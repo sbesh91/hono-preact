@@ -3,19 +3,18 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { createMiddleware } from "hono/factory";
+import { locationStub } from "preact-iso/prerender";
 import { Base, Layout, Routes } from "./iso.js";
 
 const port = 3000;
 const app = new Hono();
 
-globalThis.location = {
-  origin: "",
-  pathname: "/",
-  search: "",
-} as Location;
+locationStub("/");
 
 const location = createMiddleware(async (c, next) => {
   console.log(c.req.url);
+  const url = new URL(c.req.url);
+  globalThis.location.pathname = url.pathname;
   await next();
 });
 

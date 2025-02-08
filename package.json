@@ -8,8 +8,7 @@
   "dependencies": {
     "@hono/node-server": "^1.13.8",
     "hono": "^4.6.20",
-    "preact-iso": "file:.yalc/preact-iso",
-    "react": "npm:@preact/compat"
+    "preact-iso": "^2.9.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.0",
