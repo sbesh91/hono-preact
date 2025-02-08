@@ -1,7 +1,5 @@
 import type { FC } from "hono/jsx";
-import { LocationProvider, Route, Router } from "preact-iso";
-import Home from "./pages/home.js";
-import Test from "./pages/test.js";
+import { LocationProvider, Router } from "preact-iso";
 
 export const messages = ["Good Morning", "Good Evening", "Good Night"];
 
@@ -22,14 +20,5 @@ export const Base: FC = (props) => {
     <LocationProvider>
       <Router>{props.children}</Router>
     </LocationProvider>
-  );
-};
-
-export const Routes: FC = () => {
-  return (
-    <>
-      <Route path="/" component={Home} />
-      <Route path="/test" component={Test} />
-    </>
   );
 };

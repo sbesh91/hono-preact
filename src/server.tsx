@@ -3,13 +3,12 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { createMiddleware } from "hono/factory";
+import { lazy, Route } from "preact-iso";
 import { locationStub } from "preact-iso/prerender";
-import { Base, Layout, Routes } from "./iso.js";
+import { Base, Layout } from "./iso.js";
 
 const port = 3000;
 const app = new Hono();
-
-locationStub("/");
 
 const location = createMiddleware(async (c, next) => {
   console.log(c.req.url);
@@ -17,6 +16,9 @@ const location = createMiddleware(async (c, next) => {
   locationStub(url.pathname);
   await next();
 });
+
+const Home = lazy(() => import("./pages/home.js"));
+const Test = lazy(() => import("./pages/test.js"));
 
 app
   .use(compress(), location)
@@ -31,7 +33,8 @@ app
     return c.html(
       <Layout>
         <Base>
-          <Routes />
+          <Route path="/" component={Home} />
+          <Route path="/test" component={Test} />
         </Base>
       </Layout>
     );

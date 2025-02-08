@@ -1,8 +1,9 @@
-import { hydrate, Route } from "preact-iso";
+import { hydrate, lazy, Route } from "preact-iso";
 import "preact/debug";
 import { Base } from "./iso.js";
-import { Home } from "./pages/home.js";
-import { Test } from "./pages/test.js";
+
+export const Home = lazy(() => import("./pages/home.js"));
+export const Test = lazy(() => import("./pages/test.js"));
 
 export const App = () => (
   <Base>
