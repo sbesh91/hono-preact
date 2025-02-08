@@ -14,7 +14,7 @@ locationStub("/");
 const location = createMiddleware(async (c, next) => {
   console.log(c.req.url);
   const url = new URL(c.req.url);
-  globalThis.location.pathname = url.pathname;
+  locationStub(url.pathname);
   await next();
 });
 
