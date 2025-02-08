@@ -1,0 +1,21 @@
+{
+  "name": "app",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.tsx",
+    "bundle": "vite build -w"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "hono": "^4.6.20",
+    "preact-iso": "file:.yalc/preact-iso",
+    "react": "npm:@preact/compat"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.0",
+    "@types/node": "^20.11.17",
+    "prettier": "^3.4.2",
+    "tsx": "^4.7.1",
+    "vite": "^6.0.11"
+  }
+}

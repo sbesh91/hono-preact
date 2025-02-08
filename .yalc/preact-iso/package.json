@@ -1,0 +1,42 @@
+{
+	"name": "preact-iso",
+	"version": "2.9.0",
+	"type": "module",
+	"main": "src/index.js",
+	"module": "src/index.js",
+	"types": "src/index.d.ts",
+	"exports": {
+		".": "./src/index.js",
+		"./router": "./src/router.js",
+		"./lazy": "./src/lazy.js",
+		"./prerender": "./src/prerender.js",
+		"./hydrate": "./src/hydrate.js"
+	},
+	"license": "MIT",
+	"description": "Isomorphic utilities for Preact",
+	"author": "The Preact Authors (https://preactjs.com)",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/preactjs/preact-iso.git"
+	},
+	"files": [
+		"src",
+		"!src/internal.d.ts",
+		"LICENSE",
+		"package.json",
+		"README.md"
+	],
+	"scripts": {
+		"test": "npm run test:node && npm run test:browser",
+		"test:browser": "wtr test/*.test.js",
+		"test:node": "uvu test/node"
+	},
+	"peerDependencies": {
+		"preact": ">=10",
+		"preact-render-to-string": ">=6.4.0"
+	},
+	"overrides": {
+		"@web/dev-server-core": "0.7.1"
+	},
+	"yalcSig": "537ceb7283e79795837c8c43255d74be"
+}

@@ -1,0 +1,11 @@
+{
+  "version": "v1",
+  "packages": {
+    "preact-iso": {
+      "version": "2.9.0",
+      "signature": "537ceb7283e79795837c8c43255d74be",
+      "file": true,
+      "replaced": "^2.9.0"
+    }
+  }
+}
