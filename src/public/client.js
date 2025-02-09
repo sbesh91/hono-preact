@@ -1,4 +1,4 @@
-import { A as r } from "./client-BCBRawy4.js";
+import { A as r } from "./client-C0-9yt1l.js";
 export {
   r as App
 };
