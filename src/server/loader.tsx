@@ -1,5 +1,5 @@
 import type { FunctionComponent } from "preact";
-import { lazy, Suspense, type JSX } from "preact/compat";
+import { lazy, type JSX } from "preact/compat";
 
 interface LoaderData<T> extends JSX.IntrinsicAttributes {
   loaderData: T;
@@ -18,5 +18,5 @@ export const getLoaderData = <T,>(
     })
   );
 
-  return <Suspense fallback="loading...">{loaded}</Suspense>;
+  return loaded;
 };

@@ -11,7 +11,7 @@ export const Base: FunctionComponent<{ url?: string }> = (props) => {
       <Router url={props.url}>
         <Route path="/" component={Home} />
         <Route path="/test" component={Test} />
-        <Route path="/movies" component={Test} />
+        <Route path="/movies" component={Movies} />
       </Router>
     </LocationProvider>
   );
