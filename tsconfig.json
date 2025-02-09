@@ -5,8 +5,11 @@
     "strict": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"],
+    "types": ["node", "ESNext", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "jsxImportSource": "preact",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   }
 }

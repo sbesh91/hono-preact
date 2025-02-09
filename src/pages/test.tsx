@@ -1,11 +1,11 @@
-import type { FC } from "hono/jsx";
+import type { FunctionComponent } from "preact";
 
-export const Test: FC = () => {
+export const Test: FunctionComponent = () => {
   return (
-    <section>
-      <a href="/">home</a>
-
-      <p>test</p>
+    <section class="p-1">
+      <a href="/" class="bg-amber-200">
+        home
+      </a>
     </section>
   );
 };

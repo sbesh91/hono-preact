@@ -1,17 +1,22 @@
-import { hydrate, lazy, Route } from "preact-iso";
-import "preact/debug";
+import { lazy, prerender } from "preact-iso";
 import { Base } from "./iso.js";
+import "./styles/root.css";
 
-export const Home = lazy(() => import("./pages/home.js"));
-export const Test = lazy(() => import("./pages/test.js"));
-
-export const App = () => (
-  <Base>
-    <Route path="/" component={Home} />
-    <Route path="/test" component={Test} />
-  </Base>
-);
+export const App = () => <Base />;
 
 const app = document.getElementById("app") as HTMLElement;
 
-hydrate(<App />, app);
+async function start() {
+  const Movies = await lazy(() => import("./pages/movies.js")).preload();
+  const result = await prerender(
+    <p>
+      hello world
+      <div>{Movies}</div>
+    </p>
+  );
+  console.log(result);
+}
+
+start();
+
+// hydrate(<App />, app);

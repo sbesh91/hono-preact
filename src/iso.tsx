@@ -1,24 +1,18 @@
-import type { FC } from "hono/jsx";
-import { LocationProvider, Router } from "preact-iso";
+import type { FunctionComponent } from "preact";
+import { lazy, LocationProvider, Route, Router } from "preact-iso";
 
-export const messages = ["Good Morning", "Good Evening", "Good Night"];
+const Home = lazy(() => import("./pages/home.js"));
+const Test = lazy(() => import("./pages/test.js"));
+const Movies = lazy(() => import("./pages/movies.js"));
 
-export const Layout: FC = (props) => {
-  return (
-    <html>
-      <head></head>
-      <body>
-        <section id="app">{props.children}</section>
-        <script type="module" src="static/client.js"></script>
-      </body>
-    </html>
-  );
-};
-
-export const Base: FC = (props) => {
+export const Base: FunctionComponent<{ url?: string }> = (props) => {
   return (
     <LocationProvider>
-      <Router>{props.children}</Router>
+      <Router url={props.url}>
+        <Route path="/" component={Home} />
+        <Route path="/test" component={Test} />
+        <Route path="/movies" component={Test} />
+      </Router>
     </LocationProvider>
   );
 };

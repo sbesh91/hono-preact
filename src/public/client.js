@@ -1,7 +1,5 @@
-import { A as e, H as o, T as p } from "./client-CkhSJSge.js";
+import { A as r } from "./client-690zc1oS.js";
 export {
-  e as App,
-  o as Home,
-  p as Test
+  r as App
 };
 //# sourceMappingURL=client.js.map

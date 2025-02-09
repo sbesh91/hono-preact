@@ -1,8 +1,12 @@
 import preact from "@preact/preset-vite";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  resolve: {
+    alias: [{ find: "@", replacement: resolve(__dirname, "./src") }],
+  },
   build: {
     sourcemap: true,
     outDir: resolve(__dirname, "src/public"),
@@ -12,11 +16,6 @@ export default defineConfig({
       fileName: "client",
       formats: ["es"],
     },
-    minify: true,
-    terserOptions: {
-      compress: true,
-      mangle: true,
-    },
   },
-  plugins: [preact()],
+  plugins: [preact(), tailwindcss()],
 });
