@@ -7,7 +7,7 @@ import { context } from "./context.js";
 const getCssPaths = () => {
   return readdirSync("./src/public/")
     .filter((path) => path.endsWith(".css"))
-    .map((path) => <link rel="stylesheet" href={`static/${path}`} />);
+    .map((path) => <link rel="stylesheet" href={`/static/${path}`} />);
 };
 
 export const Layout: FunctionComponent<{ context: Context }> = (props) => {
@@ -19,7 +19,7 @@ export const Layout: FunctionComponent<{ context: Context }> = (props) => {
         <section id="app">
           <Base />
         </section>
-        <script type="module" src="static/client.js"></script>
+        <script type="module" src="/static/client.js"></script>
       </body>
     </html>
   );

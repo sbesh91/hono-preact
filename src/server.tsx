@@ -7,9 +7,11 @@ import { resolve } from "node:path";
 import { prerender } from "preact-iso";
 import { Layout } from "./server/layout.js";
 import { location } from "./server/middleware/location.js";
+import { getMovie, getMovies } from "./server/movies.js";
 
 const port = 3000;
 export const app = new Hono();
+
 const key = readFileSync(resolve("./.env")).toString();
 process.env.API_KEY = key;
 
@@ -22,6 +24,14 @@ app
       rewriteRequestPath: (path) => path.replace(/^\/static/, "./public"),
     })
   )
+  .get("/api/movies", async (c) => {
+    const movies = await getMovies();
+    return c.json(movies);
+  })
+  .get("/api/movies/:id", async (c) => {
+    const movie = await getMovie(c.req.param("id"));
+    return c.json(movie);
+  })
   .use(location)
   .get("*", async (c) => {
     const { html } = await prerender(<Layout context={c} />);

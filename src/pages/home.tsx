@@ -17,7 +17,7 @@ export const Home: FunctionComponent = () => {
       <h1 class={`${signal.value ? "bg-green-300" : ""}`}>Hello Hono!</h1>
       <button
         class={`${toggle ? "bg-blue-300" : ""}`}
-        onClick={(e) => {
+        onClick={() => {
           setToggle(!toggle);
           signal.value = toggle;
         }}
