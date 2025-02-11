@@ -4,14 +4,14 @@ import type { FunctionalComponent } from "preact";
 import { exec } from "preact-iso/router";
 
 export async function loader() {
-  const { id } = exec(globalThis.location.pathname, "/movies/:id");
+  const { id } = exec(location.pathname, "/movies/:id");
   const movie = await getMovie(id);
 
   return { movie };
 }
 
 export async function clientLoader() {
-  const { id } = exec(globalThis.location.pathname, "/movies/:id");
+  const { id } = exec(location.pathname, "/movies/:id");
   const movie = await fetch(`/api/movies/${id}`)
     .then((res) => res.json())
     .catch(console.log);

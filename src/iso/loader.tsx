@@ -1,6 +1,6 @@
 import type { FunctionComponent } from "preact";
 import { lazy, type JSX } from "preact/compat";
-import { context } from "../server/context.js";
+import { isBrowser } from "./is-browser.js";
 
 export interface LoaderData<T> extends JSX.IntrinsicAttributes {
   loaderData?: T;
@@ -12,16 +12,10 @@ export const getLoaderData = <T,>(
   clientLoader: () => Promise<T> = serverLoader
 ): FunctionComponent => {
   return lazy(async () => {
-    const loader = context.value ? serverLoader : clientLoader;
-
-    if (!loader) {
-      return Promise.resolve({
-        default: () => <Component />,
-      });
-    }
+    const loader = !isBrowser() ? serverLoader : clientLoader;
 
     const props = await loader();
-    const data = { loaderData: props, location };
+    const data = { loaderData: props };
     return { default: () => <Component {...data} /> };
   });
 };
