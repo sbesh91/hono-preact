@@ -2,21 +2,19 @@ import { getLoaderData, type LoaderData } from "@/iso/loader.js";
 import { getMovies } from "@/server/movies.js";
 import type { FunctionalComponent } from "preact";
 
-export async function loader() {
+async function loader() {
   const movies = await getMovies();
   return { movies };
 }
 
-export async function clientLoader() {
+async function clientLoader() {
   const movies = await fetch("/api/movies")
     .then((res) => res.json())
     .catch(console.log);
   return { movies };
 }
 
-export const Movies: FunctionalComponent = (
-  props: LoaderData<{ movies: any }>
-) => {
+const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
   return (
     <section class="p-1">
       <a href="/" class="bg-amber-200">
