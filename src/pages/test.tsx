@@ -1,3 +1,4 @@
+import ExamplePopover from "@/components/popover";
 import type { FunctionComponent } from "preact";
 
 export const Test: FunctionComponent = () => {
@@ -6,6 +7,7 @@ export const Test: FunctionComponent = () => {
       <a href="/" class="bg-amber-200">
         home
       </a>
+      <ExamplePopover />
     </section>
   );
 };

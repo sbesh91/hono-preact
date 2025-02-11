@@ -1,3 +1,4 @@
+import ExampleDialog from "@/components/component";
 import { getLoaderData, type LoaderData } from "@/iso/loader.js";
 import { getMovie } from "@/server/movies.js";
 import type { FunctionalComponent } from "preact";
@@ -28,6 +29,7 @@ export const Movie: FunctionalComponent = (
         movies
       </a>
       {props.loaderData?.movie?.title}
+      <ExampleDialog />
     </section>
   );
 };

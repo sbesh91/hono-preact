@@ -1,3 +1,4 @@
+import ExampleMenu from "@/components/menu";
 import { useSignal } from "@preact/signals";
 import type { FunctionComponent } from "preact";
 import { useState } from "preact/hooks";
@@ -24,6 +25,7 @@ export const Home: FunctionComponent = () => {
       >
         toggle
       </button>
+      <ExampleMenu />
     </section>
   );
 };

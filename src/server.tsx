@@ -5,6 +5,7 @@ import { compress } from "hono/compress";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prerender } from "preact-iso";
+import { env } from "./iso/is-browser.js";
 import { Layout } from "./server/layout.js";
 import { location } from "./server/middleware/location.js";
 import { getMovie, getMovies } from "./server/movies.js";
@@ -14,6 +15,8 @@ export const app = new Hono();
 
 const key = readFileSync(resolve("./.env")).toString();
 process.env.API_KEY = key;
+
+env.current = "server";
 
 app
   .use(compress())

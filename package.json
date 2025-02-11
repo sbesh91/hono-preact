@@ -6,6 +6,7 @@
     "bundle": "vite build -w"
   },
   "dependencies": {
+    "@base-ui-components/react": "^1.0.0-alpha.6",
     "@hono/node-server": "^1.13.8",
     "@preact/signals": "^2.0.1",
     "@tailwindcss/vite": "^4.0.5",
@@ -14,6 +15,7 @@
     "preact-iso": "^2.9.0",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
+    "react-is": "npm:@preact/compat",
     "tailwindcss": "^4.0.5"
   },
   "devDependencies": {
