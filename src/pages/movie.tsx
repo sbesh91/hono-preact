@@ -2,27 +2,22 @@ import ExampleDialog from "@/components/component";
 import { getLoaderData, type LoaderData } from "@/iso/loader.js";
 import { getMovie } from "@/server/movies.js";
 import type { FunctionalComponent } from "preact";
-import { exec } from "preact-iso/router";
+import { RouteHook } from "preact-iso/router";
 
-export async function loader() {
-  const { id } = exec(location.pathname, "/movies/:id");
-  const movie = await getMovie(id);
-
+async function loader({ route }: { route: RouteHook }) {
+  const movie = await getMovie(route.params.id);
   return { movie };
 }
 
-export async function clientLoader() {
-  const { id } = exec(location.pathname, "/movies/:id");
-  const movie = await fetch(`/api/movies/${id}`)
+async function clientLoader({ route }: { route: RouteHook }) {
+  const movie = await fetch(`/api/movies/${route.params.id}`)
     .then((res) => res.json())
     .catch(console.log);
 
   return { movie };
 }
 
-export const Movie: FunctionalComponent = (
-  props: LoaderData<{ movie: any }>
-) => {
+const Movie: FunctionalComponent = (props: LoaderData<{ movie: any }>) => {
   return (
     <section class="p-1">
       <a href="/movies" class="bg-red-200">
@@ -33,5 +28,6 @@ export const Movie: FunctionalComponent = (
     </section>
   );
 };
+Movie.displayName = "Movie";
 
 export default getLoaderData(Movie, loader, clientLoader);

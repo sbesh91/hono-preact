@@ -1,13 +1,14 @@
 import { getLoaderData, type LoaderData } from "@/iso/loader.js";
 import { getMovies } from "@/server/movies.js";
 import type { FunctionalComponent } from "preact";
+import { LocationHook } from "preact-iso";
 
-async function loader() {
+async function loader({}: { location: LocationHook }) {
   const movies = await getMovies();
   return { movies };
 }
 
-async function clientLoader() {
+async function clientLoader({}: { location: LocationHook }) {
   const movies = await fetch("/api/movies")
     .then((res) => res.json())
     .catch(console.log);
@@ -32,5 +33,6 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
     </section>
   );
 };
+Movies.displayName = "Movies";
 
 export default getLoaderData(Movies, loader, clientLoader);

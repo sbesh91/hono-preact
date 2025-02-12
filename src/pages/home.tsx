@@ -3,7 +3,7 @@ import { useSignal } from "@preact/signals";
 import type { FunctionComponent } from "preact";
 import { useState } from "preact/hooks";
 
-export const Home: FunctionComponent = () => {
+const Home: FunctionComponent = () => {
   const [toggle, setToggle] = useState(false);
   const signal = useSignal(toggle);
 
