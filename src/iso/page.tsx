@@ -3,6 +3,7 @@ import { useRoute } from "preact-iso";
 import { memo, Suspense, useId } from "preact/compat";
 import { isBrowser } from "./is-browser";
 import { Loader, LoaderData } from "./loader";
+import { getPreloadedData } from "./preload";
 import wrapPromise from "./wrap-promise";
 
 type PageProps<T> = LoaderData<T> & {
@@ -11,14 +12,23 @@ type PageProps<T> = LoaderData<T> & {
   clientLoader: Loader<T>;
 };
 
-export const Page = memo(function <T>({
+export const Page = memo(function <T extends {}>({
   Child,
   serverLoader,
   clientLoader,
 }: PageProps<T>) {
   const id = useId();
   const route = useRoute();
-  console.log(route);
+  const preloaded = getPreloadedData<T>(id);
+  const isLoaded = Object.keys(preloaded).length > 0;
+
+  // double renders the first route?
+  // triple renders the second?
+  // stabilizes after?
+  if (isLoaded) {
+    return <Helper id={id} Child={Child} loader={{ read: () => preloaded }} />;
+  }
+
   const loader = wrapPromise(
     !isBrowser()
       ? serverLoader({ route })

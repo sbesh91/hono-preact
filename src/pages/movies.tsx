@@ -1,14 +1,14 @@
 import { getLoaderData, type LoaderData } from "@/iso/loader.js";
 import { getMovies } from "@/server/movies.js";
 import type { FunctionalComponent } from "preact";
-import { LocationHook } from "preact-iso";
+import { RouteHook } from "preact-iso";
 
-async function loader({}: { location: LocationHook }) {
+async function loader({}: { route: RouteHook }) {
   const movies = await getMovies();
   return { movies };
 }
 
-async function clientLoader({}: { location: LocationHook }) {
+async function clientLoader({}: { route: RouteHook }) {
   const movies = await fetch("/api/movies")
     .then((res) => res.json())
     .catch(console.log);
