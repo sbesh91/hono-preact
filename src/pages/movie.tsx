@@ -25,9 +25,11 @@ const Movie: FunctionalComponent = (props: LoaderData<{ movie: any }>) => {
       </a>
       {props.loaderData?.movie?.title}
       <ExampleDialog />
+      <a href="/movies/1241982">next movie</a>
     </section>
   );
 };
 Movie.displayName = "Movie";
+Movie.defaultProps = { route: "/movies/:id" };
 
 export default getLoaderData(Movie, loader, clientLoader);

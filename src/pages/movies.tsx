@@ -34,5 +34,6 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
   );
 };
 Movies.displayName = "Movies";
+Movies.defaultProps = { route: "/movies" };
 
 export default getLoaderData(Movies, loader, clientLoader);

@@ -1,6 +1,7 @@
 import { FunctionComponent } from "preact";
 import { useRoute } from "preact-iso";
-import { memo, Suspense, useId } from "preact/compat";
+import { exec, useLocation } from "preact-iso/router";
+import { memo, Suspense, useId, useMemo } from "preact/compat";
 import { isBrowser } from "./is-browser";
 import { Loader, LoaderData } from "./loader";
 import { getPreloadedData } from "./preload";
@@ -18,26 +19,35 @@ export const Page = memo(function <T extends {}>({
   clientLoader,
 }: PageProps<T>) {
   const id = useId();
+  const location = useLocation();
   const route = useRoute();
+
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
+  const routeMatch =
+    exec(location.url, Child.defaultProps?.route ?? "") !== undefined;
 
-  // double renders the first route?
-  // triple renders the second?
-  // stabilizes after?
+  const loader = useMemo(
+    () => () =>
+      wrapPromise(
+        !isBrowser()
+          ? serverLoader({ route })
+          : clientLoader({ route }).catch(console.log)
+      ) as { read: () => T },
+    [route]
+  );
+
+  if (!routeMatch) {
+    return null;
+  }
+
   if (isLoaded) {
     return <Helper id={id} Child={Child} loader={{ read: () => preloaded }} />;
   }
 
-  const loader = wrapPromise(
-    !isBrowser()
-      ? serverLoader({ route })
-      : clientLoader({ route }).catch(console.log)
-  ) as { read: () => T };
-
   return (
     <Suspense fallback={null}>
-      <Helper id={id} Child={Child} loader={loader} />
+      <Helper id={id} Child={Child} loader={loader()} />
     </Suspense>
   );
 });
@@ -50,6 +60,7 @@ type HelperProps<T> = {
 const Helper = memo(function <T>({ id, Child, loader }: HelperProps<T>) {
   const loaderData = loader.read();
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : "{}";
+
   const data = { loaderData };
 
   return (
