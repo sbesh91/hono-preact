@@ -1,11 +1,15 @@
 import type { FunctionComponent } from "preact";
 import { lazy, LocationProvider, Route, Router } from "preact-iso";
+import Movie from "./pages/movie.js";
+import Movies from "./pages/movies.js";
 import { NotFound } from "./pages/not-found.js";
 
 const Home = lazy(() => import("./pages/home.js"));
 const Test = lazy(() => import("./pages/test.js"));
-const Movies = lazy(() => import("./pages/movies.js"));
-const Movie = lazy(() => import("./pages/movie.js"));
+
+// data loader components double render upon loading
+// const Movies = lazy(() => import("./pages/movies.js"));
+// const Movie = lazy(() => import("./pages/movie.js"));
 
 export const Base: FunctionComponent = () => {
   return (
