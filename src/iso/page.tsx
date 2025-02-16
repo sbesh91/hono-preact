@@ -30,8 +30,8 @@ export const Page = memo(function <T extends {}>({
 
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
-  const inBrowser = isBrowser();
 
+  const inBrowser = isBrowser();
   const loading = useSignal(inBrowser);
 
   useEffect(() => {
