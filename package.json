@@ -2,7 +2,7 @@
   "name": "app",
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development vite",
+    "dev": "NODE_ENV=development vite --force",
     "build": "NODE_ENV=production vite build --mode client && vite build"
   },
   "dependencies": {

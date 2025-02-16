@@ -1,5 +1,5 @@
 import type { FunctionComponent } from "preact";
-import { RouteHook } from "preact-iso";
+import { LocationHook, RouteHook } from "preact-iso";
 import { type JSX } from "preact/compat";
 import { Page } from "./page.js";
 
@@ -9,7 +9,10 @@ export interface LoaderData<T> extends JSX.IntrinsicAttributes {
   route?: string;
 }
 
-export type Loader<T> = (props: { route: RouteHook }) => Promise<T>;
+export type Loader<T> = (props: {
+  route: RouteHook;
+  location: LocationHook;
+}) => Promise<T>;
 
 export const getLoaderData = <T extends {}>(
   Component: FunctionComponent<LoaderData<T>>,

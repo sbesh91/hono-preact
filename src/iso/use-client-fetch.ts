@@ -42,7 +42,7 @@ export function useClientFetch<T extends {}>({
     if (!routeMatch || !inBrowser || isLoaded) return;
 
     loading.value = true;
-    clientLoader({ route })
+    clientLoader({ route, location })
       .then((data) => {
         loaderData.value = data;
         deletePreloadedData(id);
