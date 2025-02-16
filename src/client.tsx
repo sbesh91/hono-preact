@@ -1,7 +1,9 @@
+// shims must be imported first
+import "./shims/process.js";
+
 import { hydrate } from "preact-iso";
 import "preact/debug";
 import { Base } from "./iso.js";
-import "./shims/process.js";
 import "./styles/root.css";
 
 export const App = () => <Base />;
