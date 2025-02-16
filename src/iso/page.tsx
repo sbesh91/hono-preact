@@ -1,11 +1,11 @@
-import { Signal, useSignal } from "@preact/signals";
+import { Signal } from "@preact/signals";
 import { FunctionComponent } from "preact";
-import { useRoute } from "preact-iso";
-import { exec, LocationHook, useLocation } from "preact-iso/router";
-import { memo, Suspense, useEffect, useId, useRef } from "preact/compat";
+import { memo, Suspense, useId } from "preact/compat";
 import { isBrowser } from "./is-browser";
 import { Loader, LoaderData } from "./loader";
-import { deletePreloadedData, getPreloadedData } from "./preload";
+import { getPreloadedData } from "./preload";
+import { useClientFetch } from "./use-client-fetch";
+import { useLocationData } from "./use-locaton";
 import wrapPromise from "./wrap-promise";
 
 type PageProps<T> = LoaderData<T> & {
@@ -20,47 +20,11 @@ export const Page = memo(function <T extends {}>({
   clientLoader,
 }: PageProps<T>) {
   const id = useId();
-
-  const location = useLocation();
-  const prevLocation = useRef<LocationHook>();
-  const route = useRoute();
-  const loaderData = useSignal<T>();
-  const routeMatch =
-    exec(location.url, Child.defaultProps?.route ?? "") !== undefined;
+  const { route, routeMatch } = useLocationData({ Child });
+  const { loaderData, loading } = useClientFetch({ Child, clientLoader, id });
 
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
-
-  const inBrowser = isBrowser();
-  const loading = useSignal(inBrowser);
-
-  useEffect(() => {
-    return () => {
-      prevLocation.current = location;
-      deletePreloadedData(id);
-    };
-  }, [location.url]);
-
-  useEffect(() => {
-    if (prevLocation.current?.url === location.url) {
-      return;
-    }
-    const preloaded = getPreloadedData<T>(id);
-    const isLoaded = Object.keys(preloaded).length > 0;
-
-    if (!routeMatch || !inBrowser || isLoaded) return;
-
-    loading.value = true;
-    clientLoader({ route })
-      .then((data) => {
-        loaderData.value = data;
-        deletePreloadedData(id);
-      })
-      .catch(console.log)
-      .finally(() => {
-        loading.value = false;
-      });
-  }, [routeMatch, location.url, inBrowser]);
 
   if (!routeMatch) {
     return null;
@@ -107,7 +71,7 @@ type HelperProps<T> = {
   loader: { read: () => T };
   loading: Signal<boolean>;
 };
-const Helper = memo(function <T>({
+export const Helper = memo(function <T>({
   id,
   Child,
   loader,
