@@ -15,7 +15,14 @@ export function getPreloadedData<T>(id: string) {
     return JSON.parse(el.dataset.loader ?? "{}") as T;
   } catch (error) {
     return defaultValue;
-  } finally {
-    delete el.dataset.loader;
   }
+}
+
+export function deletePreloadedData(id: string) {
+  const el = document.getElementById(id);
+  if (!el) {
+    return;
+  }
+
+  delete el.dataset.loader;
 }

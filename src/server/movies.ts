@@ -5,8 +5,7 @@ export async function getMovies() {
     method: "GET",
     headers: {
       accept: "application/json",
-      Authorization:
-        "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI5OGZmNDZmMmM0NzY3ODk5ODhkZTYyOWZlYmFmZTAwMCIsIm5iZiI6MTczOTExNTI2Ni45MjQsInN1YiI6IjY3YThjYjAyNWZhNDJkN2U3NmYxM2ZmYSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.3jv7QUpRoHPIKH0clcm5FL13FSV1l1xUoy4Wt5uqE3o",
+      Authorization: process.env.API_KEY ?? "",
     },
   };
 
@@ -24,8 +23,7 @@ export async function getMovie(id: string) {
     method: "GET",
     headers: {
       accept: "application/json",
-      Authorization:
-        "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI5OGZmNDZmMmM0NzY3ODk5ODhkZTYyOWZlYmFmZTAwMCIsIm5iZiI6MTczOTExNTI2Ni45MjQsInN1YiI6IjY3YThjYjAyNWZhNDJkN2U3NmYxM2ZmYSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.3jv7QUpRoHPIKH0clcm5FL13FSV1l1xUoy4Wt5uqE3o",
+      Authorization: process.env.API_KEY ?? "",
     },
   };
 
