@@ -14,6 +14,8 @@ export default defineConfig((env) => {
       build: {
         sourcemap: true,
         cssCodeSplit: true,
+        assetsDir: "static",
+        ssrEmitAssets: true,
         outDir: resolve(__dirname, "dist"),
         lib: {
           entry: resolve(__dirname, "src/client"),
@@ -25,8 +27,8 @@ export default defineConfig((env) => {
           input: ["./src/client.tsx"],
           output: {
             entryFileNames: "static/client.js",
-            chunkFileNames: "static/assets/[name]-[hash].js",
-            assetFileNames: "static/assets/[name].[ext]",
+            chunkFileNames: "static/[name]-[hash].js",
+            assetFileNames: "static/[name]-[hash].[ext]",
           },
         },
         copyPublicDir: false,
@@ -40,6 +42,8 @@ export default defineConfig((env) => {
       alias: [{ find: "@", replacement: resolve(__dirname, "./src") }],
     },
     build: {
+      assetsDir: "static",
+      ssrEmitAssets: true,
       rollupOptions: {
         onwarn(warning, warn) {
           if (
