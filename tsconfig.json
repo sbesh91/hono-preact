@@ -10,7 +10,7 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
-    "moduleResolution": "Bundler",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -29,6 +29,6 @@
     },
     "types": ["vite/client"]
   },
-  "exclude": ["node_modules/**/*", ".yalc/**/*"],
+  "exclude": ["node_modules/**/*"],
   "include": ["./src/**/*.tsx", "./src/**/*.ts"]
 }

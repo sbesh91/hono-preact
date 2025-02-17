@@ -4,6 +4,9 @@ npm run dev
 npm run bundle
 ```
 
+If not loading from .yalc, run this
 ```
-open http://localhost:3000
-```
+yalc update
+````
+
+

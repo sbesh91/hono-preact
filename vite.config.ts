@@ -2,7 +2,6 @@ import build from "@hono/vite-build/node";
 import devServer from "@hono/vite-dev-server";
 import nodeAdapter from "@hono/vite-dev-server/node";
 import preact from "@preact/preset-vite";
-import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
@@ -32,7 +31,7 @@ export default defineConfig((env) => {
         },
         copyPublicDir: false,
       },
-      plugins: [preact(), tailwindcss()],
+      plugins: [preact()],
     };
   }
 
@@ -54,6 +53,7 @@ export default defineConfig((env) => {
       },
     },
     plugins: [
+      preact(),
       build({
         entry: "src/server.tsx",
       }),
@@ -62,8 +62,6 @@ export default defineConfig((env) => {
         adapter: nodeAdapter,
         injectClientScript: true,
       }),
-      preact(),
-      tailwindcss(),
     ],
   };
 });
