@@ -29,6 +29,6 @@
     },
     "types": ["vite/client"]
   },
-  "exclude": ["node_modules/**/*"],
-  "include": ["./**/*.tsx", "./**/*.ts"]
+  "exclude": ["node_modules/**/*", ".yalc/**/*"],
+  "include": ["./src/**/*.tsx", "./src/**/*.ts"]
 }

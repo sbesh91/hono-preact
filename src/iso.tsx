@@ -1,7 +1,6 @@
 import type { FunctionComponent } from "preact";
-import { lazy, LocationProvider, Route } from "preact-iso";
+import { lazy, LocationProvider, Route, Router } from "preact-iso";
 import { NotFound } from "./pages/not-found.js";
-import { Router } from "./router/router.js";
 
 const Home = lazy(() => import("./pages/home.js"));
 const Test = lazy(() => import("./pages/test.js"));

@@ -15,7 +15,6 @@ const port = 8000;
 
 env.current = "server";
 
-// todo restore compression
 app
   .use(compression())
   .use(

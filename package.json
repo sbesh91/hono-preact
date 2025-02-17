@@ -12,7 +12,7 @@
     "hono": "^4.6.20",
     "lodash-es": "^4.17.21",
     "preact": "^10.25.4",
-    "preact-iso": "^2.9.0",
+    "preact-iso": "file:.yalc/preact-iso",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
     "react-is": "npm:@preact/compat"

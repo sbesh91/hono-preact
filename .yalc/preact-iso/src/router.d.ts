@@ -33,7 +33,7 @@ export function Router(props: {
 	onLoadEnd?: (url: string) => void;
 	onLoadStart?: (url: string) => void;
 	children?: NestedArray<VNode>;
-	mutable?: boolean
+	mutable?: boolean;
 }): VNode;
 
 interface LocationHook {
@@ -65,4 +65,3 @@ declare module 'preact' {
 	}
 	interface Attributes extends RoutableProps {}
 }
-AnyComponent, ComponentChildren, VNode, 
