@@ -11,11 +11,6 @@ export const Layout: FunctionComponent<{ context: Context }> = (props) => {
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href={root} />
-        {/* {import.meta.env.PROD ? (
-          <link rel="stylesheet" href="/static/assets/client.css" />
-        ) : (
-          <link rel="stylesheet" href="/src/styles/root.css" />
-        )} */}
       </head>
       <body class="bg-gray-300 p-2 isolate">
         <section id="app">

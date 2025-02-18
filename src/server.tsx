@@ -44,6 +44,8 @@ if (process.env.NODE_ENV === "production") {
     fetch: app.fetch,
     port,
   });
+} else {
+  console.log("starting in dev mode");
 }
 
 export default app;

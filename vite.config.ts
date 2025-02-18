@@ -12,6 +12,7 @@ export default defineConfig((env) => {
         alias: [{ find: "@", replacement: resolve(__dirname, "./src") }],
       },
       build: {
+        target: "esnext",
         sourcemap: true,
         cssCodeSplit: true,
         assetsDir: "static",
@@ -42,6 +43,7 @@ export default defineConfig((env) => {
       alias: [{ find: "@", replacement: resolve(__dirname, "./src") }],
     },
     build: {
+      target: "esnext",
       assetsDir: "static",
       ssrEmitAssets: true,
       rollupOptions: {
@@ -57,14 +59,12 @@ export default defineConfig((env) => {
       },
     },
     plugins: [
-      preact(),
       build({
         entry: "src/server.tsx",
       }),
       devServer({
         entry: "src/server.tsx",
         adapter: nodeAdapter,
-        injectClientScript: true,
       }),
     ],
   };

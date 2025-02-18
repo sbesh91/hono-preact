@@ -1,3 +1,6 @@
+@reference "tailwindcss";
+
 .test {
   font-weight: bold;
+  @apply bg-amber-200;
 }
