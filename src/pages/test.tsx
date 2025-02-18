@@ -1,16 +1,16 @@
 import ExamplePopover from "@/components/popover";
-import { importStylesheet } from "@/iso/import-stylesheet";
+import { importStylesheet, inlineStylesheet } from "@/iso/import-stylesheet";
 import type { FunctionComponent } from "preact";
 import test from "./test.css?url";
-// import raw from "./test.css?raw";
+import styles from "./test.module.scss";
 
 importStylesheet(test);
-// inlineStylesheet(raw);
+inlineStylesheet(import("./test.module.scss?inline"));
 
 const Test: FunctionComponent = () => {
   return (
     <section class="p-1">
-      <a href="/" class="test">
+      <a href="/" class={`test ${styles.test}`}>
         home
       </a>
       <ExamplePopover />

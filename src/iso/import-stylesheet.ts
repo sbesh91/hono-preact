@@ -8,11 +8,13 @@ export function importStylesheet(href: string) {
   }
 }
 
-export function inlineStylesheet(raw: string) {
+export function inlineStylesheet(promise: Promise<typeof import("*?inline")>) {
   if (typeof document !== "undefined") {
-    console.log(raw);
-    const sheet = new CSSStyleSheet();
-    sheet.replaceSync(raw);
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    promise.then((mod) => {
+      const raw = mod.default;
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(raw);
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    });
   }
 }
