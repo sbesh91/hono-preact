@@ -3,7 +3,7 @@ import { getMovies } from "@/server/movies.js";
 import type { FunctionalComponent } from "preact";
 import { RouteHook } from "preact-iso";
 
-async function loader({}: { route: RouteHook }) {
+async function serverLoader({}: { route: RouteHook }) {
   const movies = await getMovies();
   return { movies };
 }
@@ -36,4 +36,4 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
 Movies.displayName = "Movies";
 Movies.defaultProps = { route: "/movies" };
 
-export default getLoaderData(Movies, loader, clientLoader);
+export default getLoaderData(Movies, { serverLoader, clientLoader });

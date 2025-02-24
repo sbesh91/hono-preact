@@ -1,11 +1,10 @@
 import ExamplePopover from "@/components/popover";
-import { importStylesheet, inlineStylesheet } from "@/iso/import-stylesheet";
-import type { FunctionComponent } from "preact";
+import { getLoaderData } from "@/iso/loader";
+import { Fragment, type FunctionComponent } from "preact";
+import "./test.css";
 import test from "./test.css?url";
 import styles from "./test.module.scss";
-
-importStylesheet(test);
-inlineStylesheet(import("./test.module.scss?inline"));
+import inline from "./test.module.scss?inline";
 
 const Test: FunctionComponent = () => {
   return (
@@ -17,5 +16,18 @@ const Test: FunctionComponent = () => {
     </section>
   );
 };
+Test.displayName = "Test";
+Test.defaultProps = { route: "/test" };
 
-export default Test;
+function Head() {
+  return (
+    <Fragment>
+      <link rel="stylesheet" href={test} />
+      <style dangerouslySetInnerHTML={{ __html: inline }} />
+    </Fragment>
+  );
+}
+
+export default getLoaderData(Test, {
+  Head,
+});

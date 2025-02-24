@@ -5,6 +5,6 @@ export function PageNotFound() {
   return <div>Page Not Found {location.url}</div>;
 }
 
-export function NotFound() {
+export default function NotFound() {
   return <Route default component={PageNotFound} />;
 }

@@ -1,5 +1,5 @@
 import build from "@hono/vite-build/node";
-import devServer from "@hono/vite-dev-server";
+import devServer, { defaultOptions } from "@hono/vite-dev-server";
 import nodeAdapter from "@hono/vite-dev-server/node";
 import preact from "@preact/preset-vite";
 import { resolve } from "node:path";
@@ -33,6 +33,7 @@ export default defineConfig((env) => {
           },
         },
         copyPublicDir: false,
+        emptyOutDir: false,
       },
       plugins: [preact()],
     };
@@ -64,6 +65,13 @@ export default defineConfig((env) => {
       }),
       devServer({
         entry: "src/server.tsx",
+        exclude: [
+          ...defaultOptions.exclude,
+          /\.scss/,
+          /\.css/,
+          /\?url/,
+          /\?inline/,
+        ],
         adapter: nodeAdapter,
       }),
     ],

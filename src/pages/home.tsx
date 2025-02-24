@@ -1,4 +1,5 @@
 import ExampleMenu from "@/components/menu";
+import { getLoaderData } from "@/iso/loader";
 import { useSignal } from "@preact/signals";
 import type { FunctionComponent } from "preact";
 import { useState } from "preact/hooks";
@@ -30,4 +31,7 @@ const Home: FunctionComponent = () => {
   );
 };
 
-export default Home;
+Home.displayName = "Home";
+Home.defaultProps = { route: "/" };
+
+export default getLoaderData(Home);

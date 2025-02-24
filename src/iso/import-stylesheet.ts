@@ -1,5 +1,7 @@
+import { isBrowser } from "./is-browser";
+
 export function importStylesheet(href: string) {
-  if (typeof document !== "undefined" && !document.getElementById(href)) {
+  if (isBrowser() && !document.getElementById(href)) {
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = href;
@@ -9,7 +11,7 @@ export function importStylesheet(href: string) {
 }
 
 export function inlineStylesheet(promise: Promise<typeof import("*?inline")>) {
-  if (typeof document !== "undefined") {
+  if (isBrowser()) {
     promise.then((mod) => {
       const raw = mod.default;
       const sheet = new CSSStyleSheet();
