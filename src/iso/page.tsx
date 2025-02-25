@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { FunctionComponent } from "preact";
 import { memo, Suspense, useEffect, useId } from "preact/compat";
 import { useHeadContext } from "./head";
@@ -78,8 +79,15 @@ export const Helper = memo(function <T>({
   const data = { loaderData };
 
   return (
-    <section id={id} data-page={true} data-loader={stringified}>
+    <motion.section
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      key={id}
+      id={id}
+      data-page={true}
+      data-loader={stringified}
+    >
       <Child {...data} id={id} />
-    </section>
+    </motion.section>
   );
 });

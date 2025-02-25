@@ -2,7 +2,7 @@
   "name": "app",
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development vite",
+    "dev": "NODE_ENV=development vite --force",
     "build": "NODE_ENV=production vite build --mode client && vite build",
     "preview": "npm run build && npm run start",
     "start": "NODE_ENV=production node ./dist/index.js"
@@ -13,6 +13,7 @@
     "dotenv": "^16.4.7",
     "hono": "^4.6.20",
     "lodash-es": "^4.17.21",
+    "motion": "^12.4.7",
     "preact": "^10.25.4",
     "preact-iso": "file:.yalc/preact-iso",
     "react": "npm:@preact/compat",
