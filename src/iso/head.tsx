@@ -1,14 +1,11 @@
-import { createContext, FunctionComponent } from "preact";
-import { LocationHook, useLocation } from "preact-iso";
-import { Suspense, useContext } from "preact/compat";
-import wrapPromise from "./wrap-promise";
+import { createContext, FunctionComponent } from 'preact';
+import { LocationHook, useLocation } from 'preact-iso';
+import { Suspense, useContext } from 'preact/compat';
+import wrapPromise from './wrap-promise';
 
 export const Head: FunctionComponent = () => {
   const ctx = useHeadContext();
   const promise = () => wrapPromise(ctx.promise);
-
-  // the source of the strange loading seems to be this suspense
-  // and when it interacts with the suspense loading routes
 
   return (
     <Suspense fallback={<meta about="loading..." />}>
@@ -17,11 +14,12 @@ export const Head: FunctionComponent = () => {
   );
 };
 
-const Helper = ({
-  promise,
-}: {
-  promise: { read: () => FunctionComponent };
-}) => {
+const Helper = (
+  {
+    promise,
+  }: {
+    promise: { read: () => FunctionComponent };
+  }) => {
   const Component = promise.read();
 
   return <Component />;
@@ -52,7 +50,7 @@ export function useHeadContext() {
   const ctx = useContext(HeadContext);
 
   if (!ctx) {
-    throw "must be used within a head context";
+    throw 'must be used within a head context';
   }
 
   return ctx;

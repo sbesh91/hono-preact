@@ -15,7 +15,7 @@
     "lodash-es": "^4.17.21",
     "motion": "^12.4.7",
     "preact": "^10.25.4",
-    "preact-iso": "file:.yalc/preact-iso",
+    "preact-iso": "github:preactjs/preact-iso#fix/double-render",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
     "react-is": "npm:@preact/compat"

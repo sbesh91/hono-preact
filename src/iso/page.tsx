@@ -1,12 +1,12 @@
-import { motion } from "motion/react";
-import { FunctionComponent } from "preact";
-import { memo, Suspense, useEffect, useId } from "preact/compat";
-import { useHeadContext } from "./head";
-import { isBrowser } from "./is-browser";
-import { Loader, LoaderData } from "./loader";
-import { getPreloadedData } from "./preload";
-import { useLocationData } from "./use-locaton";
-import wrapPromise from "./wrap-promise";
+import { motion } from 'motion/react';
+import { FunctionComponent } from 'preact';
+import { memo, Suspense, useEffect, useId } from 'preact/compat';
+import { useHeadContext } from './head';
+import { isBrowser } from './is-browser';
+import { Loader, LoaderData } from './loader';
+import { getPreloadedData } from './preload';
+import { useLocationData } from './use-locaton';
+import wrapPromise from './wrap-promise';
 
 type PageProps<T> = LoaderData<T> & {
   Child: FunctionComponent<LoaderData<T>>;
@@ -32,21 +32,12 @@ export const Page = memo(function <T extends {}>({
   }
 
   if (isLoaded) {
-    return (
-      <Helper
-        id={id}
-        Child={Child}
-        loader={{ read: () => preloaded }}
-        Head={Head}
-      />
-    );
+    return <Helper id={id} Child={Child} loader={{ read: () => preloaded }} Head={Head} />;
   }
 
   const loader = () =>
     wrapPromise(
-      isBrowser()
-        ? clientLoader({ route, location })
-        : serverLoader({ route, location })
+      isBrowser() ? clientLoader({ route, location }) : serverLoader({ route, location })
     );
 
   return (
@@ -62,15 +53,10 @@ type HelperProps<T> = {
   loader: { read: () => T };
   Head?: FunctionComponent;
 };
-export const Helper = memo(function <T>({
-  id,
-  Child,
-  loader,
-  Head,
-}: HelperProps<T>) {
+export const Helper = memo(function <T>({ id, Child, loader, Head }: HelperProps<T>) {
   const ctx = useHeadContext();
   const loaderData = loader.read();
-  const stringified = !isBrowser() ? JSON.stringify(loaderData) : "{}";
+  const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   useEffect(() => {
     Head && ctx.resolve(Head);
