@@ -1,10 +1,9 @@
-import ExamplePopover from "@/components/popover";
-import { getLoaderData } from "@/iso/loader";
-import { Fragment, type FunctionComponent } from "preact";
-import "./test.css";
-import test from "./test.css?url";
-import styles from "./test.module.scss";
-import inline from "./test.module.scss?inline";
+import ExamplePopover from '@/components/popover';
+import { getLoaderData } from '@/iso/loader';
+import { Fragment, type FunctionComponent } from 'preact';
+import test from './test.css?url';
+import styles from './test.module.scss';
+import inline from './test.module.scss?inline';
 
 const Test: FunctionComponent = () => {
   return (
@@ -16,8 +15,8 @@ const Test: FunctionComponent = () => {
     </section>
   );
 };
-Test.displayName = "Test";
-Test.defaultProps = { route: "/test" };
+Test.displayName = 'Test';
+Test.defaultProps = { route: '/test' };
 
 function Head() {
   return (

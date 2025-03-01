@@ -1,20 +1,16 @@
-import type { FunctionComponent } from "preact";
-import { LocationHook, RouteHook } from "preact-iso";
-import { Fragment, type JSX } from "preact/compat";
-import { useHeadContext } from "./head.js";
-import { isBrowser } from "./is-browser.js";
-import { Page } from "./page.js";
+import type { FunctionComponent } from 'preact';
+import { RouteHook } from 'preact-iso';
+import { Fragment, type JSX } from 'preact/compat';
+import { useHeadContext } from './head.js';
+import { isBrowser } from './is-browser.js';
+import { Page } from './page.js';
 
 export interface LoaderData<T> extends JSX.IntrinsicAttributes {
-  id?: string;
-  loaderData?: T;
-  route?: string;
+  id: string;
+  loaderData: T;
 }
 
-export type Loader<T> = (props: {
-  route: RouteHook;
-  location: LocationHook;
-}) => Promise<T>;
+export type Loader<T> = (props: { route: RouteHook }) => Promise<T>;
 
 interface LoaderProps<T> {
   serverLoader?: Loader<T>;
@@ -31,7 +27,6 @@ export const getLoaderData = <T extends {}>(
 
     if (!isBrowser()) {
       ctx.resolve(Head);
-      // look into lazy loaded module timing between this and other suspense
     }
 
     return (
