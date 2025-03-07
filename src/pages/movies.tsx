@@ -1,15 +1,15 @@
-import { getLoaderData, type LoaderData } from "@/iso/loader.js";
-import { getMovies } from "@/server/movies.js";
-import type { FunctionalComponent } from "preact";
-import { RouteHook } from "preact-iso";
+import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+import { getMovies } from '@/server/movies.js';
+import type { FunctionalComponent } from 'preact';
+import { LocationHook } from 'preact-iso';
 
-async function serverLoader({}: { route: RouteHook }) {
+async function serverLoader({}: { location: LocationHook }) {
   const movies = await getMovies();
   return { movies };
 }
 
-async function clientLoader({}: { route: RouteHook }) {
-  const movies = await fetch("/api/movies")
+async function clientLoader({}: { location: LocationHook }) {
+  const movies = await fetch('/api/movies')
     .then((res) => res.json())
     .catch(console.log);
   return { movies };
@@ -33,7 +33,7 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
     </section>
   );
 };
-Movies.displayName = "Movies";
-Movies.defaultProps = { route: "/movies" };
+Movies.displayName = 'Movies';
+Movies.defaultProps = { route: '/movies' };
 
 export default getLoaderData(Movies, { serverLoader, clientLoader });

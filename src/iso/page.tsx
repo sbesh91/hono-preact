@@ -22,11 +22,12 @@ export const Page = memo(function <T extends {}>({
   Head,
 }: PageProps<T>) {
   const id = useId();
-  const { route, routeMatch } = useLocationData({ Child });
+  const { location, routeMatch } = useLocationData({ Child });
 
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
 
+  console.log(location, routeMatch);
   if (!routeMatch) {
     return null;
   }
@@ -44,7 +45,7 @@ export const Page = memo(function <T extends {}>({
 
   const loader = () =>
     wrapPromise(
-      isBrowser() ? clientLoader({ route }) : serverLoader({ route })
+      isBrowser() ? clientLoader({ location }) : serverLoader({ location })
     );
 
   return (

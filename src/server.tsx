@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import dot from 'dotenv';
 import { Hono } from 'hono';
-import { prerender } from 'preact-iso';
+import { prerender } from 'preact-iso/prerender';
 import { env } from './iso/is-browser.js';
 import { Layout } from './server/layout.js';
 import { compression } from './server/middleware/compress.js';

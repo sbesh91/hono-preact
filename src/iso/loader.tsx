@@ -1,16 +1,17 @@
 import type { FunctionComponent } from 'preact';
-import { RouteHook } from 'preact-iso';
+import { LocationHook } from 'preact-iso';
 import { Fragment, type JSX } from 'preact/compat';
 import { useHeadContext } from './head.js';
 import { isBrowser } from './is-browser.js';
 import { Page } from './page.js';
 
 export interface LoaderData<T> extends JSX.IntrinsicAttributes {
-  id: string;
-  loaderData: T;
+  id?: string;
+  loaderData?: T;
+  route?: string;
 }
 
-export type Loader<T> = (props: { route: RouteHook }) => Promise<T>;
+export type Loader<T> = (props: { location: LocationHook }) => Promise<T>;
 
 interface LoaderProps<T> {
   serverLoader?: Loader<T>;
