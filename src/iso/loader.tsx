@@ -1,6 +1,6 @@
 import type { FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
-import { Fragment, type JSX } from 'preact/compat';
+import { Fragment, memo, type JSX } from 'preact/compat';
 import { useHeadContext } from './head.js';
 import { isBrowser } from './is-browser.js';
 import { Page } from './page.js';
@@ -23,7 +23,7 @@ export const getLoaderData = <T extends {}>(
   Component: FunctionComponent<LoaderData<T>>,
   { serverLoader, clientLoader, Head = () => <Fragment /> }: LoaderProps<T> = {}
 ) => {
-  return () => {
+  return memo((location: LocationHook) => {
     const ctx = useHeadContext();
 
     if (!isBrowser()) {
@@ -36,7 +36,8 @@ export const getLoaderData = <T extends {}>(
         serverLoader={serverLoader}
         clientLoader={clientLoader}
         Head={Head}
+        location={location}
       />
     );
-  };
+  });
 };

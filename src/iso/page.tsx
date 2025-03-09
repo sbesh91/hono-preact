@@ -1,11 +1,11 @@
 import { motion } from 'motion/react';
 import { FunctionComponent } from 'preact';
+import { LocationHook } from 'preact-iso';
 import { memo, Suspense, useEffect, useId } from 'preact/compat';
 import { useHeadContext } from './head';
 import { isBrowser } from './is-browser';
 import { Loader, LoaderData } from './loader';
 import { getPreloadedData } from './preload';
-import { useLocationData } from './use-locaton';
 import wrapPromise from './wrap-promise';
 
 type PageProps<T> = {
@@ -13,6 +13,7 @@ type PageProps<T> = {
   serverLoader?: Loader<T>;
   clientLoader?: Loader<T>;
   Head?: FunctionComponent;
+  location: LocationHook;
 };
 
 export const Page = memo(function <T extends {}>({
@@ -20,17 +21,12 @@ export const Page = memo(function <T extends {}>({
   serverLoader = async () => ({}) as T,
   clientLoader = serverLoader,
   Head,
+  location,
 }: PageProps<T>) {
   const id = useId();
-  const { location, routeMatch } = useLocationData({ Child });
 
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
-
-  console.log(location, routeMatch);
-  if (!routeMatch) {
-    return null;
-  }
 
   if (isLoaded) {
     return (
