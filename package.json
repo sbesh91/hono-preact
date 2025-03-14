@@ -14,7 +14,7 @@
     "hono": "^4.6.20",
     "lodash-es": "^4.17.21",
     "motion": "^12.4.7",
-    "preact": "https://github.com/preactjs/preact/#revert/force-update-edgecase",
+    "preact": "https://github.com/preactjs/preact",
     "preact-iso": "github:preactjs/preact-iso#v3",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
