@@ -1,7 +1,8 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import { getMovies } from '@/server/movies.js';
 import type { FunctionalComponent } from 'preact';
-import { LocationHook } from 'preact-iso';
+import { lazy, LocationHook, Route, Router } from 'preact-iso';
+import NotFound from './not-found.js';
 
 async function serverLoader({}: { location: LocationHook }) {
   const movies = await getMovies();
@@ -14,6 +15,8 @@ async function clientLoader({}: { location: LocationHook }) {
     .catch(console.log);
   return { movies };
 }
+
+const Movie = lazy(() => import('./movie.js'));
 
 const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
   return (
@@ -30,6 +33,11 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
           {m.title}
         </a>
       ))}
+
+      <Router>
+        <Route path="/movies/:id" component={Movie} />
+        <NotFound />
+      </Router>
     </section>
   );
 };
