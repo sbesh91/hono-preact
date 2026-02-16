@@ -9,31 +9,30 @@
     "updates": "npx npm-check-updates -i --format group"
   },
   "dependencies": {
-    "@base-ui-components/react": "^1.0.0-beta.2",
-    "@preact/signals": "^2.3.1",
-    "dotenv": "^17.2.1",
-    "hono": "^4.9.4",
-    "motion": "^12.23.12",
-    "preact": "^10.27.1",
+    "@preact/signals": "^2.8.1",
+    "dotenv": "^17.3.1",
+    "hono": "^4.11.9",
+    "motion": "^12.34.0",
+    "preact": "^10.28.3",
     "preact-iso": "github:preactjs/preact-iso#v3",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
     "react-is": "npm:@preact/compat"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.19.0",
-    "@hono/vite-build": "^1.7.0",
-    "@hono/vite-dev-server": "^0.20.1",
-    "@preact/preset-vite": "^2.10.2",
-    "@tailwindcss/postcss": "^4.1.12",
+    "@hono/node-server": "^1.19.9",
+    "@hono/vite-build": "^1.9.3",
+    "@hono/vite-dev-server": "^0.25.0",
+    "@preact/preset-vite": "^2.10.3",
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^24.3.0",
     "postcss": "^8.5.6",
-    "preact-render-to-string": "^6.6.1",
-    "prettier": "^3.6.2",
-    "sass-embedded": "^1.90.0",
-    "tailwindcss": "^4.1.12",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.3"
+    "preact-render-to-string": "^6.6.5",
+    "prettier": "^3.8.1",
+    "sass-embedded": "^1.97.3",
+    "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   }
 }

@@ -1,4 +1,3 @@
-import ExamplePopover from '@/components/popover';
 import { getLoaderData } from '@/iso/loader';
 import { Fragment, type FunctionComponent } from 'preact';
 import test from './test.css?url';
@@ -11,7 +10,6 @@ const Test: FunctionComponent = () => {
       <a href="/" class={`test ${styles.test}`}>
         home
       </a>
-      <ExamplePopover />
     </section>
   );
 };

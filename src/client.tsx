@@ -1,5 +1,5 @@
 // shims must be imported first
-import './shims/process.js';
+// import './shims/process.js';
 
 import { hydrate } from 'preact';
 import { LocationProvider } from 'preact-iso';

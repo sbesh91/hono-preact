@@ -1,4 +1,3 @@
-import ExampleMenu from '@/components/menu';
 import { getLoaderData } from '@/iso/loader';
 import { useSignal } from '@preact/signals';
 import type { FunctionComponent } from 'preact';
@@ -26,7 +25,6 @@ const Home: FunctionComponent = () => {
       >
         toggle
       </button>
-      <ExampleMenu />
     </section>
   );
 };

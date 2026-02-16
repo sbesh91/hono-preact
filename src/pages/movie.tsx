@@ -1,4 +1,3 @@
-import ExampleDialog from '@/components/component';
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import { getMovie } from '@/server/movies.js';
 import type { FunctionalComponent } from 'preact';
@@ -24,8 +23,9 @@ const Movie: FunctionalComponent = (props: LoaderData<{ movie: any }>) => {
         movies
       </a>
       {props.loaderData?.movie?.title}
-      <ExampleDialog />
-      <a href="/movies/1241982">next movie</a>
+      <a class="block" href="/movies/1241982">
+        next movie
+      </a>
     </section>
   );
 };

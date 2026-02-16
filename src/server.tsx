@@ -9,7 +9,9 @@ import { compression } from './server/middleware/compress.js';
 import { location } from './server/middleware/location.js';
 import { getMovie, getMovies } from './server/movies.js';
 
-dot.config();
+dot.config({
+  debug: process.env.NODE_ENV === 'development',
+});
 export const app = new Hono();
 const port = 8000;
 
@@ -25,6 +27,7 @@ app
   )
   .get('/api/movies', async (c) => {
     const movies = await getMovies();
+    console.log('hello world');
     return c.json(movies);
   })
   .get('/api/movies/:id', async (c) => {
