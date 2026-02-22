@@ -5,4 +5,5 @@
   "assets": {
     "directory": "./dist",
   },
+  "compatibility_flags": ["nodejs_compat"],
 }
