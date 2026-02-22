@@ -27,7 +27,6 @@ app
   )
   .get('/api/movies', async (c) => {
     const movies = await getMovies();
-    console.log('hello world');
     return c.json(movies);
   })
   .get('/api/movies/:id', async (c) => {

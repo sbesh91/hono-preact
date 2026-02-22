@@ -1,6 +1,6 @@
 import build from '@hono/vite-build/node';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
-import nodeAdapter from '@hono/vite-dev-server/node';
+import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
@@ -33,6 +33,7 @@ export default defineConfig((env) => {
           },
         },
         copyPublicDir: false,
+        emptyOutDir: false,
       },
       plugins: [preact()],
     };
@@ -46,6 +47,7 @@ export default defineConfig((env) => {
       target: 'esnext',
       assetsDir: 'static',
       ssrEmitAssets: true,
+      minify: true,
       rollupOptions: {
         onwarn(warning, warn) {
           if (
@@ -71,7 +73,7 @@ export default defineConfig((env) => {
           /\?url/,
           /\?inline/,
         ],
-        adapter: nodeAdapter,
+        adapter: cloudflareAdapter,
       }),
     ],
   };
