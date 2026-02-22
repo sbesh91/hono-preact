@@ -6,7 +6,7 @@
     "build": "NODE_ENV=production vite build --mode client && vite build",
     "updates": "npx npm-check-updates -i --format group",
     "deploy": "wrangler deploy",
-    "preview": "wrangler dev"
+    "preview": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@preact/signals": "^2.8.1",
