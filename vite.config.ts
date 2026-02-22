@@ -1,4 +1,4 @@
-import build from '@hono/vite-build/node';
+import build from '@hono/vite-build/cloudflare-workers';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
@@ -33,7 +33,6 @@ export default defineConfig((env) => {
           },
         },
         copyPublicDir: false,
-        emptyOutDir: false,
       },
       plugins: [preact()],
     };

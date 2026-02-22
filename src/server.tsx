@@ -1,5 +1,3 @@
-import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import dot from 'dotenv';
 import { Hono } from 'hono';
 import { prerender } from 'preact-iso/prerender';
@@ -19,12 +17,6 @@ env.current = 'server';
 
 app
   .use(compression())
-  .use(
-    '/static/*',
-    serveStatic({
-      root: './dist',
-    })
-  )
   .get('/api/movies', async (c) => {
     const movies = await getMovies();
     return c.json(movies);
@@ -38,16 +30,5 @@ app
     const { html } = await prerender(<Layout context={c} />);
     return c.html(`<!DOCTYPE html><html lang="en-US">${html}</html>`);
   });
-
-if (process.env.NODE_ENV === 'production') {
-  console.log(`Server is running on http://localhost:${port}`);
-
-  serve({
-    fetch: app.fetch,
-    port,
-  });
-} else {
-  console.log('starting in dev mode');
-}
 
 export default app;
