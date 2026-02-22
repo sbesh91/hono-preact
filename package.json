@@ -6,7 +6,8 @@
     "build": "NODE_ENV=production vite build --mode client && vite build",
     "preview": "npm run build && npm run start",
     "start": "NODE_ENV=production node ./dist/index.js",
-    "updates": "npx npm-check-updates -i --format group"
+    "updates": "npx npm-check-updates -i --format group",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@preact/signals": "^2.8.1",

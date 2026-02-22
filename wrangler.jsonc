@@ -1,0 +1,8 @@
+{
+  "name": "hono-preact",
+  "main": "dist/index.js",
+  "compatibility_date": "2026-02-22",
+  "assets": {
+    "directory": "./dist",
+  },
+}
