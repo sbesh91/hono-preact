@@ -27,6 +27,7 @@ app
   .get('*', async (c) => {
     const { html } = await prerender(<Layout context={c} />);
 
+    c.header('Cache-Control', 'no-store');
     return c.html(
       `<!doctype html>
       <html lang="en-US">
