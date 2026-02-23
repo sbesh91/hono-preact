@@ -1,25 +1,24 @@
 import { createContext, FunctionComponent } from 'preact';
 import { LocationHook, useLocation } from 'preact-iso';
-import { Suspense, useContext } from 'preact/compat';
+import { Suspense, useContext, useRef } from 'preact/compat';
 import wrapPromise from './wrap-promise';
 
 export const Head: FunctionComponent = () => {
   const ctx = useHeadContext();
-  const promise = () => wrapPromise(ctx.promise);
+  const wrappedRef = useRef(wrapPromise(ctx.promise));
 
   return (
     <Suspense fallback={<meta about="loading..." />}>
-      <Helper promise={promise()} />
+      <Helper promise={wrappedRef.current} />
     </Suspense>
   );
 };
 
-const Helper = (
-  {
-    promise,
-  }: {
-    promise: { read: () => FunctionComponent };
-  }) => {
+const Helper = ({
+  promise,
+}: {
+  promise: { read: () => FunctionComponent };
+}) => {
   const Component = promise.read();
 
   return <Component />;
@@ -36,8 +35,8 @@ export const HeadContext = createContext<HeadContextProps | null>(null);
 
 export const HeadContextProvider: FunctionComponent = (props) => {
   const location = useLocation();
-  const { promise, resolve, reject } =
-    Promise.withResolvers<FunctionComponent>();
+  const resolversRef = useRef(Promise.withResolvers<FunctionComponent>());
+  const { promise, resolve, reject } = resolversRef.current;
 
   return (
     <HeadContext.Provider value={{ promise, resolve, reject, location }}>

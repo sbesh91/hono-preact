@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
-import { memo, Suspense, useEffect, useId } from 'preact/compat';
+import { memo, Suspense, useEffect, useId, useRef } from 'preact/compat';
 import { useHeadContext } from './head';
 import { isBrowser } from './is-browser';
 import { Loader, LoaderData } from './loader';
@@ -39,14 +39,15 @@ export const Page = memo(function <T extends {}>({
     );
   }
 
-  const loader = () =>
+  const loaderRef = useRef(
     wrapPromise(
       isBrowser() ? clientLoader({ location }) : serverLoader({ location })
-    );
+    )
+  );
 
   return (
     <Suspense fallback={null}>
-      <Helper id={id} Child={Child} loader={loader()} Head={Head} />
+      <Helper id={id} Child={Child} loader={loaderRef.current} Head={Head} />
     </Suspense>
   );
 });
@@ -68,7 +69,8 @@ export const Helper = memo(function <T>({
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   useEffect(() => {
-    Head && ctx.resolve(Head);
+    const Component = Head ?? (() => <></>);
+    ctx.resolve(Component);
   }, [Head]);
 
   const data = { loaderData };
