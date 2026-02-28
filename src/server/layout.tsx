@@ -2,9 +2,12 @@ import { Base } from '@/iso.js';
 import { Head, HeadContextProvider } from '@/iso/head.js';
 import root from '@/styles/root.css?url';
 import type { Context } from 'hono';
+import { LazyMotion } from 'motion/react';
 import { type FunctionComponent } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { HonoContext } from './context.js';
+
+const loadFeatures = () => import('motion/react').then((m) => m.domAnimation);
 
 export const Layout: FunctionComponent<{ context: Context }> = (props) => {
   return (
@@ -23,9 +26,11 @@ export const Layout: FunctionComponent<{ context: Context }> = (props) => {
         </head>
         <body class="bg-gray-300 p-2 isolate">
           <section id="app">
-            <HonoContext.Provider value={props}>
-              <Base />
-            </HonoContext.Provider>
+            <LazyMotion features={loadFeatures} strict>
+              <HonoContext.Provider value={props}>
+                <Base />
+              </HonoContext.Provider>
+            </LazyMotion>
           </section>
           {import.meta.env.PROD ? (
             <script type="module" src="/static/client.js" />

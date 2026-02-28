@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Fragment, FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
 import { memo, Suspense, useEffect, useId, useRef } from 'preact/compat';
@@ -75,7 +75,7 @@ export const Helper = memo(function <T>({
   const data = { loaderData };
 
   return (
-    <motion.section
+    <m.section
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       key={id}
@@ -84,6 +84,6 @@ export const Helper = memo(function <T>({
       data-loader={stringified}
     >
       <Child {...data} id={id} />
-    </motion.section>
+    </m.section>
   );
 });
