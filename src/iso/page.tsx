@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { FunctionComponent } from 'preact';
+import { Fragment, FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
 import { memo, Suspense, useEffect, useId, useRef } from 'preact/compat';
 import { useHeadContext } from './head';
@@ -62,15 +62,14 @@ export const Helper = memo(function <T>({
   id,
   Child,
   loader,
-  Head,
+  Head = () => <Fragment />,
 }: HelperProps<T>) {
   const ctx = useHeadContext();
   const loaderData = loader.read();
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   useEffect(() => {
-    const Component = Head ?? (() => <></>);
-    ctx.resolve(Component);
+    ctx.resolve(Head);
   }, [Head]);
 
   const data = { loaderData };

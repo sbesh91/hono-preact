@@ -1,9 +1,10 @@
-import { createContext, FunctionComponent } from 'preact';
+import { createContext, Fragment, FunctionComponent } from 'preact';
 import { LocationHook, useLocation } from 'preact-iso';
-import { Suspense, useContext, useRef } from 'preact/compat';
+import { Suspense, useContext, useRef, memo } from 'preact/compat';
+import { isBrowser } from './is-browser.js';
 import wrapPromise from './wrap-promise';
 
-export const Head: FunctionComponent = () => {
+export const Head: FunctionComponent = memo(() => {
   const ctx = useHeadContext();
   const wrappedRef = useRef(wrapPromise(ctx.promise));
 
@@ -12,7 +13,7 @@ export const Head: FunctionComponent = () => {
       <Helper promise={wrappedRef.current} />
     </Suspense>
   );
-};
+});
 
 const Helper = ({
   promise,
@@ -20,7 +21,6 @@ const Helper = ({
   promise: { read: () => FunctionComponent };
 }) => {
   const Component = promise.read();
-
   return <Component />;
 };
 
@@ -37,6 +37,12 @@ export const HeadContextProvider: FunctionComponent = (props) => {
   const location = useLocation();
   const resolversRef = useRef(Promise.withResolvers<FunctionComponent>());
   const { promise, resolve, reject } = resolversRef.current;
+
+  if (!isBrowser()) {
+    // hack to resolve promise if unresolved
+    // queueMicrotask(() => resolve(() => <Fragment />));
+    setTimeout(() => resolve(() => <Fragment />), 16);
+  }
 
   return (
     <HeadContext.Provider value={{ promise, resolve, reject, location }}>

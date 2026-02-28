@@ -1,4 +1,4 @@
-import { Route, useLocation } from "preact-iso";
+import { Route, useLocation } from 'preact-iso';
 
 export function PageNotFound() {
   const location = useLocation();

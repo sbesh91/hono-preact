@@ -25,6 +25,8 @@ function Head() {
   );
 }
 
+Head.displayName = 'Head';
+
 export default getLoaderData(Test, {
   Head,
 });
