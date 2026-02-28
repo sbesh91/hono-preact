@@ -1,12 +1,7 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
-import { getMovie } from '@/server/movies.js';
 import type { FunctionalComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
-
-async function serverLoader({ location }: { location: LocationHook }) {
-  const movie = await getMovie(location.pathParams.id);
-  return { movie };
-}
+import { serverLoader } from './movie.server.js';
 
 async function clientLoader({ location }: { location: LocationHook }) {
   const movie = await fetch(`/api/movies/${location.pathParams.id}`)

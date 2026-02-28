@@ -3,7 +3,20 @@ import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
 import { resolve } from 'node:path';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+function serverOnlyPlugin(isClientBuild: boolean): Plugin {
+  if (!isClientBuild) return { name: 'server-only-noop' };
+  return {
+    name: 'server-only',
+    enforce: 'pre',
+    load(id: string) {
+      if (/\.server\.[jt]sx?$/.test(id)) {
+        return `export const serverLoader = async () => ({});`;
+      }
+    },
+  };
+}
 
 export default defineConfig((env) => {
   if (env.mode === 'client') {
@@ -34,7 +47,7 @@ export default defineConfig((env) => {
         },
         copyPublicDir: false,
       },
-      plugins: [preact()],
+      plugins: [preact(), serverOnlyPlugin(true)],
     };
   }
 
