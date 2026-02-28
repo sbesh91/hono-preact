@@ -74,12 +74,7 @@ export const Helper = memo(function <T>({
   const data = { loaderData };
 
   return (
-    <section
-      class="animate-fade-in"
-      id={id}
-      data-page={true}
-      data-loader={stringified}
-    >
+    <section id={id} data-page={true} data-loader={stringified}>
       <Child {...data} id={id} />
     </section>
   );

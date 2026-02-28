@@ -1,10 +1,1 @@
-@import "tailwindcss" source("../");
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@utility animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
+@import 'tailwindcss' source('../');
