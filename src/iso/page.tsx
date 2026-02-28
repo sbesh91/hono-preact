@@ -1,4 +1,3 @@
-import { m } from 'motion/react';
 import { Fragment, FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
 import { memo, Suspense, useEffect, useId, useRef } from 'preact/compat';
@@ -75,15 +74,13 @@ export const Helper = memo(function <T>({
   const data = { loaderData };
 
   return (
-    <m.section
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      key={id}
+    <section
+      class="animate-fade-in"
       id={id}
       data-page={true}
       data-loader={stringified}
     >
       <Child {...data} id={id} />
-    </m.section>
+    </section>
   );
 });
