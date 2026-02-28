@@ -69,7 +69,7 @@ export const Helper = memo(function <T>({
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   useEffect(() => {
-    ctx.resolve(Head);
+    ctx.headSignal.value = Head;
   }, [Head]);
 
   const data = { loaderData };

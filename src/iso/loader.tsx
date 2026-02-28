@@ -27,7 +27,7 @@ export const getLoaderData = <T extends {}>(
     const ctx = useHeadContext();
 
     if (!isBrowser()) {
-      ctx.resolve(Head);
+      ctx.headSignal.value = Head;
     }
 
     return (
