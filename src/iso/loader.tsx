@@ -1,6 +1,7 @@
 import type { FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
 import { Fragment, memo, type JSX } from 'preact/compat';
+import { LoaderCache } from './cache.js';
 import { useHeadContext } from './head.js';
 import { isBrowser } from './is-browser.js';
 import { Page } from './page.js';
@@ -17,11 +18,12 @@ interface LoaderProps<T> {
   serverLoader?: Loader<T>;
   clientLoader?: Loader<T>;
   Head?: FunctionComponent;
+  cache?: LoaderCache<T>;
 }
 
 export const getLoaderData = <T extends {}>(
   Component: FunctionComponent<LoaderData<T>>,
-  { serverLoader, clientLoader, Head = () => <Fragment /> }: LoaderProps<T> = {}
+  { serverLoader, clientLoader, Head = () => <Fragment />, cache }: LoaderProps<T> = {}
 ) => {
   return memo((location: LocationHook) => {
     const ctx = useHeadContext();
@@ -37,6 +39,7 @@ export const getLoaderData = <T extends {}>(
         clientLoader={clientLoader}
         Head={Head}
         location={location}
+        cache={cache}
       />
     );
   });

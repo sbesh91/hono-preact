@@ -4,6 +4,8 @@ import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+// import { visualizer } from 'rollup-plugin-visualizer';
+// visualizer({ open: true, filename: 'dist/stats.html', sourcemap: true })
 
 function serverOnlyPlugin(isClientBuild: boolean): Plugin {
   if (!isClientBuild) return { name: 'server-only-noop' };

@@ -3,13 +3,16 @@ import type { FunctionalComponent } from 'preact';
 import { lazy, LocationHook, Route, Router } from 'preact-iso';
 import NotFound from './not-found.js';
 import { serverLoader } from './movies.server.js';
+import { createCache } from '@/iso/cache.js';
 
-async function clientLoader({}: { location: LocationHook }) {
+const cache = createCache<{ movies: any }>();
+
+const clientLoader = cache.wrap(async ({}: { location: LocationHook }) => {
   const movies = await fetch('/api/movies')
     .then((res) => res.json())
     .catch(console.log);
   return { movies };
-}
+}, '/movies');
 
 const Movie = lazy(() => import('./movie.js'));
 
@@ -29,11 +32,7 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
         </a>
       ))}
 
-      <Router
-        onRouteChange={console.log}
-        onLoadStart={console.log}
-        onLoadEnd={console.log}
-      >
+      <Router>
         <Route path="/movies/:id" component={Movie} />
         <NotFound />
       </Router>
@@ -43,4 +42,8 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
 Movies.displayName = 'Movies';
 Movies.defaultProps = { route: '/movies' };
 
-export default getLoaderData(Movies, { serverLoader, clientLoader });
+export default getLoaderData(Movies, {
+  serverLoader,
+  clientLoader,
+  cache,
+});
