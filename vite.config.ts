@@ -52,7 +52,14 @@ export default defineConfig((env) => {
         preact(),
         serverOnlyPlugin(true),
         ...(env.mode === 'visualizer'
-          ? [visualizer({ open: true, filename: 'dist/stats.html', sourcemap: true })]
+          ? [
+              visualizer({
+                open: true,
+                filename: 'dist/stats.html',
+                sourcemap: true,
+                gzipSize: true,
+              }),
+            ]
           : []),
       ],
     };
