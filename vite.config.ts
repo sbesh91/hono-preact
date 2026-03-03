@@ -4,8 +4,7 @@ import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
-// import { visualizer } from 'rollup-plugin-visualizer';
-// visualizer({ open: true, filename: 'dist/stats.html', sourcemap: true })
+import { visualizer } from 'rollup-plugin-visualizer';
 
 function serverOnlyPlugin(isClientBuild: boolean): Plugin {
   if (!isClientBuild) return { name: 'server-only-noop' };
@@ -21,7 +20,7 @@ function serverOnlyPlugin(isClientBuild: boolean): Plugin {
 }
 
 export default defineConfig((env) => {
-  if (env.mode === 'client') {
+  if (env.mode === 'client' || env.mode === 'visualizer') {
     return {
       resolve: {
         alias: [{ find: '@', replacement: resolve(__dirname, './src') }],
@@ -49,7 +48,13 @@ export default defineConfig((env) => {
         },
         copyPublicDir: false,
       },
-      plugins: [preact(), serverOnlyPlugin(true)],
+      plugins: [
+        preact(),
+        serverOnlyPlugin(true),
+        ...(env.mode === 'visualizer'
+          ? [visualizer({ open: true, filename: 'dist/stats.html', sourcemap: true })]
+          : []),
+      ],
     };
   }
 

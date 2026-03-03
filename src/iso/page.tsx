@@ -1,6 +1,7 @@
 import { FunctionComponent } from 'preact';
 import { LocationHook } from 'preact-iso';
-import { memo, Suspense, useId, useRef } from 'preact/compat';
+import { memo, Suspense } from 'preact/compat';
+import { useId, useRef } from 'preact/hooks';
 import { type LoaderCache } from './cache';
 import { isBrowser } from './is-browser';
 import { Loader, LoaderData } from './loader';

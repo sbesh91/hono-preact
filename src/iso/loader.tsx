@@ -1,6 +1,6 @@
-import type { FunctionComponent } from 'preact';
+import { type FunctionComponent, type JSX } from 'preact';
 import { LocationHook } from 'preact-iso';
-import { memo, type JSX } from 'preact/compat';
+import { memo } from 'preact/compat';
 import { LoaderCache } from './cache.js';
 import { Page } from './page.js';
 
