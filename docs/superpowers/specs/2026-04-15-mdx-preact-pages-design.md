@@ -65,7 +65,7 @@ Update `tsconfig.json` `include` to add `"./src/**/*.mdx"` so the compiler resol
 
 ## Authoring Convention
 
-MDX pages live in `src/pages/docs/` and export a `route` const that declares the URL path:
+MDX pages live in `src/pages/docs/` and export a `route` const that declares the path **relative to `/docs`**:
 
 ```mdx
 export const route = '/about'
@@ -75,13 +75,15 @@ export const route = '/about'
 Page content here.
 ```
 
+The registration code (see below) automatically prepends `/docs`, so the above page is served at `/docs/about`. Authors never write the `/docs` prefix — it is implied by the directory. This prevents a whole class of mistakes where someone forgets the prefix or miskeys it.
+
 The export is named `route` (not `path`) deliberately: preact-iso augments `JSX.IntrinsicAttributes` with a reserved `path` prop used internally by the router. Using `path` as a module export would collide with that name.
 
 Pages without a `route` export are valid MDX components but will not be registered as routes.
 
 ## Route Auto-Discovery
 
-`iso.tsx` uses `import.meta.glob` with `eager: true` to collect all MDX pages at build time and renders a `<Route>` for each module that has a `route` export:
+`iso.tsx` uses `import.meta.glob` with `eager: true` to collect all MDX pages at build time. The `/docs` prefix is prepended to each `route` export before passing it to `<Route>`:
 
 ```tsx
 const mdxPages = import.meta.glob('./pages/docs/*.mdx', { eager: true }) as Record<
@@ -93,7 +95,7 @@ const mdxPages = import.meta.glob('./pages/docs/*.mdx', { eager: true }) as Reco
 {Object.values(mdxPages)
   .filter((mod) => mod.route)
   .map((mod) => (
-    <Route path={mod.route!} component={mod.default} />
+    <Route path={`/docs${mod.route}`} component={mod.default} />
   ))}
 ```
 
