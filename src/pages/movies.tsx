@@ -1,7 +1,7 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import type { FunctionalComponent } from 'preact';
 import { lazy, LocationHook, Route, Router } from 'preact-iso';
-import { serverLoader } from './movies.server.js';
+import serverLoader from './movies.server.js';
 import { createCache } from '@/iso/cache.js';
 import Noop from './noop.js';
 

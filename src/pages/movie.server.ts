@@ -1,7 +1,9 @@
 import { getMovie } from '@/server/movies.js';
-import type { LocationHook } from 'preact-iso';
+import type { Loader } from '@/iso/loader.js';
 
-export async function serverLoader({ location }: { location: LocationHook }) {
+const serverLoader: Loader<{ movie: any }> = async ({ location }) => {
   const movie = await getMovie(location.pathParams.id);
   return { movie };
-}
+};
+
+export default serverLoader;
