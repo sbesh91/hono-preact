@@ -65,7 +65,7 @@ Update `tsconfig.json` `include` to add `"./src/**/*.mdx"` so the compiler resol
 
 ## Authoring Convention
 
-MDX pages live in `src/pages/` and export a `route` const that declares the URL path:
+MDX pages live in `src/pages/docs/` and export a `route` const that declares the URL path:
 
 ```mdx
 export const route = '/about'
@@ -84,7 +84,7 @@ Pages without a `route` export are valid MDX components but will not be register
 `iso.tsx` uses `import.meta.glob` with `eager: true` to collect all MDX pages at build time and renders a `<Route>` for each module that has a `route` export:
 
 ```tsx
-const mdxPages = import.meta.glob('./pages/*.mdx', { eager: true }) as Record<
+const mdxPages = import.meta.glob('./pages/docs/*.mdx', { eager: true }) as Record<
   string,
   { default: ComponentType; route?: string }
 >;
