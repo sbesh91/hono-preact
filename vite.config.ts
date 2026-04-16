@@ -38,7 +38,7 @@ export default defineConfig((env) => {
         copyPublicDir: false,
       },
       plugins: [
-        Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
+        Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' as const }),
         preact(),
         serverOnlyPlugin(true),
         ...(env.mode === 'visualizer'
@@ -77,7 +77,7 @@ export default defineConfig((env) => {
       },
     },
     plugins: [
-      Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
+      Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' as const }),
       serverLoaderValidationPlugin(),
       build({
         entry: 'src/server.tsx',
