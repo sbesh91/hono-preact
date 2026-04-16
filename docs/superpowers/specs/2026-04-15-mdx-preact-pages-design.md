@@ -55,7 +55,6 @@ Add `src/mdx.d.ts` to declare the shape of `.mdx` module imports:
 ```ts
 declare module '*.mdx' {
   import type { ComponentType } from 'preact';
-  export const route: string | undefined;
   const MDXContent: ComponentType;
   export default MDXContent;
 }
@@ -65,38 +64,34 @@ Update `tsconfig.json` `include` to add `"./src/**/*.mdx"` so the compiler resol
 
 ## Authoring Convention
 
-MDX pages live in `src/pages/docs/` and export a `route` const that declares the path **relative to `/docs`**:
+MDX pages live in `src/pages/docs/`. The route path is derived from the filename — `hello.mdx` is served at `/docs/hello`. No `route` export is needed; the directory location is the only convention.
 
 ```mdx
-export const route = '/about'
-
-# About
+# Hello
 
 Page content here.
 ```
 
-The registration code (see below) automatically prepends `/docs`, so the above page is served at `/docs/about`. Authors never write the `/docs` prefix — it is implied by the directory. This prevents a whole class of mistakes where someone forgets the prefix or miskeys it.
-
-The export is named `route` (not `path`) deliberately: preact-iso augments `JSX.IntrinsicAttributes` with a reserved `path` prop used internally by the router. Using `path` as a module export would collide with that name.
-
-Pages without a `route` export are valid MDX components but will not be registered as routes.
+The `/docs` prefix is implicit — it is always prepended by the registration code. Authors only control the sub-path via their filename choice.
 
 ## Route Auto-Discovery
 
-`iso.tsx` uses `import.meta.glob` with `eager: true` to collect all MDX pages at build time. The `/docs` prefix is prepended to each `route` export before passing it to `<Route>`:
+`iso.tsx` uses `import.meta.glob` **without** `eager: true` to keep MDX files out of the main bundle. Each loader is wrapped with `lazy()`, consistent with how `Home`, `Test`, and `Movies` are handled. The route path is derived from the glob key (the file path string), not from anything inside the module:
 
 ```tsx
-const mdxPages = import.meta.glob('./pages/docs/*.mdx', { eager: true }) as Record<
-  string,
-  { default: ComponentType; route?: string }
->;
+const mdxModules = import.meta.glob('./pages/docs/*.mdx');
+
+const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => {
+  // './pages/docs/hello.mdx' -> '/docs/hello'
+  const route = '/docs' + filePath.replace('./pages/docs', '').replace('.mdx', '');
+  const Component = lazy(load as () => Promise<{ default: ComponentType }>);
+  return { route, Component };
+});
 
 // Inside <Router>:
-{Object.values(mdxPages)
-  .filter((mod) => mod.route)
-  .map((mod) => (
-    <Route path={`/docs${mod.route}`} component={mod.default} />
-  ))}
+{mdxRoutes.map(({ route, Component }) => (
+  <Route path={route} component={Component} />
+))}
 ```
 
 MDX routes are rendered alongside the existing hand-authored routes. No changes to `server.tsx` are required — the server already SSR-renders the full app via `prerender`.

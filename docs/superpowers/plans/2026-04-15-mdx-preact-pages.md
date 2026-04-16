@@ -58,7 +58,6 @@ git commit -m "chore: add @mdx-js/rollup devDependency"
 ```ts
 declare module '*.mdx' {
   import type { ComponentType } from 'preact';
-  export const route: string | undefined;
   const MDXContent: ComponentType;
   export default MDXContent;
 }
@@ -166,15 +165,15 @@ const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
 const Movies = lazy(() => import('./pages/movies.js'));
 
-// MDX doc pages are loaded eagerly. Unlike the lazily-loaded app pages above,
-// docs are small static files with no data dependencies, so code-splitting
-// them provides no meaningful benefit. Eager loading also simplifies the
-// registration: import.meta.glob with eager:false returns promise factories
-// that require a lazy() wrapper per module, which adds complexity for no gain.
-const mdxPages = import.meta.glob('./pages/docs/*.mdx', { eager: true }) as Record<
-  string,
-  { default: ComponentType; route?: string }
->;
+// Each MDX file is lazy-loaded (code-split), consistent with the page pattern
+// above. Route paths are derived from filenames at module-evaluation time —
+// the glob keys are statically analysable by Rollup so no dynamic import of
+// module contents is needed to know the path.
+const mdxModules = import.meta.glob('./pages/docs/*.mdx');
+const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => ({
+  route: '/docs' + filePath.replace('./pages/docs', '').replace('.mdx', ''),
+  Component: lazy(load as () => Promise<{ default: ComponentType }>),
+}));
 
 function onRouteChange() {
   if (!document.startViewTransition) return;
@@ -188,11 +187,9 @@ export const Base: FunctionComponent = () => {
       <Route path="/test" component={Test} />
       <Route path="/movies" component={Movies} />
       <Route path="/movies/*" component={Movies} />
-      {Object.values(mdxPages)
-        .filter((mod) => mod.route)
-        .map((mod) => (
-          <Route path={`/docs${mod.route}`} component={mod.default} />
-        ))}
+      {mdxRoutes.map(({ route, Component }) => (
+        <Route path={route} component={Component} />
+      ))}
       <NotFound />
     </Router>
   );
@@ -226,8 +223,6 @@ git commit -m "feat: auto-discover MDX pages from src/pages/docs/ as /docs/* rou
 Create `src/pages/docs/hello.mdx`:
 
 ```mdx
-export const route = '/hello'
-
 # Hello from MDX
 
 This page is served at `/docs/hello` and rendered by Preact.
