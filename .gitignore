@@ -8,6 +8,8 @@
 .idea/usage.statistics.xml
 .idea/shelf
 .wrangler
+.yalc
+yalc.lock
 
 # deps
 node_modules/

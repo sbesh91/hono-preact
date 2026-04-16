@@ -1,9 +1,9 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import type { FunctionalComponent } from 'preact';
 import { lazy, LocationHook, Route, Router } from 'preact-iso';
-import NotFound from './not-found.js';
 import { serverLoader } from './movies.server.js';
 import { createCache } from '@/iso/cache.js';
+import Noop from './noop.js';
 
 const cache = createCache<{ movies: any }>();
 
@@ -33,8 +33,8 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
       ))}
 
       <Router>
-        <Route path="/movies/:id" component={Movie} />
-        <NotFound />
+        <Route path="/:id" component={Movie} />
+        <Noop />
       </Router>
     </section>
   );
