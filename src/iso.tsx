@@ -1,4 +1,4 @@
-import type { FunctionComponent } from 'preact';
+import type { ComponentType, FunctionComponent } from 'preact';
 import { flushSync } from 'preact/compat';
 import { lazy, Route, Router } from 'preact-iso';
 import NotFound from './pages/not-found.js';
@@ -6,6 +6,16 @@ import NotFound from './pages/not-found.js';
 const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
 const Movies = lazy(() => import('./pages/movies.js'));
+
+// Each MDX file is lazy-loaded (code-split), consistent with the page pattern
+// above. Route paths are derived from filenames at module-evaluation time —
+// the glob keys are statically analysable by Rollup so no dynamic import of
+// module contents is needed to know the path.
+const mdxModules = import.meta.glob('./pages/docs/*.mdx');
+const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => ({
+  route: '/docs' + filePath.replace('./pages/docs', '').replace('.mdx', ''),
+  Component: lazy(load as () => Promise<{ default: ComponentType }>),
+}));
 
 function onRouteChange() {
   if (!document.startViewTransition) return;
@@ -19,6 +29,9 @@ export const Base: FunctionComponent = () => {
       <Route path="/test" component={Test} />
       <Route path="/movies" component={Movies} />
       <Route path="/movies/*" component={Movies} />
+      {mdxRoutes.map(({ route, Component }) => (
+        <Route path={route} component={Component} />
+      ))}
       <NotFound />
     </Router>
   );
