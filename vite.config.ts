@@ -2,6 +2,7 @@ import build from '@hono/vite-build/cloudflare-workers';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
+import mdx from '@mdx-js/rollup';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -37,6 +38,7 @@ export default defineConfig((env) => {
         copyPublicDir: false,
       },
       plugins: [
+        Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
         preact(),
         serverOnlyPlugin(true),
         ...(env.mode === 'visualizer'
@@ -75,6 +77,7 @@ export default defineConfig((env) => {
       },
     },
     plugins: [
+      Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
       serverLoaderValidationPlugin(),
       build({
         entry: 'src/server.tsx',
