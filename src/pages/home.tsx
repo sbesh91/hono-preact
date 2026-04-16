@@ -8,12 +8,17 @@ const Home: FunctionComponent = () => {
 
   return (
     <section class="p-1">
-      <a href="/test" class="bg-red-300">
-        test
-      </a>
-      <a href="/movies" class="bg-purple-300">
-        movies
-      </a>
+      <div class="flex gap-2">
+        <a href="/test" class="bg-red-300">
+          test
+        </a>
+        <a href="/movies" class="bg-purple-300">
+          movies
+        </a>
+        <a href="/docs/hello" class="bg-purple-300">
+          docs
+        </a>
+      </div>
       <h1 class={`${lagging ? 'bg-green-300' : ''}`}>Hello Hono!</h1>
       <button
         class={`${toggle ? 'bg-blue-300' : ''}`}
