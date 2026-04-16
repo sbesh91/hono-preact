@@ -13,15 +13,40 @@ Add one devDependency: `@mdx-js/rollup`. No `@mdx-js/preact` is needed — the p
 
 ## Vite Configuration
 
-Add the MDX Rollup plugin to both build configs in `vite.config.ts` (client/visualizer and server). It must be placed **before** `preact()` in the plugins array, since both plugins transform JSX and ordering matters.
+Add the MDX Rollup plugin to both build configs in `vite.config.ts`.
 
 ```ts
 import mdx from '@mdx-js/rollup';
-
-// In plugins (both configs):
-{ enforce: 'pre', ...mdx({ jsxImportSource: 'preact' }) },
-preact(),
 ```
+
+The MDX plugin must run before JSX is processed. Use `Object.assign` to attach the Vite `enforce: 'pre'` flag without mutating the plugin object:
+
+```ts
+Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' })
+```
+
+`jsxImportSource: 'preact'` is required here even though `tsconfig.json` already sets it globally. The MDX compiler transforms `.mdx` files to JavaScript independently of the TypeScript compiler — without this option, MDX defaults to the React JSX runtime. The tsconfig setting only applies to `.ts`/`.tsx` files processed by TypeScript.
+
+**Client config** — add before `preact()`, since both plugins transform JSX and ordering matters:
+```ts
+plugins: [
+  Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
+  preact(),
+  ...
+]
+```
+
+**Server config** — `preact()` is not present; add first in the array:
+```ts
+plugins: [
+  Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
+  serverLoaderValidationPlugin(),
+  build(...),
+  devServer(...),
+]
+```
+
+No remark/rehype plugins are added; the default MDX pipeline is used.
 
 ## TypeScript
 
@@ -50,6 +75,8 @@ export const route = '/about'
 Page content here.
 ```
 
+The export is named `route` (not `path`) deliberately: preact-iso augments `JSX.IntrinsicAttributes` with a reserved `path` prop used internally by the router. Using `path` as a module export would collide with that name.
+
 Pages without a `route` export are valid MDX components but will not be registered as routes.
 
 ## Route Auto-Discovery
@@ -66,7 +93,7 @@ const mdxPages = import.meta.glob('./pages/*.mdx', { eager: true }) as Record<
 {Object.values(mdxPages)
   .filter((mod) => mod.route)
   .map((mod) => (
-    <Route key={mod.route} path={mod.route!} component={mod.default} />
+    <Route path={mod.route!} component={mod.default} />
   ))}
 ```
 
