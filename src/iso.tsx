@@ -12,10 +12,21 @@ const Movies = lazy(() => import('./pages/movies.js'));
 // the glob keys are statically analysable by Rollup so no dynamic import of
 // module contents is needed to know the path.
 const mdxModules = import.meta.glob('./pages/docs/*.mdx');
-const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => ({
-  route: '/docs' + filePath.replace('./pages/docs', '').replace('.mdx', ''),
-  Component: lazy(load as () => Promise<{ default: ComponentType }>),
-}));
+const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => {
+  const route = '/docs' + filePath.replace('./pages/docs', '').replace('.mdx', '');
+  // Wrap the MDX component in a single root element so the lazy Suspense
+  // boundary contains one node. MDX compiles to a Fragment root (multiple
+  // sibling nodes), which Preact cannot reconcile correctly during hydration
+  // when the component is inside a Suspense boundary — it appends instead of
+  // replacing, causing the content to appear twice.
+  const Component = lazy(async () => {
+    const mod = await (load as () => Promise<{ default: ComponentType }>)();
+    const MDX = mod.default;
+    const Wrapped: ComponentType = (props) => <article class="mdx-content"><MDX {...props} /></article>;
+    return { default: Wrapped };
+  });
+  return { route, Component };
+});
 
 function onRouteChange() {
   if (!document.startViewTransition) return;
