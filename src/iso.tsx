@@ -21,9 +21,12 @@ const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => {
   // when the component is inside a Suspense boundary — it appends instead of
   // replacing, causing the content to appear twice.
   const Component = lazy(async () => {
-    const mod = await (load as () => Promise<{ default: ComponentType }>)();
+    const [mod, { DocsLayout }] = await Promise.all([
+      (load as () => Promise<{ default: ComponentType }>)(),
+      import('./components/DocsLayout.js'),
+    ]);
     const MDX = mod.default;
-    const Wrapped: ComponentType = (props) => <article class="mdx-content"><MDX {...props} /></article>;
+    const Wrapped: ComponentType = (props) => <DocsLayout><MDX {...props} /></DocsLayout>;
     return { default: Wrapped };
   });
   return { route, Component };

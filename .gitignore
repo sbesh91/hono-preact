@@ -16,6 +16,7 @@ node_modules/
 public/
 static
 dist
+.superpowers
 
 # env
 .env
