@@ -15,7 +15,7 @@ const Home: FunctionComponent = () => {
         <a href="/movies" class="bg-purple-300">
           movies
         </a>
-        <a href="/docs/hello" class="bg-purple-300">
+        <a href="/docs" class="bg-purple-300">
           docs
         </a>
       </div>
