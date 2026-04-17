@@ -1,0 +1,106 @@
+[← docs](/docs)
+
+# Server Loaders
+
+Pages often need data. On the server, that data should come from a direct function call. In the browser, it must come via fetch. Writing this branch manually on every page is error-prone — the loader system handles it automatically.
+
+## How it works
+
+Split data fetching into two files that live next to the page:
+
+- `movies.server.ts` — runs only on the server; direct DB or internal API calls
+- `movies.tsx` — imports both loaders and passes them to `getLoaderData`
+
+The `Page` component (in `src/iso/page.tsx`) runs the right loader depending on the environment.
+
+**At runtime:**
+1. **SSR:** `serverLoader` runs during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
+2. **Hydration (first load):** The client reads that attribute — no fetch is fired.
+3. **Client-side navigation:** `clientLoader` runs and its result is cached for the session.
+
+## Example: listing page
+
+**`src/pages/movies.server.ts`** — server-only data fetching:
+
+```ts
+import { getMovies } from '@/server/movies.js';
+import type { Loader } from '@/iso/loader.js';
+
+const serverLoader: Loader<{ movies: MovieList }> = async () => {
+  const movies = await getMovies(); // direct call — never runs in the browser
+  return { movies };
+};
+
+export default serverLoader;
+```
+
+**`src/pages/movies.tsx`** — the page component:
+
+```tsx
+import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+import serverLoader from './movies.server.js';
+import { createCache } from '@/iso/cache.js';
+import type { LocationHook } from 'preact-iso';
+
+const cache = createCache<{ movies: MovieList }>();
+
+const clientLoader = cache.wrap(async ({}: { location: LocationHook }) => {
+  const movies = await fetch('/api/movies').then(r => r.json());
+  return { movies };
+}, '/movies');
+
+const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
+  return (
+    <ul>
+      {loaderData?.movies.results.map(m => <li key={m.id}>{m.title}</li>)}
+    </ul>
+  );
+};
+
+Movies.defaultProps = { route: '/movies' };
+export default getLoaderData(Movies, { serverLoader, clientLoader, cache });
+```
+
+## Example: detail page (using route params)
+
+`Loader<T>` receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID:
+
+```ts
+// src/pages/movie.server.ts
+import { getMovie } from '@/server/movies.js';
+import type { Loader } from '@/iso/loader.js';
+
+const serverLoader: Loader<{ movie: Movie }> = async ({ location }) => {
+  const movie = await getMovie(location.pathParams.id);
+  return { movie };
+};
+
+export default serverLoader;
+```
+
+## The server-only plugins
+
+Two custom Vite plugins (in `vite-plugin-server-only.ts`) enforce the boundary between server and client code:
+
+**`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to an inert stub:
+
+```ts
+const serverLoader = async () => ({});
+```
+
+This guarantees that database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle, even if you forget to think about it.
+
+**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports. If you write:
+
+```ts
+// ❌ build error
+export const helper = () => {};
+export default serverLoader;
+```
+
+The build will fail with:
+```
+'.server files must not have named exports (found: helper). Export the server loader as the default export only.'
+```
+
+This prevents server-only state from accidentally entering the module graph via named exports.

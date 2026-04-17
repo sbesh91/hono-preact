@@ -1,0 +1,70 @@
+[← docs](/docs)
+
+# Build & Deploy
+
+## Development
+
+```bash
+npm run dev
+```
+
+Starts the Vite dev server (`NODE_ENV=development vite --force`) with the `@hono/vite-dev-server` Cloudflare adapter. Hot module replacement works for both client components and server code. The `--force` flag disables Vite's dependency cache, which prevents stale module resolution issues during development.
+
+## Two-pass production build
+
+```bash
+npm run build
+```
+
+This runs two Vite builds sequentially:
+
+**Pass 1 — client bundle** (`vite build --mode client`):
+
+Produces the browser bundle in `dist/static/`. The `serverOnlyPlugin` replaces all `*.server.*` imports with no-op stubs so server code never enters the browser bundle.
+
+Output:
+```
+dist/static/client.js        # main client entry
+dist/static/<name>-<hash>.js # lazy page chunks
+dist/static/<name>-<hash>.css
+```
+
+**Pass 2 — Worker bundle** (`vite build`):
+
+Produces the Cloudflare Workers bundle at `dist/index.js`. The `@hono/vite-build` plugin handles bundling for the Workers runtime. Client assets from Pass 1 are included in `dist/` so the Worker can serve them.
+
+The two-pass approach is necessary because the client and server targets have different runtimes (browser vs. Workers edge runtime) and different Vite plugin configurations.
+
+## Local preview
+
+```bash
+npm run preview
+```
+
+Runs the full production build then starts Wrangler's local dev mode. This is closer to the real Cloudflare environment than the Vite dev server and is the right tool for testing production behaviour locally.
+
+## Configuring `wrangler.jsonc`
+
+Before deploying, update `wrangler.jsonc`:
+
+```jsonc
+{
+  "name": "your-app-name",       // ← change this to your Worker name
+  "main": "dist/index.js",
+  "compatibility_date": "2026-02-22",
+  "assets": {
+    "directory": "./dist"        // serves dist/static/* as static assets
+  },
+  "compatibility_flags": ["nodejs_compat"]
+}
+```
+
+`assets.directory` points Cloudflare to `dist/` so static files (JS chunks, CSS) are served automatically from the CDN alongside the Worker. The Worker itself handles all HTML responses via the catch-all route.
+
+## Deploy
+
+```bash
+npm run deploy
+```
+
+Runs `wrangler deploy`, which uploads `dist/index.js` as the Worker script and the contents of `dist/` as static assets to Cloudflare's global network.

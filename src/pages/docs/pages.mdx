@@ -1,0 +1,78 @@
+[← docs](/docs)
+
+# Adding Pages
+
+There are two kinds of pages in this template: standard Preact pages and MDX content pages. Both are lazy-loaded (code-split) and registered as preact-iso routes.
+
+## Standard Preact pages
+
+Standard pages require three steps: create the file, register it in `iso.tsx`, and add a `<Route>`.
+
+### Step 1 — Create `src/pages/about.tsx`
+
+```tsx
+import type { FunctionComponent } from 'preact';
+import { getLoaderData } from '@/iso/loader.js';
+
+const About: FunctionComponent = () => {
+  return <section>About this app.</section>;
+};
+
+About.displayName = 'About';
+About.defaultProps = { route: '/about' };
+
+export default getLoaderData(About);
+```
+
+Two things to note:
+
+- **`defaultProps.route`** — tells preact-iso which path this component owns during SSR. It must match the `path` prop on the corresponding `<Route>`.
+- **`getLoaderData`** — required even for pages with no data. It wraps the component in the loader/preload system so hydration works correctly.
+
+### Step 2 — Register in `src/iso.tsx`
+
+```tsx
+// Add the lazy import near the top with the other page imports:
+const About = lazy(() => import('./pages/about.js'));
+
+// Add a Route inside <Router>:
+<Route path="/about" component={About} />
+```
+
+### Step 3 — Link to it
+
+From anywhere in the app:
+
+```tsx
+<a href="/about">About</a>
+```
+
+preact-iso intercepts clicks on same-origin `<a>` tags and handles them as client-side navigations.
+
+## MDX docs pages
+
+MDX pages in `src/pages/docs/` are auto-discovered — no changes to `iso.tsx` are needed.
+
+**Create `src/pages/docs/my-page.mdx`:**
+
+```mdx
+[← docs](/docs)
+
+# My Page
+
+Content written in Markdown with optional JSX components.
+```
+
+It is immediately available at `/docs/my-page`. The route is derived from the filename.
+
+**Supported MDX features:**
+
+- All standard Markdown syntax
+- Inline JSX — import and use any Preact component
+- Frontmatter is not processed by default (no remark-frontmatter configured)
+
+**Note on `index.mdx`:** The file `src/pages/docs/index.mdx` is a special case — the routing logic strips its trailing `/index` to serve it at `/docs` rather than `/docs/index`.
+
+## View transitions
+
+Route changes trigger a view transition if the browser supports `document.startViewTransition`. This is wired up in `iso.tsx` via the `onRouteChange` callback passed to `<Router>`. No per-page setup is needed.
