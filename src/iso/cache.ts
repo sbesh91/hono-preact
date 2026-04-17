@@ -1,7 +1,7 @@
-import type { LocationHook } from 'preact-iso';
+import type { RouteHook } from 'preact-iso';
 import type { Loader } from './loader.js';
 
-type KeyFn = (location: LocationHook) => string;
+type KeyFn = (location: RouteHook) => string;
 
 export interface LoaderCache<T> {
   get(key: string): T | undefined;

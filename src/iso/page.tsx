@@ -1,5 +1,5 @@
 import { FunctionComponent } from 'preact';
-import { LocationHook } from 'preact-iso';
+import { RouteHook } from 'preact-iso';
 import { memo, Suspense } from 'preact/compat';
 import { useId, useRef } from 'preact/hooks';
 import { type LoaderCache } from './cache';
@@ -12,7 +12,7 @@ type PageProps<T> = {
   Child: FunctionComponent<LoaderData<T>>;
   serverLoader?: Loader<T>;
   clientLoader?: Loader<T>;
-  location: LocationHook;
+  location: RouteHook;
   cache?: LoaderCache<T>;
 };
 

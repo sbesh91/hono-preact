@@ -1,13 +1,13 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import type { FunctionalComponent } from 'preact';
-import { lazy, LocationHook, Route, Router } from 'preact-iso';
+import { lazy, Route, Router, RouteHook } from 'preact-iso';
 import serverLoader from './movies.server.js';
 import { createCache } from '@/iso/cache.js';
 import Noop from './noop.js';
 
 const cache = createCache<{ movies: any }>();
 
-const clientLoader = cache.wrap(async ({}: { location: LocationHook }) => {
+const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
   const movies = await fetch('/api/movies')
     .then((res) => res.json())
     .catch(console.log);
