@@ -22,6 +22,8 @@
   "devDependencies": {
     "@babel/parser": "^7.29.2",
     "@babel/types": "^7.29.0",
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
     "@hono/node-server": "^1.19.14",
     "@hono/vite-build": "^1.11.1",
     "@hono/vite-dev-server": "^0.25.1",
