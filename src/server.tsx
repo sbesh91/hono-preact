@@ -1,4 +1,3 @@
-import dot from 'dotenv';
 import { Hono } from 'hono';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
@@ -8,9 +7,10 @@ import { location } from './server/middleware/location.js';
 import { getMovie, getMovies } from './server/movies.js';
 
 const dev = process.env.NODE_ENV === 'development';
-dot.config({
-  debug: dev,
-});
+if (dev) {
+  const { default: dot } = await import('dotenv');
+  dot.config({ debug: true });
+}
 export const app = new Hono();
 
 env.current = 'server';
