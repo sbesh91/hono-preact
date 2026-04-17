@@ -14,7 +14,8 @@ export function DocsLayout({ children }: Props) {
   const allEntries = nav.flatMap((s) => s.entries);
   const idx = allEntries.findIndex((e) => e.route === path);
   const prev = idx > 0 ? allEntries[idx - 1] : null;
-  const next = idx !== -1 && idx < allEntries.length - 1 ? allEntries[idx + 1] : null;
+  const next =
+    idx !== -1 && idx < allEntries.length - 1 ? allEntries[idx + 1] : null;
   const currentTitle = idx !== -1 ? allEntries[idx].title : '';
 
   const navSections = nav.map((section) => (
@@ -41,7 +42,10 @@ export function DocsLayout({ children }: Props) {
     <div class="grid md:grid-cols-[220px_1fr] min-h-screen">
       {/* Desktop sidebar */}
       <aside class="hidden md:flex md:sticky md:top-0 md:h-screen md:overflow-y-auto md:bg-slate-50 md:border-r md:border-slate-200 md:p-4 md:flex-col md:gap-6">
-        <a href="/docs" class="font-bold text-[0.95rem] text-slate-900 no-underline hover:text-blue-700">
+        <a
+          href="/docs"
+          class="font-bold text-[0.95rem] text-slate-900 no-underline hover:text-blue-700"
+        >
           hono-preact docs
         </a>
         {navSections}
@@ -69,7 +73,9 @@ export function DocsLayout({ children }: Props) {
       />
 
       {/* Mobile drawer */}
-      <div class={`fixed top-0 bottom-0 left-0 w-[260px] bg-slate-50 border-r border-slate-200 z-50 transition-transform duration-200 ease-in-out flex flex-col ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div
+        class={`fixed top-0 bottom-0 left-0 w-65 bg-slate-50 border-r border-slate-200 z-50 transition-transform duration-200 ease-in-out flex flex-col ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
         <div class="flex justify-between items-center px-4 py-3 border-b border-slate-200 font-bold text-[0.9rem] text-slate-900">
           Docs
           <button
@@ -86,15 +92,27 @@ export function DocsLayout({ children }: Props) {
 
       {/* Main content */}
       <main class="max-w-[65ch] py-8 px-6">
-        <article class="mdx-content">
-          {children}
-        </article>
+        <article class="mdx-content">{children}</article>
         <nav class="flex justify-between mt-12 pt-6 border-t border-slate-200 text-sm">
           <span>
-            {prev && <a href={prev.route} class="text-blue-600 no-underline hover:underline">← {prev.title}</a>}
+            {prev && (
+              <a
+                href={prev.route}
+                class="text-blue-600 no-underline hover:underline"
+              >
+                ← {prev.title}
+              </a>
+            )}
           </span>
           <span>
-            {next && <a href={next.route} class="text-blue-600 no-underline hover:underline">{next.title} →</a>}
+            {next && (
+              <a
+                href={next.route}
+                class="text-blue-600 no-underline hover:underline"
+              >
+                {next.title} →
+              </a>
+            )}
           </span>
         </nav>
       </main>
