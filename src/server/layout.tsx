@@ -13,7 +13,7 @@ export const Layout: FunctionComponent<{ context: Context }> = (props) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href={root} />
       </head>
-      <body class="bg-gray-300 p-2 isolate">
+      <body class="bg-gray-300 isolate">
         <section id="app">
           <HonoContext.Provider value={props}>
             <Base />
