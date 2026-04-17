@@ -40,11 +40,11 @@ export default serverLoader;
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import serverLoader from './movies.server.js';
 import { createCache } from '@/iso/cache.js';
-import type { LocationHook } from 'preact-iso';
+import type { RouteHook } from 'preact-iso';
 
 const cache = createCache<{ movies: MovieList }>();
 
-const clientLoader = cache.wrap(async ({}: { location: LocationHook }) => {
+const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
   const movies = await fetch('/api/movies').then(r => r.json());
   return { movies };
 }, '/movies');

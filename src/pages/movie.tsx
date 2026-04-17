@@ -1,6 +1,6 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import type { FunctionalComponent } from 'preact';
-import { RouteHook } from 'preact-iso';
+import type { RouteHook } from 'preact-iso';
 import serverLoader from './movie.server.js';
 
 async function clientLoader({ location }: { location: RouteHook }) {
