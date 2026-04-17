@@ -13,7 +13,8 @@ const Movies = lazy(() => import('./pages/movies.js'));
 // module contents is needed to know the path.
 const mdxModules = import.meta.glob('./pages/docs/*.mdx');
 const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => {
-  const route = '/docs' + filePath.replace('./pages/docs', '').replace('.mdx', '');
+  const route = ('/docs' + filePath.replace('./pages/docs', '').replace('.mdx', ''))
+    .replace(/\/index$/, '') || '/docs';
   // Wrap the MDX component in a single root element so the lazy Suspense
   // boundary contains one node. MDX compiles to a Fragment root (multiple
   // sibling nodes), which Preact cannot reconcile correctly during hydration
