@@ -1,0 +1,77 @@
+[← docs](/docs)
+
+# Project Structure
+
+```
+hono-preact/
+├── src/
+│   ├── server.tsx              # Hono app — API routes + catch-all SSR handler
+│   ├── client.tsx              # Browser entry — hydrates the Preact app
+│   ├── iso.tsx                 # Shared component tree — Router + route registration
+│   ├── pages/                  # Page components (one file per route)
+│   │   └── docs/               # MDX content pages (auto-discovered as /docs/* routes)
+│   ├── server/                 # Server-only code
+│   │   ├── layout.tsx          # HTML shell rendered on every request
+│   │   ├── context.ts          # Hono context passed to server-side components
+│   │   └── middleware/         # Hono middleware (e.g. location)
+│   ├── iso/                    # Isomorphic utilities — loader, cache, preload
+│   ├── components/             # Shared UI components
+│   ├── styles/                 # Global CSS
+│   └── shims/                  # Browser environment shims (e.g. process)
+├── vite.config.ts              # Two build configs: client bundle + Worker bundle
+├── vite-plugin-server-only.ts  # Custom Vite plugins for server-only enforcement
+├── wrangler.jsonc              # Cloudflare Workers deployment config
+└── tsconfig.json
+```
+
+## Key files
+
+### `src/server.tsx`
+
+The Hono application. Defines API routes and a catch-all `GET *` handler that SSR-renders the full Preact app via `prerender` from preact-iso, then injects `<head>` tags and returns the HTML response.
+
+```ts
+app
+  .get('/api/movies', async (c) => { ... })
+  .get('*', async (c) => {
+    const { html } = await prerender(<Layout context={c} />);
+    return c.html(`<!doctype html>${html}`);
+  });
+```
+
+### `src/client.tsx`
+
+The browser entry point. Picks up the server-rendered HTML and hydrates it in place. Runs only in the browser.
+
+```ts
+hydrate(<App />, document.getElementById('app'));
+```
+
+### `src/iso.tsx`
+
+The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` with all routes, including lazy-loaded standard pages and auto-discovered MDX pages.
+
+```ts
+const mdxModules = import.meta.glob('./pages/docs/*.mdx');
+// Each .mdx file becomes a lazy /docs/* route — no manual registration needed.
+```
+
+### `src/server/layout.tsx`
+
+Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. The catch-all route in `server.tsx` renders this component and wraps its output in `<!doctype html>`.
+
+### `src/iso/`
+
+Isomorphic utilities shared between server and client:
+
+- `loader.tsx` — `getLoaderData` HOC and `Loader<T>` type
+- `page.tsx` — `Page` component: runs serverLoader on the server, clientLoader in the browser
+- `cache.ts` — simple in-memory cache to avoid re-fetching on client-side navigation
+- `preload.ts` — reads loader data serialized into `data-loader` attributes on first hydration
+
+### `vite-plugin-server-only.ts`
+
+Two custom Vite plugins:
+
+- **`serverOnlyPlugin`** — during the client bundle build, replaces any `*.server.*` import with a no-op stub so server code never reaches the browser
+- **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports; the server loader must be the default export
