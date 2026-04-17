@@ -2,12 +2,22 @@ import build from '@hono/vite-build/cloudflare-workers';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
-import mdx from '@mdx-js/rollup';
+import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
+import rehypeShiki from '@shikijs/rehype';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
-import { serverLoaderValidationPlugin, serverOnlyPlugin } from './vite-plugin-server-only';
+import {
+  serverLoaderValidationPlugin,
+  serverOnlyPlugin,
+} from './vite-plugin-server-only';
+
+const mdxOptions = {
+  jsxImportSource: 'preact',
+  remarkPlugins: [remarkGfm],
+  rehypePlugins: [[rehypeShiki, { theme: 'github-dark' }]],
+} satisfies MdxOptions;
 
 export default defineConfig((env) => {
   if (env.mode === 'client' || env.mode === 'visualizer') {
@@ -39,7 +49,7 @@ export default defineConfig((env) => {
         copyPublicDir: false,
       },
       plugins: [
-        Object.assign(mdx({ jsxImportSource: 'preact', remarkPlugins: [remarkGfm] }), { enforce: 'pre' as const }),
+        Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
         preact(),
         serverOnlyPlugin(true),
         ...(env.mode === 'visualizer'
@@ -78,7 +88,7 @@ export default defineConfig((env) => {
       },
     },
     plugins: [
-      Object.assign(mdx({ jsxImportSource: 'preact', remarkPlugins: [remarkGfm] }), { enforce: 'pre' as const }),
+      Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
       serverLoaderValidationPlugin(),
       build({
         entry: 'src/server.tsx',
