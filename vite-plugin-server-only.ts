@@ -41,9 +41,10 @@ export function serverLoaderValidationPlugin(): Plugin {
         }
       }
 
-      if (namedExports.length > 0) {
+      const disallowedExports = namedExports.filter((n) => n !== 'serverGuards');
+      if (disallowedExports.length > 0) {
         this.error(
-          `${id}: .server files must not have named exports (found: ${namedExports.join(', ')}). ` +
+          `${id}: .server files may only export 'serverGuards' as a named export (found: ${disallowedExports.join(', ')}). ` +
             `Export the server loader as the default export only.`
         );
       }
@@ -78,23 +79,34 @@ export function serverOnlyPlugin(isClientBuild: boolean): Plugin {
           (node as ImportDeclaration).source.value
         ) &&
         (node as ImportDeclaration).specifiers.some(
-          (s) => s.type === 'ImportDefaultSpecifier'
+          (s) =>
+            s.type === 'ImportDefaultSpecifier' ||
+            (s.type === 'ImportSpecifier' &&
+              s.imported.type === 'Identifier' &&
+              s.imported.name === 'serverGuards')
         );
 
       const serverImport = ast.program.body.find(isServerImport);
       if (!serverImport) return;
 
-      const defaultSpecifier = serverImport.specifiers.find(
-        (s) => s.type === 'ImportDefaultSpecifier'
-      )!;
-      const localName = defaultSpecifier.local.name;
+      const stubs: string[] = [];
+
+      for (const s of serverImport.specifiers) {
+        if (s.type === 'ImportDefaultSpecifier') {
+          stubs.push(`const ${s.local.name} = async () => ({});`);
+        } else if (
+          s.type === 'ImportSpecifier' &&
+          s.imported.type === 'Identifier' &&
+          s.imported.name === 'serverGuards'
+        ) {
+          stubs.push(`const ${s.local.name} = [];`);
+        }
+      }
+
+      if (stubs.length === 0) return;
 
       const s = new MagicString(code);
-      s.overwrite(
-        serverImport.start!,
-        serverImport.end!,
-        `const ${localName} = async () => ({});`
-      );
+      s.overwrite(serverImport.start!, serverImport.end!, stubs.join('\n'));
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
   };
