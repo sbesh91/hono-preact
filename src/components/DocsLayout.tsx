@@ -68,7 +68,7 @@ export function DocsLayout({ children }: Props) {
 
       {/* Mobile drawer overlay */}
       <div
-        class={`fixed inset-0 bg-black/35 z-40 ${drawerOpen ? 'block' : 'hidden'}`}
+        class={`fixed inset-0 bg-black/35 z-40 starting:hidden ${drawerOpen ? 'block' : 'hidden'}`}
         onClick={() => setDrawerOpen(false)}
       />
 
