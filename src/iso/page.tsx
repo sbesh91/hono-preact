@@ -86,6 +86,12 @@ const GuardedPage = memo(function <T extends {}>({
   const [reloading, setReloading] = useState(false);
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
 
+  const prevPath = useRef(location.path);
+  if (prevPath.current !== location.path) {
+    prevPath.current = location.path;
+    setOverrideData(undefined);
+  }
+
   const reload = useCallback(() => {
     if (reloading) return;
     setReloading(true);
