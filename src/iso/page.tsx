@@ -18,7 +18,7 @@ const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
 
 export function useReload(): ReloadContextValue {
   const ctx = useContext(ReloadContext);
-  if (!ctx) throw new Error('useReload must be used within a Page');
+  if (!ctx) throw new Error('useReload must be called inside a component rendered by getLoaderData');
   return ctx;
 }
 
@@ -89,10 +89,14 @@ const GuardedPage = memo(function <T extends {}>({
   const reload = useCallback(() => {
     if (reloading) return;
     setReloading(true);
-    clientLoader({ location }).then((result) => {
-      setOverrideData(result);
-      setReloading(false);
-    });
+    clientLoader({ location })
+      .then((result) => {
+        setOverrideData(result);
+        setReloading(false);
+      })
+      .catch(() => {
+        setReloading(false);
+      });
   }, [reloading, clientLoader, location]);
 
   void overrideData; // will be wired in Task 3
