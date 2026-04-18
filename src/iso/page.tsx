@@ -99,8 +99,6 @@ const GuardedPage = memo(function <T extends {}>({
       });
   }, [reloading, clientLoader, location]);
 
-  void overrideData; // will be wired in Task 3
-
   const guardResult = guardRef.current.read();
 
   if (guardResult && 'redirect' in guardResult) {
@@ -124,7 +122,7 @@ const GuardedPage = memo(function <T extends {}>({
     cache?.set(location.path, preloaded);
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>
-        <Helper id={id} Child={Child} loader={{ read: () => preloaded }} />
+        <Helper id={id} Child={Child} loader={{ read: () => preloaded }} overrideData={overrideData} />
       </ReloadContext.Provider>
     );
   }
@@ -133,7 +131,7 @@ const GuardedPage = memo(function <T extends {}>({
     const cached = cache.get(location.path)!;
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>
-        <Helper id={id} Child={Child} loader={{ read: () => cached }} />
+        <Helper id={id} Child={Child} loader={{ read: () => cached }} overrideData={overrideData} />
       </ReloadContext.Provider>
     );
   }
@@ -152,7 +150,7 @@ const GuardedPage = memo(function <T extends {}>({
   return (
     <ReloadContext.Provider value={{ reload, reloading }}>
       <Suspense fallback={fallback ?? null}>
-        <Helper id={id} Child={Child} loader={loaderRef.current} />
+        <Helper id={id} Child={Child} loader={loaderRef.current} overrideData={overrideData} />
       </Suspense>
     </ReloadContext.Provider>
   );
@@ -162,9 +160,10 @@ type HelperProps<T> = {
   id: string;
   Child: FunctionComponent<LoaderData<T>>;
   loader: { read: () => T };
+  overrideData?: T;
 };
-export const Helper = memo(function <T>({ id, Child, loader }: HelperProps<T>) {
-  const loaderData = loader.read();
+export const Helper = memo(function <T>({ id, Child, loader, overrideData }: HelperProps<T>) {
+  const loaderData = overrideData !== undefined ? overrideData : loader.read();
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   return (
