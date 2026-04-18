@@ -1,0 +1,164 @@
+[← docs](/docs)
+
+# Route Guards
+
+Pages sometimes need to be protected — requiring authentication, a specific role, or any other condition before rendering. Guards provide this as a middleware-style chain that runs before the page loader, on both the server (initial load) and the client (client-side navigation).
+
+## How it works
+
+Guards are async functions that receive a context object and a `next()` callback, mirroring Hono's middleware pattern. Each guard either returns a result to short-circuit, or calls `next()` to pass control to the next guard. If all guards pass, the page renders normally.
+
+Like loaders, guards are split by environment:
+
+- `serverGuards` — exported from `*.server.ts`, run during SSR, tree-shaken from the browser bundle
+- `clientGuards` — defined inline in the page file, run during client-side navigation
+
+## API
+
+### `createGuard`
+
+```ts
+import { createGuard } from '@/iso/guard.js';
+
+const authenticated = createGuard(async ({ location }, next) => {
+  const user = await getCurrentUser(); // your auth logic
+  if (!user) return { redirect: '/login' };
+  return next(); // must return next(), not just await it
+});
+```
+
+A guard receives:
+- `location` — the current `RouteHook` (path, params, searchParams)
+- `next()` — call and **return** this to pass control downstream
+
+A guard returns one of:
+- `{ redirect: '/some/path' }` — redirect the user
+- `{ render: FallbackComponent }` — render a component in place of the page (e.g. a 403 page)
+- `return next()` — pass through to the next guard or the page
+
+### `runGuards`
+
+Guards are executed in order. The first to return a result short-circuits the rest.
+
+```ts
+guards: [checkAuthenticated, checkRole('admin')]
+//        ^ runs first          ^ only runs if first passes
+```
+
+## Example: protected page
+
+**`src/pages/admin.server.ts`** — server guards (never reaches the browser bundle):
+
+```ts
+import type { Loader } from '@/iso/loader.js';
+import { createGuard } from '@/iso/guard.js';
+import { getCurrentUser } from '@/server/auth.js';
+
+const serverLoader: Loader<{ stats: Stats }> = async () => {
+  const stats = await getAdminStats();
+  return { stats };
+};
+
+export default serverLoader;
+
+export const serverGuards = [
+  createGuard(async (_ctx, next) => {
+    const user = await getCurrentUser();
+    if (!user) return { redirect: '/login' };
+    if (user.role !== 'admin') return { redirect: '/forbidden' };
+    return next();
+  }),
+];
+```
+
+**`src/pages/admin.tsx`** — the page component:
+
+```tsx
+import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+import { createGuard } from '@/iso/guard.js';
+import serverLoader, { serverGuards } from './admin.server.js';
+import { createCache } from '@/iso/cache.js';
+import type { RouteHook } from 'preact-iso';
+
+const cache = createCache<{ stats: Stats }>();
+
+const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
+  const stats = await fetch('/api/admin/stats').then(r => r.json());
+  return { stats };
+}, '/admin');
+
+const clientGuards = [
+  createGuard(async (_ctx, next) => {
+    const user = await getCurrentUser(); // client-side auth check
+    if (!user) return { redirect: '/login' };
+    if (user.role !== 'admin') return { redirect: '/forbidden' };
+    return next();
+  }),
+];
+
+const Admin: FunctionComponent<LoaderData<{ stats: Stats }>> = ({ loaderData }) => (
+  <section>...</section>
+);
+
+Admin.defaultProps = { route: '/admin' };
+export default getLoaderData(Admin, {
+  serverLoader,
+  clientLoader,
+  cache,
+  serverGuards,
+  clientGuards,
+});
+```
+
+## Build conventions
+
+The same Vite plugins that enforce loader conventions also enforce guard conventions.
+
+**`serverLoaderValidationPlugin`** — `.server.ts` files may only have `serverGuards` as a named export alongside the default loader. Any other named export fails the build:
+
+```ts
+// ❌ build error
+export const helper = () => {};
+export default serverLoader;
+
+// ✅ allowed
+export const serverGuards = [...];
+export default serverLoader;
+```
+
+**`serverOnlyPlugin`** — in the client bundle, `serverGuards` imports are replaced with an empty array stub. Your server-side auth logic never reaches the browser:
+
+```ts
+// What you write:
+import serverLoader, { serverGuards } from './admin.server.js';
+
+// What the client bundle sees:
+const serverLoader = async () => ({});
+const serverGuards = [];
+```
+
+## Composing guards
+
+Guards are plain functions — compose them however you like:
+
+```ts
+const requireAuth = createGuard(async (_ctx, next) => {
+  const user = await getCurrentUser();
+  if (!user) return { redirect: '/login' };
+  return next();
+});
+
+const requireRole = (role: string) =>
+  createGuard(async (_ctx, next) => {
+    const user = await getCurrentUser();
+    if (user?.role !== role) return { redirect: '/forbidden' };
+    return next();
+  });
+
+// Reuse across pages:
+export const serverGuards = [requireAuth, requireRole('editor')];
+```
+
+## `getCurrentUser`
+
+Guard functions call `getCurrentUser()` themselves — the framework does not. This keeps the auth layer entirely in your code. On the server, read from the Hono context (cookies, headers, session). On the client, read from whatever auth state store you use.
