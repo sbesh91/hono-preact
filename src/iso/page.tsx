@@ -1,8 +1,9 @@
 import { FunctionComponent } from 'preact';
-import { RouteHook } from 'preact-iso';
+import { RouteHook, useLocation } from 'preact-iso';
 import { memo, Suspense } from 'preact/compat';
 import { useId, useRef } from 'preact/hooks';
 import { type LoaderCache } from './cache';
+import { type GuardFn, GuardRedirect, runGuards } from './guard.js';
 import { isBrowser } from './is-browser';
 import { Loader, LoaderData } from './loader';
 import { getPreloadedData } from './preload';
@@ -14,16 +15,71 @@ type PageProps<T> = {
   clientLoader?: Loader<T>;
   location: RouteHook;
   cache?: LoaderCache<T>;
+  serverGuards?: GuardFn[];
+  clientGuards?: GuardFn[];
 };
 
 export const Page = memo(function <T extends {}>({
+  Child,
+  serverLoader,
+  clientLoader,
+  location,
+  cache,
+  serverGuards = [],
+  clientGuards = [],
+}: PageProps<T>) {
+  const guards = isBrowser() ? clientGuards : serverGuards;
+  const guardRef = useRef(wrapPromise(runGuards(guards, { location })));
+
+  return (
+    <Suspense fallback={null}>
+      <GuardedPage
+        Child={Child}
+        serverLoader={serverLoader}
+        clientLoader={clientLoader}
+        location={location}
+        cache={cache}
+        guardRef={guardRef}
+      />
+    </Suspense>
+  );
+});
+
+type GuardedPageProps<T> = {
+  Child: FunctionComponent<LoaderData<T>>;
+  serverLoader?: Loader<T>;
+  clientLoader?: Loader<T>;
+  location: RouteHook;
+  cache?: LoaderCache<T>;
+  guardRef: { current: { read: () => import('./guard.js').GuardResult } };
+};
+
+const GuardedPage = memo(function <T extends {}>({
   Child,
   serverLoader = async () => ({}) as T,
   clientLoader = serverLoader,
   location,
   cache,
-}: PageProps<T>) {
+  guardRef,
+}: GuardedPageProps<T>) {
   const id = useId();
+  const { route } = useLocation();
+
+  const guardResult = guardRef.current.read();
+
+  if (guardResult && 'redirect' in guardResult) {
+    if (isBrowser()) {
+      route(guardResult.redirect);
+      return null;
+    } else {
+      throw new GuardRedirect(guardResult.redirect);
+    }
+  }
+
+  if (guardResult && 'render' in guardResult) {
+    const Fallback = guardResult.render;
+    return <Fallback />;
+  }
 
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
