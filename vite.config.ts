@@ -16,7 +16,7 @@ import {
 const mdxOptions = {
   jsxImportSource: 'preact',
   remarkPlugins: [remarkGfm],
-  rehypePlugins: [[rehypeShiki, { theme: 'github-dark' }]],
+  rehypePlugins: [[rehypeShiki, { theme: 'github-dark', langs: ['ts', 'tsx', 'bash', 'jsonc', 'mdx'] }]],
 } satisfies MdxOptions;
 
 export default defineConfig((env) => {
