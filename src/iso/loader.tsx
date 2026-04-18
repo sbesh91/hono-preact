@@ -41,3 +41,5 @@ export const getLoaderData = <T extends {}>(
     );
   });
 };
+
+export { useReload } from './page.js';
