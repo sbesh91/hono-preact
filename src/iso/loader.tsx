@@ -19,11 +19,12 @@ interface LoaderProps<T> {
   cache?: LoaderCache<T>;
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
+  fallback?: JSX.Element;
 }
 
 export const getLoaderData = <T extends {}>(
   Component: FunctionComponent<LoaderData<T>>,
-  { serverLoader, clientLoader, cache, serverGuards, clientGuards }: LoaderProps<T> = {}
+  { serverLoader, clientLoader, cache, serverGuards, clientGuards, fallback }: LoaderProps<T> = {}
 ) => {
   return memo((location: RouteHook) => {
     return (
@@ -35,6 +36,7 @@ export const getLoaderData = <T extends {}>(
         cache={cache}
         serverGuards={serverGuards}
         clientGuards={clientGuards}
+        fallback={fallback}
       />
     );
   });

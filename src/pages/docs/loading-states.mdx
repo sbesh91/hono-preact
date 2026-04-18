@@ -1,0 +1,50 @@
+[← docs](/docs)
+
+# Loading States
+
+By default, a page renders nothing while its client loader is fetching. Pass a `fallback` to `getLoaderData` to show a loading UI during client-side navigation.
+
+## Basic usage
+
+```tsx
+import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+
+export default getLoaderData(Movies, {
+  serverLoader,
+  clientLoader,
+  cache,
+  fallback: <p>Loading…</p>,
+});
+```
+
+`fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation — SSR and first-load hydration read from preloaded data and render immediately.
+
+## When fallback shows
+
+| Navigation | Fallback shown? |
+|---|---|
+| SSR (first load) | No — data is preloaded into the HTML |
+| Hydration | No — client reads from `data-loader` attribute |
+| Client-side nav (cache miss) | Yes — until `clientLoader` resolves |
+| Client-side nav (cache hit) | No — cached data renders immediately |
+
+## Using a skeleton
+
+Any Preact element works as a fallback, including a layout-matching skeleton:
+
+```tsx
+const MoviesSkeleton = () => (
+  <ul>
+    {Array.from({ length: 5 }).map((_, i) => (
+      <li key={i} class="h-6 w-48 animate-pulse bg-gray-200 rounded" />
+    ))}
+  </ul>
+);
+
+export default getLoaderData(Movies, {
+  serverLoader,
+  clientLoader,
+  cache,
+  fallback: <MoviesSkeleton />,
+});
+```

@@ -9,6 +9,7 @@
 .idea/shelf
 .wrangler
 .yalc
+.idea
 yalc.lock
 
 # deps

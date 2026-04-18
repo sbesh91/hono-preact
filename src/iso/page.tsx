@@ -1,4 +1,4 @@
-import { FunctionComponent } from 'preact';
+import { type FunctionComponent, type JSX } from 'preact';
 import { RouteHook, useLocation } from 'preact-iso';
 import { memo, Suspense } from 'preact/compat';
 import { useId, useRef } from 'preact/hooks';
@@ -17,6 +17,7 @@ type PageProps<T> = {
   cache?: LoaderCache<T>;
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
+  fallback?: JSX.Element;
 };
 
 export const Page = memo(function <T extends {}>({
@@ -27,6 +28,7 @@ export const Page = memo(function <T extends {}>({
   cache,
   serverGuards = [],
   clientGuards = [],
+  fallback,
 }: PageProps<T>) {
   const guards = isBrowser() ? clientGuards : serverGuards;
   const guardRef = useRef(wrapPromise(runGuards(guards, { location })));
@@ -40,6 +42,7 @@ export const Page = memo(function <T extends {}>({
         location={location}
         cache={cache}
         guardRef={guardRef}
+        fallback={fallback}
       />
     </Suspense>
   );
@@ -52,6 +55,7 @@ type GuardedPageProps<T> = {
   location: RouteHook;
   cache?: LoaderCache<T>;
   guardRef: { current: { read: () => import('./guard.js').GuardResult } };
+  fallback?: JSX.Element;
 };
 
 const GuardedPage = memo(function <T extends {}>({
@@ -61,6 +65,7 @@ const GuardedPage = memo(function <T extends {}>({
   location,
   cache,
   guardRef,
+  fallback,
 }: GuardedPageProps<T>) {
   const id = useId();
   const { route } = useLocation();
@@ -106,7 +111,7 @@ const GuardedPage = memo(function <T extends {}>({
   );
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={fallback ?? null}>
       <Helper id={id} Child={Child} loader={loaderRef.current} />
     </Suspense>
   );
