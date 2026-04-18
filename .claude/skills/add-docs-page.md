@@ -42,5 +42,3 @@ The `nav` array has two sections: `Getting Started` and `Guides`. New feature do
 - [ ] `src/pages/docs/<slug>.mdx` created
 - [ ] Link added to `src/pages/docs/index.mdx`
 - [ ] Entry added to `src/pages/docs/nav.ts`
-- [ ] Dev server shows the page at `/docs/<slug>`
-- [ ] Page appears in the sidebar
