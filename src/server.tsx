@@ -5,6 +5,7 @@ import { env } from './iso/is-browser.js';
 import { Layout } from './server/layout.js';
 import { location } from './server/middleware/location.js';
 import { getMovie, getMovies } from './server/movies.js';
+import { GuardRedirect } from './iso/guard.js';
 
 const dev = process.env.NODE_ENV === 'development';
 if (dev) {
@@ -27,11 +28,18 @@ app
   .use(location)
   .get('*', async (c) => {
     const dispatcher = createDispatcher();
-    const { html } = await prerender(
-      <HoofdProvider value={dispatcher}>
-        <Layout context={c} />
-      </HoofdProvider>
-    );
+
+    let html: string;
+    try {
+      ({ html } = await prerender(
+        <HoofdProvider value={dispatcher}>
+          <Layout context={c} />
+        </HoofdProvider>
+      ));
+    } catch (e) {
+      if (e instanceof GuardRedirect) return c.redirect(e.location);
+      throw e;
+    }
 
     const { title, lang, metas = [], links = [] } = dispatcher.toStatic();
 
