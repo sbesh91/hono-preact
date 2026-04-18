@@ -1,13 +1,26 @@
-import { type FunctionComponent, type JSX } from 'preact';
+import { createContext, type FunctionComponent, type JSX } from 'preact';
 import { RouteHook, useLocation } from 'preact-iso';
 import { memo, Suspense } from 'preact/compat';
-import { useId, useRef } from 'preact/hooks';
+import { useCallback, useContext, useId, useRef, useState } from 'preact/hooks';
 import { type LoaderCache } from './cache';
 import { type GuardFn, GuardRedirect, runGuards } from './guard.js';
 import { isBrowser } from './is-browser';
 import { Loader, LoaderData } from './loader';
 import { getPreloadedData } from './preload';
 import wrapPromise from './wrap-promise';
+
+type ReloadContextValue = {
+  reload: () => void;
+  reloading: boolean;
+};
+
+const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
+
+export function useReload(): ReloadContextValue {
+  const ctx = useContext(ReloadContext);
+  if (!ctx) throw new Error('useReload must be used within a Page');
+  return ctx;
+}
 
 type PageProps<T> = {
   Child: FunctionComponent<LoaderData<T>>;
@@ -70,6 +83,20 @@ const GuardedPage = memo(function <T extends {}>({
   const id = useId();
   const { route } = useLocation();
 
+  const [reloading, setReloading] = useState(false);
+  const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
+
+  const reload = useCallback(() => {
+    if (reloading) return;
+    setReloading(true);
+    clientLoader({ location }).then((result) => {
+      setOverrideData(result);
+      setReloading(false);
+    });
+  }, [reloading, clientLoader, location]);
+
+  void overrideData; // will be wired in Task 3
+
   const guardResult = guardRef.current.read();
 
   if (guardResult && 'redirect' in guardResult) {
@@ -91,12 +118,20 @@ const GuardedPage = memo(function <T extends {}>({
 
   if (isLoaded) {
     cache?.set(location.path, preloaded);
-    return <Helper id={id} Child={Child} loader={{ read: () => preloaded }} />;
+    return (
+      <ReloadContext.Provider value={{ reload, reloading }}>
+        <Helper id={id} Child={Child} loader={{ read: () => preloaded }} />
+      </ReloadContext.Provider>
+    );
   }
 
   if (isBrowser() && cache?.has(location.path)) {
     const cached = cache.get(location.path)!;
-    return <Helper id={id} Child={Child} loader={{ read: () => cached }} />;
+    return (
+      <ReloadContext.Provider value={{ reload, reloading }}>
+        <Helper id={id} Child={Child} loader={{ read: () => cached }} />
+      </ReloadContext.Provider>
+    );
   }
 
   const loaderRef = useRef(
@@ -111,9 +146,11 @@ const GuardedPage = memo(function <T extends {}>({
   );
 
   return (
-    <Suspense fallback={fallback ?? null}>
-      <Helper id={id} Child={Child} loader={loaderRef.current} />
-    </Suspense>
+    <ReloadContext.Provider value={{ reload, reloading }}>
+      <Suspense fallback={fallback ?? null}>
+        <Helper id={id} Child={Child} loader={loaderRef.current} />
+      </Suspense>
+    </ReloadContext.Provider>
   );
 });
 
