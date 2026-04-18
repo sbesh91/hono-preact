@@ -82,15 +82,16 @@ export default serverLoader;
 
 Two custom Vite plugins (in `vite-plugin-server-only.ts`) enforce the boundary between server and client code:
 
-**`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to an inert stub:
+**`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to inert stubs. The default export becomes a no-op async function and `serverGuards` (if imported) becomes an empty array:
 
 ```ts
 const serverLoader = async () => ({});
+const serverGuards = [];
 ```
 
 This guarantees that database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle, even if you forget to think about it.
 
-**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports. If you write:
+**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`. If you write:
 
 ```ts
 // ❌ build error
@@ -100,7 +101,9 @@ export default serverLoader;
 
 The build will fail with:
 ```
-'.server files must not have named exports (found: helper). Export the server loader as the default export only.'
+'.server files may only export 'serverGuards' as a named export (found: helper). Export the server loader as the default export only.'
 ```
+
+`serverGuards` is the one permitted named export — use it to attach middleware-style guards that run before the loader on the server. Any other named export is an error.
 
 This prevents server-only state from accidentally entering the module graph via named exports.
