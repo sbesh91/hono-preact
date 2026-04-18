@@ -1,7 +1,8 @@
 import { getLoaderData, type LoaderData } from '@/iso/loader.js';
 import type { FunctionalComponent } from 'preact';
 import { lazy, Route, Router, RouteHook } from 'preact-iso';
-import serverLoader from './movies.server.js';
+import serverLoader /*, { serverGuards }*/ from './movies.server.js';
+// import { createGuard } from '../iso/guard.js';
 import { createCache } from '@/iso/cache.js';
 import Noop from './noop.js';
 
@@ -42,8 +43,16 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: any }>) => {
 Movies.displayName = 'Movies';
 Movies.defaultProps = { route: '/movies' };
 
+// const clientGuards = [
+//   createGuard(async (_ctx, _next) => {
+//     return { redirect: '/test' };
+//   }),
+// ];
+
 export default getLoaderData(Movies, {
   serverLoader,
   clientLoader,
   cache,
+  // serverGuards,
+  // clientGuards,
 });
