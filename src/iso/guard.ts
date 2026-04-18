@@ -11,6 +11,7 @@ export type GuardContext = {
   location: RouteHook;
 };
 
+/** Must `return next()` (not just `await next()`) to propagate downstream results. */
 export type GuardFn = (
   ctx: GuardContext,
   next: () => Promise<GuardResult>
@@ -29,6 +30,9 @@ export const runGuards = async (
   return run(0);
 };
 
-export class GuardRedirect {
-  constructor(public readonly location: string) {}
+export class GuardRedirect extends Error {
+  constructor(public readonly location: string) {
+    super(`Guard redirect to ${location}`);
+    this.name = 'GuardRedirect';
+  }
 }
