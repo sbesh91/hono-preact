@@ -1,0 +1,64 @@
+[← docs](/docs)
+
+# Reloading Data
+
+Sometimes you need to re-run the client loader imperatively — for example, after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
+
+## Basic usage
+
+```tsx
+import { getLoaderData, type LoaderData, useReload } from '@/iso/loader.js';
+
+const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
+  const { reload, reloading } = useReload();
+
+  const handleAdd = async () => {
+    await addMovie({ title: 'New Movie' });
+    reload();
+  };
+
+  return (
+    <>
+      <button onClick={handleAdd} disabled={reloading}>
+        {reloading ? 'Adding...' : 'Add Movie'}
+      </button>
+      <ul>
+        {loaderData?.movies.results.map(m => <li key={m.id}>{m.title}</li>)}
+      </ul>
+    </>
+  );
+};
+
+export default getLoaderData(Movies, { serverLoader, clientLoader });
+```
+
+`useReload` must be called inside a component rendered by `getLoaderData`. Calling it elsewhere throws an error.
+
+## Background refresh
+
+Reload is a background refresh — the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
+
+## Cache invalidation
+
+`reload()` re-runs the `clientLoader` as-is. If your loader is cache-wrapped, the cache will return the existing data again unless you invalidate it first:
+
+```tsx
+const { reload } = useReload();
+
+const handleAdd = async () => {
+  await addMovie({ title: 'New Movie' });
+  cache.invalidate('/movies'); // clear the cache entry first
+  reload();                    // then re-run the loader
+};
+```
+
+## API
+
+```ts
+const { reload, reloading } = useReload();
+```
+
+| Value | Type | Description |
+|---|---|---|
+| `reload` | `() => void` | Re-runs the `clientLoader`. No-op if a reload is already in progress. |
+| `reloading` | `boolean` | `true` while the loader is fetching, `false` otherwise. |
