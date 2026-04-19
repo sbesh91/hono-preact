@@ -12,6 +12,7 @@ vi.mock('../preload.js', () => ({
 }));
 
 import * as preloadModule from '../preload.js';
+import { JSX } from 'preact';
 
 const loc = {
   path: '/test',
