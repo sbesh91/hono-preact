@@ -46,12 +46,14 @@ export const Page = memo(function <T extends {}>({
   clientGuards = [],
   fallback,
 }: PageProps<T>) {
+  const id = useId();
   const guards = isBrowser() ? clientGuards : serverGuards;
   const guardRef = useRef(wrapPromise(runGuards(guards, { location })));
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={fallback}>
       <GuardedPage
+        id={id}
         Child={Child}
         serverLoader={serverLoader}
         clientLoader={clientLoader}
@@ -65,6 +67,7 @@ export const Page = memo(function <T extends {}>({
 });
 
 type GuardedPageProps<T> = {
+  id: string;
   Child: FunctionComponent<LoaderData<T>>;
   serverLoader?: Loader<T>;
   clientLoader?: Loader<T>;
@@ -75,6 +78,7 @@ type GuardedPageProps<T> = {
 };
 
 const GuardedPage = memo(function <T extends {}>({
+  id,
   Child,
   serverLoader = async () => ({}) as T,
   clientLoader = serverLoader,
@@ -83,7 +87,6 @@ const GuardedPage = memo(function <T extends {}>({
   guardRef,
   fallback,
 }: GuardedPageProps<T>) {
-  const id = useId();
   const { route } = useLocation();
 
   const [reloading, setReloading] = useState(false);
@@ -127,7 +130,6 @@ const GuardedPage = memo(function <T extends {}>({
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
 
-  console.log(id, preloaded);
   if (isLoaded) {
     cache?.set(location.path, preloaded);
     return (
@@ -169,7 +171,7 @@ const GuardedPage = memo(function <T extends {}>({
 
   return (
     <ReloadContext.Provider value={{ reload, reloading }}>
-      <Suspense fallback={fallback ?? null}>
+      <Suspense fallback={fallback}>
         <Helper
           id={id}
           Child={Child}
