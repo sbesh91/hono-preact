@@ -1,0 +1,27 @@
+{
+  "name": "hono-preact",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@hono-preact/iso": "workspace:*",
+    "@hono-preact/server": "workspace:*",
+    "@hono-preact/vite": "workspace:*"
+  },
+  "peerDependencies": {
+    "hono": ">=4.0.0",
+    "preact": ">=10.0.0",
+    "preact-iso": "*",
+    "vite": ">=5.0.0"
+  }
+}
