@@ -1,11 +1,10 @@
 import { Hono } from 'hono';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
-import { env } from './iso/is-browser.js';
+import { env, GuardRedirect } from '@hono-preact/iso';
 import { Layout } from './server/layout.js';
 import { location } from './server/middleware/location.js';
 import { getMovie, getMovies } from './server/movies.js';
-import { GuardRedirect } from './iso/guard.js';
 
 const dev = process.env.NODE_ENV === 'development';
 if (dev) {

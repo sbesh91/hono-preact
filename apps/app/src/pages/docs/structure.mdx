@@ -14,7 +14,7 @@ hono-preact/
 │   │   ├── layout.tsx          # HTML shell rendered on every request
 │   │   ├── context.ts          # Hono context passed to server-side components
 │   │   └── middleware/         # Hono middleware (e.g. location)
-│   ├── iso/                    # Isomorphic utilities — loader, cache, preload
+│   ├── (iso utilities in @hono-preact/iso package)
 │   ├── components/             # Shared UI components
 │   ├── styles/                 # Global CSS
 │   └── shims/                  # Browser environment shims (e.g. process)
@@ -60,9 +60,9 @@ const mdxModules = import.meta.glob('./pages/docs/*.mdx');
 
 Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. The catch-all route in `server.tsx` renders this component and wraps its output in `<!doctype html>`.
 
-### `src/iso/`
+### `@hono-preact/iso` (workspace package)
 
-Isomorphic utilities shared between server and client:
+Isomorphic utilities shared between server and client (extracted to `packages/iso/`):
 
 - `loader.tsx` — `getLoaderData` HOC and `Loader<T>` type
 - `page.tsx` — `Page` component: runs serverLoader on the server, clientLoader in the browser

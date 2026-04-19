@@ -7,7 +7,7 @@ Sometimes you need to re-run the client loader imperatively — for example, aft
 ## Basic usage
 
 ```tsx
-import { getLoaderData, type LoaderData, useReload } from '@/iso/loader.js';
+import { getLoaderData, type LoaderData, useReload } from '@hono-preact/iso';
 
 const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
   const { reload, reloading } = useReload();

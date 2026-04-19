@@ -1,9 +1,8 @@
-import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+import { getLoaderData, type LoaderData, createCache } from '@hono-preact/iso';
 import type { FunctionalComponent } from 'preact';
 import { lazy, Route, Router, RouteHook } from 'preact-iso';
 import serverLoader /*, { serverGuards }*/ from './movies.server.js';
 // import { createGuard } from '../iso/guard.js';
-import { createCache } from '@/iso/cache.js';
 import Noop from './noop.js';
 
 const cache = createCache<{ movies: any }>();

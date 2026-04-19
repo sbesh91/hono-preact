@@ -11,7 +11,7 @@ Split data fetching into two files that live next to the page:
 - `movies.server.ts` — runs only on the server; direct DB or internal API calls
 - `movies.tsx` — imports both loaders and passes them to `getLoaderData`
 
-The `Page` component (in `src/iso/page.tsx`) runs the right loader depending on the environment.
+The `Page` component (in `@hono-preact/iso`) runs the right loader depending on the environment.
 
 **At runtime:**
 1. **SSR:** `serverLoader` runs during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
@@ -24,7 +24,7 @@ The `Page` component (in `src/iso/page.tsx`) runs the right loader depending on 
 
 ```ts
 import { getMovies } from '@/server/movies.js';
-import type { Loader } from '@/iso/loader.js';
+import type { Loader } from '@hono-preact/iso';
 
 const serverLoader: Loader<{ movies: MovieList }> = async () => {
   const movies = await getMovies(); // direct call — never runs in the browser
@@ -37,9 +37,9 @@ export default serverLoader;
 **`src/pages/movies.tsx`** — the page component:
 
 ```tsx
-import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+import { getLoaderData, type LoaderData } from '@hono-preact/iso';
 import serverLoader from './movies.server.js';
-import { createCache } from '@/iso/cache.js';
+import { createCache } from '@hono-preact/iso';
 import type { RouteHook } from 'preact-iso';
 
 const cache = createCache<{ movies: MovieList }>();
@@ -68,7 +68,7 @@ export default getLoaderData(Movies, { serverLoader, clientLoader, cache });
 ```ts
 // src/pages/movie.server.ts
 import { getMovie } from '@/server/movies.js';
-import type { Loader } from '@/iso/loader.js';
+import type { Loader } from '@hono-preact/iso';
 
 const serverLoader: Loader<{ movie: Movie }> = async ({ location }) => {
   const movie = await getMovie(location.pathParams.id);

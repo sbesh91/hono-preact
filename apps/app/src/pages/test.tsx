@@ -1,4 +1,4 @@
-import { getLoaderData } from '@/iso/loader';
+import { getLoaderData } from '@hono-preact/iso';
 import { useLink } from 'hoofd/preact';
 import { type FunctionComponent } from 'preact';
 import test from './test.css?url';

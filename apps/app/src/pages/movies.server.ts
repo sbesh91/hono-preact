@@ -1,5 +1,5 @@
 import { getMovies } from '@/server/movies.js';
-import type { Loader } from '@/iso/loader.js';
+import type { Loader } from '@hono-preact/iso';
 // import { createGuard } from '../iso/guard.js';
 
 const serverLoader: Loader<{ movies: any }> = async () => {

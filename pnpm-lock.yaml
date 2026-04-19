@@ -10,6 +10,9 @@ importers:
 
   apps/app:
     dependencies:
+      '@hono-preact/iso':
+        specifier: workspace:*
+        version: link:../../packages/iso
       '@shikijs/rehype':
         specifier: ^4.0.2
         version: 4.0.2
@@ -113,6 +116,19 @@ importers:
       wrangler:
         specifier: ^4.83.0
         version: 4.83.0
+
+  packages/iso:
+    dependencies:
+      preact:
+        specifier: '>=10.0.0'
+        version: 10.29.1
+      preact-iso:
+        specifier: '*'
+        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+    devDependencies:
+      vite:
+        specifier: ^8.0.8
+        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0)
 
   packages/vite:
     dependencies:
@@ -1988,6 +2004,12 @@ packages:
   powershell-utils@0.1.0:
     resolution: {integrity: sha512-dM0jVuXJPsDN6DvRpea484tCUaMiXWjuCn++HGTqUWzGDjv5tZkEZldAJ/UMlqRYGFrD/etByo4/xOuC/snX2A==}
     engines: {node: '>=20'}
+
+  preact-iso@2.11.1:
+    resolution: {integrity: sha512-rLy0RmzP/hrDjnFdnEblxFgKtzUj4njkHrpGJBGS7S4QuYw1zv0lA38qsWpeAAB10JAz/hF2CsHrLen9ufCtbw==}
+    peerDependencies:
+      preact: '>=10 || >= 11.0.0-0'
+      preact-render-to-string: '>=6.4.0'
 
   preact-iso@https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777:
     resolution: {tarball: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777}
@@ -4370,6 +4392,11 @@ snapshots:
       source-map-js: 1.2.1
 
   powershell-utils@0.1.0: {}
+
+  preact-iso@2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
+    dependencies:
+      preact: 10.29.1
+      preact-render-to-string: 6.6.7(preact@10.29.1)
 
   preact-iso@https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
     dependencies:

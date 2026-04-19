@@ -1,4 +1,4 @@
-import { getLoaderData, type LoaderData } from '@/iso/loader.js';
+import { getLoaderData, type LoaderData } from '@hono-preact/iso';
 import type { FunctionalComponent } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import serverLoader from './movie.server.js';

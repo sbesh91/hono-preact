@@ -1,4 +1,4 @@
-import { getLoaderData } from '@/iso/loader';
+import { getLoaderData } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 
