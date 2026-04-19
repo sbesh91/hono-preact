@@ -3,13 +3,17 @@
   "private": true,
   "type": "module",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "workerd", "@parcel/watcher"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "@parcel/watcher"
+    ]
   },
   "scripts": {
-    "dev": "pnpm --filter app dev",
+    "dev": "pnpm --filter app run dev",
     "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter app build",
     "deploy": "pnpm --filter app run deploy",
-    "preview": "pnpm --filter app preview",
-    "visualize": "pnpm --filter app visualize"
+    "preview": "pnpm --filter app run preview",
+    "visualize": "pnpm --filter app run visualize"
   }
 }

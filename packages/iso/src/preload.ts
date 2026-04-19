@@ -1,4 +1,4 @@
-import { isBrowser } from "./is-browser";
+import { isBrowser } from './is-browser';
 
 export function getPreloadedData<T>(id: string) {
   const defaultValue = {} as T;
@@ -12,7 +12,7 @@ export function getPreloadedData<T>(id: string) {
   }
 
   try {
-    return JSON.parse(el.dataset.loader ?? "{}") as T;
+    return JSON.parse(el.dataset.loader ?? '{}') as T;
   } catch (error) {
     return defaultValue;
   } finally {

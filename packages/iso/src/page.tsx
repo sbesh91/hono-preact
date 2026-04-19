@@ -18,7 +18,10 @@ const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
 
 export function useReload(): ReloadContextValue {
   const ctx = useContext(ReloadContext);
-  if (!ctx) throw new Error('useReload must be called inside a component rendered by getLoaderData');
+  if (!ctx)
+    throw new Error(
+      'useReload must be called inside a component rendered by getLoaderData'
+    );
   return ctx;
 }
 
@@ -124,11 +127,17 @@ const GuardedPage = memo(function <T extends {}>({
   const preloaded = getPreloadedData<T>(id);
   const isLoaded = Object.keys(preloaded).length > 0;
 
+  console.log(id, preloaded);
   if (isLoaded) {
     cache?.set(location.path, preloaded);
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>
-        <Helper id={id} Child={Child} loader={{ read: () => preloaded }} overrideData={overrideData} />
+        <Helper
+          id={id}
+          Child={Child}
+          loader={{ read: () => preloaded }}
+          overrideData={overrideData}
+        />
       </ReloadContext.Provider>
     );
   }
@@ -137,7 +146,12 @@ const GuardedPage = memo(function <T extends {}>({
     const cached = cache.get(location.path)!;
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>
-        <Helper id={id} Child={Child} loader={{ read: () => cached }} overrideData={overrideData} />
+        <Helper
+          id={id}
+          Child={Child}
+          loader={{ read: () => cached }}
+          overrideData={overrideData}
+        />
       </ReloadContext.Provider>
     );
   }
@@ -156,7 +170,12 @@ const GuardedPage = memo(function <T extends {}>({
   return (
     <ReloadContext.Provider value={{ reload, reloading }}>
       <Suspense fallback={fallback ?? null}>
-        <Helper id={id} Child={Child} loader={loaderRef.current} overrideData={overrideData} />
+        <Helper
+          id={id}
+          Child={Child}
+          loader={loaderRef.current}
+          overrideData={overrideData}
+        />
       </Suspense>
     </ReloadContext.Provider>
   );
@@ -168,7 +187,12 @@ type HelperProps<T> = {
   loader: { read: () => T };
   overrideData?: T;
 };
-export const Helper = memo(function <T>({ id, Child, loader, overrideData }: HelperProps<T>) {
+export const Helper = memo(function <T>({
+  id,
+  Child,
+  loader,
+  overrideData,
+}: HelperProps<T>) {
   const loaderData = overrideData !== undefined ? overrideData : loader.read();
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 

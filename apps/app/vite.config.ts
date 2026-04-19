@@ -20,11 +20,24 @@ const mdxOptions = {
 } satisfies MdxOptions;
 
 export default defineConfig((env) => {
+  const preactIsoPath = resolve(__dirname, '../../node_modules/preact-iso');
+
+  const isoSrc = resolve(__dirname, '../../packages/iso/src/index.ts');
+  const serverSrc = resolve(__dirname, '../../packages/server/src/index.ts');
+
+  const sharedResolve = {
+    dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
+    alias: [
+      { find: '@hono-preact/iso', replacement: isoSrc },
+      { find: '@hono-preact/server', replacement: serverSrc },
+      { find: 'preact-iso/prerender', replacement: `${preactIsoPath}/src/prerender.js` },
+      { find: '@', replacement: resolve(__dirname, './src') },
+    ],
+  };
+
   if (env.mode === 'client' || env.mode === 'visualizer') {
     return {
-      resolve: {
-        alias: [{ find: '@', replacement: resolve(__dirname, './src') }],
-      },
+      resolve: sharedResolve,
       build: {
         target: 'esnext',
         sourcemap: true,
@@ -67,8 +80,9 @@ export default defineConfig((env) => {
   }
 
   return {
-    resolve: {
-      alias: [{ find: '@', replacement: resolve(__dirname, './src') }],
+    resolve: sharedResolve,
+    ssr: {
+      noExternal: ['preact-render-to-string', 'preact-iso', '@hono-preact/iso', '@hono-preact/server'],
     },
     build: {
       target: 'esnext',

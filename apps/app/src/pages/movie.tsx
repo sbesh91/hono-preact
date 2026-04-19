@@ -7,7 +7,6 @@ async function clientLoader({ location }: { location: RouteHook }) {
   const movie = await fetch(`/api/movies/${location.pathParams.id}`)
     .then((res) => res.json())
     .catch(console.log);
-
   return { movie };
 }
 
@@ -17,7 +16,7 @@ const Movie: FunctionalComponent = (props: LoaderData<{ movie: any }>) => {
       <a href="/movies" class="bg-red-200">
         movies
       </a>
-      {props.loaderData?.movie?.title}
+      <span>{props.loaderData?.movie?.title}</span>
       <a class="block" href="/movies/1241982">
         next movie
       </a>
