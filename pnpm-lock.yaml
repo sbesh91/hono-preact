@@ -13,6 +13,9 @@ importers:
       '@hono-preact/iso':
         specifier: workspace:*
         version: link:../../packages/iso
+      '@hono-preact/server':
+        specifier: workspace:*
+        version: link:../../packages/server
       '@shikijs/rehype':
         specifier: ^4.0.2
         version: 4.0.2
@@ -129,6 +132,18 @@ importers:
       vite:
         specifier: ^8.0.8
         version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0)
+
+  packages/server:
+    dependencies:
+      hono:
+        specifier: '>=4.0.0'
+        version: 4.12.14
+      preact:
+        specifier: '>=10.0.0'
+        version: 10.29.1
+      preact-iso:
+        specifier: '*'
+        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
 
   packages/vite:
     dependencies:

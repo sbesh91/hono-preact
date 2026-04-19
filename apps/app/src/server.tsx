@@ -3,7 +3,7 @@ import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
 import { env, GuardRedirect } from '@hono-preact/iso';
 import { Layout } from './server/layout.js';
-import { location } from './server/middleware/location.js';
+import { location } from '@hono-preact/server';
 import { getMovie, getMovies } from './server/movies.js';
 
 const dev = process.env.NODE_ENV === 'development';

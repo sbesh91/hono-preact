@@ -3,7 +3,7 @@ import root from '@/styles/root.css?url';
 import type { Context } from 'hono';
 import { type FunctionComponent } from 'preact';
 import { LocationProvider } from 'preact-iso';
-import { HonoContext } from './context.js';
+import { HonoContext } from '@hono-preact/server';
 
 export const Layout: FunctionComponent<{ context: Context }> = (props) => {
   return (
