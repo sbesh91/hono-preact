@@ -7,6 +7,7 @@ export default defineConfig({
       'packages/server/src/__tests__/**/*.test.ts',
       'packages/vite/src/__tests__/**/*.test.ts',
     ],
+    setupFiles: ['./vitest.setup.ts'],
     environment: 'node',
     coverage: {
       provider: 'v8',
