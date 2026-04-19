@@ -88,7 +88,6 @@ const GuardedPage = memo(function <T extends {}>({
   fallback,
 }: GuardedPageProps<T>) {
   const { route } = useLocation();
-
   const [reloading, setReloading] = useState(false);
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
 
@@ -158,15 +157,15 @@ const GuardedPage = memo(function <T extends {}>({
     );
   }
 
-  const loaderRef = useRef(
-    wrapPromise(
-      isBrowser()
-        ? clientLoader({ location }).then((r) => {
-            cache?.set(location.path, r);
-            return r;
-          })
-        : serverLoader({ location })
-    )
+  // I'm not sure this sholdn't be wrapped in a useRef
+  // research further
+  const loaderRef = wrapPromise(
+    isBrowser()
+      ? clientLoader({ location }).then((r) => {
+          cache?.set(location.path, r);
+          return r;
+        })
+      : serverLoader({ location })
   );
 
   return (
@@ -175,7 +174,7 @@ const GuardedPage = memo(function <T extends {}>({
         <Helper
           id={id}
           Child={Child}
-          loader={loaderRef.current}
+          loader={loaderRef}
           overrideData={overrideData}
         />
       </Suspense>
