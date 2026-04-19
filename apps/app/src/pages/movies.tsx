@@ -12,7 +12,7 @@ const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
     .then((res) => res.json())
     .catch(console.log);
   return { movies };
-}, '/movies');
+});
 
 const Movie = lazy(() => import('./movie.js'));
 

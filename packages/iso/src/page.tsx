@@ -130,7 +130,7 @@ const GuardedPage = memo(function <T extends {}>({
   const isLoaded = Object.keys(preloaded).length > 0;
 
   if (isLoaded) {
-    cache?.set(location.path, preloaded);
+    cache?.set(preloaded);
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>
         <Helper
@@ -143,8 +143,8 @@ const GuardedPage = memo(function <T extends {}>({
     );
   }
 
-  if (isBrowser() && cache?.has(location.path)) {
-    const cached = cache.get(location.path)!;
+  if (isBrowser() && cache?.has()) {
+    const cached = cache.get()!;
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>
         <Helper
@@ -157,12 +157,10 @@ const GuardedPage = memo(function <T extends {}>({
     );
   }
 
-  // I'm not sure this sholdn't be wrapped in a useRef
-  // research further
   const loaderRef = wrapPromise(
     isBrowser()
       ? clientLoader({ location }).then((r) => {
-          cache?.set(location.path, r);
+          cache?.set(r);
           return r;
         })
       : serverLoader({ location })

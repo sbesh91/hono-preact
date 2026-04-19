@@ -1,34 +1,31 @@
-import type { RouteHook } from 'preact-iso';
 import type { Loader } from './loader.js';
 
-type KeyFn = (location: RouteHook) => string;
-
 export interface LoaderCache<T> {
-  get(key: string): T | undefined;
-  set(key: string, value: T): void;
-  has(key: string): boolean;
-  wrap(loader: Loader<T>, keyFn?: KeyFn | string): Loader<T>;
-  invalidate(key?: string): void;
+  get(): T | null;
+  set(value: T): void;
+  has(): boolean;
+  wrap(loader: Loader<T>): Loader<T>;
+  invalidate(): void;
 }
 
 export function createCache<T>(): LoaderCache<T> {
-  const store = new Map<string, T>();
+  let store: T | null = null;
   return {
-    get: (key) => store.get(key),
-    set: (key, value) => store.set(key, value),
-    has: (key) => store.has(key),
-    wrap(loader, keyFn = ({ path }) => path) {
+    get: () => store,
+    set: (value) => {
+      store = value;
+    },
+    has: () => store !== null,
+    wrap(loader) {
       return async (props) => {
-        const key = typeof keyFn === 'string' ? keyFn : keyFn(props.location);
-        if (store.has(key)) return store.get(key)!;
+        if (store !== null) return store;
         const result = await loader(props);
-        store.set(key, result);
+        store = result;
         return result;
       };
     },
-    invalidate(key) {
-      if (key !== undefined) store.delete(key);
-      else store.clear();
+    invalidate() {
+      store = null;
     },
   };
 }
