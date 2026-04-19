@@ -101,6 +101,7 @@ export default defineConfig((env) => {
     plugins: [
       Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
       serverLoaderValidationPlugin(),
+      serverOnlyPlugin(),
       build({
         entry: 'src/server.tsx',
       }),

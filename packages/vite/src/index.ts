@@ -28,20 +28,28 @@ export function serverLoaderValidationPlugin(): Plugin {
 
           for (const s of named.specifiers) {
             namedExports.push(
-              s.exported.type === 'Identifier' ? s.exported.name : s.exported.value
+              s.exported.type === 'Identifier'
+                ? s.exported.name
+                : s.exported.value
             );
           }
-          if (named.declaration?.type === 'FunctionDeclaration' && named.declaration.id) {
+          if (
+            named.declaration?.type === 'FunctionDeclaration' &&
+            named.declaration.id
+          ) {
             namedExports.push(named.declaration.id.name);
           } else if (named.declaration?.type === 'VariableDeclaration') {
             for (const decl of named.declaration.declarations) {
-              if (decl.id.type === 'Identifier') namedExports.push(decl.id.name);
+              if (decl.id.type === 'Identifier')
+                namedExports.push(decl.id.name);
             }
           }
         }
       }
 
-      const disallowedExports = namedExports.filter((n) => n !== 'serverGuards');
+      const disallowedExports = namedExports.filter(
+        (n) => n !== 'serverGuards'
+      );
       if (disallowedExports.length > 0) {
         this.error(
           `${id}: .server files may only export 'serverGuards' as a named export (found: ${disallowedExports.join(', ')}). ` +
@@ -58,12 +66,12 @@ export function serverLoaderValidationPlugin(): Plugin {
   };
 }
 
-export function serverOnlyPlugin(isClientBuild: boolean): Plugin {
-  if (!isClientBuild) return { name: 'server-only-noop' };
+export function serverOnlyPlugin(): Plugin {
   return {
     name: 'server-only',
     enforce: 'pre',
-    transform(code: string, id: string) {
+    transform(code: string, id: string, options?: { ssr?: boolean }) {
+      if (options?.ssr) return;
       if (/\.server\.[jt]sx?$/.test(id)) return;
       if (!code.includes('.server')) return;
 
