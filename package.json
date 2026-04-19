@@ -6,6 +6,7 @@
     "dev": "pnpm --filter app dev",
     "build": "pnpm --filter app build",
     "deploy": "pnpm --filter app deploy",
-    "preview": "pnpm --filter app preview"
+    "preview": "pnpm --filter app preview",
+    "visualize": "pnpm --filter app visualize"
   }
 }
