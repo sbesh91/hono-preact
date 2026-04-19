@@ -47,7 +47,7 @@ const cache = createCache<{ movies: MovieList }>();
 const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
   const movies = await fetch('/api/movies').then(r => r.json());
   return { movies };
-}, '/movies');
+});
 
 const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
   return (

@@ -85,7 +85,7 @@ const cache = createCache<{ stats: Stats }>();
 const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
   const stats = await fetch('/api/admin/stats').then(r => r.json());
   return { stats };
-}, '/admin');
+});
 
 const clientGuards = [
   createGuard(async (_ctx, next) => {

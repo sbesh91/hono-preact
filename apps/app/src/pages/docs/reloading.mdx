@@ -47,7 +47,7 @@ const { reload } = useReload();
 
 const handleAdd = async () => {
   await addMovie({ title: 'New Movie' });
-  cache.invalidate('/movies'); // clear the cache entry first
+  cache.invalidate(); // clear the cache entry first
   reload();                    // then re-run the loader
 };
 ```

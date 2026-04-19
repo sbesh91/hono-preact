@@ -3,43 +3,51 @@
 # Project Structure
 
 ```
-hono-preact/
-├── src/
-│   ├── server.tsx              # Hono app — API routes + catch-all SSR handler
-│   ├── client.tsx              # Browser entry — hydrates the Preact app
-│   ├── iso.tsx                 # Shared component tree — Router + route registration
-│   ├── pages/                  # Page components (one file per route)
-│   │   └── docs/               # MDX content pages (auto-discovered as /docs/* routes)
-│   ├── server/                 # Server-only code
-│   │   ├── layout.tsx          # HTML shell rendered on every request
-│   │   ├── context.ts          # Hono context passed to server-side components
-│   │   └── middleware/         # Hono middleware (e.g. location)
-│   ├── (iso utilities in @hono-preact/iso package)
-│   ├── components/             # Shared UI components
-│   ├── styles/                 # Global CSS
-│   └── shims/                  # Browser environment shims (e.g. process)
-├── vite.config.ts              # Two build configs: client bundle + Worker bundle
-├── vite-plugin-server-only.ts  # Custom Vite plugins for server-only enforcement
-├── wrangler.jsonc              # Cloudflare Workers deployment config
-└── tsconfig.json
+hono-preact/                    # monorepo root
+├── apps/
+│   └── app/                    # the deployed application
+│       ├── src/
+│       │   ├── server.tsx      # Hono app — API routes + catch-all SSR handler
+│       │   ├── client.tsx      # Browser entry — hydrates the Preact app
+│       │   ├── iso.tsx         # Shared component tree — Router + route registration
+│       │   ├── pages/          # Page components (one file per route)
+│       │   │   └── docs/       # MDX content pages (auto-discovered as /docs/* routes)
+│       │   ├── server/         # Server-only app code
+│       │   │   └── layout.tsx  # HTML shell rendered on every request
+│       │   ├── components/     # Shared UI components
+│       │   ├── styles/         # Global CSS
+│       │   └── shims/          # Browser environment shims (e.g. process)
+│       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
+│       └── wrangler.jsonc      # Cloudflare Workers deployment config
+└── packages/
+    ├── iso/                    # @hono-preact/iso — isomorphic loader utilities
+    ├── server/                 # @hono-preact/server — HonoContext + server middleware
+    └── vite/                   # @hono-preact/vite — server-only Vite plugins
 ```
 
 ## Key files
 
-### `src/server.tsx`
+### `apps/app/src/server.tsx`
 
 The Hono application. Defines API routes and a catch-all `GET *` handler that SSR-renders the full Preact app via `prerender` from preact-iso, then injects `<head>` tags and returns the HTML response.
 
 ```ts
 app
   .get('/api/movies', async (c) => { ... })
+  .use(location)
   .get('*', async (c) => {
-    const { html } = await prerender(<Layout context={c} />);
+    const dispatcher = createDispatcher();
+    const { html } = await prerender(
+      <HoofdProvider value={dispatcher}>
+        <Layout context={c} />
+      </HoofdProvider>
+    );
+    // inject <head> tags from hoofd then return HTML
     return c.html(`<!doctype html>${html}`);
   });
 ```
 
-### `src/client.tsx`
+### `apps/app/src/client.tsx`
 
 The browser entry point. Picks up the server-rendered HTML and hydrates it in place. Runs only in the browser.
 
@@ -47,7 +55,7 @@ The browser entry point. Picks up the server-rendered HTML and hydrates it in pl
 hydrate(<App />, document.getElementById('app'));
 ```
 
-### `src/iso.tsx`
+### `apps/app/src/iso.tsx`
 
 The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` with all routes, including lazy-loaded standard pages and auto-discovered MDX pages.
 
@@ -56,22 +64,30 @@ const mdxModules = import.meta.glob('./pages/docs/*.mdx');
 // Each .mdx file becomes a lazy /docs/* route — no manual registration needed.
 ```
 
-### `src/server/layout.tsx`
+### `apps/app/src/server/layout.tsx`
 
 Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. The catch-all route in `server.tsx` renders this component and wraps its output in `<!doctype html>`.
 
 ### `@hono-preact/iso` (workspace package)
 
-Isomorphic utilities shared between server and client (extracted to `packages/iso/`):
+Isomorphic utilities shared between server and client (`packages/iso/`):
 
-- `loader.tsx` — `getLoaderData` HOC and `Loader<T>` type
+- `loader.tsx` — `getLoaderData` HOC, `useReload` hook, and `Loader<T>` type
 - `page.tsx` — `Page` component: runs serverLoader on the server, clientLoader in the browser
-- `cache.ts` — simple in-memory cache to avoid re-fetching on client-side navigation
+- `cache.ts` — single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation
+- `guard.ts` — `createGuard`, `runGuards`, guard types
 - `preload.ts` — reads loader data serialized into `data-loader` attributes on first hydration
 
-### `vite-plugin-server-only.ts`
+### `@hono-preact/server` (workspace package)
 
-Two custom Vite plugins:
+Server-only utilities (`packages/server/`):
+
+- `context.ts` — `HonoContext` and `useHonoContext` for accessing the Hono `Context` from Preact components during SSR
+- `middleware/location.ts` — `location` middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`
+
+### `@hono-preact/vite` (workspace package)
+
+Two custom Vite plugins (in `packages/vite/`), imported in `vite.config.ts`:
 
 - **`serverOnlyPlugin`** — during the client bundle build, replaces any `*.server.*` import with a no-op stub so server code never reaches the browser
-- **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports; the server loader must be the default export
+- **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`; the server loader must be the default export
