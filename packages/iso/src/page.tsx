@@ -1,4 +1,10 @@
-import { createContext, type FunctionComponent, type JSX } from 'preact';
+import {
+  createContext,
+  type ComponentChildren,
+  type ComponentType,
+  type FunctionComponent,
+  type JSX,
+} from 'preact';
 import { RouteHook, useLocation } from 'preact-iso';
 import { memo, Suspense } from 'preact/compat';
 import { useCallback, useContext, useId, useRef, useState } from 'preact/hooks';
@@ -25,6 +31,17 @@ export function useReload(): ReloadContextValue {
   return ctx;
 }
 
+export type WrapperProps = {
+  id: string;
+  'data-loader': string;
+  'data-page': boolean;
+  children: ComponentChildren;
+};
+
+const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
+  <section {...props} />
+);
+
 type PageProps<T> = {
   Child: FunctionComponent<LoaderData<T>>;
   serverLoader?: Loader<T>;
@@ -34,6 +51,7 @@ type PageProps<T> = {
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
   fallback?: JSX.Element;
+  Wrapper?: ComponentType<WrapperProps>;
 };
 
 export const Page = memo(function <T extends {}>({
@@ -45,6 +63,7 @@ export const Page = memo(function <T extends {}>({
   serverGuards = [],
   clientGuards = [],
   fallback,
+  Wrapper,
 }: PageProps<T>) {
   const id = useId();
   const guards = isBrowser() ? clientGuards : serverGuards;
@@ -61,6 +80,7 @@ export const Page = memo(function <T extends {}>({
         cache={cache}
         guardRef={guardRef}
         fallback={fallback}
+        Wrapper={Wrapper}
       />
     </Suspense>
   );
@@ -75,6 +95,7 @@ type GuardedPageProps<T> = {
   cache?: LoaderCache<T>;
   guardRef: { current: { read: () => import('./guard.js').GuardResult } };
   fallback?: JSX.Element;
+  Wrapper?: ComponentType<WrapperProps>;
 };
 
 const GuardedPage = memo(function <T extends {}>({
@@ -86,6 +107,7 @@ const GuardedPage = memo(function <T extends {}>({
   cache,
   guardRef,
   fallback,
+  Wrapper,
 }: GuardedPageProps<T>) {
   const { route } = useLocation();
   const [reloading, setReloading] = useState(false);
@@ -138,6 +160,7 @@ const GuardedPage = memo(function <T extends {}>({
           Child={Child}
           loader={{ read: () => preloaded }}
           overrideData={overrideData}
+          Wrapper={Wrapper}
         />
       </ReloadContext.Provider>
     );
@@ -152,6 +175,7 @@ const GuardedPage = memo(function <T extends {}>({
           Child={Child}
           loader={{ read: () => cached }}
           overrideData={overrideData}
+          Wrapper={Wrapper}
         />
       </ReloadContext.Provider>
     );
@@ -174,6 +198,7 @@ const GuardedPage = memo(function <T extends {}>({
           Child={Child}
           loader={loaderRef}
           overrideData={overrideData}
+          Wrapper={Wrapper}
         />
       </Suspense>
     </ReloadContext.Provider>
@@ -185,19 +210,21 @@ type HelperProps<T> = {
   Child: FunctionComponent<LoaderData<T>>;
   loader: { read: () => T };
   overrideData?: T;
+  Wrapper?: ComponentType<WrapperProps>;
 };
 export const Helper = memo(function <T>({
   id,
   Child,
   loader,
   overrideData,
+  Wrapper = DefaultWrapper,
 }: HelperProps<T>) {
   const loaderData = overrideData !== undefined ? overrideData : loader.read();
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   return (
-    <section id={id} data-page={true} data-loader={stringified}>
+    <Wrapper id={id} data-loader={stringified} data-page>
       <Child loaderData={loaderData} id={id} />
-    </section>
+    </Wrapper>
   );
 });

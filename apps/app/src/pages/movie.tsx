@@ -1,4 +1,4 @@
-import { getLoaderData, type LoaderData } from '@hono-preact/iso';
+import { getLoaderData, WrapperProps, type LoaderData } from '@hono-preact/iso';
 import type { FunctionalComponent } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import serverLoader from './movie.server.js';
@@ -26,4 +26,12 @@ const Movie: FunctionalComponent = (props: LoaderData<{ movie: any }>) => {
 Movie.displayName = 'Movie';
 Movie.defaultProps = { route: '/movies/:id' };
 
-export default getLoaderData(Movie, { serverLoader, clientLoader });
+function MovieWrapper(props: WrapperProps) {
+  return <article {...props} />;
+}
+
+export default getLoaderData(Movie, {
+  serverLoader,
+  clientLoader,
+  Wrapper: MovieWrapper,
+});

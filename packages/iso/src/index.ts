@@ -5,5 +5,5 @@ export type { LoaderCache } from './cache.js';
 export { createGuard, runGuards, GuardRedirect } from './guard.js';
 export type { GuardFn, GuardResult, GuardContext } from './guard.js';
 export { isBrowser, env } from './is-browser.js';
-export { importStylesheet, inlineStylesheet } from './import-stylesheet.js';
 export { getPreloadedData, deletePreloadedData } from './preload.js';
+export type { WrapperProps } from './page.js';

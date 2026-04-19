@@ -3,7 +3,7 @@ import { RouteHook } from 'preact-iso';
 import { memo } from 'preact/compat';
 import { type GuardFn } from './guard.js';
 import { LoaderCache } from './cache.js';
-import { Page } from './page.js';
+import { Page, WrapperProps } from './page.js';
 
 export interface LoaderData<T> extends JSX.IntrinsicAttributes {
   id?: string;
@@ -20,11 +20,20 @@ interface LoaderProps<T> {
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
   fallback?: JSX.Element;
+  Wrapper?: FunctionComponent<WrapperProps>;
 }
 
 export const getLoaderData = <T extends {}>(
   Component: FunctionComponent<LoaderData<T>>,
-  { serverLoader, clientLoader, cache, serverGuards, clientGuards, fallback }: LoaderProps<T> = {}
+  {
+    serverLoader,
+    clientLoader,
+    cache,
+    serverGuards,
+    clientGuards,
+    fallback,
+    Wrapper,
+  }: LoaderProps<T> = {}
 ) => {
   return memo((location: RouteHook) => {
     return (
@@ -37,6 +46,7 @@ export const getLoaderData = <T extends {}>(
         serverGuards={serverGuards}
         clientGuards={clientGuards}
         fallback={fallback}
+        Wrapper={Wrapper}
       />
     );
   });
