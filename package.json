@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter app dev",
-    "build": "pnpm --filter app build",
+    "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter app build",
     "deploy": "pnpm --filter app deploy",
     "preview": "pnpm --filter app preview",
     "visualize": "pnpm --filter app visualize"
