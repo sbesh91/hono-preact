@@ -2,6 +2,9 @@
   "name": "hono-preact-monorepo",
   "private": true,
   "type": "module",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd", "@parcel/watcher"]
+  },
   "scripts": {
     "dev": "pnpm --filter app dev",
     "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter app build",
