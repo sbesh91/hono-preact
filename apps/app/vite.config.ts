@@ -11,7 +11,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import {
   serverLoaderValidationPlugin,
   serverOnlyPlugin,
-} from './vite-plugin-server-only';
+} from '@hono-preact/vite';
 
 const mdxOptions = {
   jsxImportSource: 'preact',
