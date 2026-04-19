@@ -20,8 +20,6 @@ const mdxOptions = {
 } satisfies MdxOptions;
 
 export default defineConfig((env) => {
-  const preactIsoPath = resolve(__dirname, '../../node_modules/preact-iso');
-
   const isoSrc = resolve(__dirname, '../../packages/iso/src/index.ts');
   const serverSrc = resolve(__dirname, '../../packages/server/src/index.ts');
 
@@ -30,7 +28,6 @@ export default defineConfig((env) => {
     alias: [
       { find: '@hono-preact/iso', replacement: isoSrc },
       { find: '@hono-preact/server', replacement: serverSrc },
-      { find: 'preact-iso/prerender', replacement: `${preactIsoPath}/src/prerender.js` },
       { find: '@', replacement: resolve(__dirname, './src') },
     ],
   };
