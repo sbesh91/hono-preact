@@ -13,6 +13,7 @@ export const nav: NavSection[] = [
   {
     heading: 'Guides',
     entries: [
+      { title: 'Rendering Pages', route: '/docs/render-page' },
       { title: 'Adding Pages', route: '/docs/pages' },
       { title: 'Server Loaders', route: '/docs/loaders' },
       { title: 'Loading States', route: '/docs/loading-states' },

@@ -7,7 +7,12 @@
       "esbuild",
       "workerd",
       "@parcel/watcher"
-    ]
+    ],
+    "overrides": {
+      "preact-iso": "github:preactjs/preact-iso#v3",
+      "typescript": "^6.0.3",
+      "vite": "^8.0.8"
+    }
   },
   "scripts": {
     "dev": "pnpm --filter app run dev",

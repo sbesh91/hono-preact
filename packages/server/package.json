@@ -13,12 +13,16 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
+  "dependencies": {
+    "@hono-preact/iso": "workspace:*"
+  },
   "peerDependencies": {
     "hono": ">=4.0.0",
+    "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
     "preact-iso": "*"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "*"
   }
 }

@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  preact-iso: github:preactjs/preact-iso#v3
+  typescript: ^6.0.3
+  vite: ^8.0.8
+
 importers:
 
   .:
@@ -154,10 +159,10 @@ importers:
         specifier: '>=10.0.0'
         version: 10.29.1
       preact-iso:
-        specifier: '*'
-        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:preactjs/preact-iso#v3
+        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
       vite:
-        specifier: '>=5.0.0'
+        specifier: ^8.0.8
         version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0)
     devDependencies:
       typescript:
@@ -170,8 +175,8 @@ importers:
         specifier: '>=10.0.0'
         version: 10.29.1
       preact-iso:
-        specifier: '*'
-        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:preactjs/preact-iso#v3
+        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -182,15 +187,21 @@ importers:
 
   packages/server:
     dependencies:
+      '@hono-preact/iso':
+        specifier: workspace:*
+        version: link:../iso
       hono:
         specifier: '>=4.0.0'
         version: 4.12.14
+      hoofd:
+        specifier: '>=1.0.0'
+        version: 1.7.3(react@19.2.5)
       preact:
         specifier: '>=10.0.0'
         version: 10.29.1
       preact-iso:
-        specifier: '*'
-        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:preactjs/preact-iso#v3
+        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -1006,7 +1017,7 @@ packages:
     resolution: {integrity: sha512-p0vJpxiVO7KWWazWny3LUZ+saXyZKWv6Ju0bYMWNJRp2YveufRPgSUB1C4MTqGJfz07EehMgfN+AJNwQy+w6Iw==}
     peerDependencies:
       '@babel/core': 7.x
-      vite: 2.x || 3.x || 4.x || 5.x || 6.x || 7.x || 8.x
+      vite: ^8.0.8
 
   '@prefresh/babel-plugin@0.5.3':
     resolution: {integrity: sha512-57LX2SHs4BX2s1IwCjNzTE2OJeEepRCNf1VTEpbNcUyHfMO68eeOWGDIt4ob9aYlW6PEWZ1SuwNikuoIXANDtQ==}
@@ -1023,7 +1034,7 @@ packages:
     resolution: {integrity: sha512-FY1fzXpUjiuosznMV0YM7XAOPZjB5FIdWS0W24+XnlxYkt9hNAwwsiKYn+cuTEoMtD/ZVazS5QVssBr9YhpCQA==}
     peerDependencies:
       preact: ^10.4.0 || ^11.0.0-0
-      vite: '>=2.0.0'
+      vite: ^8.0.8
 
   '@rolldown/binding-android-arm64@1.0.0-rc.15':
     resolution: {integrity: sha512-YYe6aWruPZDtHNpwu7+qAHEMbQ/yRl6atqb/AhznLTnD3UY99Q1jE7ihLSahNWkF4EqRPVC4SiR4O0UkLK02tA==}
@@ -1469,7 +1480,7 @@ packages:
     resolution: {integrity: sha512-R9HTZBhW6yCSGbGQnDnH3QHfJxokKN4KB+Yvk9Q1le7eQNYwiCyKxmLmurSpFy6BzJanSLuEUDrD+j97Q+ZLPg==}
     peerDependencies:
       msw: ^2.4.9
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: ^8.0.8
     peerDependenciesMeta:
       msw:
         optional: true
@@ -2445,12 +2456,6 @@ packages:
     resolution: {integrity: sha512-dM0jVuXJPsDN6DvRpea484tCUaMiXWjuCn++HGTqUWzGDjv5tZkEZldAJ/UMlqRYGFrD/etByo4/xOuC/snX2A==}
     engines: {node: '>=20'}
 
-  preact-iso@2.11.1:
-    resolution: {integrity: sha512-rLy0RmzP/hrDjnFdnEblxFgKtzUj4njkHrpGJBGS7S4QuYw1zv0lA38qsWpeAAB10JAz/hF2CsHrLen9ufCtbw==}
-    peerDependencies:
-      preact: '>=10 || >= 11.0.0-0'
-      preact-render-to-string: '>=6.4.0'
-
   preact-iso@https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777:
     resolution: {tarball: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777}
     version: 2.11.1
@@ -2483,6 +2488,10 @@ packages:
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
+
+  react@19.2.5:
+    resolution: {integrity: sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA==}
+    engines: {node: '>=0.10.0'}
 
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
@@ -2891,7 +2900,7 @@ packages:
   vite-prerender-plugin@0.5.13:
     resolution: {integrity: sha512-IKSpYkzDBsKAxa05naRbj7GvNVMSdww/Z/E89oO3xndz+gWnOBOKOAbEXv7qDhktY/j3vHgJmoV1pPzqU2tx9g==}
     peerDependencies:
-      vite: 5.x || 6.x || 7.x || 8.x
+      vite: ^8.0.8
 
   vite@8.0.8:
     resolution: {integrity: sha512-dbU7/iLVa8KZALJyLOBOQ88nOXtNG8vxKuOT4I2mD+Ya70KPceF4IAmDsmU0h1Qsn5bPrvsY9HJstCRh3hG6Uw==}
@@ -2952,7 +2961,7 @@ packages:
       '@vitest/ui': 4.1.4
       happy-dom: '*'
       jsdom: '*'
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: ^8.0.8
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -4651,6 +4660,10 @@ snapshots:
     dependencies:
       react: '@preact/compat@18.3.2(preact@10.29.1)'
 
+  hoofd@1.7.3(react@19.2.5):
+    dependencies:
+      react: 19.2.5
+
   html-escaper@2.0.2: {}
 
   html-void-elements@3.0.0: {}
@@ -5401,11 +5414,6 @@ snapshots:
 
   powershell-utils@0.1.0: {}
 
-  preact-iso@2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
-    dependencies:
-      preact: 10.29.1
-      preact-render-to-string: 6.6.7(preact@10.29.1)
-
   preact-iso@https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
     dependencies:
       preact: 10.29.1
@@ -5429,6 +5437,8 @@ snapshots:
   property-information@7.1.0: {}
 
   react-is@17.0.2: {}
+
+  react@19.2.5: {}
 
   readdirp@4.1.2:
     optional: true

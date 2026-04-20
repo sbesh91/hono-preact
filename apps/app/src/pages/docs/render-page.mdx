@@ -1,0 +1,68 @@
+[← docs](/docs)
+
+# renderPage
+
+`renderPage` is the SSR entry point exported from `@hono-preact/server`. It takes a Hono context and a root Preact node, prerenders it to HTML, injects head tags collected by [hoofd](https://github.com/nickvdyck/hoofd), and returns a full HTML response — including `<!doctype html>` and the `<html>` wrapper.
+
+## Usage
+
+```ts
+import { renderPage } from '@hono-preact/server';
+
+app.get('*', (c) => renderPage(c, <Layout context={c} />));
+```
+
+That single line replaces the boilerplate for dispatcher setup, prerendering, head tag injection, and HTML assembly that would otherwise live in every app's catch-all handler.
+
+## API
+
+```ts
+renderPage(
+  c: Context,
+  node: VNode,
+  options?: { defaultTitle?: string }
+): Promise<Response>
+```
+
+| Param | Description |
+|---|---|
+| `c` | The Hono `Context` from your route handler |
+| `node` | The root Preact element to render — typically your `<Layout>` |
+| `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''` |
+
+## Head tags
+
+Head tags (`<title>`, `<meta>`, `<link>`) are collected during prerender via hoofd. Pages set them with hoofd's `useTitle`, `useMeta`, and `useLink` hooks:
+
+```tsx
+import { useTitle } from 'hoofd/preact';
+
+export default function MoviesPage() {
+  useTitle('Movies');
+  return <main>…</main>;
+}
+```
+
+`renderPage` injects the collected tags into the `<head>` of the rendered HTML before returning the response.
+
+## GuardRedirect
+
+If a [route guard](/docs/guards) redirects during SSR, it throws a `GuardRedirect`. `renderPage` catches this and turns it into an HTTP redirect via `c.redirect()` — you don't need to handle it in the route handler.
+
+## Example: full server setup
+
+```tsx
+import { Hono } from 'hono';
+import { location, renderPage } from '@hono-preact/server';
+import { Layout } from './server/layout.js';
+
+export const app = new Hono();
+
+app
+  .get('/api/movies', async (c) => {
+    const movies = await getMovies();
+    return c.json(movies);
+  })
+  .use(location)
+  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'My App' }));
+```
