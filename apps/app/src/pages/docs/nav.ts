@@ -7,6 +7,7 @@ export const nav: NavSection[] = [
     entries: [
       { title: 'Overview', route: '/docs' },
       { title: 'Project Structure', route: '/docs/structure' },
+      { title: 'Vite Configuration', route: '/docs/vite-config' },
     ],
   },
   {

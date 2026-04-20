@@ -87,7 +87,8 @@ Server-only utilities (`packages/server/`):
 
 ### `@hono-preact/vite` (workspace package)
 
-Two custom Vite plugins (in `packages/vite/`), imported in `vite.config.ts`:
+Vite plugins for the framework (`packages/vite/`). The primary export is `honoPreact()`, which bundles all framework Vite configuration into a single plugin. See [Vite Configuration](/docs/vite-config) for usage.
 
+- **`honoPreact()`** — configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, and `@hono/vite-dev-server`
 - **`serverOnlyPlugin`** — during the client bundle build, replaces any `*.server.*` import with a no-op stub so server code never reaches the browser
 - **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`; the server loader must be the default export

@@ -19,6 +19,8 @@
     "magic-string": "^0.30.21"
   },
   "peerDependencies": {
+    "@hono/vite-build": "^1.11.1",
+    "@hono/vite-dev-server": "^0.25.1",
     "vite": ">=5.0.0"
   },
   "devDependencies": {

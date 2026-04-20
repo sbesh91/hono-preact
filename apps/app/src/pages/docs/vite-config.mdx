@@ -1,0 +1,94 @@
+[← docs](/docs)
+
+# Vite Configuration
+
+The `@hono-preact/vite` package exports a `honoPreact()` plugin that configures Vite for the framework's two-pass build and dev server. Your `vite.config.ts` only needs to wire in the plugins that are specific to your application.
+
+## Minimal setup
+
+```ts
+import { honoPreact } from '@hono-preact/vite';
+import preact from '@preact/preset-vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [
+    honoPreact({ entry: 'src/server.tsx' }),
+    preact(),
+  ],
+});
+```
+
+`entry` is the path to your Hono server entry point — the file that exports the `app` object used by the Worker.
+
+## What the plugin handles
+
+`honoPreact()` configures everything the framework requires:
+
+| Concern | What it sets |
+|---------|-------------|
+| Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso` |
+| SSR bundling | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `@hono-preact/*` |
+| Client build output | `dist/static/client.js` entry, hashed chunk and asset filenames |
+| Server build output | `esnext` target, `dist/static/` asset dir, minification |
+| Worker bundling | `@hono/vite-build` (Cloudflare Workers preset), build-only |
+| Dev server | `@hono/vite-dev-server` with Cloudflare adapter, serve-only |
+| Server-only imports | `serverOnlyPlugin` — stubs `*.server.*` imports in the client bundle |
+| Loader validation | `serverLoaderValidationPlugin` — enforces `.server.*` export conventions |
+
+## Peer dependencies
+
+`@hono/vite-build` and `@hono/vite-dev-server` are peer dependencies of `@hono-preact/vite`. Install them alongside it:
+
+```bash
+npm install -D @hono/vite-build @hono/vite-dev-server
+```
+
+## Adding MDX
+
+MDX is a user-space choice and not included in the plugin. Add it alongside `honoPreact()`:
+
+```ts
+import { honoPreact } from '@hono-preact/vite';
+import preact from '@preact/preset-vite';
+import mdx from '@mdx-js/rollup';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [
+    honoPreact({ entry: 'src/server.tsx' }),
+    Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
+    preact(),
+  ],
+});
+```
+
+The `enforce: 'pre'` placement ensures MDX files are transformed to JSX before other plugins see them.
+
+## Path aliases
+
+`honoPreact()` does not add path aliases — those belong in your config. A common setup:
+
+```ts
+import { resolve } from 'node:path';
+
+export default defineConfig({
+  resolve: {
+    alias: [{ find: '@', replacement: resolve(__dirname, './src') }],
+  },
+  plugins: [honoPreact({ entry: 'src/server.tsx' }), preact()],
+});
+```
+
+## Overriding build options
+
+Pass `clientBuild`, `serverBuild`, or `sharedBuild` to extend the plugin's defaults:
+
+```ts
+honoPreact({
+  entry: 'src/server.tsx',
+  clientBuild: { sourcemap: false },
+})
+```
+
+These are merged on top of the plugin's defaults, so you only need to specify what differs.
