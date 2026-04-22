@@ -44,7 +44,6 @@
     "rollup-plugin-visualizer": "^7.0.1",
     "sass-embedded": "^1.99.0",
     "tailwindcss": "^4.2.2",
-    "tsx": "^4.21.0",
     "typescript": "*",
     "vite": "*",
     "wrangler": "^4.83.0"
