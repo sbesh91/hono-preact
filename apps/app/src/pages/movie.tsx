@@ -1,16 +1,17 @@
 import { getLoaderData, WrapperProps, type LoaderData } from '@hono-preact/iso';
 import type { FunctionalComponent } from 'preact';
 import type { RouteHook } from 'preact-iso';
+import type { Movie } from '@/server/data/movie.js';
 import serverLoader from './movie.server.js';
 
 async function clientLoader({ location }: { location: RouteHook }) {
-  const movie = await fetch(`/api/movies/${location.pathParams.id}`)
-    .then((res) => res.json())
-    .catch(console.log);
+  const movie = await fetch(`/api/movies/${location.pathParams.id}`).then(
+    (res) => res.json() as Promise<Movie>
+  );
   return { movie };
 }
 
-const Movie: FunctionalComponent = (props: LoaderData<{ movie: any }>) => {
+const Movie: FunctionalComponent = (props: LoaderData<{ movie: Movie | null }>) => {
   return (
     <section class="p-1">
       <a href="/movies" class="bg-red-200">
