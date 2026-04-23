@@ -80,7 +80,7 @@ export default serverLoader;
 
 ## The server-only plugins
 
-Two custom Vite plugins (in `vite-plugin-server-only.ts`) enforce the boundary between server and client code:
+Two custom Vite plugins (in `packages/vite/src/`) enforce the boundary between server and client code:
 
 **`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to inert stubs. The default export becomes a no-op async function and `serverGuards` (if imported) becomes an empty array:
 

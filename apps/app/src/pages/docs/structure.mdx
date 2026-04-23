@@ -29,22 +29,15 @@ hono-preact/                    # monorepo root
 
 ### `apps/app/src/server.tsx`
 
-The Hono application. Defines API routes and a catch-all `GET *` handler that SSR-renders the full Preact app via `prerender` from preact-iso, then injects `<head>` tags and returns the HTML response.
+The Hono application. Defines API routes and a catch-all `GET *` handler that SSR-renders the full Preact app via `renderPage` from `@hono-preact/server` and returns the HTML response.
 
 ```ts
 app
   .get('/api/movies', async (c) => { ... })
   .use(location)
-  .get('*', async (c) => {
-    const dispatcher = createDispatcher();
-    const { html } = await prerender(
-      <HoofdProvider value={dispatcher}>
-        <Layout context={c} />
-      </HoofdProvider>
-    );
-    // inject <head> tags from hoofd then return HTML
-    return c.html(`<!doctype html>${html}`);
-  });
+  .get('*', (c) =>
+    renderPage(c, <Layout context={c} />, { defaultTitle: 'hono-preact' })
+  );
 ```
 
 ### `apps/app/src/client.tsx`
