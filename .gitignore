@@ -18,6 +18,8 @@ public/
 static
 dist
 .superpowers
+.worktrees
+package-lock.json
 
 # env
 .env
@@ -34,4 +36,3 @@ lerna-debug.log*
 
 # misc
 .DS_Store
-.worktrees

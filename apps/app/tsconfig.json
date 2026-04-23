@@ -17,7 +17,6 @@
     "./src/**/*.ts",
     "./src/**/*.json",
     "./src/**/*.mdx",
-    "./vite.config.ts",
-    "./vite-plugin-server-only.ts"
+    "./vite.config.ts"
   ]
 }
