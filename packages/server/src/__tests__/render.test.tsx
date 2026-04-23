@@ -82,12 +82,13 @@ describe('renderPage', () => {
     const html = await res.text();
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;/title&gt;');
+    expect(html).toContain('<title>&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;title&gt;</title>');
   });
 
   it('escapes special characters in the lang attribute', async () => {
     const res = await makeApp(XssLang).request('http://localhost/');
     const html = await res.text();
     expect(html).not.toContain('onload="');
-    expect(html).toContain('&quot;');
+    expect(html).toContain('lang="en&quot; onload=&quot;alert(1)"');
   });
 });

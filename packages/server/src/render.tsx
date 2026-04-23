@@ -4,19 +4,19 @@ import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
 import { GuardRedirect } from '@hono-preact/iso';
 
-function toAttrs(obj: Record<string, string | undefined>): string {
-  return Object.entries(obj)
-    .filter(([, v]) => v != null)
-    .map(([k, v]) => `${k}="${String(v).replace(/"/g, '&quot;')}"`)
-    .join(' ');
-}
-
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function toAttrs(obj: Record<string, string | undefined>): string {
+  return Object.entries(obj)
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => `${k}="${escapeHtml(String(v))}"`)
+    .join(' ');
 }
 
 // this is a bit too naive still
