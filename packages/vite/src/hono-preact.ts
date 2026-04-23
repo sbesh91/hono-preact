@@ -51,6 +51,8 @@ export function honoPreact({
                   entryFileNames: 'static/client.js',
                   chunkFileNames: 'static/[name]-[hash].js',
                   assetFileNames: 'static/[name]-[hash].[ext]',
+                  // Array-form output is not supported — use an OutputOptions object to
+                  // override individual fields (entryFileNames, chunkFileNames, etc.).
                   ...(userRollup?.output && !Array.isArray(userRollup.output)
                     ? userRollup.output
                     : {}),
