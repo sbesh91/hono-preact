@@ -1,10 +1,16 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@hono-preact/iso': path.resolve(__dirname, 'packages/iso/src/index.ts'),
+    },
+  },
   test: {
     include: [
       'packages/iso/src/__tests__/**/*.test.{ts,tsx}',
-      'packages/server/src/__tests__/**/*.test.ts',
+      'packages/server/src/__tests__/**/*.test.{ts,tsx}',
       'packages/vite/src/__tests__/**/*.test.ts',
     ],
     setupFiles: ['./vitest.setup.ts'],
