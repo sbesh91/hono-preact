@@ -176,4 +176,5 @@ export const moviesData = {
   ],
 } as const;
 
-export type MovieSummary = (typeof moviesData.results)[number];
+export type MoviesData = typeof moviesData;
+export type MovieSummary = MoviesData['results'][number];
