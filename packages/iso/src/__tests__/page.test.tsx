@@ -108,3 +108,42 @@ describe('guard { redirect } on server', () => {
     }).toThrow(GuardRedirect);
   });
 });
+
+describe('guard re-runs on navigation', () => {
+  it('re-evaluates clientGuards when the path changes', async () => {
+    let currentPath = '/public';
+    const guard = createGuard(async (_ctx, _next) => {
+      if (currentPath === '/admin') return { redirect: '/login' };
+    });
+
+    function PageChild() {
+      return <div data-testid="page">Content</div>;
+    }
+    PageChild.defaultProps = { route: '/public' };
+
+    const Wrapped = getLoaderData(PageChild, {
+      clientGuards: [guard],
+      clientLoader: async () => ({}),
+    });
+
+    const locPublic = { ...loc, path: '/public' } as any;
+    const { rerender } = render(
+      <LocationProvider>
+        <Wrapped {...locPublic} />
+      </LocationProvider>
+    );
+
+    await screen.findByTestId('page');
+
+    // Simulate navigation to /admin
+    currentPath = '/admin';
+    const locAdmin = { ...loc, path: '/admin' } as any;
+    rerender(
+      <LocationProvider>
+        <Wrapped {...locAdmin} />
+      </LocationProvider>
+    );
+
+    await waitFor(() => expect(mockRoute).toHaveBeenCalledWith('/login'));
+  });
+});

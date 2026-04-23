@@ -67,7 +67,13 @@ export const Page = memo(function <T extends {}>({
 }: PageProps<T>) {
   const id = useId();
   const guards = isBrowser() ? clientGuards : serverGuards;
+  const prevGuardPath = useRef(location.path);
   const guardRef = useRef(wrapPromise(runGuards(guards, { location })));
+
+  if (prevGuardPath.current !== location.path) {
+    prevGuardPath.current = location.path;
+    guardRef.current = wrapPromise(runGuards(guards, { location }));
+  }
 
   return (
     <Suspense fallback={fallback}>
