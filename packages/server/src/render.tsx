@@ -11,6 +11,14 @@ function toAttrs(obj: Record<string, string | undefined>): string {
     .join(' ');
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // this is a bit too naive still
 export async function renderPage(
   c: Context,
@@ -32,14 +40,14 @@ export async function renderPage(
   const { title, lang, metas = [], links = [] } = dispatcher.toStatic();
 
   const headTags = [
-    `<title>${title ?? options?.defaultTitle ?? ''}</title>`,
+    `<title>${escapeHtml(title ?? options?.defaultTitle ?? '')}</title>`,
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
   ].join('\n        ');
 
   return c.html(
     `<!doctype html>
-      <html lang="${lang ?? 'en-US'}">
+      <html lang="${escapeHtml(lang ?? 'en-US')}">
         ${html.replace('</head>', `${headTags}\n      </head>`)}
       </html>`
   );

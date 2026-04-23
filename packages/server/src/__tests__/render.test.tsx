@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { useTitle } from 'hoofd/preact';
+import { useTitle, useLang } from 'hoofd/preact';
 import type { JSX } from 'preact';
 import { GuardRedirect } from '@hono-preact/iso';
 import { renderPage } from '../render.js';
@@ -26,6 +26,16 @@ function UntitledPage() {
 
 function RedirectingPage(): never {
   throw new GuardRedirect('/login');
+}
+
+function XssTitle() {
+  useTitle('</title><script>alert(1)</script><title>');
+  return <html><head></head><body></body></html>;
+}
+
+function XssLang() {
+  useLang('en" onload="alert(1)');
+  return <html><head></head><body></body></html>;
 }
 
 function makeApp(
@@ -65,5 +75,19 @@ describe('renderPage', () => {
     const res = await makeApp(RedirectingPage).request('http://localhost/');
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/login');
+  });
+
+  it('escapes special characters in <title> content', async () => {
+    const res = await makeApp(XssTitle).request('http://localhost/');
+    const html = await res.text();
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;/title&gt;');
+  });
+
+  it('escapes special characters in the lang attribute', async () => {
+    const res = await makeApp(XssLang).request('http://localhost/');
+    const html = await res.text();
+    expect(html).not.toContain('onload="');
+    expect(html).toContain('&quot;');
   });
 });
