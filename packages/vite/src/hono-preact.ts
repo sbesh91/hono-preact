@@ -36,6 +36,7 @@ export function honoPreact({
         };
 
         if (mode === 'client') {
+          const { rollupOptions: userRollup, ...restClientBuild } = clientBuild;
           return {
             ...shared,
             build: {
@@ -43,15 +44,18 @@ export function honoPreact({
               sourcemap: true,
               cssCodeSplit: true,
               copyPublicDir: false,
+              ...restClientBuild,
               rollupOptions: {
-                input: ['./src/client.tsx'],
+                input: userRollup?.input ?? ['./src/client.tsx'],
                 output: {
                   entryFileNames: 'static/client.js',
                   chunkFileNames: 'static/[name]-[hash].js',
                   assetFileNames: 'static/[name]-[hash].[ext]',
+                  ...(userRollup?.output && !Array.isArray(userRollup.output)
+                    ? userRollup.output
+                    : {}),
                 },
               },
-              ...clientBuild,
             },
           };
         }
