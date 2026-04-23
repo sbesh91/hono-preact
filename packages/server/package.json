@@ -20,7 +20,8 @@
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
-    "preact-iso": "*"
+    "preact-iso": "*",
+    "preact-render-to-string": "*"
   },
   "devDependencies": {
     "typescript": "*"
