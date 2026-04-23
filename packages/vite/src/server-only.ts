@@ -30,27 +30,32 @@ export function serverOnlyPlugin(): Plugin {
               s.imported.name === 'serverGuards')
         );
 
-      const serverImport = ast.program.body.find(isServerImport);
-      if (!serverImport) return;
+      const serverImports = ast.program.body.filter(isServerImport);
+      if (serverImports.length === 0) return;
 
-      const stubs: string[] = [];
+      const s = new MagicString(code);
 
-      for (const s of serverImport.specifiers) {
-        if (s.type === 'ImportDefaultSpecifier') {
-          stubs.push(`const ${s.local.name} = async () => ({});`);
-        } else if (
-          s.type === 'ImportSpecifier' &&
-          s.imported.type === 'Identifier' &&
-          s.imported.name === 'serverGuards'
-        ) {
-          stubs.push(`const ${s.local.name} = [];`);
+      // Process in reverse order to preserve character offsets
+      for (const serverImport of [...serverImports].reverse()) {
+        const stubs: string[] = [];
+
+        for (const specifier of serverImport.specifiers) {
+          if (specifier.type === 'ImportDefaultSpecifier') {
+            stubs.push(`const ${specifier.local.name} = async () => ({});`);
+          } else if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverGuards'
+          ) {
+            stubs.push(`const ${specifier.local.name} = [];`);
+          }
+        }
+
+        if (stubs.length > 0) {
+          s.overwrite(serverImport.start!, serverImport.end!, stubs.join('\n'));
         }
       }
 
-      if (stubs.length === 0) return;
-
-      const s = new MagicString(code);
-      s.overwrite(serverImport.start!, serverImport.end!, stubs.join('\n'));
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
   };

@@ -54,4 +54,14 @@ describe('serverOnlyPlugin', () => {
     const result = transform(code, 'page.tsx');
     expect(result).toBeUndefined();
   });
+
+  it('stubs all .server imports when a file has more than one', () => {
+    const code = [
+      `import serverLoader from './movies.server.js';`,
+      `import authLoader from './auth.server.js';`,
+    ].join('\n');
+    const result = transform(code, 'page.tsx');
+    expect(result?.code).toContain('const serverLoader = async () => ({});');
+    expect(result?.code).toContain('const authLoader = async () => ({});');
+  });
 });
