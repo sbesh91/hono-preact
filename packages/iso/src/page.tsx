@@ -149,9 +149,8 @@ const GuardedPage = memo(function <T extends {}>({
   }
 
   const preloaded = getPreloadedData<T>(id);
-  const isLoaded = Object.keys(preloaded).length > 0;
 
-  if (isLoaded) {
+  if (preloaded !== null) {
     cache?.set(preloaded);
     return (
       <ReloadContext.Provider value={{ reload, reloading }}>

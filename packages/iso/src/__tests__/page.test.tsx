@@ -6,7 +6,7 @@ import { createGuard, GuardRedirect, runGuards } from '../guard.js';
 import { env } from '../is-browser.js';
 
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => ({})),
+  getPreloadedData: vi.fn(() => null),
   deletePreloadedData: vi.fn(),
 }));
 

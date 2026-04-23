@@ -25,7 +25,7 @@ const loc = {
 const originalEnv = env.current;
 beforeEach(() => {
   env.current = 'browser';
-  vi.mocked(preloadModule.getPreloadedData).mockReturnValue({} as any);
+  vi.mocked(preloadModule.getPreloadedData).mockReturnValue(null);
 });
 afterEach(() => {
   env.current = originalEnv;
@@ -152,5 +152,23 @@ describe('useReload', () => {
       'useReload must be called inside a component rendered by getLoaderData'
     );
     consoleSpy.mockRestore();
+  });
+});
+
+describe('preloaded empty object (hydration edge case)', () => {
+  it('renders preloaded empty object without calling clientLoader', async () => {
+    vi.mocked(preloadModule.getPreloadedData).mockReturnValue({} as any);
+    const clientLoader = vi.fn().mockResolvedValue({ msg: 'from client' });
+
+    function EmptyChild({ loaderData }: LoaderData<Record<string, never>>) {
+      return <div data-testid="empty">{JSON.stringify(loaderData)}</div>;
+    }
+    EmptyChild.defaultProps = { route: '/test' };
+
+    const Wrapped = getLoaderData(EmptyChild, { clientLoader });
+    wrap(<Wrapped {...loc} />);
+
+    await waitFor(() => {}, { timeout: 50 }).catch(() => {});
+    expect(clientLoader).not.toHaveBeenCalled();
   });
 });
