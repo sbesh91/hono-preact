@@ -1,15 +1,16 @@
 export function wrapPromise<T>(promise: Promise<T>) {
   let status = "pending";
-  let response: T;
+  let result: T;
+  let error: unknown;
 
   const suspender = promise.then(
     (res) => {
       status = "success";
-      response = res;
+      result = res;
     },
     (err) => {
       status = "error";
-      response = err;
+      error = err;
     }
   );
 
@@ -18,9 +19,9 @@ export function wrapPromise<T>(promise: Promise<T>) {
       case "pending":
         throw suspender;
       case "error":
-        throw response;
+        throw error;
       default:
-        return response;
+        return result;
     }
   };
 
