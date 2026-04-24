@@ -79,4 +79,42 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('found: helper');
     expect(error).toContain('must have a default export');
   });
+
+  it('passes a *.server.* file with default + serverActions named export', () => {
+    const code = [
+      "import { defineAction } from '@hono-preact/iso';",
+      'export const serverActions = {',
+      '  create: defineAction(async (_ctx, payload) => ({ ok: true })),',
+      '};',
+      'export default async function serverLoader() { return {}; }',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toBeNull();
+  });
+
+  it('passes a *.server.* file with only serverActions (no default export)', () => {
+    const code = [
+      "import { defineAction } from '@hono-preact/iso';",
+      'export const serverActions = {',
+      '  create: defineAction(async (_ctx, payload) => ({ ok: true })),',
+      '};',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toBeNull();
+  });
+
+  it('still fails when a *.server.* file has no default export and no serverActions', () => {
+    const code = `export const serverGuards = [];`;
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toContain('must have a default export');
+  });
+
+  it('passes a *.server.* file with serverActions + serverGuards and no default export', () => {
+    const code = [
+      'export const serverGuards = [];',
+      'export const serverActions = {};',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toBeNull();
+  });
 });

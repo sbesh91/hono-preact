@@ -51,14 +51,16 @@ export function serverLoaderValidationPlugin(): Plugin {
         }
       }
 
-      const disallowedExports = namedExports.filter((n) => n !== 'serverGuards');
+      const disallowedExports = namedExports.filter(
+        (n) => n !== 'serverGuards' && n !== 'serverActions'
+      );
       if (disallowedExports.length > 0) {
         errors.push(
-          `${id}: .server files may only export 'serverGuards' as a named export (found: ${disallowedExports.join(', ')}). ` +
+          `${id}: .server files may only export 'serverGuards' or 'serverActions' as named exports (found: ${disallowedExports.join(', ')}). ` +
             `Export the server loader as the default export only.`
         );
       }
-      if (!hasDefault) {
+      if (!hasDefault && !namedExports.includes('serverActions')) {
         errors.push(
           `${id}: .server files must have a default export. ` +
             `Export the server loader as: export default async function serverLoader(...) { ... }`

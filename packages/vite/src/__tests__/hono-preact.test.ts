@@ -8,7 +8,8 @@ function getClientConfig(plugins: ReturnType<typeof honoPreact>, userConfig = {}
   if (!configPlugin || typeof configPlugin.config !== 'function') {
     throw new Error('config plugin not found');
   }
-  return configPlugin.config(userConfig as never, { mode: 'client', command: 'build' } as never);
+  const configFn = configPlugin.config as (config: unknown, env: unknown) => unknown;
+  return configFn(userConfig, { mode: 'client', command: 'build' });
 }
 
 describe('honoPreact rollupOptions merge', () => {

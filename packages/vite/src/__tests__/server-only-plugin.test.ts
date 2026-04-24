@@ -64,4 +64,39 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('const serverLoader = async () => ({});');
     expect(result?.code).toContain('const authLoader = async () => ({});');
   });
+
+  it('replaces serverActions named import with a Proxy stub using module name from filename', () => {
+    const code = `import { serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('const serverActions = new Proxy(');
+    expect(result?.code).toContain('__module: "movies"');
+    expect(result?.code).toContain('__action: String(action)');
+  });
+
+  it('handles serverActions alongside default import in the same statement', () => {
+    const code = `import serverLoader, { serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('const serverLoader = async () => ({});');
+    expect(result?.code).toContain('const serverActions = new Proxy(');
+    expect(result?.code).toContain('__module: "movies"');
+  });
+
+  it('handles serverActions alongside serverGuards in the same statement', () => {
+    const code = `import { serverGuards, serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('const serverGuards = [];');
+    expect(result?.code).toContain('const serverActions = new Proxy(');
+  });
+
+  it('derives module name from nested path correctly', () => {
+    const code = `import { serverActions } from '../../pages/profile.server.ts';`;
+    const result = transform(code, '/src/components/nav.tsx');
+    expect(result?.code).toContain('__module: "profile"');
+  });
+
+  it('leaves serverActions import untouched in SSR builds', () => {
+    const code = `import { serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx', { ssr: true });
+    expect(result).toBeUndefined();
+  });
 });

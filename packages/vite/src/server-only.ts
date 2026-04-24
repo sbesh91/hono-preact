@@ -3,6 +3,13 @@ import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 
+function moduleNameFromSource(importSource: string): string {
+  return importSource
+    .split('/')
+    .pop()!
+    .replace(/\.server(\.[jt]sx?)?$/, '');
+}
+
 export function serverOnlyPlugin(): Plugin {
   return {
     name: 'server-only',
@@ -27,7 +34,8 @@ export function serverOnlyPlugin(): Plugin {
             s.type === 'ImportDefaultSpecifier' ||
             (s.type === 'ImportSpecifier' &&
               s.imported.type === 'Identifier' &&
-              s.imported.name === 'serverGuards')
+              (s.imported.name === 'serverGuards' ||
+                s.imported.name === 'serverActions'))
         );
 
       const serverImports = ast.program.body.filter(isServerImport);
@@ -37,6 +45,7 @@ export function serverOnlyPlugin(): Plugin {
 
       // Process in reverse order to preserve character offsets
       for (const serverImport of [...serverImports].reverse()) {
+        const moduleName = moduleNameFromSource(serverImport.source.value);
         const stubs: string[] = [];
 
         for (const specifier of serverImport.specifiers) {
@@ -48,6 +57,14 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverGuards'
           ) {
             stubs.push(`const ${specifier.local.name} = [];`);
+          } else if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverActions'
+          ) {
+            stubs.push(
+              `const ${specifier.local.name} = new Proxy({}, { get(_, action) { return { __module: ${JSON.stringify(moduleName)}, __action: String(action) }; } });`
+            );
           }
         }
 

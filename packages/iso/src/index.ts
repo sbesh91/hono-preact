@@ -9,3 +9,4 @@ export { getPreloadedData, deletePreloadedData } from './preload.js';
 export type { WrapperProps } from './page.js';
 export { defineAction, useAction } from './action.js';
 export type { ActionStub, UseActionOptions, UseActionResult } from './action.js';
+export { Form } from './form.js';

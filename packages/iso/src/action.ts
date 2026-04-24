@@ -1,4 +1,4 @@
-import { useContext, useState } from 'preact/hooks';
+import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './page.js';
 
 export type ActionStub<TPayload, TResult> = {
@@ -38,13 +38,20 @@ export function useAction<TPayload, TResult>(
   const [data, setData] = useState<TResult | null>(null);
   const reloadCtx = useContext(ReloadContext);
 
-  const mutate = async (payload: TPayload) => {
+  const stubRef = useRef(stub);
+  stubRef.current = stub;
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  const mutate = useCallback(async (payload: TPayload) => {
     setPending(true);
     setError(null);
 
+    const currentStub = stubRef.current;
+    const currentOptions = optionsRef.current;
     let snapshot: unknown;
-    if (options?.onMutate) {
-      snapshot = options.onMutate(payload);
+    if (currentOptions?.onMutate) {
+      snapshot = currentOptions.onMutate(payload);
     }
 
     try {
@@ -52,8 +59,8 @@ export function useAction<TPayload, TResult>(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          module: (stub as unknown as { __module: string }).__module,
-          action: (stub as unknown as { __action: string }).__action,
+          module: (currentStub as unknown as { __module: string }).__module,
+          action: (currentStub as unknown as { __action: string }).__action,
           payload,
         }),
       });
@@ -65,19 +72,19 @@ export function useAction<TPayload, TResult>(
 
       const result = (await response.json()) as TResult;
       setData(result);
-      options?.onSuccess?.(result);
+      currentOptions?.onSuccess?.(result);
 
-      if (options?.invalidate === 'auto') {
+      if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
       }
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       setError(e);
-      options?.onError?.(e, snapshot);
+      currentOptions?.onError?.(e, snapshot);
     } finally {
       setPending(false);
     }
-  };
+  }, []);
 
   return { mutate, pending, error, data };
 }
