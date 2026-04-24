@@ -199,6 +199,9 @@ importers:
       preact-iso:
         specifier: github:preactjs/preact-iso#v3
         version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+      preact-render-to-string:
+        specifier: '*'
+        version: 6.6.7(preact@10.29.1)
     devDependencies:
       typescript:
         specifier: ^6.0.3
