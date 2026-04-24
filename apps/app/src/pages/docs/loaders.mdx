@@ -91,7 +91,7 @@ const serverGuards = [];
 
 This guarantees that database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle, even if you forget to think about it.
 
-**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`. If you write:
+**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards` or `serverActions`. If you write:
 
 ```ts
 // ❌ build error
@@ -101,9 +101,9 @@ export default serverLoader;
 
 The build will fail with:
 ```
-'.server files may only export 'serverGuards' as a named export (found: helper). Export the server loader as the default export only.'
+'.server files may only export 'serverGuards' or 'serverActions' as named exports (found: helper). Export the server loader as the default export only.'
 ```
 
-`serverGuards` is the one permitted named export — use it to attach middleware-style guards that run before the loader on the server. Any other named export is an error.
+`serverGuards` and `serverActions` are the only permitted named exports. Any other named export is an error.
 
 This prevents server-only state from accidentally entering the module graph via named exports.
