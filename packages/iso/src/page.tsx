@@ -18,6 +18,7 @@ import wrapPromise from './wrap-promise';
 type ReloadContextValue = {
   reload: () => void;
   reloading: boolean;
+  error: Error | null;
 };
 
 const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
@@ -118,6 +119,7 @@ const GuardedPage = memo(function <T extends {}>({
   const { route } = useLocation();
   const [reloading, setReloading] = useState(false);
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
+  const [loadError, setLoadError] = useState<Error | null>(null);
 
   const prevPath = useRef(location.path);
   if (prevPath.current !== location.path) {
@@ -128,12 +130,14 @@ const GuardedPage = memo(function <T extends {}>({
   const reload = useCallback(() => {
     if (reloading) return;
     setReloading(true);
+    setLoadError(null);
     clientLoader({ location })
       .then((result) => {
         setOverrideData(result);
         setReloading(false);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        setLoadError(err instanceof Error ? err : new Error(String(err)));
         setReloading(false);
       });
   }, [reloading, clientLoader, location]);
@@ -159,7 +163,7 @@ const GuardedPage = memo(function <T extends {}>({
   if (preloaded !== null) {
     cache?.set(preloaded);
     return (
-      <ReloadContext.Provider value={{ reload, reloading }}>
+      <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
         <Helper
           id={id}
           Child={Child}
@@ -174,7 +178,7 @@ const GuardedPage = memo(function <T extends {}>({
   if (isBrowser() && cache?.has()) {
     const cached = cache.get()!;
     return (
-      <ReloadContext.Provider value={{ reload, reloading }}>
+      <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
         <Helper
           id={id}
           Child={Child}
@@ -196,7 +200,7 @@ const GuardedPage = memo(function <T extends {}>({
   );
 
   return (
-    <ReloadContext.Provider value={{ reload, reloading }}>
+    <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
       <Suspense fallback={fallback}>
         <Helper
           id={id}

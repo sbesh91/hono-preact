@@ -172,3 +172,37 @@ describe('preloaded empty object (hydration edge case)', () => {
     expect(clientLoader).not.toHaveBeenCalled();
   });
 });
+
+describe('useReload error handling', () => {
+  it('exposes the error when clientLoader throws during reload', async () => {
+    const cache = createCache<{ msg: string }>();
+    const clientLoader = vi.fn()
+      .mockResolvedValueOnce({ msg: 'initial' })
+      .mockRejectedValueOnce(new Error('network failure'));
+
+    function ErrorChild({ loaderData }: LoaderData<{ msg: string }>) {
+      const { reload, error } = useReload();
+      return (
+        <div>
+          <span data-testid="msg">{loaderData.msg}</span>
+          <span data-testid="error">{error?.message ?? 'none'}</span>
+          <button onClick={reload}>reload</button>
+        </div>
+      );
+    }
+    ErrorChild.defaultProps = { route: '/test' };
+
+    const Wrapped = getLoaderData(ErrorChild, { clientLoader, cache });
+    wrap(<Wrapped {...loc} />);
+
+    await screen.findByText('initial');
+
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await screen.findByText('network failure');
+    expect(screen.getByTestId('error')).toHaveTextContent('network failure');
+    expect(screen.getByTestId('msg')).toHaveTextContent('initial');
+  });
+});
