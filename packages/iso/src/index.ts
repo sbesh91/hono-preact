@@ -7,5 +7,5 @@ export type { GuardFn, GuardResult, GuardContext } from './guard.js';
 export { isBrowser, env } from './is-browser.js';
 export { getPreloadedData, deletePreloadedData } from './preload.js';
 export type { WrapperProps } from './page.js';
-export { defineAction } from './action.js';
-export type { ActionStub } from './action.js';
+export { defineAction, useAction } from './action.js';
+export type { ActionStub, UseActionOptions, UseActionResult } from './action.js';

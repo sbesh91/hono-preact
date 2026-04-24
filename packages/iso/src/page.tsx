@@ -21,7 +21,7 @@ type ReloadContextValue = {
   error: Error | null;
 };
 
-const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
+export const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
 
 export function useReload(): ReloadContextValue {
   const ctx = useContext(ReloadContext);
