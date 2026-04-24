@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { useTitle, useLang } from 'hoofd/preact';
 import type { JSX } from 'preact';
-import { GuardRedirect } from '@hono-preact/iso';
+import { GuardRedirect, env } from '@hono-preact/iso';
 import { renderPage } from '../render.js';
 
 function TitledPage() {
@@ -90,5 +90,20 @@ describe('renderPage', () => {
     const html = await res.text();
     expect(html).not.toContain('onload="');
     expect(html).toContain('lang="en&quot; onload=&quot;alert(1)"');
+  });
+
+  it('sets env.current to server during render and restores it after', async () => {
+    let envDuringRender: string | undefined;
+
+    function EnvSnoop() {
+      envDuringRender = env.current;
+      return <html><head></head><body></body></html>;
+    }
+
+    const originalEnv = env.current;
+    await makeApp(EnvSnoop).request('http://localhost/');
+
+    expect(envDuringRender).toBe('server');
+    expect(env.current).toBe(originalEnv);
   });
 });
