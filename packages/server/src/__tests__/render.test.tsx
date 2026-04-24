@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { useTitle, useLang } from 'hoofd/preact';
+import { useTitle, useLang, useMeta, useLink } from 'hoofd/preact';
 import type { JSX } from 'preact';
 import { GuardRedirect, env } from '@hono-preact/iso';
 import { renderPage } from '../render.js';
@@ -36,6 +36,25 @@ function XssTitle() {
 function XssLang() {
   useLang('en" onload="alert(1)');
   return <html><head></head><body></body></html>;
+}
+
+function MetaPage() {
+  useMeta({ name: 'description', content: 'A test page' });
+  return <html><head></head><body></body></html>;
+}
+
+function LinkPage() {
+  useLink({ rel: 'stylesheet', href: '/styles.css' });
+  return <html><head></head><body></body></html>;
+}
+
+function LangPage() {
+  useLang('fr-FR');
+  return <html><head></head><body></body></html>;
+}
+
+function NoHeadPage() {
+  return <html><body><div>no head tag</div></body></html>;
 }
 
 function makeApp(
@@ -105,5 +124,38 @@ describe('renderPage', () => {
 
     expect(envDuringRender).toBe('server');
     expect(env.current).toBe(originalEnv);
+  });
+
+  it('injects <meta> tags from useMeta into SSR output', async () => {
+    const res = await makeApp(MetaPage).request('http://localhost/');
+    const html = await res.text();
+    expect(html).toContain('name="description"');
+    expect(html).toContain('content="A test page"');
+  });
+
+  it('injects <link> tags from useLink into SSR output', async () => {
+    const res = await makeApp(LinkPage).request('http://localhost/');
+    const html = await res.text();
+    expect(html).toContain('rel="stylesheet"');
+    expect(html).toContain('href="/styles.css"');
+  });
+
+  it('sets the lang attribute from useLang', async () => {
+    const res = await makeApp(LangPage).request('http://localhost/');
+    const html = await res.text();
+    expect(html).toContain('lang="fr-FR"');
+  });
+
+  it('defaults lang to en-US when useLang is not called', async () => {
+    const res = await makeApp(UntitledPage).request('http://localhost/');
+    const html = await res.text();
+    expect(html).toContain('lang="en-US"');
+  });
+
+  it('returns 200 and preserves body content when component has no <head> tag', async () => {
+    const res = await makeApp(NoHeadPage).request('http://localhost/');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('no head tag');
   });
 });
