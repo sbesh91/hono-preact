@@ -35,7 +35,6 @@ export function useReload(): ReloadContextValue {
 export type WrapperProps = {
   id: string;
   'data-loader': string;
-  'data-page': boolean;
   children: ComponentChildren;
 };
 
@@ -232,7 +231,7 @@ export const Helper = memo(function <T>({
   const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
 
   return (
-    <Wrapper id={id} data-loader={stringified} data-page>
+    <Wrapper id={id} data-loader={stringified}>
       <Child loaderData={loaderData} id={id} />
     </Wrapper>
   );
