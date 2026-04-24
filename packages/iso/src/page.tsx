@@ -126,11 +126,16 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
     setOverrideData(undefined);
   }
 
+  const clientLoaderRef = useRef(clientLoader);
+  clientLoaderRef.current = clientLoader;
+  const locationRef = useRef(location);
+  locationRef.current = location;
+
   const reload = useCallback(() => {
     if (reloading) return;
     setReloading(true);
     setLoadError(null);
-    clientLoader({ location })
+    clientLoaderRef.current({ location: locationRef.current })
       .then((result) => {
         setOverrideData(result);
         setReloading(false);
@@ -139,7 +144,7 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
         setLoadError(err instanceof Error ? err : new Error(String(err)));
         setReloading(false);
       });
-  }, [reloading, clientLoader, location]);
+  }, [reloading]);
 
   const guardResult = guardRef.current.read();
 
