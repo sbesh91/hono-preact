@@ -63,4 +63,20 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('helper');
     expect(error).toContain('util');
   });
+
+  it('fails when a *.server.* file uses export * from', () => {
+    const code = [
+      `export * from './helpers.js';`,
+      `export default async function serverLoader() { return {}; }`,
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toContain('export *');
+  });
+
+  it('reports both errors when a file has disallowed exports AND no default export', () => {
+    const code = `export const helper = () => {};`;
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toContain('found: helper');
+    expect(error).toContain('must have a default export');
+  });
 });

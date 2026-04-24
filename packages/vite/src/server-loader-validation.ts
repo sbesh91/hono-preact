@@ -1,5 +1,5 @@
 import { parse } from '@babel/parser';
-import type { ExportNamedDeclaration } from '@babel/types';
+import type { ExportAllDeclaration, ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 
 export function serverLoaderValidationPlugin(): Plugin {
@@ -17,10 +17,15 @@ export function serverLoaderValidationPlugin(): Plugin {
 
       let hasDefault = false;
       const namedExports: string[] = [];
+      const errors: string[] = [];
 
       for (const node of ast.program.body) {
         if (node.type === 'ExportDefaultDeclaration') {
           hasDefault = true;
+        } else if (node.type === 'ExportAllDeclaration') {
+          errors.push(
+            `${id}: .server files may not use 'export * from ...'. Use explicit named exports only.`
+          );
         } else if (node.type === 'ExportNamedDeclaration') {
           const named = node as ExportNamedDeclaration;
           if (named.exportKind === 'type') continue;
@@ -48,16 +53,20 @@ export function serverLoaderValidationPlugin(): Plugin {
 
       const disallowedExports = namedExports.filter((n) => n !== 'serverGuards');
       if (disallowedExports.length > 0) {
-        this.error(
+        errors.push(
           `${id}: .server files may only export 'serverGuards' as a named export (found: ${disallowedExports.join(', ')}). ` +
             `Export the server loader as the default export only.`
         );
       }
       if (!hasDefault) {
-        this.error(
+        errors.push(
           `${id}: .server files must have a default export. ` +
             `Export the server loader as: export default async function serverLoader(...) { ... }`
         );
+      }
+
+      if (errors.length > 0) {
+        this.error(errors.join('\n'));
       }
     },
   };
