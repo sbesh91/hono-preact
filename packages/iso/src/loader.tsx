@@ -7,7 +7,7 @@ import { Page, WrapperProps } from './page.js';
 
 export interface LoaderData<T> extends JSX.IntrinsicAttributes {
   id?: string;
-  loaderData?: T;
+  loaderData: T;
   route?: string;
 }
 
@@ -23,7 +23,7 @@ interface LoaderProps<T> {
   Wrapper?: FunctionComponent<WrapperProps>;
 }
 
-export const getLoaderData = <T extends {}>(
+export const getLoaderData = <T extends Record<string, unknown>>(
   Component: FunctionComponent<LoaderData<T>>,
   {
     serverLoader,

@@ -55,7 +55,7 @@ type PageProps<T> = {
   Wrapper?: ComponentType<WrapperProps>;
 };
 
-export const Page = memo(function <T extends {}>({
+export const Page = memo(function <T extends Record<string, unknown>>({
   Child,
   serverLoader,
   clientLoader,
@@ -105,7 +105,7 @@ type GuardedPageProps<T> = {
   Wrapper?: ComponentType<WrapperProps>;
 };
 
-const GuardedPage = memo(function <T extends {}>({
+const GuardedPage = memo(function <T extends Record<string, unknown>>({
   id,
   Child,
   serverLoader = async () => ({}) as T,

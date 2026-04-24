@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 function Child({ loaderData }: LoaderData<{ msg: string }>) {
-  return <div data-testid="child">{loaderData?.msg ?? 'no data'}</div>;
+  return <div data-testid="child">{loaderData.msg}</div>;
 }
 Child.defaultProps = { route: '/test' };
 
@@ -121,7 +121,7 @@ describe('useReload', () => {
       const { reload } = useReload();
       return (
         <div>
-          <span data-testid="msg">{loaderData?.msg}</span>
+          <span data-testid="msg">{loaderData.msg}</span>
           <button onClick={reload}>reload</button>
         </div>
       );
