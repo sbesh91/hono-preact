@@ -1,5 +1,5 @@
 import { parse } from '@babel/parser';
-import type { ExportAllDeclaration, ExportNamedDeclaration } from '@babel/types';
+import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 
 export function serverLoaderValidationPlugin(): Plugin {
