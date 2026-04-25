@@ -99,4 +99,17 @@ describe('serverOnlyPlugin', () => {
     const result = transform(code, '/src/pages/movies.tsx', { ssr: true });
     expect(result).toBeUndefined();
   });
+
+  it('replaces actionGuards named import with an empty array stub', () => {
+    const code = `import { actionGuards } from './movies.server.js';`;
+    const result = transform(code, 'movies.tsx');
+    expect(result?.code).toContain('const actionGuards = [];');
+  });
+
+  it('handles actionGuards alongside serverActions in the same statement', () => {
+    const code = `import { actionGuards, serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('const actionGuards = [];');
+    expect(result?.code).toContain('const serverActions = new Proxy(');
+  });
 });

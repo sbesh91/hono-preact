@@ -35,6 +35,7 @@ export function serverOnlyPlugin(): Plugin {
             (s.type === 'ImportSpecifier' &&
               s.imported.type === 'Identifier' &&
               (s.imported.name === 'serverGuards' ||
+                s.imported.name === 'actionGuards' ||
                 s.imported.name === 'serverActions'))
         );
 
@@ -54,7 +55,8 @@ export function serverOnlyPlugin(): Plugin {
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'serverGuards'
+            (specifier.imported.name === 'serverGuards' ||
+              specifier.imported.name === 'actionGuards')
           ) {
             stubs.push(`const ${specifier.local.name} = [];`);
           } else if (
