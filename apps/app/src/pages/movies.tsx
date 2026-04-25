@@ -5,7 +5,7 @@ import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
 import serverLoader, { serverActions } from './movies.server.js';
 import Noop from './noop.js';
 
-const cache = createCache<{ movies: MoviesData }>();
+const cache = createCache<{ movies: MoviesData }>('movies');
 
 const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
   const movies = await fetch('/api/movies').then(
