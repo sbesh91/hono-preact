@@ -138,3 +138,27 @@ export function useAction<TPayload, TResult>(
 
   return { mutate, pending, error, data };
 }
+
+export type ActionGuardContext = {
+  c: unknown;
+  module: string;
+  action: string;
+  payload: unknown;
+};
+
+export type ActionGuardFn = (
+  ctx: ActionGuardContext,
+  next: () => Promise<void>
+) => Promise<void>;
+
+export class ActionGuardError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number = 403
+  ) {
+    super(message);
+    this.name = 'ActionGuardError';
+  }
+}
+
+export const defineActionGuard = (fn: ActionGuardFn): ActionGuardFn => fn;
