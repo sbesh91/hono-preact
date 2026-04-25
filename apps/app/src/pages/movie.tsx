@@ -4,14 +4,9 @@ import type { RouteHook } from 'preact-iso';
 import type { Movie } from '@/server/data/movie.js';
 import serverLoader from './movie.server.js';
 
-async function clientLoader({ location }: { location: RouteHook }) {
-  const movie = await fetch(`/api/movies/${location.pathParams.id}`).then(
-    (res) => res.json() as Promise<Movie>
-  );
-  return { movie };
-}
-
-const Movie: FunctionalComponent = (props: LoaderData<{ movie: Movie | null }>) => {
+const Movie: FunctionalComponent<LoaderData<{ movie: Movie | null }>> = (
+  props
+) => {
   return (
     <section class="p-1">
       <a href="/movies" class="bg-red-200">
@@ -33,6 +28,5 @@ function MovieWrapper(props: WrapperProps) {
 
 export default getLoaderData(Movie, {
   serverLoader,
-  clientLoader,
   Wrapper: MovieWrapper,
 });

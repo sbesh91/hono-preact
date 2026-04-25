@@ -21,7 +21,9 @@ type ReloadContextValue = {
   error: Error | null;
 };
 
-export const ReloadContext = createContext<ReloadContextValue | undefined>(undefined);
+export const ReloadContext = createContext<ReloadContextValue | undefined>(
+  undefined
+);
 
 export function useReload(): ReloadContextValue {
   const ctx = useContext(ReloadContext);
@@ -130,7 +132,8 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
     if (reloading) return;
     setReloading(true);
     setLoadError(null);
-    serverLoaderRef.current({ location: locationRef.current })
+    serverLoaderRef
+      .current({ location: locationRef.current })
       .then((result) => {
         setOverrideData(result);
         setReloading(false);
@@ -226,7 +229,7 @@ export const Helper = memo(function <T>({
   Wrapper = DefaultWrapper,
 }: HelperProps<T>) {
   const loaderData = overrideData !== undefined ? overrideData : loader.read();
-  const stringified = !isBrowser() ? JSON.stringify(loaderData) : '{}';
+  const stringified = !isBrowser() ? JSON.stringify(loaderData) : 'null';
 
   return (
     <Wrapper id={id} data-loader={stringified}>

@@ -1,22 +1,22 @@
-import { getLoaderData, type LoaderData, createCache, Form } from '@hono-preact/iso';
+import {
+  getLoaderData,
+  type LoaderData,
+  createCache,
+  Form,
+} from '@hono-preact/iso';
 import type { FunctionalComponent } from 'preact';
-import { lazy, Route, Router, RouteHook } from 'preact-iso';
+import { lazy, Route, Router } from 'preact-iso';
 import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
 import serverLoader, { serverActions } from './movies.server.js';
 import Noop from './noop.js';
 
 const cache = createCache<{ movies: MoviesData }>('movies');
 
-const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
-  const movies = await fetch('/api/movies').then(
-    (res) => res.json() as Promise<MoviesData>
-  );
-  return { movies };
-});
-
 const Movie = lazy(() => import('./movie.js'));
 
-const Movies: FunctionalComponent = (props: LoaderData<{ movies: MoviesData }>) => {
+const Movies: FunctionalComponent<LoaderData<{ movies: MoviesData }>> = (
+  props
+) => {
   return (
     <section class="p-1">
       <a href="/" class="bg-amber-200">
@@ -32,7 +32,11 @@ const Movies: FunctionalComponent = (props: LoaderData<{ movies: MoviesData }>) 
         </a>
       ))}
 
-      <Form action={serverActions.addMovie} invalidate="auto" class="mt-4 flex gap-2">
+      <Form
+        action={serverActions.addMovie}
+        invalidate="auto"
+        class="mt-4 flex gap-2"
+      >
         <input name="title" placeholder="Title" class="border p-1" />
         <input name="year" placeholder="Year" class="border p-1 w-20" />
         <button type="submit" class="bg-blue-500 text-white px-3 py-1">
@@ -52,6 +56,5 @@ Movies.defaultProps = { route: '/movies' };
 
 export default getLoaderData(Movies, {
   serverLoader,
-  clientLoader,
   cache,
 });

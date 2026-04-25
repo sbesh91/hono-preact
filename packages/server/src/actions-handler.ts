@@ -6,7 +6,7 @@ type GlobModule = {
   actionGuards?: ActionGuardFn[];
   [key: string]: unknown;
 };
-type LazyGlob = Record<string, () => Promise<GlobModule>>;
+type LazyGlob = Record<string, () => Promise<unknown>>;
 type EagerGlob = Record<string, GlobModule>;
 
 type ModuleEntry = {

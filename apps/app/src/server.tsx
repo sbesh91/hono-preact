@@ -1,7 +1,12 @@
 import { Hono } from 'hono';
 import { env } from '@hono-preact/iso';
 import { Layout } from './server/layout.js';
-import { actionsHandler, location, renderPage } from '@hono-preact/server';
+import {
+  actionsHandler,
+  loadersHandler,
+  location,
+  renderPage,
+} from '@hono-preact/server';
 import { getMovie, getMovies } from './server/movies.js';
 
 const dev = process.env.NODE_ENV === 'development';
@@ -15,6 +20,7 @@ env.current = 'server';
 
 app
   .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
+  .post('/__loaders', loadersHandler(import.meta.glob('./pages/*.server.ts')))
   .get('/api/movies', async (c) => {
     const movies = await getMovies();
     return c.json(movies);

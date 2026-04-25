@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 
 type GlobModule = { default?: unknown; [key: string]: unknown };
-type LazyGlob = Record<string, () => Promise<GlobModule>>;
+type LazyGlob = Record<string, () => Promise<unknown>>;
 type EagerGlob = Record<string, GlobModule>;
 
 function moduleNameFromPath(filePath: string): string {
