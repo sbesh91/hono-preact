@@ -4,9 +4,9 @@ Fullstack made easy.
 
 Every route is a file pair: a `.tsx` page component and a `.server.ts` file that never reaches the browser. The framework handles SSR, data fetching, mutations, and access control — you write the logic.
 
-```ts
+```tsx
 // movies.server.ts — runs only on the server
-const serverLoader: Loader<{ movies: Movie[] }> = async () => ({
+const serverLoader = async () => ({
   movies: await getMovies(),
 });
 export default serverLoader;
@@ -15,12 +15,12 @@ export default serverLoader;
 export default getLoaderData(Movies, { serverLoader });
 ```
 
-On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that attribute — no fetch fires. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.
+On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that preloaded data. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.
 
 **[→ Quick Start](/docs/quick-start)** — build a page with data and a mutation in ~10 minutes
 
 ## The server/client boundary
 
-Two Vite plugins enforce the boundary between server and client code. During the client bundle build, every `*.server.*` import is replaced with stubs: the default export becomes an RPC function, `serverGuards` and `actionGuards` become empty arrays, and `serverActions` becomes a Proxy. Database clients, secrets, and internal API URLs in `.server.*` files never reach the browser bundle.
+Two Vite plugins enforce the boundary between server and client code. During the client bundle build, `serverOnlyPlugin` rewrites `*.server.*` imports: the default export becomes an RPC function, any imported `serverGuards` or `actionGuards` become empty arrays, and `serverActions` becomes a Proxy. Database clients, secrets, and internal API URLs in `.server.*` files never reach the browser bundle.
 
 `serverLoaderValidationPlugin` enforces the contract at build time: `.server.*` files may only export `serverGuards`, `serverActions`, or `actionGuards` as named exports. Any other named export fails the build.
