@@ -16,6 +16,13 @@ function post(app: Hono, body: unknown) {
   });
 }
 
+function postFormData(app: Hono, formData: FormData) {
+  return app.request('http://localhost/__actions', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 describe('actionsHandler', () => {
   it('calls the matching action with the Hono context and payload', async () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
@@ -141,5 +148,72 @@ describe('actionsHandler', () => {
     const body = await res.text();
     expect(body).toContain('{"progress":50}');
     expect(body).toContain('{"progress":100}');
+  });
+});
+
+describe('actionsHandler — multipart/form-data', () => {
+  it('dispatches action from multipart form data with __module and __action fields', async () => {
+    const uploadFn = vi.fn().mockResolvedValue({ ok: true });
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+    });
+
+    const fd = new FormData();
+    fd.append('__module', 'movies');
+    fd.append('__action', 'upload');
+    fd.append('title', 'Dune');
+
+    const res = await postFormData(app, fd);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const [, payload] = uploadFn.mock.calls[0];
+    expect(payload.title).toBe('Dune');
+  });
+
+  it('surfaces File objects in the action payload', async () => {
+    const uploadFn = vi.fn().mockResolvedValue({ stored: true });
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+    });
+
+    const fd = new FormData();
+    fd.append('__module', 'movies');
+    fd.append('__action', 'upload');
+    fd.append('poster', new File(['<binary>'], 'poster.jpg', { type: 'image/jpeg' }));
+
+    const res = await postFormData(app, fd);
+    expect(res.status).toBe(200);
+    const [, payload] = uploadFn.mock.calls[0];
+    expect(payload.poster).toBeInstanceOf(File);
+    expect((payload.poster as File).name).toBe('poster.jpg');
+  });
+
+  it('returns 400 when __module or __action is missing from form data', async () => {
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { upload: vi.fn() } },
+    });
+    const fd = new FormData();
+    fd.append('title', 'Dune');
+
+    const res = await postFormData(app, fd);
+    expect(res.status).toBe(400);
+    expect((await res.json() as { error: string }).error).toContain('__module');
+  });
+
+  it('collects repeated form field names into an array', async () => {
+    const uploadFn = vi.fn().mockResolvedValue({ ok: true });
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+    });
+
+    const fd = new FormData();
+    fd.append('__module', 'movies');
+    fd.append('__action', 'upload');
+    fd.append('tag', 'sci-fi');
+    fd.append('tag', 'drama');
+
+    await postFormData(app, fd);
+    const [, payload] = uploadFn.mock.calls[0];
+    expect(payload.tag).toEqual(['sci-fi', 'drama']);
   });
 });

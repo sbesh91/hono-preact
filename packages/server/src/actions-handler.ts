@@ -46,16 +46,53 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       return c.json({ error: `Failed to load actions: ${message}` }, 503);
     }
 
-    let body: { module: unknown; action: unknown; payload: unknown };
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: 'Invalid JSON body' }, 400);
-    }
+    let module: string;
+    let action: string;
+    let payload: unknown;
 
-    const { module, action, payload } = body;
-    if (typeof module !== 'string' || typeof action !== 'string') {
-      return c.json({ error: 'Request body must include string fields: module, action' }, 400);
+    const contentType = c.req.header('Content-Type') ?? '';
+    if (contentType.startsWith('multipart/form-data')) {
+      let formData: FormData;
+      try {
+        formData = await c.req.formData();
+      } catch {
+        return c.json({ error: 'Invalid form data' }, 400);
+      }
+
+      const rawModule = formData.get('__module');
+      const rawAction = formData.get('__action');
+      if (typeof rawModule !== 'string' || typeof rawAction !== 'string') {
+        return c.json({ error: 'Form data must include __module and __action fields' }, 400);
+      }
+
+      module = rawModule;
+      action = rawAction;
+
+      const payloadObj: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
+      for (const [key, value] of formData.entries()) {
+        if (key === '__module' || key === '__action') continue;
+        const existing = payloadObj[key];
+        if (existing !== undefined) {
+          payloadObj[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+        } else {
+          payloadObj[key] = value;
+        }
+      }
+      payload = payloadObj;
+    } else {
+      let body: { module: unknown; action: unknown; payload: unknown };
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: 'Invalid JSON body' }, 400);
+      }
+      const { module: m, action: a, payload: p } = body;
+      if (typeof m !== 'string' || typeof a !== 'string') {
+        return c.json({ error: 'Request body must include string fields: module, action' }, 400);
+      }
+      module = m;
+      action = a;
+      payload = p;
     }
 
     const moduleActions = actionsMap[module];
