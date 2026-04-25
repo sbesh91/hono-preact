@@ -21,6 +21,7 @@ export type UseActionOptions<TPayload, TResult> = {
   onMutate?: (payload: TPayload) => unknown;
   onError?: (err: Error, snapshot: unknown) => void;
   onSuccess?: (data: TResult) => void;
+  onChunk?: (chunk: string) => void;
 };
 
 export type UseActionResult<TPayload, TResult> = {
@@ -71,9 +72,26 @@ export function useAction<TPayload, TResult>(
         throw new Error(body.error ?? `Action failed with status ${response.status}`);
       }
 
-      const result = (await response.json()) as TResult;
-      setData(result);
-      currentOptions?.onSuccess?.(result);
+      const contentType = response.headers.get('Content-Type') ?? '';
+      if (contentType.includes('text/event-stream')) {
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            currentOptions?.onChunk?.(chunk);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        currentOptions?.onSuccess?.(undefined as unknown as TResult);
+      } else {
+        const result = (await response.json()) as TResult;
+        setData(result);
+        currentOptions?.onSuccess?.(result);
+      }
 
       if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
