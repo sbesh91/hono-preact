@@ -31,6 +31,13 @@ export type UseActionResult<TPayload, TResult> = {
   data: TResult | null;
 };
 
+function hasFileValues(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null) return false;
+  return Object.values(payload as Record<string, unknown>).some(
+    (v) => typeof File !== 'undefined' && v instanceof File
+  );
+}
+
 export function useAction<TPayload, TResult>(
   stub: ActionStub<TPayload, TResult>,
   options?: UseActionOptions<TPayload, TResult>
@@ -57,15 +64,27 @@ export function useAction<TPayload, TResult>(
     }
 
     try {
-      const response = await fetch('/__actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          module: (currentStub as unknown as { __module: string }).__module,
-          action: (currentStub as unknown as { __action: string }).__action,
-          payload,
-        }),
-      });
+      const stub = currentStub as unknown as { __module: string; __action: string };
+      let response: Response;
+      if (hasFileValues(payload)) {
+        const fd = new FormData();
+        fd.append('__module', stub.__module);
+        fd.append('__action', stub.__action);
+        for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+          fd.append(key, value as string | File);
+        }
+        response = await fetch('/__actions', { method: 'POST', body: fd });
+      } else {
+        response = await fetch('/__actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            module: stub.__module,
+            action: stub.__action,
+            payload,
+          }),
+        });
+      }
 
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
