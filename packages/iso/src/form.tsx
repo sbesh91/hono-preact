@@ -2,6 +2,7 @@ import { useRef, useContext } from 'preact/hooks';
 import type { JSX, ComponentChildren } from 'preact';
 import { ReloadContext } from './page.js';
 import type { ActionStub, UseActionOptions } from './action.js';
+import { cacheRegistry } from './cache-registry.js';
 
 type FormProps<TPayload extends Record<string, unknown>, TResult> = Omit<
   JSX.HTMLAttributes<HTMLFormElement>,
@@ -63,6 +64,10 @@ export function Form<TPayload extends Record<string, unknown>, TResult>({
         onSuccess?.(result);
         if (invalidate === 'auto') {
           reloadCtx?.reload();
+        } else if (Array.isArray(invalidate)) {
+          for (const name of invalidate) {
+            cacheRegistry.invalidate(name);
+          }
         }
       })
       .catch((err) => {
