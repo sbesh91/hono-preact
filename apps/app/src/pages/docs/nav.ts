@@ -3,24 +3,45 @@ export type NavSection = { heading: string; entries: NavEntry[] };
 
 export const nav: NavSection[] = [
   {
-    heading: 'Getting Started',
+    heading: 'Introduction',
     entries: [
       { title: 'Overview', route: '/docs' },
-      { title: 'Project Structure', route: '/docs/structure' },
-      { title: 'Vite Configuration', route: '/docs/vite-config' },
+      { title: 'Quick Start', route: '/docs/quick-start' },
     ],
   },
   {
-    heading: 'Guides',
+    heading: 'Pages & Routing',
     entries: [
-      { title: 'Rendering Pages', route: '/docs/render-page' },
       { title: 'Adding Pages', route: '/docs/pages' },
+    ],
+  },
+  {
+    heading: 'Data',
+    entries: [
       { title: 'Server Loaders', route: '/docs/loaders' },
       { title: 'Loading States', route: '/docs/loading-states' },
       { title: 'Reloading Data', route: '/docs/reloading' },
+    ],
+  },
+  {
+    heading: 'Mutations',
+    entries: [
       { title: 'Server Actions', route: '/docs/actions' },
       { title: 'Action Guards', route: '/docs/action-guards' },
+    ],
+  },
+  {
+    heading: 'Access Control',
+    entries: [
       { title: 'Route Guards', route: '/docs/guards' },
+    ],
+  },
+  {
+    heading: 'Infrastructure',
+    entries: [
+      { title: 'Vite Config', route: '/docs/vite-config' },
+      { title: 'Project Structure', route: '/docs/structure' },
+      { title: 'renderPage', route: '/docs/render-page' },
       { title: 'Build & Deploy', route: '/docs/deployment' },
     ],
   },
