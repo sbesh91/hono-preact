@@ -43,14 +43,26 @@ export function serverOnlyPlugin(): Plugin {
 
       const s = new MagicString(code);
 
-      // Process in reverse order to preserve character offsets
       for (const serverImport of [...serverImports].reverse()) {
         const moduleName = moduleNameFromSource(serverImport.source.value);
         const stubs: string[] = [];
 
         for (const specifier of serverImport.specifiers) {
           if (specifier.type === 'ImportDefaultSpecifier') {
-            stubs.push(`const ${specifier.local.name} = async () => ({});`);
+            stubs.push(
+              `const ${specifier.local.name} = async ({ location }) => {\n` +
+              `  const res = await fetch('/__loaders', {\n` +
+              `    method: 'POST',\n` +
+              `    headers: { 'Content-Type': 'application/json' },\n` +
+              `    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, query: location.query } }),\n` +
+              `  });\n` +
+              `  if (!res.ok) {\n` +
+              `    const body = await res.json().catch(() => ({}));\n` +
+              `    throw new Error(body.error ?? \`Loader failed with status \${res.status}\`);\n` +
+              `  }\n` +
+              `  return res.json();\n` +
+              `};`
+            );
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
