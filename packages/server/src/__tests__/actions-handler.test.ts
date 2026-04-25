@@ -356,4 +356,17 @@ describe('actionsHandler — action guards', () => {
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalledOnce();
   });
+
+  it('runs the action even when a guard returns without calling next()', async () => {
+    const createFn = vi.fn().mockResolvedValue({ id: 1 });
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { create: createFn },
+        actionGuards: [async () => { /* intentionally does not call next() */ }],
+      },
+    });
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+    expect(createFn).toHaveBeenCalledOnce();
+  });
 });
