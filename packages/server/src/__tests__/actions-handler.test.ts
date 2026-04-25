@@ -118,4 +118,28 @@ describe('actionsHandler', () => {
     expect(res.status).toBe(400);
     expect((await res.json() as { error: string }).error).toContain('module');
   });
+
+  it('pipes ReadableStream return value as text/event-stream', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"progress":50}\n'));
+        controller.enqueue(encoder.encode('{"progress":100}\n'));
+        controller.close();
+      },
+    });
+
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { process: async () => stream },
+      },
+    });
+
+    const res = await post(app, { module: 'movies', action: 'process', payload: {} });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    const body = await res.text();
+    expect(body).toContain('{"progress":50}');
+    expect(body).toContain('{"progress":100}');
+  });
 });

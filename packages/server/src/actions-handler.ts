@@ -73,6 +73,11 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
         c,
         payload
       );
+      if (result instanceof ReadableStream) {
+        return new Response(result as ReadableStream<Uint8Array>, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
       return c.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
