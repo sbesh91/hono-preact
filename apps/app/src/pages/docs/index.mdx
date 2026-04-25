@@ -1,29 +1,26 @@
-[← home](/)
-
 # hono-preact
 
-A full-stack template that pairs Hono's edge-ready HTTP layer with Preact's lightweight UI and preact-iso's SSR + hydration primitives, compiled by Vite and deployed to Cloudflare Workers.
+Fullstack made easy.
 
-## Stack
+Every route is a file pair: a `.tsx` page component and a `.server.ts` file that never reaches the browser. The framework handles SSR, data fetching, mutations, and access control — you write the logic.
 
-| Layer | Tool | Role |
-|-------|------|------|
-| HTTP server | Hono | API routes, middleware, catch-all SSR handler |
-| UI | Preact + preact-iso | Components, client-side routing, SSR + hydration |
-| Build | Vite | Dev server, two-pass production build |
-| Styles | Tailwind CSS v4 | Utility-first CSS |
-| Deploy | Cloudflare Workers | Edge runtime |
+```ts
+// movies.server.ts — runs only on the server
+const serverLoader: Loader<{ movies: Movie[] }> = async () => ({
+  movies: await getMovies(),
+});
+export default serverLoader;
 
-## Docs
+// movies.tsx — the page component
+export default getLoaderData(Movies, { serverLoader });
+```
 
-- [Project Structure](/docs/structure) — what each file and folder does
-- [Vite Configuration](/docs/vite-config) — configuring the build and dev server with `honoPreact()`
-- [Rendering Pages](/docs/render-page) — SSR entry point, head tag injection, GuardRedirect handling
-- [Adding Pages](/docs/pages) — routing conventions, lazy loading, MDX
-- [Server Loaders](/docs/loaders) — isomorphic data fetching
-- [Loading States](/docs/loading-states) — showing a fallback UI while a client loader fetches
-- [Route Guards](/docs/guards) — protecting pages with middleware-style access control
-- [Reloading Data](/docs/reloading) — imperatively re-running the client loader after a mutation
-- [Server Actions](/docs/actions) — typed client-to-server mutations with `useAction` and `<Form>`, including file uploads and streaming
-- [Action Guards](/docs/action-guards) — middleware-style checks that run before server actions
-- [Build & Deploy](/docs/deployment) — Vite build pipeline and Wrangler
+On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that attribute — no fetch fires. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.
+
+**[→ Quick Start](/docs/quick-start)** — build a page with data and a mutation in ~10 minutes
+
+## The server/client boundary
+
+Two Vite plugins enforce the boundary between server and client code. During the client bundle build, every `*.server.*` import is replaced with stubs: the default export becomes an RPC function, `serverGuards` and `actionGuards` become empty arrays, and `serverActions` becomes a Proxy. Database clients, secrets, and internal API URLs in `.server.*` files never reach the browser bundle.
+
+`serverLoaderValidationPlugin` enforces the contract at build time: `.server.*` files may only export `serverGuards`, `serverActions`, or `actionGuards` as named exports. Any other named export fails the build.
