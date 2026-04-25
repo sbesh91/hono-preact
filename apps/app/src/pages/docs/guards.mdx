@@ -78,14 +78,8 @@ import { getLoaderData, type LoaderData } from '@hono-preact/iso';
 import { createGuard } from '@hono-preact/iso';
 import serverLoader, { serverGuards } from './admin.server.js';
 import { createCache } from '@hono-preact/iso';
-import type { RouteHook } from 'preact-iso';
 
 const cache = createCache<{ stats: Stats }>();
-
-const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
-  const stats = await fetch('/api/admin/stats').then(r => r.json());
-  return { stats };
-});
 
 const clientGuards = [
   createGuard(async (_ctx, next) => {
@@ -103,7 +97,6 @@ const Admin: FunctionComponent<LoaderData<{ stats: Stats }>> = ({ loaderData }) 
 Admin.defaultProps = { route: '/admin' };
 export default getLoaderData(Admin, {
   serverLoader,
-  clientLoader,
   cache,
   serverGuards,
   clientGuards,
