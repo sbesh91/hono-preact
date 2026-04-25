@@ -42,58 +42,56 @@ function wrap(el: JSX.Element) {
 }
 
 describe('cache hit', () => {
-  it('renders cached data without calling clientLoader', async () => {
+  it('renders cached data without calling serverLoader', async () => {
     const cache = createCache<{ msg: string }>();
     cache.set({ msg: 'from cache' });
-    const clientLoader = vi.fn();
-    const Wrapped = getLoaderData(Child, { clientLoader, cache });
+    const serverLoader = vi.fn();
+    const Wrapped = getLoaderData(Child, { serverLoader, cache });
 
     wrap(<Wrapped {...loc} />);
 
     const el = await screen.findByTestId('child');
     expect(el).toHaveTextContent('from cache');
-    expect(clientLoader).not.toHaveBeenCalled();
+    expect(serverLoader).not.toHaveBeenCalled();
   });
 });
 
 describe('preloaded data (hydration path)', () => {
-  it('renders preloaded data without calling clientLoader', async () => {
+  it('renders preloaded data without calling serverLoader', async () => {
     vi.mocked(preloadModule.getPreloadedData).mockReturnValue({
       msg: 'preloaded',
     } as any);
-    const clientLoader = vi.fn();
-    const Wrapped = getLoaderData(Child, { clientLoader });
+    const serverLoader = vi.fn();
+    const Wrapped = getLoaderData(Child, { serverLoader });
 
     wrap(<Wrapped {...loc} />);
 
     const el = await screen.findByTestId('child');
     expect(el).toHaveTextContent('preloaded');
-    expect(clientLoader).not.toHaveBeenCalled();
+    expect(serverLoader).not.toHaveBeenCalled();
   });
 });
 
 describe('cache miss (fetch path)', () => {
-  it('calls clientLoader and shows fallback during load', async () => {
+  it('calls serverLoader and shows fallback during load', async () => {
     const cache = createCache<{ msg: string }>();
     let resolve!: (v: { msg: string }) => void;
-    const rawLoader = vi.fn(
+    const serverLoader = vi.fn(
       () =>
         new Promise<{ msg: string }>((r) => {
           resolve = r;
         })
     );
-    // cache.wrap prevents re-renders from calling rawLoader again after it resolves
     const Wrapped = getLoaderData(Child, {
-      clientLoader: cache.wrap(rawLoader),
+      serverLoader,
       cache,
       fallback: <div data-testid="loading">Loading…</div>,
     });
 
     wrap(<Wrapped {...loc} />);
 
-    // Guard resolves first, then clientLoader is called — wait for the call
-    await waitFor(() => expect(rawLoader).toHaveBeenCalled());
-    expect(rawLoader).toHaveBeenCalledOnce();
+    await waitFor(() => expect(serverLoader).toHaveBeenCalled());
+    expect(serverLoader).toHaveBeenCalledOnce();
     expect(screen.getByTestId('loading')).toBeInTheDocument();
 
     await act(async () => {
@@ -106,13 +104,10 @@ describe('cache miss (fetch path)', () => {
 });
 
 describe('useReload', () => {
-  it('reload() re-runs clientLoader and updates rendered content', async () => {
+  it('reload() re-runs serverLoader and updates rendered content', async () => {
     let callCount = 0;
     const cache = createCache<{ msg: string }>();
-    // Use raw clientLoader (not cache.wrap) so reload() calls it fresh each time.
-    // Provide cache so re-renders after setReloading(true) take the cache path
-    // instead of creating a new wrapPromise and calling clientLoader a third time.
-    const clientLoader = vi.fn(() => {
+    const serverLoader = vi.fn(() => {
       callCount++;
       return Promise.resolve({ msg: `call ${callCount}` });
     });
@@ -128,7 +123,7 @@ describe('useReload', () => {
     }
     ReloadChild.defaultProps = { route: '/test' };
 
-    const Wrapped = getLoaderData(ReloadChild, { clientLoader, cache });
+    const Wrapped = getLoaderData(ReloadChild, { serverLoader, cache });
     wrap(<Wrapped {...loc} />);
 
     const msg = await screen.findByTestId('msg');
@@ -139,7 +134,7 @@ describe('useReload', () => {
     });
 
     await screen.findByText('call 2');
-    expect(clientLoader).toHaveBeenCalledTimes(2);
+    expect(serverLoader).toHaveBeenCalledTimes(2);
   });
 
   it('throws when called outside a getLoaderData component', () => {
@@ -156,27 +151,27 @@ describe('useReload', () => {
 });
 
 describe('preloaded empty object (hydration edge case)', () => {
-  it('renders preloaded empty object without calling clientLoader', async () => {
+  it('renders preloaded empty object without calling serverLoader', async () => {
     vi.mocked(preloadModule.getPreloadedData).mockReturnValue({} as any);
-    const clientLoader = vi.fn().mockResolvedValue({ msg: 'from client' });
+    const serverLoader = vi.fn().mockResolvedValue({ msg: 'from server' });
 
     function EmptyChild({ loaderData }: LoaderData<Record<string, never>>) {
       return <div data-testid="empty">{JSON.stringify(loaderData)}</div>;
     }
     EmptyChild.defaultProps = { route: '/test' };
 
-    const Wrapped = getLoaderData(EmptyChild, { clientLoader });
+    const Wrapped = getLoaderData(EmptyChild, { serverLoader });
     wrap(<Wrapped {...loc} />);
 
     await waitFor(() => {}, { timeout: 50 }).catch(() => {});
-    expect(clientLoader).not.toHaveBeenCalled();
+    expect(serverLoader).not.toHaveBeenCalled();
   });
 });
 
 describe('useReload error handling', () => {
-  it('exposes the error when clientLoader throws during reload', async () => {
+  it('exposes the error when serverLoader throws during reload', async () => {
     const cache = createCache<{ msg: string }>();
-    const clientLoader = vi.fn()
+    const serverLoader = vi.fn()
       .mockResolvedValueOnce({ msg: 'initial' })
       .mockRejectedValueOnce(new Error('network failure'));
 
@@ -192,7 +187,7 @@ describe('useReload error handling', () => {
     }
     ErrorChild.defaultProps = { route: '/test' };
 
-    const Wrapped = getLoaderData(ErrorChild, { clientLoader, cache });
+    const Wrapped = getLoaderData(ErrorChild, { serverLoader, cache });
     wrap(<Wrapped {...loc} />);
 
     await screen.findByText('initial');

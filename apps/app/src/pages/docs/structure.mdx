@@ -66,7 +66,7 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
 - `loader.tsx` — `getLoaderData` HOC, `useReload` hook, and `Loader<T>` type
-- `page.tsx` — `Page` component: runs serverLoader on the server, clientLoader in the browser
+- `page.tsx` — `Page` component: runs serverLoader on the server, RPC stub in the browser
 - `cache.ts` — single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation
 - `guard.ts` — `createGuard`, `runGuards`, guard types
 - `preload.ts` — reads loader data serialized into `data-loader` attributes on first hydration

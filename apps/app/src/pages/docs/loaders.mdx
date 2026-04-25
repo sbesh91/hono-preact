@@ -2,21 +2,19 @@
 
 # Server Loaders
 
-Pages often need data. On the server, that data should come from a direct function call. In the browser, it must come via fetch. Writing this branch manually on every page is error-prone — the loader system handles it automatically.
+Pages often need data. On the server, that data should come from a direct function call. In the browser during navigation, it goes through an RPC call to the server. Writing this branch manually is error-prone — the loader system handles it automatically.
 
 ## How it works
 
-Split data fetching into two files that live next to the page:
+Define a `serverLoader` as the default export of a `.server.ts` file. That single function handles all three load cases:
 
-- `movies.server.ts` — runs only on the server; direct DB or internal API calls
-- `movies.tsx` — imports both loaders and passes them to `getLoaderData`
-
-The `Page` component (in `@hono-preact/iso`) runs the right loader depending on the environment.
+- `movies.server.ts` — the loader; runs directly on the server or via RPC from the browser
+- `movies.tsx` — imports the loader and passes it to `getLoaderData`
 
 **At runtime:**
-1. **SSR:** `serverLoader` runs during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
+1. **SSR:** `serverLoader` runs directly during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
 2. **Hydration (first load):** The client reads that attribute — no fetch is fired.
-3. **Client-side navigation:** `clientLoader` runs and its result is cached for the session.
+3. **Client-side navigation:** The Vite plugin replaces the `serverLoader` import with an RPC stub that POSTs `{ module, location }` to `POST /__loaders`. The server runs the real `serverLoader` and returns JSON.
 
 ## Example: listing page
 
@@ -40,14 +38,8 @@ export default serverLoader;
 import { getLoaderData, type LoaderData } from '@hono-preact/iso';
 import serverLoader from './movies.server.js';
 import { createCache } from '@hono-preact/iso';
-import type { RouteHook } from 'preact-iso';
 
 const cache = createCache<{ movies: MovieList }>();
-
-const clientLoader = cache.wrap(async ({}: { location: RouteHook }) => {
-  const movies = await fetch('/api/movies').then(r => r.json());
-  return { movies };
-});
 
 const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
   return (
@@ -58,7 +50,7 @@ const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderDa
 };
 
 Movies.defaultProps = { route: '/movies' };
-export default getLoaderData(Movies, { serverLoader, clientLoader, cache });
+export default getLoaderData(Movies, { serverLoader, cache });
 ```
 
 ## Example: detail page (using route params)
@@ -77,6 +69,36 @@ const serverLoader: Loader<{ movie: Movie }> = async ({ location }) => {
 
 export default serverLoader;
 ```
+
+## Registering the loader endpoint
+
+Register `loadersHandler` on your Hono app before the catch-all route. It accepts the same `import.meta.glob` pattern as `actionsHandler`:
+
+```tsx
+import { loadersHandler, actionsHandler, renderPage, location } from '@hono-preact/server';
+
+app
+  .post('/__loaders', loadersHandler(import.meta.glob('./pages/*.server.ts')))
+  .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
+  .use(location)
+  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
+```
+
+`loadersHandler` derives the module name from the filename by stripping the path prefix and `.server.*` extension — the same convention as `actionsHandler`.
+
+## Caching navigation results
+
+Pass a `cache` to `getLoaderData` so repeated navigations to the same page don't re-fetch:
+
+```tsx
+import { createCache } from '@hono-preact/iso';
+
+const cache = createCache<{ movies: MovieList }>();
+
+export default getLoaderData(Movies, { serverLoader, cache });
+```
+
+On a cache hit, the RPC call is skipped entirely. After a successful fetch the result is stored in the cache for the session.
 
 ## Named caches
 
@@ -100,14 +122,27 @@ Unnamed caches (`createCache<T>()`) work exactly as before and cannot be targete
 
 Two custom Vite plugins (in `packages/vite/src/`) enforce the boundary between server and client code:
 
-**`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to inert stubs. The default export becomes a no-op async function and `serverGuards` (if imported) becomes an empty array:
+**`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to stubs. The default export becomes an RPC fetch function, `serverGuards` becomes an empty array, and `serverActions` becomes a Proxy:
 
 ```ts
-const serverLoader = async () => ({});
+// default export stub (client navigation)
+const serverLoader = async ({ location }) => {
+  const res = await fetch('/__loaders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ module: 'movies', location: { path: location.path, pathParams: location.pathParams, query: location.query } }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Loader failed with status ${res.status}`);
+  }
+  return res.json();
+};
+
 const serverGuards = [];
 ```
 
-This guarantees that database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle, even if you forget to think about it.
+Database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle.
 
 **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`, `serverActions`, or `actionGuards`. If you write:
 

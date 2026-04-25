@@ -2,7 +2,7 @@
 
 # Loading States
 
-By default, a page renders nothing while its client loader is fetching. Pass a `fallback` to `getLoaderData` to show a loading UI during client-side navigation.
+By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `getLoaderData` to show a loading UI during client-side navigation.
 
 ## Basic usage
 
@@ -11,7 +11,6 @@ import { getLoaderData, type LoaderData } from '@hono-preact/iso';
 
 export default getLoaderData(Movies, {
   serverLoader,
-  clientLoader,
   cache,
   fallback: <p>Loading…</p>,
 });
@@ -25,7 +24,7 @@ export default getLoaderData(Movies, {
 |---|---|
 | SSR (first load) | No — data is preloaded into the HTML |
 | Hydration | No — client reads from `data-loader` attribute |
-| Client-side nav (cache miss) | Yes — until `clientLoader` resolves |
+| Client-side nav (cache miss) | Yes — until `serverLoader` resolves |
 | Client-side nav (cache hit) | No — cached data renders immediately |
 
 ## Using a skeleton
@@ -43,7 +42,6 @@ const MoviesSkeleton = () => (
 
 export default getLoaderData(Movies, {
   serverLoader,
-  clientLoader,
   cache,
   fallback: <MoviesSkeleton />,
 });

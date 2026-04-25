@@ -18,16 +18,21 @@ function transform(
 }
 
 describe('serverOnlyPlugin', () => {
-  it('replaces a default *.server.* import with an async no-op stub', () => {
+  it('replaces a default *.server.* import with an RPC fetch stub', () => {
     const code = `import serverLoader from './movies.server.js';`;
-    const result = transform(code, 'movies.tsx');
-    expect(result?.code).toBe('const serverLoader = async () => ({});');
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('fetch(\'/__loaders\'');
+    expect(result?.code).toContain('"movies"');
+    expect(result?.code).toContain('location.path');
+    expect(result?.code).toContain('location.pathParams');
+    expect(result?.code).toContain('location.query');
+    expect(result?.code).not.toContain('async () => ({})');
   });
 
   it('replaces serverGuards named import with an empty array stub', () => {
     const code = `import serverLoader, { serverGuards } from './movies.server.js';`;
-    const result = transform(code, 'movies.tsx');
-    expect(result?.code).toContain('const serverLoader = async () => ({});');
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('fetch(\'/__loaders\'');
     expect(result?.code).toContain('const serverGuards = [];');
   });
 
@@ -60,9 +65,10 @@ describe('serverOnlyPlugin', () => {
       `import serverLoader from './movies.server.js';`,
       `import authLoader from './auth.server.js';`,
     ].join('\n');
-    const result = transform(code, 'page.tsx');
-    expect(result?.code).toContain('const serverLoader = async () => ({});');
-    expect(result?.code).toContain('const authLoader = async () => ({});');
+    const result = transform(code, '/src/pages/page.tsx');
+    expect(result?.code).toContain('"movies"');
+    expect(result?.code).toContain('"auth"');
+    expect(result?.code).not.toContain('async () => ({})');
   });
 
   it('replaces serverActions named import with a Proxy stub using module name from filename', () => {
@@ -76,7 +82,7 @@ describe('serverOnlyPlugin', () => {
   it('handles serverActions alongside default import in the same statement', () => {
     const code = `import serverLoader, { serverActions } from './movies.server.js';`;
     const result = transform(code, '/src/pages/movies.tsx');
-    expect(result?.code).toContain('const serverLoader = async () => ({});');
+    expect(result?.code).toContain('fetch(\'/__loaders\'');
     expect(result?.code).toContain('const serverActions = new Proxy(');
     expect(result?.code).toContain('__module: "movies"');
   });
@@ -121,5 +127,12 @@ describe('serverOnlyPlugin', () => {
     // using the local alias name — so 'guards' becomes the stub variable.
     // This means renamed imports ARE transformed; the stub uses the alias.
     expect(result?.code).toContain('const guards = [];');
+  });
+
+  it('derives module name for default stub from the import source, not the consumer file', () => {
+    const code = `import loader from './profile.server.ts';`;
+    const result = transform(code, '/src/pages/some-other-page.tsx');
+    expect(result?.code).toContain('"profile"');
+    expect(result?.code).not.toContain('"some-other-page"');
   });
 });

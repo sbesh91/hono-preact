@@ -2,7 +2,7 @@
 
 # Reloading Data
 
-Sometimes you need to re-run the client loader imperatively — for example, after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
+Sometimes you need to re-run the loader imperatively — for example, after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
 
 ## Basic usage
 
@@ -29,7 +29,7 @@ const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderDa
   );
 };
 
-export default getLoaderData(Movies, { serverLoader, clientLoader });
+export default getLoaderData(Movies, { serverLoader });
 ```
 
 `useReload` must be called inside a component rendered by `getLoaderData`. Calling it elsewhere throws an error.
@@ -40,7 +40,7 @@ Reload is a background refresh — the current content stays visible while the n
 
 ## Cache invalidation
 
-`reload()` re-runs the `clientLoader` as-is. If your loader is cache-wrapped, the cache will return the existing data again unless you invalidate it first:
+`reload()` re-runs the `serverLoader`. If you're using a cache, invalidate it first so the RPC call fires rather than returning stale cached data:
 
 ```tsx
 const { reload } = useReload();
@@ -48,7 +48,7 @@ const { reload } = useReload();
 const handleAdd = async () => {
   await addMovie({ title: 'New Movie' });
   cache.invalidate(); // clear the cache entry first
-  reload();                    // then re-run the loader
+  reload();           // then re-run the loader
 };
 ```
 
@@ -60,5 +60,5 @@ const { reload, reloading } = useReload();
 
 | Value | Type | Description |
 |---|---|---|
-| `reload` | `() => void` | Re-runs the `clientLoader`. No-op if a reload is already in progress. |
+| `reload` | `() => void` | Re-runs the `serverLoader`. No-op if a reload is already in progress. |
 | `reloading` | `boolean` | `true` while the loader is fetching, `false` otherwise. |
