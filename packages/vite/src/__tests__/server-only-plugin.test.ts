@@ -113,7 +113,7 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('const serverActions = new Proxy(');
   });
 
-  it('does not stub renamed actionGuards imports (known limitation)', () => {
+  it('stubs renamed actionGuards imports using the local alias name', () => {
     // import { actionGuards as guards } is not currently detected
     // because isServerImport checks imported.name, not local.name
     const code = `import { actionGuards as guards } from './movies.server.js';`;
