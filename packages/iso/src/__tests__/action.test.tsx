@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
 import { defineAction } from '../action.js';
+import { cacheRegistry } from '../cache-registry.js';
 
 describe('defineAction', () => {
   it('returns the function unchanged at runtime', () => {
@@ -24,6 +25,7 @@ const stub: ActionStub<{ title: string }, { ok: boolean }> = {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  cacheRegistry.clear();
 });
 
 describe('useAction', () => {
@@ -194,5 +196,34 @@ describe('useAction', () => {
     });
 
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('invalidates named caches when invalidate is a string[]', async () => {
+    const invalidateFn = vi.fn();
+    cacheRegistry.register('movies', invalidateFn);
+
+    const testStub: ActionStub<{}, { ok: boolean }> = {
+      __module: 'movies',
+      __action: 'create',
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      )
+    );
+
+    function TestComponent() {
+      const { mutate } = useAction(testStub, { invalidate: ['movies'] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(<TestComponent />);
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() => expect(invalidateFn).toHaveBeenCalledOnce());
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './page.js';
+import { cacheRegistry } from './cache-registry.js';
 
 export type ActionStub<TPayload, TResult> = {
   readonly __module: string;
@@ -16,7 +17,7 @@ export function defineAction<TPayload, TResult>(
 }
 
 export type UseActionOptions<TPayload, TResult> = {
-  invalidate?: 'auto' | false;
+  invalidate?: 'auto' | false | string[];
   onMutate?: (payload: TPayload) => unknown;
   onError?: (err: Error, snapshot: unknown) => void;
   onSuccess?: (data: TResult) => void;
@@ -76,6 +77,10 @@ export function useAction<TPayload, TResult>(
 
       if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
+      } else if (Array.isArray(currentOptions?.invalidate)) {
+        for (const name of currentOptions.invalidate) {
+          cacheRegistry.invalidate(name);
+        }
       }
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
