@@ -1,4 +1,5 @@
 import type { Loader } from './loader.js';
+import { cacheRegistry } from './cache-registry.js';
 
 export interface LoaderCache<T> {
   get(): T | null;
@@ -8,9 +9,9 @@ export interface LoaderCache<T> {
   invalidate(): void;
 }
 
-export function createCache<T>(): LoaderCache<T> {
+export function createCache<T>(name?: string): LoaderCache<T> {
   let store: T | null = null;
-  return {
+  const cache: LoaderCache<T> = {
     get: () => store,
     set: (value) => {
       store = value;
@@ -28,4 +29,10 @@ export function createCache<T>(): LoaderCache<T> {
       store = null;
     },
   };
+  if (name) {
+    cacheRegistry.register(name, () => {
+      store = null;
+    });
+  }
+  return cache;
 }
