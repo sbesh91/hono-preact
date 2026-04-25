@@ -2,6 +2,7 @@ export { getLoaderData, useReload } from './loader.js';
 export type { LoaderData, Loader } from './loader.js';
 export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
+export { cacheRegistry } from './cache-registry.js';
 export { createGuard, runGuards, GuardRedirect } from './guard.js';
 export type { GuardFn, GuardResult, GuardContext } from './guard.js';
 export { isBrowser, env } from './is-browser.js';
