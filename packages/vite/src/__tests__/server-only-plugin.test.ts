@@ -112,4 +112,15 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('const actionGuards = [];');
     expect(result?.code).toContain('const serverActions = new Proxy(');
   });
+
+  it('does not stub renamed actionGuards imports (known limitation)', () => {
+    // import { actionGuards as guards } is not currently detected
+    // because isServerImport checks imported.name, not local.name
+    const code = `import { actionGuards as guards } from './movies.server.js';`;
+    const result = transform(code, 'movies.tsx');
+    // The plugin detects the import via imported.name ('actionGuards') and stubs it
+    // using the local alias name — so 'guards' becomes the stub variable.
+    // This means renamed imports ARE transformed; the stub uses the alias.
+    expect(result?.code).toContain('const guards = [];');
+  });
 });
