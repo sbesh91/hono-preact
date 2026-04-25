@@ -216,4 +216,46 @@ describe('actionsHandler — multipart/form-data', () => {
     const [, payload] = uploadFn.mock.calls[0];
     expect(payload.tag).toEqual(['sci-fi', 'drama']);
   });
+
+  it('detects multipart/form-data even with boundary suffix in Content-Type', async () => {
+    const uploadFn = vi.fn().mockResolvedValue({ ok: true });
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+    });
+
+    // Manually build a minimal multipart body to test the Content-Type detection
+    const boundary = 'testboundary';
+    const body = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="__module"',
+      '',
+      'movies',
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="__action"',
+      '',
+      'upload',
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const res = await app.request('http://localhost/__actions', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+    expect(res.status).toBe(200);
+    expect(uploadFn).toHaveBeenCalledOnce();
+  });
+
+  it('returns 400 when form data body is malformed', async () => {
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { upload: vi.fn() } },
+    });
+
+    const res = await app.request('http://localhost/__actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/form-data; boundary=xxx' },
+      body: 'not a valid multipart body',
+    });
+    expect(res.status).toBe(400);
+  });
 });
