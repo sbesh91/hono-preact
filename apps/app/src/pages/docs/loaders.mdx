@@ -117,45 +117,6 @@ const { mutate } = useAction(serverActions.addReview, {
 
 Unnamed caches (`createCache<T>()`) work exactly as before and cannot be targeted by other pages.
 
-## The server-only plugins
+## The server/client boundary
 
-Two custom Vite plugins (in `packages/vite/src/`) enforce the boundary between server and client code:
-
-**`serverOnlyPlugin`** — during the client bundle build, every import of a `*.server.*` file is rewritten to stubs. The default export becomes an RPC fetch function, `serverGuards` becomes an empty array, and `serverActions` becomes a Proxy:
-
-```ts
-// default export stub (client navigation)
-const serverLoader = async ({ location }) => {
-  const res = await fetch('/__loaders', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ module: 'movies', location: { path: location.path, pathParams: location.pathParams, query: location.query } }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Loader failed with status ${res.status}`);
-  }
-  return res.json();
-};
-
-const serverGuards = [];
-```
-
-Database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle.
-
-**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`, `serverActions`, or `actionGuards`. If you write:
-
-```ts
-// ❌ build error
-export const helper = () => {};
-export default serverLoader;
-```
-
-The build will fail with:
-```
-".server files may only export 'serverGuards', 'serverActions', or 'actionGuards' as named exports (found: helper)."
-```
-
-`serverGuards`, `serverActions`, and `actionGuards` are the only permitted named exports. Any other named export is an error.
-
-This prevents server-only state from accidentally entering the module graph via named exports.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the default export becomes an RPC stub, and any imported `serverGuards`, `serverActions`, or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has any named export other than those three. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
