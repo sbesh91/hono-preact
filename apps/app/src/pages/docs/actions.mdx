@@ -263,22 +263,6 @@ export const serverActions = {
 
 Guards run before every action in the module. See [Action Guards](/docs/action-guards) for the full API.
 
-## The server-only boundary
+## The server/client boundary
 
-Two Vite plugins enforce that server action code never reaches the browser:
-
-**`serverOnlyPlugin`** — in client builds, every `import { serverActions } from './movies.server.js'` is replaced with a Proxy stub:
-
-```ts
-const serverActions = new Proxy({}, {
-  get(_, action) {
-    return { __module: 'movies', __action: String(action) };
-  }
-});
-```
-
-Each property access on `serverActions` returns an `ActionStub` — the type stub that `useAction` and `<Form>` send as the RPC address. The action function bodies never enter the client bundle.
-
-**`serverOnlyPlugin`** — in client builds, `actionGuards` imports are also replaced with an empty array stub, keeping guard logic out of the browser bundle.
-
-**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file exports anything other than `serverGuards`, `serverActions`, or `actionGuards` as named exports. A file with only `serverActions` (no default loader) is valid.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy — each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
