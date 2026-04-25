@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { actionsHandler } from '../actions-handler.js';
+import { ActionGuardError } from '@hono-preact/iso';
 
 function makeApp(glob: Parameters<typeof actionsHandler>[0]) {
   const app = new Hono();
@@ -257,5 +258,102 @@ describe('actionsHandler — multipart/form-data', () => {
       body: 'not a valid multipart body',
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('actionsHandler — action guards', () => {
+  it('runs guards before the action and allows through when next() is called', async () => {
+    const guardFn = vi.fn().mockImplementation(async (_ctx: unknown, next: () => Promise<void>) => next());
+    const createFn = vi.fn().mockResolvedValue({ id: 1 });
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { create: createFn },
+        actionGuards: [guardFn],
+      },
+    });
+
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+    expect(guardFn).toHaveBeenCalledOnce();
+    expect(createFn).toHaveBeenCalledOnce();
+  });
+
+  it('returns 403 when a guard throws ActionGuardError', async () => {
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { create: vi.fn() },
+        actionGuards: [
+          async () => {
+            throw new ActionGuardError('Not allowed');
+          },
+        ],
+      },
+    });
+
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(403);
+    expect((await res.json() as { error: string }).error).toBe('Not allowed');
+  });
+
+  it('uses the status from ActionGuardError', async () => {
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { create: vi.fn() },
+        actionGuards: [
+          async () => {
+            throw new ActionGuardError('Unauthorized', 401);
+          },
+        ],
+      },
+    });
+
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(401);
+  });
+
+  it('stops the chain when a guard does not call next()', async () => {
+    const secondGuard = vi.fn();
+    const createFn = vi.fn();
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { create: createFn },
+        actionGuards: [
+          async () => { throw new ActionGuardError('Blocked'); },
+          secondGuard,
+        ],
+      },
+    });
+
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(403);
+    expect(secondGuard).not.toHaveBeenCalled();
+    expect(createFn).not.toHaveBeenCalled();
+  });
+
+  it('passes module, action, and payload to the guard context', async () => {
+    const guardFn = vi.fn().mockImplementation(async (_ctx: unknown, next: () => Promise<void>) => next());
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        serverActions: { create: vi.fn().mockResolvedValue({}) },
+        actionGuards: [guardFn],
+      },
+    });
+
+    await post(app, { module: 'movies', action: 'create', payload: { title: 'Dune' } });
+    const [ctx] = guardFn.mock.calls[0];
+    expect(ctx.module).toBe('movies');
+    expect(ctx.action).toBe('create');
+    expect(ctx.payload).toEqual({ title: 'Dune' });
+  });
+
+  it('works for modules without actionGuards', async () => {
+    const createFn = vi.fn().mockResolvedValue({ id: 1 });
+    const app = makeApp({
+      './pages/movies.server.ts': { serverActions: { create: createFn } },
+    });
+
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+    expect(createFn).toHaveBeenCalledOnce();
   });
 });
