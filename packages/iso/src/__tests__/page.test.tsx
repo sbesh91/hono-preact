@@ -10,7 +10,6 @@ vi.mock('../preload.js', () => ({
   deletePreloadedData: vi.fn(),
 }));
 
-// Mock only useLocation from preact-iso; keep LocationProvider and everything else real.
 const mockRoute = vi.fn();
 vi.mock('preact-iso', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -52,7 +51,7 @@ describe('guard { render }', () => {
 
     const Wrapped = getLoaderData(PageChild, {
       clientGuards: [guard],
-      clientLoader: async () => ({}),
+      serverLoader: async () => ({}),
     });
 
     render(
@@ -78,7 +77,7 @@ describe('guard { redirect } in browser', () => {
 
     const Wrapped = getLoaderData(PageChild, {
       clientGuards: [guard],
-      clientLoader: async () => ({}),
+      serverLoader: async () => ({}),
     });
 
     render(
@@ -94,10 +93,6 @@ describe('guard { redirect } in browser', () => {
 });
 
 describe('guard { redirect } on server', () => {
-  // GuardRedirect is thrown by Page during SSR when isBrowser()=false and the guard
-  // returns { redirect }. Testing the full render path in happy-dom is not feasible
-  // (Preact catches the throw asynchronously as an unhandled rejection). Instead,
-  // verify the guard contract and the throw directly.
   it('throws GuardRedirect when a server guard redirects', async () => {
     const guard = createGuard(async (_ctx, _next) => ({ redirect: '/login' }));
     const result = await runGuards([guard], { location: loc });
@@ -123,7 +118,7 @@ describe('guard re-runs on navigation', () => {
 
     const Wrapped = getLoaderData(PageChild, {
       clientGuards: [guard],
-      clientLoader: async () => ({}),
+      serverLoader: async () => ({}),
     });
 
     const locPublic = { ...loc, path: '/public' } as any;
@@ -135,7 +130,6 @@ describe('guard re-runs on navigation', () => {
 
     await screen.findByTestId('page');
 
-    // Simulate navigation to /admin
     currentPath = '/admin';
     const locAdmin = { ...loc, path: '/admin' } as any;
     rerender(

@@ -45,7 +45,6 @@ const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
 type PageProps<T> = {
   Child: FunctionComponent<LoaderData<T>>;
   serverLoader?: Loader<T>;
-  clientLoader?: Loader<T>;
   location: RouteHook;
   cache?: LoaderCache<T>;
   serverGuards?: GuardFn[];
@@ -57,7 +56,6 @@ type PageProps<T> = {
 export const Page = memo(function <T extends Record<string, unknown>>({
   Child,
   serverLoader,
-  clientLoader,
   location,
   cache,
   serverGuards = [],
@@ -81,7 +79,6 @@ export const Page = memo(function <T extends Record<string, unknown>>({
         id={id}
         Child={Child}
         serverLoader={serverLoader}
-        clientLoader={clientLoader}
         location={location}
         cache={cache}
         guardRef={guardRef}
@@ -96,7 +93,6 @@ type GuardedPageProps<T> = {
   id: string;
   Child: FunctionComponent<LoaderData<T>>;
   serverLoader?: Loader<T>;
-  clientLoader?: Loader<T>;
   location: RouteHook;
   cache?: LoaderCache<T>;
   guardRef: { current: { read: () => import('./guard.js').GuardResult } };
@@ -108,7 +104,6 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
   id,
   Child,
   serverLoader = async () => ({}) as T,
-  clientLoader = serverLoader,
   location,
   cache,
   guardRef,
@@ -126,8 +121,8 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
     setOverrideData(undefined);
   }
 
-  const clientLoaderRef = useRef(clientLoader);
-  clientLoaderRef.current = clientLoader;
+  const serverLoaderRef = useRef(serverLoader);
+  serverLoaderRef.current = serverLoader;
   const locationRef = useRef(location);
   locationRef.current = location;
 
@@ -135,7 +130,7 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
     if (reloading) return;
     setReloading(true);
     setLoadError(null);
-    clientLoaderRef.current({ location: locationRef.current })
+    serverLoaderRef.current({ location: locationRef.current })
       .then((result) => {
         setOverrideData(result);
         setReloading(false);
@@ -195,12 +190,10 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
   }
 
   const loaderRef = wrapPromise(
-    isBrowser()
-      ? clientLoader({ location }).then((r) => {
-          cache?.set(r);
-          return r;
-        })
-      : serverLoader({ location })
+    serverLoader({ location }).then((r) => {
+      if (isBrowser()) cache?.set(r);
+      return r;
+    })
   );
 
   return (

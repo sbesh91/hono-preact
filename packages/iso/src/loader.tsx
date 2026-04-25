@@ -15,7 +15,6 @@ export type Loader<T> = (props: { location: RouteHook }) => Promise<T>;
 
 interface LoaderProps<T> {
   serverLoader?: Loader<T>;
-  clientLoader?: Loader<T>;
   cache?: LoaderCache<T>;
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
@@ -27,7 +26,6 @@ export const getLoaderData = <T extends Record<string, unknown>>(
   Component: FunctionComponent<LoaderData<T>>,
   {
     serverLoader,
-    clientLoader,
     cache,
     serverGuards,
     clientGuards,
@@ -40,7 +38,6 @@ export const getLoaderData = <T extends Record<string, unknown>>(
       <Page
         Child={Component}
         serverLoader={serverLoader}
-        clientLoader={clientLoader}
         location={location}
         cache={cache}
         serverGuards={serverGuards}
