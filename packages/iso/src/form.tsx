@@ -28,26 +28,33 @@ export function Form<TPayload extends Record<string, unknown>, TResult>({
     e.preventDefault();
     const formEl = e.target as HTMLFormElement;
     const formData = new FormData(formEl);
-    const payload = Object.fromEntries(formData.entries()) as TPayload;
+    const hasFiles = [...formData.values()].some((v) => v instanceof File && v.size > 0);
 
     if (fieldsetRef.current) {
       fieldsetRef.current.disabled = true;
     }
 
+    const payload = Object.fromEntries(formData.entries()) as TPayload;
     let snapshot: unknown;
     if (onMutate) {
       snapshot = onMutate(payload);
     }
 
-    fetch('/__actions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        module: (action as unknown as { __module: string }).__module,
-        action: (action as unknown as { __action: string }).__action,
-        payload,
-      }),
-    })
+    const stub = action as unknown as { __module: string; __action: string };
+    let requestInit: RequestInit;
+    if (hasFiles) {
+      formData.append('__module', stub.__module);
+      formData.append('__action', stub.__action);
+      requestInit = { method: 'POST', body: formData };
+    } else {
+      requestInit = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: stub.__module, action: stub.__action, payload }),
+      };
+    }
+
+    fetch('/__actions', requestInit)
       .then(async (response) => {
         if (fieldsetRef.current) {
           fieldsetRef.current.disabled = false;
