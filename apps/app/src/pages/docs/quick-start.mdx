@@ -62,8 +62,8 @@ const store: Movie[] = [
   { id: '2', title: 'Chinatown' },
 ];
 
-export const getMovies = () => store;
-export const addMovieToStore = (title: string) =>
+const getMovies = () => store;
+const addMovieToStore = (title: string) =>
   store.push({ id: String(store.length + 1), title });
 
 const serverLoader: Loader<{ movies: Movie[] }> = async () => ({
@@ -114,8 +114,8 @@ const store: Movie[] = [
   { id: '2', title: 'Chinatown' },
 ];
 
-export const getMovies = () => store;
-export const addMovieToStore = (title: string) =>
+const getMovies = () => store;
+const addMovieToStore = (title: string) =>
   store.push({ id: String(store.length + 1), title });
 
 const serverLoader: Loader<{ movies: Movie[] }> = async () => ({
