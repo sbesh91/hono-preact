@@ -19,6 +19,7 @@ export const nav: NavSection[] = [
       { title: 'Loading States', route: '/docs/loading-states' },
       { title: 'Reloading Data', route: '/docs/reloading' },
       { title: 'Server Actions', route: '/docs/actions' },
+      { title: 'Action Guards', route: '/docs/action-guards' },
       { title: 'Route Guards', route: '/docs/guards' },
       { title: 'Build & Deploy', route: '/docs/deployment' },
     ],

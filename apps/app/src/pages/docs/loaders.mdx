@@ -78,6 +78,24 @@ const serverLoader: Loader<{ movie: Movie }> = async ({ location }) => {
 export default serverLoader;
 ```
 
+## Named caches
+
+Pass a string to `createCache` to register the cache with the global `cacheRegistry`. Actions on other pages can then invalidate it by name using `invalidate: ['cache-name']`:
+
+```ts
+// movies.tsx
+const cache = createCache<{ movies: MovieList }>('movies');
+```
+
+```tsx
+// reviews.tsx — a different page whose action should also refresh the movie list
+const { mutate } = useAction(serverActions.addReview, {
+  invalidate: ['movies'], // clears the 'movies' cache on success
+});
+```
+
+Unnamed caches (`createCache<T>()`) work exactly as before and cannot be targeted by other pages.
+
 ## The server-only plugins
 
 Two custom Vite plugins (in `packages/vite/src/`) enforce the boundary between server and client code:
@@ -91,7 +109,7 @@ const serverGuards = [];
 
 This guarantees that database clients, internal API URLs, and secrets in `.server.*` files never reach the browser bundle, even if you forget to think about it.
 
-**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards` or `serverActions`. If you write:
+**`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`, `serverActions`, or `actionGuards`. If you write:
 
 ```ts
 // ❌ build error
@@ -101,9 +119,9 @@ export default serverLoader;
 
 The build will fail with:
 ```
-'.server files may only export 'serverGuards' or 'serverActions' as named exports (found: helper). Export the server loader as the default export only.'
+".server files may only export 'serverGuards', 'serverActions', or 'actionGuards' as named exports (found: helper)."
 ```
 
-`serverGuards` and `serverActions` are the only permitted named exports. Any other named export is an error.
+`serverGuards`, `serverActions`, and `actionGuards` are the only permitted named exports. Any other named export is an error.
 
 This prevents server-only state from accidentally entering the module graph via named exports.

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/preact';
 import { Form } from '../form.js';
 import type { ActionStub } from '../action.js';
+import { cacheRegistry } from '../cache-registry.js';
 
 const stub: ActionStub<{ title: string }, { ok: boolean }> = {
   __module: 'movies',
@@ -12,6 +13,7 @@ const stub: ActionStub<{ title: string }, { ok: boolean }> = {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  cacheRegistry.clear();
 });
 
 describe('Form', () => {
@@ -92,5 +94,33 @@ describe('Form', () => {
     });
 
     expect(onSuccess).toHaveBeenCalledWith({ ok: true });
+  });
+
+  it('calls cacheRegistry.invalidate for each name in invalidate: string[]', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      )
+    );
+
+    const mockInvalidateMovies = vi.fn();
+    const mockInvalidateActors = vi.fn();
+    cacheRegistry.register('movies', mockInvalidateMovies);
+    cacheRegistry.register('actors', mockInvalidateActors);
+
+    render(
+      <Form action={stub} invalidate={['movies', 'actors']}>
+        <input name="title" defaultValue="Dune" />
+        <button type="submit">Submit</button>
+      </Form>
+    );
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+
+    expect(mockInvalidateMovies).toHaveBeenCalled();
+    expect(mockInvalidateActors).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './page.js';
+import { cacheRegistry } from './cache-registry.js';
 
 export type ActionStub<TPayload, TResult> = {
   readonly __module: string;
@@ -16,10 +17,11 @@ export function defineAction<TPayload, TResult>(
 }
 
 export type UseActionOptions<TPayload, TResult> = {
-  invalidate?: 'auto' | false;
+  invalidate?: 'auto' | false | string[];
   onMutate?: (payload: TPayload) => unknown;
   onError?: (err: Error, snapshot: unknown) => void;
   onSuccess?: (data: TResult) => void;
+  onChunk?: (chunk: string) => void;
 };
 
 export type UseActionResult<TPayload, TResult> = {
@@ -28,6 +30,12 @@ export type UseActionResult<TPayload, TResult> = {
   error: Error | null;
   data: TResult | null;
 };
+
+function hasFileValues(payload: unknown): boolean {
+  if (typeof File === 'undefined') return false;
+  if (typeof payload !== 'object' || payload === null) return false;
+  return Object.values(payload as Record<string, unknown>).some((v) => v instanceof File);
+}
 
 export function useAction<TPayload, TResult>(
   stub: ActionStub<TPayload, TResult>,
@@ -55,27 +63,69 @@ export function useAction<TPayload, TResult>(
     }
 
     try {
-      const response = await fetch('/__actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          module: (currentStub as unknown as { __module: string }).__module,
-          action: (currentStub as unknown as { __action: string }).__action,
-          payload,
-        }),
-      });
+      const stub = currentStub as unknown as { __module: string; __action: string };
+      let response: Response;
+      if (hasFileValues(payload)) {
+        const fd = new FormData();
+        fd.append('__module', stub.__module);
+        fd.append('__action', stub.__action);
+        for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+          if (key === '__module' || key === '__action') continue;
+          if (value instanceof File) {
+            fd.append(key, value);
+          } else if (typeof value === 'string') {
+            fd.append(key, value);
+          } else {
+            fd.append(key, JSON.stringify(value));
+          }
+        }
+        response = await fetch('/__actions', { method: 'POST', body: fd });
+      } else {
+        response = await fetch('/__actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            module: stub.__module,
+            action: stub.__action,
+            payload,
+          }),
+        });
+      }
 
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
         throw new Error(body.error ?? `Action failed with status ${response.status}`);
       }
 
-      const result = (await response.json()) as TResult;
-      setData(result);
-      currentOptions?.onSuccess?.(result);
+      const contentType = response.headers.get('Content-Type') ?? '';
+      if (contentType.includes('text/event-stream')) {
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            currentOptions?.onChunk?.(chunk);
+          }
+          const tail = decoder.decode();
+          if (tail) currentOptions?.onChunk?.(tail);
+        } finally {
+          reader.releaseLock();
+        }
+        currentOptions?.onSuccess?.(undefined as unknown as TResult);
+      } else {
+        const result = (await response.json()) as TResult;
+        setData(result);
+        currentOptions?.onSuccess?.(result);
+      }
 
       if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
+      } else if (Array.isArray(currentOptions?.invalidate)) {
+        for (const name of currentOptions.invalidate) {
+          cacheRegistry.invalidate(name);
+        }
       }
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
@@ -88,3 +138,27 @@ export function useAction<TPayload, TResult>(
 
   return { mutate, pending, error, data };
 }
+
+export type ActionGuardContext = {
+  c: unknown;
+  module: string;
+  action: string;
+  payload: unknown;
+};
+
+export type ActionGuardFn = (
+  ctx: ActionGuardContext,
+  next: () => Promise<void>
+) => Promise<void>;
+
+export class ActionGuardError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number = 403
+  ) {
+    super(message);
+    this.name = 'ActionGuardError';
+  }
+}
+
+export const defineActionGuard = (fn: ActionGuardFn): ActionGuardFn => fn;

@@ -52,11 +52,11 @@ export function serverLoaderValidationPlugin(): Plugin {
       }
 
       const disallowedExports = namedExports.filter(
-        (n) => n !== 'serverGuards' && n !== 'serverActions'
+        (n) => n !== 'serverGuards' && n !== 'serverActions' && n !== 'actionGuards'
       );
       if (disallowedExports.length > 0) {
         errors.push(
-          `${id}: .server files may only export 'serverGuards' or 'serverActions' as named exports (found: ${disallowedExports.join(', ')}). ` +
+          `${id}: .server files may only export 'serverGuards', 'serverActions', or 'actionGuards' as named exports (found: ${disallowedExports.join(', ')}). ` +
             `Export the server loader as the default export only.`
         );
       }

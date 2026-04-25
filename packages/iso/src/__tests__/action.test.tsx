@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
 import { defineAction } from '../action.js';
+import { cacheRegistry } from '../cache-registry.js';
 
 describe('defineAction', () => {
   it('returns the function unchanged at runtime', () => {
@@ -10,7 +11,7 @@ describe('defineAction', () => {
   });
 });
 
-import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
+import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../page.js';
@@ -24,6 +25,7 @@ const stub: ActionStub<{ title: string }, { ok: boolean }> = {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  cacheRegistry.clear();
 });
 
 describe('useAction', () => {
@@ -194,5 +196,140 @@ describe('useAction', () => {
     });
 
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('invalidates named caches when invalidate is a string[]', async () => {
+    const invalidateFn = vi.fn();
+    cacheRegistry.register('movies', invalidateFn);
+
+    const testStub: ActionStub<{}, { ok: boolean }> = {
+      __module: 'movies',
+      __action: 'create',
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      )
+    );
+
+    function TestComponent() {
+      const { mutate } = useAction(testStub, { invalidate: ['movies'] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(<TestComponent />);
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() => expect(invalidateFn).toHaveBeenCalledOnce());
+  });
+});
+
+describe('useAction — streaming (onChunk)', () => {
+  it('calls onChunk for each streamed chunk', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"progress":50}\n'));
+        controller.enqueue(encoder.encode('{"progress":100}\n'));
+        controller.close();
+      },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      )
+    );
+
+    const onChunk = vi.fn();
+    const { result } = renderHook(() =>
+      useAction(stub, { onChunk })
+    );
+
+    await act(async () => {
+      await result.current.mutate({} as { title: string });
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(2);
+    expect(onChunk).toHaveBeenNthCalledWith(1, '{"progress":50}\n');
+    expect(onChunk).toHaveBeenNthCalledWith(2, '{"progress":100}\n');
+  });
+});
+
+const mockStub: ActionStub<Record<string, unknown>, unknown> = {
+  __module: 'test-module',
+  __action: 'test-action',
+};
+
+describe('useAction — FormData (file upload)', () => {
+  it('sends FormData when payload contains a File', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ stored: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAction(mockStub));
+
+    await act(async () => {
+      await result.current.mutate({ poster: new File(['data'], 'poster.jpg') });
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call[1]?.body).toBeInstanceOf(FormData);
+    const fd = call[1]?.body as FormData;
+    expect(fd.get('__module')).toBe('test-module');
+    expect(fd.get('__action')).toBe('test-action');
+    expect(fd.get('poster')).toBeInstanceOf(File);
+  });
+
+  it('serializes non-string non-File values as JSON strings', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAction(mockStub));
+
+    await act(async () => {
+      await result.current.mutate({ poster: new File(['data'], 'p.jpg'), count: 5 });
+    });
+
+    const fd = fetchMock.mock.calls[0][1]?.body as FormData;
+    expect(fd.get('count')).toBe('5'); // number serialized as JSON string
+    expect(fd.get('poster')).toBeInstanceOf(File);
+  });
+
+  it('sends JSON when payload has no File values', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAction(mockStub));
+
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call[1]?.body).not.toBeInstanceOf(FormData);
+    expect(call[1]?.headers).toMatchObject({ 'Content-Type': 'application/json' });
   });
 });

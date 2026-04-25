@@ -117,4 +117,13 @@ describe('serverLoaderValidationPlugin', () => {
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toBeNull();
   });
+
+  it('passes a *.server.* file with actionGuards as a named export', () => {
+    const code = [
+      'export const actionGuards = [];',
+      'export const serverActions = {};',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toBeNull();
+  });
 });

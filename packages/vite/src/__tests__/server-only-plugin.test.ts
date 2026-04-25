@@ -99,4 +99,27 @@ describe('serverOnlyPlugin', () => {
     const result = transform(code, '/src/pages/movies.tsx', { ssr: true });
     expect(result).toBeUndefined();
   });
+
+  it('replaces actionGuards named import with an empty array stub', () => {
+    const code = `import { actionGuards } from './movies.server.js';`;
+    const result = transform(code, 'movies.tsx');
+    expect(result?.code).toContain('const actionGuards = [];');
+  });
+
+  it('handles actionGuards alongside serverActions in the same statement', () => {
+    const code = `import { actionGuards, serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('const actionGuards = [];');
+    expect(result?.code).toContain('const serverActions = new Proxy(');
+  });
+
+  it('stubs renamed actionGuards imports using the local alias name', () => {
+    // The plugin detects via imported.name ('actionGuards') and stubs using the local alias
+    const code = `import { actionGuards as guards } from './movies.server.js';`;
+    const result = transform(code, 'movies.tsx');
+    // The plugin detects the import via imported.name ('actionGuards') and stubs it
+    // using the local alias name — so 'guards' becomes the stub variable.
+    // This means renamed imports ARE transformed; the stub uses the alias.
+    expect(result?.code).toContain('const guards = [];');
+  });
 });
