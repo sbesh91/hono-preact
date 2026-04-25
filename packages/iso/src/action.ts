@@ -83,6 +83,8 @@ export function useAction<TPayload, TResult>(
             const chunk = decoder.decode(value, { stream: true });
             currentOptions?.onChunk?.(chunk);
           }
+          const tail = decoder.decode();
+          if (tail) currentOptions?.onChunk?.(tail);
         } finally {
           reader.releaseLock();
         }

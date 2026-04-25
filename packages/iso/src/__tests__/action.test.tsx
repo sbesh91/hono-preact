@@ -11,7 +11,7 @@ describe('defineAction', () => {
   });
 });
 
-import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
+import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../page.js';
@@ -225,5 +225,41 @@ describe('useAction', () => {
     });
 
     await waitFor(() => expect(invalidateFn).toHaveBeenCalledOnce());
+  });
+});
+
+describe('useAction — streaming (onChunk)', () => {
+  it('calls onChunk for each streamed chunk', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"progress":50}\n'));
+        controller.enqueue(encoder.encode('{"progress":100}\n'));
+        controller.close();
+      },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      )
+    );
+
+    const onChunk = vi.fn();
+    const { result } = renderHook(() =>
+      useAction(stub, { onChunk })
+    );
+
+    await act(async () => {
+      await result.current.mutate({} as { title: string });
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(2);
+    expect(onChunk).toHaveBeenNthCalledWith(1, '{"progress":50}\n');
+    expect(onChunk).toHaveBeenNthCalledWith(2, '{"progress":100}\n');
   });
 });
