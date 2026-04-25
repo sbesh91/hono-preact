@@ -1,49 +1,62 @@
+// apps/app/src/pages/movies.tsx
 import {
+  cacheRegistry,
+  createCache,
   getLoaderData,
   type LoaderData,
-  createCache,
-  Form,
+  useAction,
 } from '@hono-preact/iso';
-import type { FunctionalComponent } from 'preact';
+import type { FunctionComponent } from 'preact';
 import { lazy, Route, Router } from 'preact-iso';
 import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
 import serverLoader, { serverActions } from './movies.server.js';
 import Noop from './noop.js';
 
-const cache = createCache<{ movies: MoviesData }>('movies');
+type Data = { movies: MoviesData; watchedIds: number[] };
+
+const cache = createCache<Data>('movies-list');
 
 const Movie = lazy(() => import('./movie.js'));
 
-const Movies: FunctionalComponent<LoaderData<{ movies: MoviesData }>> = (
-  props
-) => {
+const Movies: FunctionComponent<LoaderData<Data>> = (props) => {
+  const { movies, watchedIds } = props.loaderData;
+  const watched = new Set(watchedIds);
+
+  const { mutate, pending } = useAction(serverActions.toggleWatched, {
+    invalidate: 'auto',
+    onSuccess: () => cacheRegistry.invalidate('watched'),
+  });
+
   return (
     <section class="p-1">
       <a href="/" class="bg-amber-200">
         home
+      </a>{' '}
+      <a href="/watched" class="bg-emerald-200">
+        watched ({watchedIds.length})
       </a>
-      {props.loaderData?.movies.results.map((m: MovieSummary) => (
-        <a
-          href={`/movies/${m.id}`}
-          class="border-2 m-1 p-1 inline-block"
-          key={m.id}
-        >
-          {m.title}
-        </a>
-      ))}
-
-      <Form
-        action={serverActions.addMovie}
-        invalidate="auto"
-        class="mt-4 flex gap-2"
-      >
-        <input name="title" placeholder="Title" class="border p-1" />
-        <input name="year" placeholder="Year" class="border p-1 w-20" />
-        <button type="submit" class="bg-blue-500 text-white px-3 py-1">
-          Add Movie
-        </button>
-      </Form>
-
+      <ul class="mt-2">
+        {movies.results.map((m: MovieSummary) => (
+          <li key={m.id} class="border-2 m-1 p-1 flex items-center gap-2">
+            <a href={`/movies/${m.id}`} class="flex-1">
+              {m.title}{' '}
+              {watched.has(m.id) && (
+                <span class="text-emerald-600">✓ watched</span>
+              )}
+            </a>
+            <button
+              type="button"
+              class="bg-blue-500 text-white px-2 py-1 text-sm"
+              disabled={pending}
+              onClick={() =>
+                mutate({ movieId: m.id, watched: !watched.has(m.id) })
+              }
+            >
+              {watched.has(m.id) ? 'Unwatch' : 'Mark watched'}
+            </button>
+          </li>
+        ))}
+      </ul>
       <Router>
         <Route path="/:id" component={Movie} />
         <Noop />
@@ -52,9 +65,5 @@ const Movies: FunctionalComponent<LoaderData<{ movies: MoviesData }>> = (
   );
 };
 Movies.displayName = 'Movies';
-Movies.defaultProps = { route: '/movies' };
 
-export default getLoaderData(Movies, {
-  serverLoader,
-  cache,
-});
+export default getLoaderData(Movies, { serverLoader, cache });

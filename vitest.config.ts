@@ -12,6 +12,7 @@ export default defineConfig({
       'packages/iso/src/__tests__/**/*.test.{ts,tsx}',
       'packages/server/src/__tests__/**/*.test.{ts,tsx}',
       'packages/vite/src/__tests__/**/*.test.ts',
+      'apps/app/src/**/__tests__/**/*.test.{ts,tsx}',
     ],
     setupFiles: ['./vitest.setup.ts'],
     environment: 'node',

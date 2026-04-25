@@ -94,7 +94,6 @@ const Admin: FunctionComponent<LoaderData<{ stats: Stats }>> = ({ loaderData }) 
   <section>...</section>
 );
 
-Admin.defaultProps = { route: '/admin' };
 export default getLoaderData(Admin, {
   serverLoader,
   cache,

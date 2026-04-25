@@ -86,7 +86,7 @@ const Movies = ({ loaderData }: LoaderData<{ movies: MovieList }>) => {
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `invalidate` | `'auto' \| false \| string[]` | `'auto'` re-runs the page's `clientLoader`. `string[]` invalidates named caches on other pages. Default: `false`. |
+| `invalidate` | `'auto' \| false \| string[]` | `'auto'` re-runs the page's `serverLoader` (via the `/__loaders` RPC in the browser). `string[]` invalidates named caches on other pages. Default: `false`. |
 | `onMutate` | `(payload) => unknown` | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback. |
 | `onSuccess` | `(data) => void` | Called with the action's return value on success. |
 | `onError` | `(err, snapshot) => void` | Called with the error and the `onMutate` snapshot on failure. |

@@ -135,6 +135,7 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
     serverLoaderRef
       .current({ location: locationRef.current })
       .then((result) => {
+        if (isBrowser()) cache?.set(result);
         setOverrideData(result);
         setReloading(false);
       })
@@ -142,7 +143,7 @@ const GuardedPage = memo(function <T extends Record<string, unknown>>({
         setLoadError(err instanceof Error ? err : new Error(String(err)));
         setReloading(false);
       });
-  }, [reloading]);
+  }, [reloading, cache]);
 
   const guardResult = guardRef.current.read();
 

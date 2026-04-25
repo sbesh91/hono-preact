@@ -6,6 +6,7 @@ import NotFound from './pages/not-found.js';
 const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
 const Movies = lazy(() => import('./pages/movies.js'));
+const Watched = lazy(() => import('./pages/watched.js'));
 
 // Each MDX file is lazy-loaded (code-split), consistent with the page pattern
 // above. Route paths are derived from filenames at module-evaluation time —
@@ -44,6 +45,7 @@ export const Base: FunctionComponent = () => {
       <Route path="/test" component={Test} />
       <Route path="/movies" component={Movies} />
       <Route path="/movies/*" component={Movies} />
+      <Route path="/watched" component={Watched} />
       {mdxRoutes.map(({ route, Component }) => (
         <Route path={route} component={Component} />
       ))}

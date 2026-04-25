@@ -49,7 +49,6 @@ const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderDa
   );
 };
 
-Movies.defaultProps = { route: '/movies' };
 export default getLoaderData(Movies, { serverLoader, cache });
 ```
 

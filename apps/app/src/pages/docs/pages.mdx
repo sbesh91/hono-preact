@@ -19,15 +19,11 @@ const About: FunctionComponent = () => {
 };
 
 About.displayName = 'About';
-About.defaultProps = { route: '/about' };
 
 export default getLoaderData(About);
 ```
 
-Two things to note:
-
-- **`defaultProps.route`** — tells preact-iso which path this component owns during SSR. It must match the `path` prop on the corresponding `<Route>`.
-- **`getLoaderData`** — required even for pages with no data. It wraps the component in the loader/preload system so hydration works correctly.
+Note: **`getLoaderData`** is required even for pages with no data. It wraps the component in the loader/preload system so hydration works correctly.
 
 ### Step 2 — Register in `src/iso.tsx`
 

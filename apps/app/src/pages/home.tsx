@@ -34,6 +34,5 @@ const Home: FunctionComponent = () => {
 };
 
 Home.displayName = 'Home';
-Home.defaultProps = { route: '/' };
 
 export default getLoaderData(Home);

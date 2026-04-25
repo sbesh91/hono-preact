@@ -17,6 +17,5 @@ const Test: FunctionComponent = () => {
   );
 };
 Test.displayName = 'Test';
-Test.defaultProps = { route: '/test' };
 
 export default getLoaderData(Test);

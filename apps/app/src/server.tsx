@@ -7,7 +7,7 @@ import {
   location,
   renderPage,
 } from '@hono-preact/server';
-import { getMovie, getMovies } from './server/movies.js';
+import { getWatched } from './server/watched.js';
 
 const dev = process.env.NODE_ENV === 'development';
 if (dev) {
@@ -19,15 +19,16 @@ export const app = new Hono();
 env.current = 'server';
 
 app
-  .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
   .post('/__loaders', loadersHandler(import.meta.glob('./pages/*.server.ts')))
-  .get('/api/movies', async (c) => {
-    const movies = await getMovies();
-    return c.json(movies);
-  })
-  .get('/api/movies/:id', async (c) => {
-    const movie = await getMovie(c.req.param('id'));
-    return c.json(movie);
+  .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
+  .get('/api/watched/:movieId/photo', async (c) => {
+    const id = Number(c.req.param('movieId'));
+    if (!Number.isFinite(id)) return c.notFound();
+    const rec = await getWatched(id);
+    if (!rec?.photo) return c.notFound();
+    return new Response(new Blob([rec.photo.bytes], { type: rec.photo.contentType }), {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   })
   .use(location)
   .get('*', (c) =>
