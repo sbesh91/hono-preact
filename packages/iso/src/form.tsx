@@ -28,12 +28,14 @@ export function Form<TPayload extends Record<string, unknown>, TResult>({
     e.preventDefault();
     const formEl = e.target as HTMLFormElement;
     const formData = new FormData(formEl);
-    const hasFiles = [...formData.values()].some((v) => v instanceof File && v.size > 0);
+    const hasFiles = [...formData.values()].some((v) => v instanceof File && v.name !== '');
 
     if (fieldsetRef.current) {
       fieldsetRef.current.disabled = true;
     }
 
+    // Multi-value fields (e.g. checkboxes with the same name) are collapsed to
+    // their last value. Use a custom onMutate handler if you need getAll semantics.
     const payload = Object.fromEntries(formData.entries()) as TPayload;
     let snapshot: unknown;
     if (onMutate) {
