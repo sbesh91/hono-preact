@@ -263,3 +263,73 @@ describe('useAction — streaming (onChunk)', () => {
     expect(onChunk).toHaveBeenNthCalledWith(2, '{"progress":100}\n');
   });
 });
+
+const mockStub: ActionStub<Record<string, unknown>, unknown> = {
+  __module: 'test-module',
+  __action: 'test-action',
+};
+
+describe('useAction — FormData (file upload)', () => {
+  it('sends FormData when payload contains a File', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ stored: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAction(mockStub));
+
+    await act(async () => {
+      await result.current.mutate({ poster: new File(['data'], 'poster.jpg') });
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call[1]?.body).toBeInstanceOf(FormData);
+    const fd = call[1]?.body as FormData;
+    expect(fd.get('__module')).toBe('test-module');
+    expect(fd.get('__action')).toBe('test-action');
+    expect(fd.get('poster')).toBeInstanceOf(File);
+  });
+
+  it('serializes non-string non-File values as JSON strings', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAction(mockStub));
+
+    await act(async () => {
+      await result.current.mutate({ poster: new File(['data'], 'p.jpg'), count: 5 });
+    });
+
+    const fd = fetchMock.mock.calls[0][1]?.body as FormData;
+    expect(fd.get('count')).toBe('5'); // number serialized as JSON string
+    expect(fd.get('poster')).toBeInstanceOf(File);
+  });
+
+  it('sends JSON when payload has no File values', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAction(mockStub));
+
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call[1]?.body).not.toBeInstanceOf(FormData);
+    expect(call[1]?.headers).toMatchObject({ 'Content-Type': 'application/json' });
+  });
+});

@@ -32,10 +32,9 @@ export type UseActionResult<TPayload, TResult> = {
 };
 
 function hasFileValues(payload: unknown): boolean {
+  if (typeof File === 'undefined') return false;
   if (typeof payload !== 'object' || payload === null) return false;
-  return Object.values(payload as Record<string, unknown>).some(
-    (v) => typeof File !== 'undefined' && v instanceof File
-  );
+  return Object.values(payload as Record<string, unknown>).some((v) => v instanceof File);
 }
 
 export function useAction<TPayload, TResult>(
@@ -71,7 +70,14 @@ export function useAction<TPayload, TResult>(
         fd.append('__module', stub.__module);
         fd.append('__action', stub.__action);
         for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
-          fd.append(key, value as string | File);
+          if (key === '__module' || key === '__action') continue;
+          if (value instanceof File) {
+            fd.append(key, value);
+          } else if (typeof value === 'string') {
+            fd.append(key, value);
+          } else {
+            fd.append(key, JSON.stringify(value));
+          }
         }
         response = await fetch('/__actions', { method: 'POST', body: fd });
       } else {
