@@ -99,34 +99,18 @@ Guards are plain functions — extract and reuse them across modules:
 
 ```ts
 // src/server/guards.ts
-import { defineActionGuard, ActionGuardError } from '@hono-preact/iso';
-import type { Context } from 'hono';
-import { getCurrentUser } from './auth.js';
-
 export const requireAuth = defineActionGuard(async ({ c }, next) => {
   const user = await getCurrentUser(c as Context);
   if (!user) throw new ActionGuardError('Authentication required', 401);
   return next();
 });
-
-export const requireRole = (role: string) =>
-  defineActionGuard(async ({ c }, next) => {
-    const user = await getCurrentUser(c as Context);
-    if (user?.role !== role) throw new ActionGuardError('Forbidden', 403);
-    return next();
-  });
 ```
 
 ```ts
 // src/pages/admin.server.ts
-import { requireAuth, requireRole } from '@/server/guards.js';
+import { requireAuth } from '@/server/guards.js';
 
-export const actionGuards = [requireAuth, requireRole('admin')];
+export const actionGuards = [requireAuth];
 ```
 
-## The server-only boundary
-
-Like `serverGuards` and `serverActions`, the `actionGuards` export is handled by the Vite plugins:
-
-- **`serverOnlyPlugin`** — replaces `import { actionGuards } from './movies.server.js'` with `const actionGuards = []` in the client bundle. Guard logic never reaches the browser.
-- **`serverLoaderValidationPlugin`** — `actionGuards` is a permitted named export from `.server.*` files. Any other named export fails the build.
+See [Route Guards — Composing guards](/docs/guards#composing-guards) for the full composition pattern — the same approach applies to action guards.
