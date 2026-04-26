@@ -26,35 +26,6 @@ describe('Form', () => {
     expect(mutate).toHaveBeenCalledWith({ title: 'Dune', year: '2021' });
   });
 
-  it('passes File values through unchanged in the payload', async () => {
-    const mutate = vi.fn().mockResolvedValue(undefined);
-    const file = new File(['data'], 'poster.jpg', { type: 'image/jpeg' });
-
-    function TestForm() {
-      return (
-        <Form mutate={mutate}>
-          <input type="file" name="poster" />
-          <button type="submit">Submit</button>
-        </Form>
-      );
-    }
-
-    render(<TestForm />);
-    const input = screen.getByRole('button').closest('form')!.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
-    Object.defineProperty(input, 'files', { value: [file] });
-
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
-    });
-
-    expect(mutate).toHaveBeenCalledTimes(1);
-    const payload = mutate.mock.calls[0][0] as { poster: File };
-    expect(payload.poster).toBeInstanceOf(File);
-    expect(payload.poster.name).toBe('poster.jpg');
-  });
-
   it('disables the fieldset when pending is true', () => {
     const mutate = vi.fn();
     render(

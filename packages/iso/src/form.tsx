@@ -19,18 +19,8 @@ export function Form<TPayload extends Record<string, unknown>>({
     e.preventDefault();
     const formEl = e.currentTarget as HTMLFormElement;
     const formData = new FormData(formEl);
-    const payload = Object.fromEntries(formData.entries()) as Record<string, unknown>;
-
-    // Overlay File inputs directly from the DOM so the original File objects
-    // (with their filenames) are preserved in the payload.
-    const fileInputs = formEl.querySelectorAll<HTMLInputElement>('input[type="file"]');
-    for (const input of fileInputs) {
-      if (input.name && input.files && input.files.length > 0) {
-        payload[input.name] = input.files[0];
-      }
-    }
-
-    void mutate(payload as TPayload);
+    const payload = Object.fromEntries(formData.entries()) as TPayload;
+    void mutate(payload);
   };
 
   return (
