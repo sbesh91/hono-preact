@@ -18,23 +18,38 @@ const mdxOptions = {
   ],
 } satisfies MdxOptions;
 
+const visualize = process.env.VISUALIZE === '1';
+
 export default defineConfig((env) => ({
   resolve: {
     alias: [
-      { find: '@hono-preact/iso', replacement: resolve(__dirname, '../../packages/iso/src/index.ts') },
-      { find: '@hono-preact/server', replacement: resolve(__dirname, '../../packages/server/src/index.ts') },
+      {
+        find: '@hono-preact/iso',
+        replacement: resolve(__dirname, '../../packages/iso/src/index.ts'),
+      },
+      {
+        find: '@hono-preact/server',
+        replacement: resolve(__dirname, '../../packages/server/src/index.ts'),
+      },
       { find: '@', replacement: resolve(__dirname, './src') },
     ],
   },
   build: {
-    sourcemap: env.mode === 'visualizer',
+    sourcemap: visualize && env.mode === 'client',
   },
   plugins: [
     honoPreact({ entry: 'src/server.tsx' }),
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
     preact(),
-    ...(env.mode === 'visualizer'
-      ? [visualizer({ open: true, filename: 'dist/stats.html', sourcemap: true, gzipSize: true })]
+    ...(visualize && env.mode === 'client'
+      ? [
+          visualizer({
+            open: true,
+            filename: 'dist/stats.html',
+            sourcemap: true,
+            gzipSize: true,
+          }),
+        ]
       : []),
   ],
 }));

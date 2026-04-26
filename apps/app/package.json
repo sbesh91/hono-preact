@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "NODE_ENV=development vite --force",
     "build": "NODE_ENV=production vite build --mode client && vite build",
-    "visualize": "NODE_ENV=production vite build --mode visualizer",
+    "visualize": "NODE_ENV=production VISUALIZE=1 vite build --mode client",
     "updates": "npx npm-check-updates -i --format group",
     "deploy": "wrangler deploy",
     "preview": "npm run build && wrangler dev"
