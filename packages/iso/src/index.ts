@@ -13,3 +13,10 @@ export type { ActionStub, UseActionOptions, UseActionResult } from './action.js'
 export type { ActionGuardContext, ActionGuardFn } from './action.js';
 export { ActionGuardError, defineActionGuard } from './action.js';
 export { Form } from './form.js';
+export { useOptimistic } from './optimistic.js';
+export type { OptimisticHandle } from './optimistic.js';
+export { useOptimisticAction } from './optimistic-action.js';
+export type {
+  UseOptimisticActionOptions,
+  UseOptimisticActionResult,
+} from './optimistic-action.js';
