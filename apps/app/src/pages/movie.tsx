@@ -5,6 +5,7 @@ import {
   getLoaderData,
   type LoaderData,
   useAction,
+  useOptimisticAction,
   useReload,
   type WrapperProps,
 } from '@hono-preact/iso';
@@ -72,9 +73,11 @@ const MovieDetail: FunctionComponent<LoaderData<Data>> = (props) => {
 
   const reload = useReload();
 
-  const { mutate: toggle, pending: togglePending } = useAction(
+  const { mutate: toggle, value: isWatchedOpt } = useOptimisticAction(
     serverActions.toggleWatched,
     {
+      base: isWatched,
+      apply: (_current, payload) => payload.watched,
       invalidate: 'auto',
       onSuccess: () => {
         cacheRegistry.invalidate('movies-list');
@@ -91,9 +94,12 @@ const MovieDetail: FunctionComponent<LoaderData<Data>> = (props) => {
 
       <header>
         <h1 class="text-xl font-semibold">{movie.title}</h1>
-        {isWatched && (
+        {isWatchedOpt && (
           <p class="text-emerald-700">
-            ✓ watched on {new Date(watched!.watchedAt).toLocaleDateString()}
+            ✓ watched
+            {watched
+              ? ` on ${new Date(watched.watchedAt).toLocaleDateString()}`
+              : ''}
           </p>
         )}
       </header>
@@ -102,10 +108,9 @@ const MovieDetail: FunctionComponent<LoaderData<Data>> = (props) => {
         <button
           type="button"
           class="bg-blue-500 text-white px-3 py-1"
-          disabled={togglePending}
-          onClick={() => toggle({ movieId: movie.id, watched: !isWatched })}
+          onClick={() => toggle({ movieId: movie.id, watched: !isWatchedOpt })}
         >
-          {isWatched ? 'Unwatch' : 'Mark watched'}
+          {isWatchedOpt ? 'Unwatch' : 'Mark watched'}
         </button>
         <button
           type="button"
