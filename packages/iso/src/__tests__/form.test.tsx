@@ -93,7 +93,7 @@ describe('Form', () => {
       fireEvent.submit(screen.getByRole('button').closest('form')!);
     });
 
-    expect(onSuccess).toHaveBeenCalledWith({ ok: true });
+    expect(onSuccess).toHaveBeenCalledWith({ ok: true }, undefined);
   });
 
   it('calls cacheRegistry.invalidate for each name in invalidate: string[]', async () => {
