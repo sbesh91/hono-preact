@@ -26,6 +26,9 @@ export default defineConfig((env) => ({
       { find: '@', replacement: resolve(__dirname, './src') },
     ],
   },
+  build: {
+    sourcemap: env.mode === 'visualizer',
+  },
   plugins: [
     honoPreact({ entry: 'src/server.tsx' }),
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
