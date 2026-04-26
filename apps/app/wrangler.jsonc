@@ -8,8 +8,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "routes": [
     {
-      "pattern": "framework.sbesh.com/*",
-      "zone_name": "sbesh.com",
+      "pattern": "framework.sbesh.com",
+      "custom_domain": true,
     },
   ],
   "observability": {
