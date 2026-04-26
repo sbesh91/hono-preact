@@ -113,7 +113,32 @@ describe('useAction', () => {
 
     await screen.findByText('has-data');
     expect(screen.getByTestId('data')).toHaveTextContent('has-data');
-    expect(onSuccess).toHaveBeenCalledWith({ ok: true });
+    expect(onSuccess).toHaveBeenCalledWith({ ok: true }, undefined);
+  });
+
+  it('passes snapshot from onMutate to onSuccess', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      )
+    );
+    const onMutate = vi.fn(() => 'snap-success');
+    const onSuccess = vi.fn();
+
+    function TestComponent() {
+      const { mutate } = useAction(stub, { onMutate, onSuccess });
+      return <button onClick={() => mutate({ title: 'Dune' })}>go</button>;
+    }
+
+    render(<TestComponent />);
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() =>
+      expect(onSuccess).toHaveBeenCalledWith({ ok: true }, 'snap-success')
+    );
   });
 
   it('sets error on failure and calls onError with snapshot', async () => {

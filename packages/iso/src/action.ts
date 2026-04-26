@@ -16,11 +16,11 @@ export function defineAction<TPayload, TResult>(
   return fn as unknown as ActionStub<TPayload, TResult>;
 }
 
-export type UseActionOptions<TPayload, TResult> = {
+export type UseActionOptions<TPayload, TResult, TSnapshot = unknown> = {
   invalidate?: 'auto' | false | string[];
-  onMutate?: (payload: TPayload) => unknown;
-  onError?: (err: Error, snapshot: unknown) => void;
-  onSuccess?: (data: TResult) => void;
+  onMutate?: (payload: TPayload) => TSnapshot;
+  onError?: (err: Error, snapshot: TSnapshot) => void;
+  onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
   onChunk?: (chunk: string) => void;
 };
 
@@ -37,9 +37,9 @@ function hasFileValues(payload: unknown): boolean {
   return Object.values(payload as Record<string, unknown>).some((v) => v instanceof File);
 }
 
-export function useAction<TPayload, TResult>(
+export function useAction<TPayload, TResult, TSnapshot = unknown>(
   stub: ActionStub<TPayload, TResult>,
-  options?: UseActionOptions<TPayload, TResult>
+  options?: UseActionOptions<TPayload, TResult, TSnapshot>
 ): UseActionResult<TPayload, TResult> {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -113,11 +113,11 @@ export function useAction<TPayload, TResult>(
         } finally {
           reader.releaseLock();
         }
-        currentOptions?.onSuccess?.(undefined as unknown as TResult);
+        currentOptions?.onSuccess?.(undefined as unknown as TResult, snapshot as TSnapshot);
       } else {
         const result = (await response.json()) as TResult;
         setData(result);
-        currentOptions?.onSuccess?.(result);
+        currentOptions?.onSuccess?.(result, snapshot as TSnapshot);
       }
 
       if (currentOptions?.invalidate === 'auto') {
@@ -130,7 +130,7 @@ export function useAction<TPayload, TResult>(
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       setError(e);
-      currentOptions?.onError?.(e, snapshot);
+      currentOptions?.onError?.(e, snapshot as TSnapshot);
     } finally {
       setPending(false);
     }

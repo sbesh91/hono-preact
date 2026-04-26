@@ -4,15 +4,15 @@ import { ReloadContext } from './page.js';
 import type { ActionStub, UseActionOptions } from './action.js';
 import { cacheRegistry } from './cache-registry.js';
 
-type FormProps<TPayload extends Record<string, unknown>, TResult> = Omit<
+type FormProps<TPayload extends Record<string, unknown>, TResult, TSnapshot = unknown> = Omit<
   JSX.HTMLAttributes<HTMLFormElement>,
   'action' | 'onSubmit'
-> & UseActionOptions<TPayload, TResult> & {
+> & UseActionOptions<TPayload, TResult, TSnapshot> & {
   action: ActionStub<TPayload, TResult>;
   children?: ComponentChildren;
 };
 
-export function Form<TPayload extends Record<string, unknown>, TResult>({
+export function Form<TPayload extends Record<string, unknown>, TResult, TSnapshot = unknown>({
   action,
   invalidate,
   onMutate,
@@ -37,10 +37,7 @@ export function Form<TPayload extends Record<string, unknown>, TResult>({
     // Multi-value fields (e.g. checkboxes with the same name) are collapsed to
     // their last value. Use a custom onMutate handler if you need getAll semantics.
     const payload = Object.fromEntries(formData.entries()) as TPayload;
-    let snapshot: unknown;
-    if (onMutate) {
-      snapshot = onMutate(payload);
-    }
+    const snapshot = (onMutate ? onMutate(payload) : undefined) as TSnapshot | undefined;
 
     const stub = action as unknown as { __module: string; __action: string };
     let requestInit: RequestInit;
@@ -70,7 +67,7 @@ export function Form<TPayload extends Record<string, unknown>, TResult>({
         }
         const text = await response.text();
         const result = JSON.parse(text) as TResult;
-        onSuccess?.(result);
+        onSuccess?.(result, snapshot as TSnapshot);
         if (invalidate === 'auto') {
           reloadCtx?.reload();
         } else if (Array.isArray(invalidate)) {
@@ -84,7 +81,7 @@ export function Form<TPayload extends Record<string, unknown>, TResult>({
           fieldsetRef.current.disabled = false;
         }
         const e = err instanceof Error ? err : new Error(String(err));
-        onError?.(e, snapshot);
+        onError?.(e, snapshot as TSnapshot);
       });
   };
 
