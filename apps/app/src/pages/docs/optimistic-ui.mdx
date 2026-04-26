@@ -1,0 +1,130 @@
+# Optimistic UI Updates
+
+`useOptimistic` and `useOptimisticAction` let you show the result of a mutation in the UI before the server confirms it, then automatically reconcile when the server responds. They compose with the existing `useAction` hook — no changes to your loaders or actions are required.
+
+## Why two hooks?
+
+- **`useOptimistic`** is a primitive: it maintains a queue of pending changes layered over a base value. You hold the queue handles and decide when to settle (success) or revert (error) each entry. Use it directly when you need full control or when one piece of optimistic state is fed by multiple actions.
+- **`useOptimisticAction`** is a wrapper around `useAction` + `useOptimistic` for the common single-action case. It owns the queue lifecycle for you.
+
+Start with `useOptimisticAction`. Drop down to the primitive if you outgrow it.
+
+## `useOptimisticAction`
+
+```tsx
+import { useOptimisticAction } from '@hono-preact/iso';
+import { serverActions } from './movies.server.js';
+
+const Movies = ({ loaderData }) => {
+  const { mutate, pending, value: movies } = useOptimisticAction(
+    serverActions.create,
+    {
+      base: loaderData.movies,
+      apply: (current, payload) => [...current, payload],
+      invalidate: 'auto',
+      onSuccess: (data) => console.log('created', data),
+      onError: (err) => console.error(err),
+    }
+  );
+
+  return (
+    <ul>
+      {movies.map((m) => <li key={m.id}>{m.title}</li>)}
+    </ul>
+  );
+};
+```
+
+`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `value` reflects real server data with no visual gap.
+
+### Options
+
+| Option | Type | Description |
+|---|---|---|
+| `base` | `TBase` | The base value (typically loader data) the projection layers over |
+| `apply` | `(current, payload) => TBase` | Reducer that produces the next projection |
+| `invalidate` | `'auto' \| string[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed — see below. |
+| `onSuccess` | `(data) => void` | Called after a successful mutation. Snapshot is internal; not exposed here. |
+| `onError` | `(err) => void` | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
+
+Other `useAction` options (`onChunk`) pass through.
+
+### Why no `invalidate: false`?
+
+The optimistic entry settles into `'ready'` state on success and waits for the base to update before evicting. Without an invalidation that refetches, the base never changes, the entry lingers, and the UI gets stuck. Use `useOptimistic` directly if you have a use case where base updates by another path.
+
+## `useOptimistic` (primitive)
+
+```tsx
+import { useOptimistic, useAction } from '@hono-preact/iso';
+
+const Movies = ({ loaderData }) => {
+  const [movies, addOptimistic] = useOptimistic(
+    loaderData.movies,
+    (current, payload) => [...current, payload]
+  );
+
+  const { mutate } = useAction(serverActions.create, {
+    invalidate: 'auto',
+    onMutate: (payload) => addOptimistic(payload),
+    onSuccess: (_data, handle) => handle.settle(),
+    onError: (_err, handle) => handle.revert(),
+  });
+
+  return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
+};
+```
+
+`addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
+
+```ts
+type OptimisticHandle = {
+  settle: () => void;  // success: linger until base ref changes
+  revert: () => void;  // error: remove immediately
+};
+```
+
+The handle becomes the snapshot in `useAction`'s `onMutate`/`onSuccess`/`onError` chain.
+
+## Concurrent mutations
+
+Both APIs handle concurrent mutations correctly. If a user fires two mutations and the first completes before the second, the second's optimistic entry survives the first's settle-and-refetch:
+
+```
+queue=[A:active, B:active]
+  → A succeeds, A.settle()
+queue=[A:ready, B:active]
+  → loader refetches, base updates (A confirmed)
+  → A:ready evicted (base ref changed), B:active stays
+queue=[B:active]
+  → UI shows server-confirmed A + optimistic B
+```
+
+No special configuration needed.
+
+## Composing with `<Form>`
+
+`<Form>` accepts the `mutate`/`pending` from `useOptimisticAction` directly:
+
+```tsx
+const NotesForm = ({ defaultNotes }) => {
+  const { mutate, pending, value: notes } = useOptimisticAction(
+    serverActions.setNotes,
+    {
+      base: defaultNotes,
+      apply: (_current, payload) => payload.notes,
+      invalidate: 'auto',
+    }
+  );
+
+  return (
+    <>
+      <p>Current: {notes}</p>
+      <Form mutate={mutate} pending={pending}>
+        <textarea name="notes" defaultValue={notes} />
+        <button>Save</button>
+      </Form>
+    </>
+  );
+};
+```

@@ -28,6 +28,7 @@ export const nav: NavSection[] = [
     entries: [
       { title: 'Server Actions', route: '/docs/actions' },
       { title: 'Action Guards', route: '/docs/action-guards' },
+      { title: 'Optimistic UI', route: '/docs/optimistic-ui' },
     ],
   },
   {
