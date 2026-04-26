@@ -138,17 +138,24 @@ Update `src/pages/movies.tsx` to add the form:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { Form, getLoaderData, type LoaderData } from '@hono-preact/iso';
+import { Form, getLoaderData, type LoaderData, useAction } from '@hono-preact/iso';
 import serverLoader, { serverActions, type Movie } from './movies.server.js';
+
+const AddMovieForm: FunctionComponent = () => {
+  const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: 'auto' });
+  return (
+    <Form mutate={mutate} pending={pending}>
+      <input name="title" placeholder="Movie title" required />
+      <button type="submit">Add</button>
+    </Form>
+  );
+};
 
 const Movies: FunctionComponent<LoaderData<{ movies: Movie[] }>> = ({ loaderData }) => {
   return (
     <main>
       <h1>Movies</h1>
-      <Form action={serverActions.addMovie} invalidate="auto">
-        <input name="title" placeholder="Movie title" required />
-        <button type="submit">Add</button>
-      </Form>
+      <AddMovieForm />
       <ul>
         {loaderData?.movies.map((m) => (
           <li key={m.id}>{m.title}</li>
@@ -163,7 +170,7 @@ Movies.displayName = 'Movies';
 export default getLoaderData(Movies, { serverLoader });
 ```
 
-Submit a title in the form. The action runs on the server, `invalidate="auto"` re-fetches the loader, and the list updates — no manual state management.
+Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates — no manual state management.
 
 ## What's next
 

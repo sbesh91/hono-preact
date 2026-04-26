@@ -2,30 +2,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/preact';
 import { Form } from '../form.js';
-import type { ActionStub } from '../action.js';
-import { cacheRegistry } from '../cache-registry.js';
-
-const stub: ActionStub<{ title: string }, { ok: boolean }> = {
-  __module: 'movies',
-  __action: 'create',
-};
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
-  cacheRegistry.clear();
 });
 
 describe('Form', () => {
-  it('serializes FormData to object and posts to /__actions on submit', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  it('serializes FormData to a plain object and calls mutate on submit', async () => {
+    const mutate = vi.fn().mockResolvedValue(undefined);
 
     render(
-      <Form action={stub}>
+      <Form mutate={mutate}>
         <input name="title" defaultValue="Dune" />
+        <input name="year" defaultValue="2021" />
         <button type="submit">Submit</button>
       </Form>
     );
@@ -34,93 +23,91 @@ describe('Form', () => {
       fireEvent.submit(screen.getByRole('button').closest('form')!);
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/__actions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module: 'movies', action: 'create', payload: { title: 'Dune' } }),
-    });
+    expect(mutate).toHaveBeenCalledWith({ title: 'Dune', year: '2021' });
   });
 
-  it('disables submit button while pending', async () => {
-    let resolveFetch!: (v: Response) => void;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        () =>
-          new Promise<Response>((r) => {
-            resolveFetch = r;
-          })
-      )
-    );
+  it('passes File values through unchanged in the payload', async () => {
+    const mutate = vi.fn().mockResolvedValue(undefined);
+    const file = new File(['data'], 'poster.jpg', { type: 'image/jpeg' });
 
-    render(
-      <Form action={stub}>
-        <input name="title" defaultValue="Dune" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
+    function TestForm() {
+      return (
+        <Form mutate={mutate}>
+          <input type="file" name="poster" />
+          <button type="submit">Submit</button>
+        </Form>
+      );
+    }
+
+    render(<TestForm />);
+    const input = screen.getByRole('button').closest('form')!.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file] });
 
     await act(async () => {
       fireEvent.submit(screen.getByRole('button').closest('form')!);
     });
 
-    expect(screen.getByRole('button')).toBeDisabled();
-
-    await act(async () => {
-      resolveFetch(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-    });
-
-    expect(screen.getByRole('button')).not.toBeDisabled();
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0] as { poster: File };
+    expect(payload.poster).toBeInstanceOf(File);
+    expect(payload.poster.name).toBe('poster.jpg');
   });
 
-  it('calls onSuccess after successful submission', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      )
-    );
-    const onSuccess = vi.fn();
-
+  it('disables the fieldset when pending is true', () => {
+    const mutate = vi.fn();
     render(
-      <Form action={stub} onSuccess={onSuccess}>
-        <input name="title" defaultValue="Dune" />
+      <Form mutate={mutate} pending={true}>
+        <input name="title" />
         <button type="submit">Submit</button>
       </Form>
     );
-
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
-    });
-
-    expect(onSuccess).toHaveBeenCalledWith({ ok: true }, undefined);
+    const fieldset = screen.getByRole('button').closest('fieldset');
+    expect(fieldset).toBeDisabled();
   });
 
-  it('calls cacheRegistry.invalidate for each name in invalidate: string[]', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      )
-    );
-
-    const mockInvalidateMovies = vi.fn();
-    const mockInvalidateActors = vi.fn();
-    cacheRegistry.register('movies', mockInvalidateMovies);
-    cacheRegistry.register('actors', mockInvalidateActors);
-
-    render(
-      <Form action={stub} invalidate={['movies', 'actors']}>
-        <input name="title" defaultValue="Dune" />
+  it('does not disable the fieldset when pending is false or absent', () => {
+    const mutate = vi.fn();
+    const { rerender } = render(
+      <Form mutate={mutate} pending={false}>
+        <input name="title" />
         <button type="submit">Submit</button>
       </Form>
     );
+    expect(screen.getByRole('button').closest('fieldset')).not.toBeDisabled();
 
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
-    });
+    rerender(
+      <Form mutate={mutate}>
+        <input name="title" />
+        <button type="submit">Submit</button>
+      </Form>
+    );
+    expect(screen.getByRole('button').closest('fieldset')).not.toBeDisabled();
+  });
 
-    expect(mockInvalidateMovies).toHaveBeenCalled();
-    expect(mockInvalidateActors).toHaveBeenCalled();
+  it('forwards arbitrary HTML form attributes to the <form> element', () => {
+    const mutate = vi.fn();
+    render(
+      <Form mutate={mutate} class="my-form" data-testid="theform">
+        <button type="submit">Submit</button>
+      </Form>
+    );
+    const formEl = screen.getByTestId('theform');
+    expect(formEl.tagName).toBe('FORM');
+    expect(formEl).toHaveClass('my-form');
+  });
+
+  it('prevents default form submission', () => {
+    const mutate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Form mutate={mutate}>
+        <button type="submit">Submit</button>
+      </Form>
+    );
+    const formEl = screen.getByRole('button').closest('form')!;
+    const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+    formEl.dispatchEvent(submitEvent);
+    expect(submitEvent.defaultPrevented).toBe(true);
   });
 });

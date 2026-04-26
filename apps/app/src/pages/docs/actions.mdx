@@ -35,7 +35,7 @@ export const serverActions = {
 };
 ```
 
-`defineAction` is a no-op at runtime — it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` and `<Form>` can infer the payload and result types without codegen.
+`defineAction` is a no-op at runtime — it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` can infer the payload and result types without codegen.
 
 ## Registering the handler
 
@@ -101,23 +101,26 @@ const Movies = ({ loaderData }: LoaderData<{ movies: MovieList }>) => {
 | `error` | `Error \| null` | The last error, or `null` if none. |
 | `data` | `TResult \| null` | The last successful result, or `null`. Not set for streaming responses. |
 
-## Calling actions with `<Form>`
+## Submitting with `<Form>`
 
-`<Form>` wraps `useAction` and handles FormData serialization. It disables all its inputs while the action is pending.
+`<Form>` is a thin wrapper around a native `<form>` that serializes the submission to a payload object and calls a `mutate` function you provide (typically from `useAction` or `useOptimisticAction`). When you pass `pending`, the wrapping `<fieldset>` is disabled while the mutation is in flight.
 
 ```tsx
-import { Form } from '@hono-preact/iso';
+import { Form, useAction } from '@hono-preact/iso';
 import { serverActions } from './movies.server.js';
 
-const AddMovieForm = () => (
-  <Form action={serverActions.addMovie} invalidate="auto">
-    <input name="title" placeholder="Title" />
-    <button type="submit">Add Movie</button>
-  </Form>
-);
+const AddMovieForm = () => {
+  const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: 'auto' });
+  return (
+    <Form mutate={mutate} pending={pending}>
+      <input name="title" placeholder="Title" />
+      <button type="submit">Add Movie</button>
+    </Form>
+  );
+};
 ```
 
-`<Form>` accepts the same `invalidate`, `onMutate`, `onSuccess`, and `onError` options as `useAction`, plus any HTML `<form>` attribute except `action` and `onSubmit`.
+`<Form>` accepts any HTML `<form>` attribute (except `onSubmit`, which it owns), plus `mutate` (required) and `pending` (optional). All action-related options live on the `useAction` call, not on `<Form>`.
 
 FormData values are collected with `Object.fromEntries(new FormData(form))`. String values are passed as strings — coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
 
@@ -156,22 +159,29 @@ const { mutate } = useAction(serverActions.addMovie, {
 
 Name a cache by passing a string to `createCache`. When an action specifies `invalidate: ['movies']`, the registry calls that cache's `invalidate()` and the next client navigation re-fetches.
 
-`invalidate` accepts an array so you can clear multiple caches in one shot: `invalidate: ['movies', 'ratings']`. `<Form>` accepts the same option.
+`invalidate` accepts an array so you can clear multiple caches in one shot: `invalidate: ['movies', 'ratings']`. Pass it to `useAction`; `<Form>` itself has no `invalidate` prop.
 
 See the [Server Loaders](/docs/loaders#named-caches) page for details on `createCache` naming.
 
 ## File uploads
 
-`<Form>` and `useAction` automatically switch to `multipart/form-data` when the payload contains `File` objects, so you can accept file uploads in your action without any extra configuration.
+`useAction` automatically switches to `multipart/form-data` when the payload contains `File` objects. Since `<Form>` serializes file inputs as `File` instances in the payload, file uploads work transparently when you pair it with `useAction`.
 
-**With `<Form>`** — add a file input; `<Form>` detects it and sends FormData:
+**With `<Form>`** — add a file input; `useAction` detects the `File` value in the payload and sends FormData:
 
 ```tsx
-<Form action={serverActions.uploadPoster} onSuccess={({ url }) => setPosterUrl(url)}>
-  <input type="hidden" name="movieId" value={movie.id} />
-  <input type="file" name="poster" accept="image/*" />
-  <button type="submit">Upload Poster</button>
-</Form>
+const UploadPosterForm = ({ movieId, setPosterUrl }) => {
+  const { mutate, pending } = useAction(serverActions.uploadPoster, {
+    onSuccess: ({ url }) => setPosterUrl(url),
+  });
+  return (
+    <Form mutate={mutate} pending={pending}>
+      <input type="hidden" name="movieId" value={movieId} />
+      <input type="file" name="poster" accept="image/*" />
+      <button type="submit">Upload Poster</button>
+    </Form>
+  );
+};
 ```
 
 **With `useAction`** — include a `File` in the payload object:

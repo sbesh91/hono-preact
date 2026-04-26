@@ -15,6 +15,54 @@ import serverLoader, { serverActions } from './movie.server.js';
 
 type Data = { movie: Movie | null; watched: WatchedRecord | null };
 
+const NotesForm: FunctionComponent<{
+  movieIdStr: string;
+  defaultNotes: string;
+  movieKey: number;
+}> = ({ movieIdStr, defaultNotes, movieKey }) => {
+  const { mutate, pending } = useAction(serverActions.setNotes, {
+    invalidate: 'auto',
+    onSuccess: () => cacheRegistry.invalidate('watched'),
+  });
+  return (
+    <Form mutate={mutate} pending={pending} class="flex flex-col gap-2 mt-1">
+      <input type="hidden" name="movieId" value={movieIdStr} />
+      <textarea
+        key={movieKey}
+        name="notes"
+        class="border p-1 w-full"
+        rows={3}
+        defaultValue={defaultNotes}
+      />
+      <button
+        type="submit"
+        class="bg-blue-500 text-white px-3 py-1 self-start"
+      >
+        Save notes
+      </button>
+    </Form>
+  );
+};
+
+const PhotoForm: FunctionComponent<{ movieIdStr: string }> = ({ movieIdStr }) => {
+  const { mutate, pending } = useAction(serverActions.setPhoto, {
+    invalidate: 'auto',
+    onSuccess: () => cacheRegistry.invalidate('watched'),
+  });
+  return (
+    <Form mutate={mutate} pending={pending} class="flex flex-col gap-2 mt-1">
+      <input type="hidden" name="movieId" value={movieIdStr} />
+      <input type="file" name="photo" accept="image/*" />
+      <button
+        type="submit"
+        class="bg-blue-500 text-white px-3 py-1 self-start"
+      >
+        Upload photo
+      </button>
+    </Form>
+  );
+};
+
 const MovieDetail: FunctionComponent<LoaderData<Data>> = (props) => {
   const { movie, watched } = props.loaderData;
   if (!movie) return <p>Movie not found.</p>;
@@ -70,27 +118,11 @@ const MovieDetail: FunctionComponent<LoaderData<Data>> = (props) => {
 
       <section>
         <h2 class="font-semibold">Notes</h2>
-        <Form
-          action={serverActions.setNotes}
-          invalidate="auto"
-          onSuccess={() => cacheRegistry.invalidate('watched')}
-          class="flex flex-col gap-2 mt-1"
-        >
-          <input type="hidden" name="movieId" value={movieIdStr} />
-          <textarea
-            key={movie.id}
-            name="notes"
-            class="border p-1 w-full"
-            rows={3}
-            defaultValue={watched?.notes ?? ''}
-          />
-          <button
-            type="submit"
-            class="bg-blue-500 text-white px-3 py-1 self-start"
-          >
-            Save notes
-          </button>
-        </Form>
+        <NotesForm
+          movieIdStr={movieIdStr}
+          defaultNotes={watched?.notes ?? ''}
+          movieKey={movie.id}
+        />
       </section>
 
       <section>
@@ -102,21 +134,7 @@ const MovieDetail: FunctionComponent<LoaderData<Data>> = (props) => {
             class="max-w-xs my-2"
           />
         )}
-        <Form
-          action={serverActions.setPhoto}
-          invalidate="auto"
-          onSuccess={() => cacheRegistry.invalidate('watched')}
-          class="flex flex-col gap-2 mt-1"
-        >
-          <input type="hidden" name="movieId" value={movieIdStr} />
-          <input type="file" name="photo" accept="image/*" />
-          <button
-            type="submit"
-            class="bg-blue-500 text-white px-3 py-1 self-start"
-          >
-            Upload photo
-          </button>
-        </Form>
+        <PhotoForm movieIdStr={movieIdStr} />
       </section>
     </section>
   );

@@ -1,93 +1,41 @@
-import { useRef, useContext } from 'preact/hooks';
 import type { JSX, ComponentChildren } from 'preact';
-import { ReloadContext } from './page.js';
-import type { ActionStub, UseActionOptions } from './action.js';
-import { cacheRegistry } from './cache-registry.js';
 
-type FormProps<TPayload extends Record<string, unknown>, TResult, TSnapshot = unknown> = Omit<
+export type FormProps<TPayload extends Record<string, unknown>> = Omit<
   JSX.HTMLAttributes<HTMLFormElement>,
-  'action' | 'onSubmit'
-> & UseActionOptions<TPayload, TResult, TSnapshot> & {
-  action: ActionStub<TPayload, TResult>;
+  'onSubmit'
+> & {
+  mutate: (payload: TPayload) => Promise<void> | void;
+  pending?: boolean;
   children?: ComponentChildren;
 };
 
-export function Form<TPayload extends Record<string, unknown>, TResult, TSnapshot = unknown>({
-  action,
-  invalidate,
-  onMutate,
-  onError,
-  onSuccess,
+export function Form<TPayload extends Record<string, unknown>>({
+  mutate,
+  pending,
   children,
   ...rest
-}: FormProps<TPayload, TResult>) {
-  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
-  const reloadCtx = useContext(ReloadContext);
-
+}: FormProps<TPayload>) {
   const handleSubmit = (e: Event) => {
     e.preventDefault();
-    const formEl = e.target as HTMLFormElement;
+    const formEl = e.currentTarget as HTMLFormElement;
     const formData = new FormData(formEl);
-    const hasFiles = [...formData.values()].some((v) => v instanceof File && v.name !== '');
+    const payload = Object.fromEntries(formData.entries()) as Record<string, unknown>;
 
-    if (fieldsetRef.current) {
-      fieldsetRef.current.disabled = true;
+    // Overlay File inputs directly from the DOM so the original File objects
+    // (with their filenames) are preserved in the payload.
+    const fileInputs = formEl.querySelectorAll<HTMLInputElement>('input[type="file"]');
+    for (const input of fileInputs) {
+      if (input.name && input.files && input.files.length > 0) {
+        payload[input.name] = input.files[0];
+      }
     }
 
-    // Multi-value fields (e.g. checkboxes with the same name) are collapsed to
-    // their last value. Use a custom onMutate handler if you need getAll semantics.
-    const payload = Object.fromEntries(formData.entries()) as TPayload;
-    const snapshot = (onMutate ? onMutate(payload) : undefined) as TSnapshot | undefined;
-
-    const stub = action as unknown as { __module: string; __action: string };
-    let requestInit: RequestInit;
-    if (hasFiles) {
-      formData.append('__module', stub.__module);
-      formData.append('__action', stub.__action);
-      requestInit = { method: 'POST', body: formData };
-    } else {
-      requestInit = {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: stub.__module, action: stub.__action, payload }),
-      };
-    }
-
-    fetch('/__actions', requestInit)
-      .then(async (response) => {
-        if (fieldsetRef.current) {
-          fieldsetRef.current.disabled = false;
-        }
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(
-            (JSON.parse(text) as { error?: string }).error ??
-              `Action failed with status ${response.status}`
-          );
-        }
-        const text = await response.text();
-        const result = JSON.parse(text) as TResult;
-        onSuccess?.(result, snapshot as TSnapshot);
-        if (invalidate === 'auto') {
-          reloadCtx?.reload();
-        } else if (Array.isArray(invalidate)) {
-          for (const name of invalidate) {
-            cacheRegistry.invalidate(name);
-          }
-        }
-      })
-      .catch((err) => {
-        if (fieldsetRef.current) {
-          fieldsetRef.current.disabled = false;
-        }
-        const e = err instanceof Error ? err : new Error(String(err));
-        onError?.(e, snapshot as TSnapshot);
-      });
+    void mutate(payload as TPayload);
   };
 
   return (
     <form {...rest} onSubmit={handleSubmit}>
-      <fieldset ref={fieldsetRef} style={{ border: 'none', padding: 0, margin: 0 }}>
+      <fieldset disabled={pending} class="hp-form-fieldset">
         {children}
       </fieldset>
     </form>
