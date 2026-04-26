@@ -4,7 +4,7 @@ import {
   createCache,
   getLoaderData,
   type LoaderData,
-  useAction,
+  useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { lazy, Route, Router } from 'preact-iso';
@@ -20,12 +20,21 @@ const Movie = lazy(() => import('./movie.js'));
 
 const Movies: FunctionComponent<LoaderData<Data>> = (props) => {
   const { movies, watchedIds } = props.loaderData;
-  const watched = new Set(watchedIds);
 
-  const { mutate, pending } = useAction(serverActions.toggleWatched, {
-    invalidate: 'auto',
-    onSuccess: () => cacheRegistry.invalidate('watched'),
-  });
+  const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
+    serverActions.toggleWatched,
+    {
+      base: watchedIds,
+      apply: (current, payload) =>
+        payload.watched
+          ? [...current, payload.movieId]
+          : current.filter((id) => id !== payload.movieId),
+      invalidate: 'auto',
+      onSuccess: () => cacheRegistry.invalidate('watched'),
+    }
+  );
+
+  const watched = new Set(optimisticWatchedIds);
 
   return (
     <section class="p-1">
@@ -33,7 +42,7 @@ const Movies: FunctionComponent<LoaderData<Data>> = (props) => {
         home
       </a>{' '}
       <a href="/watched" class="bg-emerald-200">
-        watched ({watchedIds.length})
+        watched ({optimisticWatchedIds.length})
       </a>
       <ul class="mt-2">
         {movies.results.map((m: MovieSummary) => (
@@ -47,7 +56,6 @@ const Movies: FunctionComponent<LoaderData<Data>> = (props) => {
             <button
               type="button"
               class="bg-blue-500 text-white px-2 py-1 text-sm"
-              disabled={pending}
               onClick={() =>
                 mutate({ movieId: m.id, watched: !watched.has(m.id) })
               }
