@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/preact';
+import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/preact';
 import { Form } from '../form.js';
+import { useAction, type ActionStub } from '../action.js';
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('Form', () => {
@@ -80,5 +82,50 @@ describe('Form', () => {
     const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
     formEl.dispatchEvent(submitEvent);
     expect(submitEvent.defaultPrevented).toBe(true);
+  });
+
+  it('forwards streaming responses through useAction.mutate', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('chunk-1\n'));
+        controller.enqueue(encoder.encode('chunk-2\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      )
+    );
+
+    const stub: ActionStub<{ title: string }, void> = {
+      __module: 'movies',
+      __action: 'stream',
+    };
+    const onChunk = vi.fn();
+
+    function TestForm() {
+      const { mutate, pending } = useAction(stub, { onChunk });
+      return (
+        <Form mutate={mutate} pending={pending}>
+          <input name="title" defaultValue="Dune" />
+          <button type="submit">Submit</button>
+        </Form>
+      );
+    }
+
+    render(<TestForm />);
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+
+    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(2));
+    expect(onChunk).toHaveBeenNthCalledWith(1, 'chunk-1\n');
+    expect(onChunk).toHaveBeenNthCalledWith(2, 'chunk-2\n');
   });
 });
