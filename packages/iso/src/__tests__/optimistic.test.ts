@@ -105,8 +105,6 @@ describe('useOptimistic', () => {
       result.current[1](4);
     });
     expect(result.current[0]).toEqual([1, 2, 3, 4]);
-    // Avoid leaving the last entry in flight in the test
-    void handleB;
   });
 
   it('base ref change with no ready entries leaves queue intact', () => {

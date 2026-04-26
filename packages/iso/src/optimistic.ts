@@ -15,7 +15,7 @@ export function useOptimistic<TBase, TPayload>(
   const queueRef = useRef<Entry<TPayload>[]>([]);
   const lastBaseRef = useRef(base);
   const idRef = useRef(0);
-  const [, forceRender] = useReducer((c: number) => c + 1, 0) as [number, () => void];
+  const [, forceRender] = useReducer<number, void>((c) => c + 1, 0);
 
   if (!Object.is(lastBaseRef.current, base)) {
     queueRef.current = queueRef.current.filter((e) => e.status !== 'ready');
