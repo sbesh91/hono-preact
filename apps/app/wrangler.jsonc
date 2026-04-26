@@ -6,6 +6,12 @@
     "directory": "./dist",
   },
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "framework.sbesh.com/*",
+      "zone_name": "sbesh.com",
+    },
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
