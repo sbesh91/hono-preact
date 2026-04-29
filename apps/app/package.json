@@ -7,6 +7,7 @@
     "visualize": "NODE_ENV=production VISUALIZE=1 vite build --mode client",
     "updates": "npx npm-check-updates -i --format group",
     "deploy": "wrangler deploy",
+    "deploy:upload": "wrangler versions upload",
     "preview": "npm run build && wrangler dev"
   },
   "dependencies": {

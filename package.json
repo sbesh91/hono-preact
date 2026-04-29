@@ -18,6 +18,7 @@
     "dev": "pnpm --filter app run dev",
     "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter app build",
     "deploy": "pnpm --filter app run deploy",
+    "deploy:upload": "pnpm --filter app run deploy:upload",
     "preview": "pnpm --filter app run preview",
     "visualize": "pnpm --filter app run visualize",
     "test": "vitest run",
