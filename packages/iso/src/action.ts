@@ -1,6 +1,7 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './page.js';
 import { cacheRegistry } from './cache-registry.js';
+import type { LoaderCache } from './cache.js';
 
 export type ActionStub<TPayload, TResult> = {
   readonly __module: string;
@@ -18,6 +19,8 @@ export function defineAction<TPayload, TResult>(
 
 export type UseActionOptions<TPayload, TResult, TSnapshot = unknown> = {
   invalidate?: 'auto' | false | string[];
+  cache?: LoaderCache<unknown>;
+  reload?: () => void;
   onMutate?: (payload: TPayload) => TSnapshot;
   onError?: (err: Error, snapshot: TSnapshot) => void;
   onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
@@ -121,7 +124,12 @@ export function useAction<TPayload, TResult, TSnapshot = unknown>(
       }
 
       if (currentOptions?.invalidate === 'auto') {
-        reloadCtx?.reload();
+        const reload = currentOptions.reload ?? reloadCtx?.reload;
+        if (reload) {
+          reload();
+        } else if (currentOptions.cache) {
+          currentOptions.cache.invalidate();
+        }
       } else if (Array.isArray(currentOptions?.invalidate)) {
         for (const name of currentOptions.invalidate) {
           cacheRegistry.invalidate(name);
