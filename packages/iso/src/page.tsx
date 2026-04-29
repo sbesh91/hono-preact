@@ -1,19 +1,20 @@
 import {
   createContext,
-  type ComponentChildren,
   type ComponentType,
   type FunctionComponent,
   type JSX,
 } from 'preact';
-import { RouteHook, useLocation } from 'preact-iso';
+import { type RouteHook } from 'preact-iso';
 import { memo, Suspense } from 'preact/compat';
-import { useCallback, useContext, useId, useRef, useState } from 'preact/hooks';
-import { type LoaderCache } from './cache';
-import { type GuardFn, GuardRedirect, runGuards } from './guard.js';
-import { isBrowser } from './is-browser';
-import { Loader, LoaderData } from './loader';
-import { getPreloadedData } from './preload';
-import wrapPromise from './wrap-promise';
+import { useContext, useId } from 'preact/hooks';
+import { type LoaderCache } from './cache.js';
+import { type GuardFn } from './guard.js';
+import { GuardGate } from './guard-gate.js';
+import { isBrowser } from './is-browser.js';
+import { type Loader, type LoaderData } from './loader.js';
+import { LoaderDataContext } from './loader-data-context.js';
+import { useGuardSuspender, type GuardSuspender } from './use-guards.js';
+import { useLoaderState, type LoaderSuspender } from './use-loader.js';
 
 type ReloadContextValue = {
   reload: () => void;
@@ -37,7 +38,7 @@ export function useReload(): ReloadContextValue {
 export type WrapperProps = {
   id: string;
   'data-loader': string;
-  children: ComponentChildren;
+  children: JSX.Element | JSX.Element[] | string | null;
 };
 
 const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
@@ -55,6 +56,8 @@ type PageProps<T> = {
   Wrapper?: ComponentType<WrapperProps>;
 };
 
+const defaultLoader: Loader<Record<string, unknown>> = async () => ({});
+
 export const Page = memo(function <T extends Record<string, unknown>>({
   Child,
   serverLoader,
@@ -67,174 +70,84 @@ export const Page = memo(function <T extends Record<string, unknown>>({
 }: PageProps<T>) {
   const id = useId();
   const guards = isBrowser() ? clientGuards : serverGuards;
-  const prevGuardPath = useRef(location.path);
-  const guardRef = useRef(wrapPromise(runGuards(guards, { location })));
+  const loader = (serverLoader ?? defaultLoader) as Loader<T>;
 
-  if (prevGuardPath.current !== location.path) {
-    prevGuardPath.current = location.path;
-    guardRef.current = wrapPromise(runGuards(guards, { location }));
-  }
+  // These hooks live outside the Suspense boundaries below. Their refs/state
+  // persist across re-mounts of the suspending children.
+  const guardSuspender = useGuardSuspender(guards, location);
+  const { suspender: loaderSuspender, reload, reloading, error } =
+    useLoaderState<T>(loader, { id, cache, location });
 
   return (
-    <Suspense fallback={fallback}>
-      <GuardedPage
-        id={id}
-        Child={Child}
-        serverLoader={serverLoader}
-        location={location}
-        cache={cache}
-        guardRef={guardRef}
-        fallback={fallback}
-        Wrapper={Wrapper}
-      />
-    </Suspense>
+    <ReloadContext.Provider value={{ reload, reloading, error }}>
+      <Suspense fallback={fallback}>
+        <GuardBoundary guardSuspender={guardSuspender}>
+          <Suspense fallback={fallback}>
+            <LoaderBoundary
+              id={id}
+              Child={Child}
+              suspender={loaderSuspender}
+              Wrapper={Wrapper}
+            />
+          </Suspense>
+        </GuardBoundary>
+      </Suspense>
+    </ReloadContext.Provider>
   );
 });
 
-type GuardedPageProps<T> = {
+type GuardBoundaryProps = {
+  guardSuspender: GuardSuspender;
+  children: JSX.Element | JSX.Element[];
+};
+
+const GuardBoundary = memo(function ({
+  guardSuspender,
+  children,
+}: GuardBoundaryProps) {
+  const result = guardSuspender.read() ?? null;
+  return <GuardGate result={result}>{children}</GuardGate>;
+});
+
+type LoaderBoundaryProps<T> = {
   id: string;
   Child: FunctionComponent<LoaderData<T>>;
-  serverLoader?: Loader<T>;
-  location: RouteHook;
-  cache?: LoaderCache<T>;
-  guardRef: { current: { read: () => import('./guard.js').GuardResult } };
-  fallback?: JSX.Element;
+  suspender: LoaderSuspender<T>;
   Wrapper?: ComponentType<WrapperProps>;
 };
 
-const GuardedPage = memo(function <T extends Record<string, unknown>>({
+const LoaderBoundary = memo(function <T>({
   id,
   Child,
-  serverLoader = async () => ({}) as T,
-  location,
-  cache,
-  guardRef,
-  fallback,
+  suspender,
   Wrapper,
-}: GuardedPageProps<T>) {
-  const { route } = useLocation();
-  const [reloading, setReloading] = useState(false);
-  const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
-  const [loadError, setLoadError] = useState<Error | null>(null);
-
-  const prevPath = useRef(location.path);
-  if (prevPath.current !== location.path) {
-    prevPath.current = location.path;
-    setOverrideData(undefined);
-  }
-
-  const serverLoaderRef = useRef(serverLoader);
-  serverLoaderRef.current = serverLoader;
-  const locationRef = useRef(location);
-  locationRef.current = location;
-
-  const reload = useCallback(() => {
-    if (reloading) return;
-    setReloading(true);
-    setLoadError(null);
-    serverLoaderRef
-      .current({ location: locationRef.current })
-      .then((result) => {
-        if (isBrowser()) cache?.set(result);
-        setOverrideData(result);
-        setReloading(false);
-      })
-      .catch((err: unknown) => {
-        setLoadError(err instanceof Error ? err : new Error(String(err)));
-        setReloading(false);
-      });
-  }, [reloading, cache]);
-
-  const guardResult = guardRef.current.read();
-
-  if (guardResult && 'redirect' in guardResult) {
-    if (isBrowser()) {
-      route(guardResult.redirect);
-      return null;
-    } else {
-      throw new GuardRedirect(guardResult.redirect);
-    }
-  }
-
-  if (guardResult && 'render' in guardResult) {
-    const Fallback = guardResult.render;
-    return <Fallback />;
-  }
-
-  const preloaded = getPreloadedData<T>(id);
-
-  if (preloaded !== null) {
-    cache?.set(preloaded);
-    return (
-      <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
-        <Helper
-          id={id}
-          Child={Child}
-          loader={{ read: () => preloaded }}
-          overrideData={overrideData}
-          Wrapper={Wrapper}
-        />
-      </ReloadContext.Provider>
-    );
-  }
-
-  if (isBrowser() && cache?.has()) {
-    const cached = cache.get()!;
-    return (
-      <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
-        <Helper
-          id={id}
-          Child={Child}
-          loader={{ read: () => cached }}
-          overrideData={overrideData}
-          Wrapper={Wrapper}
-        />
-      </ReloadContext.Provider>
-    );
-  }
-
-  const loaderRef = wrapPromise(
-    serverLoader({ location }).then((r) => {
-      if (isBrowser()) cache?.set(r);
-      return r;
-    })
-  );
-
+}: LoaderBoundaryProps<T>) {
+  const data = suspender.read();
   return (
-    <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
-      <Suspense fallback={fallback}>
-        <Helper
-          id={id}
-          Child={Child}
-          loader={loaderRef}
-          overrideData={overrideData}
-          Wrapper={Wrapper}
-        />
-      </Suspense>
-    </ReloadContext.Provider>
+    <LoaderDataContext.Provider value={data}>
+      <Helper id={id} Child={Child} data={data} Wrapper={Wrapper} />
+    </LoaderDataContext.Provider>
   );
 });
 
 type HelperProps<T> = {
   id: string;
   Child: FunctionComponent<LoaderData<T>>;
-  loader: { read: () => T };
-  overrideData?: T;
+  data: T;
   Wrapper?: ComponentType<WrapperProps>;
 };
+
 export const Helper = memo(function <T>({
   id,
   Child,
-  loader,
-  overrideData,
+  data,
   Wrapper = DefaultWrapper,
 }: HelperProps<T>) {
-  const loaderData = overrideData !== undefined ? overrideData : loader.read();
-  const stringified = !isBrowser() ? JSON.stringify(loaderData) : 'null';
+  const stringified = !isBrowser() ? JSON.stringify(data) : 'null';
 
   return (
     <Wrapper id={id} data-loader={stringified}>
-      <Child loaderData={loaderData} id={id} />
+      <Child loaderData={data} id={id} />
     </Wrapper>
   );
 });

@@ -20,3 +20,15 @@ export type {
   UseOptimisticActionOptions,
   UseOptimisticActionResult,
 } from './optimistic-action.js';
+export { useGuards, useGuardSuspender } from './use-guards.js';
+export type { GuardSuspender } from './use-guards.js';
+export { GuardGate } from './guard-gate.js';
+export { useLoader, useLoaderState } from './use-loader.js';
+export type {
+  UseLoaderOptions,
+  UseLoaderResult,
+  UseLoaderStateResult,
+  LoaderSuspender,
+} from './use-loader.js';
+export { useLoaderData } from './loader-data-context.js';
+export { prefetch } from './prefetch.js';
