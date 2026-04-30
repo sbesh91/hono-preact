@@ -2,6 +2,9 @@ import { parse } from '@babel/parser';
 import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 
+const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'loader', 'cache']);
+const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS].map((n) => `'${n}'`).join(', ');
+
 export function serverLoaderValidationPlugin(): Plugin {
   return {
     name: 'server-loader-validation',
@@ -50,14 +53,12 @@ export function serverLoaderValidationPlugin(): Plugin {
           }
         }
       }
-
-      const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'loader', 'cache']);
       const disallowedExports = namedExports.filter(
         (n) => !ALLOWED_NAMED_EXPORTS.has(n)
       );
       if (disallowedExports.length > 0) {
         errors.push(
-          `${id}: .server files may only export 'serverGuards', 'serverActions', or 'actionGuards' as named exports (found: ${disallowedExports.join(', ')}). ` +
+          `${id}: .server files may only export ${ALLOWED_NAMED_EXPORTS_LIST} as named exports (found: ${disallowedExports.join(', ')}). ` +
             `Export the server loader as the default export only.`
         );
       }
