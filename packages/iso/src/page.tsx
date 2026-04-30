@@ -31,6 +31,9 @@ export type PageProps<T> = {
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
   fallback?: JSX.Element;
+  errorFallback?:
+    | JSX.Element
+    | ((error: Error, reset: () => void) => JSX.Element);
   Wrapper?: ComponentType<WrapperProps>;
   children: ComponentChildren;
 };
@@ -42,12 +45,13 @@ export function Page<T>({
   serverGuards,
   clientGuards,
   fallback,
+  errorFallback,
   Wrapper,
   children,
 }: PageProps<T>): JSX.Element {
   const id = useId();
   return (
-    <RouteBoundary fallback={fallback}>
+    <RouteBoundary fallback={fallback} errorFallback={errorFallback}>
       <Guards server={serverGuards} client={clientGuards} location={location}>
         {loader ? (
           <Loader

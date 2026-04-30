@@ -134,3 +134,30 @@ describe('Page without a loader', () => {
     expect(el).toHaveTextContent('Hello');
   });
 });
+
+describe('Page error boundary', () => {
+  it('renders errorFallback when the loader rejects', async () => {
+    const failing = defineLoader<{ msg: string }>(async () => {
+      throw new Error('boom');
+    });
+
+    render(
+      <LocationProvider>
+        <Page
+          loader={failing}
+          location={loc}
+          fallback={<div data-testid="loading">Loading…</div>}
+          errorFallback={(err) => (
+            <div data-testid="error">{err.message}</div>
+          )}
+        >
+          <p data-testid="content">should not render</p>
+        </Page>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('error');
+    expect(el).toHaveTextContent('boom');
+    expect(screen.queryByTestId('content')).toBeNull();
+  });
+});
