@@ -25,6 +25,8 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.5",
+    "preact": "^10.29.1",
+    "preact-iso": "github:preactjs/preact-iso#v3",
     "typescript": "*",
     "vite": "*"
   }

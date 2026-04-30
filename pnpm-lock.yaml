@@ -228,6 +228,12 @@ importers:
       '@preact/preset-vite':
         specifier: ^2.10.5
         version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.2)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0))
+      preact:
+        specifier: ^10.29.1
+        version: 10.29.1
+      preact-iso:
+        specifier: github:preactjs/preact-iso#v3
+        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
