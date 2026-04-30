@@ -82,6 +82,23 @@ export function serverOnlyPlugin(): Plugin {
         errorRecovery: true,
       });
 
+      // Detect and reject re-exports from .server.* files. The plugin can't safely
+      // rewrite a re-export — synthesizing stubs and re-emitting them as exports is
+      // out of scope. Throw a clear error so the leak vector is closed at build time.
+      for (const node of ast.program.body) {
+        if (
+          (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') &&
+          node.source &&
+          /\.server(\.[jt]sx?)?$/.test(node.source.value)
+        ) {
+          throw new Error(
+            `${id}: re-export from '${node.source.value}' (a .server.* module) is not supported. ` +
+            `Import the named member directly instead, e.g. ` +
+            `\`import { loader } from '${node.source.value}';\``
+          );
+        }
+      }
+
       const isServerImport = (node: unknown): node is ImportDeclaration =>
         (node as ImportDeclaration).type === 'ImportDeclaration' &&
         /\.server(\.[jt]sx?)?$/.test((node as ImportDeclaration).source.value);

@@ -238,3 +238,31 @@ describe('side-effect and type-only imports', () => {
     expect(result?.code).not.toContain('const Foo');
   });
 });
+
+describe('re-exports from .server.* are rejected', () => {
+  it('throws on `export { loader } from .server.*`', () => {
+    const code = `export { loader } from './movies.server.js';`;
+    expect(() => transform(code, '/src/aggregator.ts')).toThrow(
+      /re-export.*from.*\.server.*not supported/i
+    );
+  });
+
+  it('throws on `export { loader as moviesLoader } from .server.*`', () => {
+    const code = `export { loader as moviesLoader } from './movies.server.js';`;
+    expect(() => transform(code, '/src/aggregator.ts')).toThrow(
+      /re-export.*from.*\.server.*not supported/i
+    );
+  });
+
+  it('throws on `export * from .server.*`', () => {
+    const code = `export * from './movies.server.js';`;
+    expect(() => transform(code, '/src/aggregator.ts')).toThrow(
+      /re-export.*from.*\.server.*not supported/i
+    );
+  });
+
+  it('does not throw on regular `export * from` of a non-server module', () => {
+    const code = `export * from './utils.js';`;
+    expect(() => transform(code, '/src/aggregator.ts')).not.toThrow();
+  });
+});
