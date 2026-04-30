@@ -279,4 +279,4 @@ Guards run before every action in the module. See [Action Guards](/docs/action-g
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy — each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy — each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

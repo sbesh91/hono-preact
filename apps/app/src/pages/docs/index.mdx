@@ -27,6 +27,6 @@ On the first request, the server runs the loader directly and preloads the resul
 
 ## The server/client boundary
 
-Two Vite plugins enforce the boundary between server and client code. During the client bundle build, `serverOnlyPlugin` rewrites `*.server.*` imports: the default export becomes an RPC function, any imported `serverGuards` or `actionGuards` become empty arrays, and `serverActions` becomes a Proxy. Database clients, secrets, and internal API URLs in `.server.*` files never reach the browser bundle.
+Two Vite plugins enforce the boundary between server and client code. During the client bundle build, `serverOnlyPlugin` rewrites `*.server.*` imports: the default export becomes an RPC function, the `loader` named export becomes a client-safe `LoaderRef` that calls the same RPC, the `cache` named export becomes a `cacheRegistry`-deduped client cache, any imported `serverGuards` or `actionGuards` become empty arrays, and `serverActions` becomes a Proxy. Side-effect-only `.server.*` imports are stripped entirely. Database clients, secrets, and internal API URLs in `.server.*` files never reach the browser bundle.
 
-`serverLoaderValidationPlugin` enforces the contract at build time: `.server.*` files may only export `serverGuards`, `serverActions`, or `actionGuards` as named exports. Any other named export fails the build.
+`serverLoaderValidationPlugin` enforces the contract at build time: `.server.*` files may only export `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards` as named exports (alongside the default loader). Any other named export fails the build, and re-exporting from a `.server.*` module (`export { loader } from './x.server.js'`) fails the build too.
