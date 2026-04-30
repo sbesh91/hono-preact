@@ -2,13 +2,13 @@
 
 # Server Actions
 
-Pages often need to mutate data — adding a record, toggling a flag, deleting a row. Server actions let you define those mutations as typed functions in your `.server.ts` file and call them from the client with a single hook or form component. No manual `fetch` wiring, no API route plumbing.
+Pages often need to mutate data: adding a record, toggling a flag, deleting a row. Server actions let you define those mutations as typed functions in your `.server.ts` file and call them from the client with a single hook or form component. No manual `fetch` wiring, no API route plumbing.
 
 ## How it works
 
 Define a `serverActions` map in your `.server.ts` file alongside the loader. Each action is wrapped with `defineAction` to carry its payload and result types.
 
-On the server, the `actionsHandler` middleware exposes a single `POST /__actions` route that dispatches all calls. On the client, the Vite plugin replaces the `serverActions` import with a Proxy — each property access returns an `ActionStub` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
+On the server, the `actionsHandler` middleware exposes a single `POST /__actions` route that dispatches all calls. On the client, the Vite plugin replaces the `serverActions` import with a Proxy: each property access returns an `ActionStub` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
 
 ## Defining actions
 
@@ -35,7 +35,7 @@ export const serverActions = {
 };
 ```
 
-`defineAction` is a no-op at runtime — it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` can infer the payload and result types without codegen.
+`defineAction` is a no-op at runtime; it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` can infer the payload and result types without codegen.
 
 ## Registering the handler
 
@@ -52,7 +52,7 @@ app
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`actionsHandler` accepts an `import.meta.glob` result — both lazy (default) and eager (`{ eager: true }`) globs work. It derives the module name from the filename by stripping the path prefix and `.server.*` extension.
+`actionsHandler` accepts an `import.meta.glob` result. Both lazy (default) and eager (`{ eager: true }`) globs work. It derives the module name from the filename by stripping the path prefix and `.server.*` extension.
 
 ## Calling actions with `useAction`
 
@@ -97,7 +97,7 @@ const Movies = () => {
 
 | Value | Type | Description |
 |-------|------|-------------|
-| `mutate` | `(payload) => Promise<void>` | Fires the action. Stable reference — safe to pass to `useEffect` or memoized children. |
+| `mutate` | `(payload) => Promise<void>` | Fires the action. Stable reference, safe to pass to `useEffect` or memoized children. |
 | `pending` | `boolean` | `true` while the request is in flight. |
 | `error` | `Error \| null` | The last error, or `null` if none. |
 | `data` | `TResult \| null` | The last successful result, or `null`. Not set for streaming responses. |
@@ -123,7 +123,7 @@ const AddMovieForm = () => {
 
 `<Form>` accepts any HTML `<form>` attribute (except `onSubmit`, which it owns), plus `mutate` (required) and `pending` (optional). All action-related options live on the `useAction` call, not on `<Form>`.
 
-FormData values are collected with `Object.fromEntries(new FormData(form))`. String values are passed as strings — coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
+FormData values are collected with `Object.fromEntries(new FormData(form))`. String values are passed as strings; coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
 
 ## Optimistic updates
 
@@ -150,12 +150,12 @@ const { mutate } = useAction(serverActions.addMovie, {
 When a mutation on one page should refresh data on another, pass the target cache's name to `invalidate`:
 
 ```ts
-// ratings.server.ts — a different page that shows the movie list in a sidebar
+// ratings.server.ts: a different page that shows the movie list in a sidebar
 export const cache = createCache<{ movies: MovieList }>('movies'); // named cache
 ```
 
 ```tsx
-// movies.tsx — action that should also refresh the ratings sidebar
+// movies.tsx: action that should also refresh the ratings sidebar
 const { mutate } = useAction(serverActions.addMovie, {
   invalidate: ['movies'], // clears the 'movies' cache on success
 });
@@ -171,7 +171,7 @@ See the [Server Loaders](/docs/loaders#named-caches) page for details on `create
 
 `useAction` automatically switches to `multipart/form-data` when the payload contains `File` objects. Since `<Form>` serializes file inputs as `File` instances in the payload, file uploads work transparently when you pair it with `useAction`.
 
-**With `<Form>`** — add a file input; `useAction` detects the `File` value in the payload and sends FormData:
+**With `<Form>`:** add a file input; `useAction` detects the `File` value in the payload and sends FormData:
 
 ```tsx
 const UploadPosterForm = ({ movieId, setPosterUrl }) => {
@@ -188,7 +188,7 @@ const UploadPosterForm = ({ movieId, setPosterUrl }) => {
 };
 ```
 
-**With `useAction`** — include a `File` in the payload object:
+**With `useAction`:** include a `File` in the payload object:
 
 ```tsx
 const { mutate } = useAction(serverActions.uploadPoster);
@@ -212,7 +212,7 @@ export const serverActions = {
 };
 ```
 
-Non-`File` values in a FormData payload are serialized as strings (numbers and booleans via `JSON.stringify`). Multi-value fields (e.g. checkboxes sharing a name) are collapsed to their last value — handle that case in your action body if needed.
+Non-`File` values in a FormData payload are serialized as strings (numbers and booleans via `JSON.stringify`). Multi-value fields (e.g. checkboxes sharing a name) are collapsed to their last value, so handle that case in your action body if needed.
 
 ## Streaming responses
 
@@ -253,7 +253,7 @@ Each `onChunk` call receives a raw string chunk. Parse it as needed. `onSuccess`
 
 ## Action guards
 
-Actions can run middleware-style checks before dispatching — useful for authentication, authorization, or rate limiting. Export an `actionGuards` array from your `.server.ts` file:
+Actions can run middleware-style checks before dispatching, useful for authentication, authorization, or rate limiting. Export an `actionGuards` array from your `.server.ts` file:
 
 ```ts
 // movies.server.ts
@@ -279,4 +279,4 @@ Guards run before every action in the module. See [Action Guards](/docs/action-g
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy — each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

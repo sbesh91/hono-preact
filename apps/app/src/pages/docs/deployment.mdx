@@ -18,7 +18,7 @@ npm run build
 
 This runs two Vite builds sequentially:
 
-**Pass 1 — client bundle** (`vite build --mode client`):
+**Pass 1: client bundle** (`vite build --mode client`):
 
 Produces the browser bundle in `dist/static/`. The `serverOnlyPlugin` replaces all `*.server.*` imports with no-op stubs so server code never enters the browser bundle.
 
@@ -29,7 +29,7 @@ dist/static/<name>-<hash>.js # lazy page chunks
 dist/static/<name>-<hash>.css
 ```
 
-**Pass 2 — Worker bundle** (`vite build`):
+**Pass 2: Worker bundle** (`vite build`):
 
 Produces the Cloudflare Workers bundle at `dist/index.js`. The `@hono/vite-build` plugin handles bundling for the Workers runtime. Client assets from Pass 1 are included in `dist/` so the Worker can serve them.
 

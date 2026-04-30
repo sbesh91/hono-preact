@@ -21,16 +21,16 @@ const Movies = lazy(() => import('./pages/movies.js'));
 />
 ```
 
-`fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation — SSR and first-load hydration read from preloaded data and render immediately.
+`fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation; SSR and first-load hydration read from preloaded data and render immediately.
 
 ## When fallback shows
 
 | Navigation | Fallback shown? |
 |---|---|
-| SSR (first load) | No — data is preloaded into the HTML |
-| Hydration | No — client reads from `data-loader` attribute |
-| Client-side nav (cache miss) | Yes — until `serverLoader` resolves |
-| Client-side nav (cache hit) | No — cached data renders immediately |
+| SSR (first load) | No. Data is preloaded into the HTML. |
+| Hydration | No. Client reads from `data-loader` attribute. |
+| Client-side nav (cache miss) | Yes, until `serverLoader` resolves. |
+| Client-side nav (cache hit) | No. Cached data renders immediately. |
 
 ## Using a skeleton
 
@@ -77,4 +77,4 @@ Calling `reset()` clears the boundary so the next render attempt re-enters the l
 
 ## See also
 
-`<Route>` accepts more than just `loader`/`cache`/`fallback` — see [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full prop list (including `Wrapper`).
+`<Route>` accepts more than just `loader`/`cache`/`fallback`. See [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full prop list (including `Wrapper`).

@@ -1,6 +1,6 @@
 # Quick Start
 
-Build a movies list with a server loader and a form action — the full file pair pattern in one example.
+Build a movies list with a server loader and a form action. One example covers the full file pair pattern.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5173`. The dev server runs both the Hono server and the Vite HMR client. `server.tsx` handles API routes and the catch-all SSR handler; `iso.tsx` defines all client-side routes. Both `/__loaders` and `/__actions` endpoints are already registered — any `.server.ts` file you add to `src/pages/` is automatically discovered.
+Open `http://localhost:5173`. The dev server runs both the Hono server and the Vite HMR client. `server.tsx` handles API routes and the catch-all SSR handler; `iso.tsx` defines all client-side routes. Both `/__loaders` and `/__actions` endpoints are already registered, so any `.server.ts` file you add to `src/pages/` is automatically discovered.
 
 ## 1. Create a page
 
@@ -48,11 +48,11 @@ const Movies = lazy(() => import('./pages/movies.js'));
 
 Open `http://localhost:5173/movies`. You should see "Movies".
 
-> `<Route>` from `@hono-preact/iso` is the registration surface — it wires the component into the loader/preload, guard, and Suspense system. For a page with no data, `loader` is omitted and the component renders directly.
+> `<Route>` from `@hono-preact/iso` is the registration surface. It wires the component into the loader/preload, guard, and Suspense system. For a page with no data, `loader` is omitted and the component renders directly.
 
 ## 2. Add a server loader
 
-Create `src/pages/movies.server.ts`. The loader ref lives next to the server function as a named export — the page never needs to import `defineLoader` itself:
+Create `src/pages/movies.server.ts`. The loader ref lives next to the server function as a named export, so the page never needs to import `defineLoader` itself:
 
 ```ts
 import { defineLoader, type LoaderFn } from '@hono-preact/iso';
@@ -113,7 +113,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 <Route path="/movies" component={Movies} loader={moviesLoader} />
 ```
 
-Reload `http://localhost:5173/movies`. The list renders server-side on first load — the data is preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
+Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
 `defineLoader(fn)` returns a typed reference. The `loader` prop on `<Route>` and the `useLoaderData(ref)` hook both take that reference, so the data type flows through without any explicit annotations on the consuming side.
 
@@ -190,14 +190,14 @@ Movies.displayName = 'Movies';
 export default Movies;
 ```
 
-The `<Route>` registration in `iso.tsx` doesn't change — actions don't need any route-level wiring.
+The `<Route>` registration in `iso.tsx` doesn't change. Actions don't need any route-level wiring.
 
-Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates — no manual state management.
+Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates with no manual state management.
 
 ## What's next
 
-- [Server Loaders](/docs/loaders) — caching, named caches, path params
-- [Server Actions](/docs/actions) — `useAction`, optimistic updates, file uploads, streaming
-- [Route Guards](/docs/guards) — protect pages with server and client guard chains
-- [Loading States](/docs/loading-states) — show a fallback while the loader fetches
-- [Build & Deploy](/docs/deployment) — production build and deployment
+- [Server Loaders](/docs/loaders): caching, named caches, path params
+- [Server Actions](/docs/actions): `useAction`, optimistic updates, file uploads, streaming
+- [Route Guards](/docs/guards): protect pages with server and client guard chains
+- [Loading States](/docs/loading-states): show a fallback while the loader fetches
+- [Build & Deploy](/docs/deployment): production build and deployment

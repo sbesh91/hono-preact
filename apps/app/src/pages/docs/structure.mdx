@@ -7,9 +7,9 @@ hono-preact/                    # monorepo root
 ├── apps/
 │   └── app/                    # the deployed application
 │       ├── src/
-│       │   ├── server.tsx      # Hono app — API routes + catch-all SSR handler
-│       │   ├── client.tsx      # Browser entry — hydrates the Preact app
-│       │   ├── iso.tsx         # Shared component tree — Router + Route registration
+│       │   ├── server.tsx      # Hono app: API routes + catch-all SSR handler
+│       │   ├── client.tsx      # Browser entry: hydrates the Preact app
+│       │   ├── iso.tsx         # Shared component tree: Router + Route registration
 │       │   ├── pages/          # Page components (one .tsx + one .server.ts per route)
 │       │   │   └── docs/       # MDX content pages (auto-discovered as /docs/* routes)
 │       │   ├── server/         # Server-only app code
@@ -20,9 +20,9 @@ hono-preact/                    # monorepo root
 │       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
 │       └── wrangler.jsonc      # Cloudflare Workers deployment config
 └── packages/
-    ├── iso/                    # @hono-preact/iso — isomorphic loader utilities + <Route>/<Router>
-    ├── server/                 # @hono-preact/server — HonoContext + server middleware
-    └── vite/                   # @hono-preact/vite — server-only Vite plugins
+    ├── iso/                    # @hono-preact/iso: isomorphic loader utilities + <Route>/<Router>
+    ├── server/                 # @hono-preact/server: HonoContext + server middleware
+    └── vite/                   # @hono-preact/vite: server-only Vite plugins
 ```
 
 ## Key files
@@ -50,7 +50,7 @@ hydrate(<App />, document.getElementById('app'));
 
 ### `apps/app/src/iso.tsx`
 
-The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` from `@hono-preact/iso` with all routes — each `<Route>` registers a lazy-loaded page component and (optionally) imports its sibling `.server.ts` loader, cache, and guards.
+The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` from `@hono-preact/iso` with all routes. Each `<Route>` registers a lazy-loaded page component and (optionally) imports its sibling `.server.ts` loader, cache, and guards.
 
 ```tsx
 import { lazy, Route, Router } from '@hono-preact/iso';
@@ -63,7 +63,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 </Router>
 ```
 
-MDX files in `src/pages/docs/` are auto-discovered via `import.meta.glob` — no manual `<Route>` per page.
+MDX files in `src/pages/docs/` are auto-discovered via `import.meta.glob`, so there's no manual `<Route>` per page.
 
 ### `apps/app/src/server/layout.tsx`
 
@@ -73,31 +73,31 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
-- `route.tsx` — `<Route>` and `<Router>` components: the user-facing registration surface. `<Route>` accepts `path`, `component`, plus the page-level props `loader`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`)
-- `page.tsx` — `<Page>` component and `WrapperProps` type: composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`)
-- `loader.tsx` — `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context
-- `define-loader.ts` — `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types
-- `use-loader-data.ts` — `useLoaderData(ref)` hook for typed access to loader data inside children
-- `envelope.tsx` — `<Envelope>` (default page Wrapper) that emits the SSR `data-loader` attribute
-- `guards.tsx` / `guard.ts` — `<Guards>` component, `createGuard`, `runGuards`, guard types
-- `cache.ts` — single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation
-- `reload-context.tsx` — `ReloadContext` and `useReload` hook
-- `preload.ts` — reads loader data serialized into `data-loader` attributes on first hydration
+- `route.tsx`: `<Route>` and `<Router>` components, the user-facing registration surface. `<Route>` accepts `path`, `component`, plus the page-level props `loader`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`).
+- `page.tsx`: `<Page>` component and `WrapperProps` type. Composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`).
+- `loader.tsx`: `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context.
+- `define-loader.ts`: `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types.
+- `use-loader-data.ts`: `useLoaderData(ref)` hook for typed access to loader data inside children.
+- `envelope.tsx`: `<Envelope>` (default page Wrapper) that emits the SSR `data-loader` attribute.
+- `guards.tsx` / `guard.ts`: `<Guards>` component, `createGuard`, `runGuards`, guard types.
+- `cache.ts`: single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation.
+- `reload-context.tsx`: `ReloadContext` and `useReload` hook.
+- `preload.ts`: reads loader data serialized into `data-loader` attributes on first hydration.
 
 ### `@hono-preact/server` (workspace package)
 
 Server-only utilities (`packages/server/`):
 
-- `context.ts` — `HonoContext` and `useHonoContext` for accessing the Hono `Context` from Preact components during SSR
-- `middleware/location.ts` — `location` middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`
-- `actions-handler.ts` — `actionsHandler` middleware that dispatches `POST /__actions` requests to the matching `serverActions[name]` from a `.server.*` glob
-- `loaders-handler.ts` — `loadersHandler` middleware that dispatches `POST /__loaders` requests to the default-exported server loader from a `.server.*` glob
-- `render.ts` — `renderPage` helper that renders the app to streaming HTML with the script tag and `<head>` injection
+- `context.ts`: `HonoContext` and `useHonoContext` for accessing the Hono `Context` from Preact components during SSR.
+- `middleware/location.ts`: `location` middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`.
+- `actions-handler.ts`: `actionsHandler` middleware that dispatches `POST /__actions` requests to the matching `serverActions[name]` from a `.server.*` glob.
+- `loaders-handler.ts`: `loadersHandler` middleware that dispatches `POST /__loaders` requests to the default-exported server loader from a `.server.*` glob.
+- `render.ts`: `renderPage` helper that renders the app to streaming HTML with the script tag and `<head>` injection.
 
 ### `@hono-preact/vite` (workspace package)
 
 Vite plugins for the framework (`packages/vite/`). The primary export is `honoPreact()`, which bundles all framework Vite configuration into a single plugin. See [Vite Configuration](/docs/vite-config) for usage.
 
-- **`honoPreact()`** — configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, and `@hono/vite-dev-server`
-- **`serverOnlyPlugin`** — during the client bundle build, replaces any `*.server.*` import with a no-op stub so server code never reaches the browser
-- **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards`; the server loader must be the default export
+- **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, and `@hono/vite-dev-server`.
+- **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing them with no-op stubs so server code never reaches the browser.
+- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards`. The server loader must be the default export.

@@ -2,13 +2,13 @@
 
 # Reloading Data
 
-Sometimes you need to re-run the loader imperatively — for example, after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
+Sometimes you need to re-run the loader imperatively, for example after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
 
 ## Basic usage
 
 Snippets on this page assume `type MovieList = { results: { id: number; title: string }[] }`.
 
-**`src/pages/movies.server.ts`** — loader and cache exports:
+**`src/pages/movies.server.ts`** holds the loader and cache exports:
 
 ```ts
 import { createCache, defineLoader, type LoaderFn } from '@hono-preact/iso';
@@ -23,7 +23,7 @@ export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
 export const cache = createCache<{ movies: MovieList }>();
 ```
 
-**`src/pages/movies.tsx`** — pure component using `useReload`:
+**`src/pages/movies.tsx`** is a pure component using `useReload`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
@@ -54,7 +54,7 @@ const Movies: FunctionComponent = () => {
 export default Movies;
 ```
 
-**`src/iso.tsx`** — register with the loader:
+**`src/iso.tsx`** registers the route with the loader:
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
@@ -69,7 +69,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 
 ## Background refresh
 
-Reload is a background refresh — the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
+Reload is a background refresh: the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
 
 ## Cache invalidation
 

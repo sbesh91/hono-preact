@@ -2,28 +2,28 @@
 
 Fullstack made easy.
 
-Every route is a file pair: a `.tsx` page component and a `.server.ts` file that never reaches the browser. The framework handles SSR, data fetching, mutations, and access control — you write the logic.
+Every route is a file pair: a `.tsx` page component and a `.server.ts` file that never reaches the browser. The framework handles SSR, data fetching, mutations, and access control. You write the logic.
 
 ```tsx
-// movies.server.ts — runs only on the server
+// movies.server.ts: runs only on the server
 const serverLoader = async () => ({ movies: await getMovies() });
 export default serverLoader;
 export const loader = defineLoader(serverLoader);
 
-// movies.tsx — the page component (pure, no wrappers)
+// movies.tsx: the page component (pure, no wrappers)
 export default function Movies() {
   const { movies } = useLoaderData(loader);
   return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
 }
 
-// iso.tsx — the route ties them together
+// iso.tsx: the route ties them together
 import { loader as moviesLoader } from './pages/movies.server.js';
 <Route path="/movies" component={Movies} loader={moviesLoader} />
 ```
 
 On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that preloaded data. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.
 
-**[→ Quick Start](/docs/quick-start)** — build a page with data and a mutation in ~10 minutes
+**[→ Quick Start](/docs/quick-start)**: build a page with data and a mutation in about 10 minutes.
 
 ## The server/client boundary
 

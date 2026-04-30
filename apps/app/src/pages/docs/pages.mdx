@@ -6,9 +6,9 @@ There are two kinds of pages in this template: standard Preact pages and MDX con
 
 ## Standard Preact pages
 
-A standard page is a pure component plus a `<Route>` registration. Loaders, caches, and guards live in the sibling `.server.ts` file and are wired in at the route — the page itself imports only what it consumes.
+A standard page is a pure component plus a `<Route>` registration. Loaders, caches, and guards live in the sibling `.server.ts` file and are wired in at the route. The page itself imports only what it consumes.
 
-### Step 1 — Create `src/pages/about.tsx`
+### Step 1: Create `src/pages/about.tsx`
 
 ```tsx
 import type { FunctionComponent } from 'preact';
@@ -22,9 +22,9 @@ About.displayName = 'About';
 export default About;
 ```
 
-The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing — those concerns belong to the route registration in the next step.
+The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to the route registration in the next step.
 
-### Step 2 — Register in `src/iso.tsx`
+### Step 2: Register in `src/iso.tsx`
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
@@ -47,7 +47,7 @@ const About = lazy(() => import('./pages/about.js'));
 <Route path="/about" component={About} loader={aboutLoader} />
 ```
 
-### Step 3 — Link to it
+### Step 3: Link to it
 
 From anywhere in the app:
 
@@ -59,7 +59,7 @@ preact-iso intercepts clicks on same-origin `<a>` tags and handles them as clien
 
 ## MDX docs pages
 
-MDX pages in `src/pages/docs/` are auto-discovered — no changes to `iso.tsx` are needed.
+MDX pages in `src/pages/docs/` are auto-discovered. No changes to `iso.tsx` are needed.
 
 **Create `src/pages/docs/my-page.mdx`:**
 
@@ -76,10 +76,10 @@ It is immediately available at `/docs/my-page`. The route is derived from the fi
 **Supported MDX features:**
 
 - All standard Markdown syntax
-- Inline JSX — import and use any Preact component
+- Inline JSX: import and use any Preact component
 - Frontmatter is not processed by default (no remark-frontmatter configured)
 
-**Note on `index.mdx`:** The file `src/pages/docs/index.mdx` is a special case — the routing logic strips its trailing `/index` to serve it at `/docs` rather than `/docs/index`.
+**Note on `index.mdx`:** The file `src/pages/docs/index.mdx` is a special case. The routing logic strips its trailing `/index` to serve it at `/docs` rather than `/docs/index`.
 
 ## View transitions
 

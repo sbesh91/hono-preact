@@ -2,20 +2,20 @@
 
 # Server Loaders
 
-Pages often need data. On the server, that data should come from a direct function call. In the browser during navigation, it goes through an RPC call to the server. Writing this branch manually is error-prone — the loader system handles it automatically.
+Pages often need data. On the server, that data should come from a direct function call. In the browser during navigation, it goes through an RPC call to the server. Writing this branch manually is error-prone, so the loader system handles it automatically.
 
 ## How it works
 
 A page is a file pair:
 
-- `movies.server.ts` — the server loader (default export) plus its `defineLoader` reference (named export). Never reaches the browser bundle.
-- `movies.tsx` — a pure component that consumes the loader data via `useLoaderData(loader)`.
+- `movies.server.ts`: the server loader (default export) plus its `defineLoader` reference (named export). Never reaches the browser bundle.
+- `movies.tsx`: a pure component that consumes the loader data via `useLoaderData(loader)`.
 
 The two are bound together at the route registration in `iso.tsx`, which passes the loader reference to `<Route loader={...}>`.
 
 **At runtime:**
 1. **SSR:** `serverLoader` runs directly during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
-2. **Hydration (first load):** The client reads that attribute — no fetch is fired.
+2. **Hydration (first load):** The client reads that attribute. No fetch is fired.
 3. **Client-side navigation:** The Vite plugin replaces the `serverLoader` import with an RPC stub that POSTs `{ module, location }` to `POST /__loaders`. The server runs the real `serverLoader` and returns JSON.
 
 ## Example: listing page
@@ -27,14 +27,14 @@ type MovieList = { results: { id: number; title: string }[] };
 type Movie = { id: number; title: string };
 ```
 
-**`src/pages/movies.server.ts`** — server-only data fetching plus the loader ref:
+**`src/pages/movies.server.ts`** holds the server-only data fetching and the loader ref:
 
 ```ts
 import { getMovies } from '@/server/movies.js';
 import { defineLoader, type LoaderFn } from '@hono-preact/iso';
 
 const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
-  const movies = await getMovies(); // direct call — never runs in the browser
+  const movies = await getMovies(); // direct call; never runs in the browser
   return { movies };
 };
 
@@ -43,7 +43,7 @@ export default serverLoader;
 export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
 ```
 
-**`src/pages/movies.tsx`** — a pure component:
+**`src/pages/movies.tsx`** is a pure component:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
@@ -62,7 +62,7 @@ const Movies: FunctionComponent = () => {
 export default Movies;
 ```
 
-**`src/iso.tsx`** — registration ties the loader to the route:
+**`src/iso.tsx`** ties the loader to the route at registration:
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
@@ -108,7 +108,7 @@ app
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`loadersHandler` derives the module name from the filename by stripping the path prefix and `.server.*` extension — the same convention as `actionsHandler`.
+`loadersHandler` derives the module name from the filename by stripping the path prefix and `.server.*` extension. This matches the convention used by `actionsHandler`.
 
 ## Caching navigation results
 
@@ -150,7 +150,7 @@ export const cache = createCache<{ movies: MovieList }>('movies');
 ```
 
 ```tsx
-// reviews.tsx — a different page whose action should also refresh the movie list
+// reviews.tsx: a different page whose action should also refresh the movie list
 import { useAction } from '@hono-preact/iso';
 import { serverActions } from './reviews.server.js';
 
@@ -163,4 +163,4 @@ Unnamed caches (`createCache<T>()`) work exactly as before and cannot be targete
 
 ## The server/client boundary
 
-Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the default export becomes an RPC stub, the `loader` and `cache` exports remain (their construction is browser-safe — only the inner `serverLoader` reference matters), and any imported `serverGuards`, `serverActions`, or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the default export becomes an RPC stub, the `loader` and `cache` exports remain (their construction is browser-safe; only the inner `serverLoader` reference matters), and any imported `serverGuards`, `serverActions`, or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
