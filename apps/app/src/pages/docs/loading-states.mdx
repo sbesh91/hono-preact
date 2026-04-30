@@ -2,18 +2,27 @@
 
 # Loading States
 
-By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `getLoaderData` to show a loading UI during client-side navigation.
+By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `<Page>` to show a loading UI during client-side navigation.
 
 ## Basic usage
 
 ```tsx
-import { getLoaderData, type LoaderData } from '@hono-preact/iso';
+import { defineLoader, Page } from '@hono-preact/iso';
 
-export default getLoaderData(Movies, {
-  serverLoader,
-  cache,
-  fallback: <p>Loading…</p>,
-});
+const moviesLoader = defineLoader<{ movies: MovieList }>(serverLoader);
+
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page
+      loader={moviesLoader}
+      location={location}
+      cache={cache}
+      fallback={<p>Loading…</p>}
+    >
+      <Movies />
+    </Page>
+  );
+}
 ```
 
 `fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation — SSR and first-load hydration read from preloaded data and render immediately.
@@ -40,9 +49,16 @@ const MoviesSkeleton = () => (
   </ul>
 );
 
-export default getLoaderData(Movies, {
-  serverLoader,
-  cache,
-  fallback: <MoviesSkeleton />,
-});
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page
+      loader={moviesLoader}
+      location={location}
+      cache={cache}
+      fallback={<MoviesSkeleton />}
+    >
+      <Movies />
+    </Page>
+  );
+}
 ```

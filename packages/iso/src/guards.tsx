@@ -7,9 +7,9 @@ import {
   GuardRedirect,
   type GuardResult,
   runGuards,
-} from '../guard.js';
-import { isBrowser } from '../is-browser.js';
-import wrapPromise from '../wrap-promise.js';
+} from './guard.js';
+import { isBrowser } from './is-browser.js';
+import wrapPromise from './wrap-promise.js';
 import { GuardResultContext } from './contexts.js';
 
 export function useGuards(

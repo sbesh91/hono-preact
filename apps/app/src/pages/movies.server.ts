@@ -1,10 +1,10 @@
 // apps/app/src/pages/movies.server.ts
 import { getMovies } from '@/server/movies.js';
-import { defineAction, type Loader } from '@hono-preact/iso';
+import { defineAction, type LoaderFn } from '@hono-preact/iso';
 import type { MoviesData } from '@/server/data/movies.js';
 import { listWatched, markWatched, unmarkWatched } from '@/server/watched.js';
 
-const serverLoader: Loader<{ movies: MoviesData; watchedIds: number[] }> = async () => {
+const serverLoader: LoaderFn<{ movies: MoviesData; watchedIds: number[] }> = async () => {
   const [movies, watched] = await Promise.all([getMovies(), listWatched()]);
   return { movies, watchedIds: watched.map((w) => w.movieId) };
 };

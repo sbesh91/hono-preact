@@ -16,9 +16,9 @@ On the server, the `actionsHandler` middleware exposes a single `POST /__actions
 
 ```ts
 import { getMovies } from '@/server/movies.js';
-import { defineAction, type Loader } from '@hono-preact/iso';
+import { defineAction, type LoaderFn } from '@hono-preact/iso';
 
-const serverLoader: Loader<{ movies: MovieList }> = async () => {
+const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
   const movies = await getMovies();
   return { movies };
 };
@@ -59,10 +59,12 @@ app
 `useAction` manages pending state, error handling, and optional cache invalidation after the action completes.
 
 ```tsx
-import { getLoaderData, type LoaderData, useAction } from '@hono-preact/iso';
-import serverLoader, { serverActions } from './movies.server.js';
+import { useAction, useLoaderData } from '@hono-preact/iso';
+import { moviesLoader } from './movies.js';
+import { serverActions } from './movies.server.js';
 
-const Movies = ({ loaderData }: LoaderData<{ movies: MovieList }>) => {
+const Movies = () => {
+  const { movies } = useLoaderData(moviesLoader);
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (data) => console.log('added', data),
@@ -129,7 +131,8 @@ FormData values are collected with `Object.fromEntries(new FormData(form))`. Str
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const [items, setItems] = useState(loaderData?.movies.results ?? []);
+const { movies } = useLoaderData(moviesLoader);
+const [items, setItems] = useState(movies.results);
 
 const { mutate } = useAction(serverActions.addMovie, {
   onMutate: (payload) => {

@@ -5,8 +5,8 @@ import type {
   JSX,
 } from 'preact';
 import { useContext } from 'preact/hooks';
-import { isBrowser } from '../is-browser.js';
-import type { WrapperProps } from '../page.js';
+import { isBrowser } from './is-browser.js';
+import type { WrapperProps } from './page.js';
 import { LoaderDataContext, LoaderIdContext } from './contexts.js';
 
 type EnvelopeProps = {

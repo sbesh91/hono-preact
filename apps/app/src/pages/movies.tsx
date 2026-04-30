@@ -2,12 +2,13 @@
 import {
   cacheRegistry,
   createCache,
-  getLoaderData,
-  type LoaderData,
+  defineLoader,
+  Page,
+  useLoaderData,
   useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
-import { lazy, Route, Router } from 'preact-iso';
+import { lazy, Route, type RouteHook, Router } from 'preact-iso';
 import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
 import serverLoader, { serverActions } from './movies.server.js';
 import Noop from './noop.js';
@@ -15,11 +16,12 @@ import Noop from './noop.js';
 type Data = { movies: MoviesData; watchedIds: number[] };
 
 const cache = createCache<Data>('movies-list');
+const moviesLoaderRef = defineLoader<Data>(serverLoader);
 
 const Movie = lazy(() => import('./movie.js'));
 
-const Movies: FunctionComponent<LoaderData<Data>> = (props) => {
-  const { movies, watchedIds } = props.loaderData;
+const Movies: FunctionComponent = () => {
+  const { movies, watchedIds } = useLoaderData(moviesLoaderRef);
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
     serverActions.toggleWatched,
@@ -74,4 +76,10 @@ const Movies: FunctionComponent<LoaderData<Data>> = (props) => {
 };
 Movies.displayName = 'Movies';
 
-export default getLoaderData(Movies, { serverLoader, cache });
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page loader={moviesLoaderRef} location={location} cache={cache}>
+      <Movies />
+    </Page>
+  );
+}

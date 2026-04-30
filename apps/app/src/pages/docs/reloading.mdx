@@ -7,9 +7,17 @@ Sometimes you need to re-run the loader imperatively — for example, after a us
 ## Basic usage
 
 ```tsx
-import { getLoaderData, type LoaderData, useReload } from '@hono-preact/iso';
+import {
+  defineLoader,
+  Page,
+  useLoaderData,
+  useReload,
+} from '@hono-preact/iso';
 
-const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
+const moviesLoader = defineLoader<{ movies: MovieList }>(serverLoader);
+
+const Movies: FunctionComponent = () => {
+  const { movies } = useLoaderData(moviesLoader);
   const { reload, reloading } = useReload();
 
   const handleAdd = async () => {
@@ -23,16 +31,22 @@ const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderDa
         {reloading ? 'Adding...' : 'Add Movie'}
       </button>
       <ul>
-        {loaderData?.movies.results.map(m => <li key={m.id}>{m.title}</li>)}
+        {movies.results.map(m => <li key={m.id}>{m.title}</li>)}
       </ul>
     </>
   );
 };
 
-export default getLoaderData(Movies, { serverLoader });
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page loader={moviesLoader} location={location}>
+      <Movies />
+    </Page>
+  );
+}
 ```
 
-`useReload` must be called inside a component rendered by `getLoaderData`. Calling it elsewhere throws an error.
+`useReload` must be called inside a `<Page>` that has a `loader` prop. Calling it elsewhere throws an error.
 
 ## Background refresh
 

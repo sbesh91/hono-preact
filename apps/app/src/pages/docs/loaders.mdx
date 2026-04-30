@@ -9,7 +9,7 @@ Pages often need data. On the server, that data should come from a direct functi
 Define a `serverLoader` as the default export of a `.server.ts` file. That single function handles all three load cases:
 
 - `movies.server.ts` — the loader; runs directly on the server or via RPC from the browser
-- `movies.tsx` — imports the loader and passes it to `getLoaderData`
+- `movies.tsx` — wraps the loader with `defineLoader` and passes the resulting reference to `<Page loader={...}>`
 
 **At runtime:**
 1. **SSR:** `serverLoader` runs directly during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
@@ -22,9 +22,9 @@ Define a `serverLoader` as the default export of a `.server.ts` file. That singl
 
 ```ts
 import { getMovies } from '@/server/movies.js';
-import type { Loader } from '@hono-preact/iso';
+import type { LoaderFn } from '@hono-preact/iso';
 
-const serverLoader: Loader<{ movies: MovieList }> = async () => {
+const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
   const movies = await getMovies(); // direct call — never runs in the browser
   return { movies };
 };
@@ -35,33 +35,49 @@ export default serverLoader;
 **`src/pages/movies.tsx`** — the page component:
 
 ```tsx
-import { getLoaderData, type LoaderData } from '@hono-preact/iso';
+import {
+  createCache,
+  defineLoader,
+  Page,
+  useLoaderData,
+} from '@hono-preact/iso';
+import type { FunctionComponent } from 'preact';
+import type { RouteHook } from 'preact-iso';
 import serverLoader from './movies.server.js';
-import { createCache } from '@hono-preact/iso';
 
 const cache = createCache<{ movies: MovieList }>();
+const moviesLoader = defineLoader<{ movies: MovieList }>(serverLoader);
 
-const Movies: FunctionComponent<LoaderData<{ movies: MovieList }>> = ({ loaderData }) => {
+const Movies: FunctionComponent = () => {
+  const { movies } = useLoaderData(moviesLoader);
   return (
     <ul>
-      {loaderData?.movies.results.map(m => <li key={m.id}>{m.title}</li>)}
+      {movies.results.map(m => <li key={m.id}>{m.title}</li>)}
     </ul>
   );
 };
 
-export default getLoaderData(Movies, { serverLoader, cache });
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page loader={moviesLoader} location={location} cache={cache}>
+      <Movies />
+    </Page>
+  );
+}
 ```
+
+`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The `<Page loader={...}>` prop and the `useLoaderData(ref)` hook both consume that reference, so the data type flows through with no extra annotations.
 
 ## Example: detail page (using route params)
 
-`Loader<T>` receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID:
+`LoaderFn<T>` receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID:
 
 ```ts
 // src/pages/movie.server.ts
 import { getMovie } from '@/server/movies.js';
-import type { Loader } from '@hono-preact/iso';
+import type { LoaderFn } from '@hono-preact/iso';
 
-const serverLoader: Loader<{ movie: Movie }> = async ({ location }) => {
+const serverLoader: LoaderFn<{ movie: Movie }> = async ({ location }) => {
   const movie = await getMovie(location.pathParams.id);
   return { movie };
 };
@@ -87,14 +103,21 @@ app
 
 ## Caching navigation results
 
-Pass a `cache` to `getLoaderData` so repeated navigations to the same page don't re-fetch:
+Pass a `cache` to `<Page>` so repeated navigations to the same page don't re-fetch:
 
 ```tsx
-import { createCache } from '@hono-preact/iso';
+import { createCache, defineLoader, Page } from '@hono-preact/iso';
 
 const cache = createCache<{ movies: MovieList }>();
+const moviesLoader = defineLoader<{ movies: MovieList }>(serverLoader);
 
-export default getLoaderData(Movies, { serverLoader, cache });
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page loader={moviesLoader} location={location} cache={cache}>
+      <Movies />
+    </Page>
+  );
+}
 ```
 
 On a cache hit, the RPC call is skipped entirely. After a successful fetch the result is stored in the cache for the session.

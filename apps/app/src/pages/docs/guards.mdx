@@ -50,11 +50,11 @@ guards: [checkAuthenticated, checkRole('admin')]
 **`src/pages/admin.server.ts`** — server guards (never reaches the browser bundle):
 
 ```ts
-import type { Loader } from '@hono-preact/iso';
+import type { LoaderFn } from '@hono-preact/iso';
 import { createGuard } from '@hono-preact/iso';
 import { getCurrentUser } from '@/server/auth.js';
 
-const serverLoader: Loader<{ stats: Stats }> = async () => {
+const serverLoader: LoaderFn<{ stats: Stats }> = async () => {
   const stats = await getAdminStats();
   return { stats };
 };
@@ -74,12 +74,19 @@ export const serverGuards = [
 **`src/pages/admin.tsx`** — the page component:
 
 ```tsx
-import { getLoaderData, type LoaderData } from '@hono-preact/iso';
-import { createGuard } from '@hono-preact/iso';
+import {
+  createCache,
+  createGuard,
+  defineLoader,
+  Page,
+  useLoaderData,
+} from '@hono-preact/iso';
+import type { FunctionComponent } from 'preact';
+import type { RouteHook } from 'preact-iso';
 import serverLoader, { serverGuards } from './admin.server.js';
-import { createCache } from '@hono-preact/iso';
 
 const cache = createCache<{ stats: Stats }>();
+const adminLoader = defineLoader<{ stats: Stats }>(serverLoader);
 
 const clientGuards = [
   createGuard(async (_ctx, next) => {
@@ -90,16 +97,24 @@ const clientGuards = [
   }),
 ];
 
-const Admin: FunctionComponent<LoaderData<{ stats: Stats }>> = ({ loaderData }) => (
-  <section>...</section>
-);
+const Admin: FunctionComponent = () => {
+  const { stats } = useLoaderData(adminLoader);
+  return <section>...</section>;
+};
 
-export default getLoaderData(Admin, {
-  serverLoader,
-  cache,
-  serverGuards,
-  clientGuards,
-});
+export default function AdminPage(location: RouteHook) {
+  return (
+    <Page
+      loader={adminLoader}
+      location={location}
+      cache={cache}
+      serverGuards={serverGuards}
+      clientGuards={clientGuards}
+    >
+      <Admin />
+    </Page>
+  );
+}
 ```
 
 ## Build conventions

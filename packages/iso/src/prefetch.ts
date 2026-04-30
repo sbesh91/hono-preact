@@ -1,6 +1,6 @@
 import type { RouteHook } from 'preact-iso';
-import type { LoaderCache } from '../cache.js';
-import { isBrowser } from '../is-browser.js';
+import type { LoaderCache } from './cache.js';
+import { isBrowser } from './is-browser.js';
 import type { LoaderRef } from './define-loader.js';
 
 export async function prefetch<T>(

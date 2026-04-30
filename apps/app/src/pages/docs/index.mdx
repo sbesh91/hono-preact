@@ -12,7 +12,15 @@ const serverLoader = async () => ({
 export default serverLoader;
 
 // movies.tsx — the page component
-export default getLoaderData(Movies, { serverLoader });
+const moviesLoader = defineLoader(serverLoader);
+
+export default function MoviesPage(location: RouteHook) {
+  return (
+    <Page loader={moviesLoader} location={location}>
+      <Movies />
+    </Page>
+  );
+}
 ```
 
 On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that preloaded data. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.

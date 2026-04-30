@@ -1,17 +1,15 @@
 // apps/app/src/pages/movie.tsx
 import {
   cacheRegistry,
+  defineLoader,
   Form,
+  Page,
   useAction,
+  useLoaderData,
   useOptimisticAction,
   useReload,
   type WrapperProps,
 } from '@hono-preact/iso';
-import {
-  defineLoader,
-  Page,
-  useLoaderData,
-} from '@hono-preact/iso/v3';
 import type { FunctionComponent } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import type { Movie } from '@/server/data/movie.js';

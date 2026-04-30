@@ -65,10 +65,14 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
-- `loader.tsx` — `getLoaderData` HOC, `useReload` hook, and `Loader<T>` type
-- `page.tsx` — `Page` component: runs serverLoader on the server, RPC stub in the browser
+- `page.tsx` — `<Page>` component: composes the route boundary, guards, loader, and envelope into a single page wrapper
+- `loader.tsx` — `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context
+- `define-loader.ts` — `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types
+- `use-loader-data.ts` — `useLoaderData(ref)` hook for typed access to loader data inside children
+- `envelope.tsx` — `<Envelope>` (default page Wrapper) that emits the SSR `data-loader` attribute
+- `guards.tsx` / `guard.ts` — `<Guards>` component, `createGuard`, `runGuards`, guard types
 - `cache.ts` — single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation
-- `guard.ts` — `createGuard`, `runGuards`, guard types
+- `reload-context.tsx` — `ReloadContext` and `useReload` hook
 - `preload.ts` — reads loader data serialized into `data-loader` attributes on first hydration
 
 ### `@hono-preact/server` (workspace package)

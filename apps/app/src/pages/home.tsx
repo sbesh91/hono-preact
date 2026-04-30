@@ -1,6 +1,7 @@
-import { getLoaderData } from '@hono-preact/iso';
+import { Page } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
+import type { RouteHook } from 'preact-iso';
 
 const Home: FunctionComponent = () => {
   const [toggle, setToggle] = useState(false);
@@ -35,4 +36,10 @@ const Home: FunctionComponent = () => {
 
 Home.displayName = 'Home';
 
-export default getLoaderData(Home);
+export default function HomePage(location: RouteHook) {
+  return (
+    <Page location={location}>
+      <Home />
+    </Page>
+  );
+}

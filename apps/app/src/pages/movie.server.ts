@@ -1,6 +1,6 @@
 // apps/app/src/pages/movie.server.ts
 import { getMovie } from '@/server/movies.js';
-import { defineAction, type Loader } from '@hono-preact/iso';
+import { defineAction, type LoaderFn } from '@hono-preact/iso';
 import type { Movie } from '@/server/data/movie.js';
 import {
   getWatched,
@@ -11,7 +11,7 @@ import {
   type WatchedRecord,
 } from '@/server/watched.js';
 
-const serverLoader: Loader<{ movie: Movie | null; watched: WatchedRecord | null }> =
+const serverLoader: LoaderFn<{ movie: Movie | null; watched: WatchedRecord | null }> =
   async ({ location }) => {
     const idStr = location.pathParams.id;
     const id = Number(idStr);

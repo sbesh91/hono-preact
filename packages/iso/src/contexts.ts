@@ -1,5 +1,5 @@
 import { createContext } from 'preact';
-import type { GuardResult } from '../guard.js';
+import type { GuardResult } from './guard.js';
 
 export const LoaderIdContext = createContext<string | null>(null);
 

@@ -2,13 +2,15 @@
 import {
   cacheRegistry,
   createCache,
-  getLoaderData,
-  type LoaderData,
+  defineLoader,
+  Page,
   useAction,
+  useLoaderData,
   useReload,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
+import type { RouteHook } from 'preact-iso';
 import type { Movie } from '@/server/data/movie.js';
 import serverLoader, {
   serverActions,
@@ -19,9 +21,10 @@ type Entry = { movie: Movie | null; watched: WireWatched };
 type Data = { entries: Entry[] };
 
 const cache = createCache<Data>('watched');
+const watchedLoaderRef = defineLoader<Data>(serverLoader);
 
-const WatchedPage: FunctionComponent<LoaderData<Data>> = (props) => {
-  const { entries } = props.loaderData;
+const WatchedPage: FunctionComponent = () => {
+  const { entries } = useLoaderData(watchedLoaderRef);
   const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
 
   const reload = useReload();
@@ -114,8 +117,15 @@ const WatchedPage: FunctionComponent<LoaderData<Data>> = (props) => {
 };
 WatchedPage.displayName = 'WatchedPage';
 
-export default getLoaderData(WatchedPage, {
-  serverLoader,
-  cache,
-  fallback: <p class="p-1">Loading watched list…</p>,
-});
+export default function WatchedRoute(location: RouteHook) {
+  return (
+    <Page
+      loader={watchedLoaderRef}
+      location={location}
+      cache={cache}
+      fallback={<p class="p-1">Loading watched list…</p>}
+    >
+      <WatchedPage />
+    </Page>
+  );
+}

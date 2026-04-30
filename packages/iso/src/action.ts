@@ -1,5 +1,5 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
-import { ReloadContext } from './page.js';
+import { ReloadContext } from './reload-context.js';
 import { cacheRegistry } from './cache-registry.js';
 
 export type ActionStub<TPayload, TResult> = {
