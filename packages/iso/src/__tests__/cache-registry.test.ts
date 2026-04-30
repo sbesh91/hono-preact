@@ -57,4 +57,17 @@ describe('cacheRegistry.acquire', () => {
     cacheRegistry.invalidate('inv-test');
     expect(cache.get()).toBeNull();
   });
+
+  it('storage is keyed on globalThis Symbol.for so duplicate module copies share state', () => {
+    // Simulate a duplicate module copy by deleting the locally cached storage
+    // and re-running the lookup. The Symbol.for slot on globalThis must
+    // persist so the same `acquired` Map is returned.
+    const a = cacheRegistry.acquire('dup', () => createCache<number>('dup'));
+    const slot = (globalThis as unknown as Record<symbol, unknown>)[
+      Symbol.for('@hono-preact/iso/cacheRegistry')
+    ];
+    expect(slot).toBeDefined();
+    const b = cacheRegistry.acquire('dup', () => createCache<number>('dup'));
+    expect(a).toBe(b);
+  });
 });
