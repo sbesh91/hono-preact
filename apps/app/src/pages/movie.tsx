@@ -1,24 +1,14 @@
 // apps/app/src/pages/movie.tsx
 import {
   cacheRegistry,
-  defineLoader,
   Form,
-  Page,
   useAction,
   useLoaderData,
   useOptimisticAction,
   useReload,
-  type WrapperProps,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
-import type { RouteHook } from 'preact-iso';
-import type { Movie } from '@/server/data/movie.js';
-import type { WatchedRecord } from '@/server/watched.js';
-import serverLoader, { serverActions } from './movie.server.js';
-
-type Data = { movie: Movie | null; watched: WatchedRecord | null };
-
-const movieLoaderRef = defineLoader<Data>(serverLoader);
+import { loader as movieLoader, serverActions } from './movie.server.js';
 
 const NotesForm: FunctionComponent<{
   movieIdStr: string;
@@ -69,7 +59,7 @@ const PhotoForm: FunctionComponent<{ movieIdStr: string }> = ({ movieIdStr }) =>
 };
 
 const MovieDetail: FunctionComponent = () => {
-  const { movie, watched } = useLoaderData(movieLoaderRef);
+  const { movie, watched } = useLoaderData(movieLoader);
   if (!movie) return <p>Movie not found.</p>;
 
   const isWatched = !!watched && watched.watchedAt > 0;
@@ -150,14 +140,4 @@ const MovieDetail: FunctionComponent = () => {
 };
 MovieDetail.displayName = 'MovieDetail';
 
-function MovieWrapper(props: WrapperProps) {
-  return <article {...props} />;
-}
-
-export default function MoviePage(location: RouteHook) {
-  return (
-    <Page loader={movieLoaderRef} location={location} Wrapper={MovieWrapper}>
-      <MovieDetail />
-    </Page>
-  );
-}
+export default MovieDetail;

@@ -14,7 +14,7 @@ function moduleNameFromPath(filePath: string): string {
 type SerializedLocation = {
   path: string;
   pathParams: Record<string, string>;
-  query: Record<string, string>;
+  searchParams: Record<string, string>;
 };
 
 type LoaderFn = (props: { location: SerializedLocation }) => Promise<unknown>;

@@ -117,4 +117,4 @@ See [Route Guards — Composing guards](/docs/guards#composing-guards) for the f
 
 ## The server/client boundary
 
-`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array — guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of only three permitted named exports from `.server.*` files (`serverGuards`, `serverActions`, `actionGuards`). See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array — guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of the permitted named exports from `.server.*` files (`loader`, `cache`, `serverGuards`, `serverActions`, `actionGuards`). See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

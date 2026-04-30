@@ -1,6 +1,6 @@
 // apps/app/src/pages/movie.server.ts
 import { getMovie } from '@/server/movies.js';
-import { defineAction, type LoaderFn } from '@hono-preact/iso';
+import { defineAction, defineLoader, type LoaderFn } from '@hono-preact/iso';
 import type { Movie } from '@/server/data/movie.js';
 import {
   getWatched,
@@ -23,6 +23,8 @@ const serverLoader: LoaderFn<{ movie: Movie | null; watched: WatchedRecord | nul
   };
 
 export default serverLoader;
+
+export const loader = defineLoader<{ movie: Movie | null; watched: WatchedRecord | null }>(serverLoader);
 
 export const serverActions = {
   toggleWatched: defineAction<{ movieId: number; watched: boolean }, { ok: boolean }>(

@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
 import { useState } from 'preact/hooks';
-import { LocationProvider } from 'preact-iso';
+import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { Loader } from '../loader.js';
 import { useLoaderData } from '../use-loader-data.js';
@@ -17,10 +17,9 @@ vi.mock('../preload.js', () => ({
 const loc = {
   path: '/test',
   url: 'http://localhost/test',
-  query: {},
-  params: {},
+  searchParams: {},
   pathParams: {},
-} as any;
+} as unknown as RouteHook;
 
 const originalEnv = env.current;
 beforeEach(() => {

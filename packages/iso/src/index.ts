@@ -48,3 +48,10 @@ export type {
   UseOptimisticActionOptions,
   UseOptimisticActionResult,
 } from './optimistic-action.js';
+
+export { Route, Router, wrapWithPage } from './route.js';
+export type { RouteProps, RouterProps, PageConfig } from './route.js';
+
+// Convenience re-export so consumers don't need to import from preact-iso
+// alongside @hono-preact/iso.
+export { lazy } from 'preact-iso';

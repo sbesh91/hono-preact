@@ -1,7 +1,10 @@
 import type { ComponentType, FunctionComponent } from 'preact';
 import { flushSync } from 'preact/compat';
-import { lazy, Route, Router } from 'preact-iso';
+import { lazy, Route, Router } from '@hono-preact/iso';
+import { Route as IsoRoute } from 'preact-iso';
 import NotFound from './pages/not-found.js';
+import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
+import { loader as watchedLoader, cache as watchedCache } from './pages/watched.server.js';
 
 const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
@@ -41,13 +44,23 @@ function onRouteChange() {
 export const Base: FunctionComponent = () => {
   return (
     <Router onRouteChange={onRouteChange}>
+      {/* Migrated to route-level Page wrapping */}
       <Route path="/" component={Home} />
+      {/* Migrated to route-level Page wrapping */}
       <Route path="/test" component={Test} />
-      <Route path="/movies" component={Movies} />
-      <Route path="/movies/*" component={Movies} />
-      <Route path="/watched" component={Watched} />
+      {/* Migrated to route-level Page wrapping */}
+      <Route path="/movies" component={Movies} loader={moviesLoader} cache={moviesCache} />
+      <Route path="/movies/*" component={Movies} loader={moviesLoader} cache={moviesCache} />
+      {/* Migrated to route-level Page wrapping */}
+      <Route
+        path="/watched"
+        component={Watched}
+        loader={watchedLoader}
+        cache={watchedCache}
+        fallback={<p class="p-1">Loading watched list…</p>}
+      />
       {mdxRoutes.map(({ route, Component }) => (
-        <Route path={route} component={Component} />
+        <IsoRoute path={route} component={Component} />
       ))}
       <NotFound />
     </Router>

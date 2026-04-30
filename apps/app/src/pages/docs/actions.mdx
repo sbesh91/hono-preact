@@ -60,11 +60,10 @@ app
 
 ```tsx
 import { useAction, useLoaderData } from '@hono-preact/iso';
-import { moviesLoader } from './movies.js';
-import { serverActions } from './movies.server.js';
+import { loader, serverActions } from './movies.server.js';
 
 const Movies = () => {
-  const { movies } = useLoaderData(moviesLoader);
+  const { movies } = useLoaderData(loader);
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (data) => console.log('added', data),
@@ -131,7 +130,7 @@ FormData values are collected with `Object.fromEntries(new FormData(form))`. Str
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { movies } = useLoaderData(moviesLoader);
+const { movies } = useLoaderData(loader);
 const [items, setItems] = useState(movies.results);
 
 const { mutate } = useAction(serverActions.addMovie, {
@@ -150,10 +149,12 @@ const { mutate } = useAction(serverActions.addMovie, {
 
 When a mutation on one page should refresh data on another, pass the target cache's name to `invalidate`:
 
-```tsx
-// ratings.tsx — a different page that shows the movie list in a sidebar
-const cache = createCache<{ movies: MovieList }>('movies'); // named cache
+```ts
+// ratings.server.ts — a different page that shows the movie list in a sidebar
+export const cache = createCache<{ movies: MovieList }>('movies'); // named cache
+```
 
+```tsx
 // movies.tsx — action that should also refresh the ratings sidebar
 const { mutate } = useAction(serverActions.addMovie, {
   invalidate: ['movies'], // clears the 'movies' cache on success
@@ -278,4 +279,4 @@ Guards run before every action in the module. See [Action Guards](/docs/action-g
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy — each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy — each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

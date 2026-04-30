@@ -1,27 +1,27 @@
 // apps/app/src/pages/movies.tsx
 import {
   cacheRegistry,
-  createCache,
-  defineLoader,
-  Page,
+  lazy,
+  Route,
+  Router,
   useLoaderData,
   useOptimisticAction,
+  type WrapperProps,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
-import { lazy, Route, type RouteHook, Router } from 'preact-iso';
-import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
-import serverLoader, { serverActions } from './movies.server.js';
+import type { MovieSummary } from '@/server/data/movies.js';
+import { loader as movieLoader } from './movie.server.js';
+import { loader as moviesLoader, serverActions } from './movies.server.js';
 import Noop from './noop.js';
-
-type Data = { movies: MoviesData; watchedIds: number[] };
-
-const cache = createCache<Data>('movies-list');
-const moviesLoaderRef = defineLoader<Data>(serverLoader);
 
 const Movie = lazy(() => import('./movie.js'));
 
+function MovieWrapper(props: WrapperProps) {
+  return <article {...props} />;
+}
+
 const Movies: FunctionComponent = () => {
-  const { movies, watchedIds } = useLoaderData(moviesLoaderRef);
+  const { movies, watchedIds } = useLoaderData(moviesLoader);
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
     serverActions.toggleWatched,
@@ -68,7 +68,7 @@ const Movies: FunctionComponent = () => {
         ))}
       </ul>
       <Router>
-        <Route path="/:id" component={Movie} />
+        <Route path="/:id" component={Movie} loader={movieLoader} Wrapper={MovieWrapper} />
         <Noop />
       </Router>
     </section>
@@ -76,10 +76,4 @@ const Movies: FunctionComponent = () => {
 };
 Movies.displayName = 'Movies';
 
-export default function MoviesPage(location: RouteHook) {
-  return (
-    <Page loader={moviesLoaderRef} location={location} cache={cache}>
-      <Movies />
-    </Page>
-  );
-}
+export default Movies;

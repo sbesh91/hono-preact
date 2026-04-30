@@ -21,8 +21,7 @@ vi.mock('preact-iso', async (importOriginal) => {
 const loc = {
   path: '/test',
   url: 'http://localhost/test',
-  query: {},
-  params: {},
+  searchParams: {},
   pathParams: {},
 } as unknown as RouteHook;
 

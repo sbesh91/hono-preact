@@ -8,7 +8,7 @@ export async function prefetch<T>(
   opts: { location?: RouteHook; cache?: LoaderCache<T> } = {}
 ): Promise<T> {
   const fakeLocation =
-    opts.location ?? ({ path: '', query: {} } as unknown as RouteHook);
+    opts.location ?? ({ path: '', searchParams: {}, pathParams: {} } as RouteHook);
   const cache = opts.cache ?? ref.cache;
   const result = await ref.fn({ location: fakeLocation });
   if (isBrowser()) cache?.set(result);
