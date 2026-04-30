@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # renderPage
 
 `renderPage` is the SSR entry point exported from `@hono-preact/server`. It takes a Hono context and a root Preact node, prerenders it to HTML, injects head tags collected by [hoofd](https://github.com/nickvdyck/hoofd), and returns a full HTML response (including `<!doctype html>` and the `<html>` wrapper).

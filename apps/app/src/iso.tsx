@@ -12,7 +12,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 const Watched = lazy(() => import('./pages/watched.js'));
 
 // Each MDX file is lazy-loaded (code-split), consistent with the page pattern
-// above. Route paths are derived from filenames at module-evaluation time —
+// above. Route paths are derived from filenames at module-evaluation time;
 // the glob keys are statically analysable by Rollup so no dynamic import of
 // module contents is needed to know the path.
 const mdxModules = import.meta.glob('./pages/docs/*.mdx');
@@ -22,7 +22,7 @@ const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => {
   // Wrap the MDX component in a single root element so the lazy Suspense
   // boundary contains one node. MDX compiles to a Fragment root (multiple
   // sibling nodes), which Preact cannot reconcile correctly during hydration
-  // when the component is inside a Suspense boundary — it appends instead of
+  // when the component is inside a Suspense boundary; it appends instead of
   // replacing, causing the content to appear twice.
   const Component = lazy(async () => {
     const [mod, { DocsLayout }] = await Promise.all([
@@ -44,14 +44,10 @@ function onRouteChange() {
 export const Base: FunctionComponent = () => {
   return (
     <Router onRouteChange={onRouteChange}>
-      {/* Migrated to route-level Page wrapping */}
       <Route path="/" component={Home} />
-      {/* Migrated to route-level Page wrapping */}
       <Route path="/test" component={Test} />
-      {/* Migrated to route-level Page wrapping */}
       <Route path="/movies" component={Movies} loader={moviesLoader} cache={moviesCache} />
       <Route path="/movies/*" component={Movies} loader={moviesLoader} cache={moviesCache} />
-      {/* Migrated to route-level Page wrapping */}
       <Route
         path="/watched"
         component={Watched}

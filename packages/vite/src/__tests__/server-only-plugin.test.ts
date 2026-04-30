@@ -289,3 +289,66 @@ describe('re-exports from .server.* are rejected', () => {
     expect(() => transform(code, '/src/aggregator.ts')).not.toThrow();
   });
 });
+
+describe('cache alias suffix is collision-free', () => {
+  it('produces distinct cache aliases for module sources that sanitize to the same identifier', () => {
+    // Before the hash-based suffix, a sanitizer of /[^a-zA-Z0-9_$]/g -> '_'
+    // collapsed both "foo-bar" and "foo_bar" to the same alias and broke
+    // multi-import cases that resolved to either.
+    const code = [
+      `import { cache as a } from './foo-bar.server.js';`,
+      `import { cache as b } from './foo_bar.server.js';`,
+    ].join('\n');
+    const result = transform(code, '/src/iso.tsx');
+    expect(result).toBeDefined();
+    // Two distinct cacheRegistry alias bindings should be emitted.
+    const matches = result!.code.match(/__\$cacheRegistry_[a-zA-Z0-9$_]+/g) ?? [];
+    const unique = new Set(matches);
+    expect(unique.size).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('loader RPC stub key alignment', () => {
+  it('default and loader-named stubs share the same fetch envelope (refactored helper)', () => {
+    const code = [
+      `import serverLoader from './movies.server.js';`,
+      `import { loader } from './movies.server.js';`,
+    ].join('\n');
+    const result = transform(code, '/src/iso.tsx');
+    expect(result).toBeDefined();
+    // Both stubs include the same module RPC body shape.
+    const fetchOccurrences =
+      (result!.code.match(/fetch\('\/__loaders'/g) ?? []).length;
+    expect(fetchOccurrences).toBe(2);
+    // Same module string is referenced from both stubs.
+    const moduleOccurrences =
+      (result!.code.match(/module:\s*"movies"/g) ?? []).length;
+    expect(moduleOccurrences).toBe(2);
+  });
+});
+
+describe('loader stub Symbol.for keying matches user-provided name', () => {
+  it("extracts the name argument from defineLoader('foo', ...) in the source file", () => {
+    // Use the fixture .server.ts which has `defineLoader<...>('foo', serverLoader)`.
+    // The plugin should statically extract 'foo' and key the stub on it,
+    // even if the module filename happened to differ from the chosen name.
+    const code = `import { loader } from './pages/foo.server.js';`;
+    const importerPath =
+      '/Users/stevenbeshensky/Documents/repos/hono-preact/packages/vite/src/__tests__/fixtures/leak-test/iso.tsx';
+    const result = transform(code, importerPath);
+    expect(result).toBeDefined();
+    expect(result?.code).toContain(
+      "__id: Symbol.for('@hono-preact/loader:foo')"
+    );
+  });
+
+  it('falls back to module basename when the source file is unreachable', () => {
+    const code = `import { loader } from './nope.server.js';`;
+    const result = transform(code, '/no/such/path/iso.tsx');
+    expect(result).toBeDefined();
+    // Falls back to the module basename derived from the import source.
+    expect(result?.code).toContain(
+      "__id: Symbol.for('@hono-preact/loader:nope')"
+    );
+  });
+});

@@ -21,6 +21,7 @@ export const nav: NavSection[] = [
       { title: 'Server Loaders', route: '/docs/loaders' },
       { title: 'Loading States', route: '/docs/loading-states' },
       { title: 'Reloading Data', route: '/docs/reloading' },
+      { title: 'Prefetching', route: '/docs/prefetch' },
     ],
   },
   {

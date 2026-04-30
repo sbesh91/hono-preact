@@ -8,7 +8,7 @@ Every route is a file pair: a `.tsx` page component and a `.server.ts` file that
 // movies.server.ts: runs only on the server
 const serverLoader = async () => ({ movies: await getMovies() });
 export default serverLoader;
-export const loader = defineLoader(serverLoader);
+export const loader = defineLoader('movies', serverLoader);
 
 // movies.tsx: the page component (pure, no wrappers)
 export default function Movies() {

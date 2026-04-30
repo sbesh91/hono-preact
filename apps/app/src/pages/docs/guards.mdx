@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # Route Guards
 
 Pages sometimes need to be protected: requiring authentication, a specific role, or any other condition before rendering. Guards provide this as a middleware-style chain that runs before the page loader, on both the server (initial load) and the client (client-side navigation).
@@ -62,7 +60,7 @@ const serverLoader: LoaderFn<{ stats: Stats }> = async () => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ stats: Stats }>(serverLoader);
+export const loader = defineLoader<{ stats: Stats }>('admin', serverLoader);
 export const cache = createCache<{ stats: Stats }>();
 
 export const serverGuards = [
@@ -141,7 +139,7 @@ export const helper = () => {};
 export default serverLoader;
 
 // ✅ allowed
-export const loader = defineLoader(serverLoader);
+export const loader = defineLoader('admin', serverLoader);
 export const serverGuards = [...];
 export default serverLoader;
 ```

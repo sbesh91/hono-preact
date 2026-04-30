@@ -14,6 +14,6 @@ export const ReloadContext = createContext<ReloadContextValue | undefined>(
 export function useReload(): ReloadContextValue {
   const ctx = useContext(ReloadContext);
   if (!ctx)
-    throw new Error('useReload must be called inside a <Page> with a loader');
+    throw new Error('useReload must be called inside a route or <Page> with a loader');
   return ctx;
 }

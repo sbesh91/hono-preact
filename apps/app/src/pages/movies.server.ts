@@ -11,7 +11,7 @@ const serverLoader: LoaderFn<{ movies: MoviesData; watchedIds: number[] }> = asy
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MoviesData; watchedIds: number[] }>(serverLoader);
+export const loader = defineLoader<{ movies: MoviesData; watchedIds: number[] }>('movies', serverLoader);
 export const cache = createCache<{ movies: MoviesData; watchedIds: number[] }>('movies-list');
 
 export const serverActions = {

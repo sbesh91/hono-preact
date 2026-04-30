@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import { ActionGuardError, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
+import { ActionGuardError, runRequestScope, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
 
 type GlobModule = {
   serverActions?: Record<string, unknown>;
@@ -139,9 +139,8 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
     }
 
     try {
-      const result = await (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(
-        c,
-        payload
+      const result = await runRequestScope(() =>
+        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(c, payload)
       );
       if (result instanceof ReadableStream) {
         return new Response(result as ReadableStream<Uint8Array>, {

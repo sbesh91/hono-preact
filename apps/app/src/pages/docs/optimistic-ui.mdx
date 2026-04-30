@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # Optimistic UI Updates
 
 `useOptimistic` and `useOptimisticAction` let you show the result of a mutation in the UI before the server confirms it, then automatically reconcile when the server responds. They compose with the existing `useAction` hook with no changes to your loaders or actions.
@@ -130,3 +128,37 @@ const NotesForm = ({ defaultNotes }) => {
   );
 };
 ```
+
+## `<OptimisticOverlay>`
+
+`<OptimisticOverlay>` projects a list of pending actions onto the loader data that descendant components see via `useLoaderData`. Use it when a child component reads loader data and you want it to render against an optimistic projection without rewriting the child to take a prop.
+
+```tsx
+import { OptimisticOverlay, useLoaderData } from '@hono-preact/iso';
+import { moviesLoader } from './movies.server.js';
+
+const MovieList = () => {
+  const movies = useLoaderData(moviesLoader);
+  return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
+};
+
+const MoviesPage = ({ pendingAdds }) => (
+  <OptimisticOverlay
+    loader={moviesLoader}
+    reducer={(base, action) => [...base, action]}
+    pending={pendingAdds}
+  >
+    <MovieList />
+  </OptimisticOverlay>
+);
+```
+
+`<OptimisticOverlay>` must be inside a route or `<Page>` configured with the same `loader` it references; otherwise it throws.
+
+| Prop | Type | Description |
+|---|---|---|
+| `loader` | `LoaderRef<T>` | The loader whose data is being projected. Must match the surrounding route's loader. |
+| `reducer` | `(base: T, action: A) => T` | Folds each pending action into the base value. |
+| `pending` | `A[]` | Pending actions to project. Defaults to `[]`. |
+
+Prefer `useOptimistic` or `useOptimisticAction` when the optimistic state is local to the component that owns the mutation. Reach for `<OptimisticOverlay>` when the optimistic projection needs to flow through `useLoaderData` for descendants you don't want to thread props through.

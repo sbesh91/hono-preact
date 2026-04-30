@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
-import { GuardRedirect, env } from '@hono-preact/iso';
+import { GuardRedirect, env, runRequestScope } from '@hono-preact/iso';
 
 function escapeHtml(str: string): string {
   return str
@@ -32,8 +32,8 @@ export async function renderPage(
 
   let html: string;
   try {
-    ({ html } = await prerender(
-      <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+    ({ html } = await runRequestScope(() =>
+      prerender(<HoofdProvider value={dispatcher}>{node}</HoofdProvider>)
     ));
   } catch (e: unknown) {
     if (e instanceof GuardRedirect) return c.redirect(e.location);
