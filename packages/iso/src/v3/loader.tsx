@@ -64,12 +64,6 @@ function LoaderHost<T>({
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
   const [loadError, setLoadError] = useState<Error | null>(null);
 
-  const prevPath = useRef(location.path);
-  if (prevPath.current !== location.path) {
-    prevPath.current = location.path;
-    setOverrideData(undefined);
-  }
-
   const fnRef = useRef(loaderRef.fn);
   fnRef.current = loaderRef.fn;
   const locationRef = useRef(location);
@@ -92,22 +86,37 @@ function LoaderHost<T>({
       });
   }, [reloading, cache]);
 
-  let reader: { read: () => T };
+  // Stable reader: only rebuilt when path or loader identity changes. Without
+  // this, every re-render (e.g. from setReloading) would call wrapPromise(...)
+  // again, fire a duplicate XHR, and throw a fresh promise into Suspense —
+  // unmounting the children and wiping any optimistic UI state below.
+  const readerRef = useRef<{ read: () => T } | null>(null);
+  const prevPath = useRef(location.path);
+  const prevLoaderId = useRef(loaderRef.__id);
 
-  const preloaded = getPreloadedData<T>(id);
-  if (preloaded !== null) {
-    cache?.set(preloaded);
-    reader = { read: () => preloaded };
-  } else if (isBrowser() && cache?.has()) {
-    const cached = cache.get()!;
-    reader = { read: () => cached };
-  } else {
-    reader = wrapPromise(
-      loaderRef.fn({ location }).then((r) => {
-        if (isBrowser()) cache?.set(r);
-        return r;
-      })
-    );
+  const pathChanged = prevPath.current !== location.path;
+  const loaderChanged = prevLoaderId.current !== loaderRef.__id;
+
+  if (readerRef.current === null || pathChanged || loaderChanged) {
+    prevPath.current = location.path;
+    prevLoaderId.current = loaderRef.__id;
+    if (pathChanged || loaderChanged) setOverrideData(undefined);
+
+    const preloaded = getPreloadedData<T>(id);
+    if (preloaded !== null) {
+      cache?.set(preloaded);
+      readerRef.current = { read: () => preloaded };
+    } else if (isBrowser() && cache?.has()) {
+      const cached = cache.get()!;
+      readerRef.current = { read: () => cached };
+    } else {
+      readerRef.current = wrapPromise(
+        loaderRef.fn({ location }).then((r) => {
+          if (isBrowser()) cache?.set(r);
+          return r;
+        })
+      );
+    }
   }
 
   return (
@@ -115,7 +124,7 @@ function LoaderHost<T>({
       <Suspense fallback={fallback}>
         <DataReader
           refId={loaderRef.__id}
-          reader={reader}
+          reader={readerRef.current}
           overrideData={overrideData}
         >
           {children}
