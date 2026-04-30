@@ -37,17 +37,22 @@ export type RouteProps<T> = PageConfig<T> & {
 // preact-iso <Route> elements whose `component` prop is wrapped in <Page>.
 // Rendering <Route> directly (outside our <Router>) is a programmer error;
 // we silently render nothing rather than throw.
+
+// Using Symbol.for ensures the marker survives duplicate module copies (HMR,
+// pnpm phantom deps, etc.) because Symbol.for is realm-wide by key.
+const ROUTE_MARKER = Symbol.for('@hono-preact/iso/Route');
+
 export function Route<T>(_props: RouteProps<T>): null {
   return null;
 }
 Route.displayName = 'Route';
+(Route as unknown as Record<symbol, unknown>)[ROUTE_MARKER] = true;
 
 function isOurRoute(node: unknown): node is VNode<RouteProps<unknown>> {
   return (
     isValidElement(node) &&
-    typeof node === 'object' &&
-    node !== null &&
-    (node as VNode).type === Route
+    typeof node.type === 'function' &&
+    (node.type as unknown as Record<symbol, unknown>)[ROUTE_MARKER] === true
   );
 }
 

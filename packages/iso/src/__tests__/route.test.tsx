@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/preact';
+import { render, screen, cleanup, act } from '@testing-library/preact';
+import { useState } from 'preact/hooks';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { Route, Router, wrapWithPage } from '../route.js';
@@ -127,5 +128,66 @@ describe('<Route> rendered directly', () => {
     const Foo = () => <p data-testid="foo">foo</p>;
     const { container } = render(<Route path="/foo" component={Foo} />);
     expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('Route symbol marker', () => {
+  it('marks Route with a cross-realm-safe Symbol identity', () => {
+    const marker = Symbol.for('@hono-preact/iso/Route');
+    expect((Route as unknown as Record<symbol, unknown>)[marker]).toBe(true);
+  });
+});
+
+describe('<Router> re-render stability', () => {
+  it('does not remount the route component when Router re-renders', async () => {
+    let mountCount = 0;
+    const Counter = () => {
+      const [count, setCount] = useState(0);
+      if (count === 0 && mountCount === 0) mountCount++;
+      return (
+        <div>
+          <span data-testid="count">{count}</span>
+          <button data-testid="bump" onClick={() => setCount((c) => c + 1)}>
+            bump
+          </button>
+        </div>
+      );
+    };
+
+    // Wrap Router in a component that we can re-render externally
+    let triggerOuterRender!: () => void;
+    function Outer() {
+      const [, force] = useState(0);
+      triggerOuterRender = () => force((n) => n + 1);
+      return (
+        <Router>
+          <Route path="/x" component={Counter} />
+        </Router>
+      );
+    }
+
+    window.history.pushState({}, '', '/x');
+    render(
+      <LocationProvider>
+        <Outer />
+      </LocationProvider>
+    );
+
+    await screen.findByTestId('count');
+    // Bump the inner state to a non-zero value
+    await act(async () => {
+      screen.getByTestId('bump').click();
+      screen.getByTestId('bump').click();
+    });
+    expect(screen.getByTestId('count')).toHaveTextContent('2');
+
+    // Force the outer (and thus the Router) to re-render
+    await act(async () => {
+      triggerOuterRender();
+      triggerOuterRender();
+    });
+
+    // If the route component remounted, the count would reset to 0
+    expect(screen.getByTestId('count')).toHaveTextContent('2');
   });
 });
