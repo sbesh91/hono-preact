@@ -136,3 +136,80 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).not.toContain('"some-other-page"');
   });
 });
+
+describe('loader and cache specifiers', () => {
+  it('replaces a `loader` named import with a client-side LoaderRef stub', () => {
+    const code = `import { loader } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toMatch(/const loader = \{[\s\S]*__id: Symbol\.for\(['"]@hono-preact\/loader:movies['"]\)[\s\S]*fn:\s*async/);
+    expect(result?.code).toContain("fetch('/__loaders'");
+    expect(result?.code).toContain('"movies"');
+  });
+
+  it('replaces a `cache` named import with a createCache call using the source-file name', () => {
+    // The fixture file isn't available here; the plugin should fall back to module name.
+    const code = `import { cache } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toContain("import { createCache as");
+    // Expect the fallback name (module name) since no fixture exists for source-extraction.
+    // The plugin uses a unique alias (e.g. __$createCache_movies) to avoid collisions,
+    // so match `createCache[_a-zA-Z0-9$]*("movies")` to allow either bare or aliased call sites.
+    expect(result?.code).toMatch(/createCache[_a-zA-Z0-9$]*\(['"]movies['"]\)/);
+  });
+
+  it('handles `loader` aliased to a different local name', () => {
+    const code = `import { loader as moviesLoader } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toMatch(/const moviesLoader = \{[\s\S]*Symbol\.for/);
+    expect(result?.code).toContain('"movies"');
+  });
+
+  it('handles `cache` aliased to a different local name', () => {
+    const code = `import { cache as moviesCache } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toContain('const moviesCache =');
+    expect(result?.code).toMatch(/createCache[_a-zA-Z0-9$]*\(['"]movies['"]\)/);
+  });
+
+  it('handles mixed loader + cache + serverActions in one import statement', () => {
+    const code = `import { loader, cache, serverActions } from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('const loader =');
+    expect(result?.code).toContain('const cache =');
+    expect(result?.code).toContain('const serverActions = new Proxy');
+  });
+
+  it('handles mixed default + loader in one import statement', () => {
+    const code = `import serverLoader, { loader } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toContain('const serverLoader =');
+    expect(result?.code).toContain('const loader =');
+  });
+
+  it('matches an import that has ONLY loader (no default, no actions, no guards)', () => {
+    // This is the bug from the route-level-loaders migration: imports with only
+    // `loader` were silently passed through.
+    const code = `import { loader } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result).toBeDefined();
+    expect(result?.code).not.toContain("import { loader }");
+    expect(result?.code).toContain('const loader =');
+  });
+
+  it('matches an import that has ONLY cache (no default, no actions, no guards)', () => {
+    const code = `import { cache } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result).toBeDefined();
+    expect(result?.code).not.toContain("import { cache }");
+    expect(result?.code).toContain('const cache =');
+  });
+});
+
+describe('unknown specifiers from .server.* imports', () => {
+  it('throws a clear error when an unknown named export is imported from .server.*', () => {
+    const code = `import { unknownExport } from './movies.server.js';`;
+    expect(() => transform(code, '/src/iso.tsx')).toThrow(
+      /unknownExport.*not a recognized.*server/i
+    );
+  });
+});
