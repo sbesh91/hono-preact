@@ -1,6 +1,7 @@
 import type { ComponentType, FunctionComponent } from 'preact';
 import { flushSync } from 'preact/compat';
-import { lazy, Route, Router } from 'preact-iso';
+import { lazy, Route, Router } from '@hono-preact/iso';
+import { Route as IsoRoute } from 'preact-iso';
 import NotFound from './pages/not-found.js';
 
 const Home = lazy(() => import('./pages/home.js'));
@@ -41,13 +42,15 @@ function onRouteChange() {
 export const Base: FunctionComponent = () => {
   return (
     <Router onRouteChange={onRouteChange}>
+      {/* Migrated to route-level Page wrapping */}
       <Route path="/" component={Home} />
-      <Route path="/test" component={Test} />
-      <Route path="/movies" component={Movies} />
-      <Route path="/movies/*" component={Movies} />
-      <Route path="/watched" component={Watched} />
+      {/* Still self-wrapping in <Page> — will migrate in subsequent tasks */}
+      <IsoRoute path="/test" component={Test} />
+      <IsoRoute path="/movies" component={Movies} />
+      <IsoRoute path="/movies/*" component={Movies} />
+      <IsoRoute path="/watched" component={Watched} />
       {mdxRoutes.map(({ route, Component }) => (
-        <Route path={route} component={Component} />
+        <IsoRoute path={route} component={Component} />
       ))}
       <NotFound />
     </Router>
