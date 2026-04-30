@@ -201,8 +201,10 @@ export function serverOnlyPlugin(): Plugin {
             // files contribute cache imports to the same consumer.
             const aliasSuffix = moduleName.replace(/[^a-zA-Z0-9_$]/g, '_');
             needsCacheImport.add(aliasSuffix);
+            // Route through cacheRegistry.acquire so that two consumers stubbing the
+            // same .server.* module share a single cache instance (name-as-identity).
             stubs.push(
-              `const ${specifier.local.name} = __$createCache_${aliasSuffix}(${JSON.stringify(cacheName)});`
+              `const ${specifier.local.name} = __$cacheRegistry_${aliasSuffix}.acquire(${JSON.stringify(cacheName)}, () => __$createCache_${aliasSuffix}(${JSON.stringify(cacheName)}));`
             );
           } else {
             const importedName =
@@ -234,7 +236,7 @@ export function serverOnlyPlugin(): Plugin {
         const importDeclarations = [...needsCacheImport]
           .map(
             (suffix) =>
-              `import { createCache as __$createCache_${suffix} } from '@hono-preact/iso';`
+              `import { cacheRegistry as __$cacheRegistry_${suffix}, createCache as __$createCache_${suffix} } from '@hono-preact/iso';`
           )
           .join('\n');
         s.prepend(importDeclarations + '\n');

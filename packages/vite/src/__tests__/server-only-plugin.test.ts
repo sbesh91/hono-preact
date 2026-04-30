@@ -150,7 +150,7 @@ describe('loader and cache specifiers', () => {
     // The fixture file isn't available here; the plugin should fall back to module name.
     const code = `import { cache } from './movies.server.js';`;
     const result = transform(code, '/src/iso.tsx');
-    expect(result?.code).toContain("import { createCache as");
+    expect(result?.code).toContain('createCache as');
     // Expect the fallback name (module name) since no fixture exists for source-extraction.
     // The plugin uses a unique alias (e.g. __$createCache_movies) to avoid collisions,
     // so match `createCache[_a-zA-Z0-9$]*("movies")` to allow either bare or aliased call sites.
@@ -202,6 +202,13 @@ describe('loader and cache specifiers', () => {
     expect(result).toBeDefined();
     expect(result?.code).not.toContain("import { cache }");
     expect(result?.code).toContain('const cache =');
+  });
+
+  it('emits cache stubs that go through cacheRegistry.acquire for identity', () => {
+    const code = `import { cache } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toContain('.acquire(');
+    expect(result?.code).toContain('cacheRegistry');
   });
 });
 
