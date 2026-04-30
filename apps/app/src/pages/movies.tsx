@@ -1,12 +1,24 @@
 // apps/app/src/pages/movies.tsx
-import { cacheRegistry, useLoaderData, useOptimisticAction } from '@hono-preact/iso';
+import {
+  cacheRegistry,
+  lazy,
+  Route,
+  Router,
+  useLoaderData,
+  useOptimisticAction,
+  type WrapperProps,
+} from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
-import { lazy, Route, Router } from 'preact-iso';
 import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
+import { loader as movieLoader } from './movie.server.js';
 import { loader as moviesLoader, serverActions } from './movies.server.js';
 import Noop from './noop.js';
 
 const Movie = lazy(() => import('./movie.js'));
+
+function MovieWrapper(props: WrapperProps) {
+  return <article {...props} />;
+}
 
 const Movies: FunctionComponent = () => {
   const { movies, watchedIds } = useLoaderData(moviesLoader);
@@ -56,7 +68,7 @@ const Movies: FunctionComponent = () => {
         ))}
       </ul>
       <Router>
-        <Route path="/:id" component={Movie} />
+        <Route path="/:id" component={Movie} loader={movieLoader} Wrapper={MovieWrapper} />
         <Noop />
       </Router>
     </section>
