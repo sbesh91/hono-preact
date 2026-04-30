@@ -7,14 +7,10 @@ import {
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import type { Movie } from '@/server/data/movie.js';
 import {
   serverActions,
-  type WireWatched,
   loader as watchedLoader,
 } from './watched.server.js';
-
-type Entry = { movie: Movie | null; watched: WireWatched };
 
 const WatchedPage: FunctionComponent = () => {
   const { entries } = useLoaderData(watchedLoader);

@@ -9,7 +9,7 @@ import {
   type WrapperProps,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
-import type { MovieSummary, MoviesData } from '@/server/data/movies.js';
+import type { MovieSummary } from '@/server/data/movies.js';
 import { loader as movieLoader } from './movie.server.js';
 import { loader as moviesLoader, serverActions } from './movies.server.js';
 import Noop from './noop.js';
