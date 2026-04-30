@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { runRequestScope } from '@hono-preact/iso';
 
 type GlobModule = { default?: unknown; [key: string]: unknown };
 type LazyGlob = Record<string, () => Promise<unknown>>;
@@ -72,7 +73,9 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
     }
 
     try {
-      const result = await loader({ location: location as SerializedLocation });
+      const result = await runRequestScope(() =>
+        loader({ location: location as SerializedLocation })
+      );
       return c.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

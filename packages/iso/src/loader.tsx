@@ -69,8 +69,16 @@ function LoaderHost<T>({
   const locationRef = useRef(location);
   locationRef.current = location;
 
-  const reload = useCallback(() => {
-    if (reloading) return;
+  // True while either the initial Suspense fetch or an explicit reload is in
+  // flight. Tracked via a ref so reload() can read it without recapturing on
+  // every state change, and so the wrapPromise branch below can flip it
+  // during render without scheduling an extra setState.
+  const inFlightRef = useRef(false);
+  const queuedReloadRef = useRef(false);
+  const runReloadRef = useRef<() => void>(() => {});
+
+  const runReload = useCallback(() => {
+    inFlightRef.current = true;
     setReloading(true);
     setLoadError(null);
     fnRef
@@ -79,12 +87,28 @@ function LoaderHost<T>({
         if (isBrowser()) cache?.set(result);
         setOverrideData(result);
         setReloading(false);
+        inFlightRef.current = false;
+        if (queuedReloadRef.current) {
+          queuedReloadRef.current = false;
+          runReloadRef.current();
+        }
       })
       .catch((err: unknown) => {
         setLoadError(err instanceof Error ? err : new Error(String(err)));
         setReloading(false);
+        inFlightRef.current = false;
+        queuedReloadRef.current = false;
       });
-  }, [reloading, cache]);
+  }, [cache]);
+  runReloadRef.current = runReload;
+
+  const reload = useCallback(() => {
+    if (inFlightRef.current) {
+      queuedReloadRef.current = true;
+      return;
+    }
+    runReloadRef.current();
+  }, []);
 
   // Stable reader: only rebuilt when location or loader identity changes.
   // Without this, every re-render (e.g. from setReloading) would call
@@ -116,11 +140,26 @@ function LoaderHost<T>({
       const cached = cache.get()!;
       readerRef.current = { read: () => cached };
     } else {
+      inFlightRef.current = true;
+      const settle = () => {
+        inFlightRef.current = false;
+        if (queuedReloadRef.current) {
+          queuedReloadRef.current = false;
+          runReloadRef.current();
+        }
+      };
       readerRef.current = wrapPromise(
-        loaderRef.fn({ location }).then((r) => {
-          if (isBrowser()) cache?.set(r);
-          return r;
-        })
+        loaderRef
+          .fn({ location })
+          .then((r) => {
+            if (isBrowser()) cache?.set(r);
+            settle();
+            return r;
+          })
+          .catch((err: unknown) => {
+            settle();
+            throw err;
+          })
       );
     }
   }

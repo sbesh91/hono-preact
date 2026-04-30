@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createCache } from '../cache.js';
+import { createCache, runRequestScope } from '../cache.js';
 import { cacheRegistry } from '../cache-registry.js';
+import { env } from '../is-browser.js';
 
 beforeEach(() => {
   cacheRegistry.clear();
@@ -71,5 +72,74 @@ describe('createCache', () => {
     createCache<{ val: number }>();
     cacheRegistry.invalidate('sentinel');
     expect(fn).toHaveBeenCalledOnce();
+  });
+});
+
+describe('createCache request-scoped storage on the server', () => {
+  it('does not leak cache writes between concurrent server requests', async () => {
+    const cache = createCache<{ user: string }>();
+    const previousEnv = env.current;
+    env.current = 'server';
+    try {
+      const observed: Array<{ before: { user: string } | null; after: { user: string } | null }> = [];
+
+      const handleRequest = async (user: string) => {
+        return runRequestScope(async () => {
+          const before = cache.get();
+          await Promise.resolve();
+          cache.set({ user });
+          await Promise.resolve();
+          const after = cache.get();
+          observed.push({ before, after });
+        });
+      };
+
+      await Promise.all([
+        handleRequest('alice'),
+        handleRequest('bob'),
+        handleRequest('carol'),
+      ]);
+
+      for (const o of observed) {
+        expect(o.before).toBeNull();
+      }
+      expect(observed.map((o) => o.after?.user).sort()).toEqual(['alice', 'bob', 'carol']);
+    } finally {
+      env.current = previousEnv;
+    }
+  });
+
+  it('cache.wrap() inside runRequestScope only sees its own request data', async () => {
+    const cache = createCache<{ id: number }>();
+    const previousEnv = env.current;
+    env.current = 'server';
+    try {
+      const handle = (id: number) =>
+        runRequestScope(async () => {
+          const wrapped = cache.wrap(async () => {
+            await Promise.resolve();
+            return { id };
+          });
+          const a = await wrapped({ location: {} as never });
+          const b = await wrapped({ location: {} as never });
+          return { a, b };
+        });
+
+      const [r1, r2, r3] = await Promise.all([handle(1), handle(2), handle(3)]);
+      expect(r1.a).toEqual({ id: 1 });
+      expect(r1.b).toEqual({ id: 1 });
+      expect(r2.a).toEqual({ id: 2 });
+      expect(r2.b).toEqual({ id: 2 });
+      expect(r3.a).toEqual({ id: 3 });
+      expect(r3.b).toEqual({ id: 3 });
+    } finally {
+      env.current = previousEnv;
+    }
+  });
+
+  it('falls back to module-scoped storage when no request scope is active (browser path)', () => {
+    const cache = createCache<{ val: number }>();
+    cache.set({ val: 7 });
+    expect(cache.get()).toEqual({ val: 7 });
   });
 });

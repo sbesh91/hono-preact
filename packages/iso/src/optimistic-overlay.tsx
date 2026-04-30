@@ -19,7 +19,7 @@ export function OptimisticOverlay<T, A>({
   const ctx = useContext(LoaderDataContext);
   if (!ctx || ctx.refId !== loader.__id)
     throw new Error(
-      '<OptimisticOverlay loader={x}> must be inside a <Loader loader={x}>'
+      '<OptimisticOverlay loader={x}> must be inside a route or <Page> configured with the same loader'
     );
 
   const base = ctx.data as T;

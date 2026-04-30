@@ -12,20 +12,6 @@ import { isBrowser } from './is-browser.js';
 import wrapPromise from './wrap-promise.js';
 import { GuardResultContext } from './contexts.js';
 
-export function useGuards(
-  guards: GuardFn[],
-  location: RouteHook
-): GuardResult | null {
-  const prevPath = useRef(location.path);
-  const ref = useRef(wrapPromise(runGuards(guards, { location })));
-  if (prevPath.current !== location.path) {
-    prevPath.current = location.path;
-    ref.current = wrapPromise(runGuards(guards, { location }));
-  }
-  const result = ref.current.read();
-  return (result ?? null) as GuardResult | null;
-}
-
 export function useGuardResult(): GuardResult | null {
   return useContext(GuardResultContext);
 }

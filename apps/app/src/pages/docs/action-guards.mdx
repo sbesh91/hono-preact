@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # Action Guards
 
 Action guards are middleware-style functions that run before a server action executes. Use them for authentication, authorization, rate limiting, or any cross-cutting concern that should halt execution before the action body runs.
@@ -53,7 +51,7 @@ import { defineActionGuard } from '@hono-preact/iso';
 
 const guard = defineActionGuard(async (ctx, next) => {
   // inspect ctx, then either throw or call next()
-  await next();
+  return next();
 });
 ```
 

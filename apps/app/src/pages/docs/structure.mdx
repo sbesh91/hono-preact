@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # Project Structure
 
 ```
@@ -74,13 +72,13 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
 - `route.tsx`: `<Route>` and `<Router>` components, the user-facing registration surface. `<Route>` accepts `path`, `component`, plus the page-level props `loader`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`).
-- `page.tsx`: `<Page>` component and `WrapperProps` type. Composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`).
+- `page.tsx`: `<Page>` component and `WrapperProps` type. Composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`). `<Page>` accepts `loader`, `location`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`).
 - `loader.tsx`: `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context.
 - `define-loader.ts`: `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types.
 - `use-loader-data.ts`: `useLoaderData(ref)` hook for typed access to loader data inside children.
-- `envelope.tsx`: `<Envelope>` (default page Wrapper) that emits the SSR `data-loader` attribute.
+- `envelope.tsx`: `<Envelope>` (default page Wrapper) that emits the SSR `data-loader` attribute. Accepts `as` (an intrinsic tag name or a `ComponentType<WrapperProps>`, defaults to `'section'`) and `children`.
 - `guards.tsx` / `guard.ts`: `<Guards>` component, `createGuard`, `runGuards`, guard types.
-- `cache.ts`: single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation.
+- `cache.ts`: single-value in-memory cache (`createCache`) to avoid re-fetching on client-side navigation. On the server, storage is request-scoped via `AsyncLocalStorage` so concurrent requests do not leak data; `runRequestScope(fn)` from the same module wraps each render and loader/action call.
 - `reload-context.tsx`: `ReloadContext` and `useReload` hook.
 - `preload.ts`: reads loader data serialized into `data-loader` attributes on first hydration.
 

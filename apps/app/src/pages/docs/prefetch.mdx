@@ -1,0 +1,45 @@
+# Prefetching Data
+
+`prefetch` runs a loader and fills its cache ahead of navigation, so the destination route renders immediately when the user arrives. Use it when you can predict the user's next move (hover on a link, scroll into view, idle after page load) and the loader is non-trivial.
+
+## Basic usage
+
+```ts
+import { prefetch } from '@hono-preact/iso';
+import { loader as movieLoader } from './pages/movie.server.js';
+
+// On link hover, kick off a fetch for /movies/42 so the route is ready when clicked.
+function onMovieLinkHover(id: number) {
+  prefetch(movieLoader, { url: `/movies/${id}`, route: '/movies/:id' });
+}
+```
+
+The result is written into the loader's cache (when one is configured) and the next navigation reads from cache instead of refetching.
+
+## Why pass `url` and `route`?
+
+Loaders receive a `RouteHook` location (`{ path, searchParams, pathParams }`). When your loader reads `location.pathParams.id` or `location.searchParams.q`, prefetching with no location would crash or return the wrong data. Pass the URL the user is about to navigate to, plus the route pattern, and `prefetch` derives a complete `RouteHook` for you:
+
+- `url` populates `path` (trailing slash stripped, root preserved) and `searchParams`.
+- `route` is the matching route pattern (e.g. `/movies/:id`); when present, `pathParams` is derived by matching `url` against it.
+
+If you don't read any of those fields, omit both arguments and `prefetch(loader)` still works.
+
+## Options
+
+| Option | Type | Description |
+|---|---|---|
+| `url` | `string` | Target URL or path. Drives `path` and `searchParams`. |
+| `route` | `string` | Route pattern (e.g. `/movies/:id`). Combined with `url` to derive `pathParams`. |
+| `location` | `RouteHook` | Escape hatch: pass a fully-formed `RouteHook` directly. Overrides `url`/`route`. |
+| `cache` | `LoaderCache<T>` | Override the cache the result is written to. Defaults to the cache attached to the loader. |
+
+## Common patterns
+
+**Hover prefetch** is the typical case: bind to `onMouseEnter` on a link and call `prefetch` with the destination URL.
+
+**Idle prefetch** is useful for the next-most-likely route. Call `prefetch` from a `requestIdleCallback` after the current page settles.
+
+**Programmatic prefetch** works anywhere: a router transition listener, a search-as-you-type debounce, an intersection observer for cards scrolling into view.
+
+`prefetch` is a no-op for cache hits if the underlying loader is wrapped in a cached path; treat it as a hint, not a guarantee.

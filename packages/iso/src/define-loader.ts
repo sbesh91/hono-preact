@@ -12,8 +12,20 @@ export interface LoaderRef<T> {
 }
 
 export function defineLoader<T>(
+  name: string,
   fn: Loader<T>,
   cache?: LoaderCache<T>
 ): LoaderRef<T> {
-  return { __id: Symbol('loader'), fn, cache };
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error(
+      'defineLoader(name, fn): name must be a non-empty string. ' +
+      "Pick a stable identifier matching the .server.* module basename, " +
+      "e.g. defineLoader('movies', serverLoader)."
+    );
+  }
+  return {
+    __id: Symbol.for(`@hono-preact/loader:${name}`),
+    fn,
+    cache,
+  };
 }

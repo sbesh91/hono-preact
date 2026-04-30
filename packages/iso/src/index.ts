@@ -6,7 +6,6 @@ export { RouteBoundary } from './route-boundary.js';
 export {
   Guards,
   GuardGate,
-  useGuards,
   useGuardResult,
 } from './guards.js';
 export { defineLoader } from './define-loader.js';
@@ -25,7 +24,7 @@ export {
 } from './contexts.js';
 
 export { ReloadContext, useReload } from './reload-context.js';
-export { createCache } from './cache.js';
+export { createCache, runRequestScope } from './cache.js';
 export type { LoaderCache } from './cache.js';
 export { cacheRegistry } from './cache-registry.js';
 export { createGuard, runGuards, GuardRedirect } from './guard.js';

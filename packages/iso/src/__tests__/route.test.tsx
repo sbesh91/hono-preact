@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/preact';
+import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
@@ -45,7 +46,7 @@ describe('wrapWithPage', () => {
 
   it('renders the component with loader data via useLoaderData', async () => {
     const fn = vi.fn(async () => ({ msg: 'ok' }));
-    const ref = defineLoader<{ msg: string }>(fn);
+    const ref = defineLoader<{ msg: string }>('wrap-with-page-test', fn);
     const Inner = () => {
       const { msg } = useLoaderData(ref);
       return <p data-testid="msg">{msg}</p>;
@@ -65,7 +66,7 @@ describe('wrapWithPage', () => {
 describe('<Router> + <Route>', () => {
   it('renders the matched route wrapped in <Page> with loader data', async () => {
     const fn = vi.fn(async () => ({ msg: 'foo-data' }));
-    const ref = defineLoader<{ msg: string }>(fn);
+    const ref = defineLoader<{ msg: string }>('router-route-test', fn);
     const Foo = () => {
       const { msg } = useLoaderData(ref);
       return <p data-testid="foo">{msg}</p>;
@@ -134,6 +135,86 @@ describe('Route symbol marker', () => {
   it('marks Route with a cross-realm-safe Symbol identity', () => {
     const marker = Symbol.for('@hono-preact/iso/Route');
     expect((Route as unknown as Record<symbol, unknown>)[marker]).toBe(true);
+  });
+});
+
+describe('<Router> Fragment recursion', () => {
+  it('matches a <Route> nested inside an explicit <Fragment>', async () => {
+    const Foo = () => <p data-testid="foo">foo-frag</p>;
+
+    window.history.pushState({}, '', '/foo');
+    render(
+      <LocationProvider>
+        <Router>
+          <Fragment>
+            <Route path="/foo" component={Foo} />
+          </Fragment>
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('foo');
+    expect(el).toHaveTextContent('foo-frag');
+  });
+
+  it('matches a <Route> nested inside a short-form <>...</> fragment', async () => {
+    const Foo = () => <p data-testid="foo">foo-short</p>;
+    const Bar = () => <p data-testid="bar">bar-short</p>;
+
+    window.history.pushState({}, '', '/bar');
+    render(
+      <LocationProvider>
+        <Router>
+          <>
+            <Route path="/foo" component={Foo} />
+            <Route path="/bar" component={Bar} />
+          </>
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('bar');
+    expect(el).toHaveTextContent('bar-short');
+    expect(screen.queryByTestId('foo')).toBeNull();
+  });
+
+  it('matches a <Route> nested inside a Fragment inside a Fragment', async () => {
+    const Foo = () => <p data-testid="foo">foo-deep</p>;
+
+    window.history.pushState({}, '', '/foo');
+    render(
+      <LocationProvider>
+        <Router>
+          <Fragment>
+            <>
+              <Fragment>
+                <Route path="/foo" component={Foo} />
+              </Fragment>
+            </>
+          </Fragment>
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('foo');
+    expect(el).toHaveTextContent('foo-deep');
+  });
+
+  it('still matches a conditional `cond && <Route />` (regression)', async () => {
+    const Foo = () => <p data-testid="foo">foo-cond</p>;
+    const enabled = true;
+
+    window.history.pushState({}, '', '/foo');
+    render(
+      <LocationProvider>
+        <Router>
+          {enabled && <Route path="/foo" component={Foo} />}
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('foo');
+    expect(el).toHaveTextContent('foo-cond');
   });
 });
 

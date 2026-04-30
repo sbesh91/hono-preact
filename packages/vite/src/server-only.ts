@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { parse } from '@babel/parser';
 import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
@@ -12,15 +13,13 @@ function moduleNameFromSource(importSource: string): string {
     .replace(/\.server(\.[jt]sx?)?$/, '');
 }
 
-function extractCacheName(
-  importerPath: string,
-  importSource: string,
-  fallbackModuleName: string
-): string {
-  // Resolve the import source relative to the importer.
+function hashSuffix(input: string): string {
+  return crypto.createHash('sha1').update(input).digest('hex').slice(0, 8);
+}
+
+function readSource(importerPath: string, importSource: string): string | null {
   const importerDir = path.dirname(importerPath);
   const baseResolved = path.resolve(importerDir, importSource);
-  // Try common TS/JS extensions.
   const candidates = [
     baseResolved,
     baseResolved.replace(/\.js$/, '.ts'),
@@ -32,38 +31,92 @@ function extractCacheName(
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
       try {
-        const src = fs.readFileSync(candidate, 'utf8');
-        const ast = parse(src, {
-          sourceType: 'module',
-          plugins: ['typescript', 'jsx'],
-          errorRecovery: true,
-        });
-        for (const node of ast.program.body) {
-          if (
-            node.type === 'ExportNamedDeclaration' &&
-            node.declaration?.type === 'VariableDeclaration'
-          ) {
-            for (const decl of node.declaration.declarations) {
-              if (
-                decl.id.type === 'Identifier' &&
-                decl.id.name === 'cache' &&
-                decl.init?.type === 'CallExpression' &&
-                decl.init.callee.type === 'Identifier' &&
-                decl.init.callee.name === 'createCache'
-              ) {
-                const arg = decl.init.arguments[0];
-                if (arg?.type === 'StringLiteral') return arg.value;
-              }
-            }
-          }
-        }
+        return fs.readFileSync(candidate, 'utf8');
       } catch {
-        // Source-parse failure — fall through to the fallback.
+        return null;
       }
-      break; // file exists but no extractable name; don't keep trying extensions
     }
   }
-  return fallbackModuleName;
+  return null;
+}
+
+function extractStringArgFromVarDecl(
+  src: string,
+  exportName: string,
+  factoryName: string,
+  argIndex: number
+): string | null {
+  try {
+    const ast = parse(src, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+      errorRecovery: true,
+    });
+    for (const node of ast.program.body) {
+      if (
+        node.type === 'ExportNamedDeclaration' &&
+        node.declaration?.type === 'VariableDeclaration'
+      ) {
+        for (const decl of node.declaration.declarations) {
+          if (
+            decl.id.type === 'Identifier' &&
+            decl.id.name === exportName &&
+            decl.init?.type === 'CallExpression' &&
+            decl.init.callee.type === 'Identifier' &&
+            decl.init.callee.name === factoryName
+          ) {
+            const arg = decl.init.arguments[argIndex];
+            if (arg?.type === 'StringLiteral') return arg.value;
+          }
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function extractCacheName(
+  importerPath: string,
+  importSource: string,
+  fallbackModuleName: string
+): string {
+  const src = readSource(importerPath, importSource);
+  if (src === null) return fallbackModuleName;
+  return (
+    extractStringArgFromVarDecl(src, 'cache', 'createCache', 0) ?? fallbackModuleName
+  );
+}
+
+function extractLoaderName(
+  importerPath: string,
+  importSource: string,
+  fallbackModuleName: string
+): string {
+  const src = readSource(importerPath, importSource);
+  if (src === null) return fallbackModuleName;
+  return (
+    extractStringArgFromVarDecl(src, 'loader', 'defineLoader', 0) ?? fallbackModuleName
+  );
+}
+
+function loaderFetchArrow(moduleName: string, indent: string): string {
+  const i = indent;
+  return (
+    `async ({ location }) => {\n` +
+    `${i}  const res = await fetch('/__loaders', {\n` +
+    `${i}    method: 'POST',\n` +
+    `${i}    headers: { 'Content-Type': 'application/json' },\n` +
+    `${i}    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
+    `${i}  });\n` +
+    `${i}  if (!res.ok) {\n` +
+    `${i}    const body = await res.json().catch(() => ({}));\n` +
+    `${i}    throw new Error(body.error ?? \`Loader failed with status \${res.status}\`);\n` +
+    `${i}  }\n` +
+    `${i}  return res.json();\n` +
+    `${i}}`
+  );
 }
 
 export function serverOnlyPlugin(): Plugin {
@@ -82,9 +135,6 @@ export function serverOnlyPlugin(): Plugin {
         errorRecovery: true,
       });
 
-      // Detect and reject re-exports from .server.* files. The plugin can't safely
-      // rewrite a re-export — synthesizing stubs and re-emitting them as exports is
-      // out of scope. Throw a clear error so the leak vector is closed at build time.
       for (const node of ast.program.body) {
         if (
           (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') &&
@@ -110,9 +160,6 @@ export function serverOnlyPlugin(): Plugin {
       const needsCacheImport = new Set<string>();
 
       for (const serverImport of [...serverImports].reverse()) {
-        // Type-only declarations (`import type { ... } from '...'`) are erased
-        // by Vite/esbuild; strip the entire declaration so it doesn't leak the
-        // .server.* module into the client bundle.
         if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
           s.overwrite(serverImport.start!, serverImport.end!, '');
           continue;
@@ -123,17 +170,10 @@ export function serverOnlyPlugin(): Plugin {
         let hasValueSpecifier = false;
 
         for (const specifier of serverImport.specifiers) {
-          // Skip type-only specifiers in mixed imports (e.g.
-          // `import { type Foo, default as loader } from '...'`). These are
-          // erased by Vite/esbuild and must not trigger the unknown-specifier
-          // guard below.
           if ((specifier as unknown as { importKind?: string }).importKind === 'type') {
             continue;
           }
           hasValueSpecifier = true;
-          // Treat both `import X from '...'` (ImportDefaultSpecifier) and
-          // `import { default as X } from '...'` (ImportSpecifier with
-          // imported.name === 'default') as the default-loader case.
           const isDefaultImport =
             specifier.type === 'ImportDefaultSpecifier' ||
             (specifier.type === 'ImportSpecifier' &&
@@ -141,18 +181,7 @@ export function serverOnlyPlugin(): Plugin {
               specifier.imported.name === 'default');
           if (isDefaultImport) {
             stubs.push(
-              `const ${specifier.local.name} = async ({ location }) => {\n` +
-              `  const res = await fetch('/__loaders', {\n` +
-              `    method: 'POST',\n` +
-              `    headers: { 'Content-Type': 'application/json' },\n` +
-              `    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
-              `  });\n` +
-              `  if (!res.ok) {\n` +
-              `    const body = await res.json().catch(() => ({}));\n` +
-              `    throw new Error(body.error ?? \`Loader failed with status \${res.status}\`);\n` +
-              `  }\n` +
-              `  return res.json();\n` +
-              `};`
+              `const ${specifier.local.name} = ${loaderFetchArrow(moduleName, '')};`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -174,21 +203,11 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'loader'
           ) {
+            const loaderName = extractLoaderName(id, serverImport.source.value, moduleName);
             stubs.push(
               `const ${specifier.local.name} = {\n` +
-              `  __id: Symbol.for('@hono-preact/loader:${moduleName}'),\n` +
-              `  fn: async ({ location }) => {\n` +
-              `    const res = await fetch('/__loaders', {\n` +
-              `      method: 'POST',\n` +
-              `      headers: { 'Content-Type': 'application/json' },\n` +
-              `      body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
-              `    });\n` +
-              `    if (!res.ok) {\n` +
-              `      const body = await res.json().catch(() => ({}));\n` +
-              `      throw new Error(body.error ?? \`Loader failed with status \${res.status}\`);\n` +
-              `    }\n` +
-              `    return res.json();\n` +
-              `  },\n` +
+              `  __id: Symbol.for('@hono-preact/loader:${loaderName}'),\n` +
+              `  fn: ${loaderFetchArrow(moduleName, '  ')},\n` +
               `};`
             );
           } else if (
@@ -197,12 +216,8 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'cache'
           ) {
             const cacheName = extractCacheName(id, serverImport.source.value, moduleName);
-            // Use a per-source unique alias to avoid collisions when multiple .server.ts
-            // files contribute cache imports to the same consumer.
-            const aliasSuffix = moduleName.replace(/[^a-zA-Z0-9_$]/g, '_');
+            const aliasSuffix = hashSuffix(serverImport.source.value);
             needsCacheImport.add(aliasSuffix);
-            // Route through cacheRegistry.acquire so that two consumers stubbing the
-            // same .server.* module share a single cache instance (name-as-identity).
             stubs.push(
               `const ${specifier.local.name} = __$cacheRegistry_${aliasSuffix}.acquire(${JSON.stringify(cacheName)}, () => __$createCache_${aliasSuffix}(${JSON.stringify(cacheName)}));`
             );
@@ -224,10 +239,6 @@ export function serverOnlyPlugin(): Plugin {
         if (stubs.length > 0) {
           s.overwrite(serverImport.start!, serverImport.end!, stubs.join('\n'));
         } else if (!hasValueSpecifier) {
-          // Side-effect-only import (`import './x.server.js';`) or a mixed
-          // import whose only specifiers were type-only. In either case there
-          // is nothing to stub and the original declaration would leak the
-          // .server.* module into the client bundle — strip it.
           s.overwrite(serverImport.start!, serverImport.end!, '');
         }
       }

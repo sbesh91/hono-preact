@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # Reloading Data
 
 Sometimes you need to re-run the loader imperatively, for example after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
@@ -19,7 +17,7 @@ const serverLoader: LoaderFn<{ movies: MovieList }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
+export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
 export const cache = createCache<{ movies: MovieList }>();
 ```
 
@@ -95,5 +93,5 @@ const { reload, reloading } = useReload();
 
 | Value | Type | Description |
 |---|---|---|
-| `reload` | `() => void` | Re-runs the `serverLoader`. No-op if a reload is already in progress. |
+| `reload` | `() => void` | Re-runs the `serverLoader`. If called while a fetch (initial load or a previous reload) is still in flight, the call is queued and runs once the in-flight fetch settles; concurrent calls coalesce into a single queued run. |
 | `reloading` | `boolean` | `true` while the loader is fetching, `false` otherwise. |

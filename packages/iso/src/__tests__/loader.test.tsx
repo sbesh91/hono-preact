@@ -37,7 +37,7 @@ describe('v3 <Loader> stability', () => {
       callCount++;
       return Promise.resolve({ msg: `call ${callCount}` });
     });
-    const ref = defineLoader<{ msg: string }>(fn);
+    const ref = defineLoader<{ msg: string }>('refire-test', fn);
 
     function Child() {
       const { msg } = useLoaderData(ref);
@@ -86,7 +86,7 @@ describe('v3 <Loader> stability', () => {
             resolveReload = r;
           })
       );
-    const ref = defineLoader<{ msg: string }>(fn);
+    const ref = defineLoader<{ msg: string }>('preserve-state-test', fn);
 
     function Child() {
       const { msg } = useLoaderData(ref);
@@ -156,7 +156,7 @@ describe('v3 <Loader> stability', () => {
           resolve = r;
         })
     );
-    const ref = defineLoader<{ msg: string }>(fn);
+    const ref = defineLoader<{ msg: string }>('dup-xhr-test', fn);
 
     function Child() {
       const { msg } = useLoaderData(ref);
@@ -204,11 +204,76 @@ describe('v3 <Loader> stability', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it('queues reload() invoked before the initial fetch resolves', async () => {
+    let resolveInitial!: (v: { msg: string }) => void;
+    let resolveReload!: (v: { msg: string }) => void;
+    const fn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ msg: string }>((r) => {
+            resolveInitial = r;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ msg: string }>((r) => {
+            resolveReload = r;
+          })
+      );
+    const ref = defineLoader<{ msg: string }>('search-test', fn);
+
+    function Fallback() {
+      const { reload } = useReload();
+      return (
+        <button data-testid="early-reload" onClick={reload}>
+          reload
+        </button>
+      );
+    }
+
+    function Child() {
+      const { msg } = useLoaderData(ref);
+      return <span data-testid="msg">{msg}</span>;
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc} fallback={<Fallback />}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      screen.getByTestId('early-reload').click();
+    });
+
+    // The reload should not have fired yet because the initial fetch is
+    // still pending. The click is queued, not dropped and not racing.
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveInitial({ msg: 'initial' });
+    });
+
+    // Once the initial settles, the queued reload fires.
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      resolveReload({ msg: 'reloaded' });
+    });
+
+    await screen.findByText('reloaded');
+  });
+
   it('refetches when searchParams change even though path is stable', async () => {
     const fn = vi.fn(({ location }: { location: RouteHook }) =>
       Promise.resolve({ q: location.searchParams.q ?? '' })
     );
-    const ref = defineLoader<{ q: string }>(fn);
+    const ref = defineLoader<{ q: string }>('search-q-test', fn);
 
     function Child() {
       const { q } = useLoaderData(ref);

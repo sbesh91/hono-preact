@@ -72,7 +72,7 @@ const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: Movie[] }>(serverLoader);
+export const loader = defineLoader<{ movies: Movie[] }>('movies', serverLoader);
 ```
 
 Update `src/pages/movies.tsx` to a pure consumer of the loader data:
@@ -115,7 +115,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(fn)` returns a typed reference. The `loader` prop on `<Route>` and the `useLoaderData(ref)` hook both take that reference, so the data type flows through without any explicit annotations on the consuming side.
+`defineLoader(name, fn)` returns a typed reference. The `name` is required and must match the user-chosen identifier on both sides (server module and client RPC stub), wired by `Symbol.for`. The `loader` prop on `<Route>` and the `useLoaderData(ref)` hook both take that reference, so the data type flows through without any explicit annotations on the consuming side.
 
 ## 3. Add a server action
 
@@ -141,7 +141,7 @@ const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: Movie[] }>(serverLoader);
+export const loader = defineLoader<{ movies: Movie[] }>('movies', serverLoader);
 
 export const serverActions = {
   addMovie: defineAction<{ title: string }, { ok: boolean }>(

@@ -1,5 +1,3 @@
-[← docs](/docs)
-
 # Server Loaders
 
 Pages often need data. On the server, that data should come from a direct function call. In the browser during navigation, it goes through an RPC call to the server. Writing this branch manually is error-prone, so the loader system handles it automatically.
@@ -40,7 +38,7 @@ const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
+export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
 ```
 
 **`src/pages/movies.tsx`** is a pure component:
@@ -73,7 +71,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 <Route path="/movies" component={Movies} loader={moviesLoader} />
 ```
 
-`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The `<Route loader={...}>` prop and the `useLoaderData(ref)` hook both consume that reference, so the data type flows through with no extra annotations.
+`defineLoader(name, fn)` returns a typed reference (`LoaderRef<T>`). The `name` argument is required, must be a non-empty string, and is used as a stable identity key (via `Symbol.for`) so that the SSR loader, the client RPC stub, and `useLoaderData` all agree on the same reference even when the module is loaded twice. The `<Route loader={...}>` prop and the `useLoaderData(ref)` hook both consume that reference, so the data type flows through with no extra annotations.
 
 ## Example: detail page (using route params)
 
@@ -91,7 +89,7 @@ const serverLoader: LoaderFn<{ movie: Movie }> = async ({ location }) => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movie: Movie }>(serverLoader);
+export const loader = defineLoader<{ movie: Movie }>('movie', serverLoader);
 ```
 
 ## Registering the loader endpoint
@@ -124,7 +122,7 @@ const serverLoader: LoaderFn<{ movies: MovieList }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
+export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
 export const cache = createCache<{ movies: MovieList }>();
 ```
 

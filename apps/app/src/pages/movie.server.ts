@@ -24,7 +24,7 @@ const serverLoader: LoaderFn<{ movie: Movie | null; watched: WatchedRecord | nul
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movie: Movie | null; watched: WatchedRecord | null }>(serverLoader);
+export const loader = defineLoader<{ movie: Movie | null; watched: WatchedRecord | null }>('movie', serverLoader);
 
 export const serverActions = {
   toggleWatched: defineAction<{ movieId: number; watched: boolean }, { ok: boolean }>(

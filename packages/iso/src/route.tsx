@@ -1,6 +1,8 @@
 import {
+  Fragment,
   isValidElement,
   toChildArray,
+  type ComponentChild,
   type ComponentChildren,
   type ComponentType,
   type JSX,
@@ -69,8 +71,25 @@ export type RouterProps = Omit<PreactIsoRouterProps, 'children'> & {
   children?: ComponentChildren;
 };
 
+function isFragmentNode(node: unknown): node is VNode<{ children?: ComponentChildren }> {
+  return isValidElement(node) && node.type === Fragment;
+}
+
+function flattenFragments(children: ComponentChildren): ComponentChild[] {
+  const out: ComponentChild[] = [];
+  for (const child of toChildArray(children)) {
+    if (isFragmentNode(child)) {
+      out.push(...flattenFragments(child.props.children));
+    } else {
+      out.push(child);
+    }
+  }
+  return out;
+}
+
+/** Routes one matching child path; recurses through nested Fragments, but not through other component wrappers. */
 export function Router({ children, ...rest }: RouterProps): JSX.Element {
-  const transformed = toChildArray(children).map((child) => {
+  const transformed = flattenFragments(children).map((child) => {
     if (!isOurRoute(child)) return child;
     const { path, component, ...config } = child.props;
     return (
