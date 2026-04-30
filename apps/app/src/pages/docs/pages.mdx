@@ -2,18 +2,16 @@
 
 # Adding Pages
 
-There are two kinds of pages in this template: standard Preact pages and MDX content pages. Both are lazy-loaded (code-split) and registered as preact-iso routes.
+There are two kinds of pages in this template: standard Preact pages and MDX content pages. Both are lazy-loaded (code-split) and registered as routes.
 
 ## Standard Preact pages
 
-Standard pages require three steps: create the file, register it in `iso.tsx`, and add a `<Route>`.
+A standard page is a pure component plus a `<Route>` registration. Loaders, caches, and guards live in the sibling `.server.ts` file and are wired in at the route — the page itself imports only what it consumes.
 
 ### Step 1 — Create `src/pages/about.tsx`
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import type { RouteHook } from 'preact-iso';
-import { Page } from '@hono-preact/iso';
 
 const About: FunctionComponent = () => {
   return <section>About this app.</section>;
@@ -21,25 +19,32 @@ const About: FunctionComponent = () => {
 
 About.displayName = 'About';
 
-export default function AboutPage(location: RouteHook) {
-  return (
-    <Page location={location}>
-      <About />
-    </Page>
-  );
-}
+export default About;
 ```
 
-Note: **`<Page>`** wraps every route component. It hosts the Suspense boundary, runs guards, and (when a `loader` prop is supplied) coordinates SSR preload, hydration, and client-side fetching. For pages with no data, omit the `loader` prop — children render directly inside the page wrapper.
+The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing — those concerns belong to the route registration in the next step.
 
 ### Step 2 — Register in `src/iso.tsx`
 
 ```tsx
+import { lazy, Route } from '@hono-preact/iso';
+
 // Add the lazy import near the top with the other page imports:
 const About = lazy(() => import('./pages/about.js'));
 
 // Add a Route inside <Router>:
 <Route path="/about" component={About} />
+```
+
+`<Route>` from `@hono-preact/iso` is the registration surface. It hosts the Suspense boundary, runs guards, and (when a `loader` prop is supplied) coordinates SSR preload, hydration, and client-side fetching. For pages with data, import the loader from the `.server.ts` sibling and pass it through:
+
+```tsx
+import { lazy, Route } from '@hono-preact/iso';
+import { loader as aboutLoader } from './pages/about.server.js';
+
+const About = lazy(() => import('./pages/about.js'));
+
+<Route path="/about" component={About} loader={aboutLoader} />
 ```
 
 ### Step 3 — Link to it

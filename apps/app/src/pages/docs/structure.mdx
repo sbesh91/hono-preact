@@ -9,8 +9,8 @@ hono-preact/                    # monorepo root
 │       ├── src/
 │       │   ├── server.tsx      # Hono app — API routes + catch-all SSR handler
 │       │   ├── client.tsx      # Browser entry — hydrates the Preact app
-│       │   ├── iso.tsx         # Shared component tree — Router + route registration
-│       │   ├── pages/          # Page components (one file per route)
+│       │   ├── iso.tsx         # Shared component tree — Router + Route registration
+│       │   ├── pages/          # Page components (one .tsx + one .server.ts per route)
 │       │   │   └── docs/       # MDX content pages (auto-discovered as /docs/* routes)
 │       │   ├── server/         # Server-only app code
 │       │   │   └── layout.tsx  # HTML shell rendered on every request
@@ -20,7 +20,7 @@ hono-preact/                    # monorepo root
 │       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
 │       └── wrangler.jsonc      # Cloudflare Workers deployment config
 └── packages/
-    ├── iso/                    # @hono-preact/iso — isomorphic loader utilities
+    ├── iso/                    # @hono-preact/iso — isomorphic loader utilities + <Route>/<Router>
     ├── server/                 # @hono-preact/server — HonoContext + server middleware
     └── vite/                   # @hono-preact/vite — server-only Vite plugins
 ```
@@ -50,12 +50,20 @@ hydrate(<App />, document.getElementById('app'));
 
 ### `apps/app/src/iso.tsx`
 
-The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` with all routes, including lazy-loaded standard pages and auto-discovered MDX pages.
+The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` from `@hono-preact/iso` with all routes — each `<Route>` registers a lazy-loaded page component and (optionally) imports its sibling `.server.ts` loader, cache, and guards.
 
-```ts
-const mdxModules = import.meta.glob('./pages/docs/*.mdx');
-// Each .mdx file becomes a lazy /docs/* route — no manual registration needed.
+```tsx
+import { lazy, Route, Router } from '@hono-preact/iso';
+import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
+
+const Movies = lazy(() => import('./pages/movies.js'));
+
+<Router>
+  <Route path="/movies" component={Movies} loader={moviesLoader} cache={moviesCache} />
+</Router>
 ```
+
+MDX files in `src/pages/docs/` are auto-discovered via `import.meta.glob` — no manual `<Route>` per page.
 
 ### `apps/app/src/server/layout.tsx`
 
@@ -65,7 +73,8 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
-- `page.tsx` — `<Page>` component: composes the route boundary, guards, loader, and envelope into a single page wrapper
+- `route.tsx` — `<Route>` and `<Router>` components: the user-facing registration surface that wires loader, cache, guards, and fallback into the page boundary
+- `page.tsx` — `<Page>` component: composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`)
 - `loader.tsx` — `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context
 - `define-loader.ts` — `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types
 - `use-loader-data.ts` — `useLoaderData(ref)` hook for typed access to loader data inside children
@@ -88,4 +97,4 @@ Vite plugins for the framework (`packages/vite/`). The primary export is `honoPr
 
 - **`honoPreact()`** — configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, and `@hono/vite-dev-server`
 - **`serverOnlyPlugin`** — during the client bundle build, replaces any `*.server.*` import with a no-op stub so server code never reaches the browser
-- **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `serverGuards`; the server loader must be the default export
+- **`serverLoaderValidationPlugin`** — fails the build if a `.server.*` file has named exports other than `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards`; the server loader must be the default export

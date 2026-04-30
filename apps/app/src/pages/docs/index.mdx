@@ -6,21 +6,19 @@ Every route is a file pair: a `.tsx` page component and a `.server.ts` file that
 
 ```tsx
 // movies.server.ts — runs only on the server
-const serverLoader = async () => ({
-  movies: await getMovies(),
-});
+const serverLoader = async () => ({ movies: await getMovies() });
 export default serverLoader;
+export const loader = defineLoader(serverLoader);
 
-// movies.tsx — the page component
-const moviesLoader = defineLoader(serverLoader);
-
-export default function MoviesPage(location: RouteHook) {
-  return (
-    <Page loader={moviesLoader} location={location}>
-      <Movies />
-    </Page>
-  );
+// movies.tsx — the page component (pure, no wrappers)
+export default function Movies() {
+  const { movies } = useLoaderData(loader);
+  return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
 }
+
+// iso.tsx — the route ties them together
+import { loader as moviesLoader } from './pages/movies.server.js';
+<Route path="/movies" component={Movies} loader={moviesLoader} />
 ```
 
 On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that preloaded data. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.

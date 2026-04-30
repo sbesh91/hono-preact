@@ -17,12 +17,10 @@ Open `http://localhost:5173`. The dev server runs both the Hono server and the V
 
 ## 1. Create a page
 
-Create `src/pages/movies.tsx`:
+Create `src/pages/movies.tsx` as a pure component with a default export:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import type { RouteHook } from 'preact-iso';
-import { Page } from '@hono-preact/iso';
 
 const Movies: FunctionComponent = () => {
   return (
@@ -34,33 +32,30 @@ const Movies: FunctionComponent = () => {
 
 Movies.displayName = 'Movies';
 
-export default function MoviesPage(location: RouteHook) {
-  return (
-    <Page location={location}>
-      <Movies />
-    </Page>
-  );
-}
+export default Movies;
 ```
 
 Register the route in `src/iso.tsx` alongside the other lazy imports:
 
 ```tsx
+import { lazy, Route } from '@hono-preact/iso';
+
 const Movies = lazy(() => import('./pages/movies.js'));
+
 // inside <Router>:
 <Route path="/movies" component={Movies} />
 ```
 
 Open `http://localhost:5173/movies`. You should see "Movies".
 
-> `<Page>` wires the component into the loader/preload, guard, and Suspense system. It is required even for pages with no data — `loader` is the only optional prop.
+> `<Route>` from `@hono-preact/iso` is the registration surface — it wires the component into the loader/preload, guard, and Suspense system. For a page with no data, `loader` is omitted and the component renders directly.
 
 ## 2. Add a server loader
 
-Create `src/pages/movies.server.ts`:
+Create `src/pages/movies.server.ts`. The loader ref lives next to the server function as a named export — the page never needs to import `defineLoader` itself:
 
 ```ts
-import { type LoaderFn } from '@hono-preact/iso';
+import { defineLoader, type LoaderFn } from '@hono-preact/iso';
 
 export type Movie = { id: string; title: string };
 
@@ -78,20 +73,19 @@ const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
 });
 
 export default serverLoader;
+
+export const loader = defineLoader<{ movies: Movie[] }>(serverLoader);
 ```
 
-Update `src/pages/movies.tsx` to use the loader data:
+Update `src/pages/movies.tsx` to a pure consumer of the loader data:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import type { RouteHook } from 'preact-iso';
-import { defineLoader, Page, useLoaderData } from '@hono-preact/iso';
-import serverLoader, { type Movie } from './movies.server.js';
-
-const moviesLoader = defineLoader<{ movies: Movie[] }>(serverLoader);
+import { useLoaderData } from '@hono-preact/iso';
+import { loader } from './movies.server.js';
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData(moviesLoader);
+  const { movies } = useLoaderData(loader);
   return (
     <main>
       <h1>Movies</h1>
@@ -106,25 +100,31 @@ const Movies: FunctionComponent = () => {
 
 Movies.displayName = 'Movies';
 
-export default function MoviesPage(location: RouteHook) {
-  return (
-    <Page loader={moviesLoader} location={location}>
-      <Movies />
-    </Page>
-  );
-}
+export default Movies;
+```
+
+Wire the loader into the route in `src/iso.tsx`:
+
+```tsx
+import { lazy, Route } from '@hono-preact/iso';
+import { loader as moviesLoader } from './pages/movies.server.js';
+
+const Movies = lazy(() => import('./pages/movies.js'));
+
+// inside <Router>:
+<Route path="/movies" component={Movies} loader={moviesLoader} />
 ```
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load — the data is preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(fn)` returns a typed reference. The `loader` prop on `<Page>` and the `useLoaderData(ref)` hook both take that reference, so the data type flows through without any explicit annotations on the consuming side.
+`defineLoader(fn)` returns a typed reference. The `loader` prop on `<Route>` and the `useLoaderData(ref)` hook both take that reference, so the data type flows through without any explicit annotations on the consuming side.
 
 ## 3. Add a server action
 
 Add `serverActions` to `src/pages/movies.server.ts`:
 
 ```ts
-import { defineAction, type LoaderFn } from '@hono-preact/iso';
+import { defineAction, defineLoader, type LoaderFn } from '@hono-preact/iso';
 
 export type Movie = { id: string; title: string };
 
@@ -142,6 +142,8 @@ const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
 });
 
 export default serverLoader;
+
+export const loader = defineLoader<{ movies: Movie[] }>(serverLoader);
 
 export const serverActions = {
   addMovie: defineAction<{ title: string }, { ok: boolean }>(
@@ -157,17 +159,8 @@ Update `src/pages/movies.tsx` to add the form:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import type { RouteHook } from 'preact-iso';
-import {
-  defineLoader,
-  Form,
-  Page,
-  useAction,
-  useLoaderData,
-} from '@hono-preact/iso';
-import serverLoader, { serverActions, type Movie } from './movies.server.js';
-
-const moviesLoader = defineLoader<{ movies: Movie[] }>(serverLoader);
+import { Form, useAction, useLoaderData } from '@hono-preact/iso';
+import { loader, serverActions } from './movies.server.js';
 
 const AddMovieForm: FunctionComponent = () => {
   const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: 'auto' });
@@ -180,7 +173,7 @@ const AddMovieForm: FunctionComponent = () => {
 };
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData(moviesLoader);
+  const { movies } = useLoaderData(loader);
   return (
     <main>
       <h1>Movies</h1>
@@ -196,14 +189,10 @@ const Movies: FunctionComponent = () => {
 
 Movies.displayName = 'Movies';
 
-export default function MoviesPage(location: RouteHook) {
-  return (
-    <Page loader={moviesLoader} location={location}>
-      <Movies />
-    </Page>
-  );
-}
+export default Movies;
 ```
+
+The `<Route>` registration in `iso.tsx` doesn't change — actions don't need any route-level wiring.
 
 Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates — no manual state management.
 
