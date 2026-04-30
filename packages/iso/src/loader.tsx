@@ -86,21 +86,27 @@ function LoaderHost<T>({
       });
   }, [reloading, cache]);
 
-  // Stable reader: only rebuilt when path or loader identity changes. Without
-  // this, every re-render (e.g. from setReloading) would call wrapPromise(...)
-  // again, fire a duplicate XHR, and throw a fresh promise into Suspense —
-  // unmounting the children and wiping any optimistic UI state below.
+  // Stable reader: only rebuilt when location or loader identity changes.
+  // Without this, every re-render (e.g. from setReloading) would call
+  // wrapPromise(...) again, fire a duplicate XHR, and throw a fresh promise
+  // into Suspense — unmounting the children and wiping any optimistic UI
+  // state below.
+  //
+  // The location key includes path AND searchParams so /movies?genre=action →
+  // /movies?genre=drama refetches even though preact-iso doesn't remount on
+  // querystring changes.
   const readerRef = useRef<{ read: () => T } | null>(null);
-  const prevPath = useRef(location.path);
+  const locKey = serializeLocation(location);
+  const prevLocKey = useRef(locKey);
   const prevLoaderId = useRef(loaderRef.__id);
 
-  const pathChanged = prevPath.current !== location.path;
+  const locationChanged = prevLocKey.current !== locKey;
   const loaderChanged = prevLoaderId.current !== loaderRef.__id;
 
-  if (readerRef.current === null || pathChanged || loaderChanged) {
-    prevPath.current = location.path;
+  if (readerRef.current === null || locationChanged || loaderChanged) {
+    prevLocKey.current = locKey;
     prevLoaderId.current = loaderRef.__id;
-    if (pathChanged || loaderChanged) setOverrideData(undefined);
+    if (locationChanged || loaderChanged) setOverrideData(undefined);
 
     const preloaded = getPreloadedData<T>(id);
     if (preloaded !== null) {
@@ -153,4 +159,13 @@ function DataReader<T>({
       {children}
     </LoaderDataContext.Provider>
   );
+}
+
+function serializeLocation(loc: RouteHook): string {
+  const sp = loc.searchParams ?? {};
+  const sortedSearch = Object.keys(sp)
+    .sort()
+    .map((k) => `${k}=${sp[k]}`)
+    .join('&');
+  return `${loc.path}?${sortedSearch}`;
 }

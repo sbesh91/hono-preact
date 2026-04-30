@@ -203,4 +203,46 @@ describe('v3 <Loader> stability', () => {
     await screen.findByText('done');
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it('refetches when searchParams change even though path is stable', async () => {
+    const fn = vi.fn(({ location }: { location: RouteHook }) =>
+      Promise.resolve({ q: location.searchParams.q ?? '' })
+    );
+    const ref = defineLoader<{ q: string }>(fn);
+
+    function Child() {
+      const { q } = useLoaderData(ref);
+      return <span data-testid="q">{q || '(empty)'}</span>;
+    }
+
+    const make = (q: string) =>
+      ({
+        path: '/search',
+        url: `http://localhost/search?q=${q}`,
+        searchParams: { q },
+        pathParams: {},
+      }) as unknown as RouteHook;
+
+    const { rerender } = render(
+      <LocationProvider>
+        <Loader loader={ref} location={make('alpha')}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await screen.findByText('alpha');
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <LocationProvider>
+        <Loader loader={ref} location={make('beta')}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await screen.findByText('beta');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
 });
