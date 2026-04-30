@@ -213,3 +213,28 @@ describe('unknown specifiers from .server.* imports', () => {
     );
   });
 });
+
+describe('side-effect and type-only imports', () => {
+  it('strips a side-effect-only .server.* import', () => {
+    const code = `import './x.server.js';\nconst foo = 1;`;
+    const result = transform(code, '/p.tsx');
+    expect(result?.code).not.toContain('.server');
+    expect(result?.code).toContain('const foo = 1');
+  });
+
+  it('leaves `import type { Foo } from .server.*` untouched (or stripped — either is safe since types are erased)', () => {
+    const code = `import type { Foo } from './x.server.js';\nconst foo = 1;`;
+    // Should NOT throw. The exact transform output is flexible — assert no throw.
+    expect(() => transform(code, '/p.tsx')).not.toThrow();
+  });
+
+  it('handles mixed `import { type Foo, default as loader } from .server.*`', () => {
+    const code = `import { type Foo, default as loader } from './x.server.js';`;
+    expect(() => transform(code, '/p.tsx')).not.toThrow();
+    const result = transform(code, '/p.tsx');
+    // The default import should still be stubbed.
+    expect(result?.code).toContain("fetch('/__loaders'");
+    // The type import should be skipped (no Foo declaration emitted).
+    expect(result?.code).not.toContain('const Foo');
+  });
+});

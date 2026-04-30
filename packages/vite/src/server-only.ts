@@ -93,11 +93,36 @@ export function serverOnlyPlugin(): Plugin {
       const needsCacheImport = new Set<string>();
 
       for (const serverImport of [...serverImports].reverse()) {
+        // Type-only declarations (`import type { ... } from '...'`) are erased
+        // by Vite/esbuild; strip the entire declaration so it doesn't leak the
+        // .server.* module into the client bundle.
+        if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
+          s.overwrite(serverImport.start!, serverImport.end!, '');
+          continue;
+        }
+
         const moduleName = moduleNameFromSource(serverImport.source.value);
         const stubs: string[] = [];
+        let hasValueSpecifier = false;
 
         for (const specifier of serverImport.specifiers) {
-          if (specifier.type === 'ImportDefaultSpecifier') {
+          // Skip type-only specifiers in mixed imports (e.g.
+          // `import { type Foo, default as loader } from '...'`). These are
+          // erased by Vite/esbuild and must not trigger the unknown-specifier
+          // guard below.
+          if ((specifier as unknown as { importKind?: string }).importKind === 'type') {
+            continue;
+          }
+          hasValueSpecifier = true;
+          // Treat both `import X from '...'` (ImportDefaultSpecifier) and
+          // `import { default as X } from '...'` (ImportSpecifier with
+          // imported.name === 'default') as the default-loader case.
+          const isDefaultImport =
+            specifier.type === 'ImportDefaultSpecifier' ||
+            (specifier.type === 'ImportSpecifier' &&
+              specifier.imported.type === 'Identifier' &&
+              specifier.imported.name === 'default');
+          if (isDefaultImport) {
             stubs.push(
               `const ${specifier.local.name} = async ({ location }) => {\n` +
               `  const res = await fetch('/__loaders', {\n` +
@@ -179,6 +204,12 @@ export function serverOnlyPlugin(): Plugin {
 
         if (stubs.length > 0) {
           s.overwrite(serverImport.start!, serverImport.end!, stubs.join('\n'));
+        } else if (!hasValueSpecifier) {
+          // Side-effect-only import (`import './x.server.js';`) or a mixed
+          // import whose only specifiers were type-only. In either case there
+          // is nothing to stub and the original declaration would leak the
+          // .server.* module into the client bundle — strip it.
+          s.overwrite(serverImport.start!, serverImport.end!, '');
         }
       }
 
