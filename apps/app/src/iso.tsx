@@ -44,8 +44,8 @@ export const Base: FunctionComponent = () => {
     <Router onRouteChange={onRouteChange}>
       {/* Migrated to route-level Page wrapping */}
       <Route path="/" component={Home} />
-      {/* Still self-wrapping in <Page> — will migrate in subsequent tasks */}
-      <IsoRoute path="/test" component={Test} />
+      {/* Migrated to route-level Page wrapping */}
+      <Route path="/test" component={Test} />
       <IsoRoute path="/movies" component={Movies} />
       <IsoRoute path="/movies/*" component={Movies} />
       <IsoRoute path="/watched" component={Watched} />
