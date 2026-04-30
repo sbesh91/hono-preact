@@ -14,7 +14,7 @@ describe('defineAction', () => {
 import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
 import { useAction } from '../action.js';
-import { ReloadContext } from '../page.js';
+import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
 
 const stub: ActionStub<{ title: string }, { ok: boolean }> = {

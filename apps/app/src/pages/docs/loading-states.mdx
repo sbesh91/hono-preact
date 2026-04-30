@@ -2,30 +2,35 @@
 
 # Loading States
 
-By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `getLoaderData` to show a loading UI during client-side navigation.
+By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `<Route>` to show a loading UI during client-side navigation.
 
 ## Basic usage
 
 ```tsx
-import { getLoaderData, type LoaderData } from '@hono-preact/iso';
+import { lazy, Route } from '@hono-preact/iso';
+import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
 
-export default getLoaderData(Movies, {
-  serverLoader,
-  cache,
-  fallback: <p>Loading…</p>,
-});
+const Movies = lazy(() => import('./pages/movies.js'));
+
+<Route
+  path="/movies"
+  component={Movies}
+  loader={moviesLoader}
+  cache={moviesCache}
+  fallback={<p>Loading…</p>}
+/>
 ```
 
-`fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation — SSR and first-load hydration read from preloaded data and render immediately.
+`fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation; SSR and first-load hydration read from preloaded data and render immediately.
 
 ## When fallback shows
 
 | Navigation | Fallback shown? |
 |---|---|
-| SSR (first load) | No — data is preloaded into the HTML |
-| Hydration | No — client reads from `data-loader` attribute |
-| Client-side nav (cache miss) | Yes — until `serverLoader` resolves |
-| Client-side nav (cache hit) | No — cached data renders immediately |
+| SSR (first load) | No. Data is preloaded into the HTML. |
+| Hydration | No. Client reads from `data-loader` attribute. |
+| Client-side nav (cache miss) | Yes, until `serverLoader` resolves. |
+| Client-side nav (cache hit) | No. Cached data renders immediately. |
 
 ## Using a skeleton
 
@@ -40,9 +45,36 @@ const MoviesSkeleton = () => (
   </ul>
 );
 
-export default getLoaderData(Movies, {
-  serverLoader,
-  cache,
-  fallback: <MoviesSkeleton />,
-});
+<Route
+  path="/movies"
+  component={Movies}
+  loader={moviesLoader}
+  cache={moviesCache}
+  fallback={<MoviesSkeleton />}
+/>
 ```
+
+## Error fallback
+
+If the loader rejects, `<Route>` renders `errorFallback` instead of unwinding the page tree. The fallback may be an element or a function that receives the error and a `reset()` callback:
+
+```tsx
+<Route
+  path="/movies"
+  component={Movies}
+  loader={moviesLoader}
+  fallback={<p>Loading…</p>}
+  errorFallback={(err, reset) => (
+    <div role="alert">
+      <p>Couldn't load movies: {err.message}</p>
+      <button onClick={reset}>Retry</button>
+    </div>
+  )}
+/>
+```
+
+Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [named caches + `invalidate`](/docs/loaders).
+
+## See also
+
+`<Route>` accepts more than just `loader`/`cache`/`fallback`. See [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full prop list (including `Wrapper`).

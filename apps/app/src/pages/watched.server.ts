@@ -1,6 +1,6 @@
 // apps/app/src/pages/watched.server.ts
 import { getMovie, getMovies } from '@/server/movies.js';
-import { defineAction, type Loader } from '@hono-preact/iso';
+import { createCache, defineAction, defineLoader, type LoaderFn } from '@hono-preact/iso';
 import type { Movie } from '@/server/data/movie.js';
 import {
   listWatched,
@@ -16,7 +16,7 @@ export type WireWatched = {
 };
 type Entry = { movie: Movie | null; watched: WireWatched };
 
-const serverLoader: Loader<{ entries: Entry[] }> = async () => {
+const serverLoader: LoaderFn<{ entries: Entry[] }> = async () => {
   const records = await listWatched();
   const entries: Entry[] = await Promise.all(
     records.map(async (w) => ({
@@ -33,6 +33,9 @@ const serverLoader: Loader<{ entries: Entry[] }> = async () => {
 };
 
 export default serverLoader;
+
+export const loader = defineLoader<{ entries: Entry[] }>(serverLoader);
+export const cache = createCache<{ entries: Entry[] }>('watched');
 
 export const serverActions = {
   removeWatched: defineAction<{ movieId: number }, { ok: boolean }>(

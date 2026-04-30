@@ -1,4 +1,3 @@
-import { getLoaderData } from '@hono-preact/iso';
 import { useLink } from 'hoofd/preact';
 import { type FunctionComponent } from 'preact';
 import test from './test.css?url';
@@ -18,4 +17,4 @@ const Test: FunctionComponent = () => {
 };
 Test.displayName = 'Test';
 
-export default getLoaderData(Test);
+export default Test;

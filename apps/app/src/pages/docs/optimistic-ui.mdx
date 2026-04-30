@@ -1,6 +1,8 @@
+[← docs](/docs)
+
 # Optimistic UI Updates
 
-`useOptimistic` and `useOptimisticAction` let you show the result of a mutation in the UI before the server confirms it, then automatically reconcile when the server responds. They compose with the existing `useAction` hook — no changes to your loaders or actions are required.
+`useOptimistic` and `useOptimisticAction` let you show the result of a mutation in the UI before the server confirms it, then automatically reconcile when the server responds. They compose with the existing `useAction` hook with no changes to your loaders or actions.
 
 ## Why two hooks?
 
@@ -43,7 +45,7 @@ const Movies = ({ loaderData }) => {
 |---|---|---|
 | `base` | `TBase` | The base value (typically loader data) the projection layers over |
 | `apply` | `(current, payload) => TBase` | Reducer that produces the next projection |
-| `invalidate` | `'auto' \| string[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed — see below. |
+| `invalidate` | `'auto' \| string[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below). |
 | `onSuccess` | `(data) => void` | Called after a successful mutation. Snapshot is internal; not exposed here. |
 | `onError` | `(err) => void` | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
 

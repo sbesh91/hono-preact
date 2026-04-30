@@ -1,203 +1,248 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act, cleanup } from '@testing-library/preact';
-import { LocationProvider } from 'preact-iso';
-import { getLoaderData, useReload, type LoaderData } from '../loader.js';
-import { createCache } from '../cache.js';
+import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
+import { useState } from 'preact/hooks';
+import { LocationProvider, type RouteHook } from 'preact-iso';
+import { defineLoader } from '../define-loader.js';
+import { Loader } from '../loader.js';
+import { useLoaderData } from '../use-loader-data.js';
+import { useReload } from '../reload-context.js';
 import { env } from '../is-browser.js';
 
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => ({})),
+  getPreloadedData: vi.fn(() => null),
   deletePreloadedData: vi.fn(),
 }));
-
-import * as preloadModule from '../preload.js';
-import { JSX } from 'preact';
 
 const loc = {
   path: '/test',
   url: 'http://localhost/test',
-  query: {},
-  params: {},
+  searchParams: {},
   pathParams: {},
-} as any;
+} as unknown as RouteHook;
 
 const originalEnv = env.current;
 beforeEach(() => {
   env.current = 'browser';
-  vi.mocked(preloadModule.getPreloadedData).mockReturnValue(null);
 });
 afterEach(() => {
   env.current = originalEnv;
   cleanup();
 });
 
-function Child({ loaderData }: LoaderData<{ msg: string }>) {
-  return <div data-testid="child">{loaderData.msg}</div>;
-}
-Child.defaultProps = { route: '/test' };
-
-function wrap(el: JSX.Element) {
-  return render(<LocationProvider>{el}</LocationProvider>);
-}
-
-describe('cache hit', () => {
-  it('renders cached data without calling serverLoader', async () => {
-    const cache = createCache<{ msg: string }>();
-    cache.set({ msg: 'from cache' });
-    const serverLoader = vi.fn();
-    const Wrapped = getLoaderData(Child, { serverLoader, cache });
-
-    wrap(<Wrapped {...loc} />);
-
-    const el = await screen.findByTestId('child');
-    expect(el).toHaveTextContent('from cache');
-    expect(serverLoader).not.toHaveBeenCalled();
-  });
-});
-
-describe('preloaded data (hydration path)', () => {
-  it('renders preloaded data without calling serverLoader', async () => {
-    vi.mocked(preloadModule.getPreloadedData).mockReturnValue({
-      msg: 'preloaded',
-    } as any);
-    const serverLoader = vi.fn();
-    const Wrapped = getLoaderData(Child, { serverLoader });
-
-    wrap(<Wrapped {...loc} />);
-
-    const el = await screen.findByTestId('child');
-    expect(el).toHaveTextContent('preloaded');
-    expect(serverLoader).not.toHaveBeenCalled();
-  });
-});
-
-describe('cache miss (fetch path)', () => {
-  it('calls serverLoader and shows fallback during load', async () => {
-    const cache = createCache<{ msg: string }>();
-    let resolve!: (v: { msg: string }) => void;
-    const serverLoader = vi.fn(
-      () =>
-        new Promise<{ msg: string }>((r) => {
-          resolve = r;
-        })
-    );
-    const Wrapped = getLoaderData(Child, {
-      serverLoader,
-      cache,
-      fallback: <div data-testid="loading">Loading…</div>,
-    });
-
-    wrap(<Wrapped {...loc} />);
-
-    await waitFor(() => expect(serverLoader).toHaveBeenCalled());
-    expect(serverLoader).toHaveBeenCalledOnce();
-    expect(screen.getByTestId('loading')).toBeInTheDocument();
-
-    await act(async () => {
-      resolve({ msg: 'loaded' });
-    });
-
-    const el = await screen.findByTestId('child');
-    expect(el).toHaveTextContent('loaded');
-  });
-});
-
-describe('useReload', () => {
-  it('reload() re-runs serverLoader and updates rendered content', async () => {
+describe('v3 <Loader> stability', () => {
+  it('does not refire the loader on internal re-renders triggered by reload()', async () => {
     let callCount = 0;
-    const cache = createCache<{ msg: string }>();
-    const serverLoader = vi.fn(() => {
+    const fn = vi.fn(() => {
       callCount++;
       return Promise.resolve({ msg: `call ${callCount}` });
     });
+    const ref = defineLoader<{ msg: string }>(fn);
 
-    function ReloadChild({ loaderData }: LoaderData<{ msg: string }>) {
+    function Child() {
+      const { msg } = useLoaderData(ref);
       const { reload } = useReload();
       return (
         <div>
-          <span data-testid="msg">{loaderData.msg}</span>
+          <span data-testid="msg">{msg}</span>
           <button onClick={reload}>reload</button>
         </div>
       );
     }
-    ReloadChild.defaultProps = { route: '/test' };
 
-    const Wrapped = getLoaderData(ReloadChild, { serverLoader, cache });
-    wrap(<Wrapped {...loc} />);
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
 
-    const msg = await screen.findByTestId('msg');
-    expect(msg).toHaveTextContent('call 1');
+    await screen.findByText('call 1');
+    expect(fn).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       screen.getByRole('button').click();
     });
 
     await screen.findByText('call 2');
-    expect(serverLoader).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it('throws when called outside a getLoaderData component', () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    function Bad() {
-      useReload();
-      return null;
-    }
-    expect(() => render(<Bad />)).toThrow(
-      'useReload must be called inside a component rendered by getLoaderData'
-    );
-    consoleSpy.mockRestore();
-  });
-});
+  it('preserves child component state across reload (no Suspense unmount)', async () => {
+    let resolveInitial!: (v: { msg: string }) => void;
+    let resolveReload!: (v: { msg: string }) => void;
+    const fn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ msg: string }>((r) => {
+            resolveInitial = r;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ msg: string }>((r) => {
+            resolveReload = r;
+          })
+      );
+    const ref = defineLoader<{ msg: string }>(fn);
 
-describe('preloaded empty object (hydration edge case)', () => {
-  it('renders preloaded empty object without calling serverLoader', async () => {
-    vi.mocked(preloadModule.getPreloadedData).mockReturnValue({} as any);
-    const serverLoader = vi.fn().mockResolvedValue({ msg: 'from server' });
-
-    function EmptyChild({ loaderData }: LoaderData<Record<string, never>>) {
-      return <div data-testid="empty">{JSON.stringify(loaderData)}</div>;
-    }
-    EmptyChild.defaultProps = { route: '/test' };
-
-    const Wrapped = getLoaderData(EmptyChild, { serverLoader });
-    wrap(<Wrapped {...loc} />);
-
-    await waitFor(() => {}, { timeout: 50 }).catch(() => {});
-    expect(serverLoader).not.toHaveBeenCalled();
-  });
-});
-
-describe('useReload error handling', () => {
-  it('exposes the error when serverLoader throws during reload', async () => {
-    const cache = createCache<{ msg: string }>();
-    const serverLoader = vi.fn()
-      .mockResolvedValueOnce({ msg: 'initial' })
-      .mockRejectedValueOnce(new Error('network failure'));
-
-    function ErrorChild({ loaderData }: LoaderData<{ msg: string }>) {
-      const { reload, error } = useReload();
+    function Child() {
+      const { msg } = useLoaderData(ref);
+      const { reload } = useReload();
+      const [count, setCount] = useState(0);
       return (
         <div>
-          <span data-testid="msg">{loaderData.msg}</span>
-          <span data-testid="error">{error?.message ?? 'none'}</span>
-          <button onClick={reload}>reload</button>
+          <span data-testid="msg">{msg}</span>
+          <span data-testid="count">{count}</span>
+          <button data-testid="bump" onClick={() => setCount((c) => c + 1)}>
+            bump
+          </button>
+          <button data-testid="reload" onClick={reload}>
+            reload
+          </button>
         </div>
       );
     }
-    ErrorChild.defaultProps = { route: '/test' };
 
-    const Wrapped = getLoaderData(ErrorChild, { serverLoader, cache });
-    wrap(<Wrapped {...loc} />);
-
-    await screen.findByText('initial');
+    render(
+      <LocationProvider>
+        <Loader
+          loader={ref}
+          location={loc}
+          fallback={<div data-testid="loading">Loading…</div>}
+        >
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
 
     await act(async () => {
-      screen.getByRole('button').click();
+      resolveInitial({ msg: 'initial' });
+    });
+    await screen.findByText('initial');
+
+    // Increment local state in the child.
+    await act(async () => {
+      screen.getByTestId('bump').click();
+      screen.getByTestId('bump').click();
+    });
+    expect(screen.getByTestId('count')).toHaveTextContent('2');
+
+    // Trigger reload — should NOT remount Child or show fallback.
+    await act(async () => {
+      screen.getByTestId('reload').click();
     });
 
-    await screen.findByText('network failure');
-    expect(screen.getByTestId('error')).toHaveTextContent('network failure');
+    expect(screen.queryByTestId('loading')).toBeNull();
     expect(screen.getByTestId('msg')).toHaveTextContent('initial');
+    expect(screen.getByTestId('count')).toHaveTextContent('2');
+
+    await act(async () => {
+      resolveReload({ msg: 'reloaded' });
+    });
+
+    await screen.findByText('reloaded');
+    // Child state survived the reload.
+    expect(screen.getByTestId('count')).toHaveTextContent('2');
+  });
+
+  it('does not fire a duplicate XHR when the host re-renders before the initial fetch resolves', async () => {
+    let resolve!: (v: { msg: string }) => void;
+    const fn = vi.fn(
+      () =>
+        new Promise<{ msg: string }>((r) => {
+          resolve = r;
+        })
+    );
+    const ref = defineLoader<{ msg: string }>(fn);
+
+    function Child() {
+      const { msg } = useLoaderData(ref);
+      return <span data-testid="msg">{msg}</span>;
+    }
+
+    let trigger!: () => void;
+    function Outer() {
+      const [, force] = useState(0);
+      trigger = () => force((n) => n + 1);
+      return (
+        <Loader
+          loader={ref}
+          location={loc}
+          fallback={<div data-testid="loading">Loading…</div>}
+        >
+          <Child />
+        </Loader>
+      );
+    }
+
+    render(
+      <LocationProvider>
+        <Outer />
+      </LocationProvider>
+    );
+
+    await waitFor(() => expect(fn).toHaveBeenCalled());
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    // Force parent re-renders while the loader fetch is still pending.
+    await act(async () => {
+      trigger();
+      trigger();
+    });
+
+    // Even after multiple re-renders, the loader should still have been
+    // invoked exactly once.
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve({ msg: 'done' });
+    });
+    await screen.findByText('done');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches when searchParams change even though path is stable', async () => {
+    const fn = vi.fn(({ location }: { location: RouteHook }) =>
+      Promise.resolve({ q: location.searchParams.q ?? '' })
+    );
+    const ref = defineLoader<{ q: string }>(fn);
+
+    function Child() {
+      const { q } = useLoaderData(ref);
+      return <span data-testid="q">{q || '(empty)'}</span>;
+    }
+
+    const make = (q: string) =>
+      ({
+        path: '/search',
+        url: `http://localhost/search?q=${q}`,
+        searchParams: { q },
+        pathParams: {},
+      }) as unknown as RouteHook;
+
+    const { rerender } = render(
+      <LocationProvider>
+        <Loader loader={ref} location={make('alpha')}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await screen.findByText('alpha');
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <LocationProvider>
+        <Loader loader={ref} location={make('beta')}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await screen.findByText('beta');
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });

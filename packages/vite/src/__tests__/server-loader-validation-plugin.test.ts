@@ -126,4 +126,37 @@ describe('serverLoaderValidationPlugin', () => {
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toBeNull();
   });
+
+  it('error message lists all allowed named exports including loader and cache', () => {
+    const code = [
+      'export const unauthorized = () => {};',
+      'export default async function serverLoader() { return {}; }',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toContain("'serverGuards'");
+    expect(error).toContain("'serverActions'");
+    expect(error).toContain("'actionGuards'");
+    expect(error).toContain("'loader'");
+    expect(error).toContain("'cache'");
+  });
+
+  describe('allows loader and cache named exports', () => {
+    it('does not reject "loader" named export', () => {
+      const code = [
+        'export default serverLoader;',
+        'export const loader = defineLoader(serverLoader);',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('does not reject "cache" named export', () => {
+      const code = [
+        "export default serverLoader;",
+        "export const cache = createCache('movies-list');",
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+  });
 });

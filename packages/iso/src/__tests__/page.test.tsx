@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/preact';
-import { getLoaderData } from '../loader.js';
+import { render, screen, waitFor, cleanup } from '@testing-library/preact';
+import { LocationProvider, type RouteHook } from 'preact-iso';
+import { Page } from '../page.js';
+import { defineLoader } from '../define-loader.js';
 import { createGuard, GuardRedirect, runGuards } from '../guard.js';
 import { env } from '../is-browser.js';
 
@@ -16,15 +18,12 @@ vi.mock('preact-iso', async (importOriginal) => {
   return { ...actual, useLocation: () => ({ route: mockRoute }) };
 });
 
-import { LocationProvider } from 'preact-iso';
-
 const loc = {
   path: '/test',
   url: 'http://localhost/test',
-  query: {},
-  params: {},
+  searchParams: {},
   pathParams: {},
-} as any;
+} as unknown as RouteHook;
 
 const originalEnv = env.current;
 beforeEach(() => {
@@ -33,30 +32,23 @@ beforeEach(() => {
 });
 afterEach(() => {
   env.current = originalEnv;
+  cleanup();
 });
+
+const emptyLoader = defineLoader<Record<string, never>>(async () => ({}));
 
 describe('guard { render }', () => {
   it('renders the guard-supplied component instead of the page', async () => {
     const ForbiddenPage = () => (
       <div data-testid="forbidden">403 Forbidden</div>
     );
-    const guard = createGuard(async (_ctx, _next) => ({
-      render: ForbiddenPage,
-    }));
-
-    function PageChild() {
-      return <div data-testid="page">Protected content</div>;
-    }
-    PageChild.defaultProps = { route: '/test' };
-
-    const Wrapped = getLoaderData(PageChild, {
-      clientGuards: [guard],
-      serverLoader: async () => ({}),
-    });
+    const guard = createGuard(async () => ({ render: ForbiddenPage }));
 
     render(
       <LocationProvider>
-        <Wrapped {...loc} />
+        <Page loader={emptyLoader} location={loc} clientGuards={[guard]}>
+          <div data-testid="page">Protected content</div>
+        </Page>
       </LocationProvider>
     );
 
@@ -68,21 +60,13 @@ describe('guard { render }', () => {
 
 describe('guard { redirect } in browser', () => {
   it('calls route() with the redirect path when a client guard redirects', async () => {
-    const guard = createGuard(async (_ctx, _next) => ({ redirect: '/login' }));
-
-    function PageChild() {
-      return <div data-testid="page">Protected</div>;
-    }
-    PageChild.defaultProps = { route: '/test' };
-
-    const Wrapped = getLoaderData(PageChild, {
-      clientGuards: [guard],
-      serverLoader: async () => ({}),
-    });
+    const guard = createGuard(async () => ({ redirect: '/login' }));
 
     render(
       <LocationProvider>
-        <Wrapped {...loc} />
+        <Page loader={emptyLoader} location={loc} clientGuards={[guard]}>
+          <div data-testid="page">Protected</div>
+        </Page>
       </LocationProvider>
     );
 
@@ -94,7 +78,7 @@ describe('guard { redirect } in browser', () => {
 
 describe('guard { redirect } on server', () => {
   it('throws GuardRedirect when a server guard redirects', async () => {
-    const guard = createGuard(async (_ctx, _next) => ({ redirect: '/login' }));
+    const guard = createGuard(async () => ({ redirect: '/login' }));
     const result = await runGuards([guard], { location: loc });
     expect(result).toHaveProperty('redirect', '/login');
     expect(() => {
@@ -107,37 +91,73 @@ describe('guard { redirect } on server', () => {
 describe('guard re-runs on navigation', () => {
   it('re-evaluates clientGuards when the path changes', async () => {
     let currentPath = '/public';
-    const guard = createGuard(async (_ctx, _next) => {
+    const guard = createGuard(async () => {
       if (currentPath === '/admin') return { redirect: '/login' };
     });
 
-    function PageChild() {
-      return <div data-testid="page">Content</div>;
-    }
-    PageChild.defaultProps = { route: '/public' };
-
-    const Wrapped = getLoaderData(PageChild, {
-      clientGuards: [guard],
-      serverLoader: async () => ({}),
-    });
-
-    const locPublic = { ...loc, path: '/public' } as any;
+    const locPublic = { ...loc, path: '/public' } as unknown as RouteHook;
     const { rerender } = render(
       <LocationProvider>
-        <Wrapped {...locPublic} />
+        <Page loader={emptyLoader} location={locPublic} clientGuards={[guard]}>
+          <div data-testid="page">Content</div>
+        </Page>
       </LocationProvider>
     );
 
     await screen.findByTestId('page');
 
     currentPath = '/admin';
-    const locAdmin = { ...loc, path: '/admin' } as any;
+    const locAdmin = { ...loc, path: '/admin' } as unknown as RouteHook;
     rerender(
       <LocationProvider>
-        <Wrapped {...locAdmin} />
+        <Page loader={emptyLoader} location={locAdmin} clientGuards={[guard]}>
+          <div data-testid="page">Content</div>
+        </Page>
       </LocationProvider>
     );
 
     await waitFor(() => expect(mockRoute).toHaveBeenCalledWith('/login'));
+  });
+});
+
+describe('Page without a loader', () => {
+  it('renders children inside a default Wrapper', async () => {
+    render(
+      <LocationProvider>
+        <Page location={loc}>
+          <p data-testid="content">Hello</p>
+        </Page>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('content');
+    expect(el).toHaveTextContent('Hello');
+  });
+});
+
+describe('Page error boundary', () => {
+  it('renders errorFallback when the loader rejects', async () => {
+    const failing = defineLoader<{ msg: string }>(async () => {
+      throw new Error('boom');
+    });
+
+    render(
+      <LocationProvider>
+        <Page
+          loader={failing}
+          location={loc}
+          fallback={<div data-testid="loading">Loading…</div>}
+          errorFallback={(err) => (
+            <div data-testid="error">{err.message}</div>
+          )}
+        >
+          <p data-testid="content">should not render</p>
+        </Page>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('error');
+    expect(el).toHaveTextContent('boom');
+    expect(screen.queryByTestId('content')).toBeNull();
   });
 });

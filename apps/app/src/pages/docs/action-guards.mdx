@@ -57,7 +57,7 @@ const guard = defineActionGuard(async (ctx, next) => {
 });
 ```
 
-`defineActionGuard` is a no-op at runtime — it exists only for type inference. A guard receives:
+`defineActionGuard` is a no-op at runtime; it exists only for type inference. A guard receives:
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -80,11 +80,11 @@ The error message is returned as `{ "error": "..." }` JSON. The `status` field s
 
 ### `next()`
 
-Call `next()` to pass control to the next guard in the chain, or to the action if no more guards remain. A guard that returns without calling `next()` and without throwing will still allow the action to proceed — the only way to block is to throw.
+Call `next()` to pass control to the next guard in the chain, or to the action if no more guards remain. A guard that returns without calling `next()` and without throwing will still allow the action to proceed; the only way to block is to throw.
 
 ## Guard chains
 
-Guards run in array order. The first to throw stops the chain — subsequent guards and the action are not called:
+Guards run in array order. The first to throw stops the chain; subsequent guards and the action are not called:
 
 ```ts
 export const actionGuards = [
@@ -95,7 +95,7 @@ export const actionGuards = [
 
 ## Composing guards
 
-Guards are plain functions — extract and reuse them across modules:
+Guards are plain functions, so extract and reuse them across modules:
 
 ```ts
 // src/server/guards.ts
@@ -113,8 +113,8 @@ import { requireAuth } from '@/server/guards.js';
 export const actionGuards = [requireAuth];
 ```
 
-See [Route Guards — Composing guards](/docs/guards#composing-guards) for the full composition pattern — the same approach applies to action guards.
+See [Route Guards: Composing guards](/docs/guards#composing-guards) for the full composition pattern. The same approach applies to action guards.
 
 ## The server/client boundary
 
-`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array — guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of only three permitted named exports from `.server.*` files (`serverGuards`, `serverActions`, `actionGuards`). See [Overview — The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array, so guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of the permitted named exports from `.server.*` files (`loader`, `cache`, `serverGuards`, `serverActions`, `actionGuards`). See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

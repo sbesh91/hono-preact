@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
 import { useOptimisticAction } from '../optimistic-action.js';
-import { ReloadContext } from '../page.js';
+import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
 import { cacheRegistry } from '../cache-registry.js';
 

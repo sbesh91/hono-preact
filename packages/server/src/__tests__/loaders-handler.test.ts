@@ -16,7 +16,7 @@ function post(app: Hono, body: unknown) {
   });
 }
 
-const loc = { path: '/movies', pathParams: {}, query: {} };
+const loc = { path: '/movies', pathParams: {}, searchParams: {} };
 
 describe('loadersHandler', () => {
   it('calls the matching serverLoader with the location and returns JSON', async () => {
@@ -94,5 +94,22 @@ describe('loadersHandler', () => {
     });
     const res = await post(app, { module: 'movies', location: loc });
     expect(res.status).toBe(200);
+  });
+
+  it('propagates location.searchParams through to the loader', async () => {
+    const loaderFn = vi.fn().mockResolvedValue({ ok: true });
+    const app = makeApp({
+      './pages/movies.server.ts': { default: loaderFn },
+    });
+    const locWithParams = {
+      path: '/movies',
+      pathParams: {},
+      searchParams: { genre: 'action' },
+    };
+    const res = await post(app, { module: 'movies', location: locWithParams });
+    expect(res.status).toBe(200);
+    expect(loaderFn).toHaveBeenCalledWith({ location: locWithParams });
+    const callArg = loaderFn.mock.calls[0][0] as { location: { searchParams: Record<string, string> } };
+    expect(callArg.location.searchParams).toEqual({ genre: 'action' });
   });
 });

@@ -11,7 +11,7 @@ A commit that changes documented behavior without updating the docs is a broken 
 
 ## When This Applies
 
-- Adding a new option or prop to any public API (`getLoaderData`, `useAction`, `Form`, `createGuard`, etc.)
+- Adding a new option or prop to any public API (`<Page>`, `defineLoader`, `useLoaderData`, `useAction`, `Form`, `createGuard`, etc.)
 - Adding a new export to any `@hono-preact/*` package
 - Renaming a function, type, option, or export
 - Changing how something behaves (even "slightly")

@@ -1,4 +1,4 @@
-import type { Loader } from './loader.js';
+import type { Loader } from './define-loader.js';
 import { cacheRegistry } from './cache-registry.js';
 
 export interface LoaderCache<T> {
