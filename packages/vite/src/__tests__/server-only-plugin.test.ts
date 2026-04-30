@@ -25,7 +25,7 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('"movies"');
     expect(result?.code).toContain('location.path');
     expect(result?.code).toContain('location.pathParams');
-    expect(result?.code).toContain('location.query');
+    expect(result?.code).toContain('location.searchParams');
     expect(result?.code).not.toContain('async () => ({})');
   });
 
@@ -243,6 +243,22 @@ describe('side-effect and type-only imports', () => {
     expect(result?.code).toContain("fetch('/__loaders'");
     // The type import should be skipped (no Foo declaration emitted).
     expect(result?.code).not.toContain('const Foo');
+  });
+});
+
+describe('loader RPC stub uses searchParams (not the deprecated query)', () => {
+  it('default import stub builds searchParams from location.searchParams', () => {
+    const code = `import serverLoader from './movies.server.js';`;
+    const result = transform(code, '/src/pages/movies.tsx');
+    expect(result?.code).toContain('searchParams: location.searchParams');
+    expect(result?.code).not.toContain('query: location.query');
+  });
+
+  it('loader named-import stub builds searchParams from location.searchParams', () => {
+    const code = `import { loader } from './movies.server.js';`;
+    const result = transform(code, '/src/iso.tsx');
+    expect(result?.code).toContain('searchParams: location.searchParams');
+    expect(result?.code).not.toContain('query: location.query');
   });
 });
 

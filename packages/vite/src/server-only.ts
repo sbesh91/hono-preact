@@ -145,7 +145,7 @@ export function serverOnlyPlugin(): Plugin {
               `  const res = await fetch('/__loaders', {\n` +
               `    method: 'POST',\n` +
               `    headers: { 'Content-Type': 'application/json' },\n` +
-              `    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, query: location.query } }),\n` +
+              `    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
               `  });\n` +
               `  if (!res.ok) {\n` +
               `    const body = await res.json().catch(() => ({}));\n` +
@@ -181,7 +181,7 @@ export function serverOnlyPlugin(): Plugin {
               `    const res = await fetch('/__loaders', {\n` +
               `      method: 'POST',\n` +
               `      headers: { 'Content-Type': 'application/json' },\n` +
-              `      body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, query: location.query } }),\n` +
+              `      body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
               `    });\n` +
               `    if (!res.ok) {\n` +
               `      const body = await res.json().catch(() => ({}));\n` +
