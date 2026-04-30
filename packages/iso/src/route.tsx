@@ -1,18 +1,8 @@
 import type { ComponentType, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import type { LoaderCache } from './cache.js';
-import type { GuardFn } from './guard.js';
-import type { LoaderRef } from './define-loader.js';
-import { Page, type WrapperProps } from './page.js';
+import { Page, type PageProps } from './page.js';
 
-export type PageConfig<T> = {
-  loader?: LoaderRef<T>;
-  cache?: LoaderCache<T>;
-  serverGuards?: GuardFn[];
-  clientGuards?: GuardFn[];
-  fallback?: JSX.Element;
-  Wrapper?: ComponentType<WrapperProps>;
-};
+export type PageConfig<T> = Omit<PageProps<T>, 'location' | 'children'>;
 
 export function wrapWithPage<T>(
   Component: ComponentType,
