@@ -23,7 +23,10 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
   if (!id || !ctx)
     throw new Error('<Envelope> must be inside a <Loader>');
 
-  const dataLoader = isBrowser() ? 'null' : JSON.stringify(ctx.data);
+  // Coerce undefined → null so JSON.stringify(undefined) (which returns
+  // undefined and serializes as the literal string "undefined") never
+  // reaches the wire. Loaders that return undefined should hydrate to null.
+  const dataLoader = isBrowser() ? 'null' : JSON.stringify(ctx.data ?? null);
 
   if (typeof as === 'string') {
     const Tag = as as keyof JSX.IntrinsicElements;
