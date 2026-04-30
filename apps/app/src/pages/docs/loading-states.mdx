@@ -53,3 +53,28 @@ const MoviesSkeleton = () => (
   fallback={<MoviesSkeleton />}
 />
 ```
+
+## Error fallback
+
+If the loader rejects, `<Route>` renders `errorFallback` instead of unwinding the page tree. The fallback may be an element or a function that receives the error and a `reset()` callback:
+
+```tsx
+<Route
+  path="/movies"
+  component={Movies}
+  loader={moviesLoader}
+  fallback={<p>Loading…</p>}
+  errorFallback={(err, reset) => (
+    <div role="alert">
+      <p>Couldn't load movies: {err.message}</p>
+      <button onClick={reset}>Retry</button>
+    </div>
+  )}
+/>
+```
+
+Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [named caches + `invalidate`](/docs/loaders).
+
+## See also
+
+`<Route>` accepts more than just `loader`/`cache`/`fallback` — see [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full prop list (including `Wrapper`).

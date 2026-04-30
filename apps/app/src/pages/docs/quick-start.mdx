@@ -65,8 +65,6 @@ const store: Movie[] = [
 ];
 
 const getMovies = () => store;
-const addMovieToStore = (title: string) =>
-  store.push({ id: String(store.length + 1), title });
 
 const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
   movies: getMovies(),

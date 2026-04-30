@@ -12,7 +12,7 @@ On the server, the `actionsHandler` middleware exposes a single `POST /__actions
 
 ## Defining actions
 
-**`src/pages/movies.server.ts`**
+**`src/pages/movies.server.ts`** (assumes `type MovieList = { results: { id: number; title: string }[] }`):
 
 ```ts
 import { getMovies } from '@/server/movies.js';

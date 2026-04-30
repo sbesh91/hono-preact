@@ -73,8 +73,8 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
-- `route.tsx` — `<Route>` and `<Router>` components: the user-facing registration surface that wires loader, cache, guards, and fallback into the page boundary
-- `page.tsx` — `<Page>` component: composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`)
+- `route.tsx` — `<Route>` and `<Router>` components: the user-facing registration surface. `<Route>` accepts `path`, `component`, plus the page-level props `loader`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`)
+- `page.tsx` — `<Page>` component and `WrapperProps` type: composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`)
 - `loader.tsx` — `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context
 - `define-loader.ts` — `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types
 - `use-loader-data.ts` — `useLoaderData(ref)` hook for typed access to loader data inside children
@@ -90,6 +90,9 @@ Server-only utilities (`packages/server/`):
 
 - `context.ts` — `HonoContext` and `useHonoContext` for accessing the Hono `Context` from Preact components during SSR
 - `middleware/location.ts` — `location` middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`
+- `actions-handler.ts` — `actionsHandler` middleware that dispatches `POST /__actions` requests to the matching `serverActions[name]` from a `.server.*` glob
+- `loaders-handler.ts` — `loadersHandler` middleware that dispatches `POST /__loaders` requests to the default-exported server loader from a `.server.*` glob
+- `render.ts` — `renderPage` helper that renders the app to streaming HTML with the script tag and `<head>` injection
 
 ### `@hono-preact/vite` (workspace package)
 

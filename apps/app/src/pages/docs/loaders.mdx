@@ -20,6 +20,13 @@ The two are bound together at the route registration in `iso.tsx`, which passes 
 
 ## Example: listing page
 
+Snippets on this page assume:
+
+```ts
+type MovieList = { results: { id: number; title: string }[] };
+type Movie = { id: number; title: string };
+```
+
 **`src/pages/movies.server.ts`** — server-only data fetching plus the loader ref:
 
 ```ts
