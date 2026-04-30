@@ -51,8 +51,9 @@ export function serverLoaderValidationPlugin(): Plugin {
         }
       }
 
+      const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'loader', 'cache']);
       const disallowedExports = namedExports.filter(
-        (n) => n !== 'serverGuards' && n !== 'serverActions' && n !== 'actionGuards'
+        (n) => !ALLOWED_NAMED_EXPORTS.has(n)
       );
       if (disallowedExports.length > 0) {
         errors.push(
