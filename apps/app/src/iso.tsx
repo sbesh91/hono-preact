@@ -3,6 +3,7 @@ import { flushSync } from 'preact/compat';
 import { lazy, Route, Router } from '@hono-preact/iso';
 import { Route as IsoRoute } from 'preact-iso';
 import NotFound from './pages/not-found.js';
+import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
 
 const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
@@ -46,8 +47,9 @@ export const Base: FunctionComponent = () => {
       <Route path="/" component={Home} />
       {/* Migrated to route-level Page wrapping */}
       <Route path="/test" component={Test} />
-      <IsoRoute path="/movies" component={Movies} />
-      <IsoRoute path="/movies/*" component={Movies} />
+      {/* Migrated to route-level Page wrapping */}
+      <Route path="/movies" component={Movies} loader={moviesLoader} cache={moviesCache} />
+      <Route path="/movies/*" component={Movies} loader={moviesLoader} cache={moviesCache} />
       <IsoRoute path="/watched" component={Watched} />
       {mdxRoutes.map(({ route, Component }) => (
         <IsoRoute path={route} component={Component} />
