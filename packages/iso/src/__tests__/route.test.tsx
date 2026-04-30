@@ -16,8 +16,7 @@ vi.mock('../preload.js', () => ({
 const loc = {
   path: '/x',
   url: 'http://localhost/x',
-  query: {},
-  params: {},
+  searchParams: {},
   pathParams: {},
 } as unknown as RouteHook;
 
