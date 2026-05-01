@@ -14,6 +14,8 @@ export type {
   LoaderCtx,
   Loader as LoaderFn,
 } from './define-loader.js';
+export { definePage, PAGE_BINDINGS } from './define-page.js';
+export type { PageBindings, PageComponent } from './define-page.js';
 export { useLoaderData } from './use-loader-data.js';
 export { OptimisticOverlay } from './optimistic-overlay.js';
 export { prefetch } from './prefetch.js';
@@ -49,8 +51,9 @@ export type {
 } from './optimistic-action.js';
 
 export { Route, Router, wrapWithPage } from './route.js';
-export type { RouteProps, RouterProps, PageConfig } from './route.js';
+export type { RouteProps, RouterProps, RouteConfig, PageConfig } from './route.js';
 
-// Convenience re-export so consumers don't need to import from preact-iso
-// alongside @hono-preact/iso.
-export { lazy } from 'preact-iso';
+// Wrapped lazy that exposes the resolved default for binding lookup. API is
+// otherwise identical to preact-iso's lazy.
+export { lazy } from './lazy.js';
+export type { LazyComponent } from './lazy.js';

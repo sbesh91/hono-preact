@@ -8,6 +8,8 @@ import { defineLoader } from '../define-loader.js';
 import { Route, Router, wrapWithPage } from '../route.js';
 import { useLoaderData } from '../use-loader-data.js';
 import { env } from '../is-browser.js';
+import { definePage } from '../define-page.js';
+import { lazy } from '../lazy.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
@@ -48,10 +50,11 @@ describe('wrapWithPage', () => {
     const fn = vi.fn(async () => ({ msg: 'ok' }));
     const ref = defineLoader<{ msg: string }>('wrap-with-page-test', fn);
     const Inner = () => {
-      const { msg } = useLoaderData(ref);
+      const { msg } = useLoaderData<typeof ref>();
       return <p data-testid="msg">{msg}</p>;
     };
-    const Wrapped = wrapWithPage(Inner, { loader: ref });
+    const Page = definePage(Inner, { loader: ref });
+    const Wrapped = wrapWithPage(Page, {});
     render(
       <LocationProvider>
         <Wrapped {...loc} />
@@ -68,15 +71,16 @@ describe('<Router> + <Route>', () => {
     const fn = vi.fn(async () => ({ msg: 'foo-data' }));
     const ref = defineLoader<{ msg: string }>('router-route-test', fn);
     const Foo = () => {
-      const { msg } = useLoaderData(ref);
+      const { msg } = useLoaderData<typeof ref>();
       return <p data-testid="foo">{msg}</p>;
     };
+    const Page = definePage(Foo, { loader: ref });
 
     window.history.pushState({}, '', '/foo');
     render(
       <LocationProvider>
         <Router>
-          <Route path="/foo" component={Foo} loader={ref} />
+          <Route path="/foo" component={Page} />
         </Router>
       </LocationProvider>
     );
@@ -120,6 +124,71 @@ describe('<Router> + <Route>', () => {
     );
 
     expect(screen.queryByTestId('foo')).toBeNull();
+  });
+
+  it('reads loader/cache/Wrapper from PAGE_BINDINGS on the component', async () => {
+    const fn = vi.fn(async () => ({ msg: 'page-data' }));
+    const ref = defineLoader<{ msg: string }>('page-bindings-test', fn);
+
+    const Inner = () => {
+      const { msg } = useLoaderData<typeof ref>();
+      return <p data-testid="page">{msg}</p>;
+    };
+    const Wrapped = definePage(Inner, { loader: ref });
+
+    window.history.pushState({}, '', '/page');
+    render(
+      <LocationProvider>
+        <Router>
+          <Route path="/page" component={Wrapped} />
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('page');
+    expect(el).toHaveTextContent('page-data');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads PAGE_BINDINGS off a lazy component once resolved', async () => {
+    const fn = vi.fn(async () => ({ msg: 'lazy-data' }));
+    const ref = defineLoader<{ msg: string }>('page-bindings-lazy-test', fn);
+
+    const Inner = () => {
+      const { msg } = useLoaderData<typeof ref>();
+      return <p data-testid="lazy-page">{msg}</p>;
+    };
+    const Wrapped = definePage(Inner, { loader: ref });
+    const Lazy = lazy(async () => ({ default: Wrapped }));
+
+    window.history.pushState({}, '', '/lazy');
+    render(
+      <LocationProvider>
+        <Router>
+          <Route path="/lazy" component={Lazy} />
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('lazy-page');
+    expect(el).toHaveTextContent('lazy-data');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a component with no PAGE_BINDINGS without a loader (no-data page)', async () => {
+    const Inner = () => <p data-testid="bare">no-data</p>;
+
+    window.history.pushState({}, '', '/bare');
+    render(
+      <LocationProvider>
+        <Router>
+          <Route path="/bare" component={Inner} />
+        </Router>
+      </LocationProvider>
+    );
+
+    const el = await screen.findByTestId('bare');
+    expect(el).toHaveTextContent('no-data');
   });
 });
 

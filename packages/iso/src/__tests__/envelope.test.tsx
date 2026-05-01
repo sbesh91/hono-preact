@@ -16,10 +16,9 @@ afterEach(() => {
 
 describe('<Envelope> data-loader serialization', () => {
   it('serializes undefined data as null (not the literal "undefined")', () => {
-    const refId = Symbol('test');
     const { container } = render(
       <LoaderIdContext.Provider value="loader-1">
-        <LoaderDataContext.Provider value={{ refId, data: undefined }}>
+        <LoaderDataContext.Provider value={{ data: undefined }}>
           <Envelope>
             <span>child</span>
           </Envelope>
@@ -31,10 +30,9 @@ describe('<Envelope> data-loader serialization', () => {
   });
 
   it('serializes regular data as JSON', () => {
-    const refId = Symbol('test');
     const { container } = render(
       <LoaderIdContext.Provider value="loader-2">
-        <LoaderDataContext.Provider value={{ refId, data: { msg: 'hi' } }}>
+        <LoaderDataContext.Provider value={{ data: { msg: 'hi' } }}>
           <Envelope>
             <span>child</span>
           </Envelope>

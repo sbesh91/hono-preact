@@ -19,8 +19,8 @@ describe('defineLoader', () => {
     const a = defineLoader('movies', async () => ({}));
     const b = defineLoader('movies', async () => ({}));
     // Same name produces the same registered symbol, even across distinct
-    // defineLoader call sites. This protects useLoaderData(refId === ref.__id)
-    // when a consumer ends up importing two copies of the same .server.* module.
+    // defineLoader call sites. This ensures stable loader identity for prefetch
+    // and cache keying when a consumer imports two copies of the same .server.* module.
     expect(a.__id).toBe(b.__id);
     expect(typeof Symbol.keyFor(a.__id)).toBe('string');
     expect(Symbol.keyFor(a.__id)).toBe('@hono-preact/loader:movies');
