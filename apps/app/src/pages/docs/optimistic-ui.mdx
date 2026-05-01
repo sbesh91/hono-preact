@@ -135,10 +135,10 @@ const NotesForm = ({ defaultNotes }) => {
 
 ```tsx
 import { OptimisticOverlay, useLoaderData } from '@hono-preact/iso';
-import { moviesLoader } from './movies.server.js';
+import { loader as moviesLoader } from './movies.server.js';
 
 const MovieList = () => {
-  const movies = useLoaderData(moviesLoader);
+  const movies = useLoaderData<typeof moviesLoader>();
   return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
 };
 

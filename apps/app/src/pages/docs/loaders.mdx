@@ -7,9 +7,9 @@ Pages often need data. On the server, that data should come from a direct functi
 A page is a file pair:
 
 - `movies.server.ts`: the server loader (default export) plus its `defineLoader` reference (named export). Never reaches the browser bundle.
-- `movies.tsx`: a pure component that consumes the loader data via `useLoaderData(loader)`.
+- `movies.tsx`: a pure component that consumes the loader data via `useLoaderData<typeof loader>()` and is exported through `definePage(Component, { loader })`.
 
-The two are bound together at the route registration in `iso.tsx`, which passes the loader reference to `<Route loader={...}>`.
+`definePage` attaches the loader (and optional `cache`, `Wrapper`) to the page component itself. The `<Route>` in `iso.tsx` only maps a path to a component; it discovers the bindings by reading them off the component.
 
 **At runtime:**
 1. **SSR:** `serverLoader` runs directly during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
@@ -41,15 +41,15 @@ export default serverLoader;
 export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
 ```
 
-**`src/pages/movies.tsx`** is a pure component:
+**`src/pages/movies.tsx`** is a pure component, with `definePage` attaching the loader binding:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { useLoaderData } from '@hono-preact/iso';
+import { definePage, useLoaderData } from '@hono-preact/iso';
 import { loader } from './movies.server.js';
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData(loader);
+  const { movies } = useLoaderData<typeof loader>();
   return (
     <ul>
       {movies.results.map((m) => <li key={m.id}>{m.title}</li>)}
@@ -57,21 +57,20 @@ const Movies: FunctionComponent = () => {
   );
 };
 
-export default Movies;
+export default definePage(Movies, { loader });
 ```
 
-**`src/iso.tsx`** ties the loader to the route at registration:
+**`src/iso.tsx`** maps the path to the component; it does not import the loader:
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
-import { loader as moviesLoader } from './pages/movies.server.js';
 
 const Movies = lazy(() => import('./pages/movies.js'));
 
-<Route path="/movies" component={Movies} loader={moviesLoader} />
+<Route path="/movies" component={Movies} />
 ```
 
-`defineLoader(name, fn)` returns a typed reference (`LoaderRef<T>`). The `name` argument is required, must be a non-empty string, and is used as a stable identity key (via `Symbol.for`) so that the SSR loader, the client RPC stub, and `useLoaderData` all agree on the same reference even when the module is loaded twice. The `<Route loader={...}>` prop and the `useLoaderData(ref)` hook both consume that reference, so the data type flows through with no extra annotations.
+`defineLoader(name, fn)` returns a typed reference (`LoaderRef<T>`). The `name` argument is required, must be a non-empty string, and is used as a stable identity key (via `Symbol.for`) so that the SSR loader, the client RPC stub, and `useLoaderData` all agree on the same reference even when the module is loaded twice. `definePage(Component, { loader })` stamps that reference onto the page component so the route runtime can pick it up. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
 
 ## Example: detail page (using route params)
 
@@ -110,7 +109,7 @@ app
 
 ## Caching navigation results
 
-Export a `cache` from the `.server.ts` file alongside the loader, then pass it to the route so repeated navigations to the same page don't re-fetch:
+Export a `cache` from the `.server.ts` file alongside the loader, then pass it to `definePage` so repeated navigations to the same page don't re-fetch:
 
 ```ts
 // src/pages/movies.server.ts
@@ -127,16 +126,80 @@ export const cache = createCache<{ movies: MovieList }>();
 ```
 
 ```tsx
+// src/pages/movies.tsx
+import { definePage, useLoaderData } from '@hono-preact/iso';
+import { loader, cache } from './movies.server.js';
+
+function Movies() {
+  const { movies } = useLoaderData<typeof loader>();
+  return <ul>{movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
+}
+
+export default definePage(Movies, { loader, cache });
+```
+
+```tsx
 // src/iso.tsx
 import { lazy, Route } from '@hono-preact/iso';
-import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
 
 const Movies = lazy(() => import('./pages/movies.js'));
 
-<Route path="/movies" component={Movies} loader={moviesLoader} cache={moviesCache} />
+<Route path="/movies" component={Movies} />
 ```
 
 On a cache hit, the RPC call is skipped entirely. After a successful fetch the result is stored in the cache for the session.
+
+## Page bindings with `definePage`
+
+Per-page concerns (loader, cache, Wrapper) live with the page component, not with the route declaration that mounts it. `definePage` attaches them to the component:
+
+```tsx
+import { definePage } from '@hono-preact/iso';
+
+export default definePage(Component, { loader, cache, Wrapper });
+```
+
+`definePage(Component, bindings)` returns the same component reference, with the bindings stamped onto it via a well-known symbol. At route time, `<Route>` reads those bindings off the component to coordinate SSR preload, hydration, and client-side fetching. From the consumer's perspective the export is still just the page component.
+
+A page with no loader simply skips `definePage`. `<Route>` treats the absence of bindings as "no loader", and the component renders directly:
+
+```tsx
+// src/pages/home.tsx
+const Home = () => <main>Welcome.</main>;
+export default Home;
+```
+
+```tsx
+// src/iso.tsx
+<Route path="/" component={Home} />
+```
+
+A `Wrapper` binding wraps the page in a custom element while keeping the SSR `data-loader` plumbing. This was previously a `<Route Wrapper>` prop:
+
+```tsx
+// src/pages/movie.tsx
+import { definePage, type WrapperProps } from '@hono-preact/iso';
+import { loader } from './movie.server.js';
+
+function MovieWrapper(props: WrapperProps) {
+  return <article {...props} />;
+}
+
+function MovieDetail() {
+  /* ... */
+}
+
+export default definePage(MovieDetail, { loader, Wrapper: MovieWrapper });
+```
+
+```tsx
+// src/iso.tsx
+<Route path="/movies/:id" component={Movie} />
+```
+
+`useLoaderData<typeof loader>()` is the consumer side. Importing `loader` purely as a type from the `.server.ts` file gives narrowing without a runtime reference; the call itself takes no arguments.
+
+For nested routers, the bindings always live with the page being mounted. A nested `<Route path="/:id" component={Movie} />` inside a `Movies` page no longer plumbs `loader=` or `Wrapper=` to that route; those move into `movie.tsx`'s `definePage` call.
 
 ## Named caches
 

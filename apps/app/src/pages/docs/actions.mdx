@@ -61,7 +61,7 @@ import { useAction, useLoaderData } from '@hono-preact/iso';
 import { loader, serverActions } from './movies.server.js';
 
 const Movies = () => {
-  const { movies } = useLoaderData(loader);
+  const { movies } = useLoaderData<typeof loader>();
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (data) => console.log('added', data),
@@ -128,7 +128,7 @@ FormData values are collected with `Object.fromEntries(new FormData(form))`. Str
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { movies } = useLoaderData(loader);
+const { movies } = useLoaderData<typeof loader>();
 const [items, setItems] = useState(movies.results);
 
 const { mutate } = useAction(serverActions.addMovie, {
