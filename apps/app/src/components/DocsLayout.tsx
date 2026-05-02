@@ -12,8 +12,20 @@ const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
 const HOVER_CLOSE_DELAY_MS = 120;
 
+// Module-scoped so pin state survives DocsLayout remounts as the user
+// navigates between docs pages (each page wraps its own DocsLayout).
+// Client-only mutation; server renders always start at false.
+let pinnedShared = false;
+
 export function DocsLayout({ children }: Props) {
-  const [pinned, setPinned] = useState(false);
+  const [pinned, setPinnedLocal] = useState(() => pinnedShared);
+  const setPinned = (updater: (prev: boolean) => boolean) => {
+    setPinnedLocal((prev) => {
+      const next = updater(prev);
+      pinnedShared = next;
+      return next;
+    });
+  };
   const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
