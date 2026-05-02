@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { useRoute } from 'preact-iso';
+import { useLocation } from 'preact-iso';
 import { Pin, PinOff } from 'lucide-preact';
 import { nav } from '../pages/docs/nav.js';
 
@@ -10,33 +10,20 @@ interface Props {
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
-const HOVER_CLOSE_DELAY_MS = 120;
-
-// Module-scoped so pin state survives DocsLayout remounts as the user
-// navigates between docs pages (each page wraps its own DocsLayout).
-// Client-only mutation; server renders always start at false.
-let pinnedShared = false;
+const HOVER_CLOSE_DELAY_MS = 500;
 
 export function DocsLayout({ children }: Props) {
-  const [pinned, setPinnedLocal] = useState(() => pinnedShared);
-  const setPinned = (updater: (prev: boolean) => boolean) => {
-    setPinnedLocal((prev) => {
-      const next = updater(prev);
-      pinnedShared = next;
-      return next;
-    });
-  };
+  const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { path } = useRoute();
+  const { path } = useLocation();
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    return () => {
       if (closeTimer.current) clearTimeout(closeTimer.current);
-    },
-    []
-  );
+    };
+  }, []);
 
   const handleMouseEnter = () => {
     if (closeTimer.current) {
@@ -220,7 +207,7 @@ export function DocsLayout({ children }: Props) {
 
       {/* Main content */}
       <main class="col-span-full md:col-auto max-w-[65ch] py-8 px-6">
-        <article class="mdx-content">{children}</article>
+        {children}
         <nav class="flex justify-between mt-12 pt-6 border-t border-slate-200 text-sm">
           <span>
             {prev && (

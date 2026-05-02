@@ -1,4 +1,4 @@
-import type { ComponentType, FunctionComponent } from 'preact';
+import type { FunctionComponent } from 'preact';
 import { flushSync } from 'preact/compat';
 import { lazy, Route, Router } from '@hono-preact/iso';
 import { Route as IsoRoute } from 'preact-iso';
@@ -8,34 +8,9 @@ const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
 const Movies = lazy(() => import('./pages/movies.js'));
 const Watched = lazy(() => import('./pages/watched.js'));
-
-// Each MDX file is lazy-loaded (code-split), consistent with the page pattern
-// above. Route paths are derived from filenames at module-evaluation time;
-// the glob keys are statically analysable by Rollup so no dynamic import of
-// module contents is needed to know the path.
-const mdxModules = import.meta.glob('./pages/docs/*.mdx');
-const mdxRoutes = Object.entries(mdxModules).map(([filePath, load]) => {
-  const route = ('/docs' + filePath.replace('./pages/docs', '').replace('.mdx', ''))
-    .replace(/\/index$/, '') || '/docs';
-  // Wrap the MDX component in a single root element so the lazy Suspense
-  // boundary contains one node. MDX compiles to a Fragment root (multiple
-  // sibling nodes), which Preact cannot reconcile correctly during hydration
-  // when the component is inside a Suspense boundary; it appends instead of
-  // replacing, causing the content to appear twice.
-  const Component = lazy(async () => {
-    const [mod, { DocsLayout }] = await Promise.all([
-      (load as () => Promise<{ default: ComponentType }>)(),
-      import('./components/DocsLayout.js'),
-    ]);
-    const MDX = mod.default;
-    const Wrapped: ComponentType = (props) => <DocsLayout><MDX {...props} /></DocsLayout>;
-    return { default: Wrapped };
-  });
-  return { route, Component };
-});
+const DocsRoute = lazy(() => import('./components/DocsRoute.js'));
 
 function onRouteChange() {
-  if (!document.startViewTransition) return;
   document.startViewTransition(() => flushSync(() => {}));
 }
 
@@ -51,9 +26,15 @@ export const Base: FunctionComponent = () => {
         component={Watched}
         fallback={<p class="p-1">Loading watched list…</p>}
       />
-      {mdxRoutes.map(({ route, Component }) => (
-        <IsoRoute path={route} component={Component} />
-      ))}
+      {/* IsoRoute (preact-iso's Route) so both /docs and /docs/* hand the
+          same DocsRoute lazy reference to preact-iso. With our @hono-preact/iso
+          Route, wrapWithPage would mint a new PageRouteHandler per Route, and
+          preact-iso's component-identity check would treat /docs <-> /docs/foo
+          as a route change and remount DocsRoute (and the sidebar with it).
+          DocsRoute has no definePage bindings, so PageBoundary wrapping isn't
+          needed here. */}
+      <IsoRoute path="/docs" component={DocsRoute} />
+      <IsoRoute path="/docs/*" component={DocsRoute} />
       <NotFound />
     </Router>
   );
