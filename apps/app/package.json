@@ -17,6 +17,7 @@
     "dotenv": "^17.4.2",
     "hono": "^4.12.14",
     "hoofd": "^1.7.3",
+    "lucide-preact": "^1.14.0",
     "preact": "^10.29.1",
     "preact-iso": "github:preactjs/preact-iso#v3",
     "react": "npm:@preact/compat",
@@ -26,9 +27,9 @@
   "devDependencies": {
     "@babel/parser": "^7.29.2",
     "@babel/types": "^7.29.0",
-    "@hono-preact/vite": "workspace:*",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
+    "@hono-preact/vite": "workspace:*",
     "@hono/node-server": "^1.19.14",
     "@hono/vite-build": "^1.11.1",
     "@hono/vite-dev-server": "^0.25.1",
