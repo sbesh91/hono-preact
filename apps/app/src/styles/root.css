@@ -3,16 +3,17 @@
 :root {
   --spring-soft: linear(
     0,
-    0.5 7.5%,
-    0.85 14%,
-    1.02 21%,
-    1.04 28%,
-    1.01 38%,
-    0.998 50%,
-    1.001 70%,
+    0.18 6%,
+    0.42 14%,
+    0.66 24%,
+    0.84 34%,
+    0.94 44%,
+    0.985 55%,
+    1.005 70%,
+    1.001 82%,
     1
   );
-  --spring-duration: 280ms;
+  --spring-duration: 380ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

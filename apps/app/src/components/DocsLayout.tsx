@@ -19,9 +19,12 @@ export function DocsLayout({ children }: Props) {
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { path } = useRoute();
 
-  useEffect(() => () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    []
+  );
 
   const handleMouseEnter = () => {
     if (closeTimer.current) {
@@ -33,7 +36,10 @@ export function DocsLayout({ children }: Props) {
 
   const handleMouseLeave = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setHovered(false), HOVER_CLOSE_DELAY_MS);
+    closeTimer.current = setTimeout(
+      () => setHovered(false),
+      HOVER_CLOSE_DELAY_MS
+    );
   };
 
   const expanded = pinned || hovered;
@@ -49,11 +55,22 @@ export function DocsLayout({ children }: Props) {
     <div class="flex flex-col gap-4">
       {nav.map((section) => (
         <div key={section.heading} class="flex flex-col gap-0.5">
-          {showText && (
-            <div class="text-[0.7rem] font-bold uppercase tracking-[0.08em] text-slate-400 mb-1.5 px-3">
-              {section.heading}
+          <div
+            aria-hidden={!showText}
+            style={{
+              display: 'grid',
+              gridTemplateRows: showText ? '1fr' : '0fr',
+              opacity: showText ? 1 : 0,
+              transition:
+                'grid-template-rows var(--spring-duration) var(--spring-soft), opacity var(--spring-duration) var(--spring-soft)',
+            }}
+          >
+            <div class="overflow-hidden">
+              <div class="text-[0.7rem] font-bold uppercase tracking-[0.08em] text-slate-400 mb-1.5 px-3 whitespace-nowrap">
+                {section.heading}
+              </div>
             </div>
-          )}
+          </div>
           {section.entries.map((entry) => {
             const Icon = entry.icon;
             const active = entry.route === path;
@@ -84,7 +101,9 @@ export function DocsLayout({ children }: Props) {
     <div
       class="min-h-screen grid"
       style={{
-        gridTemplateColumns: pinned ? `${EXPANDED_W}px 1fr` : `${COLLAPSED_W}px 1fr`,
+        gridTemplateColumns: pinned
+          ? `${EXPANDED_W}px 1fr`
+          : `${COLLAPSED_W}px 1fr`,
         transition: `grid-template-columns var(--spring-duration) var(--spring-soft)`,
       }}
     >
@@ -106,16 +125,20 @@ export function DocsLayout({ children }: Props) {
           <a
             href="/docs"
             aria-label="hono-preact docs"
-            class={`flex items-center h-12 shrink-0 font-bold text-[0.95rem] text-slate-900 no-underline hover:text-blue-700 ${
+            class={`flex whitespace-nowrap overflow-hidden text-ellipsis items-center h-12 shrink-0 font-bold text-[0.95rem] text-slate-900 no-underline hover:text-blue-700 ${
               expanded ? 'px-3' : 'justify-center px-0'
             }`}
           >
             {expanded ? 'hono-preact docs' : <span class="text-lg">📚</span>}
           </a>
-          <div class={`flex-1 overflow-y-auto overflow-x-hidden py-2 ${expanded ? 'px-2' : 'px-1.5'}`}>
+          <div
+            class={`flex-1 overflow-y-auto overflow-x-hidden py-2 ${expanded ? 'px-2' : 'px-1.5'}`}
+          >
             {renderNav(expanded)}
           </div>
-          <div class={`shrink-0 border-t border-slate-200 py-2 ${expanded ? 'px-2' : 'px-1.5'}`}>
+          <div
+            class={`shrink-0 border-t border-slate-200 py-2 ${expanded ? 'px-2' : 'px-1.5'}`}
+          >
             <button
               type="button"
               aria-pressed={pinned}
@@ -125,8 +148,14 @@ export function DocsLayout({ children }: Props) {
                 expanded ? 'px-3' : 'justify-center px-0'
               }`}
             >
-              {pinned ? <PinOff size={18} class="shrink-0" /> : <Pin size={18} class="shrink-0" />}
-              {expanded && <span>{pinned ? 'Unpin sidebar' : 'Pin sidebar'}</span>}
+              {pinned ? (
+                <PinOff size={18} class="shrink-0" />
+              ) : (
+                <Pin size={18} class="shrink-0" />
+              )}
+              {expanded && (
+                <span>{pinned ? 'Unpin sidebar' : 'Pin sidebar'}</span>
+              )}
             </button>
           </div>
         </div>
@@ -157,7 +186,7 @@ export function DocsLayout({ children }: Props) {
       {/* Mobile drawer */}
       <aside
         aria-label="Docs navigation menu"
-        class="fixed top-0 bottom-0 left-0 w-[260px] bg-slate-50 border-r border-slate-200 z-50 flex flex-col md:hidden"
+        class="fixed top-0 bottom-0 left-0 w-65 bg-slate-50 border-r border-slate-200 z-50 flex flex-col md:hidden"
         style={{
           transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: `transform var(--spring-duration) var(--spring-soft)`,
