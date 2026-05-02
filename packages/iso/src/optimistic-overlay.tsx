@@ -4,6 +4,9 @@ import { LoaderDataContext } from './contexts.js';
 import type { LoaderRef } from './define-loader.js';
 
 type OverlayProps<T, A> = {
+  // `loader` binds the overlay's data type `T`. It is not read at runtime;
+  // the overlay reads from the nearest LoaderDataContext provided by <Page>.
+  // Pass the same loader ref the page was configured with so `T` matches.
   loader: LoaderRef<T>;
   reducer: (base: T, action: A) => T;
   pending?: A[];
@@ -11,15 +14,14 @@ type OverlayProps<T, A> = {
 };
 
 export function OptimisticOverlay<T, A>({
-  loader,
   reducer,
   pending = [],
   children,
 }: OverlayProps<T, A>) {
   const ctx = useContext(LoaderDataContext);
-  if (!ctx || ctx.refId !== loader.__id)
+  if (!ctx)
     throw new Error(
-      '<OptimisticOverlay loader={x}> must be inside a route or <Page> configured with the same loader'
+      '<OptimisticOverlay> must be inside a route page that has a loader'
     );
 
   const base = ctx.data as T;
@@ -29,7 +31,7 @@ export function OptimisticOverlay<T, A>({
   );
 
   return (
-    <LoaderDataContext.Provider value={{ refId: loader.__id, data: projected }}>
+    <LoaderDataContext.Provider value={{ data: projected }}>
       {children}
     </LoaderDataContext.Provider>
   );

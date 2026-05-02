@@ -11,7 +11,7 @@ Like loaders, guards are split by environment:
 - `serverGuards`: exported from `*.server.ts`, run during SSR, tree-shaken from the browser bundle
 - `clientGuards`: defined in the page file (or any browser-safe module), run during client-side navigation
 
-Both are passed to the route at registration time via `<Route serverGuards={...} clientGuards={...}>`.
+Both are passed to the route at registration time via `<Route serverGuards={...} clientGuards={...}>`. Loaders, caches, and `Wrapper` move into `definePage` on the page component, but guards remain `<Route>`-level props because they often differ per mount point (the same component can be guarded differently behind two paths).
 
 ## API
 
@@ -73,19 +73,19 @@ export const serverGuards = [
 ];
 ```
 
-**`src/pages/admin.tsx`** is a pure component:
+**`src/pages/admin.tsx`** is a pure component, with bindings attached via `definePage`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { useLoaderData } from '@hono-preact/iso';
-import { loader } from './admin.server.js';
+import { definePage, useLoaderData } from '@hono-preact/iso';
+import { loader, cache } from './admin.server.js';
 
 const Admin: FunctionComponent = () => {
-  const { stats } = useLoaderData(loader);
+  const { stats } = useLoaderData<typeof loader>();
   return <section>...</section>;
 };
 
-export default Admin;
+export default definePage(Admin, { loader, cache });
 ```
 
 **`src/pages/admin.guards.ts`** holds client guards in a browser-safe module:
@@ -104,15 +104,11 @@ export const clientGuards = [
 ];
 ```
 
-**`src/iso.tsx`** wires the loader, cache, and both guard chains into the route:
+**`src/iso.tsx`** wires both guard chains into the route. The loader and cache live on the page component (via `definePage`) and don't need to be re-imported here:
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
-import {
-  loader as adminLoader,
-  cache as adminCache,
-  serverGuards,
-} from './pages/admin.server.js';
+import { serverGuards } from './pages/admin.server.js';
 import { clientGuards } from './pages/admin.guards.js';
 
 const Admin = lazy(() => import('./pages/admin.js'));
@@ -120,8 +116,6 @@ const Admin = lazy(() => import('./pages/admin.js'));
 <Route
   path="/admin"
   component={Admin}
-  loader={adminLoader}
-  cache={adminCache}
   serverGuards={serverGuards}
   clientGuards={clientGuards}
 />

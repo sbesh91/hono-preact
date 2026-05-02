@@ -1,19 +1,17 @@
 // apps/app/src/pages/watched.tsx
 import {
   cacheRegistry,
+  definePage,
   useAction,
   useLoaderData,
   useReload,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import {
-  serverActions,
-  loader as watchedLoader,
-} from './watched.server.js';
+import { cache, loader, serverActions } from './watched.server.js';
 
 const WatchedPage: FunctionComponent = () => {
-  const { entries } = useLoaderData(watchedLoader);
+  const { entries } = useLoaderData<typeof loader>();
   const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
 
   const reload = useReload();
@@ -106,4 +104,4 @@ const WatchedPage: FunctionComponent = () => {
 };
 WatchedPage.displayName = 'WatchedPage';
 
-export default WatchedPage;
+export default definePage(WatchedPage, { loader, cache });

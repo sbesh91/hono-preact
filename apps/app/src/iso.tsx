@@ -3,8 +3,6 @@ import { flushSync } from 'preact/compat';
 import { lazy, Route, Router } from '@hono-preact/iso';
 import { Route as IsoRoute } from 'preact-iso';
 import NotFound from './pages/not-found.js';
-import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
-import { loader as watchedLoader, cache as watchedCache } from './pages/watched.server.js';
 
 const Home = lazy(() => import('./pages/home.js'));
 const Test = lazy(() => import('./pages/test.js'));
@@ -46,13 +44,11 @@ export const Base: FunctionComponent = () => {
     <Router onRouteChange={onRouteChange}>
       <Route path="/" component={Home} />
       <Route path="/test" component={Test} />
-      <Route path="/movies" component={Movies} loader={moviesLoader} cache={moviesCache} />
-      <Route path="/movies/*" component={Movies} loader={moviesLoader} cache={moviesCache} />
+      <Route path="/movies" component={Movies} />
+      <Route path="/movies/*" component={Movies} />
       <Route
         path="/watched"
         component={Watched}
-        loader={watchedLoader}
-        cache={watchedCache}
         fallback={<p class="p-1">Loading watched list…</p>}
       />
       {mdxRoutes.map(({ route, Component }) => (

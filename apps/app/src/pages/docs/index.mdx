@@ -10,15 +10,18 @@ const serverLoader = async () => ({ movies: await getMovies() });
 export default serverLoader;
 export const loader = defineLoader('movies', serverLoader);
 
-// movies.tsx: the page component (pure, no wrappers)
-export default function Movies() {
-  const { movies } = useLoaderData(loader);
+// movies.tsx: the page component, with bindings attached via definePage
+import { definePage, useLoaderData } from '@hono-preact/iso';
+import { loader } from './movies.server.js';
+
+function Movies() {
+  const { movies } = useLoaderData<typeof loader>();
   return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
 }
+export default definePage(Movies, { loader });
 
-// iso.tsx: the route ties them together
-import { loader as moviesLoader } from './pages/movies.server.js';
-<Route path="/movies" component={Movies} loader={moviesLoader} />
+// iso.tsx: routes deal only in paths and component refs
+<Route path="/movies" component={Movies} />
 ```
 
 On the first request, the server runs the loader directly and preloads the result into the HTML. On hydration, the client reads from that preloaded data. On client-side navigation, the framework calls the loader over RPC. Same loader, three environments, zero config.

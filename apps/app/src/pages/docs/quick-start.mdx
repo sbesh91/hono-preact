@@ -48,7 +48,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 
 Open `http://localhost:5173/movies`. You should see "Movies".
 
-> `<Route>` from `@hono-preact/iso` is the registration surface. It wires the component into the loader/preload, guard, and Suspense system. For a page with no data, `loader` is omitted and the component renders directly.
+> `<Route>` from `@hono-preact/iso` is the registration surface. It maps a path to a component. Per-page concerns (loader, cache, Wrapper) are attached to the page component itself via `definePage`; pages without bindings render directly.
 
 ## 2. Add a server loader
 
@@ -75,15 +75,15 @@ export default serverLoader;
 export const loader = defineLoader<{ movies: Movie[] }>('movies', serverLoader);
 ```
 
-Update `src/pages/movies.tsx` to a pure consumer of the loader data:
+Update `src/pages/movies.tsx` to a pure consumer of the loader data, and bind the loader to the page with `definePage`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { useLoaderData } from '@hono-preact/iso';
+import { definePage, useLoaderData } from '@hono-preact/iso';
 import { loader } from './movies.server.js';
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData(loader);
+  const { movies } = useLoaderData<typeof loader>();
   return (
     <main>
       <h1>Movies</h1>
@@ -98,24 +98,23 @@ const Movies: FunctionComponent = () => {
 
 Movies.displayName = 'Movies';
 
-export default Movies;
+export default definePage(Movies, { loader });
 ```
 
-Wire the loader into the route in `src/iso.tsx`:
+The `<Route>` registration in `src/iso.tsx` does not change; it still just maps the path to the component:
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
-import { loader as moviesLoader } from './pages/movies.server.js';
 
 const Movies = lazy(() => import('./pages/movies.js'));
 
 // inside <Router>:
-<Route path="/movies" component={Movies} loader={moviesLoader} />
+<Route path="/movies" component={Movies} />
 ```
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(name, fn)` returns a typed reference. The `name` is required and must match the user-chosen identifier on both sides (server module and client RPC stub), wired by `Symbol.for`. The `loader` prop on `<Route>` and the `useLoaderData(ref)` hook both take that reference, so the data type flows through without any explicit annotations on the consuming side.
+`defineLoader(name, fn)` returns a typed reference. The `name` is required and must match the user-chosen identifier on both sides (server module and client RPC stub), wired by `Symbol.for`. `definePage(Component, { loader })` attaches the loader to the page component so the route can find it. `useLoaderData<typeof loader>()` is argument-free; the type-only generic narrows the return type without pulling the loader ref in as a runtime value.
 
 ## 3. Add a server action
 
@@ -157,7 +156,7 @@ Update `src/pages/movies.tsx` to add the form:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { Form, useAction, useLoaderData } from '@hono-preact/iso';
+import { definePage, Form, useAction, useLoaderData } from '@hono-preact/iso';
 import { loader, serverActions } from './movies.server.js';
 
 const AddMovieForm: FunctionComponent = () => {
@@ -171,7 +170,7 @@ const AddMovieForm: FunctionComponent = () => {
 };
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData(loader);
+  const { movies } = useLoaderData<typeof loader>();
   return (
     <main>
       <h1>Movies</h1>
@@ -187,7 +186,7 @@ const Movies: FunctionComponent = () => {
 
 Movies.displayName = 'Movies';
 
-export default Movies;
+export default definePage(Movies, { loader });
 ```
 
 The `<Route>` registration in `iso.tsx` doesn't change. Actions don't need any route-level wiring.

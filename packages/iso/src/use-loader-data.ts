@@ -2,15 +2,12 @@ import { useContext } from 'preact/hooks';
 import { LoaderDataContext } from './contexts.js';
 import type { LoaderRef } from './define-loader.js';
 
-export function useLoaderData<T>(ref: LoaderRef<T>): T {
+export function useLoaderData<L>(): L extends LoaderRef<infer T> ? T : L {
   const ctx = useContext(LoaderDataContext);
-  if (!ctx)
-    throw new Error('useLoaderData must be called inside a <Loader>');
-  if (ctx.refId !== ref.__id) {
+  if (!ctx) {
     throw new Error(
-      'useLoaderData(ref) called with a ref that does not match the nearest <Loader>. ' +
-        'If you have nested loaders, the inner ref shadows the outer.'
+      'useLoaderData must be called inside a route page that has a loader.'
     );
   }
-  return ctx.data as T;
+  return ctx.data as never;
 }

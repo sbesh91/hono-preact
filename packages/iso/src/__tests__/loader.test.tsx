@@ -40,7 +40,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>('refire-test', fn);
 
     function Child() {
-      const { msg } = useLoaderData(ref);
+      const { msg } = useLoaderData<typeof ref>();
       const { reload } = useReload();
       return (
         <div>
@@ -89,7 +89,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>('preserve-state-test', fn);
 
     function Child() {
-      const { msg } = useLoaderData(ref);
+      const { msg } = useLoaderData<typeof ref>();
       const { reload } = useReload();
       const [count, setCount] = useState(0);
       return (
@@ -159,7 +159,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>('dup-xhr-test', fn);
 
     function Child() {
-      const { msg } = useLoaderData(ref);
+      const { msg } = useLoaderData<typeof ref>();
       return <span data-testid="msg">{msg}</span>;
     }
 
@@ -233,7 +233,7 @@ describe('v3 <Loader> stability', () => {
     }
 
     function Child() {
-      const { msg } = useLoaderData(ref);
+      const { msg } = useLoaderData<typeof ref>();
       return <span data-testid="msg">{msg}</span>;
     }
 
@@ -276,7 +276,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ q: string }>('search-q-test', fn);
 
     function Child() {
-      const { q } = useLoaderData(ref);
+      const { q } = useLoaderData<typeof ref>();
       return <span data-testid="q">{q || '(empty)'}</span>;
     }
 

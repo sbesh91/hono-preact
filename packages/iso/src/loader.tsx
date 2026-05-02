@@ -168,7 +168,6 @@ function LoaderHost<T>({
     <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
       <Suspense fallback={fallback}>
         <DataReader
-          refId={loaderRef.__id}
           reader={readerRef.current}
           overrideData={overrideData}
         >
@@ -180,21 +179,19 @@ function LoaderHost<T>({
 }
 
 type DataReaderProps<T> = {
-  refId: symbol;
   reader: { read: () => T };
   overrideData?: T;
   children: ComponentChildren;
 };
 
 function DataReader<T>({
-  refId,
   reader,
   overrideData,
   children,
 }: DataReaderProps<T>) {
   const data = overrideData !== undefined ? overrideData : reader.read();
   return (
-    <LoaderDataContext.Provider value={{ refId, data }}>
+    <LoaderDataContext.Provider value={{ data }}>
       {children}
     </LoaderDataContext.Provider>
   );
