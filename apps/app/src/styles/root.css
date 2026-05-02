@@ -1,5 +1,26 @@
 @import 'tailwindcss';
 
+:root {
+  --spring-soft: linear(
+    0,
+    0.5 7.5%,
+    0.85 14%,
+    1.02 21%,
+    1.04 28%,
+    1.01 38%,
+    0.998 50%,
+    1.001 70%,
+    1
+  );
+  --spring-duration: 280ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --spring-duration: 0ms;
+  }
+}
+
 /* MDX prose defaults */
 .mdx-content {
   line-height: 1.75;
