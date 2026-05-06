@@ -31,4 +31,12 @@ describe('deriveModuleKey', () => {
     const b = deriveModuleKey('/r/pages/admin/movies.server.ts', root);
     expect(a).not.toBe(b);
   });
+
+  it('documents out-of-root behavior: callers must verify absPath is inside viteRoot', () => {
+    // The helper does not validate; an out-of-root absPath produces a
+    // `../`-prefixed string. Callers (the Vite plugins) gate this case
+    // with an explicit `id.startsWith(viteRoot)` check before calling.
+    const result = deriveModuleKey('/elsewhere/movies.server.ts', '/r');
+    expect(result.startsWith('..')).toBe(true);
+  });
 });
