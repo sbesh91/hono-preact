@@ -1,22 +1,33 @@
 # Loading States
 
-By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `<Route>` to show a loading UI during client-side navigation.
+By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `definePage` bindings to show a loading UI while a route's lazy chunk or loader resolves during client-side navigation.
 
 ## Basic usage
 
 ```tsx
+// src/pages/movies.tsx
+import { definePage, useLoaderData } from '@hono-preact/iso';
+import { loader, cache } from './movies.server.js';
+
+function Movies() {
+  const { movies } = useLoaderData<typeof loader>();
+  return <ul>{movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
+}
+
+export default definePage(Movies, {
+  loader,
+  cache,
+  fallback: <p>Loading…</p>,
+});
+```
+
+```tsx
+// src/iso.tsx
 import { lazy, Route } from '@hono-preact/iso';
-import { loader as moviesLoader, cache as moviesCache } from './pages/movies.server.js';
 
 const Movies = lazy(() => import('./pages/movies.js'));
 
-<Route
-  path="/movies"
-  component={Movies}
-  loader={moviesLoader}
-  cache={moviesCache}
-  fallback={<p>Loading…</p>}
-/>
+<Route path="/movies" component={Movies} />
 ```
 
 `fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation; SSR and first-load hydration read from preloaded data and render immediately.
@@ -43,36 +54,32 @@ const MoviesSkeleton = () => (
   </ul>
 );
 
-<Route
-  path="/movies"
-  component={Movies}
-  loader={moviesLoader}
-  cache={moviesCache}
-  fallback={<MoviesSkeleton />}
-/>
+export default definePage(Movies, {
+  loader,
+  cache,
+  fallback: <MoviesSkeleton />,
+});
 ```
 
 ## Error fallback
 
-If the loader rejects, `<Route>` renders `errorFallback` instead of unwinding the page tree. The fallback may be an element or a function that receives the error and a `reset()` callback:
+If the loader rejects, the page renders `errorFallback` instead of unwinding the page tree. Pass it in `definePage` bindings. The fallback may be an element or a function that receives the error and a `reset()` callback:
 
 ```tsx
-<Route
-  path="/movies"
-  component={Movies}
-  loader={moviesLoader}
-  fallback={<p>Loading…</p>}
-  errorFallback={(err, reset) => (
+export default definePage(Movies, {
+  loader,
+  fallback: <p>Loading…</p>,
+  errorFallback: (err, reset) => (
     <div role="alert">
       <p>Couldn't load movies: {err.message}</p>
       <button onClick={reset}>Retry</button>
     </div>
-  )}
-/>
+  ),
+});
 ```
 
 Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [named caches + `invalidate`](/docs/loaders).
 
 ## See also
 
-`<Route>` accepts more than just `loader`/`cache`/`fallback`. See [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full prop list (including `Wrapper`).
+`definePage` accepts more than just `loader`/`cache`/`fallback`. See [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full bindings list (including `Wrapper`).

@@ -11,7 +11,14 @@ Like loaders, guards are split by environment:
 - `serverGuards`: exported from `*.server.ts`, run during SSR, tree-shaken from the browser bundle
 - `clientGuards`: defined in the page file (or any browser-safe module), run during client-side navigation
 
-Both are passed to the route at registration time via `<Route serverGuards={...} clientGuards={...}>`. Loaders, caches, and `Wrapper` move into `definePage` on the page component, but guards remain `<Route>`-level props because they often differ per mount point (the same component can be guarded differently behind two paths).
+Guards live with the page component via `definePage` bindings, alongside the loader and cache. If the same component needs different guards at different mount points, wrap it twice and route to each separately:
+
+```tsx
+export const AdminPage = definePage(Page, { serverGuards: ['admin'] });
+export const SuperAdminPage = definePage(Page, { serverGuards: ['superadmin'] });
+```
+
+Then mount each export at its own path in `iso.tsx`.
 
 ## API
 
@@ -73,21 +80,6 @@ export const serverGuards = [
 ];
 ```
 
-**`src/pages/admin.tsx`** is a pure component, with bindings attached via `definePage`:
-
-```tsx
-import type { FunctionComponent } from 'preact';
-import { definePage, useLoaderData } from '@hono-preact/iso';
-import { loader, cache } from './admin.server.js';
-
-const Admin: FunctionComponent = () => {
-  const { stats } = useLoaderData<typeof loader>();
-  return <section>...</section>;
-};
-
-export default definePage(Admin, { loader, cache });
-```
-
 **`src/pages/admin.guards.ts`** holds client guards in a browser-safe module:
 
 ```ts
@@ -104,21 +96,30 @@ export const clientGuards = [
 ];
 ```
 
-**`src/iso.tsx`** wires both guard chains into the route. The loader and cache live on the page component (via `definePage`) and don't need to be re-imported here:
+**`src/pages/admin.tsx`** is a pure component, with all bindings (loader, cache, and both guard chains) attached via `definePage`:
+
+```tsx
+import type { FunctionComponent } from 'preact';
+import { definePage, useLoaderData } from '@hono-preact/iso';
+import { loader, cache, serverGuards } from './admin.server.js';
+import { clientGuards } from './admin.guards.js';
+
+const Admin: FunctionComponent = () => {
+  const { stats } = useLoaderData<typeof loader>();
+  return <section>...</section>;
+};
+
+export default definePage(Admin, { loader, cache, serverGuards, clientGuards });
+```
+
+**`src/iso.tsx`** just maps the path to the component; no guard imports needed here:
 
 ```tsx
 import { lazy, Route } from '@hono-preact/iso';
-import { serverGuards } from './pages/admin.server.js';
-import { clientGuards } from './pages/admin.guards.js';
 
 const Admin = lazy(() => import('./pages/admin.js'));
 
-<Route
-  path="/admin"
-  component={Admin}
-  serverGuards={serverGuards}
-  clientGuards={clientGuards}
-/>
+<Route path="/admin" component={Admin} />
 ```
 
 ## Build conventions

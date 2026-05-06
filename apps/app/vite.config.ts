@@ -24,6 +24,10 @@ export default defineConfig((env) => ({
   resolve: {
     alias: [
       {
+        find: '@hono-preact/iso/internal',
+        replacement: resolve(__dirname, '../../packages/iso/src/internal.ts'),
+      },
+      {
         find: '@hono-preact/iso',
         replacement: resolve(__dirname, '../../packages/iso/src/index.ts'),
       },

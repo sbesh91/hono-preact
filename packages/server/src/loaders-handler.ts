@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import { runRequestScope } from '@hono-preact/iso';
+import { runRequestScope } from '@hono-preact/iso/internal';
 
 type GlobModule = {
   default?: unknown;

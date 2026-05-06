@@ -48,7 +48,7 @@ hydrate(<App />, document.getElementById('app'));
 
 ### `apps/app/src/iso.tsx`
 
-The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` from `@hono-preact/iso` with all routes. Each `<Route>` registers a lazy-loaded page component by path. Loader, cache, and Wrapper bindings live with the page component itself (via `definePage` in the `.tsx` file); guards stay on `<Route>` because they often differ per mount point.
+The shared component tree used by both the server (via `Layout`) and the client (via hydration). Defines the `<Router>` from `@hono-preact/iso` with all routes. Each `<Route>` registers a lazy-loaded page component by path. All per-page bindings (loader, cache, fallback, errorFallback, serverGuards, clientGuards, Wrapper) live with the page component itself via `definePage` in the `.tsx` file. `<Route>` is `preact-iso`'s `<Route>` re-exported: it only maps a path to a component.
 
 ```tsx
 import { lazy, Route, Router } from '@hono-preact/iso';
@@ -70,9 +70,9 @@ Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the
 
 Isomorphic utilities shared between server and client (`packages/iso/`):
 
-- `route.tsx`: `<Route>` and `<Router>` components, the user-facing registration surface. `<Route>` accepts `path`, `component`, plus the route-level props `serverGuards`, `clientGuards`, `fallback`, and `errorFallback`. Page-level bindings (`loader`, `cache`, `Wrapper`) come from the component itself via `definePage`.
-- `define-page.ts`: `definePage(Component, { loader, cache, Wrapper })` factory that stamps page bindings onto a component via a well-known symbol; `<Route>` reads them at mount time.
-- `page.tsx`: `<Page>` component and `WrapperProps` type. Composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`). `<Page>` accepts `loader`, `location`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`).
+- `define-page.tsx`: `definePage(Component, bindings)` factory. Returns a routable component that self-wraps in `<Page>` with those bindings captured in a closure. Bindings include `loader`, `cache`, `fallback`, `errorFallback`, `serverGuards`, `clientGuards`, and `Wrapper`. No symbol marker; `<Route>` does no introspection.
+- `Route`, `Router`, `lazy`: re-exported directly from `preact-iso`. `<Route>` accepts only `path`, `component`, and `default` — no per-page props.
+- `page.tsx`: `<Page>` component and `WrapperProps` type. Composes the route boundary, guards, loader, and envelope into a single page wrapper. Used internally by components returned from `definePage`; also available as an escape hatch for advanced cases where `definePage` bindings aren't expressive enough. `<Page>` accepts `loader`, `location`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`).
 - `loader.tsx`: `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context.
 - `define-loader.ts`: `defineLoader` factory and `LoaderRef<T>` type.
 - `use-loader-data.ts`: `useLoaderData<typeof loader>()` hook for typed access to loader data inside children. The loader is supplied as a type-only generic, not as a runtime argument.

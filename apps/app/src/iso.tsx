@@ -1,7 +1,6 @@
 import type { FunctionComponent } from 'preact';
 import { flushSync } from 'preact/compat';
 import { lazy, Route, Router } from '@hono-preact/iso';
-import { Route as IsoRoute } from 'preact-iso';
 import NotFound from './pages/not-found.js';
 
 const Home = lazy(() => import('./pages/home.js'));
@@ -21,20 +20,9 @@ export const Base: FunctionComponent = () => {
       <Route path="/test" component={Test} />
       <Route path="/movies" component={Movies} />
       <Route path="/movies/*" component={Movies} />
-      <Route
-        path="/watched"
-        component={Watched}
-        fallback={<p class="p-1">Loading watched list…</p>}
-      />
-      {/* IsoRoute (preact-iso's Route) so both /docs and /docs/* hand the
-          same DocsRoute lazy reference to preact-iso. With our @hono-preact/iso
-          Route, wrapWithPage would mint a new PageRouteHandler per Route, and
-          preact-iso's component-identity check would treat /docs <-> /docs/foo
-          as a route change and remount DocsRoute (and the sidebar with it).
-          DocsRoute has no definePage bindings, so PageBoundary wrapping isn't
-          needed here. */}
-      <IsoRoute path="/docs" component={DocsRoute} />
-      <IsoRoute path="/docs/*" component={DocsRoute} />
+      <Route path="/watched" component={Watched} />
+      <Route path="/docs" component={DocsRoute} />
+      <Route path="/docs/*" component={DocsRoute} />
       <NotFound />
     </Router>
   );

@@ -9,7 +9,7 @@ A page is a file pair:
 - `movies.server.ts`: the server loader (default export) plus its `defineLoader` reference (named export). Never reaches the browser bundle.
 - `movies.tsx`: a pure component that consumes the loader data via `useLoaderData<typeof loader>()` and is exported through `definePage(Component, { loader })`.
 
-`definePage` attaches the loader (and optional `cache`, `Wrapper`) to the page component itself. The `<Route>` in `iso.tsx` only maps a path to a component; it discovers the bindings by reading them off the component.
+`definePage(Component, bindings)` returns a routable component that self-wraps in `<Page>` with those bindings. The `<Route>` in `iso.tsx` is `preact-iso`'s `<Route>` re-exported: it only maps a path to a component, no introspection.
 
 **At runtime:**
 1. **SSR:** `serverLoader` runs directly during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
@@ -70,7 +70,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 <Route path="/movies" component={Movies} />
 ```
 
-`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. Two `.server.*` files in different folders produce distinct keys by construction, so basename collisions are no longer a concern. `definePage(Component, { loader })` stamps that reference onto the page component so the route runtime can pick it up. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
+`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. Two `.server.*` files in different folders produce distinct keys by construction, so basename collisions are no longer a concern. `definePage(Component, { loader })` returns a routable component that self-wraps in `<Page>` with the loader captured in a closure. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
 
 ## Example: detail page (using route params)
 
@@ -151,7 +151,7 @@ On a cache hit, the RPC call is skipped entirely. After a successful fetch the r
 
 ## Page bindings with `definePage`
 
-Per-page concerns (loader, cache, Wrapper) live with the page component, not with the route declaration that mounts it. `definePage` attaches them to the component:
+Per-page concerns (loader, cache, Wrapper, fallback, errorFallback, serverGuards, clientGuards) live with the page component, not with the route declaration that mounts it. `definePage` captures them:
 
 ```tsx
 import { definePage } from '@hono-preact/iso';
@@ -159,9 +159,9 @@ import { definePage } from '@hono-preact/iso';
 export default definePage(Component, { loader, cache, Wrapper });
 ```
 
-`definePage(Component, bindings)` returns the same component reference, with the bindings stamped onto it via a well-known symbol. At route time, `<Route>` reads those bindings off the component to coordinate SSR preload, hydration, and client-side fetching. From the consumer's perspective the export is still just the page component.
+`definePage(Component, bindings)` returns a routable component that self-wraps in `<Page>` with those bindings captured in a closure. `<Route>` does no introspection; it just maps a path to whatever component it receives. From the consumer's perspective the export is still just the page component.
 
-A page with no loader simply skips `definePage`. `<Route>` treats the absence of bindings as "no loader", and the component renders directly:
+A page with no loader simply skips `definePage` and exports the component directly. It renders without a loader boundary:
 
 ```tsx
 // src/pages/home.tsx

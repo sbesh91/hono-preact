@@ -4,6 +4,7 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
+      '@hono-preact/iso/internal': path.resolve(__dirname, 'packages/iso/src/internal.ts'),
       '@hono-preact/iso': path.resolve(__dirname, 'packages/iso/src/index.ts'),
     },
   },
