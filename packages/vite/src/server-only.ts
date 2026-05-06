@@ -144,12 +144,11 @@ export function serverOnlyPlugin(): Plugin {
 
       const serverImports = ast.program.body.filter(isServerImport);
       if (serverImports.length === 0) return;
+      if (viteRoot === undefined) return;
+      const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
       const needsCacheImport = new Set<string>();
-
-      if (viteRoot === undefined) return;
-      const importerDir = path.dirname(id);
 
       for (const serverImport of [...serverImports].reverse()) {
         if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
