@@ -5,13 +5,7 @@ import { parse } from '@babel/parser';
 import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
-
-function moduleNameFromSource(importSource: string): string {
-  return importSource
-    .split('/')
-    .pop()!
-    .replace(/\.server(\.[jt]sx?)?$/, '');
-}
+import { deriveModuleKey } from './module-key.js';
 
 function hashSuffix(input: string): string {
   return crypto.createHash('sha1').update(input).digest('hex').slice(0, 8);
@@ -89,18 +83,6 @@ function extractCacheName(
   );
 }
 
-function extractLoaderName(
-  importerPath: string,
-  importSource: string,
-  fallbackModuleName: string
-): string {
-  const src = readSource(importerPath, importSource);
-  if (src === null) return fallbackModuleName;
-  return (
-    extractStringArgFromVarDecl(src, 'loader', 'defineLoader', 0) ?? fallbackModuleName
-  );
-}
-
 function loaderFetchArrow(moduleName: string, indent: string): string {
   const i = indent;
   return (
@@ -166,13 +148,17 @@ export function serverOnlyPlugin(): Plugin {
       const s = new MagicString(code);
       const needsCacheImport = new Set<string>();
 
+      if (viteRoot === undefined) return;
+      const importerDir = path.dirname(id);
+
       for (const serverImport of [...serverImports].reverse()) {
         if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
           s.overwrite(serverImport.start!, serverImport.end!, '');
           continue;
         }
 
-        const moduleName = moduleNameFromSource(serverImport.source.value);
+        const absServerPath = path.resolve(importerDir, serverImport.source.value);
+        const moduleKey = deriveModuleKey(absServerPath, viteRoot);
         const stubs: string[] = [];
         let hasValueSpecifier = false;
 
@@ -188,7 +174,7 @@ export function serverOnlyPlugin(): Plugin {
               specifier.imported.name === 'default');
           if (isDefaultImport) {
             stubs.push(
-              `const ${specifier.local.name} = ${loaderFetchArrow(moduleName, '')};`
+              `const ${specifier.local.name} = ${loaderFetchArrow(moduleKey, '')};`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -203,18 +189,17 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverActions'
           ) {
             stubs.push(
-              `const ${specifier.local.name} = new Proxy({}, { get(_, action) { return { __module: ${JSON.stringify(moduleName)}, __action: String(action) }; } });`
+              `const ${specifier.local.name} = new Proxy({}, { get(_, action) { return { __module: ${JSON.stringify(moduleKey)}, __action: String(action) }; } });`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'loader'
           ) {
-            const loaderName = extractLoaderName(id, serverImport.source.value, moduleName);
             stubs.push(
               `const ${specifier.local.name} = {\n` +
-              `  __id: Symbol.for('@hono-preact/loader:${loaderName}'),\n` +
-              `  fn: ${loaderFetchArrow(moduleName, '  ')},\n` +
+              `  __id: Symbol.for('@hono-preact/loader:${moduleKey}'),\n` +
+              `  fn: ${loaderFetchArrow(moduleKey, '  ')},\n` +
               `};`
             );
           } else if (
@@ -222,7 +207,7 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'cache'
           ) {
-            const cacheName = extractCacheName(id, serverImport.source.value, moduleName);
+            const cacheName = extractCacheName(id, serverImport.source.value, moduleKey);
             const aliasSuffix = hashSuffix(serverImport.source.value);
             needsCacheImport.add(aliasSuffix);
             stubs.push(
