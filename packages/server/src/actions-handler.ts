@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
-import { ActionGuardError, runRequestScope, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
+import { ActionGuardError, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
+import { runRequestScope } from '@hono-preact/iso/internal';
 
 type GlobModule = {
   __moduleKey?: unknown;

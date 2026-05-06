@@ -2,7 +2,8 @@ import type { Context } from 'hono';
 import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
-import { GuardRedirect, env, runRequestScope } from '@hono-preact/iso';
+import { GuardRedirect, env } from '@hono-preact/iso';
+import { runRequestScope } from '@hono-preact/iso/internal';
 
 function escapeHtml(str: string): string {
   return str
