@@ -37,7 +37,7 @@ describe('v3 <Loader> stability', () => {
       callCount++;
       return Promise.resolve({ msg: `call ${callCount}` });
     });
-    const ref = defineLoader<{ msg: string }>('refire-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'refire-test' });
 
     function Child() {
       const { msg } = useLoaderData<typeof ref>();
@@ -86,7 +86,7 @@ describe('v3 <Loader> stability', () => {
             resolveReload = r;
           })
       );
-    const ref = defineLoader<{ msg: string }>('preserve-state-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'preserve-state-test' });
 
     function Child() {
       const { msg } = useLoaderData<typeof ref>();
@@ -156,7 +156,7 @@ describe('v3 <Loader> stability', () => {
           resolve = r;
         })
     );
-    const ref = defineLoader<{ msg: string }>('dup-xhr-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'dup-xhr-test' });
 
     function Child() {
       const { msg } = useLoaderData<typeof ref>();
@@ -221,7 +221,7 @@ describe('v3 <Loader> stability', () => {
             resolveReload = r;
           })
       );
-    const ref = defineLoader<{ msg: string }>('search-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'search-test' });
 
     function Fallback() {
       const { reload } = useReload();
@@ -273,7 +273,7 @@ describe('v3 <Loader> stability', () => {
     const fn = vi.fn(({ location }: { location: RouteHook }) =>
       Promise.resolve({ q: location.searchParams.q ?? '' })
     );
-    const ref = defineLoader<{ q: string }>('search-q-test', fn);
+    const ref = defineLoader<{ q: string }>(fn, { __moduleKey: 'search-q-test' });
 
     function Child() {
       const { q } = useLoaderData<typeof ref>();
