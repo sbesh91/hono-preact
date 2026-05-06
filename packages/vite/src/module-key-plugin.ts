@@ -22,10 +22,15 @@ export function moduleKeyPlugin(): Plugin {
     configResolved(config) {
       viteRoot = config.root;
     },
+    // transform receives an `options.ssr` argument from Vite, but we want
+    // __moduleKey injected into both the client and SSR builds (so the SSR
+    // runtime sees the same routing key the handler reads), so we ignore the
+    // flag and always run.
     transform(code: string, id: string) {
       if (viteRoot === undefined) return;
       if (!/\.server\.[jt]sx?$/.test(id)) return;
       if (!id.startsWith(viteRoot + '/')) return;
+      if (/^\s*export\s+const\s+__moduleKey\s*=/m.test(code)) return;
 
       const key = deriveModuleKey(id, viteRoot);
       const s = new MagicString(code);
