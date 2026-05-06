@@ -1,67 +1,84 @@
-import { describe, it, expect, expectTypeOf } from 'vitest';
-import { definePage, PAGE_BINDINGS, type PageComponent, type PageBindings } from '../define-page.js';
-import { defineLoader } from '../define-loader.js';
-import { createCache } from '../cache.js';
+// @vitest-environment happy-dom
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/preact';
+import { LocationProvider, type RouteHook } from 'preact-iso';
 import type { JSX } from 'preact';
+import { definePage, type PageBindings } from '../define-page.js';
+import { defineLoader } from '../define-loader.js';
 import type { GuardFn } from '../guard.js';
 
+vi.mock('../preload.js', () => ({
+  getPreloadedData: vi.fn(() => null),
+  deletePreloadedData: vi.fn(),
+}));
+
+afterEach(() => {
+  cleanup();
+});
+
+const fakeLocation: RouteHook = {
+  url: '/test',
+  path: '/test',
+  query: '',
+  pathParams: {},
+  searchParams: {},
+  route: () => {},
+} as RouteHook;
+
 describe('definePage', () => {
-  it('attaches bindings under the realm-wide PAGE_BINDINGS symbol', () => {
-    const fn = async () => ({ msg: 'ok' });
-    const loader = defineLoader<{ msg: string }>(fn, { __moduleKey: 'define-page-test-1' });
-    const cache = createCache<{ msg: string }>('define-page-test-1');
-    const Inner = () => null;
-
-    const Wrapped = definePage(Inner, { loader, cache });
-
-    expect(Wrapped).toBe(Inner);
-    expect((Wrapped as PageComponent<{ msg: string }>)[PAGE_BINDINGS]).toEqual({
-      loader,
-      cache,
-    });
+  it('returns a routable component that self-wraps in <Page>', async () => {
+    const loader = defineLoader(async () => ({ msg: 'hello' }));
+    function Body() {
+      return <p>body</p>;
+    }
+    const PageRoute = definePage(Body, { loader });
+    render(
+      <LocationProvider>
+        <PageRoute {...fakeLocation} />
+      </LocationProvider>
+    );
+    expect(await screen.findByText('body')).toBeInTheDocument();
   });
 
-  it('uses Symbol.for for cross-module identity', () => {
-    expect(PAGE_BINDINGS).toBe(Symbol.for('@hono-preact/iso/page-bindings'));
+  it('returns a routable component for a binding-less page', async () => {
+    function Body() {
+      return <p>plain</p>;
+    }
+    const PageRoute = definePage(Body);
+    render(
+      <LocationProvider>
+        <PageRoute {...fakeLocation} />
+      </LocationProvider>
+    );
+    expect(await screen.findByText('plain')).toBeInTheDocument();
   });
 
-  it('returns the same component reference (no wrapper)', () => {
-    const Inner = () => null;
-    const Wrapped = definePage(Inner);
-    expect(Wrapped).toBe(Inner);
+  it('threads fallback, errorFallback, serverGuards, clientGuards into <Page>', async () => {
+    const guard: GuardFn = async (_ctx, next) => next();
+    const bindings: PageBindings<{ ok: true }> = {
+      fallback: <p>loading-state</p>,
+      serverGuards: [guard],
+      clientGuards: [guard],
+    };
+    function Body() {
+      return <p>ok</p>;
+    }
+    const PageRoute = definePage(Body, bindings);
+    render(
+      <LocationProvider>
+        <PageRoute {...fakeLocation} />
+      </LocationProvider>
+    );
+    expect(await screen.findByText('ok')).toBeInTheDocument();
   });
 
-  it('treats omitted bindings as no-op (no symbol attached)', () => {
-    const Inner = () => null;
-    definePage(Inner);
-    expect((Inner as PageComponent<unknown>)[PAGE_BINDINGS]).toBeUndefined();
-  });
-
-  it('replaces previously-attached bindings if called twice on the same component', () => {
-    const fn1 = async () => ({ a: 1 });
-    const fn2 = async () => ({ b: 2 });
-    const loader1 = defineLoader(fn1, { __moduleKey: 'define-page-test-replace-1' });
-    const loader2 = defineLoader(fn2, { __moduleKey: 'define-page-test-replace-2' });
-    const Inner = () => null;
-
-    definePage(Inner, { loader: loader1 });
-    definePage(Inner, { loader: loader2 });
-
-    expect((Inner as PageComponent<unknown>)[PAGE_BINDINGS]).toEqual({
-      loader: loader2,
-    });
-  });
-
-  it('accepts a Wrapper component in bindings', () => {
-    const Inner = () => null;
-    const Wrapper = (props: { children: unknown }) =>
-      props.children as never;
-
-    const Wrapped = definePage(Inner, { Wrapper });
-
-    expect((Wrapped as PageComponent<unknown>)[PAGE_BINDINGS]).toEqual({
-      Wrapper,
-    });
+  it('preserves the wrapped component name in displayName for debuggability', () => {
+    function Movies() {
+      return <p>movies</p>;
+    }
+    Movies.displayName = 'Movies';
+    const PageRoute = definePage(Movies);
+    expect(PageRoute.displayName).toBe('definePage(Movies)');
   });
 });
 
