@@ -104,4 +104,8 @@ const WatchedPage: FunctionComponent = () => {
 };
 WatchedPage.displayName = 'WatchedPage';
 
-export default definePage(WatchedPage, { loader, cache });
+export default definePage(WatchedPage, {
+  loader,
+  cache,
+  fallback: <p class="p-1">Loading watched list…</p>,
+});

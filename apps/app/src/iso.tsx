@@ -21,11 +21,7 @@ export const Base: FunctionComponent = () => {
       <Route path="/test" component={Test} />
       <Route path="/movies" component={Movies} />
       <Route path="/movies/*" component={Movies} />
-      <Route
-        path="/watched"
-        component={Watched}
-        fallback={<p class="p-1">Loading watched list…</p>}
-      />
+      <Route path="/watched" component={Watched} />
       {/* IsoRoute (preact-iso's Route) so both /docs and /docs/* hand the
           same DocsRoute lazy reference to preact-iso. With our @hono-preact/iso
           Route, wrapWithPage would mint a new PageRouteHandler per Route, and
