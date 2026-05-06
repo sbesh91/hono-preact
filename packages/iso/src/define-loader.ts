@@ -19,7 +19,6 @@ export interface LoaderRef<T> {
  */
 export type DefineLoaderOpts<T> = {
   __moduleKey: string;
-  cache?: LoaderCache<T>;
 };
 
 /**
@@ -33,8 +32,8 @@ export type DefineLoaderOpts<T> = {
  * and the payload of `Symbol.for(...)` for `__id`. Two loaders defined in
  * different files produce distinct `__id` symbols by construction.
  *
- * The optional `cache` slot binds a `LoaderCache` to the loader so
- * consumers needn't pass it separately to `<Page>`.
+ * To bind a `LoaderCache` to a loader, pass it via `definePage(Component,
+ * { loader, cache })` rather than through `defineLoader` opts.
  */
 export function defineLoader<T>(fn: Loader<T>): LoaderRef<T>;
 export function defineLoader<T>(
@@ -49,7 +48,6 @@ export function defineLoader<T>(
     return {
       __id: Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`),
       fn,
-      cache: opts.cache,
     };
   }
   // Plugin-less context (a consumer testing their loader in isolation).
