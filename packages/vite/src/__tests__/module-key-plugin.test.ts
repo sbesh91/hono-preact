@@ -78,3 +78,42 @@ describe('moduleKeyPlugin', () => {
     expect(result?.code).toBeTypeOf('string');
   });
 });
+
+describe('moduleKeyPlugin defineLoader threading', () => {
+  it('rewrites `defineLoader(fn)` to `defineLoader(fn, { __moduleKey })`', () => {
+    const plugin = makePlugin();
+    const code = [
+      `import { defineLoader } from '@hono-preact/iso';`,
+      `const serverLoader = async () => ({});`,
+      `export default serverLoader;`,
+      `export const loader = defineLoader(serverLoader);`,
+    ].join('\n');
+    const result = plugin.transform.call(
+      {} as any,
+      code,
+      '/Users/me/repo/src/pages/movies.server.ts'
+    );
+    expect(result?.code).toContain(
+      'defineLoader(serverLoader, { __moduleKey: "src/pages/movies" })'
+    );
+  });
+
+  it('leaves an existing two-arg defineLoader call unchanged', () => {
+    // Legacy (name, fn) form is still supported until the cleanup task; the
+    // plugin should not touch calls that already have a second argument.
+    const plugin = makePlugin();
+    const code = [
+      `import { defineLoader } from '@hono-preact/iso';`,
+      `export const loader = defineLoader('movies', async () => ({}));`,
+    ].join('\n');
+    const result = plugin.transform.call(
+      {} as any,
+      code,
+      '/Users/me/repo/src/pages/movies.server.ts'
+    );
+    expect(result?.code).toContain(
+      `defineLoader('movies', async () => ({}))`
+    );
+    expect(result?.code).not.toContain('__moduleKey: ');
+  });
+});
