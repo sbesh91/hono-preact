@@ -1,12 +1,19 @@
-import type { ComponentType } from 'preact';
+import type { ComponentType, JSX } from 'preact';
 import type { LoaderRef } from './define-loader.js';
 import type { LoaderCache } from './cache.js';
+import type { GuardFn } from './guard.js';
 import type { WrapperProps } from './page.js';
 
 export type PageBindings<T> = {
   loader?: LoaderRef<T>;
   cache?: LoaderCache<T>;
   Wrapper?: ComponentType<WrapperProps>;
+  fallback?: JSX.Element;
+  errorFallback?:
+    | JSX.Element
+    | ((error: Error, reset: () => void) => JSX.Element);
+  serverGuards?: GuardFn[];
+  clientGuards?: GuardFn[];
 };
 
 // Symbol.for so duplicate module copies (HMR, pnpm phantom deps) still match.

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { definePage, PAGE_BINDINGS, type PageComponent } from '../define-page.js';
+import { describe, it, expect, expectTypeOf } from 'vitest';
+import { definePage, PAGE_BINDINGS, type PageComponent, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
 import { createCache } from '../cache.js';
+import type { JSX } from 'preact';
+import type { GuardFn } from '../guard.js';
 
 describe('definePage', () => {
   it('attaches bindings under the realm-wide PAGE_BINDINGS symbol', () => {
@@ -60,5 +62,23 @@ describe('definePage', () => {
     expect((Wrapped as PageComponent<unknown>)[PAGE_BINDINGS]).toEqual({
       Wrapper,
     });
+  });
+});
+
+describe('PageBindings widened surface', () => {
+  it('accepts fallback, errorFallback, serverGuards, clientGuards on the bindings type', () => {
+    const guard: GuardFn = async (_ctx, next) => next();
+    const bindings: PageBindings<{ ok: true }> = {
+      fallback: <p>loading</p>,
+      errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
+      serverGuards: [guard],
+      clientGuards: [guard],
+    };
+    expectTypeOf(bindings.fallback).toEqualTypeOf<JSX.Element | undefined>();
+    expectTypeOf(bindings.errorFallback).toMatchTypeOf<
+      JSX.Element | ((error: Error, reset: () => void) => JSX.Element) | undefined
+    >();
+    expectTypeOf(bindings.serverGuards).toEqualTypeOf<GuardFn[] | undefined>();
+    expectTypeOf(bindings.clientGuards).toEqualTypeOf<GuardFn[] | undefined>();
   });
 });
