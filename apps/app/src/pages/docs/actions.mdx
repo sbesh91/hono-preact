@@ -14,9 +14,9 @@ On the server, the `actionsHandler` middleware exposes a single `POST /__actions
 
 ```ts
 import { getMovies } from '@/server/movies.js';
-import { defineAction, type LoaderFn } from '@hono-preact/iso';
+import { defineAction } from '@hono-preact/iso';
 
-const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
+const serverLoader = async () => {
   const movies = await getMovies();
   return { movies };
 };

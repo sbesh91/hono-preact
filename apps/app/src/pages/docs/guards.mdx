@@ -50,17 +50,17 @@ guards: [checkAuthenticated, checkRole('admin')]
 **`src/pages/admin.server.ts`** holds server guards plus the loader ref (never reaches the browser bundle):
 
 ```ts
-import { createCache, createGuard, defineLoader, type LoaderFn } from '@hono-preact/iso';
+import { createCache, createGuard, defineLoader } from '@hono-preact/iso';
 import { getCurrentUser, getAdminStats } from '@/server/admin.js';
 
-const serverLoader: LoaderFn<{ stats: Stats }> = async () => {
+const serverLoader = async () => {
   const stats = await getAdminStats();
   return { stats };
 };
 
 export default serverLoader;
 
-export const loader = defineLoader<{ stats: Stats }>(serverLoader);
+export const loader = defineLoader(serverLoader);
 export const cache = createCache<{ stats: Stats }>();
 
 export const serverGuards = [
