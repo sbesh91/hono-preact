@@ -17,7 +17,7 @@ export interface LoaderRef<T> {
  * `moduleKeyPlugin` Vite transform when it rewrites
  * `defineLoader(fn)` to `defineLoader(fn, { __moduleKey: '...' })`.
  */
-export type DefineLoaderOpts<T> = {
+export type DefineLoaderOpts = {
   __moduleKey: string;
 };
 
@@ -38,11 +38,11 @@ export type DefineLoaderOpts<T> = {
 export function defineLoader<T>(fn: Loader<T>): LoaderRef<T>;
 export function defineLoader<T>(
   fn: Loader<T>,
-  opts: DefineLoaderOpts<T>
+  opts: DefineLoaderOpts
 ): LoaderRef<T>;
 export function defineLoader<T>(
   fn: Loader<T>,
-  opts?: DefineLoaderOpts<T>
+  opts?: DefineLoaderOpts
 ): LoaderRef<T> {
   if (opts?.__moduleKey) {
     return {
