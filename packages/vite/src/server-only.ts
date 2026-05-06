@@ -7,6 +7,11 @@ import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
 
+// Symbol-keyed accessor used by unit tests to verify `configResolved` fires
+// and captures the root. Hidden behind a Symbol so it does not appear in IDE
+// autocomplete for the public Plugin surface.
+export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/viteRoot');
+
 function hashSuffix(input: string): string {
   return crypto.createHash('sha1').update(input).digest('hex').slice(0, 8);
 }
@@ -109,9 +114,7 @@ export function serverOnlyPlugin(): Plugin {
     configResolved(config) {
       viteRoot = config.root;
     },
-    // Test-only accessor. Used by unit tests to verify the hook fires;
-    // not part of the public plugin contract.
-    _viteRoot: () => viteRoot,
+    [VITE_ROOT_ACCESSOR]: () => viteRoot,
     transform(code: string, id: string, options?: { ssr?: boolean }) {
       if (options?.ssr) return;
       if (!/\.[jt]sx?$/.test(id)) return;
@@ -144,7 +147,14 @@ export function serverOnlyPlugin(): Plugin {
 
       const serverImports = ast.program.body.filter(isServerImport);
       if (serverImports.length === 0) return;
-      if (viteRoot === undefined) return;
+      if (viteRoot === undefined) {
+        this.warn(
+          `serverOnlyPlugin: configResolved hasn't fired before transform on ${id}. ` +
+          `.server.* imports will not be transformed; this can leak server code into the client bundle. ` +
+          `Ensure moduleKeyPlugin and serverOnlyPlugin are added to the Vite config under the standard plugin pipeline.`
+        );
+        return;
+      }
       const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
@@ -158,6 +168,13 @@ export function serverOnlyPlugin(): Plugin {
 
         const absServerPath = path.resolve(importerDir, serverImport.source.value);
         const moduleKey = deriveModuleKey(absServerPath, viteRoot);
+        if (moduleKey.startsWith('..')) {
+          this.warn(
+            `serverOnlyPlugin: import of '${serverImport.source.value}' from '${id}' resolves outside the Vite root (${viteRoot}). ` +
+            `Generated module key '${moduleKey}' will not match any server-side moduleKeyPlugin output, so RPC calls will return 404. ` +
+            `Move the .server.* file inside the Vite root, or restructure the import.`
+          );
+        }
         const stubs: string[] = [];
         let hasValueSpecifier = false;
 
@@ -246,5 +263,5 @@ export function serverOnlyPlugin(): Plugin {
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
-  } as Plugin & { _viteRoot: () => string | undefined };
+  } as Plugin & { [VITE_ROOT_ACCESSOR]: () => string | undefined };
 }

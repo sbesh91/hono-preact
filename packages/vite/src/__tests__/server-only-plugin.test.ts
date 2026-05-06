@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serverOnlyPlugin } from '../index.js';
+import { serverOnlyPlugin, VITE_ROOT_ACCESSOR } from '../index.js';
 import type { Plugin } from 'vite';
 
 type TransformFn = (
@@ -341,14 +341,14 @@ describe('loader RPC stub key alignment', () => {
 });
 
 describe('serverOnlyPlugin viteRoot capture', () => {
-  it('captures viteRoot from configResolved and exposes it for plugin coordination', () => {
+  it('captures viteRoot from configResolved and exposes it via VITE_ROOT_ACCESSOR', () => {
     const plugin = serverOnlyPlugin() as Plugin & {
       configResolved?: (config: { root: string }) => void;
-      _viteRoot?: () => string | undefined;
+      [VITE_ROOT_ACCESSOR]?: () => string | undefined;
     };
-    expect(plugin._viteRoot?.()).toBeUndefined();
+    expect(plugin[VITE_ROOT_ACCESSOR]?.()).toBeUndefined();
     plugin.configResolved?.({ root: '/Users/me/repo' });
-    expect(plugin._viteRoot?.()).toBe('/Users/me/repo');
+    expect(plugin[VITE_ROOT_ACCESSOR]?.()).toBe('/Users/me/repo');
   });
 });
 
