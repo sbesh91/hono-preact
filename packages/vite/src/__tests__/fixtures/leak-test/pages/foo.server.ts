@@ -14,7 +14,7 @@ const serverLoader: LoaderFn<{ secret: string }> = async () => {
 };
 export default serverLoader;
 
-export const loader = defineLoader<{ secret: string }>('foo', serverLoader);
+export const loader = defineLoader<{ secret: string }>(serverLoader);
 export const cache = createCache<{ secret: string }>('foo');
 
 export const serverActions = {
