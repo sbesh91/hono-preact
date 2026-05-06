@@ -5,13 +5,12 @@ import { parse } from '@babel/parser';
 import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
+import { deriveModuleKey } from './module-key.js';
 
-function moduleNameFromSource(importSource: string): string {
-  return importSource
-    .split('/')
-    .pop()!
-    .replace(/\.server(\.[jt]sx?)?$/, '');
-}
+// Symbol-keyed accessor used by unit tests to verify `configResolved` fires
+// and captures the root. Hidden behind a Symbol so it does not appear in IDE
+// autocomplete for the public Plugin surface.
+export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/viteRoot');
 
 function hashSuffix(input: string): string {
   return crypto.createHash('sha1').update(input).digest('hex').slice(0, 8);
@@ -89,18 +88,6 @@ function extractCacheName(
   );
 }
 
-function extractLoaderName(
-  importerPath: string,
-  importSource: string,
-  fallbackModuleName: string
-): string {
-  const src = readSource(importerPath, importSource);
-  if (src === null) return fallbackModuleName;
-  return (
-    extractStringArgFromVarDecl(src, 'loader', 'defineLoader', 0) ?? fallbackModuleName
-  );
-}
-
 function loaderFetchArrow(moduleName: string, indent: string): string {
   const i = indent;
   return (
@@ -120,9 +107,14 @@ function loaderFetchArrow(moduleName: string, indent: string): string {
 }
 
 export function serverOnlyPlugin(): Plugin {
+  let viteRoot: string | undefined;
   return {
     name: 'server-only',
     enforce: 'pre',
+    configResolved(config) {
+      viteRoot = config.root;
+    },
+    [VITE_ROOT_ACCESSOR]: () => viteRoot,
     transform(code: string, id: string, options?: { ssr?: boolean }) {
       if (options?.ssr) return;
       if (!/\.[jt]sx?$/.test(id)) return;
@@ -155,6 +147,15 @@ export function serverOnlyPlugin(): Plugin {
 
       const serverImports = ast.program.body.filter(isServerImport);
       if (serverImports.length === 0) return;
+      if (viteRoot === undefined) {
+        this.warn(
+          `serverOnlyPlugin: configResolved hasn't fired before transform on ${id}. ` +
+          `.server.* imports will not be transformed; this can leak server code into the client bundle. ` +
+          `Ensure moduleKeyPlugin and serverOnlyPlugin are added to the Vite config under the standard plugin pipeline.`
+        );
+        return;
+      }
+      const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
       const needsCacheImport = new Set<string>();
@@ -165,7 +166,15 @@ export function serverOnlyPlugin(): Plugin {
           continue;
         }
 
-        const moduleName = moduleNameFromSource(serverImport.source.value);
+        const absServerPath = path.resolve(importerDir, serverImport.source.value);
+        const moduleKey = deriveModuleKey(absServerPath, viteRoot);
+        if (moduleKey.startsWith('..')) {
+          this.warn(
+            `serverOnlyPlugin: import of '${serverImport.source.value}' from '${id}' resolves outside the Vite root (${viteRoot}). ` +
+            `Generated module key '${moduleKey}' will not match any server-side moduleKeyPlugin output, so RPC calls will return 404. ` +
+            `Move the .server.* file inside the Vite root, or restructure the import.`
+          );
+        }
         const stubs: string[] = [];
         let hasValueSpecifier = false;
 
@@ -181,7 +190,7 @@ export function serverOnlyPlugin(): Plugin {
               specifier.imported.name === 'default');
           if (isDefaultImport) {
             stubs.push(
-              `const ${specifier.local.name} = ${loaderFetchArrow(moduleName, '')};`
+              `const ${specifier.local.name} = ${loaderFetchArrow(moduleKey, '')};`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -196,18 +205,17 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverActions'
           ) {
             stubs.push(
-              `const ${specifier.local.name} = new Proxy({}, { get(_, action) { return { __module: ${JSON.stringify(moduleName)}, __action: String(action) }; } });`
+              `const ${specifier.local.name} = new Proxy({}, { get(_, action) { return { __module: ${JSON.stringify(moduleKey)}, __action: String(action) }; } });`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'loader'
           ) {
-            const loaderName = extractLoaderName(id, serverImport.source.value, moduleName);
             stubs.push(
               `const ${specifier.local.name} = {\n` +
-              `  __id: Symbol.for('@hono-preact/loader:${loaderName}'),\n` +
-              `  fn: ${loaderFetchArrow(moduleName, '  ')},\n` +
+              `  __id: Symbol.for('@hono-preact/loader:${moduleKey}'),\n` +
+              `  fn: ${loaderFetchArrow(moduleKey, '  ')},\n` +
               `};`
             );
           } else if (
@@ -215,7 +223,7 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'cache'
           ) {
-            const cacheName = extractCacheName(id, serverImport.source.value, moduleName);
+            const cacheName = extractCacheName(id, serverImport.source.value, moduleKey);
             const aliasSuffix = hashSuffix(serverImport.source.value);
             needsCacheImport.add(aliasSuffix);
             stubs.push(
@@ -255,5 +263,5 @@ export function serverOnlyPlugin(): Plugin {
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
-  };
+  } as Plugin & { [VITE_ROOT_ACCESSOR]: () => string | undefined };
 }

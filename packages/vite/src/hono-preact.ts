@@ -3,6 +3,7 @@ import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import { type BuildEnvironmentOptions, type Plugin } from 'vite';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
+import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
 
 export interface HonoPreactOptions {
@@ -80,6 +81,7 @@ export function honoPreact({
       },
     },
     serverLoaderValidationPlugin(),
+    moduleKeyPlugin(),
     serverOnlyPlugin(),
     Object.assign(build({ entry }), {
       apply: (_: unknown, { command, mode }: { command: string; mode: string }) =>

@@ -34,7 +34,7 @@ const serverLoader: LoaderFn<{ entries: Entry[] }> = async () => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ entries: Entry[] }>('watched', serverLoader);
+export const loader = defineLoader<{ entries: Entry[] }>(serverLoader);
 export const cache = createCache<{ entries: Entry[] }>('watched');
 
 export const serverActions = {

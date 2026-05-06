@@ -38,7 +38,7 @@ const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
+export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
 ```
 
 **`src/pages/movies.tsx`** is a pure component, with `definePage` attaching the loader binding:
@@ -70,7 +70,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 <Route path="/movies" component={Movies} />
 ```
 
-`defineLoader(name, fn)` returns a typed reference (`LoaderRef<T>`). The `name` argument is required, must be a non-empty string, and is used as a stable identity key (via `Symbol.for`) so that the SSR loader, the client RPC stub, and `useLoaderData` all agree on the same reference even when the module is loaded twice. `definePage(Component, { loader })` stamps that reference onto the page component so the route runtime can pick it up. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
+`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. Two `.server.*` files in different folders produce distinct keys by construction, so basename collisions are no longer a concern. `definePage(Component, { loader })` stamps that reference onto the page component so the route runtime can pick it up. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
 
 ## Example: detail page (using route params)
 
@@ -88,7 +88,7 @@ const serverLoader: LoaderFn<{ movie: Movie }> = async ({ location }) => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movie: Movie }>('movie', serverLoader);
+export const loader = defineLoader<{ movie: Movie }>(serverLoader);
 ```
 
 ## Registering the loader endpoint
@@ -105,7 +105,7 @@ app
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`loadersHandler` derives the module name from the filename by stripping the path prefix and `.server.*` extension. This matches the convention used by `actionsHandler`.
+`loadersHandler` and `actionsHandler` route by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`. Modules without `__moduleKey` are silently skipped at map-build time.
 
 ## Caching navigation results
 
@@ -121,7 +121,7 @@ const serverLoader: LoaderFn<{ movies: MovieList }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
+export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
 export const cache = createCache<{ movies: MovieList }>();
 ```
 

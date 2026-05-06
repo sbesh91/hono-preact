@@ -28,7 +28,7 @@ describe('actionsHandler', () => {
   it('calls the matching action with the Hono context and payload', async () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { create: createFn } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: createFn } },
     });
 
     const res = await post(app, {
@@ -57,7 +57,7 @@ describe('actionsHandler', () => {
 
   it('returns 404 when the action is not found in the module', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { create: vi.fn() } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: vi.fn() } },
     });
     const res = await post(app, { module: 'movies', action: 'destroy', payload: {} });
     expect(res.status).toBe(404);
@@ -67,6 +67,7 @@ describe('actionsHandler', () => {
   it('returns 500 when the action throws', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: {
           create: async () => {
             throw new Error('DB error');
@@ -83,7 +84,7 @@ describe('actionsHandler', () => {
     const createFn = vi.fn().mockResolvedValue({ ok: true });
     const lazyGlob = {
       './pages/movies.server.ts': () =>
-        Promise.resolve({ serverActions: { create: createFn } }),
+        Promise.resolve({ __moduleKey: 'movies', serverActions: { create: createFn } }),
     };
     const app = makeApp(lazyGlob);
 
@@ -94,18 +95,18 @@ describe('actionsHandler', () => {
 
   it('ignores modules without serverActions', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { serverLoader: async () => ({}) },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverLoader: async () => ({}) },
     });
     const res = await post(app, { module: 'movies', action: 'create', payload: {} });
     expect(res.status).toBe(404);
   });
 
-  it('derives module name by stripping path and .server.* extension', async () => {
+  it('routes by __moduleKey rather than filename basename', async () => {
     const createFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './src/pages/movies.server.tsx': { serverActions: { create: createFn } },
+      './src/pages/movies.server.tsx': { __moduleKey: 'src/pages/movies', serverActions: { create: createFn } },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, { module: 'src/pages/movies', action: 'create', payload: {} });
     expect(res.status).toBe(200);
   });
 
@@ -120,7 +121,7 @@ describe('actionsHandler', () => {
 
   it('returns 400 when body is missing module or action fields', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { create: vi.fn() } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: vi.fn() } },
     });
     const res = await post(app, { payload: {} });
     expect(res.status).toBe(400);
@@ -139,6 +140,7 @@ describe('actionsHandler', () => {
 
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { process: async () => stream },
       },
     });
@@ -156,7 +158,7 @@ describe('actionsHandler — multipart/form-data', () => {
   it('dispatches action from multipart form data with __module and __action fields', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
     });
 
     const fd = new FormData();
@@ -174,7 +176,7 @@ describe('actionsHandler — multipart/form-data', () => {
   it('surfaces File objects in the action payload', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ stored: true });
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
     });
 
     const fd = new FormData();
@@ -191,7 +193,7 @@ describe('actionsHandler — multipart/form-data', () => {
 
   it('returns 400 when __module or __action is missing from form data', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { upload: vi.fn() } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: vi.fn() } },
     });
     const fd = new FormData();
     fd.append('title', 'Dune');
@@ -204,7 +206,7 @@ describe('actionsHandler — multipart/form-data', () => {
   it('collects repeated form field names into an array', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
     });
 
     const fd = new FormData();
@@ -221,7 +223,7 @@ describe('actionsHandler — multipart/form-data', () => {
   it('detects multipart/form-data even with boundary suffix in Content-Type', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
     });
 
     // Manually build a minimal multipart body to test the Content-Type detection
@@ -249,7 +251,7 @@ describe('actionsHandler — multipart/form-data', () => {
 
   it('returns 400 when form data body is malformed', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { upload: vi.fn() } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: vi.fn() } },
     });
 
     const res = await app.request('http://localhost/__actions', {
@@ -267,6 +269,7 @@ describe('actionsHandler — action guards', () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { create: createFn },
         actionGuards: [guardFn],
       },
@@ -281,6 +284,7 @@ describe('actionsHandler — action guards', () => {
   it('returns 403 when a guard throws ActionGuardError', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { create: vi.fn() },
         actionGuards: [
           async () => {
@@ -298,6 +302,7 @@ describe('actionsHandler — action guards', () => {
   it('uses the status from ActionGuardError', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { create: vi.fn() },
         actionGuards: [
           async () => {
@@ -316,6 +321,7 @@ describe('actionsHandler — action guards', () => {
     const createFn = vi.fn();
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { create: createFn },
         actionGuards: [
           async () => { throw new ActionGuardError('Blocked'); },
@@ -334,6 +340,7 @@ describe('actionsHandler — action guards', () => {
     const guardFn = vi.fn().mockImplementation(async (_ctx: unknown, next: () => Promise<void>) => next());
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { create: vi.fn().mockResolvedValue({}) },
         actionGuards: [guardFn],
       },
@@ -349,7 +356,7 @@ describe('actionsHandler — action guards', () => {
   it('works for modules without actionGuards', async () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
-      './pages/movies.server.ts': { serverActions: { create: createFn } },
+      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: createFn } },
     });
 
     const res = await post(app, { module: 'movies', action: 'create', payload: {} });
@@ -361,6 +368,7 @@ describe('actionsHandler — action guards', () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
       './pages/movies.server.ts': {
+        __moduleKey: 'movies',
         serverActions: { create: createFn },
         actionGuards: [async () => { /* intentionally does not call next() */ }],
       },
@@ -368,5 +376,56 @@ describe('actionsHandler — action guards', () => {
     const res = await post(app, { module: 'movies', action: 'create', payload: {} });
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalledOnce();
+  });
+});
+
+describe('actionsHandler path-keyed routing', () => {
+  it('routes lookups by mod.__moduleKey rather than filename', async () => {
+    const toggleWatched = vi.fn().mockResolvedValue({ ok: true, id: 7 });
+    // Filename and __moduleKey deliberately disagree to prove the
+    // handler trusts the export, not the path.
+    const app = makeApp({
+      '/whatever.server.ts': {
+        __moduleKey: 'src/pages/movies',
+        serverActions: { toggleWatched },
+      },
+    });
+    const res = await post(app, {
+      module: 'src/pages/movies',
+      action: 'toggleWatched',
+      payload: { id: 7 },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, id: 7 });
+    expect(toggleWatched).toHaveBeenCalled();
+  });
+
+  it('returns 404 when the requested module key does not match any export', async () => {
+    const app = makeApp({
+      '/x.server.ts': {
+        __moduleKey: 'a',
+        serverActions: { x: vi.fn() },
+      },
+    });
+    const res = await post(app, {
+      module: 'b',
+      action: 'x',
+      payload: {},
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('skips modules that lack __moduleKey', async () => {
+    const app = makeApp({
+      '/no-key.server.ts': {
+        serverActions: { x: vi.fn() },
+      },
+    });
+    const res = await post(app, {
+      module: 'no-key',
+      action: 'x',
+      payload: {},
+    });
+    expect(res.status).toBe(404);
   });
 });

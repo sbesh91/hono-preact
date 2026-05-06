@@ -6,7 +6,7 @@ import { createCache } from '../cache.js';
 describe('definePage', () => {
   it('attaches bindings under the realm-wide PAGE_BINDINGS symbol', () => {
     const fn = async () => ({ msg: 'ok' });
-    const loader = defineLoader<{ msg: string }>('define-page-test-1', fn);
+    const loader = defineLoader<{ msg: string }>(fn, { __moduleKey: 'define-page-test-1' });
     const cache = createCache<{ msg: string }>('define-page-test-1');
     const Inner = () => null;
 
@@ -38,8 +38,8 @@ describe('definePage', () => {
   it('replaces previously-attached bindings if called twice on the same component', () => {
     const fn1 = async () => ({ a: 1 });
     const fn2 = async () => ({ b: 2 });
-    const loader1 = defineLoader('define-page-test-replace-1', fn1);
-    const loader2 = defineLoader('define-page-test-replace-2', fn2);
+    const loader1 = defineLoader(fn1, { __moduleKey: 'define-page-test-replace-1' });
+    const loader2 = defineLoader(fn2, { __moduleKey: 'define-page-test-replace-2' });
     const Inner = () => null;
 
     definePage(Inner, { loader: loader1 });

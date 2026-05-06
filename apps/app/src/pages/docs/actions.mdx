@@ -50,7 +50,7 @@ app
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`actionsHandler` accepts an `import.meta.glob` result. Both lazy (default) and eager (`{ eager: true }`) globs work. It derives the module name from the filename by stripping the path prefix and `.server.*` extension.
+`actionsHandler` accepts an `import.meta.glob` result. Both lazy (default) and eager (`{ eager: true }`) globs work. It routes by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`.
 
 ## Calling actions with `useAction`
 

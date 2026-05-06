@@ -17,7 +17,7 @@ const serverLoader: LoaderFn<{ movies: MovieList }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>('movies', serverLoader);
+export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
 export const cache = createCache<{ movies: MovieList }>();
 ```
 

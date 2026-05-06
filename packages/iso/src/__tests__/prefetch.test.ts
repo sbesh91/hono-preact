@@ -4,38 +4,38 @@ import { prefetch } from '../prefetch.js';
 
 describe('prefetch', () => {
   it('derives pathParams from url + route', async () => {
-    const ref = defineLoader('movie-by-id', async ({ location }) => {
+    const ref = defineLoader(async ({ location }) => {
       return { id: location.pathParams.id };
-    });
+    }, { __moduleKey: 'movie-by-id' });
     const result = await prefetch(ref, { url: '/movies/42', route: '/movies/:id' });
     expect(result).toEqual({ id: '42' });
   });
 
   it('derives searchParams from url query string', async () => {
-    const ref = defineLoader('search-by-q', async ({ location }) => {
+    const ref = defineLoader(async ({ location }) => {
       return { q: location.searchParams.q };
-    });
+    }, { __moduleKey: 'search-by-q' });
     const result = await prefetch(ref, { url: '/search?q=hi' });
     expect(result).toEqual({ q: 'hi' });
   });
 
   it('derives a clean path (no trailing slash, leading slash preserved)', async () => {
-    const ref = defineLoader('path-echo', async ({ location }) => {
+    const ref = defineLoader(async ({ location }) => {
       return { path: location.path };
-    });
+    }, { __moduleKey: 'path-echo' });
     expect(await prefetch(ref, { url: '/movies/' })).toEqual({ path: '/movies' });
     expect(await prefetch(ref, { url: '/' })).toEqual({ path: '/' });
     expect(await prefetch(ref, { url: '/movies/42?x=1' })).toEqual({ path: '/movies/42' });
   });
 
   it('back-compat: location overrides url/route derivation', async () => {
-    const ref = defineLoader('back-compat', async ({ location }) => {
+    const ref = defineLoader(async ({ location }) => {
       return {
         path: location.path,
         id: location.pathParams.id,
         q: location.searchParams.q,
       };
-    });
+    }, { __moduleKey: 'back-compat' });
     const result = await prefetch(ref, {
       url: '/should-be-ignored',
       route: '/should-be-ignored/:id',
@@ -49,13 +49,13 @@ describe('prefetch', () => {
   });
 
   it('no-args call resolves with an empty but type-complete location', async () => {
-    const ref = defineLoader('empty-loc', async ({ location }) => {
+    const ref = defineLoader(async ({ location }) => {
       return {
         path: location.path,
         pathParams: location.pathParams,
         searchParams: location.searchParams,
       };
-    });
+    }, { __moduleKey: 'empty-loc' });
     const result = await prefetch(ref);
     expect(result).toEqual({ path: '', pathParams: {}, searchParams: {} });
   });

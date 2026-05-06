@@ -1,16 +1,13 @@
 import type { MiddlewareHandler } from 'hono';
 import { runRequestScope } from '@hono-preact/iso';
 
-type GlobModule = { default?: unknown; [key: string]: unknown };
+type GlobModule = {
+  default?: unknown;
+  __moduleKey?: unknown;
+  [key: string]: unknown;
+};
 type LazyGlob = Record<string, () => Promise<unknown>>;
 type EagerGlob = Record<string, GlobModule>;
-
-function moduleNameFromPath(filePath: string): string {
-  return filePath
-    .split('/')
-    .pop()!
-    .replace(/\.server\.[jt]sx?$/, '');
-}
 
 type SerializedLocation = {
   path: string;
@@ -24,13 +21,14 @@ async function buildLoadersMap(
   glob: LazyGlob | EagerGlob
 ): Promise<Record<string, LoaderFn>> {
   const result: Record<string, LoaderFn> = {};
-  for (const [filePath, moduleOrLoader] of Object.entries(glob)) {
+  for (const [, moduleOrLoader] of Object.entries(glob)) {
     const mod =
       typeof moduleOrLoader === 'function'
         ? await (moduleOrLoader as () => Promise<GlobModule>)()
         : (moduleOrLoader as GlobModule);
-    if (typeof mod.default === 'function') {
-      result[moduleNameFromPath(filePath)] = mod.default as LoaderFn;
+    const key = mod.__moduleKey;
+    if (typeof key === 'string' && typeof mod.default === 'function') {
+      result[key] = mod.default as LoaderFn;
     }
   }
   return result;
@@ -64,7 +62,10 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
 
     const { module, location } = body;
     if (typeof module !== 'string') {
-      return c.json({ error: 'Request body must include string field: module' }, 400);
+      return c.json(
+        { error: 'Request body must include string field: module' },
+        400
+      );
     }
 
     const loader = loadersMap[module];

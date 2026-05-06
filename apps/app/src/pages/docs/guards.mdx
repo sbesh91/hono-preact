@@ -60,7 +60,7 @@ const serverLoader: LoaderFn<{ stats: Stats }> = async () => {
 
 export default serverLoader;
 
-export const loader = defineLoader<{ stats: Stats }>('admin', serverLoader);
+export const loader = defineLoader<{ stats: Stats }>(serverLoader);
 export const cache = createCache<{ stats: Stats }>();
 
 export const serverGuards = [
@@ -133,7 +133,7 @@ export const helper = () => {};
 export default serverLoader;
 
 // ✅ allowed
-export const loader = defineLoader('admin', serverLoader);
+export const loader = defineLoader(serverLoader);
 export const serverGuards = [...];
 export default serverLoader;
 ```

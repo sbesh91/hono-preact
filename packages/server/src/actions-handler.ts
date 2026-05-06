@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { ActionGuardError, runRequestScope, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
 
 type GlobModule = {
+  __moduleKey?: unknown;
   serverActions?: Record<string, unknown>;
   actionGuards?: ActionGuardFn[];
   [key: string]: unknown;
@@ -14,24 +15,18 @@ type ModuleEntry = {
   guards: ActionGuardFn[];
 };
 
-function moduleNameFromPath(filePath: string): string {
-  return filePath
-    .split('/')
-    .pop()!
-    .replace(/\.server\.[jt]sx?$/, '');
-}
-
 async function buildActionsMap(
   glob: LazyGlob | EagerGlob
 ): Promise<Record<string, ModuleEntry>> {
   const result: Record<string, ModuleEntry> = {};
-  for (const [filePath, moduleOrLoader] of Object.entries(glob)) {
+  for (const [, moduleOrLoader] of Object.entries(glob)) {
     const mod =
       typeof moduleOrLoader === 'function'
         ? await (moduleOrLoader as () => Promise<GlobModule>)()
         : (moduleOrLoader as GlobModule);
-    if (mod.serverActions) {
-      result[moduleNameFromPath(filePath)] = {
+    const key = mod.__moduleKey;
+    if (typeof key === 'string' && mod.serverActions) {
+      result[key] = {
         actions: mod.serverActions as Record<string, unknown>,
         guards: (mod.actionGuards as ActionGuardFn[] | undefined) ?? [],
       };

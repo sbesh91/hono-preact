@@ -48,7 +48,7 @@ describe('wrapWithPage', () => {
 
   it('renders the component with loader data via useLoaderData', async () => {
     const fn = vi.fn(async () => ({ msg: 'ok' }));
-    const ref = defineLoader<{ msg: string }>('wrap-with-page-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'wrap-with-page-test' });
     const Inner = () => {
       const { msg } = useLoaderData<typeof ref>();
       return <p data-testid="msg">{msg}</p>;
@@ -69,7 +69,7 @@ describe('wrapWithPage', () => {
 describe('<Router> + <Route>', () => {
   it('renders the matched route wrapped in <Page> with loader data', async () => {
     const fn = vi.fn(async () => ({ msg: 'foo-data' }));
-    const ref = defineLoader<{ msg: string }>('router-route-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'router-route-test' });
     const Foo = () => {
       const { msg } = useLoaderData<typeof ref>();
       return <p data-testid="foo">{msg}</p>;
@@ -128,7 +128,7 @@ describe('<Router> + <Route>', () => {
 
   it('reads loader/cache/Wrapper from PAGE_BINDINGS on the component', async () => {
     const fn = vi.fn(async () => ({ msg: 'page-data' }));
-    const ref = defineLoader<{ msg: string }>('page-bindings-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'page-bindings-test' });
 
     const Inner = () => {
       const { msg } = useLoaderData<typeof ref>();
@@ -152,7 +152,7 @@ describe('<Router> + <Route>', () => {
 
   it('reads PAGE_BINDINGS off a lazy component once resolved', async () => {
     const fn = vi.fn(async () => ({ msg: 'lazy-data' }));
-    const ref = defineLoader<{ msg: string }>('page-bindings-lazy-test', fn);
+    const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'page-bindings-lazy-test' });
 
     const Inner = () => {
       const { msg } = useLoaderData<typeof ref>();
