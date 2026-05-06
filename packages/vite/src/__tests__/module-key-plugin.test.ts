@@ -16,6 +16,33 @@ function makePlugin() {
   return plugin;
 }
 
+describe('moduleKeyPlugin __moduleKey injection', () => {
+  it('prepends `export const __moduleKey = "<key>"` to .server.ts files', () => {
+    const plugin = makePlugin();
+    const code = `export default async () => ({});`;
+    const result = plugin.transform.call(
+      {} as any,
+      code,
+      '/Users/me/repo/src/pages/movies.server.ts'
+    );
+    expect(result?.code).toMatch(
+      /^export const __moduleKey = "src\/pages\/movies";/
+    );
+  });
+
+  it('uses the path-derived key for nested folders', () => {
+    const plugin = makePlugin();
+    const result = plugin.transform.call(
+      {} as any,
+      `export default async () => ({});`,
+      '/Users/me/repo/src/pages/admin/movies.server.ts'
+    );
+    expect(result?.code).toMatch(
+      /^export const __moduleKey = "src\/pages\/admin\/movies";/
+    );
+  });
+});
+
 describe('moduleKeyPlugin', () => {
   it('returns undefined for non-server files', () => {
     const plugin = makePlugin();

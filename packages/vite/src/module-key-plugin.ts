@@ -1,4 +1,6 @@
+import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
+import { deriveModuleKey } from './module-key.js';
 
 /**
  * Transforms `.server.*` files to inject a stable module-level
@@ -22,8 +24,11 @@ export function moduleKeyPlugin(): Plugin {
       if (viteRoot === undefined) return;
       if (!/\.server\.[jt]sx?$/.test(id)) return;
       if (!id.startsWith(viteRoot)) return;
-      // Skeleton: signals that we'll handle this file in subsequent tasks.
-      return { code, map: null };
+
+      const key = deriveModuleKey(id, viteRoot);
+      const s = new MagicString(code);
+      s.prepend(`export const __moduleKey = ${JSON.stringify(key)};\n`);
+      return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
   };
 }
