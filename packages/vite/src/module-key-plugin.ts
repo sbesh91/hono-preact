@@ -25,7 +25,7 @@ export function moduleKeyPlugin(): Plugin {
     transform(code: string, id: string) {
       if (viteRoot === undefined) return;
       if (!/\.server\.[jt]sx?$/.test(id)) return;
-      if (!id.startsWith(viteRoot)) return;
+      if (!id.startsWith(viteRoot + '/')) return;
 
       const key = deriveModuleKey(id, viteRoot);
       const s = new MagicString(code);
@@ -57,7 +57,7 @@ export function moduleKeyPlugin(): Plugin {
           return;
         }
         const arg = node.arguments[0];
-        if (arg.type === 'StringLiteral') return; // legacy (name, fn) form
+        if (arg.type === 'StringLiteral') return; // single-arg string literal isn't a valid defineLoader form; skip to avoid garbling
         const insertAt = arg.end;
         if (insertAt == null) return;
         s.appendRight(
