@@ -11,6 +11,12 @@ export interface LoaderRef<T> {
   readonly cache?: LoaderCache<T>;
 }
 
+/**
+ * Plugin-emitted opts for `defineLoader`. Authored code should never
+ * construct this literal directly — it's threaded in by the
+ * `moduleKeyPlugin` Vite transform when it rewrites
+ * `defineLoader(fn)` to `defineLoader(fn, { __moduleKey: '...' })`.
+ */
 export type DefineLoaderOpts<T> = {
   __moduleKey: string;
   cache?: LoaderCache<T>;
@@ -59,6 +65,8 @@ export function defineLoader<T>(
   // directly). Use a placeholder symbol; identity will be unstable across
   // module reloads, which is acceptable for tests.
   const fn = fnOrName;
+  // At this point fnOrName is Loader<T>, so fnOrOpts is either
+  // DefineLoaderOpts<T> or undefined (not a Loader<T>).
   const opts = fnOrOpts as DefineLoaderOpts<T> | undefined;
   if (opts?.__moduleKey) {
     return {
