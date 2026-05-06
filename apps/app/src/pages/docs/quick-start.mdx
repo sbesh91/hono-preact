@@ -72,7 +72,7 @@ const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: Movie[] }>('movies', serverLoader);
+export const loader = defineLoader<{ movies: Movie[] }>(serverLoader);
 ```
 
 Update `src/pages/movies.tsx` to a pure consumer of the loader data, and bind the loader to the page with `definePage`:
@@ -114,7 +114,7 @@ const Movies = lazy(() => import('./pages/movies.js'));
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(name, fn)` returns a typed reference. The `name` is required and must match the user-chosen identifier on both sides (server module and client RPC stub), wired by `Symbol.for`. `definePage(Component, { loader })` attaches the loader to the page component so the route can find it. `useLoaderData<typeof loader>()` is argument-free; the type-only generic narrows the return type without pulling the loader ref in as a runtime value.
+`defineLoader(fn)` returns a typed reference. The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. `definePage(Component, { loader })` attaches the loader to the page component so the route can find it. `useLoaderData<typeof loader>()` is argument-free; the type-only generic narrows the return type without pulling the loader ref in as a runtime value.
 
 ## 3. Add a server action
 
@@ -140,7 +140,7 @@ const serverLoader: LoaderFn<{ movies: Movie[] }> = async () => ({
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: Movie[] }>('movies', serverLoader);
+export const loader = defineLoader<{ movies: Movie[] }>(serverLoader);
 
 export const serverActions = {
   addMovie: defineAction<{ title: string }, { ok: boolean }>(
