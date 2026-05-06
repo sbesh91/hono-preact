@@ -94,17 +94,74 @@ When you ship an abstraction *and* an escape hatch *and* a comment explaining wh
 
 ## 3. Target shape
 
-### 3.1 Page module (after)
+### 3.1 Page module
+
+**Before** (today, `apps/app/src/pages/movies.tsx` + `movies.server.ts`):
 
 ```tsx
 // pages/movies.tsx
 import {
   cacheRegistry,
   definePage,
+  lazy,
+  Route,
+  Router,
   useLoaderData,
   useOptimisticAction,
 } from '@hono-preact/iso';
+import type { FunctionComponent } from 'preact';
 import { loader, cache, serverActions } from './movies.server.js';
+import Noop from './noop.js';
+
+const Movie = lazy(() => import('./movie.js'));
+
+const Movies: FunctionComponent = () => {
+  const { movies, watchedIds } = useLoaderData<typeof loader>();
+
+  const { mutate, value } = useOptimisticAction(serverActions.toggleWatched, {
+    base: watchedIds,
+    apply: (current, p) =>
+      p.watched ? [...current, p.movieId] : current.filter((id) => id !== p.movieId),
+    invalidate: 'auto',
+    onSuccess: () => cacheRegistry.invalidate('watched'),
+  });
+
+  return <ul>...</ul>;
+}
+Movies.displayName = 'Movies';
+
+export default definePage(Movies, { loader, cache });
+```
+
+```ts
+// pages/movies.server.ts
+import { createCache, defineAction, defineLoader, type LoaderFn } from '@hono-preact/iso';
+
+const serverLoader: LoaderFn<{ ... }> = async () => ({ ... });
+export default serverLoader;
+
+export const loader = defineLoader<{ ... }>('movies', serverLoader);    // explicit name
+export const cache = createCache<{ ... }>('movies-list');
+export const serverActions = { ... };
+```
+
+**After**:
+
+```tsx
+// pages/movies.tsx
+import {
+  cacheRegistry,
+  definePage,
+  lazy,
+  Route,
+  Router,
+  useLoaderData,
+  useOptimisticAction,
+} from '@hono-preact/iso';                 // import surface unchanged
+import { loader, cache, serverActions } from './movies.server.js';
+import Noop from './noop.js';
+
+const Movie = lazy(() => import('./movie.js'));
 
 function Movies() {
   const { movies, watchedIds } = useLoaderData<typeof loader>();
@@ -130,18 +187,66 @@ import { createCache, defineAction, defineLoader } from '@hono-preact/iso';
 const serverLoader = async () => ({ ... });
 export default serverLoader;
 
-export const loader = defineLoader(serverLoader);   // no name; plugin derives 'movies'
-export const cache = createCache('movies-list');    // explicit; consumer-visible
+export const loader = defineLoader(serverLoader);    // no name; plugin derives 'movies'
+export const cache = createCache('movies-list');     // explicit; consumer-visible
 export const serverActions = { ... };
 ```
 
-### 3.2 Router (after)
+The leaf-level diff is one less argument to `defineLoader`. Everything else at the call site is identical. The `LoaderFn` type import goes away (no longer needed when the loader is a single arg) but isn't required to.
+
+### 3.2 Router
+
+**Before** (today, `apps/app/src/iso.tsx`):
 
 ```tsx
-// apps/app/src/iso.tsx
+import type { FunctionComponent } from 'preact';
+import { flushSync } from 'preact/compat';
+import { lazy, Route, Router } from '@hono-preact/iso';
+import { Route as IsoRoute } from 'preact-iso';
+import NotFound from './pages/not-found.js';
+
+const Home = lazy(() => import('./pages/home.js'));
+const Test = lazy(() => import('./pages/test.js'));
+const Movies = lazy(() => import('./pages/movies.js'));
+const Watched = lazy(() => import('./pages/watched.js'));
+const DocsRoute = lazy(() => import('./components/DocsRoute.js'));
+
+function onRouteChange() {
+  document.startViewTransition(() => flushSync(() => {}));
+}
+
+export const Base: FunctionComponent = () => (
+  <Router onRouteChange={onRouteChange}>
+    <Route path="/" component={Home} />
+    <Route path="/test" component={Test} />
+    <Route path="/movies" component={Movies} />
+    <Route path="/movies/*" component={Movies} />
+    <Route
+      path="/watched"
+      component={Watched}
+      fallback={<p class="p-1">Loading watched list…</p>}
+    />
+    {/* IsoRoute (preact-iso's Route) so both /docs and /docs/* hand the
+        same DocsRoute lazy reference to preact-iso. With our @hono-preact/iso
+        Route, wrapWithPage would mint a new PageRouteHandler per Route, and
+        preact-iso's component-identity check would treat /docs <-> /docs/foo
+        as a route change and remount DocsRoute (and the sidebar with it).
+        DocsRoute has no definePage bindings, so PageBoundary wrapping isn't
+        needed here. */}
+    <IsoRoute path="/docs" component={DocsRoute} />
+    <IsoRoute path="/docs/*" component={DocsRoute} />
+    <NotFound />
+  </Router>
+);
+```
+
+**After**:
+
+```tsx
 import { Route, Router, lazy } from '@hono-preact/iso';   // re-exports of preact-iso
 
 const Home = lazy(() => import('./pages/home.js'));
+const Test = lazy(() => import('./pages/test.js'));
 const Movies = lazy(() => import('./pages/movies.js'));
 const Watched = lazy(() => import('./pages/watched.js'));
 const DocsRoute = lazy(() => import('./components/DocsRoute.js'));
@@ -149,6 +254,7 @@ const DocsRoute = lazy(() => import('./components/DocsRoute.js'));
 export const Base = () => (
   <Router onRouteChange={onRouteChange}>
     <Route path="/" component={Home} />
+    <Route path="/test" component={Test} />
     <Route path="/movies" component={Movies} />
     <Route path="/movies/*" component={Movies} />
     <Route path="/watched" component={Watched} />
@@ -159,13 +265,22 @@ export const Base = () => (
 );
 ```
 
-The `IsoRoute` import vanishes. The multi-line comment vanishes. `DocsRoute` (which doesn't use `definePage`) and `Movies` (which does) route through the same component, because `definePage`'s output is itself a routable component now.
+The `IsoRoute` import vanishes. The route-level `fallback` on `/watched` moves into `definePage(WatchedPage, { … })` (see §6.2). The multi-line comment vanishes. `DocsRoute` (which doesn't use `definePage`) and `Movies` (which does) route through the same component, because `definePage`'s output is itself a routable component now.
 
-### 3.3 The `<Page>` escape (unchanged in spirit)
+### 3.3 The `<Page>` escape
 
-A page that needs something `definePage` can't express drops to `<Page>` directly:
+**Before**: there is no clean drop-into-`<Page>` escape today. A consumer who wants to bypass `definePage` has two unhappy options:
+
+1. Use the granular `<Loader>` / `<Guards>` / `<Envelope>` / `<RouteBoundary>` directly, which works but pulls in five separate exports and replicates `<Page>`'s composition by hand.
+2. Render `<Page>` from inside a component referenced by `<Route>` — but the custom `<Route>` will then call `wrapWithPage` again on the outer component, double-wrapping. Avoidable only by switching that route to `IsoRoute` (the workaround `DocsRoute` already uses).
+
+**After**: `<Page>` is a usable escape directly, because `<Route>` from `preact-iso` no longer wraps anything. A page that needs something `definePage` can't express:
 
 ```tsx
+import { Page } from '@hono-preact/iso';
+import type { RouteHook } from 'preact-iso';
+import { loader, cache } from './movie.server.js';
+
 function MoviePage({ location }: { location: RouteHook }) {
   return (
     <Page
