@@ -29,16 +29,16 @@ type Movie = { id: number; title: string };
 
 ```ts
 import { getMovies } from '@/server/movies.js';
-import { defineLoader, type LoaderFn } from '@hono-preact/iso';
+import { defineLoader } from '@hono-preact/iso';
 
-const serverLoader: LoaderFn<{ movies: MovieList }> = async () => {
+const serverLoader = async () => {
   const movies = await getMovies(); // direct call; never runs in the browser
   return { movies };
 };
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
+export const loader = defineLoader(serverLoader);
 ```
 
 **`src/pages/movies.tsx`** is a pure component, with `definePage` attaching the loader binding:
@@ -74,21 +74,21 @@ const Movies = lazy(() => import('./pages/movies.js'));
 
 ## Example: detail page (using route params)
 
-`LoaderFn<T>` receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID:
+The loader function receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID. The function's return type is inferred and propagated through `defineLoader(fn)` to `useLoaderData<typeof loader>()` calls.
 
 ```ts
 // src/pages/movie.server.ts
 import { getMovie } from '@/server/movies.js';
-import { defineLoader, type LoaderFn } from '@hono-preact/iso';
+import { defineLoader } from '@hono-preact/iso';
 
-const serverLoader: LoaderFn<{ movie: Movie }> = async ({ location }) => {
+const serverLoader = async ({ location }) => {
   const movie = await getMovie(location.pathParams.id);
   return { movie };
 };
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movie: Movie }>(serverLoader);
+export const loader = defineLoader(serverLoader);
 ```
 
 ## Registering the loader endpoint
@@ -113,15 +113,15 @@ Export a `cache` from the `.server.ts` file alongside the loader, then pass it t
 
 ```ts
 // src/pages/movies.server.ts
-import { createCache, defineLoader, type LoaderFn } from '@hono-preact/iso';
+import { createCache, defineLoader } from '@hono-preact/iso';
 
-const serverLoader: LoaderFn<{ movies: MovieList }> = async () => ({
+const serverLoader = async () => ({
   movies: await getMovies(),
 });
 
 export default serverLoader;
 
-export const loader = defineLoader<{ movies: MovieList }>(serverLoader);
+export const loader = defineLoader(serverLoader);
 export const cache = createCache<{ movies: MovieList }>();
 ```
 

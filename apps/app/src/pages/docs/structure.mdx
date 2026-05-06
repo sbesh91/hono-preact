@@ -74,7 +74,7 @@ Isomorphic utilities shared between server and client (`packages/iso/`):
 - `define-page.ts`: `definePage(Component, { loader, cache, Wrapper })` factory that stamps page bindings onto a component via a well-known symbol; `<Route>` reads them at mount time.
 - `page.tsx`: `<Page>` component and `WrapperProps` type. Composes the route boundary, guards, loader, and envelope into a single page wrapper (used internally by `<Route>`). `<Page>` accepts `loader`, `location`, `cache`, `serverGuards`, `clientGuards`, `fallback`, `errorFallback`, and `Wrapper` (typed as `ComponentType<WrapperProps>`).
 - `loader.tsx`: `<Loader>` component that fetches and caches loader data, plus the `useReload` provider context.
-- `define-loader.ts`: `defineLoader` factory and `LoaderFn<T>` / `LoaderRef<T>` types.
+- `define-loader.ts`: `defineLoader` factory and `LoaderRef<T>` type.
 - `use-loader-data.ts`: `useLoaderData<typeof loader>()` hook for typed access to loader data inside children. The loader is supplied as a type-only generic, not as a runtime argument.
 - `envelope.tsx`: `<Envelope>` (default page Wrapper) that emits the SSR `data-loader` attribute. Accepts `as` (an intrinsic tag name or a `ComponentType<WrapperProps>`, defaults to `'section'`) and `children`.
 - `guards.tsx` / `guard.ts`: `<Guards>` component, `createGuard`, `runGuards`, guard types.
