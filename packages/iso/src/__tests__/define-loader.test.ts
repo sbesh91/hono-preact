@@ -13,6 +13,15 @@ describe('defineLoader', () => {
 
 });
 
+describe('defineLoader type-level guards', () => {
+  it('rejects the legacy (name, fn) form at the type level', () => {
+    // @ts-expect-error: defineLoader no longer accepts a string as the first
+    // argument; the (name, fn) overload was removed in the path-keyed identity
+    // refactor.
+    defineLoader('movies', async () => ({}));
+  });
+});
+
 describe('defineLoader (path-keyed __moduleKey form)', () => {
   it('accepts (fn, { __moduleKey }) and derives __id from the key', () => {
     const ref = defineLoader(async () => ({}), {
