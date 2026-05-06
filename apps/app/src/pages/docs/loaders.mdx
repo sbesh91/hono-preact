@@ -105,7 +105,7 @@ app
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`loadersHandler` derives the module name from the filename by stripping the path prefix and `.server.*` extension. This matches the convention used by `actionsHandler`.
+`loadersHandler` and `actionsHandler` route by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`. Modules without `__moduleKey` are silently skipped at map-build time.
 
 ## Caching navigation results
 
