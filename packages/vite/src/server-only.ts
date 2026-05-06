@@ -120,9 +120,16 @@ function loaderFetchArrow(moduleName: string, indent: string): string {
 }
 
 export function serverOnlyPlugin(): Plugin {
+  let viteRoot: string | undefined;
   return {
     name: 'server-only',
     enforce: 'pre',
+    configResolved(config) {
+      viteRoot = config.root;
+    },
+    // Test-only accessor. Used by unit tests to verify the hook fires;
+    // not part of the public plugin contract.
+    _viteRoot: () => viteRoot,
     transform(code: string, id: string, options?: { ssr?: boolean }) {
       if (options?.ssr) return;
       if (!/\.[jt]sx?$/.test(id)) return;
@@ -255,5 +262,5 @@ export function serverOnlyPlugin(): Plugin {
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
-  };
+  } as Plugin & { _viteRoot: () => string | undefined };
 }

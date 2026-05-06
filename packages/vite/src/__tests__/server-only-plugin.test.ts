@@ -327,6 +327,18 @@ describe('loader RPC stub key alignment', () => {
   });
 });
 
+describe('serverOnlyPlugin viteRoot capture', () => {
+  it('captures viteRoot from configResolved and exposes it for plugin coordination', () => {
+    const plugin = serverOnlyPlugin() as Plugin & {
+      configResolved?: (config: { root: string }) => void;
+      _viteRoot?: () => string | undefined;
+    };
+    expect(plugin._viteRoot?.()).toBeUndefined();
+    plugin.configResolved?.({ root: '/Users/me/repo' });
+    expect(plugin._viteRoot?.()).toBe('/Users/me/repo');
+  });
+});
+
 describe('loader stub Symbol.for keying matches user-provided name', () => {
   it("extracts the name argument from defineLoader('foo', ...) in the source file", () => {
     // Use the fixture .server.ts which has `defineLoader<...>('foo', serverLoader)`.
