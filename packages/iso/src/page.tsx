@@ -4,7 +4,7 @@ import type {
   FunctionComponent,
   JSX,
 } from 'preact';
-import { useId } from 'preact/hooks';
+import { useContext, useId } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import type { LoaderCache } from './cache.js';
 import type { GuardFn } from './guard.js';
@@ -13,6 +13,15 @@ import { Envelope } from './envelope.js';
 import { Guards } from './guards.js';
 import { Loader } from './loader.js';
 import { RouteBoundary } from './route-boundary.js';
+import { FragmentModeContext } from './fragment-mode.js';
+
+declare module 'preact' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'hp-page-fragment': { children?: ComponentChildren };
+    }
+  }
+}
 
 export type WrapperProps = {
   id: string;
@@ -50,7 +59,9 @@ export function Page<T>({
   children,
 }: PageProps<T>): JSX.Element {
   const id = useId();
-  return (
+  const isFragment = useContext(FragmentModeContext);
+
+  const tree = (
     <RouteBoundary fallback={fallback} errorFallback={errorFallback}>
       <Guards server={serverGuards} client={clientGuards} location={location}>
         {loader ? (
@@ -70,6 +81,13 @@ export function Page<T>({
       </Guards>
     </RouteBoundary>
   );
+
+  if (isFragment) {
+    // Custom element name (must contain a dash) renders as-is in HTML.
+    // renderPage extracts content between these markers in fragment mode.
+    return <hp-page-fragment>{tree}</hp-page-fragment> as unknown as JSX.Element;
+  }
+  return tree;
 }
 
 const NoLoaderFrame: FunctionComponent<{

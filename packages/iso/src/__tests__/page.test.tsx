@@ -6,6 +6,7 @@ import { Page } from '../page.js';
 import { defineLoader } from '../define-loader.js';
 import { createGuard, GuardRedirect, runGuards } from '../guard.js';
 import { env } from '../is-browser.js';
+import { FragmentModeContext } from '../fragment-mode.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
@@ -159,5 +160,47 @@ describe('Page error boundary', () => {
     const el = await screen.findByTestId('error');
     expect(el).toHaveTextContent('boom');
     expect(screen.queryByTestId('content')).toBeNull();
+  });
+});
+
+const fragLoc = { path: '/x', url: '/x', searchParams: {}, pathParams: {} } as unknown as RouteHook;
+
+describe('<Page> under fragment mode', () => {
+  it('wraps its rendered subtree in <hp-page-fragment>', async () => {
+    function Inner() {
+      return <p data-testid="frag-inner">body</p>;
+    }
+    const { container } = render(
+      <LocationProvider>
+        <FragmentModeContext.Provider value={true}>
+          <Page location={fragLoc}>
+            <Inner />
+          </Page>
+        </FragmentModeContext.Provider>
+      </LocationProvider>
+    );
+
+    await screen.findByTestId('frag-inner');
+    const sentinel = container.querySelector('hp-page-fragment');
+    expect(sentinel).not.toBeNull();
+    const inner = screen.getByTestId('frag-inner');
+    expect(sentinel).toContainElement(inner);
+  });
+
+  it('does not wrap when fragment mode is false (default)', async () => {
+    function Inner() {
+      return <p data-testid="no-frag-inner">body</p>;
+    }
+    const { container } = render(
+      <LocationProvider>
+        <Page location={fragLoc}>
+          <Inner />
+        </Page>
+      </LocationProvider>
+    );
+
+    await screen.findByTestId('no-frag-inner');
+    const sentinel = container.querySelector('hp-page-fragment');
+    expect(sentinel).toBeNull();
   });
 });
