@@ -3,7 +3,7 @@ import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
 import { GuardRedirect, env } from '@hono-preact/iso';
-import { runRequestScope } from '@hono-preact/iso/internal';
+import { runRequestScope, FragmentModeContext } from '@hono-preact/iso/internal';
 
 function escapeHtml(str: string): string {
   return str
@@ -20,8 +20,67 @@ function toAttrs(obj: Record<string, string | undefined>): string {
     .join(' ');
 }
 
-// this is a bit too naive still
 export async function renderPage(
+  c: Context,
+  node: VNode,
+  options?: { defaultTitle?: string }
+): Promise<Response> {
+  const isFragment = c.req.header('X-HP-Navigate') === 'fragment';
+  if (isFragment) return renderFragment(c, node);
+  return renderDocument(c, node, options);
+}
+
+const FRAGMENT_OPEN = '<hp-page-fragment>';
+const FRAGMENT_CLOSE = '</hp-page-fragment>';
+
+async function renderFragment(c: Context, node: VNode): Promise<Response> {
+  const dispatcher = createDispatcher();
+  const previousEnv = env.current;
+  env.current = 'server';
+
+  let html: string;
+  try {
+    ({ html } = await runRequestScope(() =>
+      prerender(
+        <FragmentModeContext.Provider value={true}>
+          <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+        </FragmentModeContext.Provider>
+      )
+    ));
+  } catch (e: unknown) {
+    if (e instanceof GuardRedirect) {
+      return c.json({
+        events: [{ type: 'redirect', location: e.location }],
+      });
+    }
+    throw e;
+  } finally {
+    env.current = previousEnv;
+  }
+
+  const start = html.indexOf(FRAGMENT_OPEN);
+  const end = html.indexOf(FRAGMENT_CLOSE);
+  if (start < 0 || end < 0 || end < start) {
+    // No fragment marker found. Either the matched route did not render <Page>,
+    // or the marker was stripped. Fall back to instructing the client to do a
+    // hard navigation.
+    return c.json({ events: [{ type: 'fallback' }] }, 200);
+  }
+  const captured = html.slice(start + FRAGMENT_OPEN.length, end);
+
+  const { title, metas = [], links = [] } = dispatcher.toStatic();
+  return c.json({
+    events: [
+      {
+        type: 'envelope',
+        html: captured,
+        head: { title, metas, links },
+      },
+    ],
+  });
+}
+
+async function renderDocument(
   c: Context,
   node: VNode,
   options?: { defaultTitle?: string }

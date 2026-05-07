@@ -26,3 +26,4 @@ export { getPreloadedData, deletePreloadedData } from './preload.js';
 export { runRequestScope } from './cache.js';
 export { default as wrapPromise } from './wrap-promise.js';
 export { runGuards } from './guard.js';
+export { FragmentModeContext } from './fragment-mode.js';
