@@ -10,6 +10,7 @@ import {
   installClickInterceptor,
   uninstallClickInterceptor,
   __setNavigateForTesting,
+  navigate,
 } from '../navigator.js';
 
 beforeEach(() => {
@@ -130,5 +131,105 @@ describe('navigator fragment buffer + subscription', () => {
     setLatestFragment('/blog/*', 'X');
     expect(seen).toEqual([]);
     unsub();
+  });
+});
+
+describe('navigator.navigate()', () => {
+  beforeEach(() => {
+    clearRegistry();
+    clearLatestFragment();
+  });
+
+  it('fetches URL with X-HP-Navigate: fragment and applies envelope', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        events: [{
+          type: 'envelope',
+          html: '<section id="loader-foo" data-loader="{}">x</section>',
+          head: { title: 'Doc', metas: [], links: [] },
+        }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    );
+    registerRouteMode('/docs/:slug', 'ssr');
+
+    const seen: string[] = [];
+    subscribeToFragment('/docs/:slug', (h) => seen.push(h));
+
+    await navigate('/docs/intro');
+
+    expect(fetchSpy).toHaveBeenCalledWith('/docs/intro', expect.objectContaining({
+      headers: expect.objectContaining({ 'X-HP-Navigate': 'fragment' }),
+    }));
+    expect(seen).toEqual(['<section id="loader-foo" data-loader="{}">x</section>']);
+    expect(document.title).toBe('Doc');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('falls back to location.assign on non-2xx response', async () => {
+    const assignSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, assign: assignSpy, origin: window.location.origin },
+      writable: true,
+    });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('boom', { status: 500 })
+    );
+    registerRouteMode('/docs/*', 'ssr');
+    await navigate('/docs/x');
+    expect(assignSpy).toHaveBeenCalledWith('/docs/x');
+    vi.restoreAllMocks();
+  });
+
+  it('follows redirect events to a new navigate call', async () => {
+    let calls = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      calls++;
+      if (calls === 1) {
+        return new Response(JSON.stringify({
+          events: [{ type: 'redirect', location: '/login' }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        events: [{ type: 'envelope', html: '<p>login</p>', head: { title: 'Login', metas: [], links: [] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    registerRouteMode('/docs/:slug', 'ssr');
+    registerRouteMode('/login', 'ssr');
+    const seen: string[] = [];
+    subscribeToFragment('/login', (h) => seen.push(h));
+    await navigate('/docs/secret');
+    expect(calls).toBe(2);
+    expect(seen).toEqual(['<p>login</p>']);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('navigator popstate handling', () => {
+  it('refetches the fragment on popstate for SSR routes without pushing state', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        events: [{ type: 'envelope', html: '<p>back</p>', head: {} }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    );
+    const pushSpy = vi.spyOn(history, 'pushState');
+    registerRouteMode('/docs/*', 'ssr');
+    const seen: string[] = [];
+    subscribeToFragment('/docs/*', (h) => seen.push(h));
+
+    // Simulate browser back/forward to /docs/old.
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, pathname: '/docs/old', search: '' },
+      writable: true,
+    });
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchSpy).toHaveBeenCalledWith('/docs/old', expect.anything());
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(seen).toEqual(['<p>back</p>']);
+
+    fetchSpy.mockRestore();
+    pushSpy.mockRestore();
   });
 });

@@ -58,21 +58,94 @@ export function subscribeToFragment(
   };
 }
 
-// Implemented in Task 7. Stub is intentionally loud to surface accidental misuse.
-export function navigate(url: string): void {
-  throw new Error(`navigator.navigate() not yet implemented (url: ${url})`);
+let inflight: AbortController | null = null;
+
+type Envelope = {
+  type: 'envelope';
+  html: string;
+  head: {
+    title?: string;
+    metas?: { name?: string; content?: string; property?: string }[];
+    links?: { rel?: string; href?: string }[];
+  };
+};
+type Redirect = { type: 'redirect'; location: string };
+type Fallback = { type: 'fallback' };
+type EventItem = Envelope | Redirect | Fallback;
+
+function applyHead(head: Envelope['head']): void {
+  if (typeof document === 'undefined') return;
+  if (head.title !== undefined) document.title = head.title;
+  // For metas/links: imperatively reconcile with hoofd-rendered tags.
+  // v1 keeps this minimal; hoofd hooks in the hydrating tree will further
+  // reconcile after hydrate fires. See spec "Hoofd reconciliation" risk note.
 }
 
-let installed = false;
+function findMatchingPattern(url: string): string | null {
+  for (const [pattern] of routeModes) {
+    if (exec(url, pattern, {})) return pattern;
+  }
+  return null;
+}
+
 let testingNavigate: ((url: string) => void) | null = null;
 
 export function __setNavigateForTesting(fn: ((url: string) => void) | null): void {
   testingNavigate = fn;
 }
 
+export async function navigate(
+  url: string,
+  opts: { push?: boolean } = { push: true }
+): Promise<void> {
+  if (testingNavigate) return testingNavigate(url) as unknown as void;
+  if (inflight) inflight.abort();
+  const ctrl = new AbortController();
+  inflight = ctrl;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { 'X-HP-Navigate': 'fragment' },
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return;
+    location.assign(url);
+    return;
+  }
+  if (!res.ok) {
+    location.assign(url);
+    return;
+  }
+  let body: { events?: EventItem[] };
+  try {
+    body = await res.json();
+  } catch {
+    location.assign(url);
+    return;
+  }
+  const events = body.events ?? [];
+  for (const event of events) {
+    if (event.type === 'envelope') {
+      applyHead(event.head);
+      const pattern = findMatchingPattern(url);
+      if (pattern) setLatestFragment(pattern, event.html);
+      // History update: gated by opts.push so popstate-triggered fetches
+      // don't double-push.
+      if (opts.push) history.pushState(null, '', url);
+    } else if (event.type === 'redirect') {
+      await navigate(event.location);
+      return;
+    } else if (event.type === 'fallback') {
+      location.assign(url);
+      return;
+    }
+  }
+}
+
 function dispatchNavigate(url: string): void {
   if (testingNavigate) testingNavigate(url);
-  else navigate(url);
+  else void navigate(url);
 }
 
 function shouldInterceptClick(event: MouseEvent): { url: string } | null {
@@ -100,15 +173,26 @@ function onClickCapture(event: MouseEvent): void {
   dispatchNavigate(decision.url);
 }
 
+function onPopstate(): void {
+  const url = location.pathname + location.search;
+  if (lookupRouteMode(url) === 'ssr') {
+    void navigate(url, { push: false });
+  }
+}
+
+let installed = false;
+
 export function installClickInterceptor(): void {
   if (installed) return;
   if (typeof document === 'undefined') return;
   document.addEventListener('click', onClickCapture, true);
+  window.addEventListener('popstate', onPopstate);
   installed = true;
 }
 
 export function uninstallClickInterceptor(): void {
   if (!installed) return;
   document.removeEventListener('click', onClickCapture, true);
+  window.removeEventListener('popstate', onPopstate);
   installed = false;
 }
