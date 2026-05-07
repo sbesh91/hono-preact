@@ -17,7 +17,7 @@ export const Base: FunctionComponent = () => {
   return (
     <Router onRouteChange={onRouteChange}>
       <Route path="/" component={Home} />
-      <Route path="/test" component={Test} />
+      <Route path="/test" component={Test} navigate="ssr" />
       <Route path="/movies" component={Movies} />
       <Route path="/movies/*" component={Movies} />
       <Route path="/watched" component={Watched} />

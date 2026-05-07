@@ -1,10 +1,10 @@
 import { useLink } from 'hoofd/preact';
-import { type FunctionComponent } from 'preact';
+import { definePage } from '@hono-preact/iso';
 import test from './test.css?url';
 import styles from './test.module.scss';
 import inline from './test.module.scss?inline';
 
-const Test: FunctionComponent = () => {
+function TestContent() {
   useLink({ rel: 'stylesheet', href: test });
   return (
     <section class="p-1">
@@ -14,7 +14,9 @@ const Test: FunctionComponent = () => {
       </a>
     </section>
   );
-};
-Test.displayName = 'Test';
+}
+TestContent.displayName = 'Test';
+
+const Test = definePage(TestContent);
 
 export default Test;
