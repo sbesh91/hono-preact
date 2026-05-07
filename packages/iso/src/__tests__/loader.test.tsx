@@ -5,6 +5,7 @@ import { useState } from 'preact/hooks';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { Loader } from '../loader.js';
+import { Envelope } from '../envelope.js';
 import { useLoaderData } from '../use-loader-data.js';
 import { useReload } from '../reload-context.js';
 import { env } from '../is-browser.js';
@@ -267,6 +268,22 @@ describe('v3 <Loader> stability', () => {
     });
 
     await screen.findByText('reloaded');
+  });
+
+  it('derives the preload-channel id from loaderRef moduleKey, not useId', async () => {
+    const ref = defineLoader<{ ok: true }>(async () => ({ ok: true }), {
+      __moduleKey: 'src/pages/movies',
+    });
+    const { container } = render(
+      <Loader loader={ref} location={loc}>
+        <Envelope as="section">child</Envelope>
+      </Loader>
+    );
+    // Wait one tick for Suspense to resolve.
+    await new Promise((r) => setTimeout(r, 0));
+    const wrapper = container.querySelector('section');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper!.id).toBe('loader-src-pages-movies');
   });
 
   it('refetches when searchParams change even though path is stable', async () => {

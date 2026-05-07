@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
-import { useCallback, useId, useRef, useState } from 'preact/hooks';
+import { useCallback, useRef, useState } from 'preact/hooks';
 import type { LoaderCache } from './cache.js';
 import { isBrowser } from './is-browser.js';
 import { ReloadContext } from './reload-context.js';
@@ -9,6 +9,18 @@ import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { LoaderDataContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from './define-loader.js';
+
+const LOADER_ID_PREFIX = '@hono-preact/loader:';
+
+function deriveLoaderDomId(ref: LoaderRef<unknown>): string {
+  const desc = ref.__id.description ?? '';
+  const moduleKey = desc.startsWith(LOADER_ID_PREFIX)
+    ? desc.slice(LOADER_ID_PREFIX.length)
+    : 'unkeyed';
+  // DOM id: replace path-unfriendly characters with hyphens for selector-safe ids.
+  const safe = moduleKey.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return `loader-${safe}`;
+}
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -25,7 +37,7 @@ export function Loader<T>({
   fallback,
   children,
 }: LoaderProps<T>) {
-  const id = useId();
+  const id = deriveLoaderDomId(loader);
   const effectiveCache = cache ?? loader.cache;
 
   return (
