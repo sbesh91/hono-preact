@@ -9,15 +9,17 @@ import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { LoaderDataContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from './define-loader.js';
-
-const LOADER_ID_PREFIX = '@hono-preact/loader:';
+import { LOADER_ID_PREFIX } from './define-loader.js';
 
 function deriveLoaderDomId(ref: LoaderRef<unknown>): string {
   const desc = ref.__id.description ?? '';
   const moduleKey = desc.startsWith(LOADER_ID_PREFIX)
     ? desc.slice(LOADER_ID_PREFIX.length)
+    // Unkeyed loaders (no Vite plugin) all share this id, so the DOM
+    // preload channel is unreliable for them. Tests that don't depend
+    // on cache-by-id behavior tolerate this.
     : 'unkeyed';
-  // DOM id: replace path-unfriendly characters with hyphens for selector-safe ids.
+  // CSS-selector-safe: replace any char outside [a-zA-Z0-9_-] with a hyphen.
   const safe = moduleKey.replace(/[^a-zA-Z0-9_-]/g, '-');
   return `loader-${safe}`;
 }

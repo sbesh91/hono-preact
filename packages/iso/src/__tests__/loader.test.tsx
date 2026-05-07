@@ -286,6 +286,19 @@ describe('v3 <Loader> stability', () => {
     expect(wrapper!.id).toBe('loader-src-pages-movies');
   });
 
+  it('falls back to "loader-unkeyed" when defineLoader is called without a moduleKey', async () => {
+    const ref = defineLoader<{ ok: true }>(async () => ({ ok: true }));
+    const { container } = render(
+      <Loader loader={ref} location={loc}>
+        <Envelope as="section">child</Envelope>
+      </Loader>
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    const wrapper = container.querySelector('section');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper!.id).toBe('loader-unkeyed');
+  });
+
   it('refetches when searchParams change even though path is stable', async () => {
     const fn = vi.fn(({ location }: { location: RouteHook }) =>
       Promise.resolve({ q: location.searchParams.q ?? '' })

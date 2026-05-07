@@ -1,6 +1,8 @@
 import type { RouteHook } from 'preact-iso';
 import type { LoaderCache } from './cache.js';
 
+export const LOADER_ID_PREFIX = '@hono-preact/loader:';
+
 export type LoaderCtx = { location: RouteHook };
 
 export type Loader<T> = (ctx: LoaderCtx) => Promise<T>;
@@ -46,7 +48,7 @@ export function defineLoader<T>(
 ): LoaderRef<T> {
   if (opts?.__moduleKey) {
     return {
-      __id: Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`),
+      __id: Symbol.for(`${LOADER_ID_PREFIX}${opts.__moduleKey}`),
       fn,
     };
   }
@@ -54,7 +56,7 @@ export function defineLoader<T>(
   // Identity is unstable across module reloads, which is acceptable for
   // tests that don't depend on cache-by-id behavior.
   return {
-    __id: Symbol(`@hono-preact/loader:<unkeyed>`),
+    __id: Symbol(`<unkeyed>`),
     fn,
   };
 }
