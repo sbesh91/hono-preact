@@ -81,7 +81,7 @@ function applyHead(head: Envelope['head']): void {
   // reconcile after hydrate fires. See spec "Hoofd reconciliation" risk note.
 }
 
-function findMatchingPattern(url: string): string | null {
+export function findMatchingPattern(url: string): string | null {
   for (const [pattern] of routeModes) {
     if (exec(url, pattern, {})) return pattern;
   }
