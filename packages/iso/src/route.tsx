@@ -23,8 +23,15 @@ export type RouteProps = {
 const _prevVNode = options.vnode;
 options.vnode = (vnode: VNode) => {
   if (vnode.type === Route) {
-    const props = vnode.props as RouteProps;
-    if (props.navigate === 'ssr' && props.path) {
+    const props = vnode.props as RouteProps & { searchParams?: unknown };
+    // Skip clones produced by preact-iso's Router, which add searchParams to
+    // matchProps and overwrite `path` with the matched URL. Only the original
+    // JSX VNode should drive registration.
+    if (
+      props.navigate === 'ssr' &&
+      props.path &&
+      !('searchParams' in props)
+    ) {
       registerRouteMode(props.path, 'ssr');
     }
   }

@@ -8,6 +8,7 @@ import {
   clearRegistry,
   setLatestFragment,
   clearLatestFragment,
+  findMatchingPattern,
 } from '../navigator.js';
 
 beforeEach(() => {
@@ -42,6 +43,22 @@ describe('<Route> wrapper', () => {
       </LocationProvider>
     );
     expect(lookupRouteMode('/docs/intro')).toBe('ssr');
+  });
+
+  it('does not register the matched URL as an additional pattern after navigation', async () => {
+    function Page(props: any) {
+      return <p data-testid="x">slug={props.pathParams.slug}</p>;
+    }
+    window.history.pushState({}, '', '/docs/intro');
+    render(
+      <LocationProvider>
+        <Router>
+          <Route path="/docs/:slug" component={Page} navigate="ssr" />
+        </Router>
+      </LocationProvider>
+    );
+    await screen.findByTestId('x');
+    expect(findMatchingPattern('/docs/intro')).toBe('/docs/:slug');
   });
 
   it('substitutes PageHost for SSR routes', async () => {
