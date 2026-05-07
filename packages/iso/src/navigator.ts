@@ -21,7 +21,7 @@ export function clearRegistry(): void {
  */
 export function lookupRouteMode(url: string): NavigateMode {
   for (const [pattern, mode] of routeModes) {
-    if (exec(url, pattern, {})) return mode;
+    if (exec(url, pattern)) return mode;
   }
   return 'spa';
 }
@@ -83,7 +83,7 @@ function applyHead(head: Envelope['head']): void {
 
 export function findMatchingPattern(url: string): string | null {
   for (const [pattern] of routeModes) {
-    if (exec(url, pattern, {})) return pattern;
+    if (exec(url, pattern)) return pattern;
   }
   return null;
 }

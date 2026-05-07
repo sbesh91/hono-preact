@@ -1,5 +1,5 @@
 import type { ComponentType, VNode } from 'preact';
-import { options } from 'preact';
+import { h, options } from 'preact';
 import { Route as PreactIsoRoute, type RouteHook } from 'preact-iso';
 import { PageHost } from './page-host.js';
 import {
@@ -23,7 +23,7 @@ export type RouteProps = {
 const _prevVNode = options.vnode;
 options.vnode = (vnode: VNode) => {
   if (vnode.type === Route) {
-    const props = vnode.props as RouteProps & { searchParams?: unknown };
+    const props = vnode.props as unknown as RouteProps & { searchParams?: unknown };
     // Skip clones produced by preact-iso's Router, which add searchParams to
     // matchProps and overwrite `path` with the matched URL. Only the original
     // JSX VNode should drive registration.
@@ -49,7 +49,11 @@ export function Route({ component, navigate, path, ...rest }: RouteProps) {
       <PageHost component={component} location={props} path={pattern} />
     );
     HostedComponent.displayName = `SsrRoute(${pattern})`;
-    return <PreactIsoRoute path={path} component={HostedComponent} {...rest} />;
+    // preact-iso's Route uses a discriminated union ({ path } | { default: true })
+    // that TypeScript cannot satisfy when forwarding a spread containing
+    // `default?: boolean`. Use h() directly to bypass JSX prop checking.
+    return h(PreactIsoRoute, { path, component: HostedComponent, ...rest } as any);
   }
-  return <PreactIsoRoute path={path} component={component} {...rest} />;
+  // Same discriminated-union bypass for the non-SSR path.
+  return h(PreactIsoRoute, { path, component, ...rest } as any);
 }

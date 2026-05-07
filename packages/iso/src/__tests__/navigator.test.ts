@@ -46,7 +46,7 @@ describe('navigator click interceptor', () => {
   beforeEach(() => {
     clearRegistry();
     navigateSpy = vi.fn();
-    __setNavigateForTesting(navigateSpy);
+    __setNavigateForTesting(navigateSpy as unknown as (url: string) => void);
     installClickInterceptor();
   });
   afterEach(() => {
@@ -183,7 +183,7 @@ describe('navigator.navigate()', () => {
 
   it('follows redirect events to a new navigate call', async () => {
     let calls = 0;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
       calls++;
       if (calls === 1) {
         return new Response(JSON.stringify({

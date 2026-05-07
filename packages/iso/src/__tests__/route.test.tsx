@@ -24,9 +24,8 @@ describe('<Route> wrapper', () => {
     window.history.pushState({}, '', '/spa');
     render(
       <LocationProvider>
-        <Router>
-          <Route path="/spa" component={Page} />
-        </Router>
+        {/* Router expects NestedArray<VNode> children; wrap in array to satisfy the type */}
+        <Router>{[<Route key="r" path="/spa" component={Page} />]}</Router>
       </LocationProvider>
     );
     expect(await screen.findByTestId('spa')).toHaveTextContent('spa');
@@ -37,9 +36,7 @@ describe('<Route> wrapper', () => {
     function Page() { return null; }
     render(
       <LocationProvider>
-        <Router>
-          <Route path="/docs/:slug" component={Page} navigate="ssr" />
-        </Router>
+        <Router>{[<Route key="r" path="/docs/:slug" component={Page} navigate="ssr" />]}</Router>
       </LocationProvider>
     );
     expect(lookupRouteMode('/docs/intro')).toBe('ssr');
@@ -52,9 +49,7 @@ describe('<Route> wrapper', () => {
     window.history.pushState({}, '', '/docs/intro');
     render(
       <LocationProvider>
-        <Router>
-          <Route path="/docs/:slug" component={Page} navigate="ssr" />
-        </Router>
+        <Router>{[<Route key="r" path="/docs/:slug" component={Page} navigate="ssr" />]}</Router>
       </LocationProvider>
     );
     await screen.findByTestId('x');
@@ -68,9 +63,7 @@ describe('<Route> wrapper', () => {
     window.history.pushState({}, '', '/docs/intro');
     render(
       <LocationProvider>
-        <Router>
-          <Route path="/docs/:slug" component={Page} navigate="ssr" />
-        </Router>
+        <Router>{[<Route key="r" path="/docs/:slug" component={Page} navigate="ssr" />]}</Router>
       </LocationProvider>
     );
     // Pre-island: same as SPA-mode
