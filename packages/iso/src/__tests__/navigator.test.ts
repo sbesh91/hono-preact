@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   registerRouteMode,
   lookupRouteMode,
@@ -7,6 +7,9 @@ import {
   setLatestFragment,
   subscribeToFragment,
   clearLatestFragment,
+  installClickInterceptor,
+  uninstallClickInterceptor,
+  __setNavigateForTesting,
 } from '../navigator.js';
 
 beforeEach(() => {
@@ -34,6 +37,72 @@ describe('navigator route mode registry', () => {
     registerRouteMode('/docs/*', 'ssr');
     expect(lookupRouteMode('/docs/a')).toBe('ssr');
     expect(lookupRouteMode('/docs/a/b/c')).toBe('ssr');
+  });
+});
+
+describe('navigator click interceptor', () => {
+  let navigateSpy: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    clearRegistry();
+    navigateSpy = vi.fn();
+    __setNavigateForTesting(navigateSpy);
+    installClickInterceptor();
+  });
+  afterEach(() => {
+    uninstallClickInterceptor();
+    __setNavigateForTesting(null);
+  });
+
+  function clickAnchor(href: string, init?: Partial<MouseEventInit>): MouseEvent {
+    const a = document.createElement('a');
+    a.href = href;
+    document.body.appendChild(a);
+    const ev = new MouseEvent('click', {
+      bubbles: true, cancelable: true, button: 0, ...init,
+    });
+    a.dispatchEvent(ev);
+    a.remove();
+    return ev;
+  }
+
+  it('intercepts SSR-route same-origin plain clicks', () => {
+    registerRouteMode('/docs/:slug', 'ssr');
+    const ev = clickAnchor(window.location.origin + '/docs/intro');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(navigateSpy).toHaveBeenCalledWith('/docs/intro');
+  });
+
+  it('does not intercept SPA-route clicks', () => {
+    const ev = clickAnchor(window.location.origin + '/profile');
+    expect(ev.defaultPrevented).toBe(false);
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not intercept clicks with modifier keys', () => {
+    registerRouteMode('/docs/:slug', 'ssr');
+    const ev = clickAnchor(window.location.origin + '/docs/intro', { metaKey: true });
+    expect(ev.defaultPrevented).toBe(false);
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not intercept cross-origin clicks', () => {
+    registerRouteMode('/docs/:slug', 'ssr');
+    const ev = clickAnchor('https://example.com/docs/intro');
+    expect(ev.defaultPrevented).toBe(false);
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not intercept target=_blank', () => {
+    registerRouteMode('/docs/:slug', 'ssr');
+    const a = document.createElement('a');
+    a.href = window.location.origin + '/docs/intro';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    a.dispatchEvent(ev);
+    a.remove();
+    expect(ev.defaultPrevented).toBe(false);
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });
 
