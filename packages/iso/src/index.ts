@@ -4,9 +4,20 @@ export type { PageProps, WrapperProps } from './page.js';
 export { definePage } from './define-page.js';
 export type { PageBindings } from './define-page.js';
 
-// Routing primitives — trivial re-exports of preact-iso. Listed here so
-// consumers have a single import surface for everything they need.
-export { Route, Router, lazy } from 'preact-iso';
+// Routing primitives. Router and lazy are direct re-exports of preact-iso;
+// Route is our wrapper that adds the optional navigate="ssr" prop.
+export { Router, lazy } from 'preact-iso';
+export { Route } from './route.js';
+export type { RouteProps } from './route.js';
+export type { NavigateMode } from './navigator.js';
+
+// Programmatic navigation that respects per-route SSR/SPA mode.
+export { navigate } from './navigator.js';
+
+// Hydration island used by SSR routes (also exported so advanced consumers
+// can compose their own routing).
+export { PageHost } from './page-host.js';
+export type { PageHostProps } from './page-host.js';
 
 // Server bindings.
 export { defineLoader } from './define-loader.js';
