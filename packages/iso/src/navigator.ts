@@ -94,6 +94,16 @@ export function __setNavigateForTesting(fn: ((url: string) => void) | null): voi
   testingNavigate = fn;
 }
 
+/**
+ * Programmatic navigation that respects per-route SSR/SPA mode.
+ *
+ * v1 limitation: when called outside a click context, this pushes
+ * history state but does not notify preact-iso's LocationProvider
+ * reducer. The matched <Route> may not advance until the next click
+ * or popstate. Click-driven navigation is unaffected (preact-iso's
+ * bubble-phase click listener picks up the URL after we
+ * preventDefault).
+ */
 export async function navigate(
   url: string,
   opts: { push?: boolean } = { push: true }
@@ -125,14 +135,18 @@ export async function navigate(
     return;
   }
   const events = body.events ?? [];
+  // v1 processes events sequentially. envelope sets state and continues
+  // (in practice the response has at most one envelope); redirect and
+  // fallback both terminate. Phase 2 streaming may emit multiple events
+  // per response (see spec "Forward compatibility for streaming"); when
+  // that happens, pushState behavior must be revisited.
+  let pushedHistoryFor: string | null = null;
   for (const event of events) {
     if (event.type === 'envelope') {
       applyHead(event.head);
       const pattern = findMatchingPattern(url);
       if (pattern) setLatestFragment(pattern, event.html);
-      // History update: gated by opts.push so popstate-triggered fetches
-      // don't double-push.
-      if (opts.push) history.pushState(null, '', url);
+      pushedHistoryFor = url;
     } else if (event.type === 'redirect') {
       await navigate(event.location);
       return;
@@ -141,11 +155,15 @@ export async function navigate(
       return;
     }
   }
+  if (opts.push && pushedHistoryFor) history.pushState(null, '', pushedHistoryFor);
 }
 
 function dispatchNavigate(url: string): void {
   if (testingNavigate) testingNavigate(url);
-  else void navigate(url);
+  // Click path: preact-iso's bubble-phase listener will run after ours
+  // and call history.pushState itself, so we skip the push here. The
+  // LocationProvider URL signal is updated by preact-iso's reducer.
+  else void navigate(url, { push: false });
 }
 
 function shouldInterceptClick(event: MouseEvent): { url: string } | null {

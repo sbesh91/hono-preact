@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { PageHost } from '../page-host.js';
-import { setLatestFragment, clearLatestFragment } from '../navigator.js';
+import { setLatestFragment, clearLatestFragment, registerRouteMode } from '../navigator.js';
 
 afterEach(cleanup);
 
@@ -45,5 +45,41 @@ describe('PageHost (island mode)', () => {
     const host = container.querySelector('[data-hp-island="true"]');
     expect(host).not.toBeNull();
     expect(host!.querySelector('p')).not.toBeNull();
+  });
+
+  it('outer rerender with new location does not blank the host innerHTML', async () => {
+    function User(props: RouteHook) {
+      return <p data-testid="island">island slug={props.pathParams!.slug}</p>;
+    }
+    registerRouteMode('/docs/:slug', 'ssr');
+    const loc1 = { ...loc, pathParams: { slug: 'x' } } as RouteHook;
+    const loc2 = { ...loc, pathParams: { slug: 'y' }, path: '/docs/y', url: '/docs/y' } as RouteHook;
+
+    const { rerender, container } = render(
+      <LocationProvider>
+        <PageHost component={User} location={loc1} path="/docs/:slug" />
+      </LocationProvider>
+    );
+
+    setLatestFragment('/docs/:slug', '<p data-testid="island">island slug=x</p>');
+    await new Promise((r) => setTimeout(r, 0));
+    const host = container.querySelector('[data-hp-island="true"]') as HTMLDivElement;
+    expect(host).not.toBeNull();
+    expect(host.innerHTML.length).toBeGreaterThan(0);
+
+    // Rerender outer tree with a new location prop.
+    rerender(
+      <LocationProvider>
+        <PageHost component={User} location={loc2} path="/docs/:slug" />
+      </LocationProvider>
+    );
+
+    // The host element is the same DOM node and its innerHTML has been
+    // re-hydrated by the useLayoutEffect (because location changed),
+    // but it MUST NOT have been blanked by Preact's outer reconciler
+    // between the rerender and the layout effect.
+    const sameHost = container.querySelector('[data-hp-island="true"]') as HTMLDivElement;
+    expect(sameHost).toBe(host);
+    expect(sameHost.innerHTML.length).toBeGreaterThan(0);
   });
 });

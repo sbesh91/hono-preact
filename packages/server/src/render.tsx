@@ -68,13 +68,13 @@ async function renderFragment(c: Context, node: VNode): Promise<Response> {
   }
   const captured = html.slice(start + FRAGMENT_OPEN.length, end);
 
-  const { title, metas = [], links = [] } = dispatcher.toStatic();
+  const { title } = dispatcher.toStatic();
   return c.json({
     events: [
       {
         type: 'envelope',
         html: captured,
-        head: { title, metas, links },
+        head: { title },
       },
     ],
   });

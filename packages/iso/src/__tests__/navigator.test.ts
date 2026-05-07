@@ -105,6 +105,36 @@ describe('navigator click interceptor', () => {
     expect(ev.defaultPrevented).toBe(false);
     expect(navigateSpy).not.toHaveBeenCalled();
   });
+
+  it('does not push history state on click-intercepted navigation (preact-iso handles it)', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        events: [{ type: 'envelope', html: '<p>x</p>', head: {} }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    );
+    const pushSpy = vi.spyOn(history, 'pushState');
+    registerRouteMode('/docs/:slug', 'ssr');
+
+    // Simulate click via the real interceptor (drop testingNavigate so the real navigate runs).
+    __setNavigateForTesting(null);
+    const a = document.createElement('a');
+    a.href = window.location.origin + '/docs/intro';
+    document.body.appendChild(a);
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    a.dispatchEvent(ev);
+    a.remove();
+
+    // Wait for the navigate promise to settle.
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(fetchSpy).toHaveBeenCalled();
+    expect(pushSpy).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
+    pushSpy.mockRestore();
+    // Restore testingNavigate so afterEach works cleanly.
+    __setNavigateForTesting(navigateSpy as unknown as (url: string) => void);
+  });
 });
 
 describe('navigator fragment buffer + subscription', () => {
@@ -135,9 +165,13 @@ describe('navigator fragment buffer + subscription', () => {
 });
 
 describe('navigator.navigate()', () => {
+  const ORIGINAL_LOCATION = window.location;
   beforeEach(() => {
     clearRegistry();
     clearLatestFragment();
+  });
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: ORIGINAL_LOCATION, writable: true });
   });
 
   it('fetches URL with X-HP-Navigate: fragment and applies envelope', async () => {
@@ -146,7 +180,7 @@ describe('navigator.navigate()', () => {
         events: [{
           type: 'envelope',
           html: '<section id="loader-foo" data-loader="{}">x</section>',
-          head: { title: 'Doc', metas: [], links: [] },
+          head: { title: 'Doc' },
         }],
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     );
@@ -191,7 +225,7 @@ describe('navigator.navigate()', () => {
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({
-        events: [{ type: 'envelope', html: '<p>login</p>', head: { title: 'Login', metas: [], links: [] } }],
+        events: [{ type: 'envelope', html: '<p>login</p>', head: { title: 'Login' } }],
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     registerRouteMode('/docs/:slug', 'ssr');
@@ -206,6 +240,11 @@ describe('navigator.navigate()', () => {
 });
 
 describe('navigator popstate handling', () => {
+  const ORIGINAL_LOCATION = window.location;
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: ORIGINAL_LOCATION, writable: true });
+  });
+
   it('refetches the fragment on popstate for SSR routes without pushing state', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({

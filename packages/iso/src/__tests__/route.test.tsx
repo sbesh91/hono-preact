@@ -9,6 +9,7 @@ import {
   setLatestFragment,
   clearLatestFragment,
   findMatchingPattern,
+  uninstallClickInterceptor,
 } from '../navigator.js';
 
 beforeEach(() => {
@@ -16,7 +17,10 @@ beforeEach(() => {
   clearLatestFragment();
   window.history.pushState({}, '', '/');
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  uninstallClickInterceptor();
+});
 
 describe('<Route> wrapper', () => {
   it('passes through to preact-iso Route when navigate is omitted', async () => {
