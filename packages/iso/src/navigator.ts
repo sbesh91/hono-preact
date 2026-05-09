@@ -5,6 +5,7 @@ export type NavigateMode = 'spa' | 'ssr';
 const routeModes = new Map<string, NavigateMode>();
 const subscribers = new Map<string, Set<(html: string) => void>>();
 const latestFragments = new Map<string, string>();
+const pendingFragments = new Set<string>();
 
 export function registerRouteMode(path: string, mode: NavigateMode): void {
   routeModes.set(path, mode);
@@ -34,6 +35,28 @@ export function setLatestFragment(path: string, html: string): void {
 
 export function clearLatestFragment(): void {
   latestFragments.clear();
+  pendingFragments.clear();
+}
+
+/**
+ * Returns the buffered fragment HTML for a given path pattern, if any.
+ * Used by PageHost to initialize directly into island mode when the
+ * navigator already has a fragment buffered (e.g., the fetch resolved
+ * before PageHost mounted because a lazy chunk was still loading).
+ */
+export function getLatestFragment(path: string): string | undefined {
+  return latestFragments.get(path);
+}
+
+/**
+ * True while a fragment fetch is in flight for the given path pattern.
+ * PageHost reads this to skip rendering the user component during a
+ * client-side SSR navigation; rendering the user pre-island would
+ * fire a /__loaders fetch and flicker through the SPA path before the
+ * fragment arrives.
+ */
+export function isFragmentPending(path: string): boolean {
+  return pendingFragments.has(path);
 }
 
 export function subscribeToFragment(
@@ -112,6 +135,11 @@ export async function navigate(
   if (inflight) inflight.abort();
   const ctrl = new AbortController();
   inflight = ctrl;
+  // Mark the destination's pattern as pending so any PageHost mounting
+  // mid-fetch (e.g., after a lazy chunk resolves) renders a placeholder
+  // instead of pre-island User. Cleared once setLatestFragment fires.
+  const navPattern = findMatchingPattern(url);
+  if (navPattern) pendingFragments.add(navPattern);
   let res: Response;
   try {
     res = await fetch(url, {
@@ -119,11 +147,13 @@ export async function navigate(
       signal: ctrl.signal,
     });
   } catch (err) {
+    if (navPattern) pendingFragments.delete(navPattern);
     if ((err as Error).name === 'AbortError') return;
     location.assign(url);
     return;
   }
   if (!res.ok) {
+    if (navPattern) pendingFragments.delete(navPattern);
     location.assign(url);
     return;
   }
@@ -131,6 +161,7 @@ export async function navigate(
   try {
     body = await res.json();
   } catch {
+    if (navPattern) pendingFragments.delete(navPattern);
     location.assign(url);
     return;
   }
@@ -145,12 +176,19 @@ export async function navigate(
     if (event.type === 'envelope') {
       applyHead(event.head);
       const pattern = findMatchingPattern(url);
-      if (pattern) setLatestFragment(pattern, event.html);
+      if (pattern) {
+        // setLatestFragment notifies subscribers; clear pending first so
+        // any PageHost reacting to the notification sees pending=false.
+        pendingFragments.delete(pattern);
+        setLatestFragment(pattern, event.html);
+      }
       pushedHistoryFor = url;
     } else if (event.type === 'redirect') {
+      if (navPattern) pendingFragments.delete(navPattern);
       await navigate(event.location);
       return;
     } else if (event.type === 'fallback') {
+      if (navPattern) pendingFragments.delete(navPattern);
       location.assign(url);
       return;
     }

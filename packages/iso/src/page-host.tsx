@@ -1,7 +1,11 @@
 import { hydrate, render, h, type ComponentType, type RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
-import { subscribeToFragment } from './navigator.js';
+import {
+  getLatestFragment,
+  isFragmentPending,
+  subscribeToFragment,
+} from './navigator.js';
 
 export type PageHostProps = {
   component: ComponentType<RouteHook>;
@@ -10,7 +14,12 @@ export type PageHostProps = {
 };
 
 export function PageHost({ component: User, location, path }: PageHostProps) {
-  const [fragment, setFragment] = useState<string | null>(null);
+  // Initialize from any fragment the navigator already has buffered: the
+  // navigator may resolve before PageHost mounts (e.g., a lazy chunk
+  // delayed PageHost while the fragment fetch completed).
+  const [fragment, setFragment] = useState<string | null>(
+    () => getLatestFragment(path) ?? null
+  );
   const hostRef: RefObject<HTMLDivElement> = useRef(null);
 
   useEffect(() => {
@@ -31,6 +40,16 @@ export function PageHost({ component: User, location, path }: PageHostProps) {
   }, [fragment, location]);
 
   if (fragment === null) {
+    // During a client-side SSR navigation the navigator marks the path
+    // pending before fetching. Rendering <User> here would mount the
+    // page's loader and fire a /__loaders fetch, then the User subtree
+    // would be torn down again as soon as the fragment arrives, causing
+    // a visible flicker. The empty placeholder holds the slot until the
+    // fragment arrives, at which point we transition to the island
+    // branch below.
+    if (isFragmentPending(path)) {
+      return <div data-hp-pending="true" />;
+    }
     return <User {...location} />;
   }
   // Stable container. dangerouslySetInnerHTML={{__html: ''}} tells Preact's
