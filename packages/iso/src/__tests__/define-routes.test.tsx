@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { JSX } from 'preact';
 import { defineRoutes } from '../define-routes.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
@@ -95,5 +96,32 @@ describe('serverImports collection', () => {
   it('returns an empty list when no routes have server imports', () => {
     const m = defineRoutes([{ path: '/', view: noopView }]);
     expect(m.serverImports).toEqual([]);
+  });
+});
+
+describe('flatten — flat (no layouts)', () => {
+  it('emits one FlatRoute per leaf with full URL path', () => {
+    const m = defineRoutes([
+      { path: '/', view: noopView },
+      { path: '/about', view: noopView },
+      { path: '*', view: noopView },
+    ]);
+    expect(m.flat.map((f) => f.path)).toEqual(['/', '/about', '*']);
+  });
+
+  it('preserves source order in the flat list', () => {
+    const m = defineRoutes([
+      { path: '/b', view: noopView },
+      { path: '/a', view: noopView },
+    ]);
+    expect(m.flat.map((f) => f.path)).toEqual(['/b', '/a']);
+  });
+
+  it('attaches fallback and errorFallback per leaf', () => {
+    const fb = { type: 'p', props: {}, key: null } as unknown as JSX.Element;
+    const m = defineRoutes([
+      { path: '/', view: noopView, fallback: fb },
+    ]);
+    expect(m.flat[0].fallback).toBe(fb);
   });
 });

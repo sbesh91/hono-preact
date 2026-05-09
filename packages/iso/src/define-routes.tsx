@@ -1,4 +1,5 @@
 import type { ComponentChildren, ComponentType, JSX } from 'preact';
+import { lazy } from 'preact-iso';
 
 export type LayoutProps = { children: ComponentChildren };
 
@@ -23,7 +24,7 @@ export type RouteDef = {
 
 export type FlatRoute = {
   path: string;
-  component: ComponentType;
+  component: ComponentType<ViewProps>;
   fallback?: JSX.Element;
   errorFallback?: RouteDef['errorFallback'];
 };
@@ -78,11 +79,31 @@ function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport
   return out;
 }
 
+function flattenFlat(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRoute[] {
+  const out: FlatRoute[] = [];
+  for (const r of routes) {
+    const here =
+      parentPath === ''
+        ? r.path
+        : parentPath + (r.path === '' ? '' : '/' + r.path);
+    if (r.view) {
+      out.push({
+        path: here,
+        component: lazy(r.view),
+        fallback: r.fallback,
+        errorFallback: r.errorFallback,
+      });
+    }
+    // Layouts handled in Task 4.
+  }
+  return out;
+}
+
 export function defineRoutes(tree: RouteDef[]): RoutesManifest {
   validate(tree);
   return {
     tree,
-    flat: [], // populated in Task 3
+    flat: flattenFlat(tree),
     serverImports: collectServerImports(tree),
   };
 }
