@@ -9,20 +9,20 @@
 // The contract here is intentionally less stable than the package's main
 // surface. Internal symbols may change shape between minor versions.
 
-export { Loader } from './loader.js';
-export { Envelope } from './envelope.js';
-export { RouteBoundary } from './route-boundary.js';
-export { Guards, GuardGate, useGuardResult } from './guards.js';
-export { OptimisticOverlay } from './optimistic-overlay.js';
+export { Loader } from './internal/loader.js';
+export { Envelope } from './internal/envelope.js';
+export { RouteBoundary } from './internal/route-boundary.js';
+export { Guards, GuardGate, useGuardResult } from './internal/guards.js';
+export { OptimisticOverlay } from './internal/optimistic-overlay.js';
 
 export {
   LoaderIdContext,
   LoaderDataContext,
   GuardResultContext,
-} from './contexts.js';
+} from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
 
-export { getPreloadedData, deletePreloadedData } from './preload.js';
+export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
 export { runRequestScope } from './cache.js';
-export { default as wrapPromise } from './wrap-promise.js';
+export { default as wrapPromise } from './internal/wrap-promise.js';
 export { runGuards } from './guard.js';

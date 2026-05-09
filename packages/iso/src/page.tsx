@@ -9,10 +9,10 @@ import type { RouteHook } from 'preact-iso';
 import type { LoaderCache } from './cache.js';
 import type { GuardFn } from './guard.js';
 import type { LoaderRef } from './define-loader.js';
-import { Envelope } from './envelope.js';
-import { Guards } from './guards.js';
-import { Loader } from './loader.js';
-import { RouteBoundary } from './route-boundary.js';
+import { Envelope } from './internal/envelope.js';
+import { Guards } from './internal/guards.js';
+import { Loader } from './internal/loader.js';
+import { RouteBoundary } from './internal/route-boundary.js';
 
 export type WrapperProps = {
   id: string;

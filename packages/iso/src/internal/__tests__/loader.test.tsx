@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
 import { useState } from 'preact/hooks';
 import { LocationProvider, type RouteHook } from 'preact-iso';
-import { defineLoader } from '../define-loader.js';
+import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
-import { useLoaderData } from '../use-loader-data.js';
-import { useReload } from '../reload-context.js';
-import { env } from '../is-browser.js';
+import { useLoaderData } from '../../use-loader-data.js';
+import { useReload } from '../../reload-context.js';
+import { env } from '../../is-browser.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),

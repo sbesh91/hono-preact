@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useContext } from 'preact/hooks';
 import { LoaderDataContext } from './contexts.js';
-import type { LoaderRef } from './define-loader.js';
+import type { LoaderRef } from '../define-loader.js';
 
 type OverlayProps<T, A> = {
   // `loader` binds the overlay's data type `T`. It is not read at runtime;

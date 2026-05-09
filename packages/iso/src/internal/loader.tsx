@@ -2,13 +2,13 @@ import type { ComponentChildren, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
 import { useCallback, useId, useRef, useState } from 'preact/hooks';
-import type { LoaderCache } from './cache.js';
-import { isBrowser } from './is-browser.js';
-import { ReloadContext } from './reload-context.js';
+import type { LoaderCache } from '../cache.js';
+import { isBrowser } from '../is-browser.js';
+import { ReloadContext } from '../reload-context.js';
 import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { LoaderDataContext, LoaderIdContext } from './contexts.js';
-import type { LoaderRef } from './define-loader.js';
+import type { LoaderRef } from '../define-loader.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;

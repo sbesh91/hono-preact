@@ -1,5 +1,5 @@
 import { useContext } from 'preact/hooks';
-import { LoaderDataContext } from './contexts.js';
+import { LoaderDataContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
 
 export function useLoaderData<L>(): L extends LoaderRef<infer T> ? T : L {

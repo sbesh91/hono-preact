@@ -1,4 +1,4 @@
-import { isBrowser } from './is-browser';
+import { isBrowser } from '../is-browser.js';
 
 export function getPreloadedData<T>(id: string): T | null {
   if (!isBrowser()) {

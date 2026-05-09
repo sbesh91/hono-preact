@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/preact';
 import { Envelope } from '../envelope.js';
 import { LoaderDataContext, LoaderIdContext } from '../contexts.js';
-import { env } from '../is-browser.js';
+import { env } from '../../is-browser.js';
 
 const originalEnv = env.current;
 beforeEach(() => {

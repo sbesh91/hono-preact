@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getPreloadedData, deletePreloadedData } from '../preload.js';
-import { env } from '../is-browser.js';
+import { env } from '../../is-browser.js';
 
 function makeElement(id: string, loaderJson?: string): HTMLElement {
   const el = document.createElement('section');
