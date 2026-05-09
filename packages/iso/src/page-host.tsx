@@ -1,6 +1,11 @@
 import { hydrate, render, h, type ComponentType, type RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { LocationProvider, type RouteHook } from 'preact-iso';
+import {
+  LocationProvider,
+  Route as PreactIsoRoute,
+  Router,
+  type RouteHook,
+} from 'preact-iso';
 import {
   getLatestFragment,
   isFragmentPending,
@@ -36,10 +41,25 @@ export function PageHost({ component: User, location, path }: PageHostProps) {
     // Replace DOM with new server-rendered HTML.
     host.innerHTML = fragment;
     // Hydrate the user component against the now-populated DOM. Wrap in
-    // LocationProvider because the page subtree may contain nested
-    // <Router>/useLocation() consumers; without a provider those throw
-    // and Preact's error handling tears down the spliced HTML.
-    hydrate(h(LocationProvider, null, h(User, location)), host);
+    // LocationProvider + Router so any nested useLocation()/useRoute()
+    // or nested <Router> in the page subtree sees the same context the
+    // outer tree provides. The Router matches the URL against `path` and
+    // sets up RouteContext with the correct `rest`/`pathParams`. Without
+    // this wrapping, a nested <Router> falls back to `rest = path` and
+    // matches the wrong URL segment (e.g. /movies's nested Router would
+    // treat "movies" as the :id param of /:id).
+    hydrate(
+      h(LocationProvider, null,
+        h(Router, null,
+          // preact-iso's Route props use a RouteHook discriminated union;
+          // path + component is sufficient at runtime, cast to bypass the
+          // strict type that expects matchProps fields the parent Router
+          // will inject.
+          h(PreactIsoRoute, { path, component: User } as never)
+        )
+      ),
+      host
+    );
   }, [fragment, location]);
 
   if (fragment === null) {
