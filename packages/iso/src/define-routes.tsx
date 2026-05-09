@@ -66,11 +66,23 @@ function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
   }
 }
 
+function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport[] {
+  const out: LazyServerImport[] = [];
+  const walk = (rs: ReadonlyArray<RouteDef>) => {
+    for (const r of rs) {
+      if (r.server) out.push(r.server);
+      if (r.children) walk(r.children);
+    }
+  };
+  walk(routes);
+  return out;
+}
+
 export function defineRoutes(tree: RouteDef[]): RoutesManifest {
   validate(tree);
   return {
     tree,
-    flat: [],         // populated in Task 3
-    serverImports: [], // populated in Task 3
+    flat: [], // populated in Task 3
+    serverImports: collectServerImports(tree),
   };
 }

@@ -74,3 +74,26 @@ describe('defineRoutes validation', () => {
     ).toThrow(/\/broken/);
   });
 });
+
+describe('serverImports collection', () => {
+  it('collects server imports from leaves at any depth', () => {
+    const s1 = () => Promise.resolve({ tag: 's1' });
+    const s2 = () => Promise.resolve({ tag: 's2' });
+    const m = defineRoutes([
+      { path: '/', view: noopView, server: s1 },
+      {
+        path: '/x',
+        layout: noopLayout,
+        children: [{ path: 'y', view: noopView, server: s2 }],
+      },
+    ]);
+    expect(m.serverImports).toHaveLength(2);
+    expect(m.serverImports).toContain(s1);
+    expect(m.serverImports).toContain(s2);
+  });
+
+  it('returns an empty list when no routes have server imports', () => {
+    const m = defineRoutes([{ path: '/', view: noopView }]);
+    expect(m.serverImports).toEqual([]);
+  });
+});
