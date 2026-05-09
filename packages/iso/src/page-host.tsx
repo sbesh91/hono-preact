@@ -1,6 +1,6 @@
 import { hydrate, render, h, type ComponentType, type RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import type { RouteHook } from 'preact-iso';
+import { LocationProvider, type RouteHook } from 'preact-iso';
 import {
   getLatestFragment,
   isFragmentPending,
@@ -35,8 +35,11 @@ export function PageHost({ component: User, location, path }: PageHostProps) {
     render(null, host);
     // Replace DOM with new server-rendered HTML.
     host.innerHTML = fragment;
-    // Hydrate the user component against the now-populated DOM.
-    hydrate(h(User, location), host);
+    // Hydrate the user component against the now-populated DOM. Wrap in
+    // LocationProvider because the page subtree may contain nested
+    // <Router>/useLocation() consumers; without a provider those throw
+    // and Preact's error handling tears down the spliced HTML.
+    hydrate(h(LocationProvider, null, h(User, location)), host);
   }, [fragment, location]);
 
   if (fragment === null) {
