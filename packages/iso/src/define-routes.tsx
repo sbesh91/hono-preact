@@ -1,5 +1,6 @@
-import type { ComponentChildren, ComponentType, JSX } from 'preact';
-import { lazy } from 'preact-iso';
+import { h } from 'preact';
+import type { AnyComponent, ComponentChildren, ComponentType, JSX, VNode } from 'preact';
+import { lazy, Route, Router } from 'preact-iso';
 
 export type LayoutProps = { children: ComponentChildren };
 
@@ -79,13 +80,76 @@ function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport
   return out;
 }
 
-function flattenFlat(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRoute[] {
+/**
+ * Build the component for a layout group: <Layout><Router>{childRoutes}</Router></Layout>.
+ * Returned via preact-iso's lazy so the layout module loads only when matched.
+ * Children are themselves wrapped in preact-iso's lazy via their own `view`/`layout`,
+ * so each child remains a separate code-split chunk.
+ */
+function makeLayoutGroupComponent(
+  layoutImport: NonNullable<RouteDef['layout']>,
+  children: ReadonlyArray<RouteDef>
+): ComponentType<ViewProps> {
+  return lazy(async () => {
+    const Layout = (await layoutImport()).default;
+    const inner = buildInnerRoutes(children);
+    const Wrapper: ComponentType = () =>
+      h(Layout, null, h(Router, null, ...inner));
+    return { default: Wrapper };
+  }) as ComponentType<ViewProps>;
+}
+
+/**
+ * Build the inner <Route> children for a layout group's <Router>. Each child
+ * is either a leaf (registered under its relative path) or another layout
+ * group (registered under bare + wildcard paths within the inner router).
+ */
+function buildInnerRoutes(children: ReadonlyArray<RouteDef>): VNode<any>[] {
+  const nodes: VNode<any>[] = [];
+  for (const child of children) {
+    if (child.view) {
+      nodes.push(
+        h(Route, {
+          path: child.path,
+          component: lazy(child.view) as AnyComponent<any>,
+        })
+      );
+    } else if (child.layout && child.children) {
+      const Group = makeLayoutGroupComponent(child.layout, child.children);
+      // Same shared-component trick at this nesting level.
+      nodes.push(h(Route, { path: child.path, component: Group as AnyComponent<any> }));
+      nodes.push(
+        h(Route, { path: child.path + '/*', component: Group as AnyComponent<any> })
+      );
+    } else if (child.children) {
+      // Path-grouping inside a layout: inline child paths into this router.
+      for (const grand of child.children) {
+        const joined =
+          child.path === '' ? grand.path : child.path + '/' + grand.path;
+        if (grand.view) {
+          nodes.push(
+            h(Route, {
+              path: joined,
+              component: lazy(grand.view) as AnyComponent<any>,
+            })
+          );
+        }
+        // Note: deep recursion of grouping/layouts inside a grouping is rare
+        // enough at v0.1 that we keep this one-level. If needed, extend later.
+      }
+    }
+  }
+  return nodes;
+}
+
+function flattenTree(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRoute[] {
   const out: FlatRoute[] = [];
   for (const r of routes) {
     const here =
       parentPath === ''
         ? r.path
         : parentPath + (r.path === '' ? '' : '/' + r.path);
+
     if (r.view) {
       out.push({
         path: here,
@@ -93,8 +157,25 @@ function flattenFlat(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRout
         fallback: r.fallback,
         errorFallback: r.errorFallback,
       });
+    } else if (r.layout && r.children) {
+      const Group = makeLayoutGroupComponent(r.layout, r.children);
+      out.push({
+        path: here,
+        component: Group,
+        fallback: r.fallback,
+        errorFallback: r.errorFallback,
+      });
+      out.push({
+        path: here + '/*',
+        component: Group,
+        fallback: r.fallback,
+        errorFallback: r.errorFallback,
+      });
+    } else if (r.children) {
+      // Path-grouping at top level: recurse with the prefix.
+      const childParent = here === '/' ? '' : here;
+      out.push(...flattenTree(r.children, childParent));
     }
-    // Layouts handled in Task 4.
   }
   return out;
 }
@@ -103,7 +184,7 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
   validate(tree);
   return {
     tree,
-    flat: flattenFlat(tree),
+    flat: flattenTree(tree),
     serverImports: collectServerImports(tree),
   };
 }

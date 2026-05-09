@@ -125,3 +125,66 @@ describe('flatten — flat (no layouts)', () => {
     expect(m.flat[0].fallback).toBe(fb);
   });
 });
+
+describe('flatten — layout groups', () => {
+  it('registers a layout group at both bare path and wildcard path', () => {
+    const m = defineRoutes([
+      {
+        path: '/movies',
+        layout: noopLayout,
+        children: [
+          { path: '', view: noopView },
+          { path: ':id', view: noopView },
+        ],
+      },
+    ]);
+    expect(m.flat.map((f) => f.path)).toEqual(['/movies', '/movies/*']);
+    // Same component reference for both:
+    expect(m.flat[0].component).toBe(m.flat[1].component);
+  });
+
+  it('mixes top-level leaves and layout groups in source order', () => {
+    const m = defineRoutes([
+      { path: '/', view: noopView },
+      {
+        path: '/x',
+        layout: noopLayout,
+        children: [{ path: '', view: noopView }],
+      },
+      { path: '*', view: noopView },
+    ]);
+    expect(m.flat.map((f) => f.path)).toEqual(['/', '/x', '/x/*', '*']);
+  });
+
+  it('flattens path-grouping routes (no layout) by inlining children', () => {
+    const m = defineRoutes([
+      {
+        path: '/admin',
+        children: [
+          { path: 'users', view: noopView },
+          { path: 'posts', view: noopView },
+        ],
+      },
+    ]);
+    expect(m.flat.map((f) => f.path)).toEqual(['/admin/users', '/admin/posts']);
+  });
+
+  it('handles nested layouts (layout inside layout)', () => {
+    const m = defineRoutes([
+      {
+        path: '/a',
+        layout: noopLayout,
+        children: [
+          {
+            path: 'b',
+            layout: noopLayout,
+            children: [{ path: '', view: noopView }],
+          },
+        ],
+      },
+    ]);
+    // Outer layout group exposes itself + wildcard; inner is collapsed
+    // into the outer's child router (not at the outer Router).
+    expect(m.flat.map((f) => f.path)).toEqual(['/a', '/a/*']);
+  });
+});
