@@ -7,9 +7,11 @@ import {
 import type { FunctionComponent } from 'preact';
 import type { MovieSummary } from '@/server/data/movies.js';
 import { loader, cache, serverActions } from './movies-list.server.js';
+import { useMoviesFilter } from './movies-layout.js';
 
 const MoviesList: FunctionComponent = () => {
   const { movies, watchedIds } = useLoaderData<typeof loader>();
+  const { query } = useMoviesFilter();
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
     serverActions.toggleWatched,
@@ -26,11 +28,22 @@ const MoviesList: FunctionComponent = () => {
 
   const watched = new Set(optimisticWatchedIds);
 
+  const trimmed = query.trim().toLowerCase();
+  const filtered = trimmed
+    ? movies.results.filter((m: MovieSummary) =>
+        m.title.toLowerCase().includes(trimmed)
+      )
+    : movies.results;
+
   return (
     <>
-      <p>watched: {optimisticWatchedIds.length}</p>
+      <p>
+        watched: {optimisticWatchedIds.length}
+        {trimmed &&
+          ` · showing ${filtered.length} of ${movies.results.length}`}
+      </p>
       <ul class="mt-2">
-        {movies.results.map((m: MovieSummary) => (
+        {filtered.map((m: MovieSummary) => (
           <li key={m.id} class="border-2 m-1 p-1 flex items-center gap-2">
             <a href={`/movies/${m.id}`} class="flex-1">
               {m.title}{' '}
