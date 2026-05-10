@@ -58,7 +58,7 @@ There is no manual `<Router>` or `<Route>` JSX in user code; `<Routes>` instanti
 
 ### Server entry (generated)
 
-The framework generates the Hono application as a virtual module (`virtual:hono-preact/server`) from your `routes.ts` and `server/layout.tsx`. It wires the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler automatically. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
+The framework generates the Hono application as a virtual module (`virtual:hono-preact/server`) from your `routes.ts` and `Layout.tsx`. It wires the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler automatically. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
 
 ### `apps/app/src/client.tsx`
 
@@ -68,9 +68,9 @@ The browser entry point. Picks up the server-rendered HTML and hydrates it in pl
 hydrate(<App />, document.getElementById('app'));
 ```
 
-### `apps/app/src/server/layout.tsx`
+### `apps/app/src/Layout.tsx`
 
-Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. The framework's generated server entry renders this component for the catch-all route and wraps its output in `<!doctype html>`.
+Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. Default-exports a component the framework's generated server entry renders for the catch-all route and wraps in `<!doctype html>`.
 
 ### `apps/app/src/pages/`
 

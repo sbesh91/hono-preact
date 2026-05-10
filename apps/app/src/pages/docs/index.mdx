@@ -48,8 +48,8 @@ On the first request, the server runs the loader directly and preloads the resul
 | `src/routes.ts` | The route table. One entry per URL. Declares which view (and optionally which `.server.ts`) lives at each path. |
 | `src/pages/<name>.tsx` | View component. Default-exports the page; uses `definePage` when it has loader or guard bindings. |
 | `src/pages/<name>.server.ts` | Server-only sibling. Holds the default-exported loader plus optional `loader`, `serverActions`, `serverGuards`, `actionGuards` named exports. |
-| `src/server/layout.tsx` | The HTML shell rendered around every page. |
-| `src/server.tsx` | Hono app: framework handler wiring + your own REST routes + the catch-all SSR handler. |
+| `src/Layout.tsx` | The HTML shell rendered around every page. Default-exports a component. |
+| `src/api.ts` (optional) | A Hono app default-exporting any custom REST routes you need. The framework mounts it before its own SSR catch-all. |
 
 ## The server/client boundary
 
