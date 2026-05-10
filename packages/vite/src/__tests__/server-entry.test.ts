@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { generateServerEntrySource } from '../server-entry.js';
+import {
+  findApiCatchAllRoutes,
+  generateServerEntrySource,
+} from '../server-entry.js';
 
 describe('generateServerEntrySource', () => {
   it('emits the framework imports, mounts loaders/actions/location/catchall, omits api when not provided', () => {
@@ -56,5 +59,78 @@ describe('generateServerEntrySource', () => {
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(apiIdx).toBeGreaterThan(-1);
     expect(catchallIdx).toBeGreaterThan(apiIdx);
+  });
+});
+
+describe('findApiCatchAllRoutes', () => {
+  it('flags literal "*" on any HTTP method', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().get('*', (c) => c.text('catch'));
+    `;
+    const warnings = findApiCatchAllRoutes(src);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ kind: 'wildcard', method: 'get', pattern: '*' });
+  });
+
+  it('flags literal "/*"', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().all('/*', (c) => c.text('catch'));
+    `;
+    const warnings = findApiCatchAllRoutes(src);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ kind: 'wildcard', method: 'all', pattern: '/*' });
+  });
+
+  it('flags app.notFound(...)', () => {
+    const src = `
+      import { Hono } from 'hono';
+      const app = new Hono();
+      app.notFound((c) => c.text('nope', 404));
+      export default app;
+    `;
+    const warnings = findApiCatchAllRoutes(src);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ kind: 'notFound' });
+  });
+
+  it('does not flag variable-arg routes', () => {
+    const src = `
+      import { Hono } from 'hono';
+      const path = '/api/foo';
+      export default new Hono().get(path, (c) => c.text('ok'));
+    `;
+    expect(findApiCatchAllRoutes(src)).toEqual([]);
+  });
+
+  it('does not flag pathless app.use(...) middleware', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().use((c, next) => next());
+    `;
+    expect(findApiCatchAllRoutes(src)).toEqual([]);
+  });
+
+  it('does not flag a specific path on a chained call', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono()
+        .get('/api/watched/:id/photo', (c) => c.text('ok'))
+        .post('/api/watched', (c) => c.text('ok'));
+    `;
+    expect(findApiCatchAllRoutes(src)).toEqual([]);
+  });
+
+  it('returns multiple warnings if multiple catchalls are present', () => {
+    const src = `
+      import { Hono } from 'hono';
+      const app = new Hono();
+      app.get('*', (c) => c.text('a'));
+      app.notFound((c) => c.text('b'));
+      export default app;
+    `;
+    const warnings = findApiCatchAllRoutes(src);
+    expect(warnings).toHaveLength(2);
   });
 });
