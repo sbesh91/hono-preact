@@ -1,21 +1,14 @@
-// apps/app/src/pages/movies.tsx
 import {
   cacheRegistry,
   definePage,
-  lazy,
-  Route,
-  Router,
   useLoaderData,
   useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import type { MovieSummary } from '@/server/data/movies.js';
 import { loader, cache, serverActions } from './movies-list.server.js';
-import Noop from './noop.js';
 
-const Movie = lazy(() => import('./movie.js'));
-
-const Movies: FunctionComponent = () => {
+const MoviesList: FunctionComponent = () => {
   const { movies, watchedIds } = useLoaderData<typeof loader>();
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
@@ -34,13 +27,8 @@ const Movies: FunctionComponent = () => {
   const watched = new Set(optimisticWatchedIds);
 
   return (
-    <section class="p-1">
-      <a href="/" class="bg-amber-200">
-        home
-      </a>{' '}
-      <a href="/watched" class="bg-emerald-200">
-        watched ({optimisticWatchedIds.length})
-      </a>
+    <>
+      <p>watched: {optimisticWatchedIds.length}</p>
       <ul class="mt-2">
         {movies.results.map((m: MovieSummary) => (
           <li key={m.id} class="border-2 m-1 p-1 flex items-center gap-2">
@@ -62,13 +50,9 @@ const Movies: FunctionComponent = () => {
           </li>
         ))}
       </ul>
-      <Router>
-        <Route path="/:id" component={Movie} />
-        <Noop />
-      </Router>
-    </section>
+    </>
   );
 };
-Movies.displayName = 'Movies';
+MoviesList.displayName = 'MoviesList';
 
-export default definePage(Movies, { loader, cache });
+export default definePage(MoviesList, { loader, cache });
