@@ -4,6 +4,7 @@ import { defineAction, defineLoader } from '@hono-preact/iso';
 import type { Movie } from '@/server/data/movie.js';
 import {
   getWatched,
+  listWatched,
   markWatched,
   setNotes,
   setPhoto,
@@ -14,11 +15,12 @@ import {
 const serverLoader = async ({ location }) => {
   const idStr = location.pathParams.id;
   const id = Number(idStr);
-  const [movie, watched] = await Promise.all([
+  const [movie, watched, allWatched] = await Promise.all([
     getMovie(idStr),
     Number.isFinite(id) ? getWatched(id) : Promise.resolve(null),
+    listWatched(),
   ]);
-  return { movie, watched };
+  return { movie, watched, watchedCount: allWatched.length };
 };
 
 export default serverLoader;

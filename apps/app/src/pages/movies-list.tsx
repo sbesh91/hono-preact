@@ -5,13 +5,15 @@ import {
   useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
+import { useEffect } from 'preact/hooks';
 import type { MovieSummary } from '@/server/data/movies.js';
 import { loader, cache, serverActions } from './movies-list.server.js';
-import { useMoviesFilter } from './movies-layout.js';
+import { useMoviesFilter, useWatchedBadge } from './movies-layout.js';
 
 const MoviesList: FunctionComponent = () => {
   const { movies, watchedIds } = useLoaderData<typeof loader>();
   const { query } = useMoviesFilter();
+  const { setCount } = useWatchedBadge();
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
     serverActions.toggleWatched,
@@ -26,6 +28,13 @@ const MoviesList: FunctionComponent = () => {
     }
   );
 
+  // Push the optimistic count up to the layout's badge. The optimistic value
+  // is updated synchronously on click (via useOptimisticAction's queue), so
+  // the badge increments immediately and rolls back on action error.
+  useEffect(() => {
+    setCount(optimisticWatchedIds.length);
+  }, [optimisticWatchedIds.length, setCount]);
+
   const watched = new Set(optimisticWatchedIds);
 
   const trimmed = query.trim().toLowerCase();
@@ -37,11 +46,11 @@ const MoviesList: FunctionComponent = () => {
 
   return (
     <>
-      <p>
-        watched: {optimisticWatchedIds.length}
-        {trimmed &&
-          ` · showing ${filtered.length} of ${movies.results.length}`}
-      </p>
+      {trimmed && (
+        <p>
+          showing {filtered.length} of {movies.results.length}
+        </p>
+      )}
       <ul class="mt-2">
         {filtered.map((m: MovieSummary) => (
           <li key={m.id} class="border-2 m-1 p-1 flex items-center gap-2">

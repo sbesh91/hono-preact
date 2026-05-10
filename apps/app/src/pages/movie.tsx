@@ -10,7 +10,9 @@ import {
   type WrapperProps,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
+import { useEffect } from 'preact/hooks';
 import { loader, serverActions } from './movie.server.js';
+import { useWatchedBadge } from './movies-layout.js';
 
 function MovieWrapper(props: WrapperProps) {
   return <article {...props} />;
@@ -65,7 +67,16 @@ const PhotoForm: FunctionComponent<{ movieIdStr: string }> = ({ movieIdStr }) =>
 };
 
 const MovieDetail: FunctionComponent = () => {
-  const { movie, watched } = useLoaderData<typeof loader>();
+  const { movie, watched, watchedCount } = useLoaderData<typeof loader>();
+  const { setCount } = useWatchedBadge();
+
+  // Seed/refresh the layout badge from the loader's authoritative count.
+  // Runs on first detail-page mount (covers direct visits to /movies/:id)
+  // and again whenever the loader reloads after a successful mutation.
+  useEffect(() => {
+    setCount(watchedCount);
+  }, [watchedCount, setCount]);
+
   if (!movie) return <p>Movie not found.</p>;
 
   const isWatched = !!watched && watched.watchedAt > 0;
@@ -85,6 +96,15 @@ const MovieDetail: FunctionComponent = () => {
       },
     }
   );
+
+  const handleToggle = () => {
+    const next = !isWatchedOpt;
+    // Optimistic delta on the layout's badge so the count increments the
+    // instant the user clicks. The detail's own loader reloads on action
+    // success and the seeding effect above converges back to truth.
+    setCount((c) => (c == null ? c : next ? c + 1 : c - 1));
+    toggle({ movieId: movie.id, watched: next });
+  };
 
   return (
     <section class="p-1 space-y-4">
@@ -108,7 +128,7 @@ const MovieDetail: FunctionComponent = () => {
         <button
           type="button"
           class="bg-blue-500 text-white px-3 py-1"
-          onClick={() => toggle({ movieId: movie.id, watched: !isWatchedOpt })}
+          onClick={handleToggle}
         >
           {isWatchedOpt ? 'Unwatch' : 'Mark watched'}
         </button>
