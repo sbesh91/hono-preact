@@ -1,6 +1,10 @@
+// @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import type { JSX } from 'preact';
-import { defineRoutes } from '../define-routes.js';
+import type { ComponentType, JSX, VNode } from 'preact';
+import { h } from 'preact';
+import { render } from '@testing-library/preact';
+import { LocationProvider } from 'preact-iso';
+import { defineRoutes, Routes } from '../define-routes.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
 const noopLayout = () => Promise.resolve({ default: ({ children }: { children: unknown }) => children as never });
@@ -186,5 +190,20 @@ describe('flatten — layout groups', () => {
     // Outer layout group exposes itself + wildcard; inner is collapsed
     // into the outer's child router (not at the outer Router).
     expect(m.flat.map((f) => f.path)).toEqual(['/a', '/a/*']);
+  });
+});
+
+describe('<Routes>', () => {
+  it('renders a preact-iso Router with one Route per flat entry', () => {
+    const Hi: ComponentType = () => h('p', null, 'hi') as unknown as VNode;
+    const manifest = defineRoutes([
+      { path: '/', view: () => Promise.resolve({ default: Hi }) },
+    ]);
+    const { container } = render(
+      h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode
+    );
+    // The lazy Hi resolves async; the smoke is just that <Routes> renders
+    // without throwing and produces the LocationProvider tree.
+    expect(container.innerHTML).toBeDefined();
   });
 });

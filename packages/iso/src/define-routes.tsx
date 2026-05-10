@@ -188,3 +188,17 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
     serverImports: collectServerImports(tree),
   };
 }
+
+export const Routes: ComponentType<{ routes: RoutesManifest }> = ({ routes }) => {
+  return h(
+    Router,
+    null,
+    ...routes.flat.map((r) =>
+      h(Route, {
+        key: r.path,
+        path: r.path,
+        component: r.component as AnyComponent<any>,
+      })
+    )
+  );
+};
