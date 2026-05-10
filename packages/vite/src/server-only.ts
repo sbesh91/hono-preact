@@ -120,6 +120,7 @@ export function serverOnlyPlugin(): Plugin {
 
       const s = new MagicString(code);
       let needsDefineLoaderImport = false;
+      let needsUseActionImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
         if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
@@ -168,8 +169,15 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'serverActions'
           ) {
+            needsUseActionImport = true;
             stubs.push(
-              `const ${specifier.local.name} = new Proxy({}, { get(_, action) { return { __module: ${JSON.stringify(moduleKey)}, __action: String(action) }; } });`
+              `const ${specifier.local.name} = new Proxy({}, {\n` +
+              `  get(_, action) {\n` +
+              `    const stub = { __module: ${JSON.stringify(moduleKey)}, __action: String(action) };\n` +
+              `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
+              `    return stub;\n` +
+              `  }\n` +
+              `});`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -219,6 +227,9 @@ export function serverOnlyPlugin(): Plugin {
 
       if (needsDefineLoaderImport) {
         s.prepend(`import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';\n`);
+      }
+      if (needsUseActionImport) {
+        s.prepend(`import { useAction as __$useAction_hpiso } from '@hono-preact/iso';\n`);
       }
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };

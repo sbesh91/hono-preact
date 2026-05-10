@@ -103,10 +103,10 @@ describe('Form', () => {
       )
     );
 
-    const stub: ActionStub<{ title: string }, void> = {
+    const stub = {
       __module: 'movies',
       __action: 'stream',
-    };
+    } as unknown as ActionStub<{ title: string }, void>;
     const onChunk = vi.fn();
 
     function TestForm() {

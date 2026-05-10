@@ -5,10 +5,10 @@ import { useOptimisticAction } from '../optimistic-action.js';
 import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
 
-const stub: ActionStub<{ title: string }, { id: number; title: string }> = {
+const stub = {
   __module: 'movies',
   __action: 'create',
-};
+} as unknown as ActionStub<{ title: string }, { id: number; title: string }>;
 
 afterEach(() => {
   cleanup();

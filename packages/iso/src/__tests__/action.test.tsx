@@ -12,15 +12,16 @@ describe('defineAction', () => {
 
 import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
+import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
 import { defineLoader } from '../define-loader.js';
 
-const stub: ActionStub<{ title: string }, { ok: boolean }> = {
+const stub = {
   __module: 'movies',
   __action: 'create',
-};
+} as unknown as ActionStub<{ title: string }, { ok: boolean }>;
 
 afterEach(() => {
   cleanup();
@@ -230,10 +231,10 @@ describe('useAction', () => {
     expect(a.cache.has()).toBe(true);
     expect(b.cache.has()).toBe(true);
 
-    const refStub: ActionStub<Record<string, never>, { ok: true }> = {
+    const refStub = {
       __module: 'm',
       __action: 'go',
-    };
+    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
 
     vi.stubGlobal(
       'fetch',
@@ -258,6 +259,44 @@ describe('useAction', () => {
     await waitFor(() => {
       expect(a.cache.has()).toBe(false);
       expect(b.cache.has()).toBe(false);
+    });
+  });
+
+  it('exposes useAction as a method on the stub', async () => {
+    // Mimic the shape produced by serverOnlyPlugin's client-side Proxy.
+    const methodStub: ActionStub<{ x: number }, { ok: true }> = {
+      __module: 'm',
+      __action: 'go',
+      useAction(opts) {
+        return useAction(this as ActionStub<{ x: number }, { ok: true }>, opts);
+      },
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const captured: Array<{ pending: boolean; data: unknown }> = [];
+    function Probe() {
+      const { mutate, pending, data } = methodStub.useAction();
+      captured.push({ pending, data });
+      useEffect(() => {
+        void mutate({ x: 1 });
+      }, [mutate]);
+      return null;
+    }
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(
+        captured.some((c) => c.data && (c.data as { ok: true }).ok)
+      ).toBe(true);
     });
   });
 });
@@ -298,10 +337,10 @@ describe('useAction — streaming (onChunk)', () => {
   });
 });
 
-const mockStub: ActionStub<Record<string, unknown>, unknown> = {
+const mockStub = {
   __module: 'test-module',
   __action: 'test-action',
-};
+} as unknown as ActionStub<Record<string, unknown>, unknown>;
 
 describe('useAction — FormData (file upload)', () => {
   it('sends FormData when payload contains a File', async () => {

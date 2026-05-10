@@ -6,6 +6,9 @@ export type ActionStub<TPayload, TResult> = {
   readonly __module: string;
   readonly __action: string;
   readonly __phantom?: readonly [TPayload, TResult];
+  useAction<TSnapshot = unknown>(
+    options?: UseActionOptions<TPayload, TResult, TSnapshot>
+  ): UseActionResult<TPayload, TResult>;
 };
 
 export function defineAction<TPayload, TResult>(
