@@ -29,7 +29,40 @@ export type RoutesManifest = {
   serverImports: ReadonlyArray<LazyServerImport>;
 };
 
-function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
+// preact-iso's `Route<P>` and `Router` carry strict generics that reject our
+// heterogeneous route components (leaves take `ViewProps`, layout-group
+// wrappers take `()`). We erase the generic at every `h(Route, ...)` /
+// `h(Router, ...)` call site through this single helper so the rationale lives
+// in one place.
+const asRouteComponent = (c: ComponentType<any>): AnyComponent<any> =>
+  c as AnyComponent<any>;
+
+// preact-iso's `lazy()` returns a wrapper whose component-type generic is
+// loose. We know the underlying default export conforms to `ViewProps` (or to
+// our layout-group wrapper which renders an inner Router); assert that here so
+// `FlatRoute.component` stays strongly typed.
+const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
+  c as ComponentType<ViewProps>;
+
+/**
+ * Where in the tree a route is being validated. Determines which structural
+ * shapes are legal at that position.
+ *
+ * - `top`: at top level or inside a top-level path-grouping. Anything goes.
+ * - `layout`: a direct child of a layout group. May be a leaf, a layout
+ *    group, or a path-grouping (which is restricted further).
+ * - `layout-grouping`: a child of a path-grouping that is itself inside a
+ *    layout group. `buildInnerRoutes` only inlines view-leaves at this depth,
+ *    so layouts and further grouping here would silently disappear at runtime.
+ *    Reject them at validation time instead.
+ */
+type ValidationContext = 'top' | 'layout' | 'layout-grouping';
+
+function validate(
+  routes: ReadonlyArray<RouteDef>,
+  parentPath = '',
+  context: ValidationContext = 'top'
+): void {
   for (const r of routes) {
     const here = parentPath + (r.path.startsWith('/') ? r.path : '/' + r.path);
     const hasView = !!r.view;
@@ -57,7 +90,21 @@ function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
       throw new Error(`Route ${here}: child path must not start with \`/\`.`);
     }
 
-    if (hasChildren) validate(r.children!, here === '/' ? '' : here);
+    if (context === 'layout-grouping' && (hasLayout || hasChildren)) {
+      throw new Error(
+        `Route ${here}: a path-grouping inside a layout group may only contain view leaves at v0.1. ` +
+          `Move this route up a level (direct child of the layout group) or restructure as its own layout group.`
+      );
+    }
+
+    if (hasChildren) {
+      const childContext: ValidationContext = hasLayout
+        ? 'layout'
+        : context === 'layout'
+          ? 'layout-grouping'
+          : 'top';
+      validate(r.children!, here === '/' ? '' : here, childContext);
+    }
   }
 }
 
@@ -85,7 +132,7 @@ function getOrCreateLazyView(
 ): ComponentType<ViewProps> {
   let component = cache.get(view);
   if (!component) {
-    component = lazy(view) as ComponentType<ViewProps>;
+    component = asViewComponent(lazy(view));
     cache.set(view, component);
   }
   return component;
@@ -102,13 +149,15 @@ function makeLayoutGroupComponent(
   children: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>
 ): ComponentType<ViewProps> {
-  return lazy(async () => {
-    const Layout = (await layoutImport()).default;
-    const inner = buildInnerRoutes(children, viewCache);
-    const Wrapper: ComponentType = () =>
-      h(Layout, null, h(Router, null, ...inner));
-    return { default: Wrapper };
-  }) as ComponentType<ViewProps>;
+  return asViewComponent(
+    lazy(async () => {
+      const Layout = (await layoutImport()).default;
+      const inner = buildInnerRoutes(children, viewCache);
+      const Wrapper: ComponentType = () =>
+        h(Layout, null, h(Router, null, ...inner));
+      return { default: Wrapper };
+    })
+  );
 }
 
 /**
@@ -126,18 +175,19 @@ function buildInnerRoutes(
       nodes.push(
         h(Route, {
           path: child.path,
-          component: getOrCreateLazyView(child.view, viewCache) as AnyComponent<any>,
+          component: asRouteComponent(getOrCreateLazyView(child.view, viewCache)),
         })
       );
     } else if (child.layout && child.children) {
       const Group = makeLayoutGroupComponent(child.layout, child.children, viewCache);
       // Same shared-component trick at this nesting level.
-      nodes.push(h(Route, { path: child.path, component: Group as AnyComponent<any> }));
+      nodes.push(h(Route, { path: child.path, component: asRouteComponent(Group) }));
       nodes.push(
-        h(Route, { path: child.path + '/*', component: Group as AnyComponent<any> })
+        h(Route, { path: child.path + '/*', component: asRouteComponent(Group) })
       );
     } else if (child.children) {
-      // Path-grouping inside a layout: inline child paths into this router.
+      // Path-grouping inside a layout. `validate()` already enforces that all
+      // descendants here are view leaves, so we only inline grandchild views.
       for (const grand of child.children) {
         const joined =
           child.path === '' ? grand.path : child.path + '/' + grand.path;
@@ -145,12 +195,10 @@ function buildInnerRoutes(
           nodes.push(
             h(Route, {
               path: joined,
-              component: getOrCreateLazyView(grand.view, viewCache) as AnyComponent<any>,
+              component: asRouteComponent(getOrCreateLazyView(grand.view, viewCache)),
             })
           );
         }
-        // Note: deep recursion of grouping/layouts inside a grouping is rare
-        // enough at v0.1 that we keep this one-level. If needed, extend later.
       }
     }
   }
@@ -210,13 +258,13 @@ export type RoutesProps = {
 
 export const Routes: ComponentType<RoutesProps> = ({ routes, onRouteChange }) => {
   return h(
-    Router as AnyComponent<any>,
+    asRouteComponent(Router),
     onRouteChange ? { onRouteChange } : null,
     ...routes.flat.map((r) =>
       h(Route, {
         key: r.path,
         path: r.path,
-        component: r.component as AnyComponent<any>,
+        component: asRouteComponent(r.component),
       })
     )
   );

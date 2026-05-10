@@ -78,6 +78,85 @@ describe('defineRoutes validation', () => {
       defineRoutes([{ path: '/broken', layout: noopLayout }])
     ).toThrow(/\/broken/);
   });
+
+  it('accepts a path-grouping inside a layout when grandchildren are view leaves', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/movies',
+          layout: noopLayout,
+          children: [
+            {
+              path: 'admin',
+              children: [
+                { path: 'users', view: noopView },
+                { path: 'posts', view: noopView },
+              ],
+            },
+          ],
+        },
+      ])
+    ).not.toThrow();
+  });
+
+  it('rejects a layout inside a path-grouping that is inside a layout group', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/movies',
+          layout: noopLayout,
+          children: [
+            {
+              path: 'admin',
+              children: [
+                {
+                  path: 'users',
+                  layout: noopLayout,
+                  children: [{ path: '', view: noopView }],
+                },
+              ],
+            },
+          ],
+        },
+      ])
+    ).toThrow(/path-grouping inside a layout group may only contain view leaves/);
+  });
+
+  it('rejects further path-grouping inside a path-grouping that is inside a layout group', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/movies',
+          layout: noopLayout,
+          children: [
+            {
+              path: 'admin',
+              children: [
+                { path: 'users', children: [{ path: 'list', view: noopView }] },
+              ],
+            },
+          ],
+        },
+      ])
+    ).toThrow(/path-grouping inside a layout group may only contain view leaves/);
+  });
+
+  it('still allows layouts inside top-level path-groupings (no restriction at top)', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/admin',
+          children: [
+            {
+              path: 'users',
+              layout: noopLayout,
+              children: [{ path: '', view: noopView }],
+            },
+          ],
+        },
+      ])
+    ).not.toThrow();
+  });
 });
 
 describe('serverImports collection', () => {
