@@ -52,7 +52,6 @@ export { Form } from './form.js';
 // Cache + invalidation.
 export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
-export { cacheRegistry } from './cache-registry.js';
 
 // Guards.
 export { createGuard, GuardRedirect } from './guard.js';

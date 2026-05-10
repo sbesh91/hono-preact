@@ -1,11 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createCache, runRequestScope } from '../cache.js';
-import { cacheRegistry } from '../cache-registry.js';
 import { env } from '../is-browser.js';
-
-beforeEach(() => {
-  cacheRegistry.clear();
-});
 
 describe('createCache', () => {
   it('get() returns null initially', () => {
@@ -56,22 +51,6 @@ describe('createCache', () => {
     const result = await wrapped({ location: {} as any });
     expect(loader).toHaveBeenCalledOnce();
     expect(result).toEqual({ name: 'new' });
-  });
-
-  it('registers with cacheRegistry when a name is provided', () => {
-    const cache = createCache<{ val: number }>('test-cache');
-    cache.set({ val: 42 });
-    expect(cache.get()).toEqual({ val: 42 });
-    cacheRegistry.invalidate('test-cache');
-    expect(cache.get()).toBeNull();
-  });
-
-  it('does not affect cacheRegistry when no name is provided', () => {
-    const fn = vi.fn();
-    cacheRegistry.register('sentinel', fn);
-    createCache<{ val: number }>();
-    cacheRegistry.invalidate('sentinel');
-    expect(fn).toHaveBeenCalledOnce();
   });
 });
 

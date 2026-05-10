@@ -13,10 +13,7 @@ export type UseOptimisticActionOptions<TPayload, TResult, TBase> = Omit<
 > & {
   base: TBase;
   apply: (current: TBase, payload: TPayload) => TBase;
-  invalidate?:
-    | 'auto'
-    | ReadonlyArray<LoaderRef<unknown>>
-    | ReadonlyArray<string>;
+  invalidate?: 'auto' | ReadonlyArray<LoaderRef<unknown>>;
   onSuccess?: (data: TResult) => void;
   onError?: (err: Error) => void;
 };
