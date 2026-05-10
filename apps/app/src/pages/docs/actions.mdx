@@ -69,11 +69,11 @@ app
 `useAction` manages pending state, error handling, and optional cache invalidation after the action completes.
 
 ```tsx
-import { useAction, useLoaderData } from '@hono-preact/iso';
+import { useAction } from '@hono-preact/iso';
 import { loader, serverActions } from './movies.server.js';
 
 const Movies = () => {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (data) => console.log('added', data),
@@ -97,7 +97,7 @@ const Movies = () => {
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `invalidate` | `'auto' \| false \| string[]` | `'auto'` re-runs the page's `serverLoader` (via the `/__loaders` RPC in the browser). `string[]` invalidates named caches on other pages. Default: `false`. |
+| `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of `LoaderRef`s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
 | `onMutate` | `(payload) => unknown` | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback. |
 | `onSuccess` | `(data) => void` | Called with the action's return value on success. |
 | `onError` | `(err, snapshot) => void` | Called with the error and the `onMutate` snapshot on failure. |
@@ -140,7 +140,7 @@ FormData values are collected with `Object.fromEntries(new FormData(form))`. Str
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { movies } = useLoaderData<typeof loader>();
+const { movies } = loader.useData();
 const [items, setItems] = useState(movies.results);
 
 const { mutate } = useAction(serverActions.addMovie, {
@@ -157,25 +157,39 @@ const { mutate } = useAction(serverActions.addMovie, {
 
 ## Cross-page cache invalidation
 
-When a mutation on one page should refresh data on another, pass the target cache's name to `invalidate`:
-
-```ts
-// ratings.server.ts: a different page that shows the movie list in a sidebar
-export const cache = createCache<{ movies: MovieList }>('movies'); // named cache
-```
+When a mutation on one page should refresh data on another, import the other page's loader and pass it to `invalidate`. Invalidation is by reference; there are no cache names:
 
 ```tsx
-// movies.tsx: action that should also refresh the ratings sidebar
+// movies.tsx: an action that should also refresh the ratings sidebar
+import { useAction } from '@hono-preact/iso';
+import { loader as ratingsLoader } from './ratings.server.js';
+import { serverActions } from './movies.server.js';
+
 const { mutate } = useAction(serverActions.addMovie, {
-  invalidate: ['movies'], // clears the 'movies' cache on success
+  invalidate: [ratingsLoader], // clears ratingsLoader's cache on success
 });
 ```
 
-Name a cache by passing a string to `createCache`. When an action specifies `invalidate: ['movies']`, the registry calls that cache's `invalidate()` and the next client navigation re-fetches.
+`invalidate` accepts an array of `LoaderRef`s, so a single action can refresh multiple loaders in one shot: `invalidate: [moviesLoader, ratingsLoader]`. Pass it to `useAction`; `<Form>` itself has no `invalidate` prop.
 
-`invalidate` accepts an array so you can clear multiple caches in one shot: `invalidate: ['movies', 'ratings']`. Pass it to `useAction`; `<Form>` itself has no `invalidate` prop.
+Use `'auto'` (instead of an array) to invalidate the current page's own loader after the action succeeds.
 
-See the [Server Loaders](/docs/loaders#named-caches) page for details on `createCache` naming.
+## Method form: `stub.useAction(opts)`
+
+`useAction(stub, opts)` and `stub.useAction(opts)` are equivalent. Both ship; pick whichever reads better in context.
+
+```tsx
+import { useAction } from '@hono-preact/iso';
+import { loader as moviesLoader, serverActions } from './movies.server.js';
+
+// Method form:
+const { mutate, pending } = serverActions.addMovie.useAction({ invalidate: [moviesLoader] });
+
+// Equivalent function form:
+const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: [moviesLoader] });
+```
+
+The method form reads more naturally when the action is the focus of the call site; the function form reads better when grouped with other hooks at the top of a component.
 
 ## File uploads
 
@@ -289,4 +303,4 @@ Guards run before every action in the module. See [Action Guards](/docs/action-g
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `loader`, `serverGuards`, `serverActions`, or `actionGuards` as named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

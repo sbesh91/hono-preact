@@ -6,10 +6,10 @@ Sometimes you need to re-run the loader imperatively, for example after a user a
 
 Snippets on this page assume `type MovieList = { results: { id: number; title: string }[] }`.
 
-**`src/pages/movies.server.ts`** holds the loader and cache exports:
+**`src/pages/movies.server.ts`** holds the loader (the cache is auto-attached):
 
 ```ts
-import { createCache, defineLoader } from '@hono-preact/iso';
+import { defineLoader } from '@hono-preact/iso';
 
 const serverLoader = async () => ({
   movies: await getMovies(),
@@ -18,18 +18,17 @@ const serverLoader = async () => ({
 export default serverLoader;
 
 export const loader = defineLoader(serverLoader);
-export const cache = createCache<{ movies: MovieList }>();
 ```
 
 **`src/pages/movies.tsx`** is a pure component using `useReload`, with bindings attached via `definePage`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { definePage, useLoaderData, useReload } from '@hono-preact/iso';
-import { loader, cache } from './movies.server.js';
+import { definePage, useReload } from '@hono-preact/iso';
+import { loader } from './movies.server.js';
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   const { reload, reloading } = useReload();
 
   const handleAdd = async () => {
@@ -49,7 +48,7 @@ const Movies: FunctionComponent = () => {
   );
 };
 
-export default definePage(Movies, { loader, cache });
+export default definePage(Movies, { loader });
 ```
 
 **`src/routes.ts`** wires the URL to the view and its server module; the bindings live with the page:
@@ -70,17 +69,17 @@ Reload is a background refresh: the current content stays visible while the new 
 
 ## Cache invalidation
 
-`reload()` re-runs the `serverLoader`. If you're using a cache, invalidate it first so the RPC call fires rather than returning stale cached data:
+`reload()` re-runs the `serverLoader`. The loader auto-attaches a per-page cache, so invalidate it first to prevent the reload from returning stale cached data:
 
 ```tsx
-import { cache } from './movies.server.js';
+import { loader } from './movies.server.js';
 
 const { reload } = useReload();
 
 const handleAdd = async () => {
   await addMovie({ title: 'New Movie' });
-  cache.invalidate(); // clear the cache entry first
-  reload();           // then re-run the loader
+  loader.invalidate(); // clear the cache entry first
+  reload();            // then re-run the loader
 };
 ```
 

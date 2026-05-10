@@ -7,7 +7,7 @@ Pages often need data. On the server, that data should come from a direct functi
 A page is a file pair:
 
 - `movies.server.ts`: the server loader (default export) plus its `defineLoader` reference (named export). Never reaches the browser bundle.
-- `movies.tsx`: a pure component that consumes the loader data via `useLoaderData<typeof loader>()` and is exported through `definePage(Component, { loader })`.
+- `movies.tsx`: a pure component that consumes the loader data via `loader.useData()` and is exported through `definePage(Component, { loader })`.
 
 `definePage(Component, bindings)` returns a routable component that self-wraps in `<Page>` with those bindings. The route table in `routes.ts` declares which view and which `.server.ts` live at each URL via the `view` and `server` fields; the framework wires the rest.
 
@@ -45,11 +45,11 @@ export const loader = defineLoader(serverLoader);
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { definePage, useLoaderData } from '@hono-preact/iso';
+import { definePage } from '@hono-preact/iso';
 import { loader } from './movies.server.js';
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   return (
     <ul>
       {movies.results.map((m) => <li key={m.id}>{m.title}</li>)}
@@ -75,11 +75,11 @@ export default defineRoutes([
 ]);
 ```
 
-`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. Two `.server.*` files in different folders produce distinct keys by construction, so basename collisions are no longer a concern. `definePage(Component, { loader })` returns a routable component that self-wraps in `<Page>` with the loader captured in a closure. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
+`defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. Two `.server.*` files in different folders produce distinct keys by construction, so basename collisions are no longer a concern. `definePage(Component, { loader })` returns a routable component that self-wraps in `<Page>` with the loader captured in a closure. The loader ref carries its own `useData()` hook (`loader.useData()`), so consumers don't import a separate hook; the return type is inferred from the loader function itself.
 
 ## Example: detail page (using route params)
 
-The loader function receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID. The function's return type is inferred and propagated through `defineLoader(fn)` to `useLoaderData<typeof loader>()` calls.
+The loader function receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID. The function's return type is inferred and propagated through `defineLoader(fn)` to `loader.useData()` calls.
 
 ```ts
 // src/pages/movie.server.ts
@@ -125,11 +125,11 @@ app
 
 ## Caching navigation results
 
-Export a `cache` from the `.server.ts` file alongside the loader, then pass it to `definePage` so repeated navigations to the same page don't re-fetch:
+Every loader gets its own cache automatically. `defineLoader(fn)` creates a `LoaderCache` and attaches it to the returned ref. Repeated navigations to the same page hit the cache and skip the RPC call; after a successful fetch, the result is stored for the session.
 
 ```ts
 // src/pages/movies.server.ts
-import { createCache, defineLoader } from '@hono-preact/iso';
+import { defineLoader } from '@hono-preact/iso';
 
 const serverLoader = async () => ({
   movies: await getMovies(),
@@ -138,42 +138,45 @@ const serverLoader = async () => ({
 export default serverLoader;
 
 export const loader = defineLoader(serverLoader);
-export const cache = createCache<{ movies: MovieList }>();
 ```
 
 ```tsx
 // src/pages/movies.tsx
-import { definePage, useLoaderData } from '@hono-preact/iso';
-import { loader, cache } from './movies.server.js';
+import { definePage } from '@hono-preact/iso';
+import { loader } from './movies.server.js';
 
 function Movies() {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   return <ul>{movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
 }
 
-export default definePage(Movies, { loader, cache });
+export default definePage(Movies, { loader });
 ```
 
-The route entry in `routes.ts` is unchanged; the `cache` rides along with the loader through the same `server` import:
+To clear the cache for the loader's own page, call `loader.invalidate()`. The next navigation re-runs the loader.
+
+### Sharing a cache between loaders
+
+The default per-loader cache is the right choice for most pages. If two loaders genuinely need to share storage (e.g. a detail page that should populate the same cache as a list page), construct a `LoaderCache` explicitly and pass it via the `cache` option:
 
 ```ts
-{
-  path: '/movies',
-  view: () => import('./pages/movies.js'),
-  server: () => import('./pages/movies.server.js'),
-}
+import { createCache, defineLoader } from '@hono-preact/iso';
+
+const moviesCache = createCache<{ movies: MovieList }>();
+
+export const loader = defineLoader(serverLoader, { cache: moviesCache });
 ```
 
-On a cache hit, the RPC call is skipped entirely. After a successful fetch the result is stored in the cache for the session.
+`createCache<T>()` takes no arguments. Loader caches are referenced by the loader, not by name.
 
 ## Page bindings with `definePage`
 
-Per-page concerns (loader, cache, Wrapper, fallback, errorFallback, serverGuards, clientGuards) live with the page component, not with the route declaration that mounts it. `definePage` captures them:
+Per-page concerns (loader, Wrapper, fallback, errorFallback, serverGuards, clientGuards) live with the page component, not with the route declaration that mounts it. `definePage` captures them:
 
 ```tsx
 import { definePage } from '@hono-preact/iso';
 
-export default definePage(Component, { loader, cache, Wrapper });
+export default definePage(Component, { loader, Wrapper });
 ```
 
 `definePage(Component, bindings)` returns a routable component that self-wraps in `<Page>` with those bindings captured in a closure. `<Route>` does no introspection; it just maps a path to whatever component it receives. From the consumer's perspective the export is still just the page component.
@@ -214,31 +217,36 @@ export default definePage(MovieDetail, { loader, Wrapper: MovieWrapper });
 { path: ':id', view: () => import('./pages/movie.js'), server: () => import('./pages/movie.server.js') }
 ```
 
-`useLoaderData<typeof loader>()` is the consumer side. Importing `loader` purely as a type from the `.server.ts` file gives narrowing without a runtime reference; the call itself takes no arguments.
+`loader.useData()` is the consumer side. Importing `loader` from the `.server.ts` file gives both the runtime reference and the inferred return type; the call itself takes no arguments.
 
 When a page is mounted as a child of a layout group, its `definePage` bindings still attach to the page itself. The layout owns the chrome; the leaf owns the loader and any other bindings. See [Layouts & Nested Routes](/docs/layouts) for the full pattern.
 
-## Named caches
+## Cross-page invalidation
 
-Pass a string to `createCache` to register the cache with the global `cacheRegistry`. Actions on other pages can then invalidate it by name using `invalidate: ['cache-name']`:
+When a mutation on one page should refresh data on another, import the other page's loader and pass it to `useAction({ invalidate: [...] })`. Invalidation is by reference, not by name:
 
 ```ts
 // movies.server.ts
-export const cache = createCache<{ movies: MovieList }>('movies');
+import { defineLoader } from '@hono-preact/iso';
+
+export const loader = defineLoader(async () => ({
+  movies: await getMovies(),
+}));
 ```
 
 ```tsx
 // reviews.tsx: a different page whose action should also refresh the movie list
 import { useAction } from '@hono-preact/iso';
+import { loader as moviesLoader } from './movies.server.js';
 import { serverActions } from './reviews.server.js';
 
 const { mutate } = useAction(serverActions.addReview, {
-  invalidate: ['movies'], // clears the 'movies' cache on success
+  invalidate: [moviesLoader], // clears moviesLoader's cache on success
 });
 ```
 
-Unnamed caches (`createCache<T>()`) work exactly as before and cannot be targeted by other pages.
+`invalidate` accepts an array of loader refs, so a single action can refresh multiple targets in one call: `invalidate: [moviesLoader, ratingsLoader]`. Use `'auto'` instead of an array to invalidate the current page's loader only.
 
 ## The server/client boundary
 
-Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the default export becomes an RPC stub, the `loader` and `cache` exports remain (their construction is browser-safe; only the inner `serverLoader` reference matters), and any imported `serverGuards`, `serverActions`, or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the default export becomes an RPC stub, the `loader` named export remains (its construction is browser-safe; only the inner `serverLoader` reference matters), and any imported `serverGuards`, `serverActions`, or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

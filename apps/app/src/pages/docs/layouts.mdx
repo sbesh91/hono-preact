@@ -100,7 +100,7 @@ This keeps the data model simple: the matched leaf is the only route with a load
 }
 ```
 
-The list view consumes its loader data via `useLoaderData`; the layout never sees it. If a child needs data the layout ALSO needs to display, lift the data into the layout's render via context or pass it through as a prop in the empty-path child.
+The list view consumes its loader data via `loader.useData()`; the layout never sees it. If a child needs data the layout ALSO needs to display, lift the data into the layout's render via context or pass it through as a prop in the empty-path child.
 
 ## Path-grouping (no layout)
 

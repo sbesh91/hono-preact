@@ -11,7 +11,7 @@ Like loaders, guards are split by environment:
 - `serverGuards`: exported from `*.server.ts`, run during SSR, tree-shaken from the browser bundle
 - `clientGuards`: defined in the page file (or any browser-safe module), run during client-side navigation
 
-Guards live with the page component via `definePage` bindings, alongside the loader and cache. If the same component needs different guards at different mount points, wrap it twice and route to each separately:
+Guards live with the page component via `definePage` bindings, alongside the loader. If the same component needs different guards at different mount points, wrap it twice and route to each separately:
 
 ```tsx
 export const AdminPage = definePage(Page, { serverGuards: ['admin'] });
@@ -57,7 +57,7 @@ guards: [checkAuthenticated, checkRole('admin')]
 **`src/pages/admin.server.ts`** holds server guards plus the loader ref (never reaches the browser bundle):
 
 ```ts
-import { createCache, createGuard, defineLoader } from '@hono-preact/iso';
+import { createGuard, defineLoader } from '@hono-preact/iso';
 import { getCurrentUser, getAdminStats } from '@/server/admin.js';
 
 const serverLoader = async () => {
@@ -68,7 +68,6 @@ const serverLoader = async () => {
 export default serverLoader;
 
 export const loader = defineLoader(serverLoader);
-export const cache = createCache<{ stats: Stats }>();
 
 export const serverGuards = [
   createGuard(async (_ctx, next) => {
@@ -96,20 +95,20 @@ export const clientGuards = [
 ];
 ```
 
-**`src/pages/admin.tsx`** is a pure component, with all bindings (loader, cache, and both guard chains) attached via `definePage`:
+**`src/pages/admin.tsx`** is a pure component, with all bindings (loader and both guard chains) attached via `definePage`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { definePage, useLoaderData } from '@hono-preact/iso';
-import { loader, cache, serverGuards } from './admin.server.js';
+import { definePage } from '@hono-preact/iso';
+import { loader, serverGuards } from './admin.server.js';
 import { clientGuards } from './admin.guards.js';
 
 const Admin: FunctionComponent = () => {
-  const { stats } = useLoaderData<typeof loader>();
+  const { stats } = loader.useData();
   return <section>...</section>;
 };
 
-export default definePage(Admin, { loader, cache, serverGuards, clientGuards });
+export default definePage(Admin, { loader, serverGuards, clientGuards });
 ```
 
 **`src/routes.ts`** just wires the URL to the view + server module; no guard imports needed here:
@@ -126,7 +125,7 @@ export default definePage(Admin, { loader, cache, serverGuards, clientGuards });
 
 The same Vite plugins that enforce loader conventions also enforce guard conventions.
 
-**`serverLoaderValidationPlugin`:** `.server.ts` files may only export `loader`, `cache`, `serverGuards`, `serverActions`, and `actionGuards` as named exports (alongside the default loader). Any other named export fails the build:
+**`serverLoaderValidationPlugin`:** `.server.ts` files may only export `loader`, `serverGuards`, `serverActions`, and `actionGuards` as named exports (alongside the default loader). Any other named export fails the build:
 
 ```ts
 // ❌ build error
