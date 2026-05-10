@@ -1,4 +1,4 @@
-import { defineLoader, createCache, defineAction, type LoaderFn } from '@hono-preact/iso';
+import { defineLoader, defineAction, type LoaderFn } from '@hono-preact/iso';
 
 // The sentinel is intentionally constructed at runtime (concatenating two
 // halves) so that Rollup/Terser cannot constant-fold it away during
@@ -15,7 +15,6 @@ const serverLoader: LoaderFn<{ secret: string }> = async () => {
 export default serverLoader;
 
 export const loader = defineLoader<{ secret: string }>(serverLoader);
-export const cache = createCache<{ secret: string }>('foo');
 
 export const serverActions = {
   noop: defineAction<void, { ok: boolean }>(async () => ({ ok: true })),

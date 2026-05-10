@@ -1,6 +1,4 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as crypto from 'node:crypto';
 import { parse } from '@babel/parser';
 import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
@@ -11,82 +9,6 @@ import { deriveModuleKey } from './module-key.js';
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
 // autocomplete for the public Plugin surface.
 export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/viteRoot');
-
-function hashSuffix(input: string): string {
-  return crypto.createHash('sha1').update(input).digest('hex').slice(0, 8);
-}
-
-function readSource(importerPath: string, importSource: string): string | null {
-  const importerDir = path.dirname(importerPath);
-  const baseResolved = path.resolve(importerDir, importSource);
-  const candidates = [
-    baseResolved,
-    baseResolved.replace(/\.js$/, '.ts'),
-    baseResolved.replace(/\.jsx$/, '.tsx'),
-    baseResolved.replace(/\.mjs$/, '.mts'),
-    baseResolved + '.ts',
-    baseResolved + '.tsx',
-  ];
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      try {
-        return fs.readFileSync(candidate, 'utf8');
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
-function extractStringArgFromVarDecl(
-  src: string,
-  exportName: string,
-  factoryName: string,
-  argIndex: number
-): string | null {
-  try {
-    const ast = parse(src, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
-      errorRecovery: true,
-    });
-    for (const node of ast.program.body) {
-      if (
-        node.type === 'ExportNamedDeclaration' &&
-        node.declaration?.type === 'VariableDeclaration'
-      ) {
-        for (const decl of node.declaration.declarations) {
-          if (
-            decl.id.type === 'Identifier' &&
-            decl.id.name === exportName &&
-            decl.init?.type === 'CallExpression' &&
-            decl.init.callee.type === 'Identifier' &&
-            decl.init.callee.name === factoryName
-          ) {
-            const arg = decl.init.arguments[argIndex];
-            if (arg?.type === 'StringLiteral') return arg.value;
-          }
-        }
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function extractCacheName(
-  importerPath: string,
-  importSource: string,
-  fallbackModuleName: string
-): string {
-  const src = readSource(importerPath, importSource);
-  if (src === null) return fallbackModuleName;
-  return (
-    extractStringArgFromVarDecl(src, 'cache', 'createCache', 0) ?? fallbackModuleName
-  );
-}
 
 type DynamicServerImport = { start: number; end: number; source: string };
 
@@ -197,7 +119,6 @@ export function serverOnlyPlugin(): Plugin {
       const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
-      const needsCacheImport = new Set<string>();
 
       for (const serverImport of [...serverImports].reverse()) {
         if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
@@ -265,11 +186,11 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'cache'
           ) {
-            const cacheName = extractCacheName(id, serverImport.source.value, moduleKey);
-            const aliasSuffix = hashSuffix(serverImport.source.value);
-            needsCacheImport.add(aliasSuffix);
-            stubs.push(
-              `const ${specifier.local.name} = __$cacheRegistry_${aliasSuffix}.acquire(${JSON.stringify(cacheName)}, () => __$createCache_${aliasSuffix}(${JSON.stringify(cacheName)}));`
+            throw new Error(
+              `${id}: \`cache\` is no longer an allowed export from a *.server.* module. ` +
+              `Caches are auto-attached to loaders. To share a cache across loaders, ` +
+              `import \`createCache\` from '@hono-preact/iso' and pass it via ` +
+              `\`defineLoader(fn, { cache })\`.`
             );
           } else {
             const importedName =
@@ -281,7 +202,7 @@ export function serverOnlyPlugin(): Plugin {
                 : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-              `Allowed: default, loader, cache, serverGuards, serverActions, actionGuards.`
+              `Allowed: default, loader, serverGuards, serverActions, actionGuards.`
             );
           }
         }
@@ -295,16 +216,6 @@ export function serverOnlyPlugin(): Plugin {
 
       for (const imp of [...dynamicServerImports].reverse()) {
         s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
-      }
-
-      if (needsCacheImport.size > 0) {
-        const importDeclarations = [...needsCacheImport]
-          .map(
-            (suffix) =>
-              `import { cacheRegistry as __$cacheRegistry_${suffix}, createCache as __$createCache_${suffix} } from '@hono-preact/iso';`
-          )
-          .join('\n');
-        s.prepend(importDeclarations + '\n');
       }
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };

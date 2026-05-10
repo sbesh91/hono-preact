@@ -151,15 +151,11 @@ describe('loader and cache specifiers', () => {
     expect(result?.code).toContain('"src/movies"');
   });
 
-  it('replaces a `cache` named import with a createCache call using the source-file name', () => {
-    // The fixture file isn't available here; the plugin should fall back to module key.
+  it('rejects a `cache` named import with a clear error', () => {
     const code = `import { cache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('createCache as');
-    // Expect the fallback name (module key derived from server file path) since no fixture exists.
-    // The plugin uses a unique alias (e.g. __$createCache_...) to avoid collisions,
-    // so match `createCache[_a-zA-Z0-9$]*("src/movies")` to allow either bare or aliased call sites.
-    expect(result?.code).toMatch(/createCache[_a-zA-Z0-9$]*\(['"]src\/movies['"]\)/);
+    expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
+      /`cache` is no longer an allowed export from a \*\.server\.\* module/
+    );
   });
 
   it('handles `loader` aliased to a different local name', () => {
@@ -169,19 +165,18 @@ describe('loader and cache specifiers', () => {
     expect(result?.code).toContain('"src/movies"');
   });
 
-  it('handles `cache` aliased to a different local name', () => {
+  it('rejects a `cache` import even when aliased to a different local name', () => {
     const code = `import { cache as moviesCache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('const moviesCache =');
-    expect(result?.code).toMatch(/createCache[_a-zA-Z0-9$]*\(['"]src\/movies['"]\)/);
+    expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
+      /`cache` is no longer an allowed export/
+    );
   });
 
-  it('handles mixed loader + cache + serverActions in one import statement', () => {
+  it('rejects a mixed loader + cache + serverActions import on the cache specifier', () => {
     const code = `import { loader, cache, serverActions } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const loader =');
-    expect(result?.code).toContain('const cache =');
-    expect(result?.code).toContain('const serverActions = new Proxy');
+    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
+      /`cache` is no longer an allowed export/
+    );
   });
 
   it('handles mixed default + loader in one import statement', () => {
@@ -201,19 +196,11 @@ describe('loader and cache specifiers', () => {
     expect(result?.code).toContain('const loader =');
   });
 
-  it('matches an import that has ONLY cache (no default, no actions, no guards)', () => {
+  it('points users to defineLoader(fn, { cache }) when rejecting a `cache` import', () => {
     const code = `import { cache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result).toBeDefined();
-    expect(result?.code).not.toContain("import { cache }");
-    expect(result?.code).toContain('const cache =');
-  });
-
-  it('emits cache stubs that go through cacheRegistry.acquire for identity', () => {
-    const code = `import { cache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('.acquire(');
-    expect(result?.code).toContain('cacheRegistry');
+    expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
+      /defineLoader\(fn, \{ cache \}\)/
+    );
   });
 
   it('emits the path key in named `loader` stubs as Symbol.for(@hono-preact/loader:<key>)', () => {
@@ -300,24 +287,6 @@ describe('re-exports from .server.* are rejected', () => {
   it('does not throw on regular `export * from` of a non-server module', () => {
     const code = `export * from './utils.js';`;
     expect(() => transform(code, '/Users/me/repo/src/aggregator.ts')).not.toThrow();
-  });
-});
-
-describe('cache alias suffix is collision-free', () => {
-  it('produces distinct cache aliases for module sources that sanitize to the same identifier', () => {
-    // Before the hash-based suffix, a sanitizer of /[^a-zA-Z0-9_$]/g -> '_'
-    // collapsed both "foo-bar" and "foo_bar" to the same alias and broke
-    // multi-import cases that resolved to either.
-    const code = [
-      `import { cache as a } from './foo-bar.server.js';`,
-      `import { cache as b } from './foo_bar.server.js';`,
-    ].join('\n');
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result).toBeDefined();
-    // Two distinct cacheRegistry alias bindings should be emitted.
-    const matches = result!.code.match(/__\$cacheRegistry_[a-zA-Z0-9$_]+/g) ?? [];
-    const unique = new Set(matches);
-    expect(unique.size).toBeGreaterThanOrEqual(2);
   });
 });
 

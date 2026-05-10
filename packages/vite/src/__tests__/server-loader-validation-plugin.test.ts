@@ -127,7 +127,7 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toBeNull();
   });
 
-  it('error message lists all allowed named exports including loader and cache', () => {
+  it('error message lists all allowed named exports including loader', () => {
     const code = [
       'export const unauthorized = () => {};',
       'export default async function serverLoader() { return {}; }',
@@ -137,10 +137,10 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain("'serverActions'");
     expect(error).toContain("'actionGuards'");
     expect(error).toContain("'loader'");
-    expect(error).toContain("'cache'");
+    expect(error).not.toContain("'cache'");
   });
 
-  describe('allows loader and cache named exports', () => {
+  describe('loader and cache named exports', () => {
     it('does not reject "loader" named export', () => {
       const code = [
         'export default serverLoader;',
@@ -150,13 +150,13 @@ describe('serverLoaderValidationPlugin', () => {
       expect(error).toBeNull();
     });
 
-    it('does not reject "cache" named export', () => {
+    it('rejects "cache" named export', () => {
       const code = [
         "export default serverLoader;",
         "export const cache = createCache('movies-list');",
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
-      expect(error).toBeNull();
+      expect(error).toContain('found: cache');
     });
   });
 });
