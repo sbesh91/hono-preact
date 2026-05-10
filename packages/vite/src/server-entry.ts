@@ -65,6 +65,17 @@ const HONO_METHODS = new Set([
 
 const WILDCARD_PATTERNS = new Set(['*', '/*']);
 
+// Walk treats these as opaque: their bodies are user handlers, not route
+// registrations. Skipping the body keeps `c.notFound()` inside a handler
+// from being mistaken for `app.notFound(...)` at registration time.
+const FUNCTION_BODY_PARENTS = new Set([
+  'FunctionDeclaration',
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+  'ObjectMethod',
+  'ClassMethod',
+]);
+
 export function findApiCatchAllRoutes(source: string): CatchAllWarning[] {
   const warnings: CatchAllWarning[] = [];
 
@@ -130,8 +141,12 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
     }
   }
 
+  const isFunctionParent =
+    typeof n.type === 'string' && FUNCTION_BODY_PARENTS.has(n.type);
+
   for (const key of Object.keys(node as object)) {
     if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+    if (isFunctionParent && key === 'body') continue;
     walk((node as Record<string, unknown>)[key], warnings);
   }
 }

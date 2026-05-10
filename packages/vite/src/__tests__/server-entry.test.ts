@@ -138,6 +138,18 @@ describe('findApiCatchAllRoutes', () => {
     const warnings = findApiCatchAllRoutes(src);
     expect(warnings).toHaveLength(2);
   });
+
+  it('does not flag c.notFound() inside a handler body', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().get('/api/x/:id', (c) => {
+        const id = Number(c.req.param('id'));
+        if (!Number.isFinite(id)) return c.notFound();
+        return c.text('ok');
+      });
+    `;
+    expect(findApiCatchAllRoutes(src)).toEqual([]);
+  });
 });
 
 describe('serverEntryPlugin', () => {
