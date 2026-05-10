@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { env } from '@hono-preact/iso';
-import { Layout } from './server/layout.js';
+import { Layout } from './Layout.js';
 import {
   actionsHandler,
   loadersHandler,

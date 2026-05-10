@@ -28,3 +28,5 @@ export const Layout: FunctionComponent<{ context: Context }> = (props) => {
     </LocationProvider>
   );
 };
+
+export default Layout;
