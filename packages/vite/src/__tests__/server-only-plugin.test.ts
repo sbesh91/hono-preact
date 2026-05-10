@@ -146,7 +146,9 @@ describe('loader and cache specifiers', () => {
   it('replaces a `loader` named import with a client-side LoaderRef stub', () => {
     const code = `import { loader } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toMatch(/const loader = \{[\s\S]*__id: Symbol\.for\(['"]@hono-preact\/loader:src\/movies['"]\)[\s\S]*fn:\s*async/);
+    expect(result?.code).toContain("import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';");
+    expect(result?.code).toMatch(/const loader = __\$defineLoader_hpiso\(async/);
+    expect(result?.code).toContain('__moduleKey: "src/movies"');
     expect(result?.code).toContain("fetch('/__loaders'");
     expect(result?.code).toContain('"src/movies"');
   });
@@ -161,7 +163,8 @@ describe('loader and cache specifiers', () => {
   it('handles `loader` aliased to a different local name', () => {
     const code = `import { loader as moviesLoader } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toMatch(/const moviesLoader = \{[\s\S]*Symbol\.for/);
+    expect(result?.code).toMatch(/const moviesLoader = __\$defineLoader_hpiso\(/);
+    expect(result?.code).toContain('__moduleKey: "src/movies"');
     expect(result?.code).toContain('"src/movies"');
   });
 
@@ -203,12 +206,11 @@ describe('loader and cache specifiers', () => {
     );
   });
 
-  it('emits the path key in named `loader` stubs as Symbol.for(@hono-preact/loader:<key>)', () => {
+  it('emits the path key in named `loader` stubs via the defineLoader __moduleKey option', () => {
     const code = `import { loader } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain(
-      `Symbol.for('@hono-preact/loader:src/pages/movies')`
-    );
+    expect(result?.code).toContain('__moduleKey: "src/pages/movies"');
+    expect(result?.code).toContain('__$defineLoader_hpiso(');
   });
 });
 
@@ -393,9 +395,9 @@ describe('dynamic import() rewriting for .server.* sources', () => {
   });
 });
 
-describe('loader stub Symbol.for keying uses path-derived key', () => {
-  it('uses the path-derived key (not defineLoader name) for the loader Symbol', () => {
-    // After path-keying, the Symbol is derived from the module path, not the
+describe('loader stub keying uses path-derived module key', () => {
+  it('uses the path-derived key (not defineLoader name) for the loader moduleKey', () => {
+    // After path-keying, the key is derived from the module path, not the
     // defineLoader('foo', ...) first-arg string in the source file.
     const fixtureRoot =
       '/Users/stevenbeshensky/Documents/repos/hono-preact/packages/vite/src/__tests__/fixtures/leak-test';
@@ -403,9 +405,7 @@ describe('loader stub Symbol.for keying uses path-derived key', () => {
     const code = `import { loader } from './pages/foo.server.js';`;
     const result = transform(code, importerPath, { root: fixtureRoot });
     expect(result).toBeDefined();
-    expect(result?.code).toContain(
-      "__id: Symbol.for('@hono-preact/loader:pages/foo')"
-    );
+    expect(result?.code).toContain('__moduleKey: "pages/foo"');
   });
 
   it('uses path key even when the source file is unreachable', () => {
@@ -413,8 +413,6 @@ describe('loader stub Symbol.for keying uses path-derived key', () => {
     const result = transform(code, '/Users/me/repo/no/such/path/iso.tsx');
     expect(result).toBeDefined();
     // Uses path-derived key, not basename fallback.
-    expect(result?.code).toContain(
-      "__id: Symbol.for('@hono-preact/loader:no/such/path/nope')"
-    );
+    expect(result?.code).toContain('__moduleKey: "no/such/path/nope"');
   });
 });

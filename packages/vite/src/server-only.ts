@@ -119,6 +119,7 @@ export function serverOnlyPlugin(): Plugin {
       const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
+      let needsDefineLoaderImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
         if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
@@ -175,11 +176,9 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'loader'
           ) {
+            needsDefineLoaderImport = true;
             stubs.push(
-              `const ${specifier.local.name} = {\n` +
-              `  __id: Symbol.for('@hono-preact/loader:${moduleKey}'),\n` +
-              `  fn: ${loaderFetchArrow(moduleKey, '  ')},\n` +
-              `};`
+              `const ${specifier.local.name} = __$defineLoader_hpiso(${loaderFetchArrow(moduleKey, '  ')}, { __moduleKey: ${JSON.stringify(moduleKey)} });`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -216,6 +215,10 @@ export function serverOnlyPlugin(): Plugin {
 
       for (const imp of [...dynamicServerImports].reverse()) {
         s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
+      }
+
+      if (needsDefineLoaderImport) {
+        s.prepend(`import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';\n`);
       }
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
