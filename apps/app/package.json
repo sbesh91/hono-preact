@@ -14,7 +14,6 @@
     "@hono-preact/iso": "workspace:*",
     "@hono-preact/server": "workspace:*",
     "@shikijs/rehype": "^4.0.2",
-    "dotenv": "^17.4.2",
     "hono": "^4.12.14",
     "hoofd": "^1.7.3",
     "lucide-preact": "^1.14.0",
