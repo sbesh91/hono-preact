@@ -1,6 +1,6 @@
 # Quick Start
 
-Build a movies list with a server loader and a form action. One example covers the full file pair pattern.
+Build a movies list with a server loader and a form action. One example covers the full route-table + view + server pattern.
 
 ## Prerequisites
 
@@ -13,9 +13,9 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5173`. The dev server runs both the Hono server and the Vite HMR client. `server.tsx` handles API routes and the catch-all SSR handler; `iso.tsx` defines all client-side routes. Both `/__loaders` and `/__actions` endpoints are already registered, so any `.server.ts` file you add to `src/pages/` is automatically discovered.
+Open `http://localhost:5173`. The dev server runs both the Hono server and the Vite HMR client. `server.tsx` hosts the framework's `__loaders` / `__actions` handlers and the catch-all SSR handler; `routes.ts` declares every URL in the app and which view (and optional `.server.ts` module) lives at each path. The framework wires the server modules into the handlers via `routeServerModules(routes)`.
 
-## 1. Create a page
+## 1. Create a view
 
 Create `src/pages/movies.tsx` as a pure component with a default export:
 
@@ -35,24 +35,24 @@ Movies.displayName = 'Movies';
 export default Movies;
 ```
 
-Register the route in `src/iso.tsx` alongside the other lazy imports:
+Add it to `src/routes.ts`:
 
-```tsx
-import { lazy, Route } from '@hono-preact/iso';
+```ts
+import { defineRoutes } from '@hono-preact/iso';
 
-const Movies = lazy(() => import('./pages/movies.js'));
-
-// inside <Router>:
-<Route path="/movies" component={Movies} />
+export default defineRoutes([
+  // ... existing routes
+  { path: '/movies', view: () => import('./pages/movies.js') },
+]);
 ```
 
 Open `http://localhost:5173/movies`. You should see "Movies".
 
-> `<Route>` from `@hono-preact/iso` is the registration surface. It maps a path to a component. Per-page concerns (loader, cache, Wrapper) are attached to the page component itself via `definePage`; pages without bindings render directly.
+> The `view` field is a deferred dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting. No manual `<Route>` JSX is needed; `<Routes>` in `iso.tsx` registers everything from the manifest.
 
 ## 2. Add a server loader
 
-Create `src/pages/movies.server.ts`. The loader ref lives next to the server function as a named export, so the page never needs to import `defineLoader` itself:
+Create `src/pages/movies.server.ts`. The loader ref is a named export so the view never needs to import `defineLoader` itself:
 
 ```ts
 import { defineLoader } from '@hono-preact/iso';
@@ -75,7 +75,7 @@ export default serverLoader;
 export const loader = defineLoader(serverLoader);
 ```
 
-Update `src/pages/movies.tsx` to a pure consumer of the loader data, and bind the loader to the page with `definePage`:
+Update `src/pages/movies.tsx` to consume the loader data, and bind the loader to the page with `definePage`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
@@ -101,15 +101,14 @@ Movies.displayName = 'Movies';
 export default definePage(Movies, { loader });
 ```
 
-The `<Route>` registration in `src/iso.tsx` does not change; it still just maps the path to the component:
+Add the `server` field to the route entry in `src/routes.ts` so `server.tsx` finds the module:
 
-```tsx
-import { lazy, Route } from '@hono-preact/iso';
-
-const Movies = lazy(() => import('./pages/movies.js'));
-
-// inside <Router>:
-<Route path="/movies" component={Movies} />
+```ts
+{
+  path: '/movies',
+  view: () => import('./pages/movies.js'),
+  server: () => import('./pages/movies.server.js'),
+}
 ```
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
@@ -189,14 +188,14 @@ Movies.displayName = 'Movies';
 export default definePage(Movies, { loader });
 ```
 
-The `<Route>` registration in `iso.tsx` doesn't change. Actions don't need any route-level wiring.
-
-Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates with no manual state management.
+The route entry in `routes.ts` doesn't change; actions ride along with the same `server` import. Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates with no manual state management.
 
 ## What's next
 
-- [Server Loaders](/docs/loaders): caching, named caches, path params
-- [Server Actions](/docs/actions): `useAction`, optimistic updates, file uploads, streaming
-- [Route Guards](/docs/guards): protect pages with server and client guard chains
-- [Loading States](/docs/loading-states): show a fallback while the loader fetches
-- [Build & Deploy](/docs/deployment): production build and deployment
+- [The Route Table](/docs/routes): the full `defineRoutes` reference.
+- [Layouts & Nested Routes](/docs/layouts): share chrome across URLs without remounting.
+- [Server Loaders](/docs/loaders): caching, named caches, path params.
+- [Server Actions](/docs/actions): `useAction`, optimistic updates, file uploads, streaming.
+- [Route Guards](/docs/guards): protect pages with server and client guard chains.
+- [Loading States](/docs/loading-states): show a fallback while the loader fetches.
+- [Build & Deploy](/docs/deployment): production build and deployment.

@@ -31,8 +31,10 @@ export default defineConfig({
 | Server build output | `esnext` target, `dist/static/` asset dir, minification |
 | Worker bundling | `@hono/vite-build` (Cloudflare Workers preset), build-only |
 | Dev server | `@hono/vite-dev-server` with Cloudflare adapter, serve-only |
-| Server-only imports | `serverOnlyPlugin` stubs `*.server.*` imports in the client bundle |
+| Server-only imports | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle |
 | Loader validation | `serverLoaderValidationPlugin` enforces `.server.*` export conventions |
+| Module identity | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing |
+| Browser shim | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw |
 
 ## Peer dependencies
 
@@ -90,3 +92,16 @@ honoPreact({
 ```
 
 These are merged on top of the plugin's defaults, so you only need to specify what differs.
+
+## Custom client entry path
+
+The plugin defaults to `'./src/client.tsx'` for the client bundle entry. Override it with `clientEntry`:
+
+```ts
+honoPreact({
+  entry: 'src/server.tsx',
+  clientEntry: 'src/main.tsx',
+})
+```
+
+`clientEntry` is the single source of truth for both the rollup `input` and the `clientShimPlugin` transform target, so you only set it in one place.

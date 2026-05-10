@@ -51,12 +51,23 @@ If a [route guard](/docs/guards) redirects during SSR, it throws a `GuardRedirec
 
 ```tsx
 import { Hono } from 'hono';
-import { location, renderPage } from '@hono-preact/server';
+import {
+  actionsHandler,
+  loadersHandler,
+  location,
+  renderPage,
+  routeServerModules,
+} from '@hono-preact/server';
 import { Layout } from './server/layout.js';
+import routes from './routes.js';
 
 export const app = new Hono();
 
+const serverModules = routeServerModules(routes);
+
 app
+  .post('/__loaders', loadersHandler(serverModules))
+  .post('/__actions', actionsHandler(serverModules))
   .get('/api/movies', async (c) => {
     const movies = await getMovies();
     return c.json(movies);
@@ -64,3 +75,5 @@ app
   .use(location)
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'My App' }));
 ```
+
+`routeServerModules(routes)` is built once at module scope so every request reuses the same record. The framework handlers (`/__loaders`, `/__actions`) and your own REST routes can share the same Hono instance.

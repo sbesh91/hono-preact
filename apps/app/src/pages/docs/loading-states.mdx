@@ -21,13 +21,13 @@ export default definePage(Movies, {
 });
 ```
 
-```tsx
-// src/iso.tsx
-import { lazy, Route } from '@hono-preact/iso';
-
-const Movies = lazy(() => import('./pages/movies.js'));
-
-<Route path="/movies" component={Movies} />
+```ts
+// src/routes.ts
+{
+  path: '/movies',
+  view: () => import('./pages/movies.js'),
+  server: () => import('./pages/movies.server.js'),
+}
 ```
 
 `fallback` is rendered by the `Suspense` boundary that wraps the loader fetch. It only appears on client-side navigation; SSR and first-load hydration read from preloaded data and render immediately.
