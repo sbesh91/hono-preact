@@ -6,94 +6,117 @@ import { clientShimPlugin } from './client-shim.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
+import {
+  serverEntryPlugin,
+  VIRTUAL_SERVER_ENTRY_ID,
+} from './server-entry.js';
 
 export interface HonoPreactOptions {
-  entry: string;
-  clientEntry?: string;
+  // Source paths (for the generated server entry). All optional.
+  layout?: string;       // default 'src/Layout.tsx'
+  routes?: string;       // default 'src/routes.ts'
+  api?: string;          // default 'src/api.ts' (only loaded if file exists)
+  clientEntry?: string;  // default 'src/client.tsx'
+
+  // Server entry. Defaults to a generated virtual module. Rare override.
+  entry?: string;
+
+  // Build-tuning escape hatches (preserved).
   clientBuild?: BuildEnvironmentOptions;
   serverBuild?: BuildEnvironmentOptions;
   sharedBuild?: BuildEnvironmentOptions;
 }
 
-export function honoPreact({
-  entry,
-  clientEntry = './src/client.tsx',
-  clientBuild = {},
-  serverBuild = {},
-  sharedBuild = {},
-}: HonoPreactOptions): Plugin[] {
-  return [
-    {
-      name: 'hono-preact:config',
-      config(_, { mode }) {
-        const shared = {
-          resolve: {
-            dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
-          },
-          build: {
-            target: 'esnext' as const,
-            assetsDir: 'static',
-            ssrEmitAssets: true,
-            minify: true,
-            ...sharedBuild,
-          },
-        };
+export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
+  const {
+    layout = 'src/Layout.tsx',
+    routes = 'src/routes.ts',
+    api = 'src/api.ts',
+    clientEntry = './src/client.tsx',
+    entry,
+    clientBuild = {},
+    serverBuild = {},
+    sharedBuild = {},
+  } = options;
 
-        if (mode === 'client') {
-          const { rollupOptions: userRollup, ...restClientBuild } = clientBuild;
-          return {
-            ...shared,
-            build: {
-              ...shared.build,
-              sourcemap: true,
-              cssCodeSplit: true,
-              copyPublicDir: false,
-              ...restClientBuild,
-              rollupOptions: {
-                input: userRollup?.input ?? [clientEntry],
-                output: {
-                  entryFileNames: 'static/client.js',
-                  chunkFileNames: 'static/[name]-[hash].js',
-                  assetFileNames: 'static/[name]-[hash].[ext]',
-                  // Array-form output is not supported — use an OutputOptions object to
-                  // override individual fields (entryFileNames, chunkFileNames, etc.).
-                  ...(userRollup?.output && !Array.isArray(userRollup.output)
-                    ? userRollup.output
-                    : {}),
-                },
-              },
-            },
-          };
-        }
+  const useGeneratedEntry = entry === undefined;
+  const resolvedEntry = entry ?? VIRTUAL_SERVER_ENTRY_ID;
 
+  const configPlugin: Plugin = {
+    name: 'hono-preact:config',
+    config(_, { mode }) {
+      const shared = {
+        resolve: {
+          dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
+        },
+        build: {
+          target: 'esnext' as const,
+          assetsDir: 'static',
+          ssrEmitAssets: true,
+          minify: true,
+          ...sharedBuild,
+        },
+      };
+
+      if (mode === 'client') {
+        const { rollupOptions: userRollup, ...restClientBuild } = clientBuild;
         return {
           ...shared,
-          ssr: {
-            noExternal: [
-              'preact-render-to-string',
-              'preact-iso',
-              '@hono-preact/iso',
-              '@hono-preact/server',
-            ],
-          },
           build: {
             ...shared.build,
-            ...serverBuild,
+            sourcemap: true,
+            cssCodeSplit: true,
+            copyPublicDir: false,
+            ...restClientBuild,
+            rollupOptions: {
+              input: userRollup?.input ?? [clientEntry],
+              output: {
+                entryFileNames: 'static/client.js',
+                chunkFileNames: 'static/[name]-[hash].js',
+                assetFileNames: 'static/[name]-[hash].[ext]',
+                // Array-form output is not supported; use an OutputOptions object to
+                // override individual fields (entryFileNames, chunkFileNames, etc.).
+                ...(userRollup?.output && !Array.isArray(userRollup.output)
+                  ? userRollup.output
+                  : {}),
+              },
+            },
           },
         };
-      },
+      }
+
+      return {
+        ...shared,
+        ssr: {
+          noExternal: [
+            'preact-render-to-string',
+            'preact-iso',
+            '@hono-preact/iso',
+            '@hono-preact/server',
+          ],
+        },
+        build: {
+          ...shared.build,
+          ...serverBuild,
+        },
+      };
     },
+  };
+
+  return [
+    configPlugin,
     clientShimPlugin(clientEntry),
+    ...(useGeneratedEntry ? [serverEntryPlugin({ layout, routes, api })] : []),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     serverOnlyPlugin(),
-    Object.assign(build({ entry }), {
+    Object.assign(build({ entry: resolvedEntry }), {
       apply: (_: unknown, { command, mode }: { command: string; mode: string }) =>
         command === 'build' && mode !== 'client',
     }),
     Object.assign(
       devServer({
-        entry,
+        entry: resolvedEntry,
         exclude: [
           ...defaultOptions.exclude,
           /\.scss/,

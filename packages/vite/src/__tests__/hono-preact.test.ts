@@ -142,9 +142,28 @@ describe('honoPreact plugin assembly', () => {
     ]);
   });
 
-  it('emits exactly seven plugins (config, four transforms, build, dev-server)', () => {
+  it('emits exactly seven plugins when entry is provided (config, four transforms, build, dev-server)', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' });
     expect(plugins).toHaveLength(7);
+  });
+
+  it('emits exactly eight plugins by default (adds server-entry to the seven)', () => {
+    const plugins = honoPreact();
+    expect(plugins).toHaveLength(8);
+  });
+
+  it('emits the documented pipeline order in the zero-arg path', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    // server-entry slots in after config and client-shim, before validation/module-key/server-only.
+    expect(names.slice(0, 6)).toEqual([
+      'hono-preact:config',
+      'hono-preact:client-shim',
+      'hono-preact:server-entry',
+      'server-loader-validation',
+      'module-key',
+      'server-only',
+    ]);
   });
 
   it('gates the build plugin to non-client build commands', () => {
@@ -164,5 +183,31 @@ describe('honoPreact plugin assembly', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
     const devPlugin = plugins[6];
     expect(devPlugin.apply).toBe('serve');
+  });
+});
+
+describe('honoPreact zero-arg path', () => {
+  type NamedPlugin = { name?: string; apply?: unknown };
+
+  it('accepts no arguments and includes the server-entry plugin', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    expect(names).toContain('hono-preact:server-entry');
+  });
+
+  it('omits the server-entry plugin when entry is provided', () => {
+    const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    expect(names).not.toContain('hono-preact:server-entry');
+  });
+
+  it('places server-entry early in the pipeline (before module-key) so its virtual id resolves first', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    const seIdx = names.indexOf('hono-preact:server-entry');
+    const mkIdx = names.indexOf('module-key');
+    expect(seIdx).toBeGreaterThan(-1);
+    expect(mkIdx).toBeGreaterThan(-1);
+    expect(seIdx).toBeLessThan(mkIdx);
   });
 });
