@@ -47,6 +47,13 @@ describe('generateServerEntrySource', () => {
 
     // Default export
     expect(src.trimEnd().endsWith('export default app;')).toBe(true);
+
+    // Layout vnode constructed with h() (not JSX) so the virtual module
+    // compiles without a TSX loader hint. defaultTitle is wired through.
+    expect(src).toContain(`import { h } from 'preact';`);
+    expect(src).toContain(`h(Layout, { context: c })`);
+    expect(src).toContain(`{ defaultTitle: 'hono-preact' }`);
+    expect(src).not.toContain('<Layout');
   });
 
   it('emits the api import and mount when apiAbsPath is provided, before the catchall', () => {
