@@ -158,7 +158,14 @@ function LoaderHost<T>({
   }
 
   return (
-    <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
+    <ReloadContext.Provider
+      value={{
+        reload,
+        reloading,
+        error: loadError,
+        loaderId: loaderRef.__id,
+      }}
+    >
       <Suspense fallback={fallback}>
         <DataReader
           reader={readerRef.current}

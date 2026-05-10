@@ -26,6 +26,28 @@ export type DefineLoaderOpts<T> = {
   cache?: LoaderCache<T>;
 };
 
+// Stash a shared cache map on globalThis so duplicate copies of
+// @hono-preact/iso (workspace hoisting quirks) still see the same map.
+// The serverOnlyPlugin emits a `defineLoader(fn, { __moduleKey })` call at
+// EVERY importer of a `.server.*` module, so without this dedup each
+// importer would get its own private LoaderCache and `ref.invalidate()`
+// would only clear the calling importer's copy. That breaks cross-route
+// invalidation (movie.tsx invalidating `moviesListLoader` no longer flushes
+// the list page's cache).
+const SHARED_CACHES_KEY = Symbol.for('@hono-preact/iso/loaderCaches');
+
+type SharedCacheMap = Map<symbol, LoaderCache<unknown>>;
+
+function getSharedCaches(): SharedCacheMap {
+  const g = globalThis as unknown as Record<symbol, SharedCacheMap>;
+  let map = g[SHARED_CACHES_KEY];
+  if (!map) {
+    map = new Map();
+    g[SHARED_CACHES_KEY] = map;
+  }
+  return map;
+}
+
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
@@ -33,7 +55,27 @@ export function defineLoader<T>(
   const __id = opts?.__moduleKey
     ? Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`)
     : Symbol(`@hono-preact/loader:<unkeyed>`);
-  const cache = opts?.cache ?? createCache<T>();
+
+  let cache = opts?.cache;
+  if (!cache) {
+    if (opts?.__moduleKey) {
+      // Keyed loaders: dedupe the auto-attached cache by __id so every
+      // importer of the same .server module shares one LoaderCache.
+      const shared = getSharedCaches();
+      const existing = shared.get(__id) as LoaderCache<T> | undefined;
+      if (existing) {
+        cache = existing;
+      } else {
+        cache = createCache<T>();
+        shared.set(__id, cache as LoaderCache<unknown>);
+      }
+    } else {
+      // Unkeyed loaders only happen when consumers call defineLoader(fn)
+      // directly without the plugin transform (i.e. in tests). Each call
+      // gets a fresh cache.
+      cache = createCache<T>();
+    }
+  }
 
   const ref: LoaderRef<T> = {
     __id,

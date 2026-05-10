@@ -223,6 +223,94 @@ describe('useAction', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it('triggers reloadCtx.reload() when invalidate includes the active loader', async () => {
+    const active = defineLoader(async () => ({ value: 1 }), {
+      __moduleKey: 'reload-active-test',
+    });
+    const other = defineLoader(async () => ({ value: 2 }), {
+      __moduleKey: 'reload-other-test',
+    });
+    const reload = vi.fn();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const refStub = {
+      __module: 'm',
+      __action: 'go',
+    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+
+    function TestComponent() {
+      const { mutate } = useAction(refStub, { invalidate: [active, other] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(
+      <ReloadContext.Provider
+        value={{ reload, reloading: false, error: null, loaderId: active.__id }}
+      >
+        <TestComponent />
+      </ReloadContext.Provider>
+    );
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  });
+
+  it('does not call reloadCtx.reload() when invalidate refs do not include the active loader', async () => {
+    const active = defineLoader(async () => ({ value: 1 }), {
+      __moduleKey: 'reload-active-test-2',
+    });
+    const other = defineLoader(async () => ({ value: 2 }), {
+      __moduleKey: 'reload-other-test-2',
+    });
+    const reload = vi.fn();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const refStub = {
+      __module: 'm',
+      __action: 'go',
+    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+
+    function TestComponent() {
+      const { mutate } = useAction(refStub, { invalidate: [other] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(
+      <ReloadContext.Provider
+        value={{ reload, reloading: false, error: null, loaderId: active.__id }}
+      >
+        <TestComponent />
+      </ReloadContext.Provider>
+    );
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    // Wait long enough for the action to settle.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it('calls .invalidate() on each loader ref after a successful mutation', async () => {
     const a = defineLoader(async () => ({ a: 1 }));
     const b = defineLoader(async () => ({ b: 2 }));

@@ -126,8 +126,19 @@ export function useAction<TPayload, TResult, TSnapshot = unknown>(
       if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
       } else if (Array.isArray(currentOptions?.invalidate)) {
+        let invalidatedActive = false;
         for (const ref of currentOptions.invalidate) {
           ref.invalidate();
+          if (reloadCtx?.loaderId && ref.__id === reloadCtx.loaderId) {
+            invalidatedActive = true;
+          }
+        }
+        // If the user's invalidate list includes the active page's loader,
+        // also re-run that loader so the visible <Loader> picks up fresh
+        // data. Other refs (sibling pages) just clear their caches; those
+        // pages will refetch on their next mount.
+        if (invalidatedActive) {
+          reloadCtx?.reload();
         }
       }
     } catch (err) {

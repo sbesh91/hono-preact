@@ -74,6 +74,27 @@ describe('LoaderRef methods', () => {
     expect(loader.cache.has()).toBe(false);
   });
 
+  it('two defineLoader calls with the same __moduleKey share a cache', () => {
+    const a = defineLoader(async () => ({ x: 1 }), {
+      __moduleKey: 'shared-cache-test',
+    });
+    const b = defineLoader(async () => ({ x: 1 }), {
+      __moduleKey: 'shared-cache-test',
+    });
+    a.cache.set({ x: 1 });
+    expect(b.cache.has()).toBe(true);
+    expect(b.cache.get()).toEqual({ x: 1 });
+    b.invalidate();
+    expect(a.cache.has()).toBe(false);
+  });
+
+  it('unkeyed loaders get distinct caches', () => {
+    const a = defineLoader(async () => ({ x: 1 }));
+    const b = defineLoader(async () => ({ x: 1 }));
+    a.cache.set({ x: 1 });
+    expect(b.cache.has()).toBe(false);
+  });
+
   it('useData() returns the data from LoaderDataContext', () => {
     const loader = defineLoader(async () => ({ value: 42 }));
     const Probe = () => {
