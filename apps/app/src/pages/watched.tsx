@@ -3,7 +3,6 @@ import {
   cacheRegistry,
   definePage,
   useAction,
-  useLoaderData,
   useReload,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
@@ -11,7 +10,7 @@ import { useState } from 'preact/hooks';
 import { cache, loader, serverActions } from './watched.server.js';
 
 const WatchedPage: FunctionComponent = () => {
-  const { entries } = useLoaderData<typeof loader>();
+  const { entries } = loader.useData();
   const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
 
   const reload = useReload();

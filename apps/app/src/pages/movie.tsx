@@ -4,7 +4,6 @@ import {
   definePage,
   Form,
   useAction,
-  useLoaderData,
   useOptimisticAction,
   useReload,
   type WrapperProps,
@@ -67,7 +66,7 @@ const PhotoForm: FunctionComponent<{ movieIdStr: string }> = ({ movieIdStr }) =>
 };
 
 const MovieDetail: FunctionComponent = () => {
-  const { movie, watched, watchedCount } = useLoaderData<typeof loader>();
+  const { movie, watched, watchedCount } = loader.useData();
   const { setCount } = useWatchedBadge();
 
   // Seed/refresh the layout badge from the loader's authoritative count.

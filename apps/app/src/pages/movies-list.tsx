@@ -1,7 +1,6 @@
 import {
   cacheRegistry,
   definePage,
-  useLoaderData,
   useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
@@ -11,7 +10,7 @@ import { loader, cache, serverActions } from './movies-list.server.js';
 import { useMoviesFilter, useWatchedBadge } from './movies-layout.js';
 
 const MoviesList: FunctionComponent = () => {
-  const { movies, watchedIds } = useLoaderData<typeof loader>();
+  const { movies, watchedIds } = loader.useData();
   const { query } = useMoviesFilter();
   const { setCount } = useWatchedBadge();
 
