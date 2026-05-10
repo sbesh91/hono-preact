@@ -189,10 +189,15 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
   };
 }
 
-export const Routes: ComponentType<{ routes: RoutesManifest }> = ({ routes }) => {
+export type RoutesProps = {
+  routes: RoutesManifest;
+  onRouteChange?: (url: string) => void;
+};
+
+export const Routes: ComponentType<RoutesProps> = ({ routes, onRouteChange }) => {
   return h(
-    Router,
-    null,
+    Router as AnyComponent<any>,
+    onRouteChange ? { onRouteChange } : null,
     ...routes.flat.map((r) =>
       h(Route, {
         key: r.path,

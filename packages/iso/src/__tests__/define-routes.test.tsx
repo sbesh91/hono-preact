@@ -206,4 +206,13 @@ describe('<Routes>', () => {
     // without throwing and produces the LocationProvider tree.
     expect(container.innerHTML).toBeDefined();
   });
+
+  it('forwards onRouteChange to the underlying Router', () => {
+    const cb = () => {};
+    const m = defineRoutes([{ path: '/', view: noopView }]);
+    const vnode = h(Routes, { routes: m, onRouteChange: cb });
+    // Smoke: vnode is a Routes element carrying the callback in props.
+    expect(vnode.type).toBe(Routes);
+    expect((vnode.props as { onRouteChange?: unknown }).onRouteChange).toBe(cb);
+  });
 });
