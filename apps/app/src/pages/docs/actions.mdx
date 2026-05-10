@@ -37,20 +37,32 @@ export const serverActions = {
 
 ## Registering the handler
 
-Register `actionsHandler` on your Hono app before the catch-all route:
+Register `actionsHandler` on your Hono app before the catch-all route. Build the module map from your `routes.ts` manifest via `routeServerModules`:
 
 **`src/server.tsx`**
 
 ```tsx
-import { actionsHandler, renderPage, location } from '@hono-preact/server';
+import {
+  actionsHandler,
+  loadersHandler,
+  location,
+  renderPage,
+  routeServerModules,
+} from '@hono-preact/server';
+import routes from './routes.js';
+
+const serverModules = routeServerModules(routes);
 
 app
-  .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
+  .post('/__loaders', loadersHandler(serverModules))
+  .post('/__actions', actionsHandler(serverModules))
   .use(location)
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`actionsHandler` accepts an `import.meta.glob` result. Both lazy (default) and eager (`{ eager: true }`) globs work. It routes by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`.
+`routeServerModules` walks the route manifest and produces every `server` deferred import in the record shape `actionsHandler` consumes. The handler routes by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`.
+
+`actionsHandler` also accepts a raw `import.meta.glob` result if you want to wire it directly; the `routeServerModules` adapter just builds the same shape from the route manifest.
 
 ## Calling actions with `useAction`
 

@@ -1,22 +1,19 @@
-// apps/app/src/pages/movies.tsx
 import {
   cacheRegistry,
   definePage,
-  lazy,
-  Route,
-  Router,
   useLoaderData,
   useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
+import { useEffect } from 'preact/hooks';
 import type { MovieSummary } from '@/server/data/movies.js';
-import { loader, cache, serverActions } from './movies.server.js';
-import Noop from './noop.js';
+import { loader, cache, serverActions } from './movies-list.server.js';
+import { useMoviesFilter, useWatchedBadge } from './movies-layout.js';
 
-const Movie = lazy(() => import('./movie.js'));
-
-const Movies: FunctionComponent = () => {
+const MoviesList: FunctionComponent = () => {
   const { movies, watchedIds } = useLoaderData<typeof loader>();
+  const { query } = useMoviesFilter();
+  const { setCount } = useWatchedBadge();
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
     serverActions.toggleWatched,
@@ -31,18 +28,31 @@ const Movies: FunctionComponent = () => {
     }
   );
 
+  // Push the optimistic count up to the layout's badge. The optimistic value
+  // is updated synchronously on click (via useOptimisticAction's queue), so
+  // the badge increments immediately and rolls back on action error.
+  useEffect(() => {
+    setCount(optimisticWatchedIds.length);
+  }, [optimisticWatchedIds.length, setCount]);
+
   const watched = new Set(optimisticWatchedIds);
 
+  const trimmed = query.trim().toLowerCase();
+  const filtered = trimmed
+    ? movies.results.filter((m: MovieSummary) =>
+        m.title.toLowerCase().includes(trimmed)
+      )
+    : movies.results;
+
   return (
-    <section class="p-1">
-      <a href="/" class="bg-amber-200">
-        home
-      </a>{' '}
-      <a href="/watched" class="bg-emerald-200">
-        watched ({optimisticWatchedIds.length})
-      </a>
+    <>
+      {trimmed && (
+        <p>
+          showing {filtered.length} of {movies.results.length}
+        </p>
+      )}
       <ul class="mt-2">
-        {movies.results.map((m: MovieSummary) => (
+        {filtered.map((m: MovieSummary) => (
           <li key={m.id} class="border-2 m-1 p-1 flex items-center gap-2">
             <a href={`/movies/${m.id}`} class="flex-1">
               {m.title}{' '}
@@ -62,13 +72,9 @@ const Movies: FunctionComponent = () => {
           </li>
         ))}
       </ul>
-      <Router>
-        <Route path="/:id" component={Movie} />
-        <Noop />
-      </Router>
-    </section>
+    </>
   );
 };
-Movies.displayName = 'Movies';
+MoviesList.displayName = 'MoviesList';
 
-export default definePage(Movies, { loader, cache });
+export default definePage(MoviesList, { loader, cache });

@@ -1,0 +1,197 @@
+# Layouts & Nested Routes
+
+A layout is a wrapper component that stays mounted across navigations between sibling routes. Use a layout when several URLs share chrome: a sidebar, a header, a tab bar, a sub-navigation. The framework preserves the layout's identity across intra-group navigation so its state survives.
+
+## Declaring a layout
+
+In `routes.ts`, a layout group is a route entry with `layout` and `children`:
+
+```ts
+import { defineRoutes } from '@hono-preact/iso';
+
+export default defineRoutes([
+  {
+    path: '/movies',
+    layout: () => import('./pages/movies-layout.js'),
+    children: [
+      {
+        path: '',
+        view: () => import('./pages/movies-list.js'),
+        server: () => import('./pages/movies-list.server.js'),
+      },
+      {
+        path: ':id',
+        view: () => import('./pages/movie.js'),
+        server: () => import('./pages/movie.server.js'),
+      },
+    ],
+  },
+]);
+```
+
+URLs:
+
+- `/movies` matches the parent + the empty-path child. Renders `<MoviesLayout><MoviesList /></MoviesLayout>`.
+- `/movies/123` matches the parent + the `:id` child. Renders `<MoviesLayout><Movie /></MoviesLayout>` with `pathParams.id === '123'`.
+
+Navigating from `/movies` to `/movies/123` does NOT remount `MoviesLayout`. State held in the layout (an open menu, scroll position, a focused element) survives.
+
+## The layout component
+
+A layout is a Preact component whose props match `LayoutProps` from `@hono-preact/iso`:
+
+```tsx
+// src/pages/movies-layout.tsx
+import type { LayoutProps } from '@hono-preact/iso';
+
+export default function MoviesLayout({ children }: LayoutProps) {
+  return (
+    <section class="p-1">
+      <header class="flex gap-2">
+        <a href="/" class="bg-amber-200">home</a>
+        <a href="/watched" class="bg-emerald-200">watched</a>
+      </header>
+      <div class="mt-2">{children}</div>
+    </section>
+  );
+}
+```
+
+`children` is the matched descendant tree. The framework injects it.
+
+## URL composition rules
+
+| Rule | Why |
+|---|---|
+| Top-level paths start with `/` | `/movies`, `/admin`, etc. Standard. |
+| Child paths must NOT start with `/` | A child path is appended to its parent (`/movies` + `:id` → `/movies/:id`). |
+| Empty child path (`''`) matches the parent's URL exactly | The "index" child of a layout group. |
+| Routes match in source order | First match wins, including catchalls like `*`. |
+| `*` matches anything not matched by siblings | Works at any nesting level. |
+| Trailing slashes normalised | `/movies/` and `/movies` are the same route. |
+
+## One loader per leaf
+
+A layout cannot declare `server`:
+
+```ts
+{
+  path: '/movies',
+  layout: () => import('./pages/movies-layout.js'),
+  server: () => import('./movies.server.js'),  // ❌ throws at defineRoutes time
+  children: [...],
+}
+```
+
+This keeps the data model simple: the matched leaf is the only route with a loader, and it's the only loader that runs per request. If you want chrome plus data at the same URL, structure it as a layout with an empty-path child carrying the loader:
+
+```ts
+{
+  path: '/movies',
+  layout: () => import('./pages/movies-layout.js'),
+  children: [
+    {
+      path: '',
+      view: () => import('./pages/movies-list.js'),
+      server: () => import('./pages/movies-list.server.js'),  // loader for /movies
+    },
+    // ... other children
+  ],
+}
+```
+
+The list view consumes its loader data via `useLoaderData`; the layout never sees it. If a child needs data the layout ALSO needs to display, lift the data into the layout's render via context or pass it through as a prop in the empty-path child.
+
+## Path-grouping (no layout)
+
+If you want to share a URL prefix without a wrapper, omit `layout` and `view`:
+
+```ts
+{
+  path: '/admin',
+  children: [
+    { path: 'users', view: () => import('./pages/admin-users.js') },
+    { path: 'posts', view: () => import('./pages/admin-posts.js') },
+  ],
+}
+```
+
+Both `/admin/users` and `/admin/posts` are independent routes; they share only the URL prefix. No shared chrome means no shared mount, so navigating between them remounts each view.
+
+## Nested layouts
+
+Layouts can contain layouts. Each layer of nesting adds another wrapper around the matched leaf:
+
+```ts
+{
+  path: '/dashboard',
+  layout: () => import('./pages/dashboard-layout.js'),
+  children: [
+    { path: '', view: () => import('./pages/dashboard-home.js') },
+    {
+      path: 'reports',
+      layout: () => import('./pages/reports-layout.js'),
+      children: [
+        { path: '', view: () => import('./pages/reports-index.js') },
+        { path: ':id', view: () => import('./pages/report.js') },
+      ],
+    },
+  ],
+}
+```
+
+Renders for `/dashboard/reports/42`:
+
+```
+<DashboardLayout>
+  <ReportsLayout>
+    <Report />
+  </ReportsLayout>
+</DashboardLayout>
+```
+
+Navigating `/dashboard/reports → /dashboard/reports/42` remounts only `<Report />`. Both layouts stay mounted. Navigating `/dashboard/reports/42 → /dashboard` remounts everything below `<DashboardLayout>` (because `<ReportsLayout>` is no longer matched).
+
+## How the framework preserves identity
+
+preact-iso's `<Router>` decides whether a navigation is "the same component re-rendered" or "a different component mounted" by comparing component references between the matched outgoing and incoming routes. If the references are the same, the component re-renders in place; if different, it unmounts and a new one mounts.
+
+For a layout group, the framework registers ONE shared component at the outer router under both `/path` and `/path/*`. That shared component renders `<Layout><Router>{...children}</Router></Layout>` — the inner `<Router>` matches the rest of the URL against the layout's children. Outer navigation between `/movies` and `/movies/123` finds the SAME outer component, so the layout re-renders in place; the inner Router resolves the new child and swaps its content.
+
+Nesting works recursively: a layout-group child of a layout group registers as a single component within its parent's inner Router, and so on.
+
+## What's out of scope at v0.1
+
+| Feature | Status | Workaround |
+|---|---|---|
+| Pathless layout routes (no URL segment) | Not yet | Repeat the wrapper as a regular component imported by each view that needs it. |
+| Parallel parent + child loaders | Out of scope | Hoist the loader onto whichever route owns the data. |
+| `useParentLoaderData` / loader composition | Out of scope | Same. |
+| Path-prefix middleware beyond guards | Out of scope | Use Hono `.use()` in your `api.ts` for path-prefix middleware. |
+
+These may land in later versions. v0.1 intentionally keeps the data model simple: one loader per leaf, no parallel data graph, no layout-vs-view loader coordination.
+
+## Sharing chrome without a layout
+
+If you want chrome shared across unrelated URLs (not a contiguous URL prefix), don't declare a layout group. Instead, write the chrome as a regular component and import it directly into each view:
+
+```tsx
+// src/components/MarketingChrome.tsx
+export function MarketingChrome({ children }: { children: ComponentChildren }) {
+  return <div class="marketing-bg"><nav>...</nav>{children}</div>;
+}
+
+// src/pages/about.tsx
+import { MarketingChrome } from '../components/MarketingChrome.js';
+export default function About() {
+  return <MarketingChrome><h1>About</h1></MarketingChrome>;
+}
+```
+
+This pattern remounts the chrome on each navigation, so it's only appropriate when the chrome has no state that needs to survive nav. For shared chrome with state, prefer a layout group with an empty-path index child.
+
+## See also
+
+- [The Route Table](/docs/routes) — the `defineRoutes` factory and the manifest.
+- [Adding Pages](/docs/pages) — view authoring.
+- [Server Loaders](/docs/loaders) — what `server` imports provide.

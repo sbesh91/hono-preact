@@ -52,14 +52,14 @@ const Movies: FunctionComponent = () => {
 export default definePage(Movies, { loader, cache });
 ```
 
-**`src/iso.tsx`** maps the path to the component; the bindings live with the page:
+**`src/routes.ts`** wires the URL to the view and its server module; the bindings live with the page:
 
-```tsx
-import { lazy, Route } from '@hono-preact/iso';
-
-const Movies = lazy(() => import('./pages/movies.js'));
-
-<Route path="/movies" component={Movies} />
+```ts
+{
+  path: '/movies',
+  view: () => import('./pages/movies.js'),
+  server: () => import('./pages/movies.server.js'),
+}
 ```
 
 `useReload` must be called inside a component whose page has a loader binding (via `definePage(..., { loader })`). Calling it elsewhere throws an error.

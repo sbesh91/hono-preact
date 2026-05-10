@@ -9,7 +9,7 @@ A page is a file pair:
 - `movies.server.ts`: the server loader (default export) plus its `defineLoader` reference (named export). Never reaches the browser bundle.
 - `movies.tsx`: a pure component that consumes the loader data via `useLoaderData<typeof loader>()` and is exported through `definePage(Component, { loader })`.
 
-`definePage(Component, bindings)` returns a routable component that self-wraps in `<Page>` with those bindings. The `<Route>` in `iso.tsx` is `preact-iso`'s `<Route>` re-exported: it only maps a path to a component, no introspection.
+`definePage(Component, bindings)` returns a routable component that self-wraps in `<Page>` with those bindings. The route table in `routes.ts` declares which view and which `.server.ts` live at each URL via the `view` and `server` fields; the framework wires the rest.
 
 **At runtime:**
 1. **SSR:** `serverLoader` runs directly during `prerender`. Its return value is JSON-serialized into a `data-loader` attribute on the page's wrapper element.
@@ -60,14 +60,19 @@ const Movies: FunctionComponent = () => {
 export default definePage(Movies, { loader });
 ```
 
-**`src/iso.tsx`** maps the path to the component; it does not import the loader:
+**`src/routes.ts`** wires the URL to the view and its server module:
 
-```tsx
-import { lazy, Route } from '@hono-preact/iso';
+```ts
+import { defineRoutes } from '@hono-preact/iso';
 
-const Movies = lazy(() => import('./pages/movies.js'));
-
-<Route path="/movies" component={Movies} />
+export default defineRoutes([
+  // ...
+  {
+    path: '/movies',
+    view: () => import('./pages/movies.js'),
+    server: () => import('./pages/movies.server.js'),
+  },
+]);
 ```
 
 `defineLoader(fn)` returns a typed reference (`LoaderRef<T>`). The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. Two `.server.*` files in different folders produce distinct keys by construction, so basename collisions are no longer a concern. `definePage(Component, { loader })` returns a routable component that self-wraps in `<Page>` with the loader captured in a closure. `useLoaderData<typeof loader>()` is a type-only consumer: the generic narrows the return type to the loader's return shape without dragging the loader ref in as a runtime value.
@@ -93,19 +98,30 @@ export const loader = defineLoader(serverLoader);
 
 ## Registering the loader endpoint
 
-Register `loadersHandler` on your Hono app before the catch-all route. It accepts the same `import.meta.glob` pattern as `actionsHandler`:
+Register `loadersHandler` on your Hono app before the catch-all route. Build its module map from your `routes.ts` manifest via `routeServerModules`:
 
 ```tsx
-import { loadersHandler, actionsHandler, renderPage, location } from '@hono-preact/server';
+import {
+  actionsHandler,
+  loadersHandler,
+  location,
+  renderPage,
+  routeServerModules,
+} from '@hono-preact/server';
+import routes from './routes.js';
+
+const serverModules = routeServerModules(routes);
 
 app
-  .post('/__loaders', loadersHandler(import.meta.glob('./pages/*.server.ts')))
-  .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
+  .post('/__loaders', loadersHandler(serverModules))
+  .post('/__actions', actionsHandler(serverModules))
   .use(location)
   .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
 ```
 
-`loadersHandler` and `actionsHandler` route by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`. Modules without `__moduleKey` are silently skipped at map-build time.
+`routeServerModules` walks the route manifest and returns every `server` deferred import in a record shape the handlers consume. `loadersHandler` and `actionsHandler` route by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`. Modules without `__moduleKey` are silently skipped at map-build time.
+
+`loadersHandler` and `actionsHandler` also still accept a raw Vite `import.meta.glob` result if you prefer to wire them that way; the `routeServerModules` adapter just builds the same shape from the route manifest.
 
 ## Caching navigation results
 
@@ -138,13 +154,14 @@ function Movies() {
 export default definePage(Movies, { loader, cache });
 ```
 
-```tsx
-// src/iso.tsx
-import { lazy, Route } from '@hono-preact/iso';
+The route entry in `routes.ts` is unchanged; the `cache` rides along with the loader through the same `server` import:
 
-const Movies = lazy(() => import('./pages/movies.js'));
-
-<Route path="/movies" component={Movies} />
+```ts
+{
+  path: '/movies',
+  view: () => import('./pages/movies.js'),
+  server: () => import('./pages/movies.server.js'),
+}
 ```
 
 On a cache hit, the RPC call is skipped entirely. After a successful fetch the result is stored in the cache for the session.
@@ -169,12 +186,12 @@ const Home = () => <main>Welcome.</main>;
 export default Home;
 ```
 
-```tsx
-// src/iso.tsx
-<Route path="/" component={Home} />
+```ts
+// src/routes.ts
+{ path: '/', view: () => import('./pages/home.js') }
 ```
 
-A `Wrapper` binding wraps the page in a custom element while keeping the SSR `data-loader` plumbing. This was previously a `<Route Wrapper>` prop:
+A `Wrapper` binding wraps the page in a custom element while keeping the SSR `data-loader` plumbing:
 
 ```tsx
 // src/pages/movie.tsx
@@ -192,14 +209,14 @@ function MovieDetail() {
 export default definePage(MovieDetail, { loader, Wrapper: MovieWrapper });
 ```
 
-```tsx
-// src/iso.tsx
-<Route path="/movies/:id" component={Movie} />
+```ts
+// src/routes.ts (as a child of the /movies layout group)
+{ path: ':id', view: () => import('./pages/movie.js'), server: () => import('./pages/movie.server.js') }
 ```
 
 `useLoaderData<typeof loader>()` is the consumer side. Importing `loader` purely as a type from the `.server.ts` file gives narrowing without a runtime reference; the call itself takes no arguments.
 
-For nested routers, the bindings always live with the page being mounted. A nested `<Route path="/:id" component={Movie} />` inside a `Movies` page no longer plumbs `loader=` or `Wrapper=` to that route; those move into `movie.tsx`'s `definePage` call.
+When a page is mounted as a child of a layout group, its `definePage` bindings still attach to the page itself. The layout owns the chrome; the leaf owns the loader and any other bindings. See [Layouts & Nested Routes](/docs/layouts) for the full pattern.
 
 ## Named caches
 

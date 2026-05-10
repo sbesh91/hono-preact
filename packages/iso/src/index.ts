@@ -8,6 +8,16 @@ export type { PageBindings } from './define-page.js';
 // consumers have a single import surface for everything they need.
 export { Route, Router, lazy } from 'preact-iso';
 
+// Declarative route tree.
+export { defineRoutes, Routes } from './define-routes.js';
+export type {
+  RouteDef,
+  RoutesManifest,
+  FlatRoute,
+  LayoutProps,
+  ViewProps,
+} from './define-routes.js';
+
 // Server bindings.
 export { defineLoader } from './define-loader.js';
 export type {

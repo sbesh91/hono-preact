@@ -352,6 +352,78 @@ describe('serverOnlyPlugin viteRoot capture', () => {
   });
 });
 
+describe('dynamic import() rewriting for .server.* sources', () => {
+  it('rewrites a dynamic import() of a .server.* file to Promise.resolve({})', () => {
+    const code = `const m = () => import('./foo.server.ts');`;
+    const result = transform(code, '/Users/me/repo/src/routes.ts');
+    expect(result).toBeDefined();
+    expect(result?.code).toContain('Promise.resolve({})');
+    expect(result?.code).not.toContain("import('./foo.server.ts')");
+  });
+
+  it('leaves a string literal containing ".server" untouched when not in a dynamic import', () => {
+    const code = `const label = 'movies-list.server.js is the server file';\n`;
+    const result = transform(code, '/Users/me/repo/src/routes.ts');
+    // No static or dynamic imports of .server.*, so plugin returns undefined.
+    expect(result).toBeUndefined();
+  });
+
+  it('rewrites both static and dynamic .server.* imports in the same file', () => {
+    const code = [
+      `import serverLoader from './movies.server.js';`,
+      `const lazy = () => import('./auth.server.js');`,
+    ].join('\n');
+    const result = transform(code, '/Users/me/repo/src/pages/page.tsx');
+    expect(result).toBeDefined();
+    expect(result?.code).toContain("fetch('/__loaders'");
+    expect(result?.code).toContain('"src/pages/movies"');
+    expect(result?.code).toContain('Promise.resolve({})');
+    expect(result?.code).not.toContain("import('./auth.server.js')");
+  });
+
+  it('leaves a dynamic import() of a non-server module untouched', () => {
+    const code = `const lazy = () => import('./other.ts');`;
+    const result = transform(code, '/Users/me/repo/src/routes.ts');
+    // No .server.* substring at all -> early return undefined.
+    expect(result).toBeUndefined();
+  });
+
+  it('leaves a dynamic import() of a non-server module untouched when other .server text is present', () => {
+    // Force the plugin past the `.server` substring early-return so the dynamic
+    // walker actually runs; verify it does not falsely rewrite the non-server import.
+    const code = [
+      `// note: foo.server.ts is referenced elsewhere`,
+      `const lazy = () => import('./other.ts');`,
+    ].join('\n');
+    const result = transform(code, '/Users/me/repo/src/routes.ts');
+    // The walker finds no dynamic .server.* import and there are no static
+    // .server.* imports either, so the plugin returns undefined.
+    expect(result).toBeUndefined();
+  });
+
+  it('leaves dynamic .server.* imports untouched in SSR builds', () => {
+    const code = `const m = () => import('./foo.server.ts');`;
+    const result = transform(code, '/Users/me/repo/src/routes.ts', { ssr: true });
+    expect(result).toBeUndefined();
+  });
+
+  it('rewrites dynamic .server.* imports even when configResolved has not fired (no viteRoot needed)', () => {
+    const plugin = serverOnlyPlugin() as Plugin & {
+      transform: TransformFn;
+    };
+    // Skip configResolved on purpose; dynamic-only files should still be rewritten.
+    const code = `const m = () => import('./foo.server.ts');`;
+    const result = plugin.transform.call(
+      { warn: () => {} } as any,
+      code,
+      '/Users/me/repo/src/routes.ts',
+      {}
+    );
+    expect(result).toBeDefined();
+    expect(result?.code).toContain('Promise.resolve({})');
+  });
+});
+
 describe('loader stub Symbol.for keying uses path-derived key', () => {
   it('uses the path-derived key (not defineLoader name) for the loader Symbol', () => {
     // After path-keying, the Symbol is derived from the module path, not the

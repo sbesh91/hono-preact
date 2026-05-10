@@ -2,6 +2,7 @@
   "name": "hono-preact-monorepo",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.18.3",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",

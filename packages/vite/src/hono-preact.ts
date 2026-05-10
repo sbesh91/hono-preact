@@ -2,12 +2,14 @@ import build from '@hono/vite-build/cloudflare-workers';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import { type BuildEnvironmentOptions, type Plugin } from 'vite';
+import { clientShimPlugin } from './client-shim.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
 
 export interface HonoPreactOptions {
   entry: string;
+  clientEntry?: string;
   clientBuild?: BuildEnvironmentOptions;
   serverBuild?: BuildEnvironmentOptions;
   sharedBuild?: BuildEnvironmentOptions;
@@ -15,6 +17,7 @@ export interface HonoPreactOptions {
 
 export function honoPreact({
   entry,
+  clientEntry = './src/client.tsx',
   clientBuild = {},
   serverBuild = {},
   sharedBuild = {},
@@ -47,7 +50,7 @@ export function honoPreact({
               copyPublicDir: false,
               ...restClientBuild,
               rollupOptions: {
-                input: userRollup?.input ?? ['./src/client.tsx'],
+                input: userRollup?.input ?? [clientEntry],
                 output: {
                   entryFileNames: 'static/client.js',
                   chunkFileNames: 'static/[name]-[hash].js',
@@ -80,6 +83,7 @@ export function honoPreact({
         };
       },
     },
+    clientShimPlugin(clientEntry),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     serverOnlyPlugin(),

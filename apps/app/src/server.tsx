@@ -6,8 +6,10 @@ import {
   loadersHandler,
   location,
   renderPage,
+  routeServerModules,
 } from '@hono-preact/server';
 import { getWatched } from './server/watched.js';
+import routes from './routes.js';
 
 const dev = process.env.NODE_ENV === 'development';
 if (dev) {
@@ -18,9 +20,11 @@ export const app = new Hono();
 
 env.current = 'server';
 
+const serverModules = routeServerModules(routes);
+
 app
-  .post('/__loaders', loadersHandler(import.meta.glob('./pages/*.server.ts')))
-  .post('/__actions', actionsHandler(import.meta.glob('./pages/*.server.ts')))
+  .post('/__loaders', loadersHandler(serverModules))
+  .post('/__actions', actionsHandler(serverModules))
   .get('/api/watched/:movieId/photo', async (c) => {
     const id = Number(c.req.param('movieId'));
     if (!Number.isFinite(id)) return c.notFound();

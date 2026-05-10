@@ -18,7 +18,7 @@ export const AdminPage = definePage(Page, { serverGuards: ['admin'] });
 export const SuperAdminPage = definePage(Page, { serverGuards: ['superadmin'] });
 ```
 
-Then mount each export at its own path in `iso.tsx`.
+Then mount each export at its own path in `routes.ts`, pointing the `view` at a sub-export rather than the file's default. (The simplest pattern is one wrapped export per file.)
 
 ## API
 
@@ -112,14 +112,14 @@ const Admin: FunctionComponent = () => {
 export default definePage(Admin, { loader, cache, serverGuards, clientGuards });
 ```
 
-**`src/iso.tsx`** just maps the path to the component; no guard imports needed here:
+**`src/routes.ts`** just wires the URL to the view + server module; no guard imports needed here:
 
-```tsx
-import { lazy, Route } from '@hono-preact/iso';
-
-const Admin = lazy(() => import('./pages/admin.js'));
-
-<Route path="/admin" component={Admin} />
+```ts
+{
+  path: '/admin',
+  view: () => import('./pages/admin.js'),
+  server: () => import('./pages/admin.server.js'),
+}
 ```
 
 ## Build conventions

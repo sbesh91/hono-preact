@@ -5,7 +5,9 @@ import {
   FileText,
   FolderTree,
   Layers,
+  LayoutGrid,
   Loader,
+  Map as MapIcon,
   RefreshCw,
   Rocket,
   Send,
@@ -31,6 +33,8 @@ export const nav: NavSection[] = [
   {
     heading: 'Pages & Routing',
     entries: [
+      { title: 'The Route Table', route: '/docs/routes', icon: MapIcon },
+      { title: 'Layouts & Nesting', route: '/docs/layouts', icon: LayoutGrid },
       { title: 'Adding Pages', route: '/docs/pages', icon: FileText },
     ],
   },

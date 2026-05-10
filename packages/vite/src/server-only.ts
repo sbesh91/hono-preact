@@ -88,6 +88,40 @@ function extractCacheName(
   );
 }
 
+type DynamicServerImport = { start: number; end: number; source: string };
+
+function findDynamicServerImports(node: unknown, found: DynamicServerImport[]): void {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const child of node) findDynamicServerImports(child, found);
+    return;
+  }
+  const n = node as {
+    type?: string;
+    callee?: { type?: string };
+    arguments?: Array<{ type?: string; value?: string }>;
+    start?: number;
+    end?: number;
+  };
+  if (
+    n.type === 'CallExpression' &&
+    n.callee?.type === 'Import' &&
+    n.arguments?.[0]?.type === 'StringLiteral' &&
+    typeof n.arguments[0].value === 'string' &&
+    /\.server(\.[jt]sx?)?$/.test(n.arguments[0].value)
+  ) {
+    found.push({
+      start: n.start!,
+      end: n.end!,
+      source: n.arguments[0].value,
+    });
+  }
+  for (const key of Object.keys(node as object)) {
+    if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+    findDynamicServerImports((node as Record<string, unknown>)[key], found);
+  }
+}
+
 function loaderFetchArrow(moduleName: string, indent: string): string {
   const i = indent;
   return (
@@ -146,8 +180,13 @@ export function serverOnlyPlugin(): Plugin {
         /\.server(\.[jt]sx?)?$/.test((node as ImportDeclaration).source.value);
 
       const serverImports = ast.program.body.filter(isServerImport);
-      if (serverImports.length === 0) return;
-      if (viteRoot === undefined) {
+
+      const dynamicServerImports: DynamicServerImport[] = [];
+      findDynamicServerImports(ast.program, dynamicServerImports);
+
+      if (serverImports.length === 0 && dynamicServerImports.length === 0) return;
+
+      if (serverImports.length > 0 && viteRoot === undefined) {
         this.warn(
           `serverOnlyPlugin: configResolved hasn't fired before transform on ${id}. ` +
           `.server.* imports will not be transformed; this can leak server code into the client bundle. ` +
@@ -166,8 +205,11 @@ export function serverOnlyPlugin(): Plugin {
           continue;
         }
 
+        // viteRoot is guaranteed defined here: the early-return above bails when
+        // we have static imports without a viteRoot. Dynamic-only files skip this
+        // loop entirely.
         const absServerPath = path.resolve(importerDir, serverImport.source.value);
-        const moduleKey = deriveModuleKey(absServerPath, viteRoot);
+        const moduleKey = deriveModuleKey(absServerPath, viteRoot as string);
         if (moduleKey.startsWith('..')) {
           this.warn(
             `serverOnlyPlugin: import of '${serverImport.source.value}' from '${id}' resolves outside the Vite root (${viteRoot}). ` +
@@ -249,6 +291,10 @@ export function serverOnlyPlugin(): Plugin {
         } else if (!hasValueSpecifier) {
           s.overwrite(serverImport.start!, serverImport.end!, '');
         }
+      }
+
+      for (const imp of [...dynamicServerImports].reverse()) {
+        s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
       }
 
       if (needsCacheImport.size > 0) {
