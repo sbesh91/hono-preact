@@ -1,6 +1,7 @@
 import build from '@hono/vite-build/cloudflare-workers';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
+import preact from '@preact/preset-vite';
 import { type BuildEnvironmentOptions, type Plugin } from 'vite';
 import { clientShimPlugin } from './client-shim.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
@@ -128,5 +129,6 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
       }),
       { apply: 'serve' as const }
     ),
+    ...preact(),
   ];
 }

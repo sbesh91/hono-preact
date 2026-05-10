@@ -142,14 +142,18 @@ describe('honoPreact plugin assembly', () => {
     ]);
   });
 
-  it('emits exactly seven plugins when entry is provided (config, four transforms, build, dev-server)', () => {
+  it('emits at least seven framework-owned plugins when entry is provided', () => {
+    // 7 framework plugins (config, client-shim, validation, module-key,
+    // server-only, build, dev-server) plus an unknown number of preact
+    // preset plugins.
     const plugins = honoPreact({ entry: './src/server.tsx' });
-    expect(plugins).toHaveLength(7);
+    expect(plugins.length).toBeGreaterThanOrEqual(7);
   });
 
-  it('emits exactly eight plugins by default (adds server-entry to the seven)', () => {
-    const plugins = honoPreact();
-    expect(plugins).toHaveLength(8);
+  it('adds exactly one more framework-owned plugin in the zero-arg path (server-entry)', () => {
+    const withEntry = honoPreact({ entry: './src/server.tsx' });
+    const zeroArg = honoPreact();
+    expect(zeroArg.length).toBe(withEntry.length + 1);
   });
 
   it('emits the documented pipeline order in the zero-arg path', () => {
@@ -209,5 +213,17 @@ describe('honoPreact zero-arg path', () => {
     expect(seIdx).toBeGreaterThan(-1);
     expect(mkIdx).toBeGreaterThan(-1);
     expect(seIdx).toBeLessThan(mkIdx);
+  });
+});
+
+describe('honoPreact preact() auto-inclusion', () => {
+  type NamedPlugin = { name?: string };
+
+  it('includes the preact preset plugins by name', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    // @preact/preset-vite returns multiple named plugins; the JSX-transform
+    // plugin is the most stable name to assert on.
+    expect(names).toContain('vite:preact-jsx');
   });
 });

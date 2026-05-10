@@ -224,13 +224,13 @@ importers:
       '@hono/vite-dev-server':
         specifier: ^0.25.1
         version: 0.25.1(hono@4.12.14)(miniflare@4.20260415.0)(wrangler@4.83.0)
+      '@preact/preset-vite':
+        specifier: ^2.10.5
+        version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.2)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0))
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
     devDependencies:
-      '@preact/preset-vite':
-        specifier: ^2.10.5
-        version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.2)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0))
       preact:
         specifier: ^10.29.1
         version: 10.29.1
