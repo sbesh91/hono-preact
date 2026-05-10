@@ -156,10 +156,10 @@ describe('loader and cache specifiers', () => {
     expect(result?.code).toContain('"src/movies"');
   });
 
-  it('rejects a `cache` named import with a clear error', () => {
+  it('rejects a `cache` named import as an unrecognized export', () => {
     const code = `import { cache } from './movies.server.js';`;
     expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
-      /`cache` is no longer an allowed export from a \*\.server\.\* module/
+      /`cache` is not a recognized export from a \*\.server\.\* module/
     );
   });
 
@@ -171,17 +171,10 @@ describe('loader and cache specifiers', () => {
     expect(result?.code).toContain('"src/movies"');
   });
 
-  it('rejects a `cache` import even when aliased to a different local name', () => {
-    const code = `import { cache as moviesCache } from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
-      /`cache` is no longer an allowed export/
-    );
-  });
-
   it('rejects a mixed loader + cache + serverActions import on the cache specifier', () => {
     const code = `import { loader, cache, serverActions } from './movies.server.js';`;
     expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
-      /`cache` is no longer an allowed export/
+      /`cache` is not a recognized export/
     );
   });
 
@@ -200,13 +193,6 @@ describe('loader and cache specifiers', () => {
     expect(result).toBeDefined();
     expect(result?.code).not.toContain("import { loader }");
     expect(result?.code).toContain('const loader =');
-  });
-
-  it('points users to defineLoader(fn, { cache }) when rejecting a `cache` import', () => {
-    const code = `import { cache } from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
-      /defineLoader\(fn, \{ cache \}\)/
-    );
   });
 
   it('emits the path key in named `loader` stubs via the defineLoader __moduleKey option', () => {

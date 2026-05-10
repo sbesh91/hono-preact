@@ -188,17 +188,6 @@ export function serverOnlyPlugin(): Plugin {
             stubs.push(
               `const ${specifier.local.name} = __$defineLoader_hpiso(${loaderFetchArrow(moduleKey, '  ')}, { __moduleKey: ${JSON.stringify(moduleKey)} });`
             );
-          } else if (
-            specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'cache'
-          ) {
-            throw new Error(
-              `${id}: \`cache\` is no longer an allowed export from a *.server.* module. ` +
-              `Caches are auto-attached to loaders. To share a cache across loaders, ` +
-              `import \`createCache\` from '@hono-preact/iso' and pass it via ` +
-              `\`defineLoader(fn, { cache })\`.`
-            );
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&
