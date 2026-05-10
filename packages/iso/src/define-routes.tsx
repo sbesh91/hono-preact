@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import type { AnyComponent, ComponentChildren, ComponentType, JSX, VNode } from 'preact';
+import type { AnyComponent, ComponentChildren, ComponentType, VNode } from 'preact';
 import { lazy, Route, Router } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 
@@ -16,17 +16,11 @@ export type RouteDef = {
   layout?: LazyImport<ComponentType<LayoutProps>>;
   server?: LazyServerImport;
   children?: RouteDef[];
-  fallback?: JSX.Element;
-  errorFallback?:
-    | JSX.Element
-    | ((error: Error, reset: () => void) => JSX.Element);
 };
 
 export type FlatRoute = {
   path: string;
   component: ComponentType<ViewProps>;
-  fallback?: JSX.Element;
-  errorFallback?: RouteDef['errorFallback'];
 };
 
 export type RoutesManifest = {
@@ -80,6 +74,24 @@ function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport
 }
 
 /**
+ * Memoize `lazy(view)` per view-thunk identity. When the same `view` thunk is
+ * referenced by multiple route registrations (e.g. `/docs` and `/docs/*`),
+ * they should share one component reference so preact-iso's Router does not
+ * treat the navigation as a route change and remount the layout.
+ */
+function getOrCreateLazyView(
+  view: NonNullable<RouteDef['view']>,
+  cache: Map<unknown, ComponentType<ViewProps>>
+): ComponentType<ViewProps> {
+  let component = cache.get(view);
+  if (!component) {
+    component = lazy(view) as ComponentType<ViewProps>;
+    cache.set(view, component);
+  }
+  return component;
+}
+
+/**
  * Build the component for a layout group: <Layout><Router>{childRoutes}</Router></Layout>.
  * Returned via preact-iso's lazy so the layout module loads only when matched.
  * Children are themselves wrapped in preact-iso's lazy via their own `view`/`layout`,
@@ -87,11 +99,12 @@ function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport
  */
 function makeLayoutGroupComponent(
   layoutImport: NonNullable<RouteDef['layout']>,
-  children: ReadonlyArray<RouteDef>
+  children: ReadonlyArray<RouteDef>,
+  viewCache: Map<unknown, ComponentType<ViewProps>>
 ): ComponentType<ViewProps> {
   return lazy(async () => {
     const Layout = (await layoutImport()).default;
-    const inner = buildInnerRoutes(children);
+    const inner = buildInnerRoutes(children, viewCache);
     const Wrapper: ComponentType = () =>
       h(Layout, null, h(Router, null, ...inner));
     return { default: Wrapper };
@@ -103,18 +116,21 @@ function makeLayoutGroupComponent(
  * is either a leaf (registered under its relative path) or another layout
  * group (registered under bare + wildcard paths within the inner router).
  */
-function buildInnerRoutes(children: ReadonlyArray<RouteDef>): VNode<any>[] {
+function buildInnerRoutes(
+  children: ReadonlyArray<RouteDef>,
+  viewCache: Map<unknown, ComponentType<ViewProps>>
+): VNode<any>[] {
   const nodes: VNode<any>[] = [];
   for (const child of children) {
     if (child.view) {
       nodes.push(
         h(Route, {
           path: child.path,
-          component: lazy(child.view) as AnyComponent<any>,
+          component: getOrCreateLazyView(child.view, viewCache) as AnyComponent<any>,
         })
       );
     } else if (child.layout && child.children) {
-      const Group = makeLayoutGroupComponent(child.layout, child.children);
+      const Group = makeLayoutGroupComponent(child.layout, child.children, viewCache);
       // Same shared-component trick at this nesting level.
       nodes.push(h(Route, { path: child.path, component: Group as AnyComponent<any> }));
       nodes.push(
@@ -129,7 +145,7 @@ function buildInnerRoutes(children: ReadonlyArray<RouteDef>): VNode<any>[] {
           nodes.push(
             h(Route, {
               path: joined,
-              component: lazy(grand.view) as AnyComponent<any>,
+              component: getOrCreateLazyView(grand.view, viewCache) as AnyComponent<any>,
             })
           );
         }
@@ -141,7 +157,11 @@ function buildInnerRoutes(children: ReadonlyArray<RouteDef>): VNode<any>[] {
   return nodes;
 }
 
-function flattenTree(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRoute[] {
+function flattenTree(
+  routes: ReadonlyArray<RouteDef>,
+  viewCache: Map<unknown, ComponentType<ViewProps>>,
+  parentPath = ''
+): FlatRoute[] {
   const out: FlatRoute[] = [];
   for (const r of routes) {
     const here =
@@ -152,28 +172,22 @@ function flattenTree(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRout
     if (r.view) {
       out.push({
         path: here,
-        component: lazy(r.view),
-        fallback: r.fallback,
-        errorFallback: r.errorFallback,
+        component: getOrCreateLazyView(r.view, viewCache),
       });
     } else if (r.layout && r.children) {
-      const Group = makeLayoutGroupComponent(r.layout, r.children);
+      const Group = makeLayoutGroupComponent(r.layout, r.children, viewCache);
       out.push({
         path: here,
         component: Group,
-        fallback: r.fallback,
-        errorFallback: r.errorFallback,
       });
       out.push({
         path: here + '/*',
         component: Group,
-        fallback: r.fallback,
-        errorFallback: r.errorFallback,
       });
     } else if (r.children) {
       // Path-grouping at top level: recurse with the prefix.
       const childParent = here === '/' ? '' : here;
-      out.push(...flattenTree(r.children, childParent));
+      out.push(...flattenTree(r.children, viewCache, childParent));
     }
   }
   return out;
@@ -181,9 +195,10 @@ function flattenTree(routes: ReadonlyArray<RouteDef>, parentPath = ''): FlatRout
 
 export function defineRoutes(tree: RouteDef[]): RoutesManifest {
   validate(tree);
+  const viewCache = new Map<unknown, ComponentType<ViewProps>>();
   return {
     tree,
-    flat: flattenTree(tree),
+    flat: flattenTree(tree, viewCache),
     serverImports: collectServerImports(tree),
   };
 }

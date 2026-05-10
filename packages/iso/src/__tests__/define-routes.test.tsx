@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import type { ComponentType, JSX, VNode } from 'preact';
+import type { ComponentType, VNode } from 'preact';
 import { h } from 'preact';
 import { render } from '@testing-library/preact';
 import { LocationProvider, Router } from 'preact-iso';
@@ -121,12 +121,25 @@ describe('flatten — flat (no layouts)', () => {
     expect(m.flat.map((f) => f.path)).toEqual(['/b', '/a']);
   });
 
-  it('attaches fallback and errorFallback per leaf', () => {
-    const fb = { type: 'p', props: {}, key: null } as unknown as JSX.Element;
+});
+
+describe('flatten — view-thunk identity sharing', () => {
+  it('produces one component reference for two routes sharing the same view thunk', () => {
+    const docsView = () => Promise.resolve({ default: () => null });
     const m = defineRoutes([
-      { path: '/', view: noopView, fallback: fb },
+      { path: '/docs', view: docsView },
+      { path: '/docs/*', view: docsView },
     ]);
-    expect(m.flat[0].fallback).toBe(fb);
+    expect(m.flat).toHaveLength(2);
+    expect(m.flat[0].component).toBe(m.flat[1].component);
+  });
+
+  it('produces distinct component references for distinct view thunks', () => {
+    const m = defineRoutes([
+      { path: '/a', view: () => Promise.resolve({ default: () => null }) },
+      { path: '/b', view: () => Promise.resolve({ default: () => null }) },
+    ]);
+    expect(m.flat[0].component).not.toBe(m.flat[1].component);
   });
 });
 

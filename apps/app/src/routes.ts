@@ -1,5 +1,7 @@
 import { defineRoutes } from '@hono-preact/iso';
 
+const docsView = () => import('./components/DocsRoute.js');
+
 export default defineRoutes([
   { path: '/', view: () => import('./pages/home.js') },
   { path: '/test', view: () => import('./pages/test.js') },
@@ -26,11 +28,11 @@ export default defineRoutes([
   },
   {
     path: '/docs',
-    view: () => import('./components/DocsRoute.js'),
+    view: docsView,
   },
   {
     path: '/docs/*',
-    view: () => import('./components/DocsRoute.js'),
+    view: docsView,
   },
   {
     path: '*',
