@@ -11,13 +11,12 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [
-    honoPreact({ entry: 'src/server.tsx' }),
-    preact(),
+    honoPreact(),
   ],
 });
 ```
 
-`entry` is the path to your Hono server entry point: the file that exports the `app` object used by the Worker.
+`honoPreact()` takes no arguments in the common case; it generates the server entry as a virtual module and auto-includes `@preact/preset-vite`. `entry` is an advanced override for projects that need to author their own Hono server entry; it is optional.
 
 ## What the plugin handles
 
@@ -50,15 +49,13 @@ MDX is a user-space choice and not included in the plugin. Add it alongside `hon
 
 ```ts
 import { honoPreact } from '@hono-preact/vite';
-import preact from '@preact/preset-vite';
 import mdx from '@mdx-js/rollup';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [
-    honoPreact({ entry: 'src/server.tsx' }),
+    honoPreact(),
     Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
-    preact(),
   ],
 });
 ```
@@ -76,7 +73,7 @@ export default defineConfig({
   resolve: {
     alias: [{ find: '@', replacement: resolve(__dirname, './src') }],
   },
-  plugins: [honoPreact({ entry: 'src/server.tsx' }), preact()],
+  plugins: [honoPreact()],
 });
 ```
 
@@ -86,7 +83,6 @@ Pass `clientBuild`, `serverBuild`, or `sharedBuild` to extend the plugin's defau
 
 ```ts
 honoPreact({
-  entry: 'src/server.tsx',
   clientBuild: { sourcemap: false },
 })
 ```
@@ -99,7 +95,6 @@ The plugin defaults to `'./src/client.tsx'` for the client bundle entry. Overrid
 
 ```ts
 honoPreact({
-  entry: 'src/server.tsx',
   clientEntry: 'src/main.tsx',
 })
 ```
