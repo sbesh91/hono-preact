@@ -170,7 +170,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
       const source = fs.readFileSync(apiAbsPath, 'utf8');
       const warnings = findApiCatchAllRoutes(source);
       for (const w of warnings) {
-        const where = `${apiAbsPath}${w.line ? `:${w.line}` : ''}`;
+        const where = `${apiAbsPath}${w.line != null ? `:${w.line}` : ''}`;
         if (w.kind === 'notFound') {
           this.warn(
             `[hono-preact] ${where}: app.notFound(...) acts as a catch-all and ` +
