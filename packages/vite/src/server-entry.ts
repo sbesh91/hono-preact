@@ -1,4 +1,7 @@
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
+import type { Plugin } from 'vite';
 
 export interface GenerateServerEntrySourceOptions {
   layoutAbsPath: string;
@@ -131,4 +134,68 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
     if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
     walk((node as Record<string, unknown>)[key], warnings);
   }
+}
+
+export const VIRTUAL_SERVER_ENTRY_ID = 'virtual:hono-preact/server';
+const RESOLVED_ID = '\0' + VIRTUAL_SERVER_ENTRY_ID;
+
+export interface ServerEntryPluginOptions {
+  layout: string; // project-relative or absolute
+  routes: string;
+  api: string; // project-relative or absolute; absence treated as "no api"
+}
+
+export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
+  let layoutAbsPath = '';
+  let routesAbsPath = '';
+  let apiAbsPath: string | undefined;
+
+  return {
+    name: 'hono-preact:server-entry',
+    enforce: 'pre',
+    configResolved(config) {
+      layoutAbsPath = path.isAbsolute(opts.layout)
+        ? opts.layout
+        : path.resolve(config.root, opts.layout);
+      routesAbsPath = path.isAbsolute(opts.routes)
+        ? opts.routes
+        : path.resolve(config.root, opts.routes);
+      const candidateApi = path.isAbsolute(opts.api)
+        ? opts.api
+        : path.resolve(config.root, opts.api);
+      apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
+    },
+    buildStart() {
+      if (!apiAbsPath) return;
+      const source = fs.readFileSync(apiAbsPath, 'utf8');
+      const warnings = findApiCatchAllRoutes(source);
+      for (const w of warnings) {
+        const where = `${apiAbsPath}${w.line ? `:${w.line}` : ''}`;
+        if (w.kind === 'notFound') {
+          this.warn(
+            `[hono-preact] ${where}: app.notFound(...) acts as a catch-all and ` +
+              `will be shadowed by the framework's renderPage handler. ` +
+              `Move the behavior to a more specific path, or accept that it won't fire.`
+          );
+        } else {
+          this.warn(
+            `[hono-preact] ${where}: app.${w.method}('${w.pattern}', ...) is a ` +
+              `catch-all route and will be shadowed by the framework's renderPage ` +
+              `handler. Move it to a more specific path, or accept that it won't fire.`
+          );
+        }
+      }
+    },
+    resolveId(id) {
+      if (id === VIRTUAL_SERVER_ENTRY_ID) return RESOLVED_ID;
+    },
+    load(id) {
+      if (id !== RESOLVED_ID) return;
+      return generateServerEntrySource({
+        layoutAbsPath,
+        routesAbsPath,
+        apiAbsPath,
+      });
+    },
+  };
 }

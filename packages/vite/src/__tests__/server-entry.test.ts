@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import {
   findApiCatchAllRoutes,
   generateServerEntrySource,
+  serverEntryPlugin,
+  VIRTUAL_SERVER_ENTRY_ID,
 } from '../server-entry.js';
 
 describe('generateServerEntrySource', () => {
@@ -132,5 +137,108 @@ describe('findApiCatchAllRoutes', () => {
     `;
     const warnings = findApiCatchAllRoutes(src);
     expect(warnings).toHaveLength(2);
+  });
+});
+
+describe('serverEntryPlugin', () => {
+  it('exposes the documented virtual id', () => {
+    expect(VIRTUAL_SERVER_ENTRY_ID).toBe('virtual:hono-preact/server');
+  });
+
+  it('resolveId returns the prefixed id only for the virtual id', () => {
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+    });
+    // Simulate Vite firing configResolved with a fake root.
+    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+      root: '/proj',
+    });
+
+    const resolved = (plugin as {
+      resolveId?: (id: string) => string | undefined;
+    }).resolveId?.(VIRTUAL_SERVER_ENTRY_ID);
+    expect(resolved).toBe('\0' + VIRTUAL_SERVER_ENTRY_ID);
+
+    const other = (plugin as {
+      resolveId?: (id: string) => string | undefined;
+    }).resolveId?.('some-other-module');
+    expect(other).toBeUndefined();
+  });
+
+  it('load() returns the generated source for the resolved virtual id (no api file)', () => {
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts', // configured but does not exist on disk
+    });
+    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+      root: '/proj',
+    });
+
+    const code = (plugin as {
+      load?: (id: string) => string | undefined;
+    }).load?.('\0' + VIRTUAL_SERVER_ENTRY_ID);
+    expect(code).toContain(`import Layout from '/proj/src/Layout.tsx';`);
+    expect(code).toContain(`import routes from '/proj/src/routes.ts';`);
+    // Configured api path that doesn't exist is treated as absent.
+    expect(code).not.toContain('api.ts');
+  });
+
+  it('load() includes api when the file exists', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'api.ts'),
+      `import { Hono } from 'hono';\nexport default new Hono().get('/api/x', (c) => c.text('ok'));\n`
+    );
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+    });
+    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+      root: tmp,
+    });
+
+    const code = (plugin as {
+      load?: (id: string) => string | undefined;
+    }).load?.('\0' + VIRTUAL_SERVER_ENTRY_ID);
+    expect(code).toContain(`import userApp from '${path.join(tmp, 'src', 'api.ts')}';`);
+    expect(code).toContain(`.route('/', userApp)`);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart emits this.warn for catchall routes in api.ts', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'api.ts'),
+      `import { Hono } from 'hono';\nexport default new Hono().get('*', (c) => c.text('catch'));\n`
+    );
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+    });
+    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+      root: tmp,
+    });
+
+    const warnings: string[] = [];
+    const ctx = { warn: (msg: string) => warnings.push(msg) };
+    (plugin as {
+      buildStart?: (this: { warn: (m: string) => void }) => void;
+    }).buildStart?.call(ctx);
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(`src/api.ts`);
+    expect(warnings[0]).toContain(`catch-all`);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
   });
 });
