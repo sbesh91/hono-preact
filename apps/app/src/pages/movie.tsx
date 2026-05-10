@@ -1,6 +1,5 @@
 // apps/app/src/pages/movie.tsx
 import {
-  cacheRegistry,
   definePage,
   Form,
   useAction,
@@ -11,6 +10,8 @@ import {
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { loader, serverActions } from './movie.server.js';
+import { loader as moviesListLoader } from './movies-list.server.js';
+import { loader as watchedLoader } from './watched.server.js';
 import { useWatchedBadge } from './movies-layout.js';
 
 function MovieWrapper(props: WrapperProps) {
@@ -23,8 +24,7 @@ const NotesForm: FunctionComponent<{
   movieKey: number;
 }> = ({ movieIdStr, defaultNotes, movieKey }) => {
   const { mutate, pending } = useAction(serverActions.setNotes, {
-    invalidate: 'auto',
-    onSuccess: () => cacheRegistry.invalidate('watched'),
+    invalidate: [loader, watchedLoader],
   });
   return (
     <Form mutate={mutate} pending={pending} class="flex flex-col gap-2 mt-1">
@@ -48,8 +48,7 @@ const NotesForm: FunctionComponent<{
 
 const PhotoForm: FunctionComponent<{ movieIdStr: string }> = ({ movieIdStr }) => {
   const { mutate, pending } = useAction(serverActions.setPhoto, {
-    invalidate: 'auto',
-    onSuccess: () => cacheRegistry.invalidate('watched'),
+    invalidate: [loader, watchedLoader],
   });
   return (
     <Form mutate={mutate} pending={pending} class="flex flex-col gap-2 mt-1">
@@ -88,11 +87,7 @@ const MovieDetail: FunctionComponent = () => {
     {
       base: isWatched,
       apply: (_current, payload) => payload.watched,
-      invalidate: 'auto',
-      onSuccess: () => {
-        cacheRegistry.invalidate('movies-list');
-        cacheRegistry.invalidate('watched');
-      },
+      invalidate: [loader, moviesListLoader, watchedLoader],
     }
   );
 
