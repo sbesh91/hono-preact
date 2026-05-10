@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import type { ComponentType, JSX, VNode } from 'preact';
 import { h } from 'preact';
 import { render } from '@testing-library/preact';
-import { LocationProvider } from 'preact-iso';
+import { LocationProvider, Router } from 'preact-iso';
 import { defineRoutes, Routes } from '../define-routes.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
@@ -210,9 +210,21 @@ describe('<Routes>', () => {
   it('forwards onRouteChange to the underlying Router', () => {
     const cb = () => {};
     const m = defineRoutes([{ path: '/', view: noopView }]);
-    const vnode = h(Routes, { routes: m, onRouteChange: cb });
-    // Smoke: vnode is a Routes element carrying the callback in props.
-    expect(vnode.type).toBe(Routes);
-    expect((vnode.props as { onRouteChange?: unknown }).onRouteChange).toBe(cb);
+    // Call the function component directly to inspect what it returns.
+    const result = (Routes as unknown as (props: {
+      routes: typeof m;
+      onRouteChange?: () => void;
+    }) => VNode)({ routes: m, onRouteChange: cb });
+    expect(result.type).toBe(Router);
+    expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBe(cb);
+  });
+
+  it('omits onRouteChange from Router when not provided', () => {
+    const m = defineRoutes([{ path: '/', view: noopView }]);
+    const result = (Routes as unknown as (props: {
+      routes: typeof m;
+    }) => VNode)({ routes: m });
+    expect(result.type).toBe(Router);
+    expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBeUndefined();
   });
 });

@@ -1,12 +1,11 @@
 import { h } from 'preact';
 import type { AnyComponent, ComponentChildren, ComponentType, JSX, VNode } from 'preact';
 import { lazy, Route, Router } from 'preact-iso';
+import type { RouteHook } from 'preact-iso';
 
 export type LayoutProps = { children: ComponentChildren };
 
-export type ViewProps<P = Record<string, string>> = {
-  params: P;
-};
+export type ViewProps = RouteHook;
 
 type LazyImport<T> = () => Promise<{ default: T }>;
 type LazyServerImport = () => Promise<unknown>;
