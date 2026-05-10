@@ -5,6 +5,7 @@ import {
   type ActionStub,
 } from './action.js';
 import { useOptimistic, type OptimisticHandle } from './optimistic.js';
+import type { LoaderRef } from './define-loader.js';
 
 export type UseOptimisticActionOptions<TPayload, TResult, TBase> = Omit<
   UseActionOptions<TPayload, TResult>,
@@ -12,7 +13,10 @@ export type UseOptimisticActionOptions<TPayload, TResult, TBase> = Omit<
 > & {
   base: TBase;
   apply: (current: TBase, payload: TPayload) => TBase;
-  invalidate?: 'auto' | string[];
+  invalidate?:
+    | 'auto'
+    | ReadonlyArray<LoaderRef<unknown>>
+    | ReadonlyArray<string>;
   onSuccess?: (data: TResult) => void;
   onError?: (err: Error) => void;
 };

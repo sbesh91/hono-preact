@@ -16,6 +16,7 @@ import { afterEach, vi } from 'vitest';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
+import { defineLoader } from '../define-loader.js';
 
 const stub: ActionStub<{ title: string }, { ok: boolean }> = {
   __module: 'movies',
@@ -250,6 +251,45 @@ describe('useAction', () => {
     });
 
     await waitFor(() => expect(invalidateFn).toHaveBeenCalledOnce());
+  });
+
+  it('calls .invalidate() on each loader ref after a successful mutation', async () => {
+    const a = defineLoader(async () => ({ a: 1 }));
+    const b = defineLoader(async () => ({ b: 2 }));
+    a.cache.set({ a: 1 });
+    b.cache.set({ b: 2 });
+    expect(a.cache.has()).toBe(true);
+    expect(b.cache.has()).toBe(true);
+
+    const refStub: ActionStub<Record<string, never>, { ok: true }> = {
+      __module: 'm',
+      __action: 'go',
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    function TestComponent() {
+      const { mutate } = useAction(refStub, { invalidate: [a, b] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(<TestComponent />);
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() => {
+      expect(a.cache.has()).toBe(false);
+      expect(b.cache.has()).toBe(false);
+    });
   });
 });
 

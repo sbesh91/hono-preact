@@ -1,6 +1,7 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './reload-context.js';
 import { cacheRegistry } from './cache-registry.js';
+import type { LoaderRef } from './define-loader.js';
 
 export type ActionStub<TPayload, TResult> = {
   readonly __module: string;
@@ -17,7 +18,11 @@ export function defineAction<TPayload, TResult>(
 }
 
 export type UseActionOptions<TPayload, TResult, TSnapshot = unknown> = {
-  invalidate?: 'auto' | false | string[];
+  invalidate?:
+    | 'auto'
+    | false
+    | ReadonlyArray<LoaderRef<unknown>>
+    | ReadonlyArray<string>;
   onMutate?: (payload: TPayload) => TSnapshot;
   onError?: (err: Error, snapshot: TSnapshot) => void;
   onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
@@ -123,8 +128,18 @@ export function useAction<TPayload, TResult, TSnapshot = unknown>(
       if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
       } else if (Array.isArray(currentOptions?.invalidate)) {
-        for (const name of currentOptions.invalidate) {
-          cacheRegistry.invalidate(name);
+        const arr = currentOptions.invalidate;
+        // Branch on element kind: string[] uses the legacy cacheRegistry path;
+        // LoaderRef[] calls .invalidate() per ref. The arrays are homogeneous in
+        // practice (TypeScript enforces the union at the call site).
+        if (arr.length > 0 && typeof arr[0] === 'string') {
+          for (const name of arr as ReadonlyArray<string>) {
+            cacheRegistry.invalidate(name);
+          }
+        } else {
+          for (const ref of arr as ReadonlyArray<LoaderRef<unknown>>) {
+            ref.invalidate();
+          }
         }
       }
     } catch (err) {
