@@ -5,7 +5,6 @@ import { useState } from 'preact/hooks';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
-import { useLoaderData } from '../../use-loader-data.js';
 import { useReload } from '../../reload-context.js';
 import { env } from '../../is-browser.js';
 
@@ -40,7 +39,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'refire-test' });
 
     function Child() {
-      const { msg } = useLoaderData<typeof ref>();
+      const { msg } = ref.useData();
       const { reload } = useReload();
       return (
         <div>
@@ -89,7 +88,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'preserve-state-test' });
 
     function Child() {
-      const { msg } = useLoaderData<typeof ref>();
+      const { msg } = ref.useData();
       const { reload } = useReload();
       const [count, setCount] = useState(0);
       return (
@@ -159,7 +158,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn, { __moduleKey: 'dup-xhr-test' });
 
     function Child() {
-      const { msg } = useLoaderData<typeof ref>();
+      const { msg } = ref.useData();
       return <span data-testid="msg">{msg}</span>;
     }
 
@@ -233,7 +232,7 @@ describe('v3 <Loader> stability', () => {
     }
 
     function Child() {
-      const { msg } = useLoaderData<typeof ref>();
+      const { msg } = ref.useData();
       return <span data-testid="msg">{msg}</span>;
     }
 
@@ -276,7 +275,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ q: string }>(fn, { __moduleKey: 'search-q-test' });
 
     function Child() {
-      const { q } = useLoaderData<typeof ref>();
+      const { q } = ref.useData();
       return <span data-testid="q">{q || '(empty)'}</span>;
     }
 

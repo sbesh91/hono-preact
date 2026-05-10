@@ -36,7 +36,6 @@ export type {
 export { ActionGuardError, defineActionGuard } from './action.js';
 
 // Hooks.
-export { useLoaderData } from './use-loader-data.js';
 export { useReload } from './reload-context.js';
 export { useOptimistic } from './optimistic.js';
 export type { OptimisticHandle } from './optimistic.js';
