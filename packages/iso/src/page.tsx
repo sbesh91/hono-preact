@@ -6,7 +6,6 @@ import type {
 } from 'preact';
 import { useId } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
-import type { LoaderCache } from './cache.js';
 import type { GuardFn } from './guard.js';
 import type { LoaderRef } from './define-loader.js';
 import { Envelope } from './internal/envelope.js';
@@ -27,7 +26,6 @@ const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
 export type PageProps<T> = {
   loader?: LoaderRef<T>;
   location: RouteHook;
-  cache?: LoaderCache<T>;
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
   fallback?: JSX.Element;
@@ -41,7 +39,6 @@ export type PageProps<T> = {
 export function Page<T>({
   loader,
   location,
-  cache,
   serverGuards,
   clientGuards,
   fallback,
@@ -54,12 +51,7 @@ export function Page<T>({
     <RouteBoundary fallback={fallback} errorFallback={errorFallback}>
       <Guards server={serverGuards} client={clientGuards} location={location}>
         {loader ? (
-          <Loader
-            loader={loader}
-            location={location}
-            cache={cache}
-            fallback={fallback}
-          >
+          <Loader loader={loader} location={location} fallback={fallback}>
             <Envelope as={Wrapper}>{children}</Envelope>
           </Loader>
         ) : (

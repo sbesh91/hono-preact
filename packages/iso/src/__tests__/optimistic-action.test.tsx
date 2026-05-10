@@ -4,17 +4,15 @@ import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
 import { useOptimisticAction } from '../optimistic-action.js';
 import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
-import { cacheRegistry } from '../cache-registry.js';
 
-const stub: ActionStub<{ title: string }, { id: number; title: string }> = {
+const stub = {
   __module: 'movies',
   __action: 'create',
-};
+} as unknown as ActionStub<{ title: string }, { id: number; title: string }>;
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  cacheRegistry.clear();
 });
 
 describe('useOptimisticAction', () => {

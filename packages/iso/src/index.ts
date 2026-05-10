@@ -36,7 +36,6 @@ export type {
 export { ActionGuardError, defineActionGuard } from './action.js';
 
 // Hooks.
-export { useLoaderData } from './use-loader-data.js';
 export { useReload } from './reload-context.js';
 export { useOptimistic } from './optimistic.js';
 export type { OptimisticHandle } from './optimistic.js';
@@ -52,7 +51,6 @@ export { Form } from './form.js';
 // Cache + invalidation.
 export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
-export { cacheRegistry } from './cache-registry.js';
 
 // Guards.
 export { createGuard, GuardRedirect } from './guard.js';

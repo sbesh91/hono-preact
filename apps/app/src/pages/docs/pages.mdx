@@ -1,10 +1,10 @@
 # Adding Pages
 
-A page is two things: a view component (and optionally a sibling `.server.ts` for loader/actions/cache), plus an entry in `routes.ts` that wires the URL to those files. The framework does not auto-discover pages; the route table is the source of truth.
+A page is two things: a view component (and optionally a sibling `.server.ts` for loader and actions), plus an entry in `routes.ts` that wires the URL to those files. The framework does not auto-discover pages; the route table is the source of truth.
 
 ## Standard pages
 
-A view component is a default-exported Preact component. Loaders, caches, guards, and Wrappers attach to it via `definePage`. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module).
+A view component is a default-exported Preact component. Loaders, guards, and Wrappers attach to it via `definePage`. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module).
 
 ### Step 1: Create `src/pages/about.tsx`
 
@@ -20,7 +20,7 @@ About.displayName = 'About';
 export default About;
 ```
 
-The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs loader, cache, fallback, or guard bindings).
+The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs loader, fallback, or guard bindings).
 
 ### Step 2: Add to `src/routes.ts`
 
@@ -39,11 +39,11 @@ For pages that need data, also import the loader inside the view file and bind i
 
 ```tsx
 // src/pages/about.tsx
-import { definePage, useLoaderData } from '@hono-preact/iso';
+import { definePage } from '@hono-preact/iso';
 import { loader } from './about.server.js';
 
 function About() {
-  const data = useLoaderData<typeof loader>();
+  const data = loader.useData();
   return <section>{/* ... */}</section>;
 }
 

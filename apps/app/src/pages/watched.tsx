@@ -1,24 +1,22 @@
 // apps/app/src/pages/watched.tsx
 import {
-  cacheRegistry,
   definePage,
   useAction,
-  useLoaderData,
   useReload,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import { cache, loader, serverActions } from './watched.server.js';
+import { loader, serverActions } from './watched.server.js';
+import { loader as moviesListLoader } from './movies-list.server.js';
 
 const WatchedPage: FunctionComponent = () => {
-  const { entries } = useLoaderData<typeof loader>();
+  const { entries } = loader.useData();
   const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
 
   const reload = useReload();
 
   const { mutate: remove, pending: removing } = useAction(serverActions.removeWatched, {
-    invalidate: 'auto',
-    onSuccess: () => cacheRegistry.invalidate('movies-list'),
+    invalidate: [loader, moviesListLoader],
   });
 
   const { mutate: bulkImport, pending: importing } = useAction(
@@ -34,9 +32,9 @@ const WatchedPage: FunctionComponent = () => {
           }
         }
       },
+      invalidate: [moviesListLoader],
       onSuccess: () => {
         setProgress(null);
-        cacheRegistry.invalidate('movies-list');
         reload.reload();
       },
     }
@@ -106,6 +104,5 @@ WatchedPage.displayName = 'WatchedPage';
 
 export default definePage(WatchedPage, {
   loader,
-  cache,
   fallback: <p class="p-1">Loading watched list…</p>,
 });

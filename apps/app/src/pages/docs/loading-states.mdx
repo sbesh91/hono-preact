@@ -6,17 +6,16 @@ By default, a page renders nothing while its loader is fetching. Pass a `fallbac
 
 ```tsx
 // src/pages/movies.tsx
-import { definePage, useLoaderData } from '@hono-preact/iso';
-import { loader, cache } from './movies.server.js';
+import { definePage } from '@hono-preact/iso';
+import { loader } from './movies.server.js';
 
 function Movies() {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   return <ul>{movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
 }
 
 export default definePage(Movies, {
   loader,
-  cache,
   fallback: <p>Loading…</p>,
 });
 ```
@@ -56,7 +55,6 @@ const MoviesSkeleton = () => (
 
 export default definePage(Movies, {
   loader,
-  cache,
   fallback: <MoviesSkeleton />,
 });
 ```
@@ -78,8 +76,8 @@ export default definePage(Movies, {
 });
 ```
 
-Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [named caches + `invalidate`](/docs/loaders).
+Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [cross-page invalidation](/docs/loaders#cross-page-invalidation).
 
 ## See also
 
-`definePage` accepts more than just `loader`/`cache`/`fallback`. See [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full bindings list (including `Wrapper`).
+`definePage` accepts more than just `loader`/`fallback`. See [Route Guards](/docs/guards) for `serverGuards`/`clientGuards`, and [Project Structure](/docs/structure) for the full bindings list (including `Wrapper`).

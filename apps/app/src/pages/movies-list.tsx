@@ -1,17 +1,16 @@
 import {
-  cacheRegistry,
   definePage,
-  useLoaderData,
   useOptimisticAction,
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import type { MovieSummary } from '@/server/data/movies.js';
-import { loader, cache, serverActions } from './movies-list.server.js';
+import { loader, serverActions } from './movies-list.server.js';
+import { loader as watchedLoader } from './watched.server.js';
 import { useMoviesFilter, useWatchedBadge } from './movies-layout.js';
 
 const MoviesList: FunctionComponent = () => {
-  const { movies, watchedIds } = useLoaderData<typeof loader>();
+  const { movies, watchedIds } = loader.useData();
   const { query } = useMoviesFilter();
   const { setCount } = useWatchedBadge();
 
@@ -23,8 +22,7 @@ const MoviesList: FunctionComponent = () => {
         payload.watched
           ? [...current, payload.movieId]
           : current.filter((id) => id !== payload.movieId),
-      invalidate: 'auto',
-      onSuccess: () => cacheRegistry.invalidate('watched'),
+      invalidate: [loader, watchedLoader],
     }
   );
 
@@ -77,4 +75,4 @@ const MoviesList: FunctionComponent = () => {
 };
 MoviesList.displayName = 'MoviesList';
 
-export default definePage(MoviesList, { loader, cache });
+export default definePage(MoviesList, { loader });

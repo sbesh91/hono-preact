@@ -79,11 +79,11 @@ Update `src/pages/movies.tsx` to consume the loader data, and bind the loader to
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { definePage, useLoaderData } from '@hono-preact/iso';
+import { definePage } from '@hono-preact/iso';
 import { loader } from './movies.server.js';
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   return (
     <main>
       <h1>Movies</h1>
@@ -113,7 +113,7 @@ Add the `server` field to the route entry in `src/routes.ts` so `server.tsx` fin
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(fn)` returns a typed reference. The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. `definePage(Component, { loader })` attaches the loader to the page component so the route can find it. `useLoaderData<typeof loader>()` is argument-free; the type-only generic narrows the return type without pulling the loader ref in as a runtime value.
+`defineLoader(fn)` returns a typed reference. The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. `definePage(Component, { loader })` attaches the loader to the page component so the route can find it. `loader.useData()` is the consumer hook; it's argument-free and infers the return type from the loader function.
 
 ## 3. Add a server action
 
@@ -155,7 +155,7 @@ Update `src/pages/movies.tsx` to add the form:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { definePage, Form, useAction, useLoaderData } from '@hono-preact/iso';
+import { definePage, Form, useAction } from '@hono-preact/iso';
 import { loader, serverActions } from './movies.server.js';
 
 const AddMovieForm: FunctionComponent = () => {
@@ -169,7 +169,7 @@ const AddMovieForm: FunctionComponent = () => {
 };
 
 const Movies: FunctionComponent = () => {
-  const { movies } = useLoaderData<typeof loader>();
+  const { movies } = loader.useData();
   return (
     <main>
       <h1>Movies</h1>
@@ -194,7 +194,7 @@ The route entry in `routes.ts` doesn't change; actions ride along with the same 
 
 - [The Route Table](/docs/routes): the full `defineRoutes` reference.
 - [Layouts & Nested Routes](/docs/layouts): share chrome across URLs without remounting.
-- [Server Loaders](/docs/loaders): caching, named caches, path params.
+- [Server Loaders](/docs/loaders): caching, cross-page invalidation, path params.
 - [Server Actions](/docs/actions): `useAction`, optimistic updates, file uploads, streaming.
 - [Route Guards](/docs/guards): protect pages with server and client guard chains.
 - [Loading States](/docs/loading-states): show a fallback while the loader fetches.

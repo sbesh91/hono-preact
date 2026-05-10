@@ -82,6 +82,9 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('const serverActions = new Proxy(');
     expect(result?.code).toContain('__module: "src/pages/movies"');
     expect(result?.code).toContain('__action: String(action)');
+    // The stub also exposes useAction wired via the iso re-export.
+    expect(result?.code).toContain("import { useAction as __$useAction_hpiso } from '@hono-preact/iso';");
+    expect(result?.code).toMatch(/stub\.useAction\s*=\s*\(opts\)\s*=>\s*__\$useAction_hpiso\(stub,\s*opts\)/);
   });
 
   it('handles serverActions alongside default import in the same statement', () => {
@@ -146,42 +149,33 @@ describe('loader and cache specifiers', () => {
   it('replaces a `loader` named import with a client-side LoaderRef stub', () => {
     const code = `import { loader } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toMatch(/const loader = \{[\s\S]*__id: Symbol\.for\(['"]@hono-preact\/loader:src\/movies['"]\)[\s\S]*fn:\s*async/);
+    expect(result?.code).toContain("import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';");
+    expect(result?.code).toMatch(/const loader = __\$defineLoader_hpiso\(async/);
+    expect(result?.code).toContain('__moduleKey: "src/movies"');
     expect(result?.code).toContain("fetch('/__loaders'");
     expect(result?.code).toContain('"src/movies"');
   });
 
-  it('replaces a `cache` named import with a createCache call using the source-file name', () => {
-    // The fixture file isn't available here; the plugin should fall back to module key.
+  it('rejects a `cache` named import as an unrecognized export', () => {
     const code = `import { cache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('createCache as');
-    // Expect the fallback name (module key derived from server file path) since no fixture exists.
-    // The plugin uses a unique alias (e.g. __$createCache_...) to avoid collisions,
-    // so match `createCache[_a-zA-Z0-9$]*("src/movies")` to allow either bare or aliased call sites.
-    expect(result?.code).toMatch(/createCache[_a-zA-Z0-9$]*\(['"]src\/movies['"]\)/);
+    expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
+      /`cache` is not a recognized export from a \*\.server\.\* module/
+    );
   });
 
   it('handles `loader` aliased to a different local name', () => {
     const code = `import { loader as moviesLoader } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toMatch(/const moviesLoader = \{[\s\S]*Symbol\.for/);
+    expect(result?.code).toMatch(/const moviesLoader = __\$defineLoader_hpiso\(/);
+    expect(result?.code).toContain('__moduleKey: "src/movies"');
     expect(result?.code).toContain('"src/movies"');
   });
 
-  it('handles `cache` aliased to a different local name', () => {
-    const code = `import { cache as moviesCache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('const moviesCache =');
-    expect(result?.code).toMatch(/createCache[_a-zA-Z0-9$]*\(['"]src\/movies['"]\)/);
-  });
-
-  it('handles mixed loader + cache + serverActions in one import statement', () => {
+  it('rejects a mixed loader + cache + serverActions import on the cache specifier', () => {
     const code = `import { loader, cache, serverActions } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const loader =');
-    expect(result?.code).toContain('const cache =');
-    expect(result?.code).toContain('const serverActions = new Proxy');
+    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
+      /`cache` is not a recognized export/
+    );
   });
 
   it('handles mixed default + loader in one import statement', () => {
@@ -201,27 +195,11 @@ describe('loader and cache specifiers', () => {
     expect(result?.code).toContain('const loader =');
   });
 
-  it('matches an import that has ONLY cache (no default, no actions, no guards)', () => {
-    const code = `import { cache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result).toBeDefined();
-    expect(result?.code).not.toContain("import { cache }");
-    expect(result?.code).toContain('const cache =');
-  });
-
-  it('emits cache stubs that go through cacheRegistry.acquire for identity', () => {
-    const code = `import { cache } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('.acquire(');
-    expect(result?.code).toContain('cacheRegistry');
-  });
-
-  it('emits the path key in named `loader` stubs as Symbol.for(@hono-preact/loader:<key>)', () => {
+  it('emits the path key in named `loader` stubs via the defineLoader __moduleKey option', () => {
     const code = `import { loader } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain(
-      `Symbol.for('@hono-preact/loader:src/pages/movies')`
-    );
+    expect(result?.code).toContain('__moduleKey: "src/pages/movies"');
+    expect(result?.code).toContain('__$defineLoader_hpiso(');
   });
 });
 
@@ -300,24 +278,6 @@ describe('re-exports from .server.* are rejected', () => {
   it('does not throw on regular `export * from` of a non-server module', () => {
     const code = `export * from './utils.js';`;
     expect(() => transform(code, '/Users/me/repo/src/aggregator.ts')).not.toThrow();
-  });
-});
-
-describe('cache alias suffix is collision-free', () => {
-  it('produces distinct cache aliases for module sources that sanitize to the same identifier', () => {
-    // Before the hash-based suffix, a sanitizer of /[^a-zA-Z0-9_$]/g -> '_'
-    // collapsed both "foo-bar" and "foo_bar" to the same alias and broke
-    // multi-import cases that resolved to either.
-    const code = [
-      `import { cache as a } from './foo-bar.server.js';`,
-      `import { cache as b } from './foo_bar.server.js';`,
-    ].join('\n');
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result).toBeDefined();
-    // Two distinct cacheRegistry alias bindings should be emitted.
-    const matches = result!.code.match(/__\$cacheRegistry_[a-zA-Z0-9$_]+/g) ?? [];
-    const unique = new Set(matches);
-    expect(unique.size).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -424,9 +384,9 @@ describe('dynamic import() rewriting for .server.* sources', () => {
   });
 });
 
-describe('loader stub Symbol.for keying uses path-derived key', () => {
-  it('uses the path-derived key (not defineLoader name) for the loader Symbol', () => {
-    // After path-keying, the Symbol is derived from the module path, not the
+describe('loader stub keying uses path-derived module key', () => {
+  it('uses the path-derived key (not defineLoader name) for the loader moduleKey', () => {
+    // After path-keying, the key is derived from the module path, not the
     // defineLoader('foo', ...) first-arg string in the source file.
     const fixtureRoot =
       '/Users/stevenbeshensky/Documents/repos/hono-preact/packages/vite/src/__tests__/fixtures/leak-test';
@@ -434,9 +394,7 @@ describe('loader stub Symbol.for keying uses path-derived key', () => {
     const code = `import { loader } from './pages/foo.server.js';`;
     const result = transform(code, importerPath, { root: fixtureRoot });
     expect(result).toBeDefined();
-    expect(result?.code).toContain(
-      "__id: Symbol.for('@hono-preact/loader:pages/foo')"
-    );
+    expect(result?.code).toContain('__moduleKey: "pages/foo"');
   });
 
   it('uses path key even when the source file is unreachable', () => {
@@ -444,8 +402,6 @@ describe('loader stub Symbol.for keying uses path-derived key', () => {
     const result = transform(code, '/Users/me/repo/no/such/path/iso.tsx');
     expect(result).toBeDefined();
     // Uses path-derived key, not basename fallback.
-    expect(result?.code).toContain(
-      "__id: Symbol.for('@hono-preact/loader:no/such/path/nope')"
-    );
+    expect(result?.code).toContain('__moduleKey: "no/such/path/nope"');
   });
 });

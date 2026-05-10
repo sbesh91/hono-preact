@@ -1,11 +1,14 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './reload-context.js';
-import { cacheRegistry } from './cache-registry.js';
+import type { LoaderRef } from './define-loader.js';
 
 export type ActionStub<TPayload, TResult> = {
   readonly __module: string;
   readonly __action: string;
   readonly __phantom?: readonly [TPayload, TResult];
+  useAction<TSnapshot = unknown>(
+    options?: UseActionOptions<TPayload, TResult, TSnapshot>
+  ): UseActionResult<TPayload, TResult>;
 };
 
 export function defineAction<TPayload, TResult>(
@@ -17,7 +20,7 @@ export function defineAction<TPayload, TResult>(
 }
 
 export type UseActionOptions<TPayload, TResult, TSnapshot = unknown> = {
-  invalidate?: 'auto' | false | string[];
+  invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
   onMutate?: (payload: TPayload) => TSnapshot;
   onError?: (err: Error, snapshot: TSnapshot) => void;
   onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
@@ -123,8 +126,19 @@ export function useAction<TPayload, TResult, TSnapshot = unknown>(
       if (currentOptions?.invalidate === 'auto') {
         reloadCtx?.reload();
       } else if (Array.isArray(currentOptions?.invalidate)) {
-        for (const name of currentOptions.invalidate) {
-          cacheRegistry.invalidate(name);
+        let invalidatedActive = false;
+        for (const ref of currentOptions.invalidate) {
+          ref.invalidate();
+          if (reloadCtx?.loaderId && ref.__id === reloadCtx.loaderId) {
+            invalidatedActive = true;
+          }
+        }
+        // If the user's invalidate list includes the active page's loader,
+        // also re-run that loader so the visible <Loader> picks up fresh
+        // data. Other refs (sibling pages) just clear their caches; those
+        // pages will refetch on their next mount.
+        if (invalidatedActive) {
+          reloadCtx?.reload();
         }
       }
     } catch (err) {

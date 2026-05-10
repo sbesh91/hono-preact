@@ -1,5 +1,7 @@
+import { useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
-import type { LoaderCache } from './cache.js';
+import { createCache, type LoaderCache } from './cache.js';
+import { LoaderDataContext } from './internal/contexts.js';
 
 export type LoaderCtx = { location: RouteHook };
 
@@ -8,53 +10,89 @@ export type Loader<T> = (ctx: LoaderCtx) => Promise<T>;
 export interface LoaderRef<T> {
   readonly __id: symbol;
   readonly fn: Loader<T>;
-  readonly cache?: LoaderCache<T>;
+  readonly cache: LoaderCache<T>;
+  useData(): T;
+  invalidate(): void;
 }
 
 /**
- * Plugin-emitted opts for `defineLoader`. Authored code should never
- * construct this literal directly -- it's threaded in by the
- * `moduleKeyPlugin` Vite transform when it rewrites
- * `defineLoader(fn)` to `defineLoader(fn, { __moduleKey: '...' })`.
+ * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded
+ * in by the `moduleKeyPlugin` Vite transform; user code does not set it.
+ * `cache` is an opt-in for sharing a cache instance across multiple loaders;
+ * when omitted, `defineLoader` creates a fresh one.
  */
-export type DefineLoaderOpts = {
-  __moduleKey: string;
+export type DefineLoaderOpts<T> = {
+  __moduleKey?: string;
+  cache?: LoaderCache<T>;
 };
 
-/**
- * Define a server loader.
- *
- * Authored as `defineLoader(fn)` in `.server.*` files. The `moduleKeyPlugin`
- * Vite plugin rewrites the call at build time to thread the path-derived
- * module key in: `defineLoader(fn, { __moduleKey: 'src/pages/movies' })`.
- *
- * The `__moduleKey` is the routing key for `__loaders`/`__actions` RPC
- * and the payload of `Symbol.for(...)` for `__id`. Two loaders defined in
- * different files produce distinct `__id` symbols by construction.
- *
- * To bind a `LoaderCache` to a loader, pass it via `definePage(Component,
- * { loader, cache })` rather than through `defineLoader` opts.
- */
-export function defineLoader<T>(fn: Loader<T>): LoaderRef<T>;
-export function defineLoader<T>(
-  fn: Loader<T>,
-  opts: DefineLoaderOpts
-): LoaderRef<T>;
-export function defineLoader<T>(
-  fn: Loader<T>,
-  opts?: DefineLoaderOpts
-): LoaderRef<T> {
-  if (opts?.__moduleKey) {
-    return {
-      __id: Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`),
-      fn,
-    };
+// Stash a shared cache map on globalThis so duplicate copies of
+// @hono-preact/iso (workspace hoisting quirks) still see the same map.
+// The serverOnlyPlugin emits a `defineLoader(fn, { __moduleKey })` call at
+// EVERY importer of a `.server.*` module, so without this dedup each
+// importer would get its own private LoaderCache and `ref.invalidate()`
+// would only clear the calling importer's copy. That breaks cross-route
+// invalidation (movie.tsx invalidating `moviesListLoader` no longer flushes
+// the list page's cache).
+const SHARED_CACHES_KEY = Symbol.for('@hono-preact/iso/loaderCaches');
+
+type SharedCacheMap = Map<symbol, LoaderCache<unknown>>;
+
+function getSharedCaches(): SharedCacheMap {
+  const g = globalThis as unknown as Record<symbol, SharedCacheMap>;
+  let map = g[SHARED_CACHES_KEY];
+  if (!map) {
+    map = new Map();
+    g[SHARED_CACHES_KEY] = map;
   }
-  // Plugin-less context (a consumer testing their loader in isolation).
-  // Identity is unstable across module reloads, which is acceptable for
-  // tests that don't depend on cache-by-id behavior.
-  return {
-    __id: Symbol(`@hono-preact/loader:<unkeyed>`),
+  return map;
+}
+
+export function defineLoader<T>(
+  fn: Loader<T>,
+  opts?: DefineLoaderOpts<T>
+): LoaderRef<T> {
+  const __id = opts?.__moduleKey
+    ? Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`)
+    : Symbol(`@hono-preact/loader:<unkeyed>`);
+
+  let cache = opts?.cache;
+  if (!cache) {
+    if (opts?.__moduleKey) {
+      // Keyed loaders: dedupe the auto-attached cache by __id so every
+      // importer of the same .server module shares one LoaderCache.
+      const shared = getSharedCaches();
+      const existing = shared.get(__id) as LoaderCache<T> | undefined;
+      if (existing) {
+        cache = existing;
+      } else {
+        cache = createCache<T>();
+        shared.set(__id, cache as LoaderCache<unknown>);
+      }
+    } else {
+      // Unkeyed loaders only happen when consumers call defineLoader(fn)
+      // directly without the plugin transform (i.e. in tests). Each call
+      // gets a fresh cache.
+      cache = createCache<T>();
+    }
+  }
+
+  const ref: LoaderRef<T> = {
+    __id,
     fn,
+    cache,
+    useData() {
+      const ctx = useContext(LoaderDataContext);
+      if (!ctx) {
+        throw new Error(
+          'loader.useData() must be called inside a route page that has a loader.'
+        );
+      }
+      return ctx.data as T;
+    },
+    invalidate() {
+      cache.invalidate();
+    },
   };
+  return ref;
 }

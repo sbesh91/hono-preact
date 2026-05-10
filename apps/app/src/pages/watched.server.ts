@@ -1,6 +1,6 @@
 // apps/app/src/pages/watched.server.ts
 import { getMovie, getMovies } from '@/server/movies.js';
-import { createCache, defineAction, defineLoader } from '@hono-preact/iso';
+import { defineAction, defineLoader } from '@hono-preact/iso';
 import type { Movie } from '@/server/data/movie.js';
 import {
   listWatched,
@@ -35,7 +35,6 @@ const serverLoader = async () => {
 export default serverLoader;
 
 export const loader = defineLoader(serverLoader);
-export const cache = createCache<{ entries: Entry[] }>('watched');
 
 export const serverActions = {
   removeWatched: defineAction<{ movieId: number }, { ok: boolean }>(

@@ -1,13 +1,11 @@
 import type { ComponentType, FunctionComponent, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import type { LoaderRef } from './define-loader.js';
-import type { LoaderCache } from './cache.js';
 import type { GuardFn } from './guard.js';
 import { Page, type WrapperProps } from './page.js';
 
 export type PageBindings<T> = {
   loader?: LoaderRef<T>;
-  cache?: LoaderCache<T>;
   Wrapper?: ComponentType<WrapperProps>;
   fallback?: JSX.Element;
   errorFallback?:
@@ -18,7 +16,7 @@ export type PageBindings<T> = {
 };
 
 /**
- * Wrap a page component with its per-page bindings (loader, cache, fallback,
+ * Wrap a page component with its per-page bindings (loader, fallback,
  * guards, etc.) and return a routable component that self-wraps in `<Page>`.
  *
  * The output is a function `(location: RouteHook) => JSX.Element` that
@@ -32,7 +30,6 @@ export function definePage<T>(
   const PageRoute: FunctionComponent<RouteHook> = (location) => (
     <Page<T>
       loader={bindings?.loader}
-      cache={bindings?.cache}
       Wrapper={bindings?.Wrapper}
       fallback={bindings?.fallback}
       errorFallback={bindings?.errorFallback}

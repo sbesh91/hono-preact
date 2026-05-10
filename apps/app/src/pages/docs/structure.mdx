@@ -97,10 +97,10 @@ MDX content (`pages/docs/*.mdx`) is mounted via `apps/app/src/components/DocsRou
 Isomorphic primitives shared between server and client (`packages/iso/`):
 
 - **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`. The route-table primitive and runtime mounter.
-- **Page bindings**: `definePage(Component, { loader, cache, fallback, errorFallback, serverGuards, clientGuards, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need loader/cache/Suspense bindings.
-- **Loaders**: `defineLoader`, `LoaderRef`, `useLoaderData`, `useReload`.
+- **Page bindings**: `definePage(Component, { loader, fallback, errorFallback, serverGuards, clientGuards, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need loader/Suspense bindings.
+- **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `invalidate()`, and `cache`.)
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
-- **Caching**: `createCache`, `cacheRegistry`.
+- **Caching**: `createCache` (advanced: shared caches across loaders).
 - **Guards**: `createGuard`, `runGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`.
 - **Utilities**: `prefetch`, `isBrowser`, `env`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
 
@@ -120,6 +120,6 @@ Vite plugins for the framework (`packages/vite/`). The primary export is `honoPr
 
 - **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, `@hono/vite-dev-server`, and the client-shim auto-injection.
 - **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing static imports with no-op stubs and dynamic `import('./*.server.*')` calls with `Promise.resolve({})` so server code never reaches the browser.
-- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `loader`, `cache`, `serverGuards`, `serverActions`, or `actionGuards`. The server loader must be the default export.
+- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `loader`, `serverGuards`, `serverActions`, or `actionGuards`. The server loader must be the default export.
 - **`moduleKeyPlugin`** rewrites each `.server.*` file at build time with a `__moduleKey` derived from the file path, which the loader/action handlers use to dispatch RPC requests.
 - **`clientShimPlugin`** prepends a `globalThis.process ??= { env: { NODE_ENV } }` shim to the client entry so libraries that read `process.env.NODE_ENV` at module-eval time in the browser do not throw.

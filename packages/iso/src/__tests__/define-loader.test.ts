@@ -1,5 +1,10 @@
+// @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
 import { defineLoader } from '../define-loader.js';
+import { createCache } from '../cache.js';
+import { LoaderDataContext } from '../internal/contexts.js';
+import { h } from 'preact';
+import { render } from '@testing-library/preact';
 
 describe('defineLoader', () => {
   it('returns an unkeyed LoaderRef when called with only a function (no name, no opts)', () => {
@@ -44,5 +49,72 @@ describe('defineLoader (path-keyed __moduleKey form)', () => {
       __moduleKey: 'pages/admin/movies',
     });
     expect(a.__id).not.toBe(b.__id);
+  });
+});
+
+describe('LoaderRef methods', () => {
+  it('attaches a cache to every loader by default', () => {
+    const loader = defineLoader(async () => ({ value: 1 }));
+    expect(loader.cache).toBeDefined();
+    expect(typeof loader.cache.get).toBe('function');
+    expect(typeof loader.cache.invalidate).toBe('function');
+  });
+
+  it('uses the cache passed in opts when provided', () => {
+    const shared = createCache<{ value: number }>();
+    const loader = defineLoader(async () => ({ value: 1 }), { cache: shared });
+    expect(loader.cache).toBe(shared);
+  });
+
+  it('invalidate() clears the loader cache', () => {
+    const loader = defineLoader(async () => ({ value: 1 }));
+    loader.cache.set({ value: 1 });
+    expect(loader.cache.has()).toBe(true);
+    loader.invalidate();
+    expect(loader.cache.has()).toBe(false);
+  });
+
+  it('two defineLoader calls with the same __moduleKey share a cache', () => {
+    const a = defineLoader(async () => ({ x: 1 }), {
+      __moduleKey: 'shared-cache-test',
+    });
+    const b = defineLoader(async () => ({ x: 1 }), {
+      __moduleKey: 'shared-cache-test',
+    });
+    a.cache.set({ x: 1 });
+    expect(b.cache.has()).toBe(true);
+    expect(b.cache.get()).toEqual({ x: 1 });
+    b.invalidate();
+    expect(a.cache.has()).toBe(false);
+  });
+
+  it('unkeyed loaders get distinct caches', () => {
+    const a = defineLoader(async () => ({ x: 1 }));
+    const b = defineLoader(async () => ({ x: 1 }));
+    a.cache.set({ x: 1 });
+    expect(b.cache.has()).toBe(false);
+  });
+
+  it('useData() returns the data from LoaderDataContext', () => {
+    const loader = defineLoader(async () => ({ value: 42 }));
+    const Probe = () => {
+      const data = loader.useData();
+      return h('span', null, JSON.stringify(data));
+    };
+    const { container } = render(
+      h(LoaderDataContext.Provider, { value: { data: { value: 42 } } }, h(Probe, null))
+    );
+    expect(container.textContent).toBe('{"value":42}');
+  });
+
+  it('useData() throws when called outside a LoaderDataContext', () => {
+    const loader = defineLoader(async () => ({ value: 1 }));
+    expect(() => {
+      const Probe = () => {
+        loader.useData();
+        return null;
+      };
+      render(h(Probe, null));
+    }).toThrow(/inside a route page/);
   });
 });

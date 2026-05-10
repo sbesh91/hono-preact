@@ -1,5 +1,4 @@
 import type { Loader } from './define-loader.js';
-import { cacheRegistry } from './cache-registry.js';
 import { isBrowser } from './is-browser.js';
 
 export interface LoaderCache<T> {
@@ -47,8 +46,8 @@ export function runRequestScope<R>(fn: () => R | Promise<R>): R | Promise<R> {
   return alsInstance.run(new Map(), fn);
 }
 
-export function createCache<T>(name?: string): LoaderCache<T> {
-  const key = Symbol(name ?? 'cache');
+export function createCache<T>(): LoaderCache<T> {
+  const key = Symbol('cache');
   let fallbackStore: T | null = null;
 
   function read(): T | null {
@@ -73,7 +72,7 @@ export function createCache<T>(name?: string): LoaderCache<T> {
     fallbackStore = value;
   }
 
-  const cache: LoaderCache<T> = {
+  return {
     get: () => read(),
     set: (value) => write(value),
     has: () => read() !== null,
@@ -90,10 +89,4 @@ export function createCache<T>(name?: string): LoaderCache<T> {
       write(null);
     },
   };
-  if (name) {
-    cacheRegistry.register(name, () => {
-      write(null);
-    });
-  }
-  return cache;
 }

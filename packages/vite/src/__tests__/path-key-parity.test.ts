@@ -51,7 +51,7 @@ describe('path-key parity across moduleKeyPlugin and serverOnlyPlugin', () => {
       `${ROOT}/src/pages/movies.tsx`
     );
     expect(clientResult?.code).toContain(
-      `Symbol.for('@hono-preact/loader:src/pages/movies')`
+      `__moduleKey: "src/pages/movies"`
     );
   });
 

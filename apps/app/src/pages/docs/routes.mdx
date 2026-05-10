@@ -56,7 +56,7 @@ That table covers four URL behaviours:
 | `path` | `string` | always | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings. |
 | `view` | `() => Promise<{ default: ComponentType }>` | for leaves | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting. |
 | `layout` | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts). |
-| `server` | `() => Promise<unknown>` | optional, leaves only | The sibling `.server.ts` module behind a dynamic import. Carries `loader`, `cache`, `serverActions`, `serverGuards`, `actionGuards`. |
+| `server` | `() => Promise<unknown>` | optional, leaves only | The sibling `.server.ts` module behind a dynamic import. Carries `loader`, `serverActions`, `serverGuards`, `actionGuards`. |
 | `children` | `RouteDef[]` | for layouts and path groups | Nested routes. |
 
 ## The three valid shapes

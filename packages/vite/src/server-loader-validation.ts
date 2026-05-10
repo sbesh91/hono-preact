@@ -2,7 +2,7 @@ import { parse } from '@babel/parser';
 import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 
-const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'loader', 'cache']);
+const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'loader']);
 const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS].map((n) => `'${n}'`).join(', ');
 
 export function serverLoaderValidationPlugin(): Plugin {

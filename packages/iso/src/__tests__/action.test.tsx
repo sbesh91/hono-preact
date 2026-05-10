@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
 import { defineAction } from '../action.js';
-import { cacheRegistry } from '../cache-registry.js';
 
 describe('defineAction', () => {
   it('returns the function unchanged at runtime', () => {
@@ -13,19 +12,20 @@ describe('defineAction', () => {
 
 import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
+import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
+import { defineLoader } from '../define-loader.js';
 
-const stub: ActionStub<{ title: string }, { ok: boolean }> = {
+const stub = {
   __module: 'movies',
   __action: 'create',
-};
+} as unknown as ActionStub<{ title: string }, { ok: boolean }>;
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  cacheRegistry.clear();
 });
 
 describe('useAction', () => {
@@ -223,24 +223,119 @@ describe('useAction', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it('invalidates named caches when invalidate is a string[]', async () => {
-    const invalidateFn = vi.fn();
-    cacheRegistry.register('movies', invalidateFn);
-
-    const testStub: ActionStub<{}, { ok: boolean }> = {
-      __module: 'movies',
-      __action: 'create',
-    };
+  it('triggers reloadCtx.reload() when invalidate includes the active loader', async () => {
+    const active = defineLoader(async () => ({ value: 1 }), {
+      __moduleKey: 'reload-active-test',
+    });
+    const other = defineLoader(async () => ({ value: 2 }), {
+      __moduleKey: 'reload-other-test',
+    });
+    const reload = vi.fn();
 
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const refStub = {
+      __module: 'm',
+      __action: 'go',
+    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+
+    function TestComponent() {
+      const { mutate } = useAction(refStub, { invalidate: [active, other] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(
+      <ReloadContext.Provider
+        value={{ reload, reloading: false, error: null, loaderId: active.__id }}
+      >
+        <TestComponent />
+      </ReloadContext.Provider>
+    );
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  });
+
+  it('does not call reloadCtx.reload() when invalidate refs do not include the active loader', async () => {
+    const active = defineLoader(async () => ({ value: 1 }), {
+      __moduleKey: 'reload-active-test-2',
+    });
+    const other = defineLoader(async () => ({ value: 2 }), {
+      __moduleKey: 'reload-other-test-2',
+    });
+    const reload = vi.fn();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const refStub = {
+      __module: 'm',
+      __action: 'go',
+    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+
+    function TestComponent() {
+      const { mutate } = useAction(refStub, { invalidate: [other] });
+      return <button onClick={() => mutate({})}>go</button>;
+    }
+
+    render(
+      <ReloadContext.Provider
+        value={{ reload, reloading: false, error: null, loaderId: active.__id }}
+      >
+        <TestComponent />
+      </ReloadContext.Provider>
+    );
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    // Wait long enough for the action to settle.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('calls .invalidate() on each loader ref after a successful mutation', async () => {
+    const a = defineLoader(async () => ({ a: 1 }));
+    const b = defineLoader(async () => ({ b: 2 }));
+    a.cache.set({ a: 1 });
+    b.cache.set({ b: 2 });
+    expect(a.cache.has()).toBe(true);
+    expect(b.cache.has()).toBe(true);
+
+    const refStub = {
+      __module: 'm',
+      __action: 'go',
+    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       )
     );
 
     function TestComponent() {
-      const { mutate } = useAction(testStub, { invalidate: ['movies'] });
+      const { mutate } = useAction(refStub, { invalidate: [a, b] });
       return <button onClick={() => mutate({})}>go</button>;
     }
 
@@ -249,7 +344,48 @@ describe('useAction', () => {
       screen.getByRole('button').click();
     });
 
-    await waitFor(() => expect(invalidateFn).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(a.cache.has()).toBe(false);
+      expect(b.cache.has()).toBe(false);
+    });
+  });
+
+  it('exposes useAction as a method on the stub', async () => {
+    // Mimic the shape produced by serverOnlyPlugin's client-side Proxy.
+    const methodStub: ActionStub<{ x: number }, { ok: true }> = {
+      __module: 'm',
+      __action: 'go',
+      useAction(opts) {
+        return useAction(this as ActionStub<{ x: number }, { ok: true }>, opts);
+      },
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const captured: Array<{ pending: boolean; data: unknown }> = [];
+    function Probe() {
+      const { mutate, pending, data } = methodStub.useAction();
+      captured.push({ pending, data });
+      useEffect(() => {
+        void mutate({ x: 1 });
+      }, [mutate]);
+      return null;
+    }
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(
+        captured.some((c) => c.data && (c.data as { ok: true }).ok)
+      ).toBe(true);
+    });
   });
 });
 
@@ -289,10 +425,10 @@ describe('useAction — streaming (onChunk)', () => {
   });
 });
 
-const mockStub: ActionStub<Record<string, unknown>, unknown> = {
+const mockStub = {
   __module: 'test-module',
   __action: 'test-action',
-};
+} as unknown as ActionStub<Record<string, unknown>, unknown>;
 
 describe('useAction — FormData (file upload)', () => {
   it('sends FormData when payload contains a File', async () => {

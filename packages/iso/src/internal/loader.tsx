@@ -2,7 +2,6 @@ import type { ComponentChildren, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
 import { useCallback, useId, useRef, useState } from 'preact/hooks';
-import type { LoaderCache } from '../cache.js';
 import { isBrowser } from '../is-browser.js';
 import { ReloadContext } from '../reload-context.js';
 import { getPreloadedData } from './preload.js';
@@ -13,7 +12,6 @@ import type { LoaderRef } from '../define-loader.js';
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
   location: RouteHook;
-  cache?: LoaderCache<T>;
   fallback?: JSX.Element;
   children: ComponentChildren;
 };
@@ -21,18 +19,14 @@ type LoaderProps<T> = {
 export function Loader<T>({
   loader,
   location,
-  cache,
   fallback,
   children,
 }: LoaderProps<T>) {
   const id = useId();
-  const effectiveCache = cache ?? loader.cache;
-
   return (
     <LoaderIdContext.Provider value={id}>
       <LoaderHost
         loaderRef={loader}
-        cache={effectiveCache}
         location={location}
         id={id}
         fallback={fallback}
@@ -45,7 +39,6 @@ export function Loader<T>({
 
 type LoaderHostProps<T> = {
   loaderRef: LoaderRef<T>;
-  cache?: LoaderCache<T>;
   location: RouteHook;
   id: string;
   fallback?: JSX.Element;
@@ -54,7 +47,6 @@ type LoaderHostProps<T> = {
 
 function LoaderHost<T>({
   loaderRef,
-  cache,
   location,
   id,
   fallback,
@@ -84,7 +76,7 @@ function LoaderHost<T>({
     fnRef
       .current({ location: locationRef.current })
       .then((result) => {
-        if (isBrowser()) cache?.set(result);
+        if (isBrowser()) loaderRef.cache.set(result);
         setOverrideData(result);
         setReloading(false);
         inFlightRef.current = false;
@@ -99,7 +91,7 @@ function LoaderHost<T>({
         inFlightRef.current = false;
         queuedReloadRef.current = false;
       });
-  }, [cache]);
+  }, [loaderRef]);
   runReloadRef.current = runReload;
 
   const reload = useCallback(() => {
@@ -133,11 +125,12 @@ function LoaderHost<T>({
     if (locationChanged || loaderChanged) setOverrideData(undefined);
 
     const preloaded = getPreloadedData<T>(id);
+    const isFirstRender = readerRef.current === null;
     if (preloaded !== null) {
-      cache?.set(preloaded);
+      loaderRef.cache.set(preloaded);
       readerRef.current = { read: () => preloaded };
-    } else if (isBrowser() && cache?.has()) {
-      const cached = cache.get()!;
+    } else if (isBrowser() && isFirstRender && loaderRef.cache.has()) {
+      const cached = loaderRef.cache.get()!;
       readerRef.current = { read: () => cached };
     } else {
       inFlightRef.current = true;
@@ -152,7 +145,7 @@ function LoaderHost<T>({
         loaderRef
           .fn({ location })
           .then((r) => {
-            if (isBrowser()) cache?.set(r);
+            if (isBrowser()) loaderRef.cache.set(r);
             settle();
             return r;
           })
@@ -165,7 +158,14 @@ function LoaderHost<T>({
   }
 
   return (
-    <ReloadContext.Provider value={{ reload, reloading, error: loadError }}>
+    <ReloadContext.Provider
+      value={{
+        reload,
+        reloading,
+        error: loadError,
+        loaderId: loaderRef.__id,
+      }}
+    >
       <Suspense fallback={fallback}>
         <DataReader
           reader={readerRef.current}
