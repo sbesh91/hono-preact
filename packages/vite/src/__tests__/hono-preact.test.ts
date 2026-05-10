@@ -130,25 +130,26 @@ describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in the documented pipeline order', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
     const names = plugins.map((p) => p.name);
-    // The first four entries are the framework plugins; the remaining are
+    // The first five entries are the framework plugins; the remaining are
     // upstream plugin instances (vite-build, vite-dev-server) whose names
     // we don't lock to keep this test resilient to upstream renames.
-    expect(names.slice(0, 4)).toEqual([
+    expect(names.slice(0, 5)).toEqual([
       'hono-preact:config',
+      'hono-preact:client-shim',
       'server-loader-validation',
       'module-key',
       'server-only',
     ]);
   });
 
-  it('emits exactly six plugins (config, three transforms, build, dev-server)', () => {
+  it('emits exactly seven plugins (config, four transforms, build, dev-server)', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' });
-    expect(plugins).toHaveLength(6);
+    expect(plugins).toHaveLength(7);
   });
 
   it('gates the build plugin to non-client build commands', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
-    const buildPlugin = plugins[4];
+    const buildPlugin = plugins[5];
     expect(typeof buildPlugin.apply).toBe('function');
     const apply = buildPlugin.apply as (
       _: unknown,
@@ -161,7 +162,7 @@ describe('honoPreact plugin assembly', () => {
 
   it('gates the dev-server plugin to serve only', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
-    const devPlugin = plugins[5];
+    const devPlugin = plugins[6];
     expect(devPlugin.apply).toBe('serve');
   });
 });
