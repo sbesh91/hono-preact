@@ -133,10 +133,11 @@ function LoaderHost<T>({
     if (locationChanged || loaderChanged) setOverrideData(undefined);
 
     const preloaded = getPreloadedData<T>(id);
+    const isFirstRender = readerRef.current === null;
     if (preloaded !== null) {
       cache?.set(preloaded);
       readerRef.current = { read: () => preloaded };
-    } else if (isBrowser() && cache?.has()) {
+    } else if (isBrowser() && isFirstRender && cache?.has()) {
       const cached = cache.get()!;
       readerRef.current = { read: () => cached };
     } else {
