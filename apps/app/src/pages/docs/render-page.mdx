@@ -1,6 +1,6 @@
 # renderPage
 
-`renderPage` is the SSR entry point exported from `@hono-preact/server`. It takes a Hono context and a root Preact node, prerenders it to HTML, injects head tags collected by [hoofd](https://github.com/nickvdyck/hoofd), and returns a full HTML response (including `<!doctype html>` and the `<html>` wrapper).
+`renderPage` is the SSR entry point exported from `@hono-preact/server`. It takes a Hono context and a root Preact node, prerenders it to HTML, injects head tags collected by [hoofd](https://github.com/nickvdyck/hoofd), and returns a full HTML response. The framework always emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the document's `</head>`. When the rendered root already returns an `<html>` element (the new default with `<Head>` in `Layout.tsx`), `renderPage` skips the outer `<html lang>` wrap and uses your shell as-is.
 
 ## Usage
 
@@ -26,7 +26,7 @@ renderPage(
 |---|---|
 | `c` | The Hono `Context` from your route handler |
 | `node` | The root Preact element to render, typically your `<Layout>` |
-| `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''` |
+| `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''`. The framework's generated server entry no longer threads this; express defaults via `<Head defaultTitle="...">` in your `Layout`. The option remains for advanced users wiring a custom server entry. |
 
 ## Head tags
 
