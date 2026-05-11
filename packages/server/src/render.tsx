@@ -45,16 +45,40 @@ export async function renderPage(
 
   const { title, lang, metas = [], links = [] } = dispatcher.toStatic();
 
+  // Only inject a <title> when hoofd produced one or the caller provided a
+  // defaultTitle. Layouts that render their own static <title> (via <Head>)
+  // would otherwise be overridden by an empty injected one (browsers use
+  // the last <title> in <head>).
+  const titleSource = title ?? options?.defaultTitle;
   const headTags = [
-    `<title>${escapeHtml(title ?? options?.defaultTitle ?? '')}</title>`,
+    titleSource != null ? `<title>${escapeHtml(titleSource)}</title>` : '',
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
-  ].join('\n        ');
+  ]
+    .filter(Boolean)
+    .join('\n        ');
+
+  const inner = html.replace('</head>', `${headTags}\n      </head>`);
+
+  // If the rendered tree already starts with <html>, the user's Layout owns
+  // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
+  // dispatched one) and emit only the doctype; do not double-wrap.
+  // Otherwise (custom server entry rendering a fragment) keep the framework's
+  // <html lang> wrapper for backward compatibility.
+  const startsWithHtml = /^\s*<html(\s|>)/i.test(inner);
+
+  if (startsWithHtml) {
+    const withLang =
+      lang != null
+        ? inner.replace(/<html(\s|>)/i, `<html lang="${escapeHtml(lang)}"$1`)
+        : inner;
+    return c.html(`<!doctype html>${withLang}`);
+  }
 
   return c.html(
     `<!doctype html>
       <html lang="${escapeHtml(lang ?? 'en-US')}">
-        ${html.replace('</head>', `${headTags}\n      </head>`)}
+        ${inner}
       </html>`
   );
 }
