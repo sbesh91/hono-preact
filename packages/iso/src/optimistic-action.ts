@@ -28,7 +28,7 @@ export function useOptimisticAction<TPayload, TResult, TBase>(
   const { base, apply, onSuccess, onError, ...actionOpts } = options;
   const [value, addOptimistic] = useOptimistic(base, apply);
 
-  const action = useAction<TPayload, TResult, OptimisticHandle>(stub, {
+  const action = useAction<TPayload, TResult, never, OptimisticHandle>(stub, {
     ...actionOpts,
     onMutate: (payload) => addOptimistic(payload),
     onSuccess: (data, handle) => {

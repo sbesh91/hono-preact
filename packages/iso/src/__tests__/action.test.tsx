@@ -545,7 +545,7 @@ describe('useAction: streaming via SSE', () => {
     );
 
     const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, unknown, { count: number }>;
-    let caught: Error | null = null;
+    let caught = null as Error | null;
     let chunks = 0;
 
     function Probe() {
@@ -577,7 +577,7 @@ describe('useAction: streaming via SSE', () => {
     );
 
     const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, { ok: boolean }, { count: number }>;
-    let caught: Error | null = null;
+    let caught = null as Error | null;
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
