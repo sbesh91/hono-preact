@@ -125,16 +125,20 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
           } else if (ev.event === 'result') {
             try {
               resultValue = JSON.parse(ev.data) as TResult;
-            } catch {
-              // malformed
+            } catch (e) {
+              streamError = new Error(
+                `Malformed result event in stream: ${e instanceof Error ? e.message : String(e)}`
+              );
             }
           } else if (ev.event === 'error') {
             try {
               const parsed = JSON.parse(ev.data) as { message?: string; name?: string };
               streamError = new Error(parsed.message ?? 'Streamed error');
               if (parsed.name) streamError.name = parsed.name;
-            } catch {
-              streamError = new Error('Streamed error');
+            } catch (e) {
+              streamError = new Error(
+                `Malformed error event in stream: ${e instanceof Error ? e.message : String(e)}`
+              );
             }
           }
         }

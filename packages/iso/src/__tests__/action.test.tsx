@@ -562,4 +562,33 @@ describe('useAction: streaming via SSE', () => {
     expect(caught?.message).toBe('boom');
     expect(chunks).toBe(1);
   });
+
+  it('surfaces a malformed event: result as an error via onError', async () => {
+    const sse =
+      'data: {"count":1}\n\n' +
+      'event: result\ndata: this-is-not-json\n\n';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }))
+    );
+
+    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, { ok: boolean }, { count: number }>;
+    let caught: Error | null = null;
+
+    function Probe() {
+      const { mutate } = useAction(streamingStub, {
+        onError: (err) => { caught = err; },
+      });
+      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+    }
+
+    const { findByTestId } = render(<Probe />);
+    fireEvent.click(await findByTestId('go'));
+    await waitFor(() => expect(caught).not.toBeNull());
+    expect(caught?.message).toMatch(/Malformed result event/);
+  });
 });
