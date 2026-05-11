@@ -43,6 +43,9 @@ importers:
       hono:
         specifier: ^4.12.14
         version: 4.12.14
+      hono-preact:
+        specifier: workspace:*
+        version: link:../../packages/hono-preact
       hoofd:
         specifier: ^1.7.3
         version: 1.7.3(@preact/compat@18.3.2(preact@10.29.1))
