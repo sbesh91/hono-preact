@@ -39,8 +39,16 @@ export function clientShimPlugin(clientEntry: string): Plugin {
     },
     transform(code, id) {
       if (resolvedEntry === null) return;
-      // Allocation-free entry match: equal, or `<entry>?<query>`. The
-      // `transform` hook fires for every module so the fast-path matters.
+      // Virtual client entry: matches the resolved virtual id directly. The
+      // configured `clientEntry` carries the unresolved `virtual:` form, which
+      // we mirror here so the shim still injects.
+      if (clientEntry.startsWith('virtual:') && id === '\0' + clientEntry) {
+        return {
+          code: `import '${VIRTUAL_ID}';\n${code}`,
+          map: null,
+        };
+      }
+      // Disk-based entry: equal, or `<entry>?<query>`.
       if (!id.startsWith(resolvedEntry)) return;
       const tail = id.length - resolvedEntry.length;
       if (tail !== 0 && id.charCodeAt(resolvedEntry.length) !== 63 /* '?' */) return;
