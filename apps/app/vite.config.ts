@@ -1,5 +1,4 @@
 import { honoPreact } from '@hono-preact/vite';
-import preact from '@preact/preset-vite';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
@@ -23,6 +22,7 @@ const visualize = process.env.VISUALIZE === '1';
 export default defineConfig((env) => ({
   resolve: {
     alias: [
+      // Workspace aliases for monorepo dev. Removed at v0.1 §7 (package consolidation).
       {
         find: '@hono-preact/iso/internal',
         replacement: resolve(__dirname, '../../packages/iso/src/internal.ts'),
@@ -42,9 +42,8 @@ export default defineConfig((env) => ({
     sourcemap: visualize && env.mode === 'client',
   },
   plugins: [
-    honoPreact({ entry: 'src/server.tsx' }),
+    honoPreact(),
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
-    preact(),
     ...(visualize && env.mode === 'client'
       ? [
           visualizer({

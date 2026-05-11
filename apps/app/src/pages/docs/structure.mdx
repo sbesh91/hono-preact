@@ -5,7 +5,7 @@ hono-preact/                    # monorepo root
 ├── apps/
 │   └── app/                    # the deployed application
 │       ├── src/
-│       │   ├── server.tsx      # Hono app: handler wiring + catch-all SSR
+│       │   ├── api.ts          # Optional: custom Hono routes mounted before SSR
 │       │   ├── client.tsx      # Browser entry: hydrates the Preact app
 │       │   ├── iso.tsx         # Mounts <Routes> with the route table
 │       │   ├── routes.ts       # The route table (defineRoutes manifest)
@@ -56,23 +56,9 @@ export const Base = () => <Routes routes={routes} onRouteChange={onRouteChange} 
 
 There is no manual `<Router>` or `<Route>` JSX in user code; `<Routes>` instantiates them from the manifest.
 
-### `apps/app/src/server.tsx`
+### Server entry (generated)
 
-The Hono application. Builds a `serverModules` record from the route manifest via `routeServerModules(routes)` and feeds it to both `loadersHandler` and `actionsHandler`. Defines additional REST endpoints, then a catch-all `GET *` handler that SSR-renders the full Preact app via `renderPage`.
-
-```tsx
-import { actionsHandler, loadersHandler, location, renderPage, routeServerModules } from '@hono-preact/server';
-import routes from './routes.js';
-
-const serverModules = routeServerModules(routes);
-
-app
-  .post('/__loaders', loadersHandler(serverModules))
-  .post('/__actions', actionsHandler(serverModules))
-  .get('/api/...', /* your REST routes */)
-  .use(location)
-  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'hono-preact' }));
-```
+The framework generates the Hono application as a virtual module (`virtual:hono-preact/server`) from your `routes.ts` and `Layout.tsx`. It wires the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler automatically. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
 
 ### `apps/app/src/client.tsx`
 
@@ -82,9 +68,9 @@ The browser entry point. Picks up the server-rendered HTML and hydrates it in pl
 hydrate(<App />, document.getElementById('app'));
 ```
 
-### `apps/app/src/server/layout.tsx`
+### `apps/app/src/Layout.tsx`
 
-Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. The catch-all route in `server.tsx` renders this component and wraps its output in `<!doctype html>`.
+Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. Default-exports a component the framework's generated server entry renders for the catch-all route and wraps in `<!doctype html>`.
 
 ### `apps/app/src/pages/`
 

@@ -40,9 +40,6 @@ importers:
       '@shikijs/rehype':
         specifier: ^4.0.2
         version: 4.0.2
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
       hono:
         specifier: ^4.12.14
         version: 4.12.14
@@ -224,13 +221,13 @@ importers:
       '@hono/vite-dev-server':
         specifier: ^0.25.1
         version: 0.25.1(hono@4.12.14)(miniflare@4.20260415.0)(wrangler@4.83.0)
+      '@preact/preset-vite':
+        specifier: ^2.10.5
+        version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.2)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0))
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
     devDependencies:
-      '@preact/preset-vite':
-        specifier: ^2.10.5
-        version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.2)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0))
       preact:
         specifier: ^10.29.1
         version: 10.29.1
@@ -1744,10 +1741,6 @@ packages:
 
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
-
-  dotenv@17.4.2:
-    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
-    engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -4368,8 +4361,6 @@ snapshots:
       dom-serializer: 2.0.0
       domelementtype: 2.3.0
       domhandler: 5.0.3
-
-  dotenv@17.4.2: {}
 
   dunder-proto@1.0.1:
     dependencies:

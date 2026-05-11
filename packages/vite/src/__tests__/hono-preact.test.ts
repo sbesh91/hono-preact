@@ -142,9 +142,32 @@ describe('honoPreact plugin assembly', () => {
     ]);
   });
 
-  it('emits exactly seven plugins (config, four transforms, build, dev-server)', () => {
+  it('emits at least seven framework-owned plugins when entry is provided', () => {
+    // 7 framework plugins (config, client-shim, validation, module-key,
+    // server-only, build, dev-server) plus an unknown number of preact
+    // preset plugins.
     const plugins = honoPreact({ entry: './src/server.tsx' });
-    expect(plugins).toHaveLength(7);
+    expect(plugins.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('adds exactly one more framework-owned plugin in the zero-arg path (server-entry)', () => {
+    const withEntry = honoPreact({ entry: './src/server.tsx' });
+    const zeroArg = honoPreact();
+    expect(zeroArg.length).toBe(withEntry.length + 1);
+  });
+
+  it('emits the documented pipeline order in the zero-arg path', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    // server-entry slots in after config and client-shim, before validation/module-key/server-only.
+    expect(names.slice(0, 6)).toEqual([
+      'hono-preact:config',
+      'hono-preact:client-shim',
+      'hono-preact:server-entry',
+      'server-loader-validation',
+      'module-key',
+      'server-only',
+    ]);
   });
 
   it('gates the build plugin to non-client build commands', () => {
@@ -164,5 +187,43 @@ describe('honoPreact plugin assembly', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
     const devPlugin = plugins[6];
     expect(devPlugin.apply).toBe('serve');
+  });
+});
+
+describe('honoPreact zero-arg path', () => {
+  type NamedPlugin = { name?: string; apply?: unknown };
+
+  it('accepts no arguments and includes the server-entry plugin', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    expect(names).toContain('hono-preact:server-entry');
+  });
+
+  it('omits the server-entry plugin when entry is provided', () => {
+    const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    expect(names).not.toContain('hono-preact:server-entry');
+  });
+
+  it('places server-entry early in the pipeline (before module-key) so its virtual id resolves first', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    const seIdx = names.indexOf('hono-preact:server-entry');
+    const mkIdx = names.indexOf('module-key');
+    expect(seIdx).toBeGreaterThan(-1);
+    expect(mkIdx).toBeGreaterThan(-1);
+    expect(seIdx).toBeLessThan(mkIdx);
+  });
+});
+
+describe('honoPreact preact() auto-inclusion', () => {
+  type NamedPlugin = { name?: string };
+
+  it('includes the preact preset plugins by name', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    // @preact/preset-vite returns multiple named plugins; the JSX-transform
+    // plugin is the most stable name to assert on.
+    expect(names).toContain('vite:preact-jsx');
   });
 });
