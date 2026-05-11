@@ -26,3 +26,9 @@ export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
 export { runRequestScope } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
 export { runGuards } from './guard.js';
+
+export {
+  __dispatchRouteChange,
+  __subscribeRouteChange,
+  __enableViewTransitions,
+} from './internal/route-change.js';
