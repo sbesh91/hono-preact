@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+// @vitest-environment happy-dom
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook } from '@testing-library/preact';
 import {
   __dispatchRouteChange,
   __subscribeRouteChange,
   __enableViewTransitions,
 } from '../internal/route-change.js';
+import { useRouteChange } from '../route-change.js';
 
 describe('__subscribeRouteChange', () => {
   it('invokes the subscriber with (to, from) on dispatch', () => {
@@ -48,6 +51,10 @@ describe('__subscribeRouteChange', () => {
 
 describe('__enableViewTransitions', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
     vi.unstubAllGlobals();
   });
 
@@ -112,5 +119,45 @@ describe('__enableViewTransitions', () => {
     const disable = __enableViewTransitions();
     expect(() => __dispatchRouteChange('/a', undefined)).not.toThrow();
     disable();
+  });
+});
+
+describe('useRouteChange', () => {
+  it('subscribes on mount and unsubscribes on unmount', () => {
+    const calls: Array<[string, string | undefined]> = [];
+    const handler = (to: string, from: string | undefined) => {
+      calls.push([to, from]);
+    };
+
+    const { unmount } = renderHook(() => useRouteChange(handler));
+
+    __dispatchRouteChange('/a', undefined);
+    expect(calls).toEqual([['/a', undefined]]);
+
+    unmount();
+
+    __dispatchRouteChange('/b', '/a');
+    expect(calls).toEqual([['/a', undefined]]); // no call after unmount
+  });
+
+  it('uses the latest handler reference (re-subscribes on handler change)', () => {
+    const callsA: string[] = [];
+    const callsB: string[] = [];
+    const handlerA = (to: string) => callsA.push(to);
+    const handlerB = (to: string) => callsB.push(to);
+
+    const { rerender } = renderHook(({ h }: { h: (to: string) => void }) => useRouteChange(h), {
+      initialProps: { h: handlerA },
+    });
+
+    __dispatchRouteChange('/x', undefined);
+    expect(callsA).toEqual(['/x']);
+    expect(callsB).toEqual([]);
+
+    rerender({ h: handlerB });
+
+    __dispatchRouteChange('/y', '/x');
+    expect(callsA).toEqual(['/x']);
+    expect(callsB).toEqual(['/y']);
   });
 });
