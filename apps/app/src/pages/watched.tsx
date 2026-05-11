@@ -22,16 +22,7 @@ const WatchedPage: FunctionComponent = () => {
   const { mutate: bulkImport, pending: importing } = useAction(
     serverActions.bulkImportWatched,
     {
-      onChunk: (chunk) => {
-        for (const line of chunk.split('\n')) {
-          if (!line.trim()) continue;
-          try {
-            setProgress(JSON.parse(line) as { count: number; total: number });
-          } catch {
-            // ignore malformed line
-          }
-        }
-      },
+      onChunk: (progress) => setProgress(progress),
       invalidate: [moviesListLoader],
       onSuccess: () => {
         setProgress(null);

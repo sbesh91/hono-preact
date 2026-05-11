@@ -44,22 +44,14 @@ export const serverActions = {
     }
   ),
 
-  bulkImportWatched: defineAction<Record<string, never>, ReadableStream<Uint8Array<ArrayBuffer>>>(async () => {
+  bulkImportWatched: defineAction(async function* (ctx) {
     const target = (await getMovies()).results.slice(0, 20);
-    const encoder = new TextEncoder();
-    return new ReadableStream<Uint8Array<ArrayBuffer>>({
-      async start(controller) {
-        let count = 0;
-        for (const m of target) {
-          await markWatched(m.id);
-          count++;
-          controller.enqueue(
-            encoder.encode(JSON.stringify({ count, total: target.length }) + '\n')
-          );
-          await new Promise((r) => setTimeout(r, 150));
-        }
-        controller.close();
-      },
-    });
+    for (let i = 0; i < target.length; i++) {
+      if (ctx.signal.aborted) return { imported: i };
+      await markWatched(target[i].id);
+      yield { count: i + 1, total: target.length };
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return { imported: target.length };
   }),
 };
