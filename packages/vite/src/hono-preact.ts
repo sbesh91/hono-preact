@@ -8,8 +8,9 @@ import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
 import {
+  GENERATED_SERVER_ENTRY_RELATIVE,
+  generatedServerEntryAbsPath,
   serverEntryPlugin,
-  VIRTUAL_SERVER_ENTRY_ID,
 } from './server-entry.js';
 
 export interface HonoPreactOptions {
@@ -19,7 +20,8 @@ export interface HonoPreactOptions {
   api?: string;          // default 'src/api.ts' (only loaded if file exists)
   clientEntry?: string;  // default 'src/client.tsx'
 
-  // Server entry. Defaults to a generated virtual module. Rare override.
+  // Server entry. Defaults to a generated file the framework writes into the
+  // Vite cache directory. Rare override.
   entry?: string;
 
   // Build-tuning escape hatches (preserved).
@@ -41,7 +43,7 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
   } = options;
 
   const useGeneratedEntry = entry === undefined;
-  const resolvedEntry = entry ?? VIRTUAL_SERVER_ENTRY_ID;
+  const resolvedEntry = entry ?? GENERATED_SERVER_ENTRY_RELATIVE;
 
   const configPlugin: Plugin = {
     name: 'hono-preact:config',
@@ -107,7 +109,9 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
   return [
     configPlugin,
     clientShimPlugin(clientEntry),
-    ...(useGeneratedEntry ? [serverEntryPlugin({ layout, routes, api })] : []),
+    ...(useGeneratedEntry
+      ? [serverEntryPlugin({ layout, routes, api, outputPath: generatedServerEntryAbsPath() })]
+      : []),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     serverOnlyPlugin(),

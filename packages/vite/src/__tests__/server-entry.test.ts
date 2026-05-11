@@ -3,10 +3,11 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import {
+  GENERATED_SERVER_ENTRY_RELATIVE,
   findApiCatchAllRoutes,
   generateServerEntrySource,
+  generatedServerEntryAbsPath,
   serverEntryPlugin,
-  VIRTUAL_SERVER_ENTRY_ID,
 } from '../server-entry.js';
 
 describe('generateServerEntrySource', () => {
@@ -160,71 +161,67 @@ describe('findApiCatchAllRoutes', () => {
 });
 
 describe('serverEntryPlugin', () => {
-  it('exposes the documented virtual id', () => {
-    expect(VIRTUAL_SERVER_ENTRY_ID).toBe('virtual:hono-preact/server');
+  it('GENERATED_SERVER_ENTRY_RELATIVE is the documented project-relative entry path', () => {
+    expect(GENERATED_SERVER_ENTRY_RELATIVE).toBe(
+      'node_modules/.vite/hono-preact/server-entry.tsx'
+    );
   });
 
-  it('resolveId returns the prefixed id only for the virtual id', () => {
-    const plugin = serverEntryPlugin({
-      layout: 'src/Layout.tsx',
-      routes: 'src/routes.ts',
-      api: 'src/api.ts',
-    });
-    // Simulate Vite firing configResolved with a fake root.
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
-      root: '/proj',
-    });
+  it('generatedServerEntryAbsPath() resolves against cwd by default', () => {
+    const p = generatedServerEntryAbsPath();
+    expect(path.isAbsolute(p)).toBe(true);
+    expect(p.endsWith(GENERATED_SERVER_ENTRY_RELATIVE)).toBe(true);
 
-    const resolved = (plugin as {
-      resolveId?: (id: string) => string | undefined;
-    }).resolveId?.(VIRTUAL_SERVER_ENTRY_ID);
-    expect(resolved).toBe('\0' + VIRTUAL_SERVER_ENTRY_ID);
-
-    const other = (plugin as {
-      resolveId?: (id: string) => string | undefined;
-    }).resolveId?.('some-other-module');
-    expect(other).toBeUndefined();
+    const overridden = generatedServerEntryAbsPath('/some/other/root');
+    expect(overridden).toBe(
+      path.join('/some/other/root', GENERATED_SERVER_ENTRY_RELATIVE)
+    );
   });
 
-  it('load() returns the generated source for the resolved virtual id (no api file)', () => {
+  it('configResolved writes the generated entry to outputPath (no api file)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    const outputPath = path.join(tmp, '.vite', 'hono-preact', 'server-entry.tsx');
+
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts', // configured but does not exist on disk
+      outputPath,
     });
     (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
-      root: '/proj',
+      root: tmp,
     });
 
-    const code = (plugin as {
-      load?: (id: string) => string | undefined;
-    }).load?.('\0' + VIRTUAL_SERVER_ENTRY_ID);
-    expect(code).toContain(`import Layout from '/proj/src/Layout.tsx';`);
-    expect(code).toContain(`import routes from '/proj/src/routes.ts';`);
+    expect(fs.existsSync(outputPath)).toBe(true);
+    const code = fs.readFileSync(outputPath, 'utf8');
+    expect(code).toContain(`import Layout from '${path.join(tmp, 'src', 'Layout.tsx')}';`);
+    expect(code).toContain(`import routes from '${path.join(tmp, 'src', 'routes.ts')}';`);
     // Configured api path that doesn't exist is treated as absent.
     expect(code).not.toContain('api.ts');
+
+    fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('load() includes api when the file exists', () => {
+  it('configResolved writes an entry that includes api when the file exists', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('/api/x', (c) => c.text('ok'));\n`
     );
+    const outputPath = path.join(tmp, '.vite', 'hono-preact', 'server-entry.tsx');
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      outputPath,
     });
     (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
       root: tmp,
     });
 
-    const code = (plugin as {
-      load?: (id: string) => string | undefined;
-    }).load?.('\0' + VIRTUAL_SERVER_ENTRY_ID);
+    const code = fs.readFileSync(outputPath, 'utf8');
     expect(code).toContain(`import userApp from '${path.join(tmp, 'src', 'api.ts')}';`);
     expect(code).toContain(`.route('/', userApp)`);
 
@@ -238,11 +235,13 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('*', (c) => c.text('catch'));\n`
     );
+    const outputPath = path.join(tmp, '.vite', 'hono-preact', 'server-entry.tsx');
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      outputPath,
     });
     (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
       root: tmp,

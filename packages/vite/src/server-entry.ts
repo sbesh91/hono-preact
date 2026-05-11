@@ -155,34 +155,57 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
   }
 }
 
-export const VIRTUAL_SERVER_ENTRY_ID = 'virtual:hono-preact/server';
-const RESOLVED_ID = '\0' + VIRTUAL_SERVER_ENTRY_ID;
+// Project-relative path of the on-disk file the plugin writes during
+// configResolved. We use a relative path because @hono/vite-build prepends
+// `/` to the entry when constructing its `import.meta.glob([...])`, and
+// absolute paths produce a `//Users/...` double-slash that's brittle in the
+// Cloudflare Workers runtime. Project-relative keeps the resulting glob
+// pattern (`/node_modules/.vite/hono-preact/server-entry.tsx`) clean.
+//
+// We write to disk rather than register a virtual module because
+// @hono/vite-build resolves its entry via `import.meta.glob([entry])`, which
+// cannot match a `virtual:*` id. The Cloudflare Workers runtime then fails
+// with "Can't import modules from ['/virtual:...']" when it tries to load the
+// generated bundle.
+export const GENERATED_SERVER_ENTRY_RELATIVE =
+  'node_modules/.vite/hono-preact/server-entry.tsx';
+
+export function generatedServerEntryAbsPath(cwd: string = process.cwd()): string {
+  return path.resolve(cwd, GENERATED_SERVER_ENTRY_RELATIVE);
+}
 
 export interface ServerEntryPluginOptions {
   layout: string; // project-relative or absolute
   routes: string;
   api: string; // project-relative or absolute; absence treated as "no api"
+  outputPath: string; // absolute path to write the generated entry file
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
-  let layoutAbsPath = '';
-  let routesAbsPath = '';
   let apiAbsPath: string | undefined;
 
   return {
     name: 'hono-preact:server-entry',
     enforce: 'pre',
     configResolved(config) {
-      layoutAbsPath = path.isAbsolute(opts.layout)
+      const layoutAbsPath = path.isAbsolute(opts.layout)
         ? opts.layout
         : path.resolve(config.root, opts.layout);
-      routesAbsPath = path.isAbsolute(opts.routes)
+      const routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(config.root, opts.routes);
       const candidateApi = path.isAbsolute(opts.api)
         ? opts.api
         : path.resolve(config.root, opts.api);
       apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
+
+      const source = generateServerEntrySource({
+        layoutAbsPath,
+        routesAbsPath,
+        apiAbsPath,
+      });
+      fs.mkdirSync(path.dirname(opts.outputPath), { recursive: true });
+      fs.writeFileSync(opts.outputPath, source, 'utf8');
     },
     buildStart() {
       if (!apiAbsPath) return;
@@ -204,17 +227,6 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
           );
         }
       }
-    },
-    resolveId(id) {
-      if (id === VIRTUAL_SERVER_ENTRY_ID) return RESOLVED_ID;
-    },
-    load(id) {
-      if (id !== RESOLVED_ID) return;
-      return generateServerEntrySource({
-        layoutAbsPath,
-        routesAbsPath,
-        apiAbsPath,
-      });
     },
   };
 }
