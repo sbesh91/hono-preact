@@ -40,7 +40,10 @@ describe('actionsHandler', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: 1 });
     expect(createFn).toHaveBeenCalledWith(
-      expect.objectContaining({ req: expect.anything() }),
+      expect.objectContaining({
+        c: expect.objectContaining({ req: expect.anything() }),
+        signal: expect.any(AbortSignal),
+      }),
       { title: 'Dune' }
     );
   });
@@ -128,12 +131,11 @@ describe('actionsHandler', () => {
     expect((await res.json() as { error: string }).error).toContain('module');
   });
 
-  it('pipes ReadableStream return value as text/event-stream', async () => {
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
+  it('frames a ReadableStream return value as SSE', async () => {
+    const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('{"progress":50}\n'));
-        controller.enqueue(encoder.encode('{"progress":100}\n'));
+        controller.enqueue({ progress: 50 });
+        controller.enqueue({ progress: 100 });
         controller.close();
       },
     });
@@ -149,8 +151,8 @@ describe('actionsHandler', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     const body = await res.text();
-    expect(body).toContain('{"progress":50}');
-    expect(body).toContain('{"progress":100}');
+    expect(body).toContain('data: {"progress":50}');
+    expect(body).toContain('data: {"progress":100}');
   });
 });
 
@@ -427,5 +429,73 @@ describe('actionsHandler path-keyed routing', () => {
       payload: {},
     });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('actionsHandler: streaming', () => {
+  it('frames a generator action as SSE with event: result', async () => {
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverActions: {
+          go: async function* () {
+            yield { count: 1 };
+            yield { count: 2 };
+            return { imported: 2 };
+          },
+        },
+      },
+    });
+
+    const res = await post(app, { module: 'x', action: 'go', payload: {} });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    const body = await res.text();
+    expect(body).toContain('data: {"count":1}');
+    expect(body).toContain('data: {"count":2}');
+    expect(body).toContain('event: result\ndata: {"imported":2}');
+  });
+
+  it('frames thrown errors mid-generator as event: error', async () => {
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverActions: {
+          go: async function* () {
+            yield { count: 1 };
+            throw new Error('boom');
+          },
+        },
+      },
+    });
+
+    const res = await post(app, { module: 'x', action: 'go', payload: {} });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('data: {"count":1}');
+    expect(body).toContain('event: error');
+    expect(body).toContain('"message":"boom"');
+  });
+
+  it('passes ctx with c and signal to the action function', async () => {
+    let observed: { hasC: boolean; hasSignal: boolean } = { hasC: false, hasSignal: false };
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverActions: {
+          probe: async (ctx: { c: unknown; signal: AbortSignal }, _payload: unknown) => {
+            observed = {
+              hasC: typeof ctx.c === 'object' && ctx.c !== null,
+              hasSignal: ctx.signal instanceof AbortSignal,
+            };
+            return { ok: true };
+          },
+        },
+      },
+    });
+
+    await post(app, { module: 'x', action: 'probe', payload: {} });
+    expect(observed.hasC).toBe(true);
+    expect(observed.hasSignal).toBe(true);
   });
 });
