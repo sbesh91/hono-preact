@@ -10,3 +10,5 @@ export const LoaderDataContext = createContext<{
 export const GuardResultContext = createContext<GuardResult | null>(null);
 
 export const ActiveLoaderIdContext = createContext<symbol | null>(null);
+
+export const LoaderErrorContext = createContext<Error | null>(null);

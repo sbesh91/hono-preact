@@ -310,3 +310,25 @@ describe('v3 <Loader> stability', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('Loader: useError() on successful static load', () => {
+  it('returns null while data is rendered', async () => {
+    const ref = defineLoader(async () => ({ msg: 'hi' }));
+    let observed: Error | null | undefined = undefined;
+    let observedMsg: string | undefined = undefined;
+    function Child() {
+      observed = ref.useError();
+      observedMsg = ref.useData().msg;
+      return null;
+    }
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+    await waitFor(() => expect(observedMsg).toBe('hi'));
+    expect(observed).toBe(null);
+  });
+});

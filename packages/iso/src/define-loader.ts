@@ -1,7 +1,7 @@
 import { useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
-import { LoaderDataContext } from './internal/contexts.js';
+import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 
 export type LoaderCtx = {
   location: RouteHook;
@@ -18,6 +18,7 @@ export interface LoaderRef<T> {
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   useData(): T;
+  useError(): Error | null;
   invalidate(): void;
 }
 
@@ -95,6 +96,9 @@ export function defineLoader<T>(
         );
       }
       return ctx.data as T;
+    },
+    useError() {
+      return useContext(LoaderErrorContext);
     },
     invalidate() {
       cache.invalidate();
