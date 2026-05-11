@@ -83,11 +83,11 @@ describe('renderPage', () => {
     expect(html).toContain('<title>Fallback</title>');
   });
 
-  it('returns an empty title when neither useTitle nor defaultTitle is provided', async () => {
+  it('does not inject a <title> when neither useTitle nor defaultTitle is provided', async () => {
     const res = await makeApp(UntitledPage).request('http://localhost/');
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('<title></title>');
+    expect(html).not.toContain('<title>');
   });
 
   it('returns a redirect when GuardRedirect is thrown during render', async () => {
@@ -146,8 +146,22 @@ describe('renderPage', () => {
     expect(html).toContain('lang="fr-FR"');
   });
 
-  it('defaults lang to en-US when useLang is not called', async () => {
+  it('does not add a lang attribute when useLang is not called and the layout already provides <html>', async () => {
     const res = await makeApp(UntitledPage).request('http://localhost/');
+    const html = await res.text();
+    expect(html).not.toContain('lang=');
+  });
+
+  it('falls back to lang="en-US" when the rendered tree has no <html> wrapper', async () => {
+    function FragmentPage() {
+      return (
+        <>
+          <head></head>
+          <body><div>fragment</div></body>
+        </>
+      );
+    }
+    const res = await makeApp(FragmentPage).request('http://localhost/');
     const html = await res.text();
     expect(html).toContain('lang="en-US"');
   });

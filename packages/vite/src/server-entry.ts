@@ -20,12 +20,13 @@ export function generateServerEntrySource(
   const apiMount = apiAbsPath ? `  .route('/', userApp)\n` : '';
 
   // The generated source is loaded as a virtual module, which Vite/esbuild
-  // treats as plain JS by default. Use h() to construct the Layout vnode
-  // rather than JSX so the source compiles without a TSX loader hint.
+  // treats as plain JS by default. Use h() to construct vnodes rather than
+  // JSX so the source compiles without a TSX loader hint.
   return (
     `import { Hono } from 'hono';\n` +
     `import { h } from 'preact';\n` +
-    `import { env } from '@hono-preact/iso';\n` +
+    `import { LocationProvider } from 'preact-iso';\n` +
+    `import { Routes, env } from '@hono-preact/iso';\n` +
     `import {\n` +
     `  actionsHandler,\n` +
     `  loadersHandler,\n` +
@@ -45,7 +46,7 @@ export function generateServerEntrySource(
     `  .post('/__actions', actionsHandler(serverModules))\n` +
     apiMount +
     `  .use(location)\n` +
-    `  .get('*', (c) => renderPage(c, h(Layout, { context: c }), { defaultTitle: 'hono-preact' }));\n` +
+    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes })))));\n` +
     `\n` +
     `export default app;\n`
   );

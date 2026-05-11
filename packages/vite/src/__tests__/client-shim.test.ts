@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
 import { clientShimPlugin } from '../client-shim.js';
+import { VIRTUAL_CLIENT_ENTRY_ID } from '../client-entry.js';
 
 type ApplyFn = (
   _: unknown,
@@ -77,5 +78,23 @@ describe('clientShimPlugin', () => {
     const plugin = makePlugin('./src/client.tsx', '/repo');
     const result = plugin.transform('// other', '/repo/src/iso.tsx');
     expect(result).toBeUndefined();
+  });
+});
+
+describe('clientShimPlugin virtual client entry', () => {
+  it('injects the shim into the resolved virtual client entry id', () => {
+    const plugin = clientShimPlugin(VIRTUAL_CLIENT_ENTRY_ID);
+    (plugin as { configResolved?: (c: { root: string; isProduction: boolean }) => void }).configResolved?.({
+      root: '/proj',
+      isProduction: false,
+    });
+
+    const result = (plugin as {
+      transform?: (code: string, id: string) => { code: string } | undefined;
+    }).transform?.('console.log("client");', '\0virtual:hono-preact/client');
+
+    expect(result).toBeDefined();
+    expect(result?.code).toContain(`import 'virtual:hono-preact/client-shim';`);
+    expect(result?.code).toContain('console.log("client");');
   });
 });

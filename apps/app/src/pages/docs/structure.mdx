@@ -6,12 +6,9 @@ hono-preact/                    # monorepo root
 │   └── app/                    # the deployed application
 │       ├── src/
 │       │   ├── api.ts          # Optional: custom Hono routes mounted before SSR
-│       │   ├── client.tsx      # Browser entry: hydrates the Preact app
-│       │   ├── iso.tsx         # Mounts <Routes> with the route table
+│       │   ├── Layout.tsx      # HTML shell with <Head>, <ClientScript />, <ViewTransitions />
 │       │   ├── routes.ts       # The route table (defineRoutes manifest)
 │       │   ├── pages/          # View components, paired .server.ts files, MDX content
-│       │   ├── server/         # Server-only app code
-│       │   │   └── layout.tsx  # HTML shell rendered on every request
 │       │   ├── components/     # Shared UI components (incl. DocsRoute for MDX)
 │       │   └── styles/         # Global CSS
 │       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
@@ -39,38 +36,13 @@ export default defineRoutes([
 ]);
 ```
 
-### `apps/app/src/iso.tsx`
+### Client and server entries (generated)
 
-The shared component tree mounted by both the server (via `Layout`) and the client (via hydration). Now a thin consumer of `<Routes>` plus an `onRouteChange` callback for view transitions:
-
-```tsx
-import { Routes } from '@hono-preact/iso';
-import routes from './routes.js';
-
-function onRouteChange() {
-  document.startViewTransition(() => flushSync(() => {}));
-}
-
-export const Base = () => <Routes routes={routes} onRouteChange={onRouteChange} />;
-```
-
-There is no manual `<Router>` or `<Route>` JSX in user code; `<Routes>` instantiates them from the manifest.
-
-### Server entry (generated)
-
-The framework generates the Hono application as a virtual module (`virtual:hono-preact/server`) from your `routes.ts` and `Layout.tsx`. It wires the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler automatically. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
-
-### `apps/app/src/client.tsx`
-
-The browser entry point. Picks up the server-rendered HTML and hydrates it in place. Runs only in the browser. The framework's vite plugin auto-injects a `process` shim before the entry's first import, so user code does not need to author one.
-
-```ts
-hydrate(<App />, document.getElementById('app'));
-```
+The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
 
 ### `apps/app/src/Layout.tsx`
 
-Renders the full HTML shell: `<head>`, `<body>`, the `#app` mount point, and the `<script>` tag that loads the client bundle. Default-exports a component the framework's generated server entry renders for the catch-all route and wraps in `<!doctype html>`.
+Renders the HTML shell. Uses `<Head>`, `<ClientScript />`, and `<ViewTransitions />` from `hono-preact` to declare the document title/meta, inject the client bundle script tag, and opt into View Transitions. Default-exports a component the framework's generated server entry renders for the catch-all route; the framework emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the user's `</head>`.
 
 ### `apps/app/src/pages/`
 
