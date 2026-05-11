@@ -3,9 +3,15 @@ import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext } from './internal/contexts.js';
 
-export type LoaderCtx = { location: RouteHook };
+export type LoaderCtx = {
+  location: RouteHook;
+  signal: AbortSignal;
+};
 
-export type Loader<T> = (ctx: LoaderCtx) => Promise<T>;
+export type Loader<T> =
+  | ((ctx: LoaderCtx) => Promise<T>)
+  | ((ctx: LoaderCtx) => Promise<ReadableStream<T>>)
+  | ((ctx: LoaderCtx) => AsyncGenerator<T, void, unknown>);
 
 export interface LoaderRef<T> {
   readonly __id: symbol;

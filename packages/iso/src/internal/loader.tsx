@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
-import { useCallback, useId, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useId, useRef, useState } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { ReloadContext } from '../reload-context.js';
 import { getPreloadedData } from './preload.js';
@@ -62,6 +62,23 @@ function LoaderHost<T>({
   const locationRef = useRef(location);
   locationRef.current = location;
 
+  const abortRef = useRef<AbortController | null>(null);
+
+  function newAbortSignal(): AbortSignal {
+    // Abort the previous controller (cancels any in-flight loader),
+    // then allocate a fresh one whose signal is passed to the new fn call.
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    return abortRef.current.signal;
+  }
+
+  useEffect(
+    () => () => {
+      if (abortRef.current) abortRef.current.abort();
+    },
+    []
+  );
+
   // True while either the initial Suspense fetch or an explicit reload is in
   // flight. Tracked via a ref so reload() can read it without recapturing on
   // every state change, and so the wrapPromise branch below can flip it
@@ -74,8 +91,8 @@ function LoaderHost<T>({
     inFlightRef.current = true;
     setReloading(true);
     setLoadError(null);
-    fnRef
-      .current({ location: locationRef.current })
+    // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
+    (fnRef.current({ location: locationRef.current, signal: newAbortSignal() }) as Promise<T>)
       .then((result) => {
         if (isBrowser()) loaderRef.cache.set(result);
         setOverrideData(result);
@@ -142,9 +159,9 @@ function LoaderHost<T>({
           runReloadRef.current();
         }
       };
+      // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
       readerRef.current = wrapPromise(
-        loaderRef
-          .fn({ location })
+        (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<T>)
           .then((r) => {
             if (isBrowser()) loaderRef.cache.set(r);
             settle();

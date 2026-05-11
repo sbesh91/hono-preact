@@ -269,7 +269,7 @@ describe('v3 <Loader> stability', () => {
   });
 
   it('refetches when searchParams change even though path is stable', async () => {
-    const fn = vi.fn(({ location }: { location: RouteHook }) =>
+    const fn = vi.fn(({ location }: { location: RouteHook; signal: AbortSignal }) =>
       Promise.resolve({ q: location.searchParams.q ?? '' })
     );
     const ref = defineLoader<{ q: string }>(fn, { __moduleKey: 'search-q-test' });

@@ -42,7 +42,8 @@ export async function prefetch<T>(
 ): Promise<T> {
   const location = opts.location ?? buildLocation({ url: opts.url, route: opts.route });
   const cache = opts.cache ?? ref.cache;
-  const result = await ref.fn({ location });
+  // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
+  const result = await (ref.fn({ location, signal: new AbortController().signal }) as Promise<T>);
   if (isBrowser()) cache?.set(result);
   return result;
 }

@@ -77,10 +77,11 @@ export function createCache<T>(): LoaderCache<T> {
     set: (value) => write(value),
     has: () => read() !== null,
     wrap(loader) {
+      // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
       return async (props) => {
         const existing = read();
         if (existing !== null) return existing;
-        const result = await loader(props);
+        const result = await (loader(props) as Promise<T>);
         write(result);
         return result;
       };
