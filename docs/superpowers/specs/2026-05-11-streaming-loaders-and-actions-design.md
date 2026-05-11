@@ -278,6 +278,22 @@ From `docs/design-concerns-2026-04-25.md`:
 
 - **#5: loader location validation.** `packages/server/src/loaders-handler.ts:65-67` only checks `module`. Add a shape check for `location` (must be an object with `path: string`, `pathParams: Record<string, string>`, `searchParams: Record<string, string>`); default missing fields to safe empty shapes. The change is small and benefits naturally from the surrounding streaming-handler rewrite.
 
+- **#6: HMR cache invalidation for `.server.ts` edits.** Today `loaders-handler.ts:38` and `actions-handler.ts:55` resolve the route-table glob to a module map once per handler closure, then cache it forever. In `vite dev`, this means edits to a `.server.ts` file are invisible until the dev server restarts.
+
+  Fix: in dev mode, skip the cache and re-resolve the module map on each request. The resolution is a small `for...of` over the route table's `serverImports` (already lazy thunks); Vite's underlying module graph already caches the resolved module bodies, so re-resolving is a dict lookup plus N thunk invocations. Concretely:
+
+  ```ts
+  // handler factory in dev:
+  return async (c) => {
+    const loadersMap = import.meta.env.DEV
+      ? await buildLoadersMap(glob)
+      : await cachedLoadersMapPromise;
+    // ...
+  };
+  ```
+
+  `import.meta.env.DEV` is Vite-injected at build time; in prod bundles the dev branch is dead-code-eliminated, so prod keeps the existing closure cache (no behavior change in prod, no runtime check overhead). Same pattern for the actions handler. Symmetric across loaders and actions.
+
 Items already cleared (verify and note in the spec):
 
 - **#1: `<Form>` streaming.** `<Form>` no longer fetches itself; it delegates to the `mutate` passed in (`packages/iso/src/form.tsx:23`). Streaming is automatic when `mutate` comes from `useAction`. No work needed.
@@ -301,14 +317,13 @@ These are explicitly *not* part of this spec, even when adjacent:
 - **Nested arbitrary Preact Suspense streaming.** The HTML-flush protocol covers loader subtrees only. Non-loader Suspense boundaries (e.g., user-authored `<Suspense>` wrapping a lazy component) are not part of the streaming protocol; they wait synchronously during SSR. Adding general Suspense streaming is a v0.2 design.
 - **Retry-on-error UI primitives.** Users wire their own retry logic with `useError()` + `useReload().reload`. A framework-level `useRetry({ backoff })` is post-v0.1.
 - **Resume on disconnect / Last-Event-ID.** SSE supports it; we don't expose it. A reconnecting loader is a userland pattern for now.
-- **HMR cache invalidation for `.server.ts` edits** (punch list #6). Independent concern; the existing closure-lifetime cache stays as-is.
 - **Multi-channel events on a single response** (e.g., `event: progress` alongside `event: data`). The wire format supports it; no user-facing primitive exposes it in v0.1.
 
 ## Testing surface
 
 The spec implies new tests in:
 
-- `packages/server/src/__tests__/loaders-handler.test.ts`: generator handling, ReadableStream<T> handling, SSE framing of yields, `event: result` for actions, `event: error` framing, location validation.
+- `packages/server/src/__tests__/loaders-handler.test.ts`: generator handling, ReadableStream<T> handling, SSE framing of yields, `event: result` for actions, `event: error` framing, location validation, dev-mode cache re-resolution.
 - `packages/iso/src/__tests__/define-loader.test.ts`: generator runtime detection, last-good snapshot on post-first-chunk error, `useError()` semantics.
 - `packages/iso/src/__tests__/action.test.tsx`: typed `onChunk`, `data`/`onSuccess` from generator return, error propagation, abort signal.
 - `packages/iso/src/internal/__tests__/loader.test.tsx`: streaming subscription, SSR-queued chunks draining, last-good behavior across renders.
@@ -390,8 +405,8 @@ The framework docs site (`apps/app/src/pages/docs/`) gets one new page, `streami
 This spec is implementation-ready. The plan that follows it (separate document) breaks it into:
 
 1. SSE primitives (`packages/server/src/sse.ts` encoder + client decoder), with unit tests.
-2. `loadersHandler` accepts generator / `ReadableStream<T>` returns, emits SSE, validates `location`.
-3. `actionsHandler` accepts generator / `ReadableStream<TChunk>` returns, emits SSE with `event: result`.
+2. `loadersHandler` accepts generator / `ReadableStream<T>` returns, emits SSE, validates `location`, skips cache in dev.
+3. `actionsHandler` accepts generator / `ReadableStream<TChunk>` returns, emits SSE with `event: result`, skips cache in dev.
 4. Client-side `useAction` typed `onChunk` + `TResult` from generator return.
 5. Client-side loader subscription: `useError()`, last-good-on-error, `useData()` re-renders per chunk.
 6. SSR streaming: HTML response stays open, `__HP_STREAM__` registry, post-hydration drainage.
