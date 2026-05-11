@@ -2,29 +2,39 @@ import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './reload-context.js';
 import type { LoaderRef } from './define-loader.js';
 
-export type ActionStub<TPayload, TResult> = {
+export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
   readonly __action: string;
-  readonly __phantom?: readonly [TPayload, TResult];
+  readonly __phantom?: readonly [TPayload, TResult, TChunk];
   useAction<TSnapshot = unknown>(
-    options?: UseActionOptions<TPayload, TResult, TSnapshot>
+    options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
   ): UseActionResult<TPayload, TResult>;
 };
 
-export function defineAction<TPayload, TResult>(
-  fn: (ctx: unknown, payload: TPayload) => Promise<TResult>
-): ActionStub<TPayload, TResult> {
+export type ActionCtx = {
+  c: unknown;
+  signal: AbortSignal;
+};
+
+export type ActionFn<TPayload, TResult, TChunk = never> =
+  | ((ctx: ActionCtx, payload: TPayload) => Promise<TResult>)
+  | ((ctx: ActionCtx, payload: TPayload) => Promise<ReadableStream<TChunk>>)
+  | ((ctx: ActionCtx, payload: TPayload) => AsyncGenerator<TChunk, TResult, unknown>);
+
+export function defineAction<TPayload, TResult, TChunk = never>(
+  fn: ActionFn<TPayload, TResult, TChunk>
+): ActionStub<TPayload, TResult, TChunk> {
   // Runtime no-op: returns fn as-is. actionsHandler casts it back to a function.
   // The ActionStub type is enforced only by TypeScript and the Vite plugin.
-  return fn as unknown as ActionStub<TPayload, TResult>;
+  return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 
-export type UseActionOptions<TPayload, TResult, TSnapshot = unknown> = {
+export type UseActionOptions<TPayload, TResult, TChunk = never, TSnapshot = unknown> = {
   invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
   onMutate?: (payload: TPayload) => TSnapshot;
+  onChunk?: (chunk: TChunk) => void;
   onError?: (err: Error, snapshot: TSnapshot) => void;
   onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
-  onChunk?: (chunk: string) => void;
 };
 
 export type UseActionResult<TPayload, TResult> = {
@@ -40,9 +50,9 @@ function hasFileValues(payload: unknown): boolean {
   return Object.values(payload as Record<string, unknown>).some((v) => v instanceof File);
 }
 
-export function useAction<TPayload, TResult, TSnapshot = unknown>(
-  stub: ActionStub<TPayload, TResult>,
-  options?: UseActionOptions<TPayload, TResult, TSnapshot>
+export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown>(
+  stub: ActionStub<TPayload, TResult, TChunk>,
+  options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
 ): UseActionResult<TPayload, TResult> {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -101,22 +111,43 @@ export function useAction<TPayload, TResult, TSnapshot = unknown>(
       }
 
       const contentType = response.headers.get('Content-Type') ?? '';
-      if (contentType.includes('text/event-stream')) {
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            currentOptions?.onChunk?.(chunk);
+      if (contentType.includes('text/event-stream') && response.body) {
+        const { readSSE } = await import('./internal/sse-decoder.js');
+        let resultValue: TResult | undefined;
+        let streamError: Error | null = null;
+        for await (const ev of readSSE(response.body)) {
+          if (ev.event === 'message') {
+            try {
+              currentOptions?.onChunk?.(JSON.parse(ev.data) as TChunk);
+            } catch {
+              // malformed JSON in stream: skip
+            }
+          } else if (ev.event === 'result') {
+            try {
+              resultValue = JSON.parse(ev.data) as TResult;
+            } catch {
+              // malformed
+            }
+          } else if (ev.event === 'error') {
+            try {
+              const parsed = JSON.parse(ev.data) as { message?: string; name?: string };
+              streamError = new Error(parsed.message ?? 'Streamed error');
+              if (parsed.name) streamError.name = parsed.name;
+            } catch {
+              streamError = new Error('Streamed error');
+            }
           }
-          const tail = decoder.decode();
-          if (tail) currentOptions?.onChunk?.(tail);
-        } finally {
-          reader.releaseLock();
         }
-        currentOptions?.onSuccess?.(undefined as unknown as TResult, snapshot as TSnapshot);
+
+        if (streamError) {
+          throw streamError;
+        }
+        if (resultValue !== undefined) {
+          setData(resultValue);
+          currentOptions?.onSuccess?.(resultValue, snapshot as TSnapshot);
+        } else {
+          currentOptions?.onSuccess?.(undefined as unknown as TResult, snapshot as TSnapshot);
+        }
       } else {
         const result = (await response.json()) as TResult;
         setData(result);
