@@ -20,7 +20,7 @@ describe('generateServerEntrySource', () => {
 
     // Framework imports
     expect(src).toContain(`import { Hono } from 'hono';`);
-    expect(src).toContain(`import { env } from '@hono-preact/iso';`);
+    expect(src).toContain(`import { Routes, env } from '@hono-preact/iso';`);
     expect(src).toContain(
       `import {\n  actionsHandler,\n  loadersHandler,\n  location,\n  renderPage,\n  routeServerModules,\n} from '@hono-preact/server';`
     );
@@ -28,6 +28,7 @@ describe('generateServerEntrySource', () => {
     // User imports (absolute paths)
     expect(src).toContain(`import Layout from '/proj/src/Layout.tsx';`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
+    expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
 
     // No api import when not provided
     expect(src).not.toContain('api.ts');
@@ -45,15 +46,18 @@ describe('generateServerEntrySource', () => {
     expect(actionsIdx).toBeGreaterThan(loadersIdx);
     expect(useLocationIdx).toBeGreaterThan(actionsIdx);
     expect(catchallIdx).toBeGreaterThan(useLocationIdx);
+    expect(src).toContain(
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))))`
+    );
+    // defaultTitle is no longer threaded through renderPage by the framework.
+    expect(src).not.toContain('defaultTitle');
 
     // Default export
     expect(src.trimEnd().endsWith('export default app;')).toBe(true);
 
     // Layout vnode constructed with h() (not JSX) so the virtual module
-    // compiles without a TSX loader hint. defaultTitle is wired through.
+    // compiles without a TSX loader hint.
     expect(src).toContain(`import { h } from 'preact';`);
-    expect(src).toContain(`h(Layout, { context: c })`);
-    expect(src).toContain(`{ defaultTitle: 'hono-preact' }`);
     expect(src).not.toContain('<Layout');
   });
 
