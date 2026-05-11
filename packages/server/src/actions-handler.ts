@@ -2,9 +2,9 @@ import type { MiddlewareHandler } from 'hono';
 import { ActionGuardError, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
 import { runRequestScope } from '@hono-preact/iso/internal';
 import {
-  sseFromGenerator,
+  sseGeneratorResponse,
+  sseReadableStreamResponse,
   isAsyncGenerator,
-  readableStreamToSse,
 } from './sse.js';
 
 type GlobModule = {
@@ -154,14 +154,10 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
     }
 
     if (isAsyncGenerator(result)) {
-      return new Response(sseFromGenerator(result, { emitResult: true, signal }), {
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
+      return sseGeneratorResponse(c, result, { emitResult: true });
     }
     if (result instanceof ReadableStream) {
-      return new Response(readableStreamToSse(result as ReadableStream<unknown>), {
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
+      return sseReadableStreamResponse(c, result as ReadableStream<unknown>);
     }
     return c.json(result);
   };

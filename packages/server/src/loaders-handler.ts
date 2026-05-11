@@ -1,9 +1,9 @@
 import type { MiddlewareHandler } from 'hono';
 import { runRequestScope } from '@hono-preact/iso/internal';
 import {
-  sseFromGenerator,
+  sseGeneratorResponse,
+  sseReadableStreamResponse,
   isAsyncGenerator,
-  readableStreamToSse,
 } from './sse.js';
 
 type GlobModule = {
@@ -114,14 +114,10 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       );
 
       if (isAsyncGenerator(result)) {
-        return new Response(sseFromGenerator(result, { emitResult: false, signal }), {
-          headers: { 'Content-Type': 'text/event-stream' },
-        });
+        return sseGeneratorResponse(c, result, { emitResult: false });
       }
       if (result instanceof ReadableStream) {
-        return new Response(readableStreamToSse(result as ReadableStream<unknown>), {
-          headers: { 'Content-Type': 'text/event-stream' },
-        });
+        return sseReadableStreamResponse(c, result as ReadableStream<unknown>);
       }
       return c.json(result);
     } catch (err) {
