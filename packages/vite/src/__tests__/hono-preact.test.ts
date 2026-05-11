@@ -31,7 +31,7 @@ describe('honoPreact rollupOptions merge', () => {
     const config = getClientConfig(plugins);
     expect(config).toBeTruthy();
     const rollup = (config as { build: { rollupOptions: { input: string[]; output: { entryFileNames: string } } } }).build.rollupOptions;
-    expect(rollup.input).toEqual(['./src/client.tsx']);
+    expect(rollup.input).toEqual(['virtual:hono-preact/client']);
     expect(rollup.output.entryFileNames).toBe('static/client.js');
   });
 
@@ -130,24 +130,25 @@ describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in the documented pipeline order', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
     const names = plugins.map((p) => p.name);
-    // The first five entries are the framework plugins; the remaining are
+    // The first six entries are the framework plugins; the remaining are
     // upstream plugin instances (vite-build, vite-dev-server) whose names
     // we don't lock to keep this test resilient to upstream renames.
-    expect(names.slice(0, 5)).toEqual([
+    expect(names.slice(0, 6)).toEqual([
       'hono-preact:config',
       'hono-preact:client-shim',
+      'hono-preact:client-entry',
       'server-loader-validation',
       'module-key',
       'server-only',
     ]);
   });
 
-  it('emits at least seven framework-owned plugins when entry is provided', () => {
-    // 7 framework plugins (config, client-shim, validation, module-key,
-    // server-only, build, dev-server) plus an unknown number of preact
-    // preset plugins.
+  it('emits at least eight framework-owned plugins when entry is provided', () => {
+    // 8 framework plugins (config, client-shim, client-entry, validation,
+    // module-key, server-only, build, dev-server) plus an unknown number of
+    // preact preset plugins.
     const plugins = honoPreact({ entry: './src/server.tsx' });
-    expect(plugins.length).toBeGreaterThanOrEqual(7);
+    expect(plugins.length).toBeGreaterThanOrEqual(8);
   });
 
   it('adds exactly one more framework-owned plugin in the zero-arg path (server-entry)', () => {
@@ -159,10 +160,12 @@ describe('honoPreact plugin assembly', () => {
   it('emits the documented pipeline order in the zero-arg path', () => {
     const plugins = honoPreact() as NamedPlugin[];
     const names = plugins.map((p) => p.name);
-    // server-entry slots in after config and client-shim, before validation/module-key/server-only.
-    expect(names.slice(0, 6)).toEqual([
+    // client-entry slots in after client-shim; server-entry slots in after
+    // client-entry, before validation/module-key/server-only.
+    expect(names.slice(0, 7)).toEqual([
       'hono-preact:config',
       'hono-preact:client-shim',
+      'hono-preact:client-entry',
       'hono-preact:server-entry',
       'server-loader-validation',
       'module-key',
@@ -172,7 +175,7 @@ describe('honoPreact plugin assembly', () => {
 
   it('gates the build plugin to non-client build commands', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
-    const buildPlugin = plugins[5];
+    const buildPlugin = plugins[6];
     expect(typeof buildPlugin.apply).toBe('function');
     const apply = buildPlugin.apply as (
       _: unknown,
@@ -185,7 +188,7 @@ describe('honoPreact plugin assembly', () => {
 
   it('gates the dev-server plugin to serve only', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
-    const devPlugin = plugins[6];
+    const devPlugin = plugins[7];
     expect(devPlugin.apply).toBe('serve');
   });
 });
@@ -225,5 +228,31 @@ describe('honoPreact preact() auto-inclusion', () => {
     // @preact/preset-vite returns multiple named plugins; the JSX-transform
     // plugin is the most stable name to assert on.
     expect(names).toContain('vite:preact-jsx');
+  });
+});
+
+describe('honoPreact client-entry wiring', () => {
+  type NamedPlugin = { name?: string };
+
+  it('includes the client-entry plugin', () => {
+    const plugins = honoPreact() as NamedPlugin[];
+    const names = plugins.map((p) => p.name);
+    expect(names).toContain('hono-preact:client-entry');
+  });
+
+  it('defaults the client build input to the virtual client entry', () => {
+    const plugins = honoPreact();
+    const config = getClientConfig(plugins) as {
+      build: { rollupOptions: { input: string[] } };
+    };
+    expect(config.build.rollupOptions.input).toEqual(['virtual:hono-preact/client']);
+  });
+
+  it('honors a user-provided clientEntry override', () => {
+    const plugins = honoPreact({ clientEntry: './src/custom-client.tsx' });
+    const config = getClientConfig(plugins) as {
+      build: { rollupOptions: { input: string[] } };
+    };
+    expect(config.build.rollupOptions.input).toEqual(['./src/custom-client.tsx']);
   });
 });

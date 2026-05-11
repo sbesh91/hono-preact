@@ -7,3 +7,4 @@ export {
   generatedServerEntryAbsPath,
   serverEntryPlugin,
 } from './server-entry.js';
+export { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
