@@ -2,9 +2,10 @@
 import { describe, it, expect } from 'vitest';
 import type { ComponentType, VNode } from 'preact';
 import { h } from 'preact';
-import { render } from '@testing-library/preact';
+import { useState } from 'preact/hooks';
+import { fireEvent, render, waitFor } from '@testing-library/preact';
 import { LocationProvider, Router } from 'preact-iso';
-import { defineRoutes, Routes } from '../define-routes.js';
+import { defineRoutes, Routes, type LayoutProps, type ViewProps } from '../define-routes.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
 const noopLayout = () => Promise.resolve({ default: ({ children }: { children: unknown }) => children as never });
@@ -237,6 +238,17 @@ describe('flatten — layout groups', () => {
     expect(m.flat.map((f) => f.path)).toEqual(['/movies', '/movies/*']);
     // Same component reference for both:
     expect(m.flat[0].component).toBe(m.flat[1].component);
+    // And the same VNode key, so preact's diff treats the bare and wildcard
+    // registrations as the same child when navigation crosses between them.
+    expect(m.flat[0].key).toBe(m.flat[1].key);
+  });
+
+  it('assigns distinct keys to FlatRoute entries with distinct components', () => {
+    const m = defineRoutes([
+      { path: '/', view: noopView },
+      { path: '/about', view: () => Promise.resolve({ default: () => null }) },
+    ]);
+    expect(m.flat[0].key).not.toBe(m.flat[1].key);
   });
 
   it('mixes top-level leaves and layout groups in source order', () => {
@@ -318,5 +330,75 @@ describe('<Routes>', () => {
     }) => VNode)({ routes: m });
     expect(result.type).toBe(Router);
     expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBeUndefined();
+  });
+});
+
+describe('layout integration: state survives intra-group navigation', () => {
+  it('preserves layout-owned useState across /movies <-> /movies/:id', async () => {
+    let layoutMounts = 0;
+    const Layout: ComponentType<LayoutProps> = ({ children }) => {
+      const [filter, setFilter] = useState(() => {
+        layoutMounts++;
+        return '';
+      });
+      return h(
+        'div',
+        null,
+        h('input', {
+          'data-testid': 'filter',
+          value: filter,
+          onInput: (e: Event) =>
+            setFilter((e.currentTarget as HTMLInputElement).value),
+        }),
+        children as never
+      );
+    };
+
+    const IndexView: ComponentType<ViewProps> = () =>
+      h('a', { href: '/movies/123', 'data-testid': 'to-detail' }, 'detail');
+    const DetailView: ComponentType<ViewProps> = () =>
+      h('a', { href: '/movies', 'data-testid': 'to-index' }, 'back');
+
+    const manifest = defineRoutes([
+      {
+        path: '/movies',
+        layout: () => Promise.resolve({ default: Layout }),
+        children: [
+          { path: '', view: () => Promise.resolve({ default: IndexView }) },
+          { path: ':id', view: () => Promise.resolve({ default: DetailView }) },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', '/movies');
+    const { findByTestId } = render(
+      h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode
+    );
+
+    const toDetail = (await findByTestId('to-detail')) as HTMLAnchorElement;
+    const input = (await findByTestId('filter')) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'hello' } });
+    await waitFor(() => {
+      expect(
+        (document.querySelector('[data-testid=filter]') as HTMLInputElement).value
+      ).toBe('hello');
+    });
+
+    expect(layoutMounts).toBe(1);
+
+    fireEvent.click(toDetail);
+    await findByTestId('to-index');
+    expect(layoutMounts).toBe(1);
+    expect(
+      ((await findByTestId('filter')) as HTMLInputElement).value
+    ).toBe('hello');
+
+    const toIndex = (await findByTestId('to-index')) as HTMLAnchorElement;
+    fireEvent.click(toIndex);
+    await findByTestId('to-detail');
+    expect(layoutMounts).toBe(1);
+    expect(
+      ((await findByTestId('filter')) as HTMLInputElement).value
+    ).toBe('hello');
   });
 });

@@ -21,6 +21,12 @@ export type RouteDef = {
 export type FlatRoute = {
   path: string;
   component: ComponentType<ViewProps>;
+  // Stable per-component key. Two FlatRoute entries that share the same
+  // `component` (e.g. a layout group registered at both `/movies` and
+  // `/movies/*`) share this key, so preact's diff of preact-iso's matched
+  // child does not unmount the shared subtree when the URL crosses between
+  // them. See the `Routes` component below for why this matters.
+  key: string;
 };
 
 export type RoutesManifest = {
@@ -208,8 +214,17 @@ function buildInnerRoutes(
 function flattenTree(
   routes: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
+  keyCache: Map<ComponentType<ViewProps>, string>,
   parentPath = ''
 ): FlatRoute[] {
+  const keyFor = (c: ComponentType<ViewProps>): string => {
+    let k = keyCache.get(c);
+    if (!k) {
+      k = `r${keyCache.size}`;
+      keyCache.set(c, k);
+    }
+    return k;
+  };
   const out: FlatRoute[] = [];
   for (const r of routes) {
     const here =
@@ -218,24 +233,17 @@ function flattenTree(
         : parentPath + (r.path === '' ? '' : '/' + r.path);
 
     if (r.view) {
-      out.push({
-        path: here,
-        component: getOrCreateLazyView(r.view, viewCache),
-      });
+      const component = getOrCreateLazyView(r.view, viewCache);
+      out.push({ path: here, component, key: keyFor(component) });
     } else if (r.layout && r.children) {
       const Group = makeLayoutGroupComponent(r.layout, r.children, viewCache);
-      out.push({
-        path: here,
-        component: Group,
-      });
-      out.push({
-        path: here + '/*',
-        component: Group,
-      });
+      const key = keyFor(Group);
+      out.push({ path: here, component: Group, key });
+      out.push({ path: here + '/*', component: Group, key });
     } else if (r.children) {
       // Path-grouping at top level: recurse with the prefix.
       const childParent = here === '/' ? '' : here;
-      out.push(...flattenTree(r.children, viewCache, childParent));
+      out.push(...flattenTree(r.children, viewCache, keyCache, childParent));
     }
   }
   return out;
@@ -244,9 +252,10 @@ function flattenTree(
 export function defineRoutes(tree: RouteDef[]): RoutesManifest {
   validate(tree);
   const viewCache = new Map<unknown, ComponentType<ViewProps>>();
+  const keyCache = new Map<ComponentType<ViewProps>, string>();
   return {
     tree,
-    flat: flattenTree(tree, viewCache),
+    flat: flattenTree(tree, viewCache, keyCache),
     serverImports: collectServerImports(tree),
   };
 }
@@ -262,7 +271,7 @@ export const Routes: ComponentType<RoutesProps> = ({ routes, onRouteChange }) =>
     onRouteChange ? { onRouteChange } : null,
     ...routes.flat.map((r) =>
       h(Route, {
-        key: r.path,
+        key: r.key,
         path: r.path,
         component: asRouteComponent(r.component),
       })
