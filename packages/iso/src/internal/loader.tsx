@@ -6,7 +6,7 @@ import { isBrowser } from '../is-browser.js';
 import { ReloadContext } from '../reload-context.js';
 import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
-import { LoaderDataContext, LoaderIdContext } from './contexts.js';
+import { ActiveLoaderIdContext, LoaderDataContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
 
 type LoaderProps<T> = {
@@ -54,7 +54,8 @@ function LoaderHost<T>({
 }: LoaderHostProps<T>) {
   const [reloading, setReloading] = useState(false);
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
-  const [loadError, setLoadError] = useState<Error | null>(null);
+  // loadError is unused now but will be wired to LoaderErrorContext in Task 10.
+  const [_loadError, setLoadError] = useState<Error | null>(null);
 
   const fnRef = useRef(loaderRef.fn);
   fnRef.current = loaderRef.fn;
@@ -158,23 +159,18 @@ function LoaderHost<T>({
   }
 
   return (
-    <ReloadContext.Provider
-      value={{
-        reload,
-        reloading,
-        error: loadError,
-        loaderId: loaderRef.__id,
-      }}
-    >
-      <Suspense fallback={fallback}>
-        <DataReader
-          reader={readerRef.current}
-          overrideData={overrideData}
-        >
-          {children}
-        </DataReader>
-      </Suspense>
-    </ReloadContext.Provider>
+    <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
+      <ReloadContext.Provider value={{ reload, reloading }}>
+        <Suspense fallback={fallback}>
+          <DataReader
+            reader={readerRef.current}
+            overrideData={overrideData}
+          >
+            {children}
+          </DataReader>
+        </Suspense>
+      </ReloadContext.Provider>
+    </ActiveLoaderIdContext.Provider>
   );
 }
 
