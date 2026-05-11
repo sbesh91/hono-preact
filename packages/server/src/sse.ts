@@ -63,3 +63,38 @@ export function sseFromGenerator(
     },
   });
 }
+
+export function isAsyncGenerator(
+  value: unknown
+): value is AsyncGenerator<unknown, unknown, unknown> {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function' &&
+    typeof (value as { next?: unknown }).next === 'function'
+  );
+}
+
+export function readableStreamToSse(
+  stream: ReadableStream<unknown>
+): ReadableStream<Uint8Array> {
+  const reader = stream.getReader();
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(sseEncode({ data: JSON.stringify(value) }));
+        }
+      } catch (err) {
+        controller.enqueue(sseEncodeError(err));
+      } finally {
+        controller.close();
+      }
+    },
+    cancel() {
+      reader.cancel().catch(() => { /* swallow */ });
+    },
+  });
+}
