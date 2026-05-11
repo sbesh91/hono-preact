@@ -88,8 +88,8 @@ describe('Form', () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('chunk-1\n'));
-        controller.enqueue(encoder.encode('chunk-2\n'));
+        controller.enqueue(encoder.encode('data: {"text":"chunk-1"}\n\n'));
+        controller.enqueue(encoder.encode('data: {"text":"chunk-2"}\n\n'));
         controller.close();
       },
     });
@@ -125,7 +125,7 @@ describe('Form', () => {
     });
 
     await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(2));
-    expect(onChunk).toHaveBeenNthCalledWith(1, 'chunk-1\n');
-    expect(onChunk).toHaveBeenNthCalledWith(2, 'chunk-2\n');
+    expect(onChunk).toHaveBeenNthCalledWith(1, { text: 'chunk-1' });
+    expect(onChunk).toHaveBeenNthCalledWith(2, { text: 'chunk-2' });
   });
 });

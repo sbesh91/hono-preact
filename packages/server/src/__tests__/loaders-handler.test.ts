@@ -29,7 +29,9 @@ describe('loadersHandler', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ movies: [] });
-    expect(loaderFn).toHaveBeenCalledWith({ location: loc });
+    expect(loaderFn).toHaveBeenCalledWith(
+      expect.objectContaining({ location: loc, signal: expect.any(AbortSignal) })
+    );
   });
 
   it('returns 404 when the module is not found', async () => {
@@ -100,7 +102,9 @@ describe('loadersHandler', () => {
     };
     const res = await post(app, { module: 'pages/movies', location: locWithParams });
     expect(res.status).toBe(200);
-    expect(loaderFn).toHaveBeenCalledWith({ location: locWithParams });
+    expect(loaderFn).toHaveBeenCalledWith(
+      expect.objectContaining({ location: locWithParams, signal: expect.any(AbortSignal) })
+    );
     const callArg = loaderFn.mock.calls[0][0] as { location: { searchParams: Record<string, string> } };
     expect(callArg.location.searchParams).toEqual({ genre: 'action' });
   });
@@ -142,5 +146,68 @@ describe('loadersHandler path-keyed routing', () => {
     });
     const res = await post(app, { module: 'no-key', location: loc });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('loadersHandler: streaming', () => {
+  it('frames a generator-returning loader as SSE', async () => {
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        default: async function* () {
+          yield { tick: 1 };
+          yield { tick: 2 };
+        },
+      },
+    });
+
+    const res = await post(app, {
+      module: 'x',
+      location: { path: '/x', pathParams: {}, searchParams: {} },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    const body = await res.text();
+    expect(body).toContain('data: {"tick":1}');
+    expect(body).toContain('data: {"tick":2}');
+  });
+
+  it('frames a ReadableStream<T>-returning loader as SSE', async () => {
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        default: async () =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue({ tick: 1 });
+              controller.close();
+            },
+          }),
+      },
+    });
+
+    const res = await post(app, {
+      module: 'x',
+      location: { path: '/x', pathParams: {}, searchParams: {} },
+    });
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    const body = await res.text();
+    expect(body).toContain('data: {"tick":1}');
+  });
+});
+
+describe('loadersHandler: location validation', () => {
+  it('rejects missing location', async () => {
+    const app = makeApp({ './pages/x.server.ts': { __moduleKey: 'x', default: async () => ({}) } });
+    const res = await post(app, { module: 'x' });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/location/);
+  });
+
+  it('rejects location missing path or pathParams', async () => {
+    const app = makeApp({ './pages/x.server.ts': { __moduleKey: 'x', default: async () => ({}) } });
+    const res = await post(app, { module: 'x', location: { searchParams: {} } });
+    expect(res.status).toBe(400);
   });
 });

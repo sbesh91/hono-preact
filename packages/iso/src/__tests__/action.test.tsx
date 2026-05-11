@@ -10,7 +10,7 @@ describe('defineAction', () => {
   });
 });
 
-import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
+import { render, screen, act, cleanup, waitFor, renderHook, fireEvent } from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
 import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
@@ -390,12 +390,12 @@ describe('useAction', () => {
 });
 
 describe('useAction — streaming (onChunk)', () => {
-  it('calls onChunk for each streamed chunk', async () => {
+  it('calls onChunk for each SSE data event with parsed JSON', async () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('{"progress":50}\n'));
-        controller.enqueue(encoder.encode('{"progress":100}\n'));
+        controller.enqueue(encoder.encode('data: {"progress":50}\n\n'));
+        controller.enqueue(encoder.encode('data: {"progress":100}\n\n'));
         controller.close();
       },
     });
@@ -420,8 +420,8 @@ describe('useAction — streaming (onChunk)', () => {
     });
 
     expect(onChunk).toHaveBeenCalledTimes(2);
-    expect(onChunk).toHaveBeenNthCalledWith(1, '{"progress":50}\n');
-    expect(onChunk).toHaveBeenNthCalledWith(2, '{"progress":100}\n');
+    expect(onChunk).toHaveBeenNthCalledWith(1, { progress: 50 });
+    expect(onChunk).toHaveBeenNthCalledWith(2, { progress: 100 });
   });
 });
 
@@ -492,5 +492,103 @@ describe('useAction — FormData (file upload)', () => {
     const call = fetchMock.mock.calls[0];
     expect(call[1]?.body).not.toBeInstanceOf(FormData);
     expect(call[1]?.headers).toMatchObject({ 'Content-Type': 'application/json' });
+  });
+});
+
+describe('useAction: streaming via SSE', () => {
+  it('routes each data event to onChunk and the event:result to onSuccess/data', async () => {
+    const chunks: Array<{ count: number }> = [];
+    let final: { imported: number } | null = null;
+
+    const sse =
+      'data: {"count":1}\n\n' +
+      'data: {"count":2}\n\n' +
+      'event: result\ndata: {"imported":2}\n\n';
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, { imported: number }, { count: number }>;
+
+    function Probe() {
+      const { mutate } = useAction(streamingStub, {
+        onChunk: (c) => { chunks.push(c); },
+        onSuccess: (r) => { final = r; },
+      });
+      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+    }
+
+    const { findByTestId } = render(<Probe />);
+    fireEvent.click(await findByTestId('go'));
+    await waitFor(() => expect(final).not.toBeNull());
+
+    expect(chunks).toEqual([{ count: 1 }, { count: 2 }]);
+    expect(final).toEqual({ imported: 2 });
+  });
+
+  it('routes event: error to onError and rejects the mutate', async () => {
+    const sse =
+      'data: {"count":1}\n\n' +
+      'event: error\ndata: {"message":"boom","name":"Error"}\n\n';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }))
+    );
+
+    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, unknown, { count: number }>;
+    let caught = null as Error | null;
+    let chunks = 0;
+
+    function Probe() {
+      const { mutate } = useAction(streamingStub, {
+        onChunk: () => { chunks++; },
+        onError: (err) => { caught = err; },
+      });
+      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+    }
+
+    const { findByTestId } = render(<Probe />);
+    fireEvent.click(await findByTestId('go'));
+    await waitFor(() => expect(caught).not.toBeNull());
+    expect(caught?.message).toBe('boom');
+    expect(chunks).toBe(1);
+  });
+
+  it('surfaces a malformed event: result as an error via onError', async () => {
+    const sse =
+      'data: {"count":1}\n\n' +
+      'event: result\ndata: this-is-not-json\n\n';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }))
+    );
+
+    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, { ok: boolean }, { count: number }>;
+    let caught = null as Error | null;
+
+    function Probe() {
+      const { mutate } = useAction(streamingStub, {
+        onError: (err) => { caught = err; },
+      });
+      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+    }
+
+    const { findByTestId } = render(<Probe />);
+    fireEvent.click(await findByTestId('go'));
+    await waitFor(() => expect(caught).not.toBeNull());
+    expect(caught?.message).toMatch(/Malformed result event/);
   });
 });

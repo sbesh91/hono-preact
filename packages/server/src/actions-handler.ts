@@ -1,6 +1,11 @@
 import type { MiddlewareHandler } from 'hono';
 import { ActionGuardError, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
 import { runRequestScope } from '@hono-preact/iso/internal';
+import {
+  sseGeneratorResponse,
+  sseReadableStreamResponse,
+  isAsyncGenerator,
+} from './sse.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -48,15 +53,16 @@ async function runActionGuards(
 }
 
 export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
-  let actionsMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
+  let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
-    if (!actionsMapPromise) {
-      actionsMapPromise = buildActionsMap(glob).catch((err) => {
-        actionsMapPromise = null;
-        return Promise.reject(err);
-      });
-    }
+    const actionsMapPromise =
+      import.meta.env.DEV
+        ? buildActionsMap(glob)
+        : (cachedMapPromise ??= buildActionsMap(glob).catch((err) => {
+            cachedMapPromise = null;
+            return Promise.reject(err);
+          }));
 
     let actionsMap: Record<string, ModuleEntry>;
     try {
@@ -134,19 +140,25 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       return c.json({ error: `Action '${action}' not found in module '${module}'` }, 404);
     }
 
+    const signal = c.req.raw.signal;
+    const actionCtx = { c, signal };
+
+    let result: unknown;
     try {
-      const result = await runRequestScope(() =>
-        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(c, payload)
+      result = await runRequestScope(() =>
+        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(actionCtx, payload)
       );
-      if (result instanceof ReadableStream) {
-        return new Response(result as ReadableStream<Uint8Array>, {
-          headers: { 'Content-Type': 'text/event-stream' },
-        });
-      }
-      return c.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);
     }
+
+    if (isAsyncGenerator(result)) {
+      return sseGeneratorResponse(c, result, { emitResult: true });
+    }
+    if (result instanceof ReadableStream) {
+      return sseReadableStreamResponse(c, result as ReadableStream<unknown>);
+    }
+    return c.json(result);
   };
 }
