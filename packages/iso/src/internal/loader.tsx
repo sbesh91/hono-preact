@@ -116,7 +116,7 @@ function LoaderHost<T>({
 
     promise
       .then((result) => {
-        if (isBrowser()) loaderRef.cache.set(result);
+        if (isBrowser()) loaderRef.cache.set(result, serializeLocation(locationRef.current));
         setOverrideData(result);
         setReloading(false);
         inFlightRef.current = false;
@@ -167,10 +167,10 @@ function LoaderHost<T>({
     const preloaded = getPreloadedData<T>(id);
     const isFirstRender = readerRef.current === null;
     if (preloaded !== null) {
-      loaderRef.cache.set(preloaded);
+      loaderRef.cache.set(preloaded, locKey);
       readerRef.current = { read: () => preloaded };
-    } else if (isBrowser() && isFirstRender && loaderRef.cache.has()) {
-      const cached = loaderRef.cache.get()!;
+    } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
+      const cached = loaderRef.cache.get(locKey)!;
       readerRef.current = { read: () => cached };
     } else {
       inFlightRef.current = true;
@@ -207,7 +207,7 @@ function LoaderHost<T>({
       readerRef.current = wrapPromise(
         fetchPromise
           .then((r) => {
-            if (isBrowser()) loaderRef.cache.set(r);
+            if (isBrowser()) loaderRef.cache.set(r, locKey);
             settle();
             return r;
           })

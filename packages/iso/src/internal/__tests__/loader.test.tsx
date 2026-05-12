@@ -311,6 +311,59 @@ describe('v3 <Loader> stability', () => {
   });
 });
 
+describe('Loader: parametric loader cache should key on location', () => {
+  it('does not serve stale cached data when navigating to a different path param', async () => {
+    const calls: string[] = [];
+    const ref = defineLoader<{ id: string; title: string }>(
+      async ({ location }) => {
+        const id = (location.pathParams as Record<string, string>).id;
+        calls.push(id);
+        return { id, title: `Movie ${id}` };
+      }
+    );
+
+    function Page({ id }: { id: string }) {
+      const data = ref.useData();
+      return <p data-testid={`title-${id}`}>{data.title}</p>;
+    }
+
+    const makeLoc = (id: string) =>
+      ({
+        path: `/movies/${id}`,
+        url: `http://localhost/movies/${id}`,
+        searchParams: {},
+        pathParams: { id },
+      }) as unknown as RouteHook;
+
+    // First mount with id=1
+    const first = render(
+      <LocationProvider>
+        <Loader loader={ref} location={makeLoc('1')}>
+          <Page id="1" />
+        </Loader>
+      </LocationProvider>
+    );
+    await waitFor(() => expect(first.queryByTestId('title-1')).not.toBeNull());
+    expect(first.queryByTestId('title-1')!.textContent).toBe('Movie 1');
+
+    first.unmount();
+
+    // Remount with id=2. The shared cache must NOT return id=1's data.
+    const second = render(
+      <LocationProvider>
+        <Loader loader={ref} location={makeLoc('2')}>
+          <Page id="2" />
+        </Loader>
+      </LocationProvider>
+    );
+    await waitFor(() => expect(second.queryByTestId('title-2')).not.toBeNull());
+    expect(second.queryByTestId('title-2')!.textContent).toBe('Movie 2');
+
+    // Verify both fetches happened (cache didn't short-circuit the second).
+    expect(calls).toEqual(['1', '2']);
+  });
+});
+
 describe('Loader: useError() on successful static load', () => {
   it('returns null while data is rendered', async () => {
     const ref = defineLoader(async () => ({ msg: 'hi' }));
