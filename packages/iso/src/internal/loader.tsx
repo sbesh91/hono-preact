@@ -10,6 +10,7 @@ import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdC
 import type { LoaderRef } from '../define-loader.js';
 import { fetchLoaderData } from './loader-fetch.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
+import { registerServerStreamingLoader } from './streaming-ssr.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -36,6 +37,17 @@ export function Loader<T>({
         {children}
       </LoaderHost>
     </LoaderIdContext.Provider>
+  );
+}
+
+function isAsyncGenerator(
+  value: unknown
+): value is AsyncGenerator<unknown, unknown, unknown> {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function' &&
+    typeof (value as { next?: unknown }).next === 'function'
   );
 }
 
@@ -202,22 +214,41 @@ function LoaderHost<T>({
         typeof fetch === 'function' &&
         loaderRef.__moduleKey !== undefined;
 
-      const fetchPromise: Promise<T> = useFetchPath
-        ? fetchLoaderData<T>(
-            loaderRef.__moduleKey!,
-            {
-              path: location.path,
-              pathParams: (location.pathParams ?? {}) as Record<string, string>,
-              searchParams: (location.searchParams ?? {}) as Record<string, string>,
-            },
-            newAbortSignal(),
-            {
-              onChunk: (value) => setOverrideData(value),
-              onError: (err) => setLoadError(err),
-              onEnd: () => { /* nothing to do */ },
+      let fetchPromise: Promise<T>;
+      if (useFetchPath) {
+        fetchPromise = fetchLoaderData<T>(
+          loaderRef.__moduleKey!,
+          {
+            path: location.path,
+            pathParams: (location.pathParams ?? {}) as Record<string, string>,
+            searchParams: (location.searchParams ?? {}) as Record<string, string>,
+          },
+          newAbortSignal(),
+          {
+            onChunk: (value) => setOverrideData(value),
+            onError: (err) => setLoadError(err),
+            onEnd: () => { /* nothing to do */ },
+          }
+        );
+      } else {
+        // Direct-fn path. Result may be a Promise<T>, a
+        // Promise<ReadableStream<T>>, or an AsyncGenerator<T>. For an async
+        // generator (server-side streaming loader), take the first chunk
+        // for the Suspense render and register the rest with the per-request
+        // streaming-ssr registry so renderPage can flush further chunks.
+        fetchPromise = (async () => {
+          const result = await (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<unknown>);
+          if (isAsyncGenerator(result)) {
+            const step = await result.next();
+            if (step.done) {
+              return undefined as T; // generator returned without yielding
             }
-          )
-        : (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<T>);
+            registerServerStreamingLoader(id, result);
+            return step.value as T;
+          }
+          return result as T;
+        })();
+      }
 
       readerRef.current = wrapPromise(
         fetchPromise

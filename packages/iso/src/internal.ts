@@ -23,7 +23,7 @@ export {
 export { ReloadContext } from './reload-context.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
-export { runRequestScope } from './cache.js';
+export { runRequestScope, getRequestStore } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
 export { runGuards } from './guard.js';
 
@@ -37,3 +37,9 @@ export {
   installStreamRegistry,
   subscribeToLoaderStream,
 } from './internal/stream-registry.js';
+
+export {
+  registerServerStreamingLoader,
+  takeServerStreamingLoaders,
+} from './internal/streaming-ssr.js';
+export type { ServerLoaderStream } from './internal/streaming-ssr.js';
