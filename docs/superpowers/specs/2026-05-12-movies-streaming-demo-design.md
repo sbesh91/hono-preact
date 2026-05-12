@@ -1,14 +1,25 @@
 # Movies-integrated streaming demo
 
-**Status:** design
+**Status:** design (revised 2026-05-12)
 **Author:** brainstormed 2026-05-12
 **Replaces:** `/live-stats` synthetic ticker as the headline streaming-loader demo
 
+## Revision (2026-05-12)
+
+Mid-execution we hit a hard framework constraint: the vite `server-only` plugin only allows a fixed allowlist of named exports from `.server.*` files (`default, loader, serverGuards, serverActions, actionGuards`), and the server-side loader RPC keys by module path with one default loader per file. The original spec assumed multiple `defineLoader` exports per file would work; they don't.
+
+The pivot:
+
+- **Section A (detail page)** is redesigned to use **one** unified streaming loader that yields a cumulative `{ summary?, cast?, similar?, boxOffice? }` shape. Four sub-streams run inside that generator and tick at their own cadences, merged into a single output stream. The client renders four sections that conditionally show skeleton or data based on which fields are populated.
+- **Section B (layout activity feed) is dropped from this PR.** It cannot fit single-loader-per-file cleanly without giving it a dedicated stub route, which is awkward. B is deferred until framework Gap 1 (public multi-loader API) lands.
+- **Section C (streaming search)** is unchanged. It was always a single loader.
+
+Tasks 1–6 from the original plan (re-exports, mock data, genre map) remain valid and are already merged on the branch. Tasks 7–22 are replaced by the revised plan.
+
 ## Goals
 
-- Replace the synthetic `/live-stats` ticker with three coordinated streaming features that integrate naturally into the existing movies surface.
-- Show four distinct streaming shapes on `/movies/:id` running in parallel: fast-trickle, slow-trickle, token-by-token, slow-single.
-- Show a layout-anchored streaming feed that survives client-side navigation within `/movies/*`.
+- Replace the synthetic `/live-stats` ticker with two coordinated streaming features on the movies surface.
+- Show **four streaming sections** on `/movies/:id`, all flowing through one unified streaming loader. Each section has its own cadence (token-by-token, fast trickle, slow trickle, slow single) and its own skeleton-to-data transition.
 - Show input-driven SSR streaming via URL-shareable search with progressive match-bucket reveal.
 - Keep all data fully self-contained: no external APIs, no keys, no network during dev or CI.
 
