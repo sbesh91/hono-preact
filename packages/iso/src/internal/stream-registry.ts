@@ -57,8 +57,10 @@ function dispatch(ev: StreamEvent, sub: Subscriber): void {
 
 /**
  * Subscribe a loader mount to events for its loader id. Returns an
- * unsubscribe function. Drains any buffered events for this id
- * immediately, in order.
+ * unsubscribe function. Drains any buffered events for this id via a
+ * microtask so it is safe to call during a render pass: the current
+ * render commits first, then the drain fires setState-y callbacks and
+ * Preact re-renders normally.
  */
 export function subscribeToLoaderStream(
   loaderId: string,
@@ -67,9 +69,17 @@ export function subscribeToLoaderStream(
   subscribers.set(loaderId, sub);
 
   const bucket = buffered.get(loaderId);
-  if (bucket) {
+  if (bucket && bucket.length > 0) {
     buffered.delete(loaderId);
-    for (const ev of bucket) dispatch(ev, sub);
+    // Defer to a microtask so this is safe to call during a render: the
+    // current render commits, then the drain fires setState-y callbacks
+    // and Preact re-renders normally.
+    queueMicrotask(() => {
+      // The subscriber may have unmounted between subscribe and the
+      // microtask firing; skip the drain in that case.
+      if (subscribers.get(loaderId) !== sub) return;
+      for (const ev of bucket) dispatch(ev, sub);
+    });
   }
 
   return () => {
