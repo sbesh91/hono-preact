@@ -6,7 +6,7 @@ export type { PageBindings } from './define-page.js';
 
 // Routing primitives — trivial re-exports of preact-iso. Listed here so
 // consumers have a single import surface for everything they need.
-export { Route, Router, lazy } from 'preact-iso';
+export { Route, Router, lazy, useLocation, useRoute } from 'preact-iso';
 
 // Declarative route tree.
 export { defineRoutes, Routes } from './define-routes.js';
