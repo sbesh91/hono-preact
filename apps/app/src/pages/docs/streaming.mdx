@@ -1,0 +1,165 @@
+# Streaming Loaders & Actions
+
+Static loaders return a single value once. Streaming loaders and actions are async generators that yield values over time. The consumer API (`loader.useData()`, `useAction`) is the same; only the author shape changes.
+
+Reach for streaming when the data changes while the user is looking at it: dashboards, log tails, chat token streams, progressive search results. If your data is stable for the lifetime of a request, a plain async function is simpler and should be your first choice.
+
+## Streaming loaders
+
+### Author shape
+
+A streaming loader is an `async function*` that yields `T` and receives a `LoaderCtx`:
+
+```ts
+// src/pages/dashboard.server.ts
+import { defineLoader, type LoaderCtx } from '@hono-preact/iso';
+
+export type Snapshot = { count: number; load: number };
+
+const serverLoader = async function* (ctx: LoaderCtx): AsyncGenerator<Snapshot> {
+  while (!ctx.signal.aborted) {
+    yield await currentSnapshot();
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+};
+
+export default serverLoader;
+export const loader = defineLoader<Snapshot>(serverLoader);
+```
+
+`ctx.signal` is an `AbortSignal` that fires when the client disconnects or the component unmounts. Thread it into upstream `fetch` calls and subscriptions so they clean up promptly. Returning from the generator (rather than looping) also ends the stream cleanly.
+
+For byte-level piping (e.g. forwarding a server-sent event feed without parsing), you can return a `ReadableStream<Uint8Array>` instead of an `AsyncGenerator`. The framework pipes it straight to the response. This is an escape hatch; for typed structured data, use an async generator.
+
+### Consumer shape
+
+The component side is identical to a static loader:
+
+```tsx
+// src/pages/dashboard.tsx
+import { definePage } from '@hono-preact/iso';
+import { loader } from './dashboard.server.js';
+
+function Dashboard() {
+  const stats = loader.useData();
+  const error = loader.useError();
+  return (
+    <>
+      {error && <p>Live updates paused: {error.message}</p>}
+      <p>Count: {stats.count}, load: {stats.load}</p>
+    </>
+  );
+}
+export default definePage(Dashboard, { loader });
+```
+
+`loader.useData()` always returns the latest yielded value. `loader.useError()` returns the current error or `null`. Components re-render on each new chunk automatically.
+
+See `/live-stats` for a running example: the server yields a new snapshot every second for 30 ticks, then closes the stream.
+
+## What happens on first paint
+
+1. The server runs `serverLoader` and renders the page with the first chunk. The response stays open.
+2. As subsequent chunks arrive, the server flushes `<script>__HP_STREAM__.push(...)</script>` tags inline into the ongoing HTML response.
+3. The browser receives and executes those tags as they arrive. On hydration, the client picks up from the latest pushed value and continues listening.
+
+The first-load experience is full SSR with progressive enhancement: the user sees real data immediately, and it keeps updating without a separate fetch or WebSocket.
+
+## Errors
+
+**Before the first chunk:** the error propagates through the normal Suspense and error boundary path. If you provide `errorFallback` in `definePage`, it renders instead of the page. Otherwise the error boundary above catches it.
+
+**After the first chunk:** the stream is already open and the page is rendered. `loader.useError()` surfaces the error; `loader.useData()` keeps returning the last good value. The page stays mounted with the stale data visible.
+
+```tsx
+const stats = loader.useData();  // last-good value
+const error = loader.useError(); // non-null after a mid-stream error
+
+return (
+  <>
+    {error && <p>Live updates paused: {error.message}</p>}
+    <p>Visitors: {stats.visitors}</p>
+  </>
+);
+```
+
+## Abort and cleanup
+
+The framework aborts `ctx.signal` when the client disconnects (server side) or when the component that owns the loader unmounts (client side). Pass the signal to any upstream resource that supports cancellation:
+
+```ts
+const serverLoader = async function* (ctx: LoaderCtx) {
+  const res = await fetch('https://api.example.com/feed', { signal: ctx.signal });
+  for await (const chunk of parseStream(res.body!)) {
+    yield chunk;
+  }
+};
+```
+
+Polling loops should check `ctx.signal.aborted` at the top of each iteration (as in the example above) rather than listening for the abort event, so cleanup happens at a natural yield point.
+
+## Streaming actions
+
+An action can be a streaming generator that yields progress chunks and returns a final result. The type parameters on `defineAction` follow the generator's shapes automatically.
+
+### Author shape
+
+```ts
+// src/pages/watched.server.ts
+import { defineAction } from '@hono-preact/iso';
+
+export const serverActions = {
+  bulkImport: defineAction(async function* (ctx, payload: { count: number }) {
+    for (let i = 0; i < payload.count; i++) {
+      if (ctx.signal.aborted) return { imported: i };
+      await processItem(i);
+      yield { count: i + 1, total: payload.count };
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return { imported: payload.count };
+  }),
+};
+```
+
+Yielded values are the chunk type (`TChunk`). The return value is the final result (`TResult`). TypeScript infers both from the generator body.
+
+### Consumer shape
+
+```tsx
+const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
+
+const { mutate, data, pending } = useAction(serverActions.bulkImport, {
+  onChunk: (p) => setProgress(p),
+  onSuccess: (r) => console.log(`imported ${r.imported}`),
+});
+```
+
+`onChunk` receives each typed chunk. `onSuccess` receives the typed final result (the generator's return value). `data` holds the final result after the stream closes.
+
+For error handling, pass `onError`:
+
+```tsx
+const { mutate } = useAction(serverActions.bulkImport, {
+  onChunk: (p) => setProgress(p),
+  onSuccess: (r) => setProgress(null),
+  onError: (err) => console.error('import failed', err),
+});
+```
+
+Chunks and the final result are delivered in order. If the generator throws, the stream closes and `onError` is called; `onSuccess` does not fire.
+
+## Debugging
+
+Streaming loaders and actions use a server-sent event (SSE) wire format. You can inspect the framing directly with curl:
+
+```bash
+# Streaming loader endpoint
+curl -N http://localhost:5173/live-stats
+
+# Streaming action endpoint (replace the module key and action name)
+curl -N -X POST http://localhost:5173/__actions \
+  -H 'Content-Type: application/json' \
+  -d '{"module":"src/pages/watched","action":"bulkImport","payload":{"count":5}}'
+```
+
+Each chunk arrives as a `data:` line followed by a blank line (standard SSE framing). The final result for actions arrives as a `result:` line. Parsing is handled automatically by the framework on the client.

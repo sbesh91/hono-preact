@@ -2,6 +2,8 @@
 
 Pages often need to mutate data: adding a record, toggling a flag, deleting a row. Server actions let you define those mutations as typed functions in your `.server.ts` file and call them from the client with a single hook or form component. No manual `fetch` wiring, no API route plumbing.
 
+For long-running operations that emit progress or results incrementally, see [Streaming](/docs/streaming).
+
 ## How it works
 
 Define a `serverActions` map in your `.server.ts` file alongside the loader. Each action is wrapped with `defineAction` to carry its payload and result types.
