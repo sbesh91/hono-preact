@@ -13,7 +13,12 @@ type StreamRegistry = {
   push: (loaderId: string, value: unknown) => void;
   end: (loaderId: string) => void;
   error: (loaderId: string, error: { message: string; name: string }) => void;
-  /** Pre-hydration buffer; the SSR inline bootstrap pushes events here. */
+  /**
+   * Pre-hydration buffer. The SSR inline bootstrap script populates this
+   * before the client bundle loads. After `installStreamRegistry()` runs,
+   * the field continues to back per-loader buffering of events whose
+   * subscriber hasn't mounted yet (the common case during streaming SSR).
+   */
   queue?: StreamEvent[];
 };
 
@@ -24,39 +29,23 @@ declare global {
 }
 
 const subscribers = new Map<string, Subscriber>();
+const buffered = new Map<string, StreamEvent[]>();
 
-/**
- * Subscribe a loader mount to events for its loader id. Returns an
- * unsubscribe function. If a buffered event exists for this id in the
- * pre-hydration queue, it is dispatched immediately on subscribe.
- */
-export function subscribeToLoaderStream(
-  loaderId: string,
-  sub: Subscriber
-): () => void {
-  subscribers.set(loaderId, sub);
-
-  // Drain any buffered events for this id from the pre-hydration queue.
-  if (typeof window !== 'undefined') {
-    const reg = window.__HP_STREAM__;
-    if (reg?.queue) {
-      const drained: StreamEvent[] = [];
-      for (const ev of reg.queue) {
-        if (ev.loaderId === loaderId) dispatch(ev);
-        else drained.push(ev);
-      }
-      reg.queue = drained;
+function dispatchOrBuffer(ev: StreamEvent): void {
+  const sub = subscribers.get(ev.loaderId);
+  if (sub) {
+    dispatch(ev, sub);
+  } else {
+    let bucket = buffered.get(ev.loaderId);
+    if (!bucket) {
+      bucket = [];
+      buffered.set(ev.loaderId, bucket);
     }
+    bucket.push(ev);
   }
-
-  return () => {
-    if (subscribers.get(loaderId) === sub) subscribers.delete(loaderId);
-  };
 }
 
-function dispatch(ev: StreamEvent): void {
-  const sub = subscribers.get(ev.loaderId);
-  if (!sub) return;
+function dispatch(ev: StreamEvent, sub: Subscriber): void {
   if (ev.type === 'push') sub.push(ev.value);
   else if (ev.type === 'end') sub.end();
   else if (ev.type === 'error') {
@@ -67,28 +56,57 @@ function dispatch(ev: StreamEvent): void {
 }
 
 /**
- * Install the dispatcher on `window.__HP_STREAM__`. If the SSR inline
- * bootstrap already populated a queue, drain it. After installation,
- * subsequent script-tag pushes from the still-streaming response body
- * route directly to live subscriptions.
+ * Subscribe a loader mount to events for its loader id. Returns an
+ * unsubscribe function. Drains any buffered events for this id
+ * immediately, in order.
+ */
+export function subscribeToLoaderStream(
+  loaderId: string,
+  sub: Subscriber
+): () => void {
+  subscribers.set(loaderId, sub);
+
+  const bucket = buffered.get(loaderId);
+  if (bucket) {
+    buffered.delete(loaderId);
+    for (const ev of bucket) dispatch(ev, sub);
+  }
+
+  return () => {
+    if (subscribers.get(loaderId) === sub) subscribers.delete(loaderId);
+  };
+}
+
+/**
+ * Install the live dispatcher on `window.__HP_STREAM__`. Any events that
+ * were buffered by the SSR inline bootstrap (in `window.__HP_STREAM__.queue`)
+ * are routed through `dispatchOrBuffer`, which either delivers them to an
+ * already-registered subscriber or holds them until one registers.
  */
 export function installStreamRegistry(): void {
   if (typeof window === 'undefined') return;
   const existing = window.__HP_STREAM__;
-  const queue = existing?.queue ?? [];
+  const initialQueue = existing?.queue ?? [];
 
   window.__HP_STREAM__ = {
     push(loaderId: string, value: unknown) {
-      dispatch({ type: 'push', loaderId, value });
+      dispatchOrBuffer({ type: 'push', loaderId, value });
     },
     end(loaderId: string) {
-      dispatch({ type: 'end', loaderId });
+      dispatchOrBuffer({ type: 'end', loaderId });
     },
     error(loaderId: string, error: { message: string; name: string }) {
-      dispatch({ type: 'error', loaderId, error });
+      dispatchOrBuffer({ type: 'error', loaderId, error });
     },
   };
 
-  // Drain any pre-hydration events.
-  for (const ev of queue) dispatch(ev);
+  for (const ev of initialQueue) dispatchOrBuffer(ev);
+}
+
+/**
+ * Test-only: clear all buffers and subscribers. Not exposed via internal.ts.
+ */
+export function __resetStreamRegistryForTests(): void {
+  subscribers.clear();
+  buffered.clear();
 }
