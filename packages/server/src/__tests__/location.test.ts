@@ -25,9 +25,9 @@ describe('location middleware', () => {
     expect(locationStub).toHaveBeenCalledWith('/some/path');
   });
 
-  it('strips query string from the pathname passed to locationStub', async () => {
+  it('passes the query string through to locationStub', async () => {
     await makeApp().request('http://localhost/search?q=hello');
-    expect(locationStub).toHaveBeenCalledWith('/search');
+    expect(locationStub).toHaveBeenCalledWith('/search?q=hello');
   });
 
   it('calls next() so the handler runs', async () => {

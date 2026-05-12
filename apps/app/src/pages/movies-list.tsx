@@ -1,23 +1,61 @@
-import {
-  definePage,
-  useOptimisticAction,
-} from '@hono-preact/iso';
+import { definePage, useOptimisticAction } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import type { MovieSummary } from '@/server/data/movies.js';
-import { loader, serverActions } from './movies-list.server.js';
+import { loader, serverActions, type SearchResults } from './movies-list.server.js';
 import { loader as watchedLoader } from './watched.server.js';
-import { useMoviesFilter, useWatchedBadge } from './movies-layout.js';
+import { useWatchedBadge } from './movies-layout.js';
+
+type ToggleFn = (payload: { movieId: number; watched: boolean }) => void;
+
+const Row: FunctionComponent<{
+  m: MovieSummary;
+  watched: Set<number>;
+  onToggle: ToggleFn;
+}> = ({ m, watched, onToggle }) => (
+  <li class="border-2 m-1 p-1 flex items-center gap-2">
+    <a href={`/movies/${m.id}`} class="flex-1">
+      {m.title}{' '}
+      {watched.has(m.id) && <span class="text-emerald-600">✓ watched</span>}
+    </a>
+    <button
+      type="button"
+      class="bg-blue-500 text-white px-2 py-1 text-sm"
+      onClick={() => onToggle({ movieId: m.id, watched: !watched.has(m.id) })}
+    >
+      {watched.has(m.id) ? 'Unwatch' : 'Mark watched'}
+    </button>
+  </li>
+);
+
+const Bucket: FunctionComponent<{
+  title: string;
+  movies: MovieSummary[];
+  watched: Set<number>;
+  onToggle: ToggleFn;
+}> = ({ title, movies, watched, onToggle }) => {
+  if (movies.length === 0) return null;
+  return (
+    <section class="mt-3">
+      <h2 class="font-semibold">{title}</h2>
+      <ul>
+        {movies.map((m) => (
+          <Row key={m.id} m={m} watched={watched} onToggle={onToggle} />
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 const MoviesList: FunctionComponent = () => {
-  const { movies, watchedIds } = loader.useData();
-  const { query } = useMoviesFilter();
+  const data = loader.useData() as SearchResults;
+  const error = loader.useError();
   const { setCount } = useWatchedBadge();
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
     serverActions.toggleWatched,
     {
-      base: watchedIds,
+      base: data.watchedIds,
       apply: (current, payload) =>
         payload.watched
           ? [...current, payload.movieId]
@@ -26,50 +64,34 @@ const MoviesList: FunctionComponent = () => {
     }
   );
 
-  // Push the optimistic count up to the layout's badge. The optimistic value
-  // is updated synchronously on click (via useOptimisticAction's queue), so
-  // the badge increments immediately and rolls back on action error.
   useEffect(() => {
     setCount(optimisticWatchedIds.length);
   }, [optimisticWatchedIds.length, setCount]);
 
   const watched = new Set(optimisticWatchedIds);
 
-  const trimmed = query.trim().toLowerCase();
-  const filtered = trimmed
-    ? movies.results.filter((m: MovieSummary) =>
-        m.title.toLowerCase().includes(trimmed)
-      )
-    : movies.results;
-
   return (
     <>
-      {trimmed && (
-        <p>
-          showing {filtered.length} of {movies.results.length}
+      {error && (
+        <p class="text-red-700 bg-red-100 p-2 my-2">
+          Search failed: {error.message}
         </p>
       )}
-      <ul class="mt-2">
-        {filtered.map((m: MovieSummary) => (
-          <li key={m.id} class="border-2 m-1 p-1 flex items-center gap-2">
-            <a href={`/movies/${m.id}`} class="flex-1">
-              {m.title}{' '}
-              {watched.has(m.id) && (
-                <span class="text-emerald-600">✓ watched</span>
-              )}
-            </a>
-            <button
-              type="button"
-              class="bg-blue-500 text-white px-2 py-1 text-sm"
-              onClick={() =>
-                mutate({ movieId: m.id, watched: !watched.has(m.id) })
-              }
-            >
-              {watched.has(m.id) ? 'Unwatch' : 'Mark watched'}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {data.mode === 'list' ? (
+        <ul class="mt-2">
+          {data.movies.results.map((m) => (
+            <Row key={m.id} m={m} watched={watched} onToggle={mutate} />
+          ))}
+        </ul>
+      ) : (
+        <>
+          <p class="text-sm text-gray-600 mt-2">Results for "{data.query}"</p>
+          <Bucket title="Exact matches"   movies={data.buckets.exact}          watched={watched} onToggle={mutate} />
+          <Bucket title="Title contains"  movies={data.buckets.titleSubstring} watched={watched} onToggle={mutate} />
+          <Bucket title="Overview mentions" movies={data.buckets.overview}     watched={watched} onToggle={mutate} />
+          <Bucket title="Genre"           movies={data.buckets.genre}          watched={watched} onToggle={mutate} />
+        </>
+      )}
     </>
   );
 };

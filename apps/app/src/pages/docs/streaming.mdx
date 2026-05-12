@@ -55,7 +55,7 @@ export default definePage(Dashboard, { loader });
 
 `loader.useData()` always returns the latest yielded value. `loader.useError()` returns the current error or `null`. Components re-render on each new chunk automatically.
 
-See `/live-stats` for a running example: the server yields a new snapshot every second for 30 ticks, then closes the stream.
+See `/movies/:id` for a running example: a single streaming loader yields a cumulative shape with four sections (token-by-token AI summary, fast-trickle cast, slow-trickle similar movies, slow-single box office) that fill in at independent cadences. See `/movies?q=drama` for input-driven SSR streaming: the server yields match buckets (exact title, substring, overview, genre) progressively as it scans the catalog.
 
 ## What happens on first paint
 
@@ -154,7 +154,7 @@ Streaming loaders and actions use a server-sent event (SSE) wire format. You can
 
 ```bash
 # Streaming loader endpoint
-curl -N http://localhost:5173/live-stats
+curl -N 'http://localhost:5173/movies/1241982'
 
 # Streaming action endpoint (replace the module key and action name)
 curl -N -X POST http://localhost:5173/__actions \
