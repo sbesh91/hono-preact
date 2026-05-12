@@ -8,6 +8,7 @@ import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
+import { fetchLoaderData } from './loader-fetch.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -90,8 +91,30 @@ function LoaderHost<T>({
     inFlightRef.current = true;
     setReloading(true);
     setLoadError(null);
-    // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
-    (fnRef.current({ location: locationRef.current, signal: newAbortSignal() }) as Promise<T>)
+
+    const useFetchPath =
+      isBrowser() &&
+      typeof fetch === 'function' &&
+      loaderRef.__moduleKey !== undefined;
+
+    const promise: Promise<T> = useFetchPath
+      ? fetchLoaderData<T>(
+          loaderRef.__moduleKey!,
+          {
+            path: locationRef.current.path,
+            pathParams: (locationRef.current.pathParams ?? {}) as Record<string, string>,
+            searchParams: (locationRef.current.searchParams ?? {}) as Record<string, string>,
+          },
+          newAbortSignal(),
+          {
+            onChunk: (value) => setOverrideData(value),
+            onError: (err) => setLoadError(err),
+            onEnd: () => { /* nothing to do */ },
+          }
+        )
+      : (fnRef.current({ location: locationRef.current, signal: newAbortSignal() }) as Promise<T>);
+
+    promise
       .then((result) => {
         if (isBrowser()) loaderRef.cache.set(result);
         setOverrideData(result);
@@ -158,9 +181,31 @@ function LoaderHost<T>({
           runReloadRef.current();
         }
       };
-      // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
+
+      const useFetchPath =
+        isBrowser() &&
+        typeof fetch === 'function' &&
+        loaderRef.__moduleKey !== undefined;
+
+      const fetchPromise: Promise<T> = useFetchPath
+        ? fetchLoaderData<T>(
+            loaderRef.__moduleKey!,
+            {
+              path: location.path,
+              pathParams: (location.pathParams ?? {}) as Record<string, string>,
+              searchParams: (location.searchParams ?? {}) as Record<string, string>,
+            },
+            newAbortSignal(),
+            {
+              onChunk: (value) => setOverrideData(value),
+              onError: (err) => setLoadError(err),
+              onEnd: () => { /* nothing to do */ },
+            }
+          )
+        : (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<T>);
+
       readerRef.current = wrapPromise(
-        (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<T>)
+        fetchPromise
           .then((r) => {
             if (isBrowser()) loaderRef.cache.set(r);
             settle();

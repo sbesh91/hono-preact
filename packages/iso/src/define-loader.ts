@@ -15,6 +15,7 @@ export type Loader<T> =
 
 export interface LoaderRef<T> {
   readonly __id: symbol;
+  readonly __moduleKey?: string;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   useData(): T;
@@ -86,6 +87,7 @@ export function defineLoader<T>(
 
   const ref: LoaderRef<T> = {
     __id,
+    __moduleKey: opts?.__moduleKey,
     fn,
     cache,
     useData() {
