@@ -32,3 +32,8 @@ export {
   __subscribeRouteChange,
   __enableViewTransitions,
 } from './internal/route-change.js';
+
+export {
+  installStreamRegistry,
+  subscribeToLoaderStream,
+} from './internal/stream-registry.js';

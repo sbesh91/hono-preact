@@ -20,8 +20,9 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
     expect(src).toContain(`import { Routes } from '@hono-preact/iso';`);
     expect(src).toContain(
-      `import { __dispatchRouteChange } from '@hono-preact/iso/internal';`
+      `import { __dispatchRouteChange, installStreamRegistry } from '@hono-preact/iso/internal';`
     );
+    expect(src).toContain(`installStreamRegistry();`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
   });
 

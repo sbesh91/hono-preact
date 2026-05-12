@@ -9,6 +9,7 @@ import wrapPromise from './wrap-promise.js';
 import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
 import { fetchLoaderData } from './loader-fetch.js';
+import { subscribeToLoaderStream } from './stream-registry.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -169,6 +170,20 @@ function LoaderHost<T>({
     if (preloaded !== null) {
       loaderRef.cache.set(preloaded, locKey);
       readerRef.current = { read: () => preloaded };
+      if (isBrowser()) {
+        const unsub = subscribeToLoaderStream(id, {
+          push: (value) => setOverrideData(value as T),
+          end: () => { /* nothing to do */ },
+          error: (err) => setLoadError(err),
+        });
+        // Unsubscribe on unmount: attach to the abortRef signal.
+        if (abortRef.current) {
+          abortRef.current.signal.addEventListener('abort', unsub);
+        } else {
+          abortRef.current = new AbortController();
+          abortRef.current.signal.addEventListener('abort', unsub);
+        }
+      }
     } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
       const cached = loaderRef.cache.get(locKey)!;
       readerRef.current = { read: () => cached };

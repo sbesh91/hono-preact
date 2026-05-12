@@ -15,8 +15,10 @@ export function generateClientEntrySource(
     `import { h, hydrate } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes } from '@hono-preact/iso';\n` +
-    `import { __dispatchRouteChange } from '@hono-preact/iso/internal';\n` +
+    `import { __dispatchRouteChange, installStreamRegistry } from '@hono-preact/iso/internal';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
+    `\n` +
+    `installStreamRegistry();\n` +
     `\n` +
     `let lastPath;\n` +
     `function onRouteChange(path) {\n` +
