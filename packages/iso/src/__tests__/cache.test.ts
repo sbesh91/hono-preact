@@ -25,7 +25,7 @@ describe('createCache', () => {
     const cache = createCache<{ name: string }>();
     const loader = vi.fn().mockResolvedValue({ name: 'fetched' });
     const wrapped = cache.wrap(loader);
-    const result = await wrapped({ location: {} as any });
+    const result = await wrapped({ location: {} as any, signal: new AbortController().signal });
     expect(loader).toHaveBeenCalledOnce();
     expect(result).toEqual({ name: 'fetched' });
     expect(cache.get()).toEqual({ name: 'fetched' });
@@ -36,7 +36,7 @@ describe('createCache', () => {
     cache.set({ name: 'cached' });
     const loader = vi.fn();
     const wrapped = cache.wrap(loader);
-    const result = await wrapped({ location: {} as any });
+    const result = await wrapped({ location: {} as any, signal: new AbortController().signal });
     expect(loader).not.toHaveBeenCalled();
     expect(result).toEqual({ name: 'cached' });
   });
@@ -48,9 +48,32 @@ describe('createCache', () => {
     expect(cache.get()).toBeNull();
     const loader = vi.fn().mockResolvedValue({ name: 'new' });
     const wrapped = cache.wrap(loader);
-    const result = await wrapped({ location: {} as any });
+    const result = await wrapped({ location: {} as any, signal: new AbortController().signal });
     expect(loader).toHaveBeenCalledOnce();
     expect(result).toEqual({ name: 'new' });
+  });
+});
+
+describe('LoaderCache: location-aware keying', () => {
+  it('returns null from get(locKey) when the cached value was set for a different locKey', () => {
+    const cache = createCache<{ id: number }>();
+    cache.set({ id: 1 }, '/movies/1?');
+    expect(cache.has('/movies/2?')).toBe(false);
+    expect(cache.get('/movies/2?')).toBe(null);
+  });
+
+  it('returns the value from get(locKey) when locKeys match', () => {
+    const cache = createCache<{ id: number }>();
+    cache.set({ id: 1 }, '/movies/1?');
+    expect(cache.has('/movies/1?')).toBe(true);
+    expect(cache.get('/movies/1?')).toEqual({ id: 1 });
+  });
+
+  it('treats a no-key set as matching any locKey (back-compat)', () => {
+    const cache = createCache<{ id: number }>();
+    cache.set({ id: 1 });
+    expect(cache.has('/anywhere')).toBe(true);
+    expect(cache.get('/anywhere')).toEqual({ id: 1 });
   });
 });
 
@@ -99,8 +122,8 @@ describe('createCache request-scoped storage on the server', () => {
             await Promise.resolve();
             return { id };
           });
-          const a = await wrapped({ location: {} as never });
-          const b = await wrapped({ location: {} as never });
+          const a = await wrapped({ location: {} as never, signal: new AbortController().signal });
+          const b = await wrapped({ location: {} as never, signal: new AbortController().signal });
           return { a, b };
         });
 

@@ -1,5 +1,6 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import { ReloadContext } from './reload-context.js';
+import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
@@ -58,6 +59,7 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
   const [error, setError] = useState<Error | null>(null);
   const [data, setData] = useState<TResult | null>(null);
   const reloadCtx = useContext(ReloadContext);
+  const activeLoaderId = useContext(ActiveLoaderIdContext);
 
   const stubRef = useRef(stub);
   stubRef.current = stub;
@@ -164,7 +166,7 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
         let invalidatedActive = false;
         for (const ref of currentOptions.invalidate) {
           ref.invalidate();
-          if (reloadCtx?.loaderId && ref.__id === reloadCtx.loaderId) {
+          if (activeLoaderId && ref.__id === activeLoaderId) {
             invalidatedActive = true;
           }
         }

@@ -119,7 +119,7 @@ describe('useOptimisticAction', () => {
     }
 
     render(
-      <ReloadContext.Provider value={{ reload: vi.fn(), reloading: false, error: null }}>
+      <ReloadContext.Provider value={{ reload: vi.fn(), reloading: false }}>
         <TestComponent />
       </ReloadContext.Provider>
     );

@@ -2,9 +2,9 @@ import type { Loader } from './define-loader.js';
 import { isBrowser } from './is-browser.js';
 
 export interface LoaderCache<T> {
-  get(): T | null;
-  set(value: T): void;
-  has(): boolean;
+  get(locKey?: string): T | null;
+  set(value: T, locKey?: string): void;
+  has(locKey?: string): boolean;
   wrap(loader: Loader<T>): Loader<T>;
   invalidate(): void;
 }
@@ -46,47 +46,65 @@ export function runRequestScope<R>(fn: () => R | Promise<R>): R | Promise<R> {
   return alsInstance.run(new Map(), fn);
 }
 
+type CacheEntry<T> = { value: T; locKey: string | null };
+
 export function createCache<T>(): LoaderCache<T> {
   const key = Symbol('cache');
-  let fallbackStore: T | null = null;
+  let fallbackStore: CacheEntry<T> | null = null;
 
-  function read(): T | null {
+  function readEntry(): CacheEntry<T> | null {
     if (!isBrowser()) {
       const reqStore = getRequestStore();
       if (reqStore) {
-        return (reqStore.get(key) as T | undefined) ?? null;
+        return (reqStore.get(key) as CacheEntry<T> | undefined) ?? null;
       }
     }
     return fallbackStore;
   }
 
-  function write(value: T | null): void {
+  function writeEntry(entry: CacheEntry<T> | null): void {
     if (!isBrowser()) {
       const reqStore = getRequestStore();
       if (reqStore) {
-        if (value === null) reqStore.delete(key);
-        else reqStore.set(key, value);
+        if (entry === null) reqStore.delete(key);
+        else reqStore.set(key, entry);
         return;
       }
     }
-    fallbackStore = value;
+    fallbackStore = entry;
+  }
+
+  function entryMatches(entry: CacheEntry<T>, locKey?: string): boolean {
+    // A null locKey on the entry means "matches any caller locKey" (back-compat).
+    return entry.locKey === null || entry.locKey === locKey;
   }
 
   return {
-    get: () => read(),
-    set: (value) => write(value),
-    has: () => read() !== null,
+    get(locKey) {
+      const entry = readEntry();
+      if (entry === null || !entryMatches(entry, locKey)) return null;
+      return entry.value;
+    },
+    set(value, locKey) {
+      writeEntry({ value, locKey: locKey ?? null });
+    },
+    has(locKey) {
+      const entry = readEntry();
+      return entry !== null && entryMatches(entry, locKey);
+    },
     wrap(loader) {
+      // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
+      // wrap() writes without a locKey so existing callers remain back-compat.
       return async (props) => {
-        const existing = read();
-        if (existing !== null) return existing;
-        const result = await loader(props);
-        write(result);
+        const entry = readEntry();
+        if (entry !== null) return entry.value;
+        const result = await (loader(props) as Promise<T>);
+        writeEntry({ value: result, locKey: null });
         return result;
       };
     },
     invalidate() {
-      write(null);
+      writeEntry(null);
     },
   };
 }

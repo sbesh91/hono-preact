@@ -1,13 +1,14 @@
 import type { ComponentChildren, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
-import { useCallback, useId, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useId, useRef, useState } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { ReloadContext } from '../reload-context.js';
 import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
-import { LoaderDataContext, LoaderIdContext } from './contexts.js';
+import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
+import { fetchLoaderData } from './loader-fetch.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -61,6 +62,23 @@ function LoaderHost<T>({
   const locationRef = useRef(location);
   locationRef.current = location;
 
+  const abortRef = useRef<AbortController | null>(null);
+
+  function newAbortSignal(): AbortSignal {
+    // Abort the previous controller (cancels any in-flight loader),
+    // then allocate a fresh one whose signal is passed to the new fn call.
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    return abortRef.current.signal;
+  }
+
+  useEffect(
+    () => () => {
+      if (abortRef.current) abortRef.current.abort();
+    },
+    []
+  );
+
   // True while either the initial Suspense fetch or an explicit reload is in
   // flight. Tracked via a ref so reload() can read it without recapturing on
   // every state change, and so the wrapPromise branch below can flip it
@@ -73,10 +91,32 @@ function LoaderHost<T>({
     inFlightRef.current = true;
     setReloading(true);
     setLoadError(null);
-    fnRef
-      .current({ location: locationRef.current })
+
+    const useFetchPath =
+      isBrowser() &&
+      typeof fetch === 'function' &&
+      loaderRef.__moduleKey !== undefined;
+
+    const promise: Promise<T> = useFetchPath
+      ? fetchLoaderData<T>(
+          loaderRef.__moduleKey!,
+          {
+            path: locationRef.current.path,
+            pathParams: (locationRef.current.pathParams ?? {}) as Record<string, string>,
+            searchParams: (locationRef.current.searchParams ?? {}) as Record<string, string>,
+          },
+          newAbortSignal(),
+          {
+            onChunk: (value) => setOverrideData(value),
+            onError: (err) => setLoadError(err),
+            onEnd: () => { /* nothing to do */ },
+          }
+        )
+      : (fnRef.current({ location: locationRef.current, signal: newAbortSignal() }) as Promise<T>);
+
+    promise
       .then((result) => {
-        if (isBrowser()) loaderRef.cache.set(result);
+        if (isBrowser()) loaderRef.cache.set(result, serializeLocation(locationRef.current));
         setOverrideData(result);
         setReloading(false);
         inFlightRef.current = false;
@@ -127,10 +167,10 @@ function LoaderHost<T>({
     const preloaded = getPreloadedData<T>(id);
     const isFirstRender = readerRef.current === null;
     if (preloaded !== null) {
-      loaderRef.cache.set(preloaded);
+      loaderRef.cache.set(preloaded, locKey);
       readerRef.current = { read: () => preloaded };
-    } else if (isBrowser() && isFirstRender && loaderRef.cache.has()) {
-      const cached = loaderRef.cache.get()!;
+    } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
+      const cached = loaderRef.cache.get(locKey)!;
       readerRef.current = { read: () => cached };
     } else {
       inFlightRef.current = true;
@@ -141,11 +181,33 @@ function LoaderHost<T>({
           runReloadRef.current();
         }
       };
+
+      const useFetchPath =
+        isBrowser() &&
+        typeof fetch === 'function' &&
+        loaderRef.__moduleKey !== undefined;
+
+      const fetchPromise: Promise<T> = useFetchPath
+        ? fetchLoaderData<T>(
+            loaderRef.__moduleKey!,
+            {
+              path: location.path,
+              pathParams: (location.pathParams ?? {}) as Record<string, string>,
+              searchParams: (location.searchParams ?? {}) as Record<string, string>,
+            },
+            newAbortSignal(),
+            {
+              onChunk: (value) => setOverrideData(value),
+              onError: (err) => setLoadError(err),
+              onEnd: () => { /* nothing to do */ },
+            }
+          )
+        : (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<T>);
+
       readerRef.current = wrapPromise(
-        loaderRef
-          .fn({ location })
+        fetchPromise
           .then((r) => {
-            if (isBrowser()) loaderRef.cache.set(r);
+            if (isBrowser()) loaderRef.cache.set(r, locKey);
             settle();
             return r;
           })
@@ -158,23 +220,20 @@ function LoaderHost<T>({
   }
 
   return (
-    <ReloadContext.Provider
-      value={{
-        reload,
-        reloading,
-        error: loadError,
-        loaderId: loaderRef.__id,
-      }}
-    >
-      <Suspense fallback={fallback}>
-        <DataReader
-          reader={readerRef.current}
-          overrideData={overrideData}
-        >
-          {children}
-        </DataReader>
-      </Suspense>
-    </ReloadContext.Provider>
+    <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
+      <ReloadContext.Provider value={{ reload, reloading }}>
+        <LoaderErrorContext.Provider value={loadError}>
+          <Suspense fallback={fallback}>
+            <DataReader
+              reader={readerRef.current}
+              overrideData={overrideData}
+            >
+              {children}
+            </DataReader>
+          </Suspense>
+        </LoaderErrorContext.Provider>
+      </ReloadContext.Provider>
+    </ActiveLoaderIdContext.Provider>
   );
 }
 

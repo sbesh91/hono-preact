@@ -118,3 +118,40 @@ describe('LoaderRef methods', () => {
     }).toThrow(/inside a route page/);
   });
 });
+
+describe('defineLoader: streaming acceptance', () => {
+  it('accepts an async-generator loader', () => {
+    const ref = defineLoader(async function* (_ctx) {
+      yield { tick: 1 };
+      yield { tick: 2 };
+    });
+    expect(typeof ref.fn).toBe('function');
+  });
+
+  it('accepts a ReadableStream<T>-returning loader', () => {
+    const ref = defineLoader(async (_ctx) =>
+      new ReadableStream<{ tick: number }>({
+        start(c) { c.enqueue({ tick: 1 }); c.close(); },
+      })
+    );
+    expect(typeof ref.fn).toBe('function');
+  });
+
+  it('passes ctx with location and signal', async () => {
+    let seen: { hasLocation: boolean; hasSignal: boolean } | null = null;
+    const ref = defineLoader(async (ctx) => {
+      seen = {
+        hasLocation: typeof ctx.location === 'object',
+        hasSignal: ctx.signal instanceof AbortSignal,
+      };
+      return {};
+    });
+    const ac = new AbortController();
+    const fn = ref.fn as (props: { location: unknown; signal: AbortSignal }) => Promise<unknown>;
+    await fn({
+      location: { path: '/', pathParams: {}, searchParams: {} },
+      signal: ac.signal,
+    });
+    expect(seen).toEqual({ hasLocation: true, hasSignal: true });
+  });
+});

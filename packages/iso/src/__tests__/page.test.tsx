@@ -35,7 +35,7 @@ afterEach(() => {
   cleanup();
 });
 
-const emptyLoader = defineLoader<Record<string, never>>(async () => ({}), { __moduleKey: 'empty-page-test' });
+const emptyLoader = defineLoader<Record<string, never>>(async () => ({}));
 
 describe('guard { render }', () => {
   it('renders the guard-supplied component instead of the page', async () => {
@@ -139,7 +139,7 @@ describe('Page error boundary', () => {
   it('renders errorFallback when the loader rejects', async () => {
     const failing = defineLoader<{ msg: string }>(async () => {
       throw new Error('boom');
-    }, { __moduleKey: 'failing-page-test' });
+    });
 
     render(
       <LocationProvider>

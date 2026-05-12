@@ -1,17 +1,25 @@
 import { useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
-import { LoaderDataContext } from './internal/contexts.js';
+import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 
-export type LoaderCtx = { location: RouteHook };
+export type LoaderCtx = {
+  location: RouteHook;
+  signal: AbortSignal;
+};
 
-export type Loader<T> = (ctx: LoaderCtx) => Promise<T>;
+export type Loader<T> =
+  | ((ctx: LoaderCtx) => Promise<T>)
+  | ((ctx: LoaderCtx) => Promise<ReadableStream<T>>)
+  | ((ctx: LoaderCtx) => AsyncGenerator<T, void, unknown>);
 
 export interface LoaderRef<T> {
   readonly __id: symbol;
+  readonly __moduleKey?: string;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   useData(): T;
+  useError(): Error | null;
   invalidate(): void;
 }
 
@@ -79,6 +87,7 @@ export function defineLoader<T>(
 
   const ref: LoaderRef<T> = {
     __id,
+    __moduleKey: opts?.__moduleKey,
     fn,
     cache,
     useData() {
@@ -89,6 +98,9 @@ export function defineLoader<T>(
         );
       }
       return ctx.data as T;
+    },
+    useError() {
+      return useContext(LoaderErrorContext);
     },
     invalidate() {
       cache.invalidate();

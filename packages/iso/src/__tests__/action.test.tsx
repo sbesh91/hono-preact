@@ -15,6 +15,7 @@ import { afterEach, vi } from 'vitest';
 import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
+import { ActiveLoaderIdContext } from '../internal/contexts.js';
 import type { ActionStub } from '../action.js';
 import { defineLoader } from '../define-loader.js';
 
@@ -186,7 +187,7 @@ describe('useAction', () => {
     }
 
     render(
-      <ReloadContext.Provider value={{ reload, reloading: false, error: null }}>
+      <ReloadContext.Provider value={{ reload, reloading: false }}>
         <TestComponent />
       </ReloadContext.Provider>
     );
@@ -212,7 +213,7 @@ describe('useAction', () => {
     }
 
     render(
-      <ReloadContext.Provider value={{ reload, reloading: false, error: null }}>
+      <ReloadContext.Provider value={{ reload, reloading: false }}>
         <TestComponent />
       </ReloadContext.Provider>
     );
@@ -253,11 +254,11 @@ describe('useAction', () => {
     }
 
     render(
-      <ReloadContext.Provider
-        value={{ reload, reloading: false, error: null, loaderId: active.__id }}
-      >
-        <TestComponent />
-      </ReloadContext.Provider>
+      <ActiveLoaderIdContext.Provider value={active.__id}>
+        <ReloadContext.Provider value={{ reload, reloading: false }}>
+          <TestComponent />
+        </ReloadContext.Provider>
+      </ActiveLoaderIdContext.Provider>
     );
     await act(async () => {
       screen.getByRole('button').click();
@@ -296,11 +297,11 @@ describe('useAction', () => {
     }
 
     render(
-      <ReloadContext.Provider
-        value={{ reload, reloading: false, error: null, loaderId: active.__id }}
-      >
-        <TestComponent />
-      </ReloadContext.Provider>
+      <ActiveLoaderIdContext.Provider value={active.__id}>
+        <ReloadContext.Provider value={{ reload, reloading: false }}>
+          <TestComponent />
+        </ReloadContext.Provider>
+      </ActiveLoaderIdContext.Provider>
     );
     await act(async () => {
       screen.getByRole('button').click();
