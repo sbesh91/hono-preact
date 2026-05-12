@@ -32,7 +32,7 @@ describe('stream-registry', () => {
     expect(observed).toEqual([{ count: 5 }, { count: 6 }]);
   });
 
-  it('install-first, then subscribe (real-world order): pre-hydration events still drain', () => {
+  it('install-first, then subscribe (real-world order): pre-hydration events still drain', async () => {
     (window as { __HP_STREAM__?: unknown }).__HP_STREAM__ = {
       queue: [
         { type: 'push', loaderId: 'L1', value: { count: 5 } },
@@ -49,10 +49,11 @@ describe('stream-registry', () => {
       error: () => {},
     });
 
+    await Promise.resolve(); // flush microtask drain
     expect(observed).toEqual([{ count: 5 }, { count: 6 }]);
   });
 
-  it('events arriving post-install but pre-subscribe are buffered and drained on subscribe', () => {
+  it('events arriving post-install but pre-subscribe are buffered and drained on subscribe', async () => {
     installStreamRegistry();
 
     window.__HP_STREAM__!.push('LATE', { tick: 1 });
@@ -65,6 +66,7 @@ describe('stream-registry', () => {
       error: () => {},
     });
 
+    await Promise.resolve(); // flush microtask drain
     expect(observed).toEqual([{ tick: 1 }, { tick: 2 }]);
   });
 
@@ -134,7 +136,7 @@ describe('stream-registry', () => {
     expect(observed).toEqual([1]);
   });
 
-  it('after unsubscribe, post-unsubscribe events for that id are buffered until a new subscriber appears', () => {
+  it('after unsubscribe, post-unsubscribe events for that id are buffered until a new subscriber appears', async () => {
     installStreamRegistry();
 
     const observed: unknown[] = [];
@@ -155,6 +157,7 @@ describe('stream-registry', () => {
       error: () => {},
     });
 
+    await Promise.resolve(); // flush microtask drain
     expect(observed).toEqual([]);
     expect(reobserved).toEqual([1]);
   });

@@ -2,6 +2,8 @@
 
 Pages often need data. On the server, that data should come from a direct function call. In the browser during navigation, it goes through an RPC call to the server. Writing this branch manually is error-prone, so the loader system handles it automatically.
 
+If your loader produces values over time (dashboards, log tails, live feeds), see [Streaming](/docs/streaming).
+
 ## How it works
 
 A page is a file pair:

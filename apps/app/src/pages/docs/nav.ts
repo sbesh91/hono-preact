@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Loader,
   Map as MapIcon,
+  Radio,
   RefreshCw,
   Rocket,
   Send,
@@ -45,6 +46,7 @@ export const nav: NavSection[] = [
       { title: 'Loading States', route: '/docs/loading-states', icon: Loader },
       { title: 'Reloading Data', route: '/docs/reloading', icon: RefreshCw },
       { title: 'Prefetching', route: '/docs/prefetch', icon: Zap },
+      { title: 'Streaming', route: '/docs/streaming', icon: Radio },
     ],
   },
   {
