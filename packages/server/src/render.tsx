@@ -91,11 +91,14 @@ export async function renderPage(
   // Inline bootstrap installs a queue on window.__HP_STREAM__ so that
   // events flushed BEFORE the client bundle loads are buffered. The
   // client entry calls installStreamRegistry() which drains the queue.
+  // Each emitted script self-removes after running so the DOM doesn't
+  // accumulate inert <script> nodes over the life of the page.
   const bootstrap =
     '<script>window.__HP_STREAM__=window.__HP_STREAM__||{queue:[],' +
     'push(id,v){this.queue.push({type:"push",loaderId:id,value:v})},' +
     'end(id){this.queue.push({type:"end",loaderId:id})},' +
-    'error(id,e){this.queue.push({type:"error",loaderId:id,error:e})}};</script>';
+    'error(id,e){this.queue.push({type:"error",loaderId:id,error:e})}};' +
+    'document.currentScript.remove()</script>';
 
   const encoder = new TextEncoder();
   const requestSignal = c.req.raw.signal;
@@ -118,14 +121,14 @@ export async function renderPage(
                 if (step.done) {
                   controller.enqueue(
                     encoder.encode(
-                      `<script>window.__HP_STREAM__.end(${JSON.stringify(loaderId)})</script>\n`
+                      `<script>window.__HP_STREAM__.end(${JSON.stringify(loaderId)});document.currentScript.remove()</script>\n`
                     )
                   );
                   return;
                 }
                 controller.enqueue(
                   encoder.encode(
-                    `<script>window.__HP_STREAM__.push(${JSON.stringify(loaderId)},${JSON.stringify(step.value)})</script>\n`
+                    `<script>window.__HP_STREAM__.push(${JSON.stringify(loaderId)},${JSON.stringify(step.value)});document.currentScript.remove()</script>\n`
                   )
                 );
               }
@@ -134,7 +137,7 @@ export async function renderPage(
               const name = err instanceof Error ? err.name : 'Error';
               controller.enqueue(
                 encoder.encode(
-                  `<script>window.__HP_STREAM__.error(${JSON.stringify(loaderId)},${JSON.stringify({ message, name })})</script>\n`
+                  `<script>window.__HP_STREAM__.error(${JSON.stringify(loaderId)},${JSON.stringify({ message, name })});document.currentScript.remove()</script>\n`
                 )
               );
             }
