@@ -27,6 +27,11 @@ export default defineRoutes([
     server: () => import('./pages/watched.server.js'),
   },
   {
+    path: '/live-stats',
+    view: () => import('./pages/live-stats.js'),
+    server: () => import('./pages/live-stats.server.js'),
+  },
+  {
     path: '/docs',
     view: docsView,
   },
