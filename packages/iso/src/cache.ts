@@ -37,7 +37,7 @@ if (!looksLikeBrowser) {
   }
 }
 
-function getRequestStore(): RequestStore | undefined {
+export function getRequestStore(): RequestStore | undefined {
   return alsInstance?.getStore();
 }
 
