@@ -79,11 +79,3 @@ export default function MoviesLayout({ children }: LayoutProps) {
     </WatchedBadgeContext.Provider>
   );
 }
-
-// Legacy no-op export retained for one commit so movies-list.tsx (rewritten
-// in the next task) keeps compiling between R10 and R11. Removed at the end
-// of R11 along with its sole caller.
-export const useMoviesFilter = (): { query: string; setQuery: (q: string) => void } => ({
-  query: '',
-  setQuery: () => {},
-});
