@@ -44,24 +44,6 @@ function findDynamicServerImports(node: unknown, found: DynamicServerImport[]): 
   }
 }
 
-function loaderFetchArrow(moduleName: string, indent: string): string {
-  const i = indent;
-  return (
-    `async ({ location }) => {\n` +
-    `${i}  const res = await fetch('/__loaders', {\n` +
-    `${i}    method: 'POST',\n` +
-    `${i}    headers: { 'Content-Type': 'application/json' },\n` +
-    `${i}    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
-    `${i}  });\n` +
-    `${i}  if (!res.ok) {\n` +
-    `${i}    const body = await res.json().catch(() => ({}));\n` +
-    `${i}    throw new Error(body.error ?? \`Loader failed with status \${res.status}\`);\n` +
-    `${i}  }\n` +
-    `${i}  return res.json();\n` +
-    `${i}}`
-  );
-}
-
 export function serverOnlyPlugin(): Plugin {
   let viteRoot: string | undefined;
   return {
@@ -119,7 +101,7 @@ export function serverOnlyPlugin(): Plugin {
       const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
-      let needsDefineLoaderImport = false;
+      let needsCreateLoaderStubImport = false;
       let needsUseActionImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
@@ -148,14 +130,21 @@ export function serverOnlyPlugin(): Plugin {
             continue;
           }
           hasValueSpecifier = true;
-          const isDefaultImport =
-            specifier.type === 'ImportDefaultSpecifier' ||
-            (specifier.type === 'ImportSpecifier' &&
-              specifier.imported.type === 'Identifier' &&
-              specifier.imported.name === 'default');
-          if (isDefaultImport) {
+          if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverLoaders'
+          ) {
+            needsCreateLoaderStubImport = true;
             stubs.push(
-              `const ${specifier.local.name} = ${loaderFetchArrow(moduleKey, '')};`
+              `const ${specifier.local.name} = new Proxy({}, {\n` +
+              `  get(_, name) {\n` +
+              `    return __$createLoaderStub_hpiso({\n` +
+              `      __moduleKey: ${JSON.stringify(moduleKey)},\n` +
+              `      __loaderName: String(name),\n` +
+              `    });\n` +
+              `  }\n` +
+              `});`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -179,15 +168,6 @@ export function serverOnlyPlugin(): Plugin {
               `  }\n` +
               `});`
             );
-          } else if (
-            specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'loader'
-          ) {
-            needsDefineLoaderImport = true;
-            stubs.push(
-              `const ${specifier.local.name} = __$defineLoader_hpiso(${loaderFetchArrow(moduleKey, '  ')}, { __moduleKey: ${JSON.stringify(moduleKey)} });`
-            );
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&
@@ -198,7 +178,7 @@ export function serverOnlyPlugin(): Plugin {
                 : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-              `Allowed: default, loader, serverGuards, serverActions, actionGuards.`
+              `Allowed: serverLoaders, serverGuards, serverActions, actionGuards.`
             );
           }
         }
@@ -214,8 +194,8 @@ export function serverOnlyPlugin(): Plugin {
         s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
       }
 
-      if (needsDefineLoaderImport) {
-        s.prepend(`import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';\n`);
+      if (needsCreateLoaderStubImport) {
+        s.prepend(`import { __$createLoaderStub_hpiso } from '@hono-preact/iso/internal';\n`);
       }
       if (needsUseActionImport) {
         s.prepend(`import { useAction as __$useAction_hpiso } from '@hono-preact/iso';\n`);
