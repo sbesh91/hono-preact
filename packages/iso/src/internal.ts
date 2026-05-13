@@ -21,6 +21,7 @@ export {
   GuardResultContext,
 } from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
+export { RouteLocationsContext, RouteLocationsProvider } from './internal/route-locations.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
 export { runRequestScope, getRequestStore } from './cache.js';

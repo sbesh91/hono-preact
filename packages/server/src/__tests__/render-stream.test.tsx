@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { renderPage } from '../render.js';
-import { defineLoader, definePage } from '@hono-preact/iso';
+import { defineLoader } from '@hono-preact/iso';
 import { Loader } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
-import { loader as moviesListLoader } from '../../../../apps/app/src/pages/movies-list.server.js';
+import { serverLoaders as moviesListServerLoaders } from '../../../../apps/app/src/pages/movies-list.server.js';
+
+const moviesListLoader = moviesListServerLoaders.default;
 
 // Helper: read a streaming response body fully to a string.
 async function readBody(res: Response): Promise<string> {
@@ -97,17 +99,24 @@ describe('renderPage: streaming SSR', () => {
 
 describe('renderPage: movies-list streaming search SSR', () => {
   it('streams bucket chunks when q is present', async () => {
-    const PageBody = () => {
+    const moviesLoc = {
+      path: '/movies',
+      pathParams: {},
+      searchParams: { q: 'moana' },
+    } as unknown as RouteHook;
+
+    const Inner = () => {
       const data = moviesListLoader.useData() as { mode: string };
       return <p data-testid="mode">{data.mode}</p>;
     };
-    const Page = definePage(PageBody, { loader: moviesListLoader });
 
     const app = new Hono();
     app.get('/movies', (c) =>
       renderPage(
         c,
-        <Page path="/movies" pathParams={{}} searchParams={{ q: 'moana' }} />
+        <Loader loader={moviesListLoader} location={moviesLoc}>
+          <Inner />
+        </Loader>
       )
     );
 
