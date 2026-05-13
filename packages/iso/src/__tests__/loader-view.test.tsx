@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
-import { h } from 'preact';
 import type { FunctionComponent } from 'preact';
-import { render, waitFor } from '@testing-library/preact';
+import { render } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
@@ -20,7 +19,7 @@ describe('LoaderRef.Boundary', () => {
   it('renders the loader fallback then transitions to children with data', async () => {
     let resolveData: (v: { value: number }) => void = () => {};
     const ref = defineLoader<{ value: number }>(
-      () => new Promise((res) => { resolveData = res; }),
+      () => new Promise<{ value: number }>((res) => { resolveData = res; }),
       { __moduleKey: 'pages/test-boundary' }
     );
 
@@ -52,7 +51,7 @@ describe('LoaderRef.View', () => {
   it('renders fallback then provides data, error, reload to render fn', async () => {
     let resolveData: (v: { name: string }) => void = () => {};
     const ref = defineLoader<{ name: string }>(
-      () => new Promise((res) => { resolveData = res; }),
+      () => new Promise<{ name: string }>((res) => { resolveData = res; }),
       { __moduleKey: 'pages/test-view-1' }
     );
 

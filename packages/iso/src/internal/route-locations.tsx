@@ -14,7 +14,7 @@ export function RouteLocationsProvider({
 }: {
   moduleKey: string | undefined;
   location: RouteHook;
-  children: ComponentChildren;
+  children?: ComponentChildren;
 }) {
   const parent = useContext(RouteLocationsContext);
   const next = useMemo(() => {
