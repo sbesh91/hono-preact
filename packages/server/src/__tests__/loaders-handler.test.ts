@@ -22,10 +22,13 @@ describe('loadersHandler', () => {
   it('calls the matching serverLoader with the location and returns JSON', async () => {
     const loaderFn = vi.fn().mockResolvedValue({ movies: [] });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'pages/movies', default: loaderFn },
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: { default: loaderFn },
+      },
     });
 
-    const res = await post(app, { module: 'pages/movies', location: loc });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ movies: [] });
@@ -35,16 +38,19 @@ describe('loadersHandler', () => {
   });
 
   it('returns 404 when the module is not found', async () => {
-    const res = await post(makeApp({}), { module: 'missing', location: loc });
+    const res = await post(makeApp({}), { module: 'missing', loader: 'default', location: loc });
     expect(res.status).toBe(404);
-    expect((await res.json() as { error: string }).error).toContain("Module 'missing' not found");
+    expect((await res.json() as { error: string }).error).toContain("not found");
   });
 
-  it('returns 404 when the module has no default export', async () => {
+  it('returns 404 when the module has no serverLoaders', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'pages/movies', serverActions: { create: vi.fn() } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverActions: { create: vi.fn() },
+      },
     });
-    const res = await post(app, { module: 'pages/movies', location: loc });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
     expect(res.status).toBe(404);
   });
 
@@ -52,10 +58,10 @@ describe('loadersHandler', () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'pages/movies',
-        default: async () => { throw new Error('DB error'); },
+        serverLoaders: { default: async () => { throw new Error('DB error'); } },
       },
     });
-    const res = await post(app, { module: 'pages/movies', location: loc });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
     expect(res.status).toBe(500);
     expect((await res.json() as { error: string }).error).toBe('DB error');
   });
@@ -63,20 +69,27 @@ describe('loadersHandler', () => {
   it('resolves lazy glob modules before handling requests', async () => {
     const loaderFn = vi.fn().mockResolvedValue({ ok: true });
     const lazyGlob = {
-      './pages/movies.server.ts': () => Promise.resolve({ __moduleKey: 'pages/movies', default: loaderFn }),
+      './pages/movies.server.ts': () =>
+        Promise.resolve({
+          __moduleKey: 'pages/movies',
+          serverLoaders: { default: loaderFn },
+        }),
     };
     const app = makeApp(lazyGlob);
 
-    const res = await post(app, { module: 'pages/movies', location: loc });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
     expect(res.status).toBe(200);
     expect(loaderFn).toHaveBeenCalled();
   });
 
   it('returns 400 when body is missing module field', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'pages/movies', default: vi.fn() },
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: { default: vi.fn() },
+      },
     });
-    const res = await post(app, { location: loc });
+    const res = await post(app, { loader: 'default', location: loc });
     expect(res.status).toBe(400);
     expect((await res.json() as { error: string }).error).toContain('module');
   });
@@ -85,7 +98,7 @@ describe('loadersHandler', () => {
     const app = makeApp({
       './pages/movies.server.ts': () => Promise.reject(new Error('load failed')),
     });
-    const res = await post(app, { module: 'pages/movies', location: loc });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
     expect(res.status).toBe(503);
     expect((await res.json() as { error: string }).error).toContain('load failed');
   });
@@ -93,14 +106,17 @@ describe('loadersHandler', () => {
   it('propagates location.searchParams through to the loader', async () => {
     const loaderFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'pages/movies', default: loaderFn },
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: { default: loaderFn },
+      },
     });
     const locWithParams = {
       path: '/movies',
       pathParams: {},
       searchParams: { genre: 'action' },
     };
-    const res = await post(app, { module: 'pages/movies', location: locWithParams });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: locWithParams });
     expect(res.status).toBe(200);
     expect(loaderFn).toHaveBeenCalledWith(
       expect.objectContaining({ location: locWithParams, signal: expect.any(AbortSignal) })
@@ -118,11 +134,12 @@ describe('loadersHandler path-keyed routing', () => {
     const app = makeApp({
       '/whatever.server.ts': {
         __moduleKey: 'src/pages/movies',
-        default: loaderFn,
+        serverLoaders: { default: loaderFn },
       },
     });
     const res = await post(app, {
       module: 'src/pages/movies',
+      loader: 'default',
       location: loc,
     });
     expect(res.status).toBe(200);
@@ -132,9 +149,9 @@ describe('loadersHandler path-keyed routing', () => {
 
   it('returns 404 when the requested module key does not match any export', async () => {
     const app = makeApp({
-      '/x.server.ts': { __moduleKey: 'a', default: async () => ({}) },
+      '/x.server.ts': { __moduleKey: 'a', serverLoaders: { default: async () => ({}) } },
     });
-    const res = await post(app, { module: 'b', location: loc });
+    const res = await post(app, { module: 'b', loader: 'default', location: loc });
     expect(res.status).toBe(404);
   });
 
@@ -142,9 +159,9 @@ describe('loadersHandler path-keyed routing', () => {
     // A module without __moduleKey can't be routed; the handler should
     // simply not register it.
     const app = makeApp({
-      '/no-key.server.ts': { default: async () => ({}) },
+      '/no-key.server.ts': { serverLoaders: { default: async () => ({}) } },
     });
-    const res = await post(app, { module: 'no-key', location: loc });
+    const res = await post(app, { module: 'no-key', loader: 'default', location: loc });
     expect(res.status).toBe(404);
   });
 });
@@ -154,15 +171,18 @@ describe('loadersHandler: streaming', () => {
     const app = makeApp({
       './pages/x.server.ts': {
         __moduleKey: 'x',
-        default: async function* () {
-          yield { tick: 1 };
-          yield { tick: 2 };
+        serverLoaders: {
+          default: async function* () {
+            yield { tick: 1 };
+            yield { tick: 2 };
+          },
         },
       },
     });
 
     const res = await post(app, {
       module: 'x',
+      loader: 'default',
       location: { path: '/x', pathParams: {}, searchParams: {} },
     });
     expect(res.status).toBe(200);
@@ -176,18 +196,21 @@ describe('loadersHandler: streaming', () => {
     const app = makeApp({
       './pages/x.server.ts': {
         __moduleKey: 'x',
-        default: async () =>
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue({ tick: 1 });
-              controller.close();
-            },
-          }),
+        serverLoaders: {
+          default: async () =>
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue({ tick: 1 });
+                controller.close();
+              },
+            }),
+        },
       },
     });
 
     const res = await post(app, {
       module: 'x',
+      loader: 'default',
       location: { path: '/x', pathParams: {}, searchParams: {} },
     });
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
@@ -198,16 +221,26 @@ describe('loadersHandler: streaming', () => {
 
 describe('loadersHandler: location validation', () => {
   it('rejects missing location', async () => {
-    const app = makeApp({ './pages/x.server.ts': { __moduleKey: 'x', default: async () => ({}) } });
-    const res = await post(app, { module: 'x' });
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverLoaders: { default: async () => ({}) },
+      },
+    });
+    const res = await post(app, { module: 'x', loader: 'default' });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toMatch(/location/);
   });
 
   it('rejects location missing path or pathParams', async () => {
-    const app = makeApp({ './pages/x.server.ts': { __moduleKey: 'x', default: async () => ({}) } });
-    const res = await post(app, { module: 'x', location: { searchParams: {} } });
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverLoaders: { default: async () => ({}) },
+      },
+    });
+    const res = await post(app, { module: 'x', loader: 'default', location: { searchParams: {} } });
     expect(res.status).toBe(400);
   });
 });
