@@ -1,4 +1,5 @@
 import { defineLoader, type LoaderRef } from '../define-loader.js';
+import { fetchLoaderData } from './loader-fetch.js';
 
 type StubOpts = {
   __moduleKey: string;
@@ -9,15 +10,18 @@ type StubOpts = {
 export function __$createLoaderStub_hpiso<T = unknown>(
   opts: StubOpts
 ): LoaderRef<T> {
-  // The stub's fn is a placeholder that throws if invoked directly. Task 13
-  // will replace it with the actual RPC fetch arrow that calls
-  // fetchLoaderData(moduleKey, loaderName, ...).
-  const fn = async () => {
-    throw new Error(
-      `Loader stub for '${opts.__moduleKey}::${opts.__loaderName}' invoked directly; ` +
-      `expected the server-only plugin to replace the fn at build time.`
+  const fn = async ({ location, signal }: { location: any; signal?: AbortSignal }) =>
+    fetchLoaderData<T>(
+      opts.__moduleKey,
+      opts.__loaderName,
+      {
+        path: location.path,
+        pathParams: location.pathParams,
+        searchParams: location.searchParams,
+      },
+      signal ?? new AbortController().signal,
+      { onChunk: () => {}, onError: () => {}, onEnd: () => {} }
     );
-  };
   // defineLoader does the cache + symbol + useData/useError plumbing.
   return defineLoader<T>(fn as any, {
     __moduleKey: opts.__moduleKey,

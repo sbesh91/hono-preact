@@ -121,9 +121,11 @@ function LoaderHost<T>({
       typeof fetch === 'function' &&
       loaderRef.__moduleKey !== undefined;
 
+    const loaderName = loaderRef.__loaderName ?? 'default';
     const promise: Promise<T> = useFetchPath
       ? fetchLoaderData<T>(
           loaderRef.__moduleKey!,
+          loaderName,
           {
             path: locationRef.current.path,
             pathParams: (locationRef.current.pathParams ?? {}) as Record<string, string>,
@@ -225,10 +227,12 @@ function LoaderHost<T>({
         typeof fetch === 'function' &&
         loaderRef.__moduleKey !== undefined;
 
+      const firstRenderLoaderName = loaderRef.__loaderName ?? 'default';
       let fetchPromise: Promise<T>;
       if (useFetchPath) {
         fetchPromise = fetchLoaderData<T>(
           loaderRef.__moduleKey!,
+          firstRenderLoaderName,
           {
             path: location.path,
             pathParams: (location.pathParams ?? {}) as Record<string, string>,
