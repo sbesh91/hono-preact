@@ -143,7 +143,7 @@ export function defineLoader<T>(
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {
         throw new Error(
-          'loader.useData() must be called inside a route page that has a loader.'
+          'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
         );
       }
       return ctx.data as T;

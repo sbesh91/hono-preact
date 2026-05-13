@@ -115,7 +115,7 @@ describe('LoaderRef methods', () => {
         return null;
       };
       render(h(Probe, null));
-    }).toThrow(/inside a route page/);
+    }).toThrow(/loader\.View.*render function|loader\.Boundary/);
   });
 });
 
