@@ -4,6 +4,7 @@ import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
+import { ReloadContext } from './reload-context.js';
 
 export type LoaderCtx = {
   location: RouteHook;
@@ -80,6 +81,22 @@ function getSharedCaches(): SharedCacheMap {
   return map;
 }
 
+function ViewRenderer<T>({
+  loaderRef,
+  props,
+  render,
+}: {
+  loaderRef: LoaderRef<T>;
+  props: Record<string, unknown>;
+  render: (args: any) => import('preact').ComponentChildren;
+}) {
+  const data = loaderRef.useData();
+  const error = loaderRef.useError();
+  const reloadCtx = useContext(ReloadContext);
+  const reload = reloadCtx?.reload ?? (() => {});
+  return render({ data, error, reload, ...props }) as any;
+}
+
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
@@ -138,7 +155,7 @@ export function defineLoader<T>(
       cache!.invalidate();
     },
     Boundary: null as never,
-    View: (() => { throw new Error('View not yet implemented'); }) as never,
+    View: null as never,
   };
 
   const Boundary: LoaderRef<T>['Boundary'] = ({ fallback, errorFallback, children }) => {
@@ -150,6 +167,17 @@ export function defineLoader<T>(
     });
   };
   ref.Boundary = Boundary;
+
+  const View: LoaderRef<T>['View'] = (render, viewOpts) => {
+    const Wrapped: import('preact').FunctionComponent<any> = (props) =>
+      h(ref.Boundary, {
+        fallback: viewOpts?.fallback,
+        errorFallback: viewOpts?.errorFallback,
+        children: h(ViewRenderer<T> as any, { loaderRef: ref, props, render }),
+      });
+    return Wrapped;
+  };
+  ref.View = View;
 
   return ref;
 }
