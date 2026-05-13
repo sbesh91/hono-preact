@@ -21,6 +21,7 @@ export {
   GuardResultContext,
 } from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
+export { RouteLocationsContext, RouteLocationsProvider } from './internal/route-locations.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
 export { runRequestScope, getRequestStore } from './cache.js';
@@ -43,3 +44,5 @@ export {
   takeServerStreamingLoaders,
 } from './internal/streaming-ssr.js';
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
+
+export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';

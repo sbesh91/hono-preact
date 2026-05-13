@@ -12,9 +12,10 @@ const serverLoader: LoaderFn<{ secret: string }> = async () => {
   // returning the secret directly keeps tree-shakers from removing it
   return { secret: SUPER_SECRET_DATABASE_URL };
 };
-export default serverLoader;
 
-export const loader = defineLoader<{ secret: string }>(serverLoader);
+export const serverLoaders = {
+  default: defineLoader<{ secret: string }>(serverLoader),
+};
 
 export const serverActions = {
   noop: defineAction<void, { ok: boolean }>(async () => ({ ok: true })),

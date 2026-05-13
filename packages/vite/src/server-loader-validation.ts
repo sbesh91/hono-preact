@@ -2,7 +2,7 @@ import { parse } from '@babel/parser';
 import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 
-const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'loader']);
+const ALLOWED_NAMED_EXPORTS = new Set(['serverGuards', 'serverActions', 'actionGuards', 'serverLoaders']);
 const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS].map((n) => `'${n}'`).join(', ');
 
 export function serverLoaderValidationPlugin(): Plugin {
@@ -62,10 +62,16 @@ export function serverLoaderValidationPlugin(): Plugin {
             `Export the server loader as the default export only.`
         );
       }
-      if (!hasDefault && !namedExports.includes('serverActions')) {
+      if (hasDefault) {
         errors.push(
-          `${id}: .server files must have a default export. ` +
-            `Export the server loader as: export default async function serverLoader(...) { ... }`
+          `${id}: .server files may not use a default export. ` +
+            `Use \`export const serverLoaders = { default: defineLoader(...) }\` instead.`
+        );
+      }
+      if (!namedExports.includes('serverActions') && !namedExports.includes('serverLoaders')) {
+        errors.push(
+          `${id}: .server files must export either 'serverLoaders' or 'serverActions'. ` +
+            `Use \`export const serverLoaders = { default: defineLoader(fn) }\` to define loaders.`
         );
       }
 

@@ -1,11 +1,41 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeAll } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import MoviesList from '../movies-list.js';
-import { loader } from '../movies-list.server.js';
-import { loader as watchedLoader } from '../watched.server.js';
+import { serverLoaders } from '../movies-list.server.js';
+import { serverLoaders as watchedLoaders } from '../watched.server.js';
 import MoviesLayout from '../movies-layout.js';
+import { RouteLocationsContext } from '@hono-preact/iso/internal';
+
+// In happy-dom, isBrowser() returns true, which would send the loader over
+// the network. Suppress it so spies on loader.fn are actually called.
+vi.mock('@hono-preact/iso/is-browser.js', () => ({
+  isBrowser: () => false,
+  env: { current: 'server' },
+}));
+
+const loader = serverLoaders.default;
+const watchedLoader = watchedLoaders.default;
+
+// The moduleKeyPlugin injects __moduleKey at build time but not in unit tests.
+// Set a stable key so LoaderHost can look up the location from RouteLocationsContext.
+const LIST_MODULE_KEY = 'pages/movies-list-test';
+beforeAll(() => {
+  Object.defineProperty(loader, '__moduleKey', {
+    value: LIST_MODULE_KEY,
+    configurable: true,
+  });
+});
+
+const moviesLocation = {
+  url: '/movies',
+  path: '/movies',
+  query: '',
+  pathParams: {},
+  searchParams: {},
+  route: () => {},
+} as any;
 
 afterEach(() => {
   cleanup();
@@ -40,12 +70,16 @@ describe('MoviesList branches on data.mode', () => {
       };
     } as never);
 
+    const locMap = new Map([[LIST_MODULE_KEY, moviesLocation]]);
+
     render(
-      <LocationProvider>
-        <MoviesLayout>
-          <MoviesList path="/movies" pathParams={{}} searchParams={{}} />
-        </MoviesLayout>
-      </LocationProvider>
+      <RouteLocationsContext.Provider value={locMap}>
+        <LocationProvider>
+          <MoviesLayout>
+            <MoviesList path="/movies" pathParams={{}} searchParams={{}} />
+          </MoviesLayout>
+        </LocationProvider>
+      </RouteLocationsContext.Provider>
     );
 
     await screen.findByText('Moana 2');
@@ -66,12 +100,16 @@ describe('MoviesList branches on data.mode', () => {
       };
     } as never);
 
+    const locMap = new Map([[LIST_MODULE_KEY, moviesLocation]]);
+
     render(
-      <LocationProvider>
-        <MoviesLayout>
-          <MoviesList path="/movies" pathParams={{}} searchParams={{ q: 'moana' }} />
-        </MoviesLayout>
-      </LocationProvider>
+      <RouteLocationsContext.Provider value={locMap}>
+        <LocationProvider>
+          <MoviesLayout>
+            <MoviesList path="/movies" pathParams={{}} searchParams={{ q: 'moana' }} />
+          </MoviesLayout>
+        </LocationProvider>
+      </RouteLocationsContext.Provider>
     );
 
     await screen.findByText('Exact matches');

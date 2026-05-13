@@ -23,21 +23,9 @@ function transform(
 }
 
 describe('serverOnlyPlugin', () => {
-  it('replaces a default *.server.* import with an RPC fetch stub keyed by module path', () => {
-    const code = `import serverLoader from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain(`fetch('/__loaders'`);
-    expect(result?.code).toContain('"src/pages/movies"');
-    expect(result?.code).toContain('location.path');
-    expect(result?.code).toContain('location.pathParams');
-    expect(result?.code).toContain('location.searchParams');
-    expect(result?.code).not.toContain('async () => ({})');
-  });
-
   it('replaces serverGuards named import with an empty array stub', () => {
-    const code = `import serverLoader, { serverGuards } from './movies.server.js';`;
+    const code = `import { serverGuards } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('fetch(\'/__loaders\'');
     expect(result?.code).toContain('const serverGuards = [];');
   });
 
@@ -48,7 +36,7 @@ describe('serverOnlyPlugin', () => {
   });
 
   it('returns undefined when ssr option is true', () => {
-    const code = `import serverLoader from './movies.server.js';`;
+    const code = `import { serverLoaders } from './movies.server.js';`;
     const result = transform(code, 'movies.tsx', { ssr: true });
     expect(result).toBeUndefined();
   });
@@ -67,13 +55,12 @@ describe('serverOnlyPlugin', () => {
 
   it('stubs all .server imports when a file has more than one (each with its own path key)', () => {
     const code = [
-      `import serverLoader from './movies.server.js';`,
-      `import authLoader from './auth.server.js';`,
+      `import { serverLoaders as moviesLoaders } from './movies.server.js';`,
+      `import { serverLoaders as authLoaders } from './auth.server.js';`,
     ].join('\n');
     const result = transform(code, '/Users/me/repo/src/pages/page.tsx');
     expect(result?.code).toContain('"src/pages/movies"');
     expect(result?.code).toContain('"src/pages/auth"');
-    expect(result?.code).not.toContain('async () => ({})');
   });
 
   it('replaces serverActions named import with a Proxy stub using module path key', () => {
@@ -87,10 +74,10 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toMatch(/stub\.useAction\s*=\s*\(opts\)\s*=>\s*__\$useAction_hpiso\(stub,\s*opts\)/);
   });
 
-  it('handles serverActions alongside default import in the same statement', () => {
-    const code = `import serverLoader, { serverActions } from './movies.server.js';`;
+  it('handles serverActions alongside serverLoaders in the same statement', () => {
+    const code = `import { serverLoaders, serverActions } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('fetch(\'/__loaders\'');
+    expect(result?.code).toContain('const serverLoaders = new Proxy(');
     expect(result?.code).toContain('const serverActions = new Proxy(');
     expect(result?.code).toContain('__module: "src/pages/movies"');
   });
@@ -132,30 +119,20 @@ describe('serverOnlyPlugin', () => {
     const code = `import { actionGuards as guards } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
     // The plugin detects the import via imported.name ('actionGuards') and stubs it
-    // using the local alias name — so 'guards' becomes the stub variable.
+    // using the local alias name -- so 'guards' becomes the stub variable.
     // This means renamed imports ARE transformed; the stub uses the alias.
     expect(result?.code).toContain('const guards = [];');
   });
 
-  it('derives module key for default stub from the import source, not the consumer file', () => {
-    const code = `import loader from './profile.server.ts';`;
+  it('derives module key for serverLoaders stub from the import source, not the consumer file', () => {
+    const code = `import { serverLoaders } from './profile.server.ts';`;
     const result = transform(code, '/Users/me/repo/src/pages/some-other-page.tsx');
     expect(result?.code).toContain('"src/pages/profile"');
     expect(result?.code).not.toContain('"src/pages/some-other-page"');
   });
 });
 
-describe('loader and cache specifiers', () => {
-  it('replaces a `loader` named import with a client-side LoaderRef stub', () => {
-    const code = `import { loader } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain("import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';");
-    expect(result?.code).toMatch(/const loader = __\$defineLoader_hpiso\(async/);
-    expect(result?.code).toContain('__moduleKey: "src/movies"');
-    expect(result?.code).toContain("fetch('/__loaders'");
-    expect(result?.code).toContain('"src/movies"');
-  });
-
+describe('cache specifier rejection', () => {
   it('rejects a `cache` named import as an unrecognized export', () => {
     const code = `import { cache } from './movies.server.js';`;
     expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
@@ -163,43 +140,11 @@ describe('loader and cache specifiers', () => {
     );
   });
 
-  it('handles `loader` aliased to a different local name', () => {
-    const code = `import { loader as moviesLoader } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toMatch(/const moviesLoader = __\$defineLoader_hpiso\(/);
-    expect(result?.code).toContain('__moduleKey: "src/movies"');
-    expect(result?.code).toContain('"src/movies"');
-  });
-
-  it('rejects a mixed loader + cache + serverActions import on the cache specifier', () => {
-    const code = `import { loader, cache, serverActions } from './movies.server.js';`;
+  it('rejects a mixed cache + serverActions import on the cache specifier', () => {
+    const code = `import { cache, serverActions } from './movies.server.js';`;
     expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
       /`cache` is not a recognized export/
     );
-  });
-
-  it('handles mixed default + loader in one import statement', () => {
-    const code = `import serverLoader, { loader } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('const serverLoader =');
-    expect(result?.code).toContain('const loader =');
-  });
-
-  it('matches an import that has ONLY loader (no default, no actions, no guards)', () => {
-    // This is the bug from the route-level-loaders migration: imports with only
-    // `loader` were silently passed through.
-    const code = `import { loader } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result).toBeDefined();
-    expect(result?.code).not.toContain("import { loader }");
-    expect(result?.code).toContain('const loader =');
-  });
-
-  it('emits the path key in named `loader` stubs via the defineLoader __moduleKey option', () => {
-    const code = `import { loader } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('__moduleKey: "src/pages/movies"');
-    expect(result?.code).toContain('__$defineLoader_hpiso(');
   });
 });
 
@@ -220,36 +165,20 @@ describe('side-effect and type-only imports', () => {
     expect(result?.code).toContain('const foo = 1');
   });
 
-  it('leaves `import type { Foo } from .server.*` untouched (or stripped — either is safe since types are erased)', () => {
+  it('leaves `import type { Foo } from .server.*` untouched (or stripped -- either is safe since types are erased)', () => {
     const code = `import type { Foo } from './x.server.js';\nconst foo = 1;`;
-    // Should NOT throw. The exact transform output is flexible — assert no throw.
+    // Should NOT throw. The exact transform output is flexible -- assert no throw.
     expect(() => transform(code, '/Users/me/repo/p.tsx')).not.toThrow();
   });
 
-  it('handles mixed `import { type Foo, default as loader } from .server.*`', () => {
-    const code = `import { type Foo, default as loader } from './x.server.js';`;
+  it('handles mixed `import { type Foo, serverLoaders } from .server.*`', () => {
+    const code = `import { type Foo, serverLoaders } from './x.server.js';`;
     expect(() => transform(code, '/Users/me/repo/p.tsx')).not.toThrow();
     const result = transform(code, '/Users/me/repo/p.tsx');
-    // The default import should still be stubbed.
-    expect(result?.code).toContain("fetch('/__loaders'");
+    // serverLoaders should be stubbed with a Proxy.
+    expect(result?.code).toContain('const serverLoaders = new Proxy(');
     // The type import should be skipped (no Foo declaration emitted).
     expect(result?.code).not.toContain('const Foo');
-  });
-});
-
-describe('loader RPC stub uses searchParams (not the deprecated query)', () => {
-  it('default import stub builds searchParams from location.searchParams', () => {
-    const code = `import serverLoader from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('searchParams: location.searchParams');
-    expect(result?.code).not.toContain('query: location.query');
-  });
-
-  it('loader named-import stub builds searchParams from location.searchParams', () => {
-    const code = `import { loader } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result?.code).toContain('searchParams: location.searchParams');
-    expect(result?.code).not.toContain('query: location.query');
   });
 });
 
@@ -278,25 +207,6 @@ describe('re-exports from .server.* are rejected', () => {
   it('does not throw on regular `export * from` of a non-server module', () => {
     const code = `export * from './utils.js';`;
     expect(() => transform(code, '/Users/me/repo/src/aggregator.ts')).not.toThrow();
-  });
-});
-
-describe('loader RPC stub key alignment', () => {
-  it('default and loader-named stubs share the same fetch envelope (refactored helper)', () => {
-    const code = [
-      `import serverLoader from './movies.server.js';`,
-      `import { loader } from './movies.server.js';`,
-    ].join('\n');
-    const result = transform(code, '/Users/me/repo/src/iso.tsx');
-    expect(result).toBeDefined();
-    // Both stubs include the same module RPC body shape.
-    const fetchOccurrences =
-      (result!.code.match(/fetch\('\/__loaders'/g) ?? []).length;
-    expect(fetchOccurrences).toBe(2);
-    // Same module string is referenced from both stubs.
-    const moduleOccurrences =
-      (result!.code.match(/module:\s*"src\/movies"/g) ?? []).length;
-    expect(moduleOccurrences).toBe(2);
   });
 });
 
@@ -330,12 +240,12 @@ describe('dynamic import() rewriting for .server.* sources', () => {
 
   it('rewrites both static and dynamic .server.* imports in the same file', () => {
     const code = [
-      `import serverLoader from './movies.server.js';`,
+      `import { serverLoaders } from './movies.server.js';`,
       `const lazy = () => import('./auth.server.js');`,
     ].join('\n');
     const result = transform(code, '/Users/me/repo/src/pages/page.tsx');
     expect(result).toBeDefined();
-    expect(result?.code).toContain("fetch('/__loaders'");
+    expect(result?.code).toContain('const serverLoaders = new Proxy(');
     expect(result?.code).toContain('"src/pages/movies"');
     expect(result?.code).toContain('Promise.resolve({})');
     expect(result?.code).not.toContain("import('./auth.server.js')");
@@ -381,27 +291,5 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     );
     expect(result).toBeDefined();
     expect(result?.code).toContain('Promise.resolve({})');
-  });
-});
-
-describe('loader stub keying uses path-derived module key', () => {
-  it('uses the path-derived key (not defineLoader name) for the loader moduleKey', () => {
-    // After path-keying, the key is derived from the module path, not the
-    // defineLoader('foo', ...) first-arg string in the source file.
-    const fixtureRoot =
-      '/Users/stevenbeshensky/Documents/repos/hono-preact/packages/vite/src/__tests__/fixtures/leak-test';
-    const importerPath = fixtureRoot + '/iso.tsx';
-    const code = `import { loader } from './pages/foo.server.js';`;
-    const result = transform(code, importerPath, { root: fixtureRoot });
-    expect(result).toBeDefined();
-    expect(result?.code).toContain('__moduleKey: "pages/foo"');
-  });
-
-  it('uses path key even when the source file is unreachable', () => {
-    const code = `import { loader } from './nope.server.js';`;
-    const result = transform(code, '/Users/me/repo/no/such/path/iso.tsx');
-    expect(result).toBeDefined();
-    // Uses path-derived key, not basename fallback.
-    expect(result?.code).toContain('__moduleKey: "no/such/path/nope"');
   });
 });

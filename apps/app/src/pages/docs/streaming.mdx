@@ -16,15 +16,14 @@ import { defineLoader, type LoaderCtx } from '@hono-preact/iso';
 
 export type Snapshot = { count: number; load: number };
 
-const serverLoader = async function* (ctx: LoaderCtx): AsyncGenerator<Snapshot> {
-  while (!ctx.signal.aborted) {
-    yield await currentSnapshot();
-    await new Promise((r) => setTimeout(r, 1000));
-  }
+export const serverLoaders = {
+  default: defineLoader(async function* (ctx: LoaderCtx): AsyncGenerator<Snapshot> {
+    while (!ctx.signal.aborted) {
+      yield await currentSnapshot();
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }),
 };
-
-export default serverLoader;
-export const loader = defineLoader<Snapshot>(serverLoader);
 ```
 
 `ctx.signal` is an `AbortSignal` that fires when the client disconnects or the component unmounts. Thread it into upstream `fetch` calls and subscriptions so they clean up promptly. Returning from the generator (rather than looping) also ends the stream cleanly.
@@ -33,53 +32,104 @@ For byte-level piping (e.g. forwarding a server-sent event feed without parsing)
 
 ### Consumer shape
 
-The component side is identical to a static loader:
+Use `.View()` to create a component that re-renders on each new chunk. The render function receives the latest `data` value plus `error` and `reload`:
 
 ```tsx
 // src/pages/dashboard.tsx
 import { definePage } from '@hono-preact/iso';
-import { loader } from './dashboard.server.js';
+import { serverLoaders } from './dashboard.server.js';
 
-function Dashboard() {
-  const stats = loader.useData();
-  const error = loader.useError();
-  return (
+const dataLoader = serverLoaders.default;
+
+const DashboardView = dataLoader.View(
+  ({ data, error, reload }) => (
     <>
       {error && <p>Live updates paused: {error.message}</p>}
-      <p>Count: {stats.count}, load: {stats.load}</p>
+      <p>Count: {data.count}, load: {data.load}</p>
     </>
-  );
-}
-export default definePage(Dashboard, { loader });
+  ),
+  { fallback: <p>Loading...</p> }
+);
+
+export default definePage(DashboardView);
 ```
 
 `loader.useData()` always returns the latest yielded value. `loader.useError()` returns the current error or `null`. Components re-render on each new chunk automatically.
 
-See `/movies/:id` for a running example: a single streaming loader yields a cumulative shape with four sections (token-by-token AI summary, fast-trickle cast, slow-trickle similar movies, slow-single box office) that fill in at independent cadences. See `/movies?q=drama` for input-driven SSR streaming: the server yields match buckets (exact title, substring, overview, genre) progressively as it scans the catalog.
+See `/movies/:id` for a running example: each section (AI summary, cast, similar movies, box office) is a separate streaming loader declared in `serverLoaders`, each with its own `.View()` component streaming independently. See `/movies?q=drama` for input-driven SSR streaming: the server yields match buckets (exact title, substring, overview, genre) progressively as it scans the catalog.
+
+## Multi-loader streaming
+
+When a page declares multiple loaders in `serverLoaders`, each `.View()` component streams independently. They share no boundary; one loader finishing does not unblock another.
+
+```ts
+// src/pages/movie.server.ts
+import { defineLoader } from '@hono-preact/iso';
+
+export const serverLoaders = {
+  summary: defineLoader(async ({ location }) =>
+    getMovie(location.pathParams.id)
+  ),
+
+  cast: defineLoader(async function* ({ location }) {
+    for await (const member of streamCast(location.pathParams.id)) yield member;
+  }),
+};
+```
+
+```tsx
+// src/pages/movie.tsx
+import { definePage } from '@hono-preact/iso';
+import { serverLoaders } from './movie.server.js';
+
+const { summary, cast } = serverLoaders;
+
+const Summary = summary.View(
+  ({ data }) => <SummaryCard data={data} />,
+  { fallback: <SummarySkeleton /> }
+);
+
+const Cast = cast.View(
+  ({ data }) => <CastList items={data} />,
+  { fallback: <CastSkeleton /> }
+);
+
+function MovieDetail() {
+  return (
+    <article>
+      <Summary />
+      <Cast />
+    </article>
+  );
+}
+
+export default definePage(MovieDetail);
+```
+
+`<Summary />` and `<Cast />` each own their Suspense boundary. `<Summary />` can paint immediately while `<Cast />` is still streaming. Each `.View()` component gets a separate streaming-SSR registry key so the server can flush chunks for both concurrently.
 
 ## What happens on first paint
 
-1. The server runs `serverLoader` and renders the page with the first chunk. The response stays open.
-2. As subsequent chunks arrive, the server flushes `<script>__HP_STREAM__.push(...)</script>` tags inline into the ongoing HTML response.
-3. The browser receives and executes those tags as they arrive. On hydration, the client picks up from the latest pushed value and continues listening.
+1. The server runs each `serverLoader` function and renders the page with first chunks for all loaders. The response stays open.
+2. As subsequent chunks arrive, the server flushes `<script>__HP_STREAM__.push(...)</script>` tags inline into the ongoing HTML response, keyed per loader.
+3. The browser receives and executes those tags as they arrive. On hydration, the client picks up from the latest pushed value for each loader and continues listening.
 
 The first-load experience is full SSR with progressive enhancement: the user sees real data immediately, and it keeps updating without a separate fetch or WebSocket.
 
 ## Errors
 
-**Before the first chunk:** the error propagates through the normal Suspense and error boundary path. If you provide `errorFallback` in `definePage`, it renders instead of the page. Otherwise the error boundary above catches it.
+**Before the first chunk:** the error propagates through the normal Suspense and error boundary path. If you provide `errorFallback` in `.View()`, it renders instead of the content. Otherwise the error boundary above catches it.
 
-**After the first chunk:** the stream is already open and the page is rendered. `loader.useError()` surfaces the error; `loader.useData()` keeps returning the last good value. The page stays mounted with the stale data visible.
+**After the first chunk:** the stream is already open and the page is rendered. `error` in the `.View()` render function surfaces the error; `data` keeps returning the last good value. The page stays mounted with stale data visible.
 
 ```tsx
-const stats = loader.useData();  // last-good value
-const error = loader.useError(); // non-null after a mid-stream error
-
-return (
-  <>
-    {error && <p>Live updates paused: {error.message}</p>}
-    <p>Visitors: {stats.visitors}</p>
-  </>
+const StatsView = dataLoader.View(
+  ({ data, error }) => (
+    <>
+      {error && <p>Live updates paused: {error.message}</p>}
+      <p>Visitors: {data.visitors}</p>
+    </>
+  )
 );
 ```
 
@@ -88,11 +138,13 @@ return (
 The framework aborts `ctx.signal` when the client disconnects (server side) or when the component that owns the loader unmounts (client side). Pass the signal to any upstream resource that supports cancellation:
 
 ```ts
-const serverLoader = async function* (ctx: LoaderCtx) {
-  const res = await fetch('https://api.example.com/feed', { signal: ctx.signal });
-  for await (const chunk of parseStream(res.body!)) {
-    yield chunk;
-  }
+const serverLoaders = {
+  feed: defineLoader(async function* (ctx) {
+    const res = await fetch('https://api.example.com/feed', { signal: ctx.signal });
+    for await (const chunk of parseStream(res.body!)) {
+      yield chunk;
+    }
+  }),
 };
 ```
 

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { loader as listLoader, type SearchResults } from '../movies-list.server.js';
+import { serverLoaders, type SearchResults } from '../movies-list.server.js';
 import type { RouteHook } from 'preact-iso';
+
+const listLoader = serverLoaders.default;
 
 const locFor = (q?: string) =>
   ({

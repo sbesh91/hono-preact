@@ -32,9 +32,9 @@ const serverLoader = async () => {
   return { entries };
 };
 
-export default serverLoader;
-
-export const loader = defineLoader(serverLoader);
+export const serverLoaders = {
+  default: defineLoader(serverLoader),
+};
 
 export const serverActions = {
   removeWatched: defineAction<{ movieId: number }, { ok: boolean }>(

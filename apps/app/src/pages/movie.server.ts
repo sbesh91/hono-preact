@@ -124,8 +124,9 @@ const serverLoader = async function* (
   }
 };
 
-export default serverLoader;
-export const loader = defineLoader<DetailStream>(serverLoader);
+export const serverLoaders = {
+  default: defineLoader(serverLoader),
+};
 
 export const serverActions = {
   toggleWatched: defineAction<{ movieId: number; watched: boolean }, { ok: boolean }>(

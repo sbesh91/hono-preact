@@ -22,6 +22,7 @@ type SerializedLocation = {
  */
 export async function fetchLoaderData<T>(
   moduleKey: string,
+  loaderName: string,
   location: SerializedLocation,
   signal: AbortSignal,
   callbacks: LoaderFetchCallbacks<T>
@@ -29,7 +30,7 @@ export async function fetchLoaderData<T>(
   const res = await fetch('/__loaders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ module: moduleKey, location }),
+    body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
     signal,
   });
 

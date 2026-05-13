@@ -24,14 +24,13 @@ function makePlugins() {
 }
 
 describe('path-key parity across moduleKeyPlugin and serverOnlyPlugin', () => {
-  it('uses the same key for the .server.* file and its client-side import', () => {
+  it('uses the same moduleKey for the .server.* file and its client-side serverLoaders import', () => {
     const { m, s } = makePlugins();
 
     // Server side: moduleKeyPlugin transforms the .server.ts file.
     const serverCode = [
       `import { defineLoader } from '@hono-preact/iso';`,
-      `export default async () => ({});`,
-      `export const loader = defineLoader(async () => ({}));`,
+      `export const serverLoaders = { default: defineLoader(async () => ({})) };`,
     ].join('\n');
     const serverResult = m.transform.call(
       {} as any,
@@ -43,13 +42,14 @@ describe('path-key parity across moduleKeyPlugin and serverOnlyPlugin', () => {
     );
 
     // Client side: serverOnlyPlugin transforms a consumer that imports
-    // the same file.
-    const clientCode = `import { loader } from './movies.server.js';`;
+    // the same file via serverLoaders.
+    const clientCode = `import { serverLoaders } from './movies.server.js';`;
     const clientResult = s.transform.call(
       {} as any,
       clientCode,
       `${ROOT}/src/pages/movies.tsx`
     );
+    // The Proxy stub receives the same moduleKey string.
     expect(clientResult?.code).toContain(
       `__moduleKey: "src/pages/movies"`
     );

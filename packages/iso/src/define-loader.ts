@@ -1,7 +1,11 @@
+import { h } from 'preact';
+import type { ComponentChildren, ComponentType, FunctionComponent } from 'preact';
 import { useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
+import { Loader as LoaderHost } from './internal/loader.js';
+import { ReloadContext } from './reload-context.js';
 
 export type LoaderCtx = {
   location: RouteHook;
@@ -16,11 +20,31 @@ export type Loader<T> =
 export interface LoaderRef<T> {
   readonly __id: symbol;
   readonly __moduleKey?: string;
+  readonly __loaderName?: string;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
+  readonly params: string[] | '*';
   useData(): T;
   useError(): Error | null;
   invalidate(): void;
+  Boundary: ComponentType<{
+    fallback?: ComponentChildren;
+    errorFallback?:
+      | ComponentChildren
+      | ((err: Error, reset: () => void) => ComponentChildren);
+    children: ComponentChildren;
+  }>;
+  View<P extends Record<string, unknown> = {}>(
+    render: (
+      args: P & { data: T; error: Error | null; reload: () => void }
+    ) => ComponentChildren,
+    opts?: {
+      fallback?: ComponentChildren;
+      errorFallback?:
+        | ComponentChildren
+        | ((err: Error, reset: () => void) => ComponentChildren);
+    }
+  ): FunctionComponent<P>;
 }
 
 /**
@@ -31,7 +55,9 @@ export interface LoaderRef<T> {
  */
 export type DefineLoaderOpts<T> = {
   __moduleKey?: string;
+  __loaderName?: string;
   cache?: LoaderCache<T>;
+  params?: string[] | '*';
 };
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -56,12 +82,34 @@ function getSharedCaches(): SharedCacheMap {
   return map;
 }
 
+function ViewRenderer<T>({
+  loaderRef,
+  props,
+  render,
+}: {
+  loaderRef: LoaderRef<T>;
+  props: Record<string, unknown>;
+  render: (args: any) => ComponentChildren;
+}) {
+  const data = loaderRef.useData();
+  const error = loaderRef.useError();
+  const reloadCtx = useContext(ReloadContext);
+  const reload = reloadCtx?.reload ?? (() => {});
+  return render({ data, error, reload, ...props }) as any;
+}
+
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
 ): LoaderRef<T> {
-  const __id = opts?.__moduleKey
-    ? Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`)
+  const idKey = opts?.__moduleKey
+    ? opts.__loaderName
+      ? `${opts.__moduleKey}::${opts.__loaderName}`
+      : opts.__moduleKey
+    : null;
+
+  const __id = idKey
+    ? Symbol.for(`@hono-preact/loader:${idKey}`)
     : Symbol(`@hono-preact/loader:<unkeyed>`);
 
   let cache = opts?.cache;
@@ -88,13 +136,15 @@ export function defineLoader<T>(
   const ref: LoaderRef<T> = {
     __id,
     __moduleKey: opts?.__moduleKey,
+    __loaderName: opts?.__loaderName,
     fn,
-    cache,
+    cache: cache!,
+    params: opts?.params ?? [],
     useData() {
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {
         throw new Error(
-          'loader.useData() must be called inside a route page that has a loader.'
+          'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
         );
       }
       return ctx.data as T;
@@ -103,8 +153,32 @@ export function defineLoader<T>(
       return useContext(LoaderErrorContext);
     },
     invalidate() {
-      cache.invalidate();
+      cache!.invalidate();
     },
+    Boundary: null as never,
+    View: null as never,
   };
+
+  const Boundary: LoaderRef<T>['Boundary'] = ({ fallback, errorFallback, children }) => {
+    return h(LoaderHost as any, {
+      loader: ref,
+      fallback,
+      errorFallback,
+      children,
+    });
+  };
+  ref.Boundary = Boundary;
+
+  const View: LoaderRef<T>['View'] = (render, viewOpts) => {
+    const Wrapped: FunctionComponent<any> = (props) =>
+      h(ref.Boundary, {
+        fallback: viewOpts?.fallback,
+        errorFallback: viewOpts?.errorFallback,
+        children: h(ViewRenderer<T> as any, { loaderRef: ref, props, render }),
+      });
+    return Wrapped;
+  };
+  ref.View = View;
+
   return ref;
 }

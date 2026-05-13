@@ -35,19 +35,18 @@ export default defineRoutes([
 
 `view` is a deferred dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.
 
-For pages that need data, also import the loader inside the view file and bind it via `definePage`:
+For pages that need data, import `serverLoaders` from the sibling `.server.ts` and use `.View()` to create the component:
 
 ```tsx
 // src/pages/about.tsx
 import { definePage } from '@hono-preact/iso';
-import { loader } from './about.server.js';
+import { serverLoaders } from './about.server.js';
 
-function About() {
-  const data = loader.useData();
-  return <section>{/* ... */}</section>;
-}
+const AboutView = serverLoaders.default.View(({ data }) => (
+  <section>{/* ... */}</section>
+));
 
-export default definePage(About, { loader });
+export default definePage(AboutView);
 ```
 
 ```ts

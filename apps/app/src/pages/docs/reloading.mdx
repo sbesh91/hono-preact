@@ -11,24 +11,22 @@ Snippets on this page assume `type MovieList = { results: { id: number; title: s
 ```ts
 import { defineLoader } from '@hono-preact/iso';
 
-const serverLoader = async () => ({
-  movies: await getMovies(),
-});
-
-export default serverLoader;
-
-export const loader = defineLoader(serverLoader);
+export const serverLoaders = {
+  default: defineLoader(async () => ({
+    movies: await getMovies(),
+  })),
+};
 ```
 
-**`src/pages/movies.tsx`** is a pure component using `useReload`, with bindings attached via `definePage`:
+**`src/pages/movies.tsx`** uses `.View()` to create the component. `useReload` is called inside the render function, which runs inside the loader's boundary:
 
 ```tsx
-import type { FunctionComponent } from 'preact';
 import { definePage, useReload } from '@hono-preact/iso';
-import { loader } from './movies.server.js';
+import { serverLoaders } from './movies.server.js';
 
-const Movies: FunctionComponent = () => {
-  const { movies } = loader.useData();
+const dataLoader = serverLoaders.default;
+
+const MoviesView = dataLoader.View(({ data }) => {
   const { reload, reloading } = useReload();
 
   const handleAdd = async () => {
@@ -42,16 +40,16 @@ const Movies: FunctionComponent = () => {
         {reloading ? 'Adding...' : 'Add Movie'}
       </button>
       <ul>
-        {movies.results.map((m) => <li key={m.id}>{m.title}</li>)}
+        {data.movies.results.map((m) => <li key={m.id}>{m.title}</li>)}
       </ul>
     </>
   );
-};
+});
 
-export default definePage(Movies, { loader });
+export default definePage(MoviesView);
 ```
 
-**`src/routes.ts`** wires the URL to the view and its server module; the bindings live with the page:
+**`src/routes.ts`** wires the URL to the view and its server module:
 
 ```ts
 {
@@ -61,7 +59,7 @@ export default definePage(Movies, { loader });
 }
 ```
 
-`useReload` must be called inside a component whose page has a loader binding (via `definePage(..., { loader })`). Calling it elsewhere throws an error.
+`useReload` must be called inside a component rendered within a loader boundary (inside `.View()` or inside a `loader.Boundary`). Calling it outside throws an error.
 
 ## Background refresh
 
@@ -71,7 +69,7 @@ Reload is a background refresh: the current content stays visible while the new 
 
 `reload()` always re-runs the loader and writes the fresh result into the cache, no matter what the cache currently holds. There is no need to invalidate first.
 
-`loader.invalidate()` clears the cache without re-fetching. The next client-side navigation that mounts this loader will refetch (cache miss). Use it when you want to mark data stale but don't need to refresh right now (e.g. inside `useAction({ invalidate: [otherLoader] })` to invalidate a SIBLING page's cache, leaving the current page untouched).
+`loader.invalidate()` clears the cache without re-fetching. The next client-side navigation that mounts this loader will refetch (cache miss). Use it when you want to mark data stale but don't need to refresh right now (for example, inside `useAction({ invalidate: [otherLoader] })` to invalidate a sibling page's cache, leaving the current page untouched).
 
 ## API
 
