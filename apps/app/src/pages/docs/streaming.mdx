@@ -17,7 +17,7 @@ import { defineLoader, type LoaderCtx } from '@hono-preact/iso';
 export type Snapshot = { count: number; load: number };
 
 export const serverLoaders = {
-  default: defineLoader<Snapshot>(async function* (ctx: LoaderCtx) {
+  default: defineLoader(async function* (ctx: LoaderCtx): AsyncGenerator<Snapshot> {
     while (!ctx.signal.aborted) {
       yield await currentSnapshot();
       await new Promise((r) => setTimeout(r, 1000));
