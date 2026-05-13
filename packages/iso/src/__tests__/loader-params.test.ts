@@ -54,3 +54,35 @@ describe('defineLoader: __loaderName opt', () => {
     expect(a.__id).toBe(b.__id);
   });
 });
+
+import { serializeLocationForCache } from '../internal/loader.js';
+
+describe('serializeLocationForCache', () => {
+  const loc = {
+    path: '/movies/123',
+    pathParams: { id: '123' },
+    searchParams: { genre: 'action', utm_source: 'twitter' },
+  };
+
+  it('with params=[] returns path only (no search)', () => {
+    expect(serializeLocationForCache(loc as any, [])).toBe('/movies/123?');
+  });
+
+  it('with params=["genre"] returns path plus filtered search', () => {
+    expect(serializeLocationForCache(loc as any, ['genre'])).toBe(
+      '/movies/123?genre=action'
+    );
+  });
+
+  it('with params="*" returns path plus all sorted search', () => {
+    expect(serializeLocationForCache(loc as any, '*')).toBe(
+      '/movies/123?genre=action&utm_source=twitter'
+    );
+  });
+
+  it('with params listing absent keys returns path plus only present', () => {
+    expect(serializeLocationForCache(loc as any, ['nonexistent'])).toBe(
+      '/movies/123?'
+    );
+  });
+});

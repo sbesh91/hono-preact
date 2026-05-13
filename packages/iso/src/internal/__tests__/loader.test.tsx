@@ -272,7 +272,7 @@ describe('v3 <Loader> stability', () => {
     const fn = vi.fn(({ location }: { location: RouteHook; signal: AbortSignal }) =>
       Promise.resolve({ q: location.searchParams.q ?? '' })
     );
-    const ref = defineLoader<{ q: string }>(fn);
+    const ref = defineLoader<{ q: string }>(fn, { params: ['q'] });
 
     function Child() {
       const { q } = ref.useData();

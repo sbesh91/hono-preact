@@ -129,7 +129,7 @@ function LoaderHost<T>({
 
     promise
       .then((result) => {
-        if (isBrowser()) loaderRef.cache.set(result, serializeLocation(locationRef.current));
+        if (isBrowser()) loaderRef.cache.set(result, serializeLocationForCache(locationRef.current, loaderRef.params));
         setOverrideData(result);
         setReloading(false);
         inFlightRef.current = false;
@@ -165,7 +165,7 @@ function LoaderHost<T>({
   // /movies?genre=drama refetches even though preact-iso doesn't remount on
   // querystring changes.
   const readerRef = useRef<{ read: () => T } | null>(null);
-  const locKey = serializeLocation(location);
+  const locKey = serializeLocationForCache(location, loaderRef.params);
   const prevLocKey = useRef(locKey);
   const prevLoaderId = useRef(loaderRef.__id);
 
@@ -302,11 +302,15 @@ function DataReader<T>({
   );
 }
 
-function serializeLocation(loc: RouteHook): string {
-  const sp = loc.searchParams ?? {};
-  const sortedSearch = Object.keys(sp)
-    .sort()
-    .map((k) => `${k}=${sp[k]}`)
-    .join('&');
+export function serializeLocationForCache(
+  loc: RouteHook,
+  params: string[] | '*'
+): string {
+  const sp = (loc.searchParams ?? {}) as Record<string, string>;
+  const keys =
+    params === '*'
+      ? Object.keys(sp).sort()
+      : params.filter((k) => k in sp).sort();
+  const sortedSearch = keys.map((k) => `${k}=${sp[k]}`).join('&');
   return `${loc.path}?${sortedSearch}`;
 }
