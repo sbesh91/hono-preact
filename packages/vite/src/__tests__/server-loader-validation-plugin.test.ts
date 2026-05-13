@@ -23,19 +23,19 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toBeNull();
   });
 
-  it('passes a *.server.* file with only a default export', () => {
+  it('rejects a *.server.* file with only a default export', () => {
     const code = `export default async function serverLoader() { return {}; }`;
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toBeNull();
+    expect(error).toContain('may not use a default export');
   });
 
-  it('passes a *.server.* file with default + serverGuards named export', () => {
+  it('rejects a *.server.* file with default + serverGuards named export', () => {
     const code = [
       'export default async function serverLoader() { return {}; }',
       'export const serverGuards = [];',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toBeNull();
+    expect(error).toContain('may not use a default export');
   });
 
   it('fails when a *.server.* file has a disallowed named export', () => {
@@ -47,17 +47,17 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('found: helper');
   });
 
-  it('fails when a *.server.* file has no default export', () => {
+  it('fails when a *.server.* file has neither serverLoaders nor serverActions', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toContain('must have a default export');
+    expect(error).toContain("must export either 'serverLoaders' or 'serverActions'");
   });
 
   it('fails when a *.server.* file has multiple disallowed named exports', () => {
     const code = [
       'export const helper = () => {};',
       'export const util = () => {};',
-      'export default async function serverLoader() { return {}; }',
+      'export const serverLoaders = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain('helper');
@@ -73,14 +73,14 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('export *');
   });
 
-  it('reports both errors when a file has disallowed exports AND no default export', () => {
+  it('reports both errors when a file has disallowed exports AND neither serverLoaders nor serverActions', () => {
     const code = `export const helper = () => {};`;
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain('found: helper');
-    expect(error).toContain('must have a default export');
+    expect(error).toContain("must export either 'serverLoaders' or 'serverActions'");
   });
 
-  it('passes a *.server.* file with default + serverActions named export', () => {
+  it('rejects a *.server.* file with default + serverActions named export', () => {
     const code = [
       "import { defineAction } from '@hono-preact/iso';",
       'export const serverActions = {',
@@ -89,7 +89,7 @@ describe('serverLoaderValidationPlugin', () => {
       'export default async function serverLoader() { return {}; }',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toBeNull();
+    expect(error).toContain('may not use a default export');
   });
 
   it('passes a *.server.* file with only serverActions (no default export)', () => {
@@ -103,10 +103,10 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toBeNull();
   });
 
-  it('still fails when a *.server.* file has no default export and no serverActions', () => {
+  it('still fails when a *.server.* file has no serverLoaders and no serverActions', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toContain('must have a default export');
+    expect(error).toContain("must export either 'serverLoaders' or 'serverActions'");
   });
 
   it('passes a *.server.* file with serverActions + serverGuards and no default export', () => {
@@ -127,16 +127,16 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toBeNull();
   });
 
-  it('error message lists all allowed named exports including loader and serverLoaders', () => {
+  it('error message lists all allowed named exports (no longer includes loader)', () => {
     const code = [
       'export const unauthorized = () => {};',
-      'export default async function serverLoader() { return {}; }',
+      'export const serverLoaders = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain("'serverGuards'");
     expect(error).toContain("'serverActions'");
     expect(error).toContain("'actionGuards'");
-    expect(error).toContain("'loader'");
+    expect(error).not.toContain("'loader'");
     expect(error).toContain("'serverLoaders'");
     expect(error).not.toContain("'cache'");
   });
@@ -164,23 +164,32 @@ describe('serverLoaderValidationPlugin', () => {
     });
   });
 
-  describe('loader and cache named exports', () => {
-    it('does not reject "loader" named export', () => {
+  describe('legacy loader and cache named exports', () => {
+    it('rejects legacy "loader" named export (use serverLoaders instead)', () => {
       const code = [
-        'export default serverLoader;',
+        'export const serverLoaders = {};',
         'export const loader = defineLoader(serverLoader);',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
-      expect(error).toBeNull();
+      expect(error).toContain('found: loader');
     });
 
     it('rejects "cache" named export', () => {
       const code = [
-        "export default serverLoader;",
+        "export const serverLoaders = {};",
         "export const cache = createCache('movies-list');",
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
       expect(error).toContain('found: cache');
+    });
+
+    it('rejects a default export (use serverLoaders instead)', () => {
+      const code = [
+        "export const serverLoaders = {};",
+        "export default async function serverLoader() { return {}; }",
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('may not use a default export');
     });
   });
 });
