@@ -1,4 +1,5 @@
 import { h } from 'preact';
+import type { ComponentChildren, ComponentType, FunctionComponent } from 'preact';
 import { useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
@@ -26,24 +27,24 @@ export interface LoaderRef<T> {
   useData(): T;
   useError(): Error | null;
   invalidate(): void;
-  Boundary: import('preact').ComponentType<{
-    fallback?: import('preact').ComponentChildren;
+  Boundary: ComponentType<{
+    fallback?: ComponentChildren;
     errorFallback?:
-      | import('preact').ComponentChildren
-      | ((err: Error, reset: () => void) => import('preact').ComponentChildren);
-    children: import('preact').ComponentChildren;
+      | ComponentChildren
+      | ((err: Error, reset: () => void) => ComponentChildren);
+    children: ComponentChildren;
   }>;
   View<P extends Record<string, unknown> = {}>(
     render: (
       args: P & { data: T; error: Error | null; reload: () => void }
-    ) => import('preact').ComponentChildren,
+    ) => ComponentChildren,
     opts?: {
-      fallback?: import('preact').ComponentChildren;
+      fallback?: ComponentChildren;
       errorFallback?:
-        | import('preact').ComponentChildren
-        | ((err: Error, reset: () => void) => import('preact').ComponentChildren);
+        | ComponentChildren
+        | ((err: Error, reset: () => void) => ComponentChildren);
     }
-  ): import('preact').FunctionComponent<P>;
+  ): FunctionComponent<P>;
 }
 
 /**
@@ -88,7 +89,7 @@ function ViewRenderer<T>({
 }: {
   loaderRef: LoaderRef<T>;
   props: Record<string, unknown>;
-  render: (args: any) => import('preact').ComponentChildren;
+  render: (args: any) => ComponentChildren;
 }) {
   const data = loaderRef.useData();
   const error = loaderRef.useError();
@@ -169,7 +170,7 @@ export function defineLoader<T>(
   ref.Boundary = Boundary;
 
   const View: LoaderRef<T>['View'] = (render, viewOpts) => {
-    const Wrapped: import('preact').FunctionComponent<any> = (props) =>
+    const Wrapped: FunctionComponent<any> = (props) =>
       h(ref.Boundary, {
         fallback: viewOpts?.fallback,
         errorFallback: viewOpts?.errorFallback,
