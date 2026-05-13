@@ -10,54 +10,22 @@ import { ErrorBoundary } from './route-boundary.js';
 import { useLoaderRunner } from './use-loader-runner.js';
 export { serializeLocationForCache } from './cache-key.js';
 
-type LoaderProps<T> = {
-  loader: LoaderRef<T>;
-  location: RouteHook;
-  fallback?: JSX.Element;
-  errorFallback?: ComponentChildren | ((err: Error, reset: () => void) => ComponentChildren);
-  children: ComponentChildren;
-};
-
-export function Loader<T>({
-  loader,
-  location,
-  fallback,
-  errorFallback,
-  children,
-}: LoaderProps<T>) {
-  const id = useId();
-  return (
-    <LoaderIdContext.Provider value={id}>
-      <LoaderHost
-        loaderRef={loader}
-        location={location}
-        id={id}
-        fallback={fallback}
-        errorFallback={errorFallback}
-      >
-        {children}
-      </LoaderHost>
-    </LoaderIdContext.Provider>
-  );
-}
-
 type LoaderHostProps<T> = {
-  loaderRef: LoaderRef<T>;
+  loader: LoaderRef<T>;
   location?: RouteHook;
-  id: string;
   fallback?: JSX.Element;
   errorFallback?: ComponentChildren | ((err: Error, reset: () => void) => ComponentChildren);
   children: ComponentChildren;
 };
 
-function LoaderHost<T>({
-  loaderRef,
+export function LoaderHost<T>({
+  loader: loaderRef,
   location: locationProp,
-  id,
   fallback,
   errorFallback,
   children,
 }: LoaderHostProps<T>) {
+  const id = useId();
   const locMap = useContext(RouteLocationsContext);
   const ctxLocation = loaderRef.__moduleKey ? locMap?.get(loaderRef.__moduleKey) : undefined;
   const location = (locationProp ?? ctxLocation) as RouteHook | undefined;
@@ -79,19 +47,24 @@ function LoaderHost<T>({
   );
 
   return (
-    <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-      <ReloadContext.Provider value={{ reload, reloading }}>
-        <LoaderErrorContext.Provider value={error}>
-          {errorFallback != null ? (
-            <ErrorBoundary fallback={errorFallback as any}>
-              {suspenseContent}
-            </ErrorBoundary>
-          ) : suspenseContent}
-        </LoaderErrorContext.Provider>
-      </ReloadContext.Provider>
-    </ActiveLoaderIdContext.Provider>
+    <LoaderIdContext.Provider value={id}>
+      <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
+        <ReloadContext.Provider value={{ reload, reloading }}>
+          <LoaderErrorContext.Provider value={error}>
+            {errorFallback != null ? (
+              <ErrorBoundary fallback={errorFallback as any}>
+                {suspenseContent}
+              </ErrorBoundary>
+            ) : suspenseContent}
+          </LoaderErrorContext.Provider>
+        </ReloadContext.Provider>
+      </ActiveLoaderIdContext.Provider>
+    </LoaderIdContext.Provider>
   );
 }
+
+// Public name consumed by define-loader.ts and user code.
+export { LoaderHost as Loader };
 
 type DataReaderProps<T> = {
   reader: { read: () => T };
@@ -111,4 +84,3 @@ function DataReader<T>({
     </LoaderDataContext.Provider>
   );
 }
-
