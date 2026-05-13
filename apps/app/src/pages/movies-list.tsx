@@ -51,7 +51,7 @@ const Bucket: FunctionComponent<{
 };
 
 const MoviesList: FunctionComponent = () => {
-  const data = moviesLoader.useData() as SearchResults;
+  const data = moviesLoader.useData();
   const error = moviesLoader.useError();
   const { setCount } = useWatchedBadge();
 

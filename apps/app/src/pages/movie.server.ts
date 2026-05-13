@@ -125,7 +125,7 @@ const serverLoader = async function* (
 };
 
 export const serverLoaders = {
-  default: defineLoader<DetailStream>(serverLoader),
+  default: defineLoader(serverLoader),
 };
 
 export const serverActions = {

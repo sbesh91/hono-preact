@@ -88,7 +88,7 @@ const serverLoader = async function* (
 };
 
 export const serverLoaders = {
-  default: defineLoader<SearchResults>(serverLoader),
+  default: defineLoader(serverLoader),
 };
 
 export const serverActions = {
