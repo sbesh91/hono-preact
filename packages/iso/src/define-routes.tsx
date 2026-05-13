@@ -7,8 +7,8 @@ import { RouteLocationsProvider } from './internal/route-locations.js';
 function wrapWithRouteLocations(
   serverMod: unknown,
   location: RouteHook,
-  node: VNode
-): VNode {
+  node: VNode<any>
+): VNode<any> {
   const moduleKey = (serverMod as { __moduleKey?: string } | undefined)?.__moduleKey;
   return moduleKey
     ? h(RouteLocationsProvider, { moduleKey, location }, node)
