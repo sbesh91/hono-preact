@@ -52,7 +52,7 @@ Open `http://localhost:5173/movies`. You should see "Movies".
 
 ## 2. Add a server loader
 
-Create `src/pages/movies.server.ts`. The loader ref is a named export so the view never needs to import `defineLoader` itself:
+Create `src/pages/movies.server.ts`. Loaders are exported in a `serverLoaders` container so the view never needs to import `defineLoader` itself:
 
 ```ts
 import { defineLoader } from '@hono-preact/iso';
@@ -66,39 +66,35 @@ const store: Movie[] = [
 
 const getMovies = () => store;
 
-const serverLoader = async () => ({
-  movies: getMovies(),
-});
-
-export default serverLoader;
-
-export const loader = defineLoader(serverLoader);
+export const serverLoaders = {
+  default: defineLoader(async () => ({
+    movies: getMovies(),
+  })),
+};
 ```
 
-Update `src/pages/movies.tsx` to consume the loader data, and bind the loader to the page with `definePage`:
+Update `src/pages/movies.tsx` to consume the loader data via `.View()`, and pass the resulting component to `definePage`:
 
 ```tsx
-import type { FunctionComponent } from 'preact';
 import { definePage } from '@hono-preact/iso';
-import { loader } from './movies.server.js';
+import { serverLoaders } from './movies.server.js';
 
-const Movies: FunctionComponent = () => {
-  const { movies } = loader.useData();
-  return (
-    <main>
-      <h1>Movies</h1>
-      <ul>
-        {movies.map((m) => (
-          <li key={m.id}>{m.title}</li>
-        ))}
-      </ul>
-    </main>
-  );
-};
+const dataLoader = serverLoaders.default;
 
-Movies.displayName = 'Movies';
+const MoviesView = dataLoader.View(({ data }) => (
+  <main>
+    <h1>Movies</h1>
+    <ul>
+      {data.movies.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  </main>
+));
 
-export default definePage(Movies, { loader });
+MoviesView.displayName = 'Movies';
+
+export default definePage(MoviesView);
 ```
 
 Add the `server` field to the route entry in `src/routes.ts` so `server.tsx` finds the module:
@@ -113,7 +109,7 @@ Add the `server` field to the route entry in `src/routes.ts` so `server.tsx` fin
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(fn)` returns a typed reference. The Vite `moduleKeyPlugin` rewrites the call at build time to `defineLoader(fn, { __moduleKey: 'src/pages/movies' })` where the key is the file's path relative to the Vite project root with `.server.{ts,tsx,js,jsx}` stripped. The key drives RPC routing (`/__loaders`, `/__actions`), the `__id` Symbol identity, and HMR. `definePage(Component, { loader })` attaches the loader to the page component so the route can find it. `loader.useData()` is the consumer hook; it's argument-free and infers the return type from the loader function.
+`defineLoader(fn)` returns a typed `LoaderRef<T>`. The Vite `moduleKeyPlugin` rewrites the call at build time to inject `{ __moduleKey, __loaderName }` so the key drives RPC routing (`/__loaders`), the `__id` Symbol identity, and HMR. `.View(render, opts)` returns a Preact component pre-wrapped in the loader's Suspense boundary, error context, and data context. `loader.useData()` inside the render function is argument-free and infers the return type from the loader function.
 
 ## 3. Add a server action
 
@@ -133,13 +129,11 @@ const getMovies = () => store;
 const addMovieToStore = (title: string) =>
   store.push({ id: String(store.length + 1), title });
 
-const serverLoader = async () => ({
-  movies: getMovies(),
-});
-
-export default serverLoader;
-
-export const loader = defineLoader(serverLoader);
+export const serverLoaders = {
+  default: defineLoader(async () => ({
+    movies: getMovies(),
+  })),
+};
 
 export const serverActions = {
   addMovie: defineAction<{ title: string }, { ok: boolean }>(
@@ -151,12 +145,14 @@ export const serverActions = {
 };
 ```
 
-Update `src/pages/movies.tsx` to add the form:
+Update `src/pages/movies.tsx` to add the form. Import `serverActions` alongside `serverLoaders`:
 
 ```tsx
 import type { FunctionComponent } from 'preact';
 import { definePage, Form, useAction } from '@hono-preact/iso';
-import { loader, serverActions } from './movies.server.js';
+import { serverLoaders, serverActions } from './movies.server.js';
+
+const dataLoader = serverLoaders.default;
 
 const AddMovieForm: FunctionComponent = () => {
   const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: 'auto' });
@@ -168,24 +164,21 @@ const AddMovieForm: FunctionComponent = () => {
   );
 };
 
-const Movies: FunctionComponent = () => {
-  const { movies } = loader.useData();
-  return (
-    <main>
-      <h1>Movies</h1>
-      <AddMovieForm />
-      <ul>
-        {movies.map((m) => (
-          <li key={m.id}>{m.title}</li>
-        ))}
-      </ul>
-    </main>
-  );
-};
+const MoviesView = dataLoader.View(({ data }) => (
+  <main>
+    <h1>Movies</h1>
+    <AddMovieForm />
+    <ul>
+      {data.movies.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  </main>
+));
 
-Movies.displayName = 'Movies';
+MoviesView.displayName = 'Movies';
 
-export default definePage(Movies, { loader });
+export default definePage(MoviesView);
 ```
 
 The route entry in `routes.ts` doesn't change; actions ride along with the same `server` import. Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates with no manual state management.
