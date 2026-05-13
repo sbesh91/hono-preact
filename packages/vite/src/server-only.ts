@@ -1,10 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse } from '@babel/parser';
-import type { CallExpression, ImportDeclaration, ObjectExpression } from '@babel/types';
+import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
+import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 
 // Symbol-keyed accessor used by unit tests to verify `configResolved` fires
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
@@ -36,54 +37,12 @@ function extractServerLoadersMeta(absServerPath: string): Record<string, string[
     return {};
   }
 
+  const entries = parseServerLoaders(ast.program);
   const meta: Record<string, string[] | '*'> = {};
-
-  for (const stmt of ast.program.body) {
-    if (
-      stmt.type !== 'ExportNamedDeclaration' ||
-      stmt.declaration?.type !== 'VariableDeclaration'
-    ) continue;
-    for (const decl of stmt.declaration.declarations) {
-      if (
-        decl.id.type !== 'Identifier' ||
-        decl.id.name !== 'serverLoaders' ||
-        decl.init?.type !== 'ObjectExpression'
-      ) continue;
-      const obj = decl.init as ObjectExpression;
-      for (const prop of obj.properties) {
-        if (
-          prop.type !== 'ObjectProperty' ||
-          prop.key.type !== 'Identifier' ||
-          prop.value.type !== 'CallExpression'
-        ) continue;
-        const loaderName = prop.key.name;
-        const call = prop.value as CallExpression;
-        if (
-          call.callee.type !== 'Identifier' ||
-          call.callee.name !== 'defineLoader' ||
-          call.arguments.length !== 2
-        ) continue;
-        const optsArg = call.arguments[1];
-        if (optsArg.type !== 'ObjectExpression') continue;
-        for (const optProp of optsArg.properties) {
-          if (
-            optProp.type !== 'ObjectProperty' ||
-            optProp.key.type !== 'Identifier' ||
-            optProp.key.name !== 'params'
-          ) continue;
-          const val = optProp.value;
-          if (val.type === 'StringLiteral' && val.value === '*') {
-            meta[loaderName] = '*';
-          } else if (val.type === 'ArrayExpression') {
-            const items: string[] = [];
-            for (const el of val.elements) {
-              if (el?.type === 'StringLiteral') items.push(el.value);
-            }
-            if (items.length > 0) meta[loaderName] = items;
-          }
-        }
-      }
-    }
+  for (const entry of entries) {
+    if (!entry.optsArg) continue;
+    const params = readParamsOpt(entry.optsArg);
+    if (params !== undefined) meta[entry.name] = params;
   }
 
   return meta;

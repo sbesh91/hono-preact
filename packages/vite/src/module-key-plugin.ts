@@ -1,8 +1,9 @@
 import { parse } from '@babel/parser';
 import MagicString from 'magic-string';
-import type { CallExpression, ObjectExpression } from '@babel/types';
+import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
+import { parseServerLoaders } from './server-loaders-parser.js';
 
 /**
  * Transforms `.server.*` files to inject a stable module-level
@@ -91,22 +92,14 @@ export function moduleKeyPlugin(): Plugin {
         );
       };
 
-      // Walk the properties of a `serverLoaders` ObjectExpression, calling
-      // visitCallWithName for each `key: defineLoader(...)` property.
-      const visitObjectAsServerLoaders = (obj: ObjectExpression) => {
-        for (const prop of obj.properties) {
-          if (
-            prop.type !== 'ObjectProperty' ||
-            prop.key.type !== 'Identifier' ||
-            prop.value.type !== 'CallExpression'
-          ) continue;
-          visitCallWithName(prop.value, prop.key.name);
-        }
-      };
+      // Walk serverLoaders entries via the shared parser, then mutate each call.
+      for (const entry of parseServerLoaders(ast.program)) {
+        visitCallWithName(entry.call, entry.name);
+      }
 
-      // Top-level statement walk. defineLoader is overwhelmingly used at
-      // module scope; we don't recurse into nested function bodies to keep
-      // the plugin cheap.
+      // Top-level fallthrough: legacy `export const loader = defineLoader(...)`
+      // (single-loader path). defineLoader is overwhelmingly used at module
+      // scope; we don't recurse into nested function bodies to keep the plugin cheap.
       for (const stmt of ast.program.body) {
         if (
           stmt.type === 'ExportNamedDeclaration' &&
@@ -115,11 +108,9 @@ export function moduleKeyPlugin(): Plugin {
           for (const decl of stmt.declaration.declarations) {
             if (
               decl.id.type === 'Identifier' &&
-              decl.id.name === 'serverLoaders' &&
-              decl.init?.type === 'ObjectExpression'
+              decl.id.name !== 'serverLoaders' &&
+              decl.init?.type === 'CallExpression'
             ) {
-              visitObjectAsServerLoaders(decl.init);
-            } else if (decl.init?.type === 'CallExpression') {
               visitCallWithName(decl.init, undefined);
             }
           }
