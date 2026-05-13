@@ -2,6 +2,8 @@
 import { type FunctionComponent } from 'preact';
 import { type RouteHook } from 'preact-iso';
 
+export type GuardRunsOn = 'server' | 'client';
+
 export type GuardResult =
   | { redirect: string }
   | { render: FunctionComponent }
@@ -11,21 +13,31 @@ export type GuardContext = {
   location: RouteHook;
 };
 
-/** Must `return next()` (not just `await next()`) to propagate downstream results. */
-export type GuardFn = (
-  ctx: GuardContext,
-  next: () => Promise<GuardResult>
-) => Promise<GuardResult>;
+export type GuardFn = {
+  readonly runs: GuardRunsOn;
+  readonly fn: (
+    ctx: GuardContext,
+    next: () => Promise<GuardResult>,
+  ) => Promise<GuardResult>;
+};
 
-export const createGuard = (fn: GuardFn): GuardFn => fn;
+export const defineServerGuard = (fn: GuardFn['fn']): GuardFn => ({
+  runs: 'server',
+  fn,
+});
+
+export const defineClientGuard = (fn: GuardFn['fn']): GuardFn => ({
+  runs: 'client',
+  fn,
+});
 
 export const runGuards = async (
   guards: GuardFn[],
-  ctx: GuardContext
+  ctx: GuardContext,
 ): Promise<GuardResult> => {
   const run = async (index: number): Promise<GuardResult> => {
     if (index >= guards.length) return;
-    return guards[index](ctx, () => run(index + 1));
+    return guards[index].fn(ctx, () => run(index + 1));
   };
   return run(0);
 };

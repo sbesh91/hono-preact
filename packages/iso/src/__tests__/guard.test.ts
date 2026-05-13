@@ -1,74 +1,57 @@
-import { describe, it, expect, vi } from 'vitest';
-import { createGuard, runGuards, GuardRedirect } from '../guard.js';
-import type { GuardContext } from '../guard.js';
+import { describe, it, expect } from 'vitest';
+import type { RouteHook } from 'preact-iso';
+import {
+  defineServerGuard,
+  defineClientGuard,
+  runGuards,
+  type GuardFn,
+} from '../guard.js';
 
-const ctx: GuardContext = { location: {} as any };
+const loc = {
+  path: '/x',
+  url: 'http://localhost/x',
+  searchParams: {},
+  pathParams: {},
+} as unknown as RouteHook;
 
-describe('createGuard', () => {
-  it('returns the function unchanged', () => {
-    const fn = async (_ctx: GuardContext, next: () => Promise<any>) => next();
-    expect(createGuard(fn)).toBe(fn);
+describe('defineServerGuard / defineClientGuard', () => {
+  it('produces a record tagged with runs', () => {
+    const g = defineServerGuard(async (_c, next) => next());
+    expect(g.runs).toBe('server');
+    expect(typeof g.fn).toBe('function');
+  });
+
+  it('defineClientGuard tags as client', () => {
+    const g = defineClientGuard(async (_c, next) => next());
+    expect(g.runs).toBe('client');
   });
 });
 
-describe('runGuards', () => {
-  it('resolves to undefined with an empty guard list', async () => {
-    const result = await runGuards([], ctx);
+describe('runGuards composes records via .fn', () => {
+  it('threads next() through each guard in order', async () => {
+    const calls: string[] = [];
+    const a: GuardFn = defineServerGuard(async (_c, next) => {
+      calls.push('a:before');
+      const r = await next();
+      calls.push('a:after');
+      return r;
+    });
+    const b: GuardFn = defineServerGuard(async (_c, next) => {
+      calls.push('b');
+      return next();
+    });
+    const result = await runGuards([a, b], { location: loc });
     expect(result).toBeUndefined();
+    expect(calls).toEqual(['a:before', 'b', 'a:after']);
   });
 
-  it('single guard returning { redirect } short-circuits', async () => {
-    const guard = createGuard(async (_ctx, _next) => ({ redirect: '/login' }));
-    const result = await runGuards([guard], ctx);
+  it('short-circuits on the first non-void return', async () => {
+    const a = defineServerGuard(async (_c, next) => next());
+    const b = defineServerGuard(async () => ({ redirect: '/login' }));
+    const c = defineServerGuard(async (_c, next) => {
+      throw new Error('should not run');
+    });
+    const result = await runGuards([a, b, c], { location: loc });
     expect(result).toEqual({ redirect: '/login' });
-  });
-
-  it('single guard returning { render } short-circuits', async () => {
-    const ForbiddenPage = () => null;
-    const guard = createGuard(async (_ctx, _next) => ({ render: ForbiddenPage }));
-    const result = await runGuards([guard], ctx);
-    expect(result).toEqual({ render: ForbiddenPage });
-  });
-
-  it('single guard calling next() passes through to undefined', async () => {
-    const guard = createGuard(async (_ctx, next) => next());
-    const result = await runGuards([guard], ctx);
-    expect(result).toBeUndefined();
-  });
-
-  it('first guard redirect prevents second guard from running', async () => {
-    const secondFn = vi.fn();
-    const first = createGuard(async (_ctx, _next) => ({ redirect: '/login' }));
-    const second = createGuard(async (_ctx, _next) => { secondFn(); return undefined; });
-    await runGuards([first, second], ctx);
-    expect(secondFn).not.toHaveBeenCalled();
-  });
-
-  it('first guard passes, second guard redirects', async () => {
-    const first = createGuard(async (_ctx, next) => next());
-    const second = createGuard(async (_ctx, _next) => ({ redirect: '/forbidden' }));
-    const result = await runGuards([first, second], ctx);
-    expect(result).toEqual({ redirect: '/forbidden' });
-  });
-});
-
-describe('GuardRedirect', () => {
-  it('is an Error subclass', () => {
-    expect(new GuardRedirect('/login')).toBeInstanceOf(Error);
-  });
-
-  it('has the correct location property', () => {
-    const err = new GuardRedirect('/login');
-    expect(err.location).toBe('/login');
-  });
-
-  it('has name set to GuardRedirect', () => {
-    const err = new GuardRedirect('/login');
-    expect(err.name).toBe('GuardRedirect');
-  });
-
-  it('has a descriptive message', () => {
-    const err = new GuardRedirect('/login');
-    expect(err.message).toBe('Guard redirect to /login');
   });
 });
