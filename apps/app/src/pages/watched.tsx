@@ -6,17 +6,20 @@ import {
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import { loader, serverActions } from './watched.server.js';
-import { loader as moviesListLoader } from './movies-list.server.js';
+import { serverLoaders, serverActions } from './watched.server.js';
+import { serverLoaders as moviesListLoaders } from './movies-list.server.js';
+
+const watchedLoader = serverLoaders.default;
+const moviesListLoader = moviesListLoaders.default;
 
 const WatchedPage: FunctionComponent = () => {
-  const { entries } = loader.useData();
+  const { entries } = watchedLoader.useData();
   const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
 
   const reload = useReload();
 
   const { mutate: remove, pending: removing } = useAction(serverActions.removeWatched, {
-    invalidate: [loader, moviesListLoader],
+    invalidate: [watchedLoader, moviesListLoader],
   });
 
   const { mutate: bulkImport, pending: importing } = useAction(
@@ -93,7 +96,8 @@ const WatchedPage: FunctionComponent = () => {
 };
 WatchedPage.displayName = 'WatchedPage';
 
-export default definePage(WatchedPage, {
-  loader,
+const WatchedPageView = watchedLoader.View(() => <WatchedPage />, {
   fallback: <p class="p-1">Loading watched list…</p>,
 });
+
+export default definePage(WatchedPageView, {});
