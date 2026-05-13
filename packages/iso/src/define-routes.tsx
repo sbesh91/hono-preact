@@ -2,6 +2,7 @@ import { h } from 'preact';
 import type { AnyComponent, ComponentChildren, ComponentType, VNode } from 'preact';
 import { lazy, Route, Router } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
+import { RouteLocationsProvider } from './internal/route-locations.js';
 
 export type LayoutProps = { children: ComponentChildren };
 
@@ -131,14 +132,38 @@ function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport
  * referenced by multiple route registrations (e.g. `/docs` and `/docs/*`),
  * they should share one component reference so preact-iso's Router does not
  * treat the navigation as a route change and remount the layout.
+ *
+ * When `server` is provided, the loaded view is wrapped in a
+ * RouteLocationsProvider so that loaders in the server module can read the
+ * route's location from context.
  */
 function getOrCreateLazyView(
   view: NonNullable<RouteDef['view']>,
+  server: RouteDef['server'] | undefined,
   cache: Map<unknown, ComponentType<ViewProps>>
 ): ComponentType<ViewProps> {
   let component = cache.get(view);
   if (!component) {
-    component = asViewComponent(lazy(view));
+    if (!server) {
+      component = asViewComponent(lazy(view));
+    } else {
+      component = asViewComponent(
+        lazy(async () => {
+          const [{ default: View }, serverMod] = await Promise.all([
+            view(),
+            server(),
+          ]);
+          const moduleKey = (serverMod as { __moduleKey?: string }).__moduleKey;
+          const Wrapped: ComponentType<ViewProps> = (location) =>
+            h(
+              RouteLocationsProvider,
+              { moduleKey, location },
+              h(View as ComponentType<ViewProps>, location)
+            );
+          return { default: Wrapped };
+        })
+      );
+    }
     cache.set(view, component);
   }
   return component;
@@ -181,7 +206,7 @@ function buildInnerRoutes(
       nodes.push(
         h(Route, {
           path: child.path,
-          component: asRouteComponent(getOrCreateLazyView(child.view, viewCache)),
+          component: asRouteComponent(getOrCreateLazyView(child.view, child.server, viewCache)),
         })
       );
     } else if (child.layout && child.children) {
@@ -201,7 +226,7 @@ function buildInnerRoutes(
           nodes.push(
             h(Route, {
               path: joined,
-              component: asRouteComponent(getOrCreateLazyView(grand.view, viewCache)),
+              component: asRouteComponent(getOrCreateLazyView(grand.view, grand.server, viewCache)),
             })
           );
         }
@@ -233,7 +258,7 @@ function flattenTree(
         : parentPath + (r.path === '' ? '' : '/' + r.path);
 
     if (r.view) {
-      const component = getOrCreateLazyView(r.view, viewCache);
+      const component = getOrCreateLazyView(r.view, r.server, viewCache);
       out.push({ path: here, component, key: keyFor(component) });
     } else if (r.layout && r.children) {
       const Group = makeLayoutGroupComponent(r.layout, r.children, viewCache);
