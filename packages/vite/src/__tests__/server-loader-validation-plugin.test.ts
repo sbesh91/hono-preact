@@ -127,7 +127,7 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toBeNull();
   });
 
-  it('error message lists all allowed named exports including loader', () => {
+  it('error message lists all allowed named exports including loader and serverLoaders', () => {
     const code = [
       'export const unauthorized = () => {};',
       'export default async function serverLoader() { return {}; }',
@@ -137,7 +137,31 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain("'serverActions'");
     expect(error).toContain("'actionGuards'");
     expect(error).toContain("'loader'");
+    expect(error).toContain("'serverLoaders'");
     expect(error).not.toContain("'cache'");
+  });
+
+  describe('serverLoaders named export', () => {
+    it('passes a *.server.* file with only serverLoaders (no default export)', () => {
+      const code = [
+        "import { defineLoader } from '@hono-preact/iso';",
+        'const serverLoader = async () => ({});',
+        'export const serverLoaders = { default: defineLoader(serverLoader) };',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('passes a *.server.* file with serverLoaders + serverActions', () => {
+      const code = [
+        "import { defineLoader, defineAction } from '@hono-preact/iso';",
+        'const serverLoader = async () => ({});',
+        'export const serverLoaders = { default: defineLoader(serverLoader) };',
+        'export const serverActions = { foo: defineAction(async () => ({ ok: true })) };',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
   });
 
   describe('loader and cache named exports', () => {
