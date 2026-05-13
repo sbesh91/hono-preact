@@ -1,13 +1,10 @@
 import type { ComponentType, FunctionComponent, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import type { LoaderRef } from './define-loader.js';
 import type { GuardFn } from './guard.js';
 import { Page, type WrapperProps } from './page.js';
 
-export type PageBindings<T> = {
-  loader?: LoaderRef<T>;
+export type PageBindings = {
   Wrapper?: ComponentType<WrapperProps>;
-  fallback?: JSX.Element;
   errorFallback?:
     | JSX.Element
     | ((error: Error, reset: () => void) => JSX.Element);
@@ -16,22 +13,23 @@ export type PageBindings<T> = {
 };
 
 /**
- * Wrap a page component with its per-page bindings (loader, fallback,
- * guards, etc.) and return a routable component that self-wraps in `<Page>`.
+ * Wrap a page component with its per-page bindings (guards, error boundary,
+ * optional Wrapper) and return a routable component that self-wraps in `<Page>`.
  *
  * The output is a function `(location: RouteHook) => JSX.Element` that
  * `preact-iso`'s `<Route component={...}>` calls directly. No marker symbols,
  * no introspection, no custom router required.
+ *
+ * Data loading is owned by individual `loader.View()` / `loader.Boundary`
+ * components placed inside the page, not by the page itself.
  */
-export function definePage<T>(
+export function definePage(
   Component: ComponentType,
-  bindings?: PageBindings<T>
+  bindings?: PageBindings
 ): FunctionComponent<RouteHook> {
   const PageRoute: FunctionComponent<RouteHook> = (location) => (
-    <Page<T>
-      loader={bindings?.loader}
+    <Page
       Wrapper={bindings?.Wrapper}
-      fallback={bindings?.fallback}
       errorFallback={bindings?.errorFallback}
       serverGuards={bindings?.serverGuards}
       clientGuards={bindings?.clientGuards}
