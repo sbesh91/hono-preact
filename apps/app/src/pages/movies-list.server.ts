@@ -87,8 +87,9 @@ const serverLoader = async function* (
   yield { mode: 'buckets', query: q, buckets: { ...buckets }, watchedIds };
 };
 
-export default serverLoader;
-export const loader = defineLoader<SearchResults>(serverLoader);
+export const serverLoaders = {
+  default: defineLoader(serverLoader),
+};
 
 export const serverActions = {
   toggleWatched: defineAction<

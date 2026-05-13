@@ -3,6 +3,7 @@ import MagicString from 'magic-string';
 import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
+import { parseServerLoaders } from './server-loaders-parser.js';
 
 /**
  * Transforms `.server.*` files to inject a stable module-level
@@ -53,40 +54,65 @@ export function moduleKeyPlugin(): Plugin {
         return { code: s.toString(), map: s.generateMap({ hires: true }) };
       }
 
-      const visitCall = (node: CallExpression) => {
+      // Rewrite a defineLoader call to include __moduleKey and, when inside
+      // a serverLoaders object, __loaderName. Handles both the single-arg
+      // form (appends a new opts object) and the two-arg form (merges into
+      // the existing opts ObjectExpression).
+      const visitCallWithName = (node: CallExpression, loaderName: string | undefined) => {
         if (
           node.callee.type !== 'Identifier' ||
-          node.callee.name !== 'defineLoader' ||
-          node.arguments.length !== 1
+          node.callee.name !== 'defineLoader'
         ) {
           return;
         }
-        const arg = node.arguments[0];
-        if (arg.type === 'StringLiteral') return; // single-arg string literal isn't a valid defineLoader form; skip to avoid garbling
-        const insertAt = arg.end;
-        if (insertAt == null) return;
+        if (node.arguments.length === 0 || node.arguments.length > 2) return;
+        const fnArg = node.arguments[0];
+        if (fnArg.type === 'StringLiteral') return; // not a valid defineLoader fn form; skip
+
+        if (node.arguments.length === 1) {
+          const insertAt = fnArg.end;
+          if (insertAt == null) return;
+          const namePart = loaderName ? `, __loaderName: ${JSON.stringify(loaderName)}` : '';
+          s.appendRight(
+            insertAt,
+            `, { __moduleKey: ${JSON.stringify(key)}${namePart} }`
+          );
+          return;
+        }
+
+        // arguments.length === 2: merge __moduleKey/__loaderName into the
+        // existing opts object literal. Bail if it isn't an ObjectExpression.
+        const optsArg = node.arguments[1];
+        if (optsArg.type !== 'ObjectExpression') return;
+        const insertAt = optsArg.properties[0]?.start ?? (optsArg.start! + 1);
+        const namePart = loaderName ? `__loaderName: ${JSON.stringify(loaderName)}, ` : '';
         s.appendRight(
           insertAt,
-          `, { __moduleKey: ${JSON.stringify(key)} }`
+          `__moduleKey: ${JSON.stringify(key)}, ${namePart}`
         );
       };
 
-      // Top-level statement walk. defineLoader is overwhelmingly used at
-      // module scope; we don't recurse into nested function bodies to keep
-      // the plugin cheap.
+      // Walk serverLoaders entries via the shared parser, then mutate each call.
+      for (const entry of parseServerLoaders(ast.program)) {
+        visitCallWithName(entry.call, entry.name);
+      }
+
+      // Top-level fallthrough: legacy `export const loader = defineLoader(...)`
+      // (single-loader path). defineLoader is overwhelmingly used at module
+      // scope; we don't recurse into nested function bodies to keep the plugin cheap.
       for (const stmt of ast.program.body) {
         if (
           stmt.type === 'ExportNamedDeclaration' &&
           stmt.declaration?.type === 'VariableDeclaration'
         ) {
           for (const decl of stmt.declaration.declarations) {
-            if (decl.init?.type === 'CallExpression') visitCall(decl.init);
-          }
-        } else if (
-          stmt.type === 'VariableDeclaration'
-        ) {
-          for (const decl of stmt.declarations) {
-            if (decl.init?.type === 'CallExpression') visitCall(decl.init);
+            if (
+              decl.id.type === 'Identifier' &&
+              decl.id.name !== 'serverLoaders' &&
+              decl.init?.type === 'CallExpression'
+            ) {
+              visitCallWithName(decl.init, undefined);
+            }
           }
         }
       }

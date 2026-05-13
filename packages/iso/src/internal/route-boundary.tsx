@@ -11,7 +11,7 @@ type ErrorBoundaryProps = {
   children: ComponentChildren;
 };
 
-class ErrorBoundary extends Component<
+export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   { error: Error | null }
 > {

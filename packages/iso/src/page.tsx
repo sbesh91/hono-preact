@@ -7,10 +7,7 @@ import type {
 import { useId } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import type { GuardFn } from './guard.js';
-import type { LoaderRef } from './define-loader.js';
-import { Envelope } from './internal/envelope.js';
 import { Guards } from './internal/guards.js';
-import { Loader } from './internal/loader.js';
 import { RouteBoundary } from './internal/route-boundary.js';
 
 export type WrapperProps = {
@@ -23,12 +20,10 @@ const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
   <section {...props} />
 );
 
-export type PageProps<T> = {
-  loader?: LoaderRef<T>;
+export type PageProps = {
   location: RouteHook;
   serverGuards?: GuardFn[];
   clientGuards?: GuardFn[];
-  fallback?: JSX.Element;
   errorFallback?:
     | JSX.Element
     | ((error: Error, reset: () => void) => JSX.Element);
@@ -36,43 +31,23 @@ export type PageProps<T> = {
   children: ComponentChildren;
 };
 
-export function Page<T>({
-  loader,
+export function Page({
   location,
   serverGuards,
   clientGuards,
-  fallback,
   errorFallback,
   Wrapper,
   children,
-}: PageProps<T>): JSX.Element {
+}: PageProps): JSX.Element {
   const id = useId();
+  const W = Wrapper ?? DefaultWrapper;
   return (
-    <RouteBoundary fallback={fallback} errorFallback={errorFallback}>
+    <RouteBoundary errorFallback={errorFallback}>
       <Guards server={serverGuards} client={clientGuards} location={location}>
-        {loader ? (
-          <Loader loader={loader} location={location} fallback={fallback}>
-            <Envelope as={Wrapper}>{children}</Envelope>
-          </Loader>
-        ) : (
-          <NoLoaderFrame id={id} as={Wrapper}>
-            {children}
-          </NoLoaderFrame>
-        )}
+        <W id={id} data-loader="null">
+          {children}
+        </W>
       </Guards>
     </RouteBoundary>
   );
 }
-
-const NoLoaderFrame: FunctionComponent<{
-  id: string;
-  as?: ComponentType<WrapperProps>;
-  children: ComponentChildren;
-}> = ({ id, as, children }) => {
-  const W = as ?? DefaultWrapper;
-  return (
-    <W id={id} data-loader="null">
-      {children}
-    </W>
-  );
-};

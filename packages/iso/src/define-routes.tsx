@@ -1,7 +1,19 @@
 import { h } from 'preact';
 import type { AnyComponent, ComponentChildren, ComponentType, VNode } from 'preact';
-import { lazy, Route, Router } from 'preact-iso';
+import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
+import { RouteLocationsProvider } from './internal/route-locations.js';
+
+function wrapWithRouteLocations(
+  serverMod: unknown,
+  location: RouteHook,
+  node: VNode<any>
+): VNode<any> {
+  const moduleKey = (serverMod as { __moduleKey?: string } | undefined)?.__moduleKey;
+  return moduleKey
+    ? h(RouteLocationsProvider, { moduleKey, location }, node)
+    : node;
+}
 
 export type LayoutProps = { children: ComponentChildren };
 
@@ -74,7 +86,6 @@ function validate(
     const hasView = !!r.view;
     const hasLayout = !!r.layout;
     const hasChildren = !!(r.children && r.children.length > 0);
-    const hasServer = !!r.server;
 
     if (hasView && hasLayout) {
       throw new Error(`Route ${here}: cannot declare both \`view\` and \`layout\`.`);
@@ -85,9 +96,7 @@ function validate(
     if (hasLayout && !hasChildren) {
       throw new Error(`Route ${here}: \`layout\` requires \`children\`.`);
     }
-    if (hasLayout && hasServer) {
-      throw new Error(`Route ${here}: \`layout\` cannot declare \`server\` (one loader per leaf).`);
-    }
+
     if (!hasView && !hasLayout && !hasChildren) {
       throw new Error(`Route ${here}: must declare \`view\`, \`layout\`+\`children\`, or \`children\`.`);
     }
@@ -131,14 +140,44 @@ function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport
  * referenced by multiple route registrations (e.g. `/docs` and `/docs/*`),
  * they should share one component reference so preact-iso's Router does not
  * treat the navigation as a route change and remount the layout.
+ *
+ * When `server` is provided, the loaded view is wrapped in a
+ * RouteLocationsProvider so that loaders in the server module can read the
+ * route's location from context.
  */
 function getOrCreateLazyView(
   view: NonNullable<RouteDef['view']>,
+  server: RouteDef['server'] | undefined,
   cache: Map<unknown, ComponentType<ViewProps>>
 ): ComponentType<ViewProps> {
   let component = cache.get(view);
   if (!component) {
-    component = asViewComponent(lazy(view));
+    if (!server) {
+      component = asViewComponent(lazy(view));
+    } else {
+      component = asViewComponent(
+        lazy(async () => {
+          const [{ default: View }, serverMod] = await Promise.all([
+            view(),
+            server(),
+          ]);
+          // `location` from the inner Router has a relative path (e.g. `/123`
+          // when the route is nested inside a layout at `/movies/*`). Use
+          // `useLocation()` to get the full window path and searchParams so the
+          // stored location reflects the actual URL the loader runs against.
+          const Wrapped: ComponentType<ViewProps> = (location) => {
+            const { path, searchParams } = useLocation();
+            const fullLocation: ViewProps = { ...location, path, searchParams };
+            return wrapWithRouteLocations(
+              serverMod,
+              fullLocation,
+              h(View as ComponentType<ViewProps>, location)
+            );
+          };
+          return { default: Wrapped };
+        })
+      );
+    }
     cache.set(view, component);
   }
   return component;
@@ -149,21 +188,66 @@ function getOrCreateLazyView(
  * Returned via preact-iso's lazy so the layout module loads only when matched.
  * Children are themselves wrapped in preact-iso's lazy via their own `view`/`layout`,
  * so each child remains a separate code-split chunk.
+ *
+ * When the layout declares a `server` module, a RouteLocationsProvider is
+ * installed around the layout with the layout's own matched location
+ * (i.e. the path up to and including the layout's own segments, not the
+ * inner wildcard/child segments).
  */
 function makeLayoutGroupComponent(
   layoutImport: NonNullable<RouteDef['layout']>,
+  server: RouteDef['server'] | undefined,
+  layoutPathPattern: string,
   children: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>
 ): ComponentType<ViewProps> {
   return asViewComponent(
     lazy(async () => {
-      const Layout = (await layoutImport()).default;
+      const [{ default: Layout }, serverMod] = await Promise.all([
+        layoutImport(),
+        server ? server() : Promise.resolve(undefined),
+      ]);
       const inner = buildInnerRoutes(children, viewCache);
-      const Wrapper: ComponentType = () =>
-        h(Layout, null, h(Router, null, ...inner));
+      const Wrapper: ComponentType<ViewProps> = (location) => {
+        const layoutLocation = deriveLayoutLocation(location, layoutPathPattern);
+        const layoutNode = h(Layout, null, h(Router, null, ...inner));
+        return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
+      };
       return { default: Wrapper };
     })
   );
+}
+
+/**
+ * Derive the layout's own matched location from the active (inner) RouteHook.
+ *
+ * When a layout matches `/movies/*`, the wildcard portion (`rest` or `0`) is
+ * the child segment. The layout's location should be the path up to and
+ * including the layout's own segments, with the wildcard stripped.
+ */
+function deriveLayoutLocation(active: ViewProps, layoutPathPattern: string): ViewProps {
+  const params = active.pathParams ?? {};
+  const path = layoutPathPattern
+    .split('/')
+    .map((seg) =>
+      seg.startsWith(':')
+        ? String(params[seg.slice(1)] ?? '')
+        : seg.startsWith('*')
+          ? ''
+          : seg
+    )
+    .filter(Boolean)
+    .join('/');
+  const finalPath = '/' + path;
+  const filteredParams: Record<string, string> = {};
+  for (const k of Object.keys(params)) {
+    if (k !== 'rest' && k !== '0') filteredParams[k] = params[k] as string;
+  }
+  return {
+    ...active,
+    path: finalPath === '/' ? '/' : finalPath,
+    pathParams: filteredParams,
+  };
 }
 
 /**
@@ -181,11 +265,11 @@ function buildInnerRoutes(
       nodes.push(
         h(Route, {
           path: child.path,
-          component: asRouteComponent(getOrCreateLazyView(child.view, viewCache)),
+          component: asRouteComponent(getOrCreateLazyView(child.view, child.server, viewCache)),
         })
       );
     } else if (child.layout && child.children) {
-      const Group = makeLayoutGroupComponent(child.layout, child.children, viewCache);
+      const Group = makeLayoutGroupComponent(child.layout, child.server, child.path, child.children, viewCache);
       // Same shared-component trick at this nesting level.
       nodes.push(h(Route, { path: child.path, component: asRouteComponent(Group) }));
       nodes.push(
@@ -201,7 +285,7 @@ function buildInnerRoutes(
           nodes.push(
             h(Route, {
               path: joined,
-              component: asRouteComponent(getOrCreateLazyView(grand.view, viewCache)),
+              component: asRouteComponent(getOrCreateLazyView(grand.view, grand.server, viewCache)),
             })
           );
         }
@@ -233,10 +317,10 @@ function flattenTree(
         : parentPath + (r.path === '' ? '' : '/' + r.path);
 
     if (r.view) {
-      const component = getOrCreateLazyView(r.view, viewCache);
+      const component = getOrCreateLazyView(r.view, r.server, viewCache);
       out.push({ path: here, component, key: keyFor(component) });
     } else if (r.layout && r.children) {
-      const Group = makeLayoutGroupComponent(r.layout, r.children, viewCache);
+      const Group = makeLayoutGroupComponent(r.layout, r.server, here, r.children, viewCache);
       const key = keyFor(Group);
       out.push({ path: here, component: Group, key });
       out.push({ path: here + '/*', component: Group, key });

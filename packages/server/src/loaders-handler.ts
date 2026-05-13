@@ -34,9 +34,16 @@ async function buildLoadersMap(
       typeof moduleOrLoader === 'function'
         ? await (moduleOrLoader as () => Promise<GlobModule>)()
         : (moduleOrLoader as GlobModule);
-    const key = mod.__moduleKey;
-    if (typeof key === 'string' && typeof mod.default === 'function') {
-      result[key] = mod.default as LoaderFn;
+    const moduleKey = mod.__moduleKey;
+    if (typeof moduleKey !== 'string') continue;
+
+    const sl = (mod as any).serverLoaders;
+    if (sl && typeof sl === 'object') {
+      for (const [name, fn] of Object.entries(sl)) {
+        if (typeof fn === 'function') {
+          result[`${moduleKey}::${name}`] = fn as LoaderFn;
+        }
+      }
     }
   }
   return result;
@@ -75,19 +82,22 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       return c.json({ error: `Failed to load loaders: ${message}` }, 503);
     }
 
-    let body: { module: unknown; location: unknown };
+    let body: { module: unknown; loader: unknown; location: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
 
-    const { module, location } = body;
+    const { module, loader: loaderName, location } = body;
     if (typeof module !== 'string') {
       return c.json(
         { error: 'Request body must include string field: module' },
         400
       );
+    }
+    if (typeof loaderName !== 'string') {
+      return c.json({ error: 'Request body must include string field: loader' }, 400);
     }
 
     const validatedLocation = validateLocation(location);
@@ -101,16 +111,16 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       );
     }
 
-    const loader = loadersMap[module];
-    if (!loader) {
-      return c.json({ error: `Module '${module}' not found` }, 404);
+    const loaderFn = loadersMap[`${module}::${loaderName}`];
+    if (!loaderFn) {
+      return c.json({ error: `Loader '${module}::${loaderName}' not found` }, 404);
     }
 
     const signal = c.req.raw.signal;
 
     try {
       const result = await runRequestScope(() =>
-        Promise.resolve(loader({ location: validatedLocation, signal }))
+        Promise.resolve(loaderFn({ location: validatedLocation, signal }))
       );
 
       if (isAsyncGenerator(result)) {

@@ -5,11 +5,18 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import type { JSX } from 'preact';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
+import { RouteLocationsContext } from '../internal/route-locations.js';
 import type { GuardFn } from '../guard.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
   deletePreloadedData: vi.fn(),
+}));
+
+// Suppress isBrowser in tests so Loader uses fn() directly rather than fetch.
+vi.mock('../is-browser.js', () => ({
+  isBrowser: () => false,
+  env: { current: 'server' },
 }));
 
 afterEach(() => {
@@ -26,18 +33,34 @@ const fakeLocation: RouteHook = {
 } as RouteHook;
 
 describe('definePage', () => {
-  it('returns a routable component that self-wraps in <Page>', async () => {
-    const loader = defineLoader(async () => ({ msg: 'hello' }));
-    function Body() {
-      return <p>body</p>;
-    }
-    const PageRoute = definePage(Body, { loader });
-    render(
-      <LocationProvider>
-        <PageRoute {...fakeLocation} />
-      </LocationProvider>
+  it('renders a loader.View component placed inside the page body', async () => {
+    const loader = defineLoader(async () => ({ msg: 'hello' }), {
+      __moduleKey: 'test/define-page-loader-view',
+    });
+
+    const locMap = new Map();
+    locMap.set('test/define-page-loader-view', fakeLocation);
+
+    const Body = loader.View(
+      ({ data }) => <p data-testid="msg">{data.msg}</p>,
+      { fallback: <p>loading</p> }
     );
-    expect(await screen.findByText('body')).toBeInTheDocument();
+
+    function PageBody() {
+      return <Body />;
+    }
+
+    const PageRoute = definePage(PageBody);
+
+    render(
+      <RouteLocationsContext.Provider value={locMap}>
+        <LocationProvider>
+          <PageRoute {...fakeLocation} />
+        </LocationProvider>
+      </RouteLocationsContext.Provider>
+    );
+
+    expect(await screen.findByTestId('msg')).toHaveTextContent('hello');
   });
 
   it('returns a routable component for a binding-less page', async () => {
@@ -53,10 +76,10 @@ describe('definePage', () => {
     expect(await screen.findByText('plain')).toBeInTheDocument();
   });
 
-  it('threads fallback, errorFallback, serverGuards, clientGuards into <Page>', async () => {
+  it('threads errorFallback, serverGuards, clientGuards into <Page>', async () => {
     const guard: GuardFn = async (_ctx, next) => next();
-    const bindings: PageBindings<{ ok: true }> = {
-      fallback: <p>loading-state</p>,
+    const bindings: PageBindings = {
+      errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
       serverGuards: [guard],
       clientGuards: [guard],
     };
@@ -82,16 +105,14 @@ describe('definePage', () => {
   });
 });
 
-describe('PageBindings widened surface', () => {
-  it('accepts fallback, errorFallback, serverGuards, clientGuards on the bindings type', () => {
+describe('PageBindings surface', () => {
+  it('accepts errorFallback, serverGuards, clientGuards on the bindings type', () => {
     const guard: GuardFn = async (_ctx, next) => next();
-    const bindings: PageBindings<{ ok: true }> = {
-      fallback: <p>loading</p>,
+    const bindings: PageBindings = {
       errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
       serverGuards: [guard],
       clientGuards: [guard],
     };
-    expectTypeOf(bindings.fallback).toEqualTypeOf<JSX.Element | undefined>();
     expectTypeOf(bindings.errorFallback).toMatchTypeOf<
       JSX.Element | ((error: Error, reset: () => void) => JSX.Element) | undefined
     >();

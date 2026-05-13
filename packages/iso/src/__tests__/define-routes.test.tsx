@@ -58,12 +58,12 @@ describe('defineRoutes validation', () => {
     ).toThrow(/`layout` requires `children`/);
   });
 
-  it('rejects layout + server', () => {
+  it('allows layout + server (layout can declare a server module)', () => {
     expect(() =>
       defineRoutes([
         { path: '/', layout: noopLayout, server: noopServer, children: [{ path: '', view: noopView }] },
       ])
-    ).toThrow(/`layout` cannot declare `server`/);
+    ).not.toThrow();
   });
 
   it('rejects child path starting with `/`', () => {

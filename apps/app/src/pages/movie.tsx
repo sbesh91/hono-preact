@@ -9,10 +9,14 @@ import {
 } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
-import { loader, serverActions, type DetailStream } from './movie.server.js';
-import { loader as moviesListLoader } from './movies-list.server.js';
-import { loader as watchedLoader } from './watched.server.js';
+import { serverLoaders, serverActions, type DetailStream } from './movie.server.js';
+import { serverLoaders as moviesListLoaders } from './movies-list.server.js';
+import { serverLoaders as watchedLoaders } from './watched.server.js';
 import { useWatchedBadge } from './movies-layout.js';
+
+const movieLoader = serverLoaders.default;
+const moviesListLoader = moviesListLoaders.default;
+const watchedLoader = watchedLoaders.default;
 
 function MovieWrapper(props: WrapperProps) {
   return <article {...props} />;
@@ -24,7 +28,7 @@ const NotesForm: FunctionComponent<{
   movieKey: number;
 }> = ({ movieIdStr, defaultNotes, movieKey }) => {
   const { mutate, pending } = useAction(serverActions.setNotes, {
-    invalidate: [loader, watchedLoader],
+    invalidate: [movieLoader, watchedLoader],
   });
   return (
     <Form mutate={mutate} pending={pending} class="flex flex-col gap-2 mt-1">
@@ -45,7 +49,7 @@ const NotesForm: FunctionComponent<{
 
 const PhotoForm: FunctionComponent<{ movieIdStr: string }> = ({ movieIdStr }) => {
   const { mutate, pending } = useAction(serverActions.setPhoto, {
-    invalidate: [loader, watchedLoader],
+    invalidate: [movieLoader, watchedLoader],
   });
   return (
     <Form mutate={mutate} pending={pending} class="flex flex-col gap-2 mt-1">
@@ -143,8 +147,8 @@ const BoxOfficeSection: FunctionComponent<{
 };
 
 const MovieDetail: FunctionComponent = () => {
-  const data = loader.useData();
-  const error = loader.useError();
+  const data = movieLoader.useData();
+  const error = movieLoader.useError();
   const { setCount } = useWatchedBadge();
 
   useEffect(() => { setCount(data.watchedCount); }, [data.watchedCount, setCount]);
@@ -160,7 +164,7 @@ const MovieDetail: FunctionComponent = () => {
     {
       base: isWatched,
       apply: (_current, payload) => payload.watched,
-      invalidate: [loader, moviesListLoader, watchedLoader],
+      invalidate: [movieLoader, moviesListLoader, watchedLoader],
     }
   );
 
@@ -234,4 +238,6 @@ const MovieDetail: FunctionComponent = () => {
 };
 MovieDetail.displayName = 'MovieDetail';
 
-export default definePage(MovieDetail, { loader, Wrapper: MovieWrapper });
+const MovieDetailPage = movieLoader.View(() => <MovieDetail />);
+
+export default definePage(MovieDetailPage, { Wrapper: MovieWrapper });

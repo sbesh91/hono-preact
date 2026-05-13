@@ -1,14 +1,52 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse } from '@babel/parser';
 import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
+import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 
 // Symbol-keyed accessor used by unit tests to verify `configResolved` fires
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
 // autocomplete for the public Plugin surface.
 export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/viteRoot');
+
+/**
+ * Reads a .server.* file synchronously and extracts the `params` option from
+ * each entry in the `serverLoaders` ObjectExpression. Returns a map of
+ * { loaderName -> params } for loaders that declare non-default params.
+ * Returns an empty object if the file cannot be parsed or has no serverLoaders.
+ */
+function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
+  let src: string;
+  try {
+    src = fs.readFileSync(absServerPath, 'utf8');
+  } catch {
+    return {};
+  }
+
+  let ast;
+  try {
+    ast = parse(src, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+      errorRecovery: true,
+    });
+  } catch {
+    return {};
+  }
+
+  const entries = parseServerLoaders(ast.program);
+  const meta: Record<string, string[] | '*'> = {};
+  for (const entry of entries) {
+    if (!entry.optsArg) continue;
+    const params = readParamsOpt(entry.optsArg);
+    if (params !== undefined) meta[entry.name] = params;
+  }
+
+  return meta;
+}
 
 type DynamicServerImport = { start: number; end: number; source: string };
 
@@ -42,24 +80,6 @@ function findDynamicServerImports(node: unknown, found: DynamicServerImport[]): 
     if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
     findDynamicServerImports((node as Record<string, unknown>)[key], found);
   }
-}
-
-function loaderFetchArrow(moduleName: string, indent: string): string {
-  const i = indent;
-  return (
-    `async ({ location }) => {\n` +
-    `${i}  const res = await fetch('/__loaders', {\n` +
-    `${i}    method: 'POST',\n` +
-    `${i}    headers: { 'Content-Type': 'application/json' },\n` +
-    `${i}    body: JSON.stringify({ module: ${JSON.stringify(moduleName)}, location: { path: location.path, pathParams: location.pathParams, searchParams: location.searchParams } }),\n` +
-    `${i}  });\n` +
-    `${i}  if (!res.ok) {\n` +
-    `${i}    const body = await res.json().catch(() => ({}));\n` +
-    `${i}    throw new Error(body.error ?? \`Loader failed with status \${res.status}\`);\n` +
-    `${i}  }\n` +
-    `${i}  return res.json();\n` +
-    `${i}}`
-  );
 }
 
 export function serverOnlyPlugin(): Plugin {
@@ -119,7 +139,7 @@ export function serverOnlyPlugin(): Plugin {
       const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
-      let needsDefineLoaderImport = false;
+      let needsCreateLoaderStubImport = false;
       let needsUseActionImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
@@ -148,14 +168,28 @@ export function serverOnlyPlugin(): Plugin {
             continue;
           }
           hasValueSpecifier = true;
-          const isDefaultImport =
-            specifier.type === 'ImportDefaultSpecifier' ||
-            (specifier.type === 'ImportSpecifier' &&
-              specifier.imported.type === 'Identifier' &&
-              specifier.imported.name === 'default');
-          if (isDefaultImport) {
+          if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverLoaders'
+          ) {
+            needsCreateLoaderStubImport = true;
+            const absServerPath = path.resolve(importerDir, serverImport.source.value);
+            const loadersMeta = extractServerLoadersMeta(absServerPath);
+            const metaVar = `__$serverLoadersMeta_${specifier.local.name}`;
+            const metaJson = JSON.stringify(loadersMeta);
             stubs.push(
-              `const ${specifier.local.name} = ${loaderFetchArrow(moduleKey, '')};`
+              `const ${metaVar} = ${metaJson};\n` +
+              `const ${specifier.local.name} = new Proxy({}, {\n` +
+              `  get(_, name) {\n` +
+              `    const __meta = ${metaVar}[String(name)];\n` +
+              `    return __$createLoaderStub_hpiso({\n` +
+              `      __moduleKey: ${JSON.stringify(moduleKey)},\n` +
+              `      __loaderName: String(name),\n` +
+              `      params: __meta,\n` +
+              `    });\n` +
+              `  }\n` +
+              `});`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -179,15 +213,6 @@ export function serverOnlyPlugin(): Plugin {
               `  }\n` +
               `});`
             );
-          } else if (
-            specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'loader'
-          ) {
-            needsDefineLoaderImport = true;
-            stubs.push(
-              `const ${specifier.local.name} = __$defineLoader_hpiso(${loaderFetchArrow(moduleKey, '  ')}, { __moduleKey: ${JSON.stringify(moduleKey)} });`
-            );
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&
@@ -198,7 +223,7 @@ export function serverOnlyPlugin(): Plugin {
                 : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-              `Allowed: default, loader, serverGuards, serverActions, actionGuards.`
+              `Allowed: serverLoaders, serverGuards, serverActions, actionGuards.`
             );
           }
         }
@@ -214,8 +239,8 @@ export function serverOnlyPlugin(): Plugin {
         s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
       }
 
-      if (needsDefineLoaderImport) {
-        s.prepend(`import { defineLoader as __$defineLoader_hpiso } from '@hono-preact/iso';\n`);
+      if (needsCreateLoaderStubImport) {
+        s.prepend(`import { __$createLoaderStub_hpiso } from '@hono-preact/iso/internal';\n`);
       }
       if (needsUseActionImport) {
         s.prepend(`import { useAction as __$useAction_hpiso } from '@hono-preact/iso';\n`);
