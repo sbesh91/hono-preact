@@ -6,21 +6,7 @@ import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { runLoader } from './loader-runner.js';
-
-// Local copy to avoid a circular import with loader.tsx.
-// The canonical export remains in loader.tsx.
-function serializeLocationForCache(
-  loc: RouteHook,
-  params: string[] | '*'
-): string {
-  const sp = (loc.searchParams ?? {}) as Record<string, string>;
-  const keys =
-    params === '*'
-      ? Object.keys(sp).sort()
-      : params.filter((k) => k in sp).sort();
-  const sortedSearch = keys.map((k) => `${k}=${sp[k]}`).join('&');
-  return `${loc.path}?${sortedSearch}`;
-}
+import { serializeLocationForCache } from './cache-key.js';
 
 export type LoaderRunnerState<T> = {
   reader: { read: () => T };
