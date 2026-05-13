@@ -3,8 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { h } from 'preact';
 import type { FunctionComponent } from 'preact';
 import { render, waitFor } from '@testing-library/preact';
+import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
+import { RouteLocationsProvider } from '../internal/route-locations.js';
 
 // In happy-dom, isBrowser() returns true, which would cause LoaderHost to
 // use the fetch path (POST /__loaders) instead of calling the fn directly.
@@ -94,5 +96,43 @@ describe('LoaderRef.View', () => {
     );
     const el = await findByTestId('composed');
     expect(el.textContent).toBe('movie:1');
+  });
+});
+
+describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => {
+  it('uses the location for its own moduleKey', async () => {
+    const seen: { path: string }[] = [];
+    const ref = defineLoader<{ path: string }>(
+      async ({ location }) => {
+        seen.push({ path: location.path });
+        return { path: location.path };
+      },
+      { __moduleKey: 'pages/test-context-loc' }
+    );
+
+    const Probe = () => {
+      const data = ref.useData();
+      return <span data-testid="path">{data.path}</span>;
+    };
+
+    const layoutLoc = { path: '/movies', pathParams: {}, searchParams: {} } as any;
+    const pageLoc = { path: '/movies/123', pathParams: { id: '123' }, searchParams: {} } as any;
+
+    history.replaceState(null, '', '/movies/123');
+    const { findByTestId } = render(
+      <LocationProvider>
+        <RouteLocationsProvider moduleKey="pages/movies-layout-test" location={layoutLoc}>
+          <RouteLocationsProvider moduleKey="pages/test-context-loc" location={pageLoc}>
+            <ref.Boundary fallback={<span />}>
+              <Probe />
+            </ref.Boundary>
+          </RouteLocationsProvider>
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    const el = await findByTestId('path');
+    expect(el.textContent).toBe('/movies/123');
+    expect(seen[0]).toEqual({ path: '/movies/123' });
   });
 });
