@@ -8,11 +8,10 @@ import { getPreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdContext } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
-import { fetchLoaderData } from './loader-fetch.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
-import { registerServerStreamingLoader } from './streaming-ssr.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
+import { runLoader } from './loader-runner.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -42,17 +41,6 @@ export function Loader<T>({
         {children}
       </LoaderHost>
     </LoaderIdContext.Provider>
-  );
-}
-
-function isAsyncGenerator(
-  value: unknown
-): value is AsyncGenerator<unknown, unknown, unknown> {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function' &&
-    typeof (value as { next?: unknown }).next === 'function'
   );
 }
 
@@ -86,8 +74,6 @@ function LoaderHost<T>({
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
   const [loadError, setLoadError] = useState<Error | null>(null);
 
-  const fnRef = useRef(loaderRef.fn);
-  fnRef.current = loaderRef.fn;
   const locationRef = useRef(location);
   locationRef.current = location;
 
@@ -121,29 +107,17 @@ function LoaderHost<T>({
     setReloading(true);
     setLoadError(null);
 
-    const useFetchPath =
-      isBrowser() &&
-      typeof fetch === 'function' &&
-      loaderRef.__moduleKey !== undefined;
-
-    const loaderName = loaderRef.__loaderName ?? 'default';
-    const promise: Promise<T> = useFetchPath
-      ? fetchLoaderData<T>(
-          loaderRef.__moduleKey!,
-          loaderName,
-          {
-            path: locationRef.current.path,
-            pathParams: (locationRef.current.pathParams ?? {}) as Record<string, string>,
-            searchParams: (locationRef.current.searchParams ?? {}) as Record<string, string>,
-          },
-          newAbortSignal(),
-          {
-            onChunk: (value) => setOverrideData(value),
-            onError: (err) => setLoadError(err),
-            onEnd: () => { /* nothing to do */ },
-          }
-        )
-      : (fnRef.current({ location: locationRef.current, signal: newAbortSignal() }) as Promise<T>);
+    const promise: Promise<T> = runLoader<T>(
+      loaderRef,
+      locationRef.current,
+      id,
+      newAbortSignal(),
+      {
+        onChunk: (value) => setOverrideData(value),
+        onError: (err) => setLoadError(err),
+        onEnd: () => { /* nothing to do */ },
+      }
+    );
 
     promise
       .then((result) => {
@@ -227,48 +201,17 @@ function LoaderHost<T>({
         }
       };
 
-      const useFetchPath =
-        isBrowser() &&
-        typeof fetch === 'function' &&
-        loaderRef.__moduleKey !== undefined;
-
-      const firstRenderLoaderName = loaderRef.__loaderName ?? 'default';
-      let fetchPromise: Promise<T>;
-      if (useFetchPath) {
-        fetchPromise = fetchLoaderData<T>(
-          loaderRef.__moduleKey!,
-          firstRenderLoaderName,
-          {
-            path: location.path,
-            pathParams: (location.pathParams ?? {}) as Record<string, string>,
-            searchParams: (location.searchParams ?? {}) as Record<string, string>,
-          },
-          newAbortSignal(),
-          {
-            onChunk: (value) => setOverrideData(value),
-            onError: (err) => setLoadError(err),
-            onEnd: () => { /* nothing to do */ },
-          }
-        );
-      } else {
-        // Direct-fn path. Result may be a Promise<T>, a
-        // Promise<ReadableStream<T>>, or an AsyncGenerator<T>. For an async
-        // generator (server-side streaming loader), take the first chunk
-        // for the Suspense render and register the rest with the per-request
-        // streaming-ssr registry so renderPage can flush further chunks.
-        fetchPromise = (async () => {
-          const result = await (loaderRef.fn({ location, signal: newAbortSignal() }) as Promise<unknown>);
-          if (isAsyncGenerator(result)) {
-            const step = await result.next();
-            if (step.done) {
-              return undefined as T; // generator returned without yielding
-            }
-            registerServerStreamingLoader(id, result);
-            return step.value as T;
-          }
-          return result as T;
-        })();
-      }
+      const fetchPromise: Promise<T> = runLoader<T>(
+        loaderRef,
+        location,
+        id,
+        newAbortSignal(),
+        {
+          onChunk: (value) => setOverrideData(value),
+          onError: (err) => setLoadError(err),
+          onEnd: () => { /* nothing to do */ },
+        }
+      );
 
       readerRef.current = wrapPromise(
         fetchPromise
