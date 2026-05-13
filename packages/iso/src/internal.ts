@@ -43,3 +43,5 @@ export {
   takeServerStreamingLoaders,
 } from './internal/streaming-ssr.js';
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
+
+export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
