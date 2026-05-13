@@ -1,6 +1,10 @@
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { serverOnlyPlugin } from '../server-only.js';
 import type { Plugin } from 'vite';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function transform(
   code: string,
@@ -50,5 +54,48 @@ describe('serverOnlyPlugin: serverLoaders Proxy stub', () => {
     expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
       /not a recognized export/
     );
+  });
+});
+
+describe('serverOnlyPlugin: params threading from .server.ts to client Proxy', () => {
+  const fixtureDir = path.join(__dirname, 'fixtures', 'params-server');
+  const fixtureRoot = path.join(fixtureDir, '..');
+
+  it('emits params meta for loaders that declare params in the .server.ts fixture', () => {
+    const code = `import { serverLoaders } from './movies.server.ts';`;
+    const importerId = path.join(fixtureDir, 'page.tsx');
+    const result = transform(code, importerId, { root: fixtureRoot });
+    expect(result?.code).toContain(`__$serverLoadersMeta_serverLoaders`);
+    expect(result?.code).toContain(`"summary"`);
+    expect(result?.code).toContain(`"genre"`);
+    expect(result?.code).toContain(`"cast"`);
+    expect(result?.code).toContain(`"*"`);
+  });
+
+  it('passes params via the meta object into createLoaderStub', () => {
+    const code = `import { serverLoaders } from './movies.server.ts';`;
+    const importerId = path.join(fixtureDir, 'page.tsx');
+    const result = transform(code, importerId, { root: fixtureRoot });
+    // The Proxy get() reads meta[name] and forwards it as `params`
+    expect(result?.code).toContain(`params: __meta`);
+  });
+
+  it('falls back gracefully when the .server.ts file does not exist', () => {
+    const code = `import { serverLoaders } from './nonexistent.server.ts';`;
+    const importerId = path.join(fixtureDir, 'page.tsx');
+    const result = transform(code, importerId, { root: fixtureRoot });
+    // Meta is an empty object; no crash
+    expect(result?.code).toContain(`__$serverLoadersMeta_serverLoaders`);
+    expect(result?.code).toContain(`{}`);
+  });
+
+  it('default loader with no params declaration has no entry in meta', () => {
+    const code = `import { serverLoaders } from './movies.server.ts';`;
+    const importerId = path.join(fixtureDir, 'page.tsx');
+    const result = transform(code, importerId, { root: fixtureRoot });
+    // "default" key should NOT appear in meta since it has no params
+    const metaMatch = result?.code.match(/__\$serverLoadersMeta_serverLoaders\s*=\s*(\{[^}]*\})/);
+    expect(metaMatch).not.toBeNull();
+    expect(metaMatch![1]).not.toContain('"default"');
   });
 });

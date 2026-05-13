@@ -1,6 +1,7 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse } from '@babel/parser';
-import type { ImportDeclaration } from '@babel/types';
+import type { CallExpression, ImportDeclaration, ObjectExpression } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
@@ -9,6 +10,84 @@ import { deriveModuleKey } from './module-key.js';
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
 // autocomplete for the public Plugin surface.
 export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/viteRoot');
+
+/**
+ * Reads a .server.* file synchronously and extracts the `params` option from
+ * each entry in the `serverLoaders` ObjectExpression. Returns a map of
+ * { loaderName -> params } for loaders that declare non-default params.
+ * Returns an empty object if the file cannot be parsed or has no serverLoaders.
+ */
+function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
+  let src: string;
+  try {
+    src = fs.readFileSync(absServerPath, 'utf8');
+  } catch {
+    return {};
+  }
+
+  let ast;
+  try {
+    ast = parse(src, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+      errorRecovery: true,
+    });
+  } catch {
+    return {};
+  }
+
+  const meta: Record<string, string[] | '*'> = {};
+
+  for (const stmt of ast.program.body) {
+    if (
+      stmt.type !== 'ExportNamedDeclaration' ||
+      stmt.declaration?.type !== 'VariableDeclaration'
+    ) continue;
+    for (const decl of stmt.declaration.declarations) {
+      if (
+        decl.id.type !== 'Identifier' ||
+        decl.id.name !== 'serverLoaders' ||
+        decl.init?.type !== 'ObjectExpression'
+      ) continue;
+      const obj = decl.init as ObjectExpression;
+      for (const prop of obj.properties) {
+        if (
+          prop.type !== 'ObjectProperty' ||
+          prop.key.type !== 'Identifier' ||
+          prop.value.type !== 'CallExpression'
+        ) continue;
+        const loaderName = prop.key.name;
+        const call = prop.value as CallExpression;
+        if (
+          call.callee.type !== 'Identifier' ||
+          call.callee.name !== 'defineLoader' ||
+          call.arguments.length !== 2
+        ) continue;
+        const optsArg = call.arguments[1];
+        if (optsArg.type !== 'ObjectExpression') continue;
+        for (const optProp of optsArg.properties) {
+          if (
+            optProp.type !== 'ObjectProperty' ||
+            optProp.key.type !== 'Identifier' ||
+            optProp.key.name !== 'params'
+          ) continue;
+          const val = optProp.value;
+          if (val.type === 'StringLiteral' && val.value === '*') {
+            meta[loaderName] = '*';
+          } else if (val.type === 'ArrayExpression') {
+            const items: string[] = [];
+            for (const el of val.elements) {
+              if (el?.type === 'StringLiteral') items.push(el.value);
+            }
+            if (items.length > 0) meta[loaderName] = items;
+          }
+        }
+      }
+    }
+  }
+
+  return meta;
+}
 
 type DynamicServerImport = { start: number; end: number; source: string };
 
@@ -136,12 +215,19 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverLoaders'
           ) {
             needsCreateLoaderStubImport = true;
+            const absServerPath = path.resolve(importerDir, serverImport.source.value);
+            const loadersMeta = extractServerLoadersMeta(absServerPath);
+            const metaVar = `__$serverLoadersMeta_${specifier.local.name}`;
+            const metaJson = JSON.stringify(loadersMeta);
             stubs.push(
+              `const ${metaVar} = ${metaJson};\n` +
               `const ${specifier.local.name} = new Proxy({}, {\n` +
               `  get(_, name) {\n` +
+              `    const __meta = ${metaVar}[String(name)];\n` +
               `    return __$createLoaderStub_hpiso({\n` +
               `      __moduleKey: ${JSON.stringify(moduleKey)},\n` +
               `      __loaderName: String(name),\n` +
+              `      params: __meta,\n` +
               `    });\n` +
               `  }\n` +
               `});`

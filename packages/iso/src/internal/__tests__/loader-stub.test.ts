@@ -26,4 +26,30 @@ describe('__$createLoaderStub_hpiso', () => {
     const b = __$createLoaderStub_hpiso({ __moduleKey: 'pages/x', __loaderName: 'foo' });
     expect(a.__id).toBe(b.__id);
   });
+
+  it('passes params array through to the LoaderRef', () => {
+    const stub = __$createLoaderStub_hpiso({
+      __moduleKey: 'pages/movie',
+      __loaderName: 'summary',
+      params: ['genre'],
+    });
+    expect(stub.params).toEqual(['genre']);
+  });
+
+  it('passes params wildcard through to the LoaderRef', () => {
+    const stub = __$createLoaderStub_hpiso({
+      __moduleKey: 'pages/movie',
+      __loaderName: 'cast',
+      params: '*',
+    });
+    expect(stub.params).toBe('*');
+  });
+
+  it('defaults params to [] when not provided', () => {
+    const stub = __$createLoaderStub_hpiso({
+      __moduleKey: 'pages/movie',
+      __loaderName: 'info',
+    });
+    expect(stub.params).toEqual([]);
+  });
 });
