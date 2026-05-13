@@ -98,6 +98,56 @@ describe('LoaderRef.View', () => {
   });
 });
 
+describe('LoaderRef.Boundary: errorFallback', () => {
+  it('renders errorFallback when the loader fn throws', async () => {
+    const ref = defineLoader<{ value: number }>(
+      async () => { throw new Error('boom'); },
+      { __moduleKey: 'pages/test-error-boundary' }
+    );
+
+    const locMap = new Map();
+    locMap.set('pages/test-error-boundary', { path: '/', pathParams: {}, searchParams: {} });
+
+    const { findByTestId } = render(
+      <RouteLocationsContext.Provider value={locMap}>
+        <ref.Boundary
+          fallback={<span>loading</span>}
+          errorFallback={<span data-testid="err">caught</span>}
+        >
+          <span data-testid="content">should not render</span>
+        </ref.Boundary>
+      </RouteLocationsContext.Provider>
+    );
+
+    const errEl = await findByTestId('err');
+    expect(errEl.textContent).toBe('caught');
+  });
+
+  it('renders errorFallback from View opts when the loader fn throws', async () => {
+    const ref = defineLoader<{ value: number }>(
+      async () => { throw new Error('view-boom'); },
+      { __moduleKey: 'pages/test-error-view' }
+    );
+
+    const View = ref.View(
+      ({ data }) => <span data-testid="data">{data.value}</span>,
+      { errorFallback: <span data-testid="view-err">view-caught</span> }
+    );
+
+    const locMap = new Map();
+    locMap.set('pages/test-error-view', { path: '/', pathParams: {}, searchParams: {} });
+
+    const { findByTestId } = render(
+      <RouteLocationsContext.Provider value={locMap}>
+        <View />
+      </RouteLocationsContext.Provider>
+    );
+
+    const errEl = await findByTestId('view-err');
+    expect(errEl.textContent).toBe('view-caught');
+  });
+});
+
 describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => {
   it('uses the location for its own moduleKey', async () => {
     const seen: { path: string }[] = [];

@@ -12,11 +12,13 @@ import { fetchLoaderData } from './loader-fetch.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { registerServerStreamingLoader } from './streaming-ssr.js';
 import { RouteLocationsContext } from './route-locations.js';
+import { ErrorBoundary } from './route-boundary.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
   location: RouteHook;
   fallback?: JSX.Element;
+  errorFallback?: ComponentChildren | ((err: Error, reset: () => void) => ComponentChildren);
   children: ComponentChildren;
 };
 
@@ -24,6 +26,7 @@ export function Loader<T>({
   loader,
   location,
   fallback,
+  errorFallback,
   children,
 }: LoaderProps<T>) {
   const id = useId();
@@ -34,6 +37,7 @@ export function Loader<T>({
         location={location}
         id={id}
         fallback={fallback}
+        errorFallback={errorFallback}
       >
         {children}
       </LoaderHost>
@@ -66,6 +70,7 @@ function LoaderHost<T>({
   location: locationProp,
   id,
   fallback,
+  errorFallback,
   children,
 }: LoaderHostProps<T>) {
   const locMap = useContext(RouteLocationsContext);
@@ -280,18 +285,26 @@ function LoaderHost<T>({
     }
   }
 
+  const suspenseContent = (
+    <Suspense fallback={fallback}>
+      <DataReader
+        reader={readerRef.current}
+        overrideData={overrideData}
+      >
+        {children}
+      </DataReader>
+    </Suspense>
+  );
+
   return (
     <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
       <ReloadContext.Provider value={{ reload, reloading }}>
         <LoaderErrorContext.Provider value={loadError}>
-          <Suspense fallback={fallback}>
-            <DataReader
-              reader={readerRef.current}
-              overrideData={overrideData}
-            >
-              {children}
-            </DataReader>
-          </Suspense>
+          {errorFallback != null ? (
+            <ErrorBoundary fallback={errorFallback as any}>
+              {suspenseContent}
+            </ErrorBoundary>
+          ) : suspenseContent}
         </LoaderErrorContext.Provider>
       </ReloadContext.Provider>
     </ActiveLoaderIdContext.Provider>
