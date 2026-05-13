@@ -2,9 +2,12 @@ import { definePage, useOptimisticAction } from '@hono-preact/iso';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import type { MovieSummary } from '@/server/data/movies.js';
-import { loader, serverActions, type SearchResults } from './movies-list.server.js';
-import { loader as watchedLoader } from './watched.server.js';
+import { serverLoaders, serverActions, type SearchResults } from './movies-list.server.js';
+import { serverLoaders as watchedLoaders } from './watched.server.js';
 import { useWatchedBadge } from './movies-layout.js';
+
+const moviesLoader = serverLoaders.default;
+const watchedLoader = watchedLoaders.default;
 
 type ToggleFn = (payload: { movieId: number; watched: boolean }) => void;
 
@@ -48,8 +51,8 @@ const Bucket: FunctionComponent<{
 };
 
 const MoviesList: FunctionComponent = () => {
-  const data = loader.useData() as SearchResults;
-  const error = loader.useError();
+  const data = moviesLoader.useData() as SearchResults;
+  const error = moviesLoader.useError();
   const { setCount } = useWatchedBadge();
 
   const { mutate, value: optimisticWatchedIds } = useOptimisticAction(
@@ -60,7 +63,7 @@ const MoviesList: FunctionComponent = () => {
         payload.watched
           ? [...current, payload.movieId]
           : current.filter((id) => id !== payload.movieId),
-      invalidate: [loader, watchedLoader],
+      invalidate: [moviesLoader, watchedLoader],
     }
   );
 
@@ -97,4 +100,6 @@ const MoviesList: FunctionComponent = () => {
 };
 MoviesList.displayName = 'MoviesList';
 
-export default definePage(MoviesList, { loader });
+const MoviesListPage = moviesLoader.View(() => <MoviesList />);
+
+export default definePage(MoviesListPage, {});
