@@ -4,6 +4,17 @@ import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
 
+function wrapWithRouteLocations(
+  serverMod: unknown,
+  location: RouteHook,
+  node: VNode
+): VNode {
+  const moduleKey = (serverMod as { __moduleKey?: string } | undefined)?.__moduleKey;
+  return moduleKey
+    ? h(RouteLocationsProvider, { moduleKey, location }, node)
+    : node;
+}
+
 export type LayoutProps = { children: ComponentChildren };
 
 export type ViewProps = RouteHook;
@@ -150,7 +161,6 @@ function getOrCreateLazyView(
             view(),
             server(),
           ]);
-          const moduleKey = (serverMod as { __moduleKey?: string }).__moduleKey;
           // `location` from the inner Router has a relative path (e.g. `/123`
           // when the route is nested inside a layout at `/movies/*`). Use
           // `useLocation()` to get the full window path and searchParams so the
@@ -158,9 +168,9 @@ function getOrCreateLazyView(
           const Wrapped: ComponentType<ViewProps> = (location) => {
             const { path, searchParams } = useLocation();
             const fullLocation: ViewProps = { ...location, path, searchParams };
-            return h(
-              RouteLocationsProvider,
-              { moduleKey, location: fullLocation },
+            return wrapWithRouteLocations(
+              serverMod,
+              fullLocation,
               h(View as ComponentType<ViewProps>, location)
             );
           };
@@ -197,14 +207,11 @@ function makeLayoutGroupComponent(
         layoutImport(),
         server ? server() : Promise.resolve(undefined),
       ]);
-      const moduleKey = (serverMod as { __moduleKey?: string } | undefined)?.__moduleKey;
       const inner = buildInnerRoutes(children, viewCache);
       const Wrapper: ComponentType<ViewProps> = (location) => {
         const layoutLocation = deriveLayoutLocation(location, layoutPathPattern);
         const layoutNode = h(Layout, null, h(Router, null, ...inner));
-        return moduleKey
-          ? h(RouteLocationsProvider, { moduleKey, location: layoutLocation }, layoutNode)
-          : layoutNode;
+        return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
       };
       return { default: Wrapper };
     })
