@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
-import { useCallback, useEffect, useId, useRef, useState } from 'preact/hooks';
+import { useCallback, useContext, useEffect, useId, useRef, useState } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { ReloadContext } from '../reload-context.js';
 import { getPreloadedData } from './preload.js';
@@ -11,6 +11,7 @@ import type { LoaderRef } from '../define-loader.js';
 import { fetchLoaderData } from './loader-fetch.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { registerServerStreamingLoader } from './streaming-ssr.js';
+import { RouteLocationsContext } from './route-locations.js';
 
 type LoaderProps<T> = {
   loader: LoaderRef<T>;
@@ -53,19 +54,29 @@ function isAsyncGenerator(
 
 type LoaderHostProps<T> = {
   loaderRef: LoaderRef<T>;
-  location: RouteHook;
+  location?: RouteHook;
   id: string;
   fallback?: JSX.Element;
+  errorFallback?: ComponentChildren | ((err: Error, reset: () => void) => ComponentChildren);
   children: ComponentChildren;
 };
 
 function LoaderHost<T>({
   loaderRef,
-  location,
+  location: locationProp,
   id,
   fallback,
   children,
 }: LoaderHostProps<T>) {
+  const locMap = useContext(RouteLocationsContext);
+  const ctxLocation = loaderRef.__moduleKey ? locMap?.get(loaderRef.__moduleKey) : undefined;
+  const location = (locationProp ?? ctxLocation) as RouteHook | undefined;
+  if (!location) {
+    throw new Error(
+      `Loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' has no location: ` +
+      `wrap the page in a route that owns this server module, or pass location explicitly.`
+    );
+  }
   const [reloading, setReloading] = useState(false);
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
   const [loadError, setLoadError] = useState<Error | null>(null);

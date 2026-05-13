@@ -1,7 +1,9 @@
+import { h } from 'preact';
 import { useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
+import { Loader as LoaderHost } from './internal/loader.js';
 
 export type LoaderCtx = {
   location: RouteHook;
@@ -135,8 +137,19 @@ export function defineLoader<T>(
     invalidate() {
       cache!.invalidate();
     },
-    Boundary: (() => { throw new Error('Boundary not yet implemented'); }) as never,
+    Boundary: null as never,
     View: (() => { throw new Error('View not yet implemented'); }) as never,
   };
+
+  const Boundary: LoaderRef<T>['Boundary'] = ({ fallback, errorFallback, children }) => {
+    return h(LoaderHost as any, {
+      loader: ref,
+      fallback,
+      errorFallback,
+      children,
+    });
+  };
+  ref.Boundary = Boundary;
+
   return ref;
 }
