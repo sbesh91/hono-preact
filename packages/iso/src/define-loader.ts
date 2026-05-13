@@ -16,11 +16,31 @@ export type Loader<T> =
 export interface LoaderRef<T> {
   readonly __id: symbol;
   readonly __moduleKey?: string;
+  readonly __loaderName?: string;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
+  readonly params: string[] | '*';
   useData(): T;
   useError(): Error | null;
   invalidate(): void;
+  Boundary: import('preact').ComponentType<{
+    fallback?: import('preact').ComponentChildren;
+    errorFallback?:
+      | import('preact').ComponentChildren
+      | ((err: Error, reset: () => void) => import('preact').ComponentChildren);
+    children: import('preact').ComponentChildren;
+  }>;
+  View<P extends Record<string, unknown> = {}>(
+    render: (
+      args: P & { data: T; error: Error | null; reload: () => void }
+    ) => import('preact').ComponentChildren,
+    opts?: {
+      fallback?: import('preact').ComponentChildren;
+      errorFallback?:
+        | import('preact').ComponentChildren
+        | ((err: Error, reset: () => void) => import('preact').ComponentChildren);
+    }
+  ): import('preact').FunctionComponent<P>;
 }
 
 /**
@@ -31,7 +51,9 @@ export interface LoaderRef<T> {
  */
 export type DefineLoaderOpts<T> = {
   __moduleKey?: string;
+  __loaderName?: string;
   cache?: LoaderCache<T>;
+  params?: string[] | '*';
 };
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -60,8 +82,14 @@ export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
 ): LoaderRef<T> {
-  const __id = opts?.__moduleKey
-    ? Symbol.for(`@hono-preact/loader:${opts.__moduleKey}`)
+  const idKey = opts?.__moduleKey
+    ? opts.__loaderName
+      ? `${opts.__moduleKey}::${opts.__loaderName}`
+      : opts.__moduleKey
+    : null;
+
+  const __id = idKey
+    ? Symbol.for(`@hono-preact/loader:${idKey}`)
     : Symbol(`@hono-preact/loader:<unkeyed>`);
 
   let cache = opts?.cache;
@@ -88,8 +116,10 @@ export function defineLoader<T>(
   const ref: LoaderRef<T> = {
     __id,
     __moduleKey: opts?.__moduleKey,
+    __loaderName: opts?.__loaderName,
     fn,
-    cache,
+    cache: cache!,
+    params: opts?.params ?? [],
     useData() {
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {
@@ -103,8 +133,10 @@ export function defineLoader<T>(
       return useContext(LoaderErrorContext);
     },
     invalidate() {
-      cache.invalidate();
+      cache!.invalidate();
     },
+    Boundary: (() => { throw new Error('Boundary not yet implemented'); }) as never,
+    View: (() => { throw new Error('View not yet implemented'); }) as never,
   };
   return ref;
 }
