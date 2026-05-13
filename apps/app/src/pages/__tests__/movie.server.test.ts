@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { loader as movieLoader, type DetailStream } from '../movie.server.js';
+import { serverLoaders, type DetailStream } from '../movie.server.js';
 import type { RouteHook } from 'preact-iso';
+
+const movieLoader = serverLoaders.default;
 
 const locFor = (id: string, search: Record<string, string> = {}) =>
   ({
