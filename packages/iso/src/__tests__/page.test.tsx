@@ -4,6 +4,7 @@ import { render, screen, waitFor, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { Page } from '../page.js';
 import { defineLoader } from '../define-loader.js';
+import { RouteLocationsContext } from '../internal/route-locations.js';
 import { createGuard, GuardRedirect, runGuards } from '../guard.js';
 import { env } from '../is-browser.js';
 
@@ -35,8 +36,6 @@ afterEach(() => {
   cleanup();
 });
 
-const emptyLoader = defineLoader<Record<string, never>>(async () => ({}));
-
 describe('guard { render }', () => {
   it('renders the guard-supplied component instead of the page', async () => {
     const ForbiddenPage = () => (
@@ -46,7 +45,7 @@ describe('guard { render }', () => {
 
     render(
       <LocationProvider>
-        <Page loader={emptyLoader} location={loc} clientGuards={[guard]}>
+        <Page location={loc} clientGuards={[guard]}>
           <div data-testid="page">Protected content</div>
         </Page>
       </LocationProvider>
@@ -64,7 +63,7 @@ describe('guard { redirect } in browser', () => {
 
     render(
       <LocationProvider>
-        <Page loader={emptyLoader} location={loc} clientGuards={[guard]}>
+        <Page location={loc} clientGuards={[guard]}>
           <div data-testid="page">Protected</div>
         </Page>
       </LocationProvider>
@@ -98,7 +97,7 @@ describe('guard re-runs on navigation', () => {
     const locPublic = { ...loc, path: '/public' } as unknown as RouteHook;
     const { rerender } = render(
       <LocationProvider>
-        <Page loader={emptyLoader} location={locPublic} clientGuards={[guard]}>
+        <Page location={locPublic} clientGuards={[guard]}>
           <div data-testid="page">Content</div>
         </Page>
       </LocationProvider>
@@ -110,7 +109,7 @@ describe('guard re-runs on navigation', () => {
     const locAdmin = { ...loc, path: '/admin' } as unknown as RouteHook;
     rerender(
       <LocationProvider>
-        <Page loader={emptyLoader} location={locAdmin} clientGuards={[guard]}>
+        <Page location={locAdmin} clientGuards={[guard]}>
           <div data-testid="page">Content</div>
         </Page>
       </LocationProvider>
@@ -135,25 +134,41 @@ describe('Page without a loader', () => {
   });
 });
 
-describe('Page error boundary', () => {
-  it('renders errorFallback when the loader rejects', async () => {
-    const failing = defineLoader<{ msg: string }>(async () => {
-      throw new Error('boom');
-    });
+describe('Page errorFallback catches loader errors', () => {
+  it('renders errorFallback when a loader.Boundary child throws', async () => {
+    // Use server mode so the loader invokes fn() directly rather than fetch.
+    env.current = 'server';
+
+    const failing = defineLoader<{ msg: string }>(
+      async () => { throw new Error('boom'); },
+      { __moduleKey: 'test/page-error-boundary' }
+    );
+
+    const locMap = new Map();
+    locMap.set('test/page-error-boundary', loc);
+
+    function PageContent() {
+      const { msg } = failing.useData();
+      return <p data-testid="content">{msg}</p>;
+    }
 
     render(
-      <LocationProvider>
-        <Page
-          loader={failing}
-          location={loc}
-          fallback={<div data-testid="loading">Loading…</div>}
-          errorFallback={(err) => (
-            <div data-testid="error">{err.message}</div>
-          )}
-        >
-          <p data-testid="content">should not render</p>
-        </Page>
-      </LocationProvider>
+      <RouteLocationsContext.Provider value={locMap}>
+        <LocationProvider>
+          <Page
+            location={loc}
+            errorFallback={(err) => (
+              <div data-testid="error">{err.message}</div>
+            )}
+          >
+            <failing.Boundary
+              fallback={<div data-testid="loading">Loading...</div>}
+            >
+              <PageContent />
+            </failing.Boundary>
+          </Page>
+        </LocationProvider>
+      </RouteLocationsContext.Provider>
     );
 
     const el = await screen.findByTestId('error');
