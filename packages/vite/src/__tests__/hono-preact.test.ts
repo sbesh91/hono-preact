@@ -77,6 +77,7 @@ describe('honoPreact server build config', () => {
     expect(config.ssr.noExternal).toEqual([
       'preact-render-to-string',
       'preact-iso',
+      'hono-preact',
       '@hono-preact/iso',
       '@hono-preact/server',
     ]);
