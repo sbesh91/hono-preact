@@ -8,3 +8,4 @@ export {
   serverEntryPlugin,
 } from './server-entry.js';
 export { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
+export { guardStripPlugin } from './guard-strip.js';
