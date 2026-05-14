@@ -12,7 +12,7 @@ Guards run for every action in the module, so define per-module guards for blank
 
 ```ts
 // src/pages/movies.server.ts
-import { defineAction, defineActionGuard, ActionGuardError } from '@hono-preact/iso';
+import { defineAction, defineActionGuard, ActionGuardError } from 'hono-preact';
 import type { Context } from 'hono';
 import { getCurrentUser } from '@/server/auth.js';
 
@@ -47,7 +47,7 @@ Both `addMovie` and `deleteMovie` run through the guard chain before executing.
 ### `defineActionGuard`
 
 ```ts
-import { defineActionGuard } from '@hono-preact/iso';
+import { defineActionGuard } from 'hono-preact';
 
 const guard = defineActionGuard(async (ctx, next) => {
   // inspect ctx, then either throw or call next()
@@ -69,7 +69,7 @@ const guard = defineActionGuard(async (ctx, next) => {
 Throw `ActionGuardError` to reject the request with an HTTP error response:
 
 ```ts
-import { ActionGuardError, type ContentfulStatusCode } from '@hono-preact/iso';
+import { ActionGuardError, type ContentfulStatusCode } from 'hono-preact';
 
 throw new ActionGuardError('Not allowed');         // 403 by default
 throw new ActionGuardError('Unauthorized', 401);

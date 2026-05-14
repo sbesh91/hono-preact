@@ -12,7 +12,7 @@ A streaming loader is an `async function*` that yields `T` and receives a `Loade
 
 ```ts
 // src/pages/dashboard.server.ts
-import { defineLoader, type LoaderCtx } from '@hono-preact/iso';
+import { defineLoader, type LoaderCtx } from 'hono-preact';
 
 export type Snapshot = { count: number; load: number };
 
@@ -36,7 +36,7 @@ Use `.View()` to create a component that re-renders on each new chunk. The rende
 
 ```tsx
 // src/pages/dashboard.tsx
-import { definePage } from '@hono-preact/iso';
+import { definePage } from 'hono-preact';
 import { serverLoaders } from './dashboard.server.js';
 
 const dataLoader = serverLoaders.default;
@@ -64,7 +64,7 @@ When a page declares multiple loaders in `serverLoaders`, each `.View()` compone
 
 ```ts
 // src/pages/movie.server.ts
-import { defineLoader } from '@hono-preact/iso';
+import { defineLoader } from 'hono-preact';
 
 export const serverLoaders = {
   summary: defineLoader(async ({ location }) =>
@@ -79,7 +79,7 @@ export const serverLoaders = {
 
 ```tsx
 // src/pages/movie.tsx
-import { definePage } from '@hono-preact/iso';
+import { definePage } from 'hono-preact';
 import { serverLoaders } from './movie.server.js';
 
 const { summary, cast } = serverLoaders;
@@ -158,7 +158,7 @@ An action can be a streaming generator that yields progress chunks and returns a
 
 ```ts
 // src/pages/watched.server.ts
-import { defineAction } from '@hono-preact/iso';
+import { defineAction } from 'hono-preact';
 
 export const serverActions = {
   bulkImport: defineAction(async function* (ctx, payload: { count: number }) {

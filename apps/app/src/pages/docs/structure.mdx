@@ -14,9 +14,9 @@ hono-preact/                    # monorepo root
 │       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
 │       └── wrangler.jsonc      # Cloudflare Workers deployment config
 └── packages/
-    ├── iso/                    # @hono-preact/iso: routing primitives + isomorphic data
-    ├── server/                 # @hono-preact/server: render + handler wiring
-    └── vite/                   # @hono-preact/vite: framework Vite plugins
+    ├── iso/                    # hono-preact: routing primitives + isomorphic data
+    ├── server/                 # hono-preact/server: render + handler wiring
+    └── vite/                   # hono-preact/vite: framework Vite plugins
 ```
 
 ## Key files
@@ -26,7 +26,7 @@ hono-preact/                    # monorepo root
 The single source of truth for URL routing. Exports a `defineRoutes(...)` manifest naming every page in the app, paired with an optional `server` import for any route that needs a loader or actions. See [The Route Table](/docs/routes).
 
 ```ts
-import { defineRoutes } from '@hono-preact/iso';
+import { defineRoutes } from 'hono-preact';
 
 export default defineRoutes([
   { path: '/', view: () => import('./pages/home.js') },
@@ -52,7 +52,7 @@ View components and their paired server modules. Files in this folder are refere
 
 MDX content (`pages/docs/*.mdx`) is mounted via `apps/app/src/components/DocsRoute.tsx`, which is registered as the `view` for `/docs` and `/docs/*` in `routes.ts`. The DocsRoute component owns its own `import.meta.glob` and inner `<Router>` for sub-page discovery.
 
-### `@hono-preact/iso` (workspace package)
+### `hono-preact` (workspace package)
 
 Isomorphic primitives shared between server and client (`packages/iso/`):
 
@@ -64,7 +64,7 @@ Isomorphic primitives shared between server and client (`packages/iso/`):
 - **Guards**: `defineServerGuard`, `defineClientGuard`, `runGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`, `ContentfulStatusCode`.
 - **Utilities**: `prefetch`, `isBrowser`, `env`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
 
-### `@hono-preact/server` (workspace package)
+### `hono-preact/server` (workspace package)
 
 Server-only utilities (`packages/server/`):
 
@@ -74,7 +74,7 @@ Server-only utilities (`packages/server/`):
 - **`actionsHandler`**, **`loadersHandler`**: `POST /__actions` and `POST /__loaders` middleware. Accept either a Vite `import.meta.glob` result or the record produced by `routeServerModules`.
 - **`routeServerModules`**: adapter that converts a `RoutesManifest` into the lazy-glob shape the handlers consume.
 
-### `@hono-preact/vite` (workspace package)
+### `hono-preact/vite` (workspace package)
 
 Vite plugins for the framework (`packages/vite/`). The primary export is `honoPreact()`, which bundles all framework Vite configuration into a single plugin. See [Vite Configuration](/docs/vite-config) for usage.
 

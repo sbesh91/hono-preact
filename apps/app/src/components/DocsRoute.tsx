@@ -1,5 +1,5 @@
 import type { ComponentType } from 'preact';
-import { lazy } from '@hono-preact/iso';
+import { lazy } from 'hono-preact';
 import { Route as IsoRoute, Router } from 'preact-iso';
 import { DocsLayout } from './DocsLayout.js';
 

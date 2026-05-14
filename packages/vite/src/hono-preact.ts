@@ -99,6 +99,7 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
           noExternal: [
             'preact-render-to-string',
             'preact-iso',
+            'hono-preact',
             '@hono-preact/iso',
             '@hono-preact/server',
           ],

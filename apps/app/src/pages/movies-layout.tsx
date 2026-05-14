@@ -6,8 +6,8 @@ import {
   useMemo,
   useState,
 } from 'preact/hooks';
-import type { LayoutProps } from '@hono-preact/iso';
-import { useLocation } from '@hono-preact/iso';
+import type { LayoutProps } from 'hono-preact';
+import { useLocation } from 'hono-preact';
 
 type WatchedBadge = {
   count: number | null;

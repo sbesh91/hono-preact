@@ -4,7 +4,7 @@ import { render, screen, waitFor, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import MoviePage from '../movie.js';
 import { serverLoaders } from '../movie.server.js';
-import { RouteLocationsContext } from '@hono-preact/iso/internal';
+import { RouteLocationsContext } from 'hono-preact/internal';
 
 // In happy-dom, isBrowser() returns true, which would send the loader over
 // the network. Suppress it so the spy on loader.fn is actually called.

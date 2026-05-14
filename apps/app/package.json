@@ -11,8 +11,6 @@
     "preview": "npm run build && wrangler dev"
   },
   "dependencies": {
-    "@hono-preact/iso": "workspace:*",
-    "@hono-preact/server": "workspace:*",
     "hono-preact": "workspace:*",
     "@shikijs/rehype": "^4.0.2",
     "hono": "^4.12.14",
@@ -29,7 +27,6 @@
     "@babel/types": "^7.29.0",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
-    "@hono-preact/vite": "workspace:*",
     "@hono/node-server": "^1.19.14",
     "@hono/vite-build": "^1.11.1",
     "@hono/vite-dev-server": "^0.25.1",

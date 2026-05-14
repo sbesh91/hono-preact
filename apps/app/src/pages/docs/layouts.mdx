@@ -7,7 +7,7 @@ A layout is a wrapper component that stays mounted across navigations between si
 In `routes.ts`, a layout group is a route entry with `layout` and `children`:
 
 ```ts
-import { defineRoutes } from '@hono-preact/iso';
+import { defineRoutes } from 'hono-preact';
 
 export default defineRoutes([
   {
@@ -38,11 +38,11 @@ Navigating from `/movies` to `/movies/123` does NOT remount `MoviesLayout`. Stat
 
 ## The layout component
 
-A layout is a Preact component whose props match `LayoutProps` from `@hono-preact/iso`:
+A layout is a Preact component whose props match `LayoutProps` from `hono-preact`:
 
 ```tsx
 // src/pages/movies-layout.tsx
-import type { LayoutProps } from '@hono-preact/iso';
+import type { LayoutProps } from 'hono-preact';
 
 export default function MoviesLayout({ children }: LayoutProps) {
   return (

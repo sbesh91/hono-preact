@@ -1,4 +1,4 @@
-import { honoPreact } from '@hono-preact/vite';
+import { honoPreact } from 'hono-preact/vite';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
@@ -22,7 +22,25 @@ const visualize = process.env.VISUALIZE === '1';
 export default defineConfig((env) => ({
   resolve: {
     alias: [
-      // Workspace aliases for monorepo dev. Removed at v0.1 §7 (package consolidation).
+      // Umbrella subpaths (longest-prefix first).
+      {
+        find: 'hono-preact/internal',
+        replacement: resolve(__dirname, '../../packages/hono-preact/src/internal.ts'),
+      },
+      {
+        find: 'hono-preact/server',
+        replacement: resolve(__dirname, '../../packages/hono-preact/src/server.ts'),
+      },
+      {
+        find: 'hono-preact/vite',
+        replacement: resolve(__dirname, '../../packages/hono-preact/src/vite.ts'),
+      },
+      {
+        find: 'hono-preact',
+        replacement: resolve(__dirname, '../../packages/hono-preact/src/index.ts'),
+      },
+      // Workspace packages kept so the umbrella's `export * from '@hono-preact/iso'`
+      // chains through to source for HMR.
       {
         find: '@hono-preact/iso/internal',
         replacement: resolve(__dirname, '../../packages/iso/src/internal.ts'),

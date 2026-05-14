@@ -1,6 +1,6 @@
 // apps/app/src/pages/movies-list.server.ts
 import { getMovies } from '@/server/movies.js';
-import { defineAction, defineLoader, type LoaderCtx } from '@hono-preact/iso';
+import { defineAction, defineLoader, type LoaderCtx } from 'hono-preact';
 import { listWatched, markWatched, unmarkWatched } from '@/server/watched.js';
 import type { MoviesData, MovieSummary } from '@/server/data/movies.js';
 import { matchGenre } from '@/server/data/genre-map.js';

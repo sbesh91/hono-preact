@@ -1,11 +1,11 @@
 # Vite Configuration
 
-The `@hono-preact/vite` package exports a `honoPreact()` plugin that configures Vite for the framework's two-pass build and dev server. Your `vite.config.ts` only needs to wire in the plugins that are specific to your application.
+The `hono-preact/vite` subpath exports a `honoPreact()` plugin that configures Vite for the framework's two-pass build and dev server. Your `vite.config.ts` only needs to wire in the plugins that are specific to your application.
 
 ## Minimal setup
 
 ```ts
-import { honoPreact } from '@hono-preact/vite';
+import { honoPreact } from 'hono-preact/vite';
 import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
 
@@ -25,7 +25,7 @@ export default defineConfig({
 | Concern | What it sets |
 |---------|-------------|
 | Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso` |
-| SSR bundling | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `@hono-preact/*` |
+| SSR bundling | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `hono-preact` |
 | Client build output | `dist/static/client.js` entry, hashed chunk and asset filenames |
 | Server build output | `esnext` target, `dist/static/` asset dir, minification |
 | Worker bundling | `@hono/vite-build` (Cloudflare Workers preset), build-only |
@@ -37,7 +37,7 @@ export default defineConfig({
 
 ## Peer dependencies
 
-`@hono/vite-build` and `@hono/vite-dev-server` are peer dependencies of `@hono-preact/vite`. Install them alongside it:
+`@hono/vite-build` and `@hono/vite-dev-server` are peer dependencies of `hono-preact`. Install them alongside it:
 
 ```bash
 npm install -D @hono/vite-build @hono/vite-dev-server
@@ -48,7 +48,7 @@ npm install -D @hono/vite-build @hono/vite-dev-server
 MDX is a user-space choice and not included in the plugin. Add it alongside `honoPreact()`:
 
 ```ts
-import { honoPreact } from '@hono-preact/vite';
+import { honoPreact } from 'hono-preact/vite';
 import mdx from '@mdx-js/rollup';
 import { defineConfig } from 'vite';
 

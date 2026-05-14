@@ -1,4 +1,4 @@
-import { definePage, useOptimisticAction } from '@hono-preact/iso';
+import { definePage, useOptimisticAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import type { MovieSummary } from '@/server/data/movies.js';

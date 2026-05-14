@@ -2,15 +2,22 @@
   "name": "hono-preact",
   "version": "0.0.1",
   "type": "module",
-  "private": true,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
     "./vite": {
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
     }
   },
   "scripts": {
@@ -24,8 +31,10 @@
   },
   "peerDependencies": {
     "hono": ">=4.0.0",
+    "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
     "preact-iso": "*",
+    "preact-render-to-string": "*",
     "vite": ">=5.0.0"
   },
   "devDependencies": {
