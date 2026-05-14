@@ -46,3 +46,5 @@ export {
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
 
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
+
+export { __$guardNoop_hpiso } from './internal/guard-noop.js';
