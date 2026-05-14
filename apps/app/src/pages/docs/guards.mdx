@@ -53,7 +53,7 @@ A guard returns one of:
 
 ## Order semantics
 
-Guards execute in array order. The first to return a non-void result short-circuits the rest. The order is preserved regardless of which environment the page is rendering in, opposite-env guards are filtered out, surviving guards run in the same relative order.
+Guards execute in array order. The first to return a non-void result short-circuits the rest. The order is preserved regardless of which environment the page is rendering in. Opposite-env guards are filtered out, surviving guards run in the same relative order.
 
 ```ts
 guards: [
@@ -124,7 +124,7 @@ const result = await runGuards(guards, { location });
 ```tsx
 // src/pages/admin.tsx
 import { defineServerGuard, definePage } from '@hono-preact/iso';
-import { getCurrentUser } from './admin.server.js';
+import { getCurrentUser } from './admin-data.js';
 
 const requireAdmin = defineServerGuard(async (_ctx, next) => {
   const user = await getCurrentUser();
@@ -141,20 +141,28 @@ export default definePage(Admin, { guards: [requireAdmin] });
 ```
 
 ```ts
-// src/pages/admin.server.ts
-import { defineLoader } from '@hono-preact/iso';
+// src/pages/admin-data.ts
+// Server-only helper. Because admin.tsx imports it only inside a
+// defineServerGuard body, the guardStripPlugin rewrites that call site
+// in the client bundle and this module tree-shakes out.
 import { db } from '@/server/db.js';
 
 export async function getCurrentUser() {
   return await db.user.fromSession();
 }
+```
+
+```ts
+// src/pages/admin.server.ts
+import { defineLoader } from '@hono-preact/iso';
+import { db } from '@/server/db.js';
 
 export const serverLoaders = {
   default: defineLoader(async () => ({ stats: await db.adminStats() })),
 };
 ```
 
-The admin helper lives in `.server.ts` and gets stubbed in the client bundle (default-export and named exports follow the existing `serverOnlyPlugin` rules). The guard body imports it directly; when the client bundle is built, the entire guard body is stripped to a passthrough, so the unstubbed reference never materializes in the browser.
+The admin helper lives in a plain module (`admin-data.ts`, not `.server.ts`). `admin.tsx` imports it only inside a `defineServerGuard` body, which `guardStripPlugin` rewrites to a passthrough in the client bundle. Once that body is gone, the helper import is unreferenced and tree-shakes out, so neither the helper code nor its transitive `db` import reaches the browser.
 
 ## Composing guards
 
