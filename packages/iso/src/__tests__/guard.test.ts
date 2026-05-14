@@ -48,7 +48,7 @@ describe('runGuards composes records via .fn', () => {
   it('short-circuits on the first non-void return', async () => {
     const a = defineServerGuard(async (_c, next) => next());
     const b = defineServerGuard(async () => ({ redirect: '/login' }));
-    const c = defineServerGuard(async (_c, next) => {
+    const c = defineServerGuard(async (_c, _next) => {
       throw new Error('should not run');
     });
     const result = await runGuards([a, b, c], { location: loc });

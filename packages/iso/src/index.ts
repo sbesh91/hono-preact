@@ -34,6 +34,7 @@ export type {
   ActionGuardFn,
 } from './action.js';
 export { ActionGuardError, defineActionGuard } from './action.js';
+export type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 // Hooks.
 export { useReload } from './reload-context.js';
@@ -53,8 +54,17 @@ export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
 
 // Guards.
-export { createGuard, GuardRedirect } from './guard.js';
-export type { GuardFn, GuardResult, GuardContext } from './guard.js';
+export {
+  defineServerGuard,
+  defineClientGuard,
+  GuardRedirect,
+} from './guard.js';
+export type {
+  GuardFn,
+  GuardResult,
+  GuardContext,
+  GuardRunsOn,
+} from './guard.js';
 
 // Utilities.
 export { prefetch } from './prefetch.js';
