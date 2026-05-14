@@ -22,8 +22,7 @@ const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
 
 export type PageProps = {
   location: RouteHook;
-  serverGuards?: GuardFn[];
-  clientGuards?: GuardFn[];
+  guards?: GuardFn[];
   errorFallback?:
     | JSX.Element
     | ((error: Error, reset: () => void) => JSX.Element);
@@ -33,8 +32,7 @@ export type PageProps = {
 
 export function Page({
   location,
-  serverGuards,
-  clientGuards,
+  guards,
   errorFallback,
   Wrapper,
   children,
@@ -43,7 +41,7 @@ export function Page({
   const W = Wrapper ?? DefaultWrapper;
   return (
     <RouteBoundary errorFallback={errorFallback}>
-      <Guards server={serverGuards} client={clientGuards} location={location}>
+      <Guards guards={guards} location={location}>
         <W id={id} data-loader="null">
           {children}
         </W>
