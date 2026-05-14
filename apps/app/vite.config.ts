@@ -1,4 +1,4 @@
-import { honoPreact } from '@hono-preact/vite';
+import { honoPreact } from 'hono-preact/vite';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
