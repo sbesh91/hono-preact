@@ -27,7 +27,7 @@ async function bundleFor(ssr: boolean): Promise<string> {
   };
   const out = (await build(config)) as Rollup.RollupOutput;
   const chunks = Array.isArray(out) ? out : [out];
-  const chunk = chunks[0].output.find((o) => o.type === 'chunk') as Rollup.OutputChunk;
+  const chunk = chunks[0].output.find((o: { type: string }) => o.type === 'chunk') as Rollup.OutputChunk;
   return chunk.code;
 }
 
