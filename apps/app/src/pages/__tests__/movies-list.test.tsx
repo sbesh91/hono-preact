@@ -6,7 +6,7 @@ import MoviesList from '../movies-list.js';
 import { serverLoaders } from '../movies-list.server.js';
 import { serverLoaders as watchedLoaders } from '../watched.server.js';
 import MoviesLayout from '../movies-layout.js';
-import { RouteLocationsContext } from '@hono-preact/iso/internal';
+import { RouteLocationsContext } from 'hono-preact/internal';
 
 // In happy-dom, isBrowser() returns true, which would send the loader over
 // the network. Suppress it so spies on loader.fn are actually called.
