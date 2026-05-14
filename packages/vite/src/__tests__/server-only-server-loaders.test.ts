@@ -98,4 +98,21 @@ describe('serverOnlyPlugin: params threading from .server.ts to client Proxy', (
     expect(metaMatch).not.toBeNull();
     expect(metaMatch![1]).not.toContain('"default"');
   });
+
+  it('reads .server.ts from disk when source imports the TS-NodeNext .server.js path', () => {
+    // TypeScript NodeNext convention: source code imports the `.js`-suffixed
+    // form even though the file on disk is `.ts`. The plugin must fall back
+    // to the .ts extension when reading the server file for params extraction,
+    // or every loader silently loses its `params` declaration in the client
+    // stub — which means client-side navigation never refetches when search
+    // params change.
+    const code = `import { serverLoaders } from './movies.server.js';`;
+    const importerId = path.join(fixtureDir, 'page.tsx');
+    const result = transform(code, importerId, { root: fixtureRoot });
+    // Should still extract params from movies.server.ts even though the
+    // import source uses `.server.js`.
+    expect(result?.code).toContain(`__$serverLoadersMeta_serverLoaders`);
+    expect(result?.code).toContain(`"summary"`);
+    expect(result?.code).toContain(`"genre"`);
+  });
 });

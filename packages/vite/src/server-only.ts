@@ -18,13 +18,28 @@ export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/vite
  * { loaderName -> params } for loaders that declare non-default params.
  * Returns an empty object if the file cannot be parsed or has no serverLoaders.
  */
-function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
-  let src: string;
-  try {
-    src = fs.readFileSync(absServerPath, 'utf8');
-  } catch {
-    return {};
+function readSourceWithExtensionFallback(absServerPath: string): string | null {
+  // TypeScript NodeNext convention: source code imports `.server.js` even
+  // though the file on disk is `.server.ts` (or .tsx). Try the literal path
+  // first (handles plain `.js` cases), then the TS-extension swaps.
+  const tries = [
+    absServerPath,
+    absServerPath.replace(/\.js$/, '.ts'),
+    absServerPath.replace(/\.jsx$/, '.tsx'),
+  ];
+  for (const p of tries) {
+    try {
+      return fs.readFileSync(p, 'utf8');
+    } catch {
+      // try next candidate
+    }
   }
+  return null;
+}
+
+function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
+  const src = readSourceWithExtensionFallback(absServerPath);
+  if (src == null) return {};
 
   let ast;
   try {
