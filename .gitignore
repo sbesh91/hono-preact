@@ -37,3 +37,4 @@ lerna-debug.log*
 # misc
 .DS_Store
 .claude/scheduled_tasks.lock
+.claude/worktrees/
