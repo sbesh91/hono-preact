@@ -44,7 +44,7 @@ describe('guardStripPlugin: client pass (non-ssr)', () => {
       });
     `;
     const result = transform(code, '/src/pages/admin.tsx');
-    expect(result?.code ?? code).toContain('await onClient()');
+    expect(result).toBeUndefined();
   });
 });
 
@@ -72,7 +72,7 @@ describe('guardStripPlugin: server pass (ssr=true)', () => {
       });
     `;
     const result = transform(code, '/src/pages/admin.tsx', { ssr: true });
-    expect(result?.code ?? code).toContain('await onServer()');
+    expect(result).toBeUndefined();
   });
 });
 
