@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/preact';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import {
   defineServerGuard,
   defineClientGuard,
-  type GuardFn,
 } from '../guard.js';
 import { Guards } from '../internal/guards.js';
 import { env } from '../is-browser.js';
