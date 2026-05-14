@@ -4,6 +4,7 @@ import { Suspense } from 'preact/compat';
 import { useContext, useRef } from 'preact/hooks';
 import {
   type GuardFn,
+  type GuardRunsOn,
   GuardRedirect,
   type GuardResult,
   runGuards,
@@ -55,18 +56,18 @@ function GuardConsumer({
 }
 
 export const Guards: FunctionComponent<{
-  server?: GuardFn[];
-  client?: GuardFn[];
+  guards?: GuardFn[];
   location: RouteHook;
   fallback?: JSX.Element;
   children: ComponentChildren;
-}> = ({ server = [], client = [], location, fallback, children }) => {
-  const guards = isBrowser() ? client : server;
+}> = ({ guards = [], location, fallback, children }) => {
+  const env: GuardRunsOn = isBrowser() ? 'client' : 'server';
+  const active = guards.filter((g) => g.runs === env);
   const prevPath = useRef(location.path);
-  const guardRef = useRef(wrapPromise(runGuards(guards, { location })));
+  const guardRef = useRef(wrapPromise(runGuards(active, { location })));
   if (prevPath.current !== location.path) {
     prevPath.current = location.path;
-    guardRef.current = wrapPromise(runGuards(guards, { location }));
+    guardRef.current = wrapPromise(runGuards(active, { location }));
   }
   return (
     <Suspense fallback={fallback}>
