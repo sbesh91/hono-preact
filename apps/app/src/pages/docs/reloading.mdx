@@ -9,7 +9,7 @@ Snippets on this page assume `type MovieList = { results: { id: number; title: s
 **`src/pages/movies.server.ts`** holds the loader (the cache is auto-attached):
 
 ```ts
-import { defineLoader } from '@hono-preact/iso';
+import { defineLoader } from 'hono-preact';
 
 export const serverLoaders = {
   default: defineLoader(async () => ({
@@ -21,7 +21,7 @@ export const serverLoaders = {
 **`src/pages/movies.tsx`** uses `.View()` to create the component. `useReload` is called inside the render function, which runs inside the loader's boundary:
 
 ```tsx
-import { definePage, useReload } from '@hono-preact/iso';
+import { definePage, useReload } from 'hono-preact';
 import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;

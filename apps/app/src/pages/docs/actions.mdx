@@ -16,7 +16,7 @@ On the server, the `actionsHandler` middleware exposes a single `POST /__actions
 
 ```ts
 import { getMovies } from '@/server/movies.js';
-import { defineAction } from '@hono-preact/iso';
+import { defineAction } from 'hono-preact';
 
 const serverLoader = async () => {
   const movies = await getMovies();
@@ -50,7 +50,7 @@ import {
   location,
   renderPage,
   routeServerModules,
-} from '@hono-preact/server';
+} from 'hono-preact/server';
 import routes from './routes.js';
 
 const serverModules = routeServerModules(routes);
@@ -71,7 +71,7 @@ app
 `useAction` manages pending state, error handling, and optional cache invalidation after the action completes.
 
 ```tsx
-import { useAction } from '@hono-preact/iso';
+import { useAction } from 'hono-preact';
 import { loader, serverActions } from './movies.server.js';
 
 const Movies = () => {
@@ -119,7 +119,7 @@ const Movies = () => {
 `<Form>` is a thin wrapper around a native `<form>` that serializes the submission to a payload object and calls a `mutate` function you provide (typically from `useAction` or `useOptimisticAction`). When you pass `pending`, the wrapping `<fieldset>` is disabled while the mutation is in flight.
 
 ```tsx
-import { Form, useAction } from '@hono-preact/iso';
+import { Form, useAction } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const AddMovieForm = () => {
@@ -163,7 +163,7 @@ When a mutation on one page should refresh data on another, import the other pag
 
 ```tsx
 // movies.tsx: an action that should also refresh the ratings sidebar
-import { useAction } from '@hono-preact/iso';
+import { useAction } from 'hono-preact';
 import { loader as ratingsLoader } from './ratings.server.js';
 import { serverActions } from './movies.server.js';
 
@@ -181,7 +181,7 @@ Use `'auto'` (instead of an array) to invalidate the current page's own loader a
 `useAction(stub, opts)` and `stub.useAction(opts)` are equivalent. Both ship; pick whichever reads better in context.
 
 ```tsx
-import { useAction } from '@hono-preact/iso';
+import { useAction } from 'hono-preact';
 import { loader as moviesLoader, serverActions } from './movies.server.js';
 
 // Method form:
@@ -283,7 +283,7 @@ Actions can run middleware-style checks before dispatching, useful for authentic
 
 ```ts
 // movies.server.ts
-import { defineAction, defineActionGuard, ActionGuardError } from '@hono-preact/iso';
+import { defineAction, defineActionGuard, ActionGuardError } from 'hono-preact';
 import type { Context } from 'hono';
 
 export const actionGuards = [

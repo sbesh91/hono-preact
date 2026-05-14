@@ -10,7 +10,7 @@ A code-defined route table makes URL design a one-edit refactor (rename a path, 
 
 ```ts
 // src/routes.ts
-import { defineRoutes } from '@hono-preact/iso';
+import { defineRoutes } from 'hono-preact';
 
 export default defineRoutes([
   { path: '/', view: () => import('./pages/home.js') },
@@ -75,7 +75,7 @@ That table covers four URL behaviours:
 // src/iso.tsx
 import type { FunctionComponent } from 'preact';
 import { flushSync } from 'preact/compat';
-import { Routes } from '@hono-preact/iso';
+import { Routes } from 'hono-preact';
 import routes from './routes.js';
 
 function onRouteChange() {
@@ -101,7 +101,7 @@ import {
   location,
   renderPage,
   routeServerModules,
-} from '@hono-preact/server';
+} from 'hono-preact/server';
 import routes from './routes.js';
 
 const serverModules = routeServerModules(routes);

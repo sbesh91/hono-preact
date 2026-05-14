@@ -12,7 +12,7 @@ Start with `useOptimisticAction`. Drop down to the primitive if you outgrow it.
 ## `useOptimisticAction`
 
 ```tsx
-import { useOptimisticAction } from '@hono-preact/iso';
+import { useOptimisticAction } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const Movies = ({ loaderData }) => {
@@ -56,7 +56,7 @@ The optimistic entry settles into `'ready'` state on success and waits for the b
 ## `useOptimistic` (primitive)
 
 ```tsx
-import { useOptimistic, useAction } from '@hono-preact/iso';
+import { useOptimistic, useAction } from 'hono-preact';
 
 const Movies = ({ loaderData }) => {
   const [movies, addOptimistic] = useOptimistic(
@@ -134,7 +134,7 @@ const NotesForm = ({ defaultNotes }) => {
 `<OptimisticOverlay>` projects a list of pending actions onto the loader data that descendant components see via `loader.useData()`. Use it when a child component reads loader data and you want it to render against an optimistic projection without rewriting the child to take a prop.
 
 ```tsx
-import { OptimisticOverlay } from '@hono-preact/iso';
+import { OptimisticOverlay } from 'hono-preact';
 import { loader as moviesLoader } from './movies.server.js';
 
 const MovieList = () => {
