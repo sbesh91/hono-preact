@@ -39,9 +39,15 @@ async function buildLoadersMap(
 
     const sl = (mod as any).serverLoaders;
     if (sl && typeof sl === 'object') {
-      for (const [name, fn] of Object.entries(sl)) {
-        if (typeof fn === 'function') {
-          result[`${moduleKey}::${name}`] = fn as LoaderFn;
+      for (const [name, val] of Object.entries(sl)) {
+        // Two accepted shapes:
+        //   1. a raw loader function `(ctx) => ...` (used by unit-test fixtures)
+        //   2. a `LoaderRef` returned by `defineLoader(fn)`, whose `.fn`
+        //      property carries the original loader (used by user code)
+        if (typeof val === 'function') {
+          result[`${moduleKey}::${name}`] = val as LoaderFn;
+        } else if (val && typeof (val as { fn?: unknown }).fn === 'function') {
+          result[`${moduleKey}::${name}`] = (val as { fn: LoaderFn }).fn;
         }
       }
     }
