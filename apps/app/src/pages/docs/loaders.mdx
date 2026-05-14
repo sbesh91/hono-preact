@@ -381,7 +381,7 @@ export const serverLoaders = {
 
 ## Page bindings with `definePage`
 
-Per-page concerns (Wrapper, errorFallback, serverGuards, clientGuards) live with the page component, not with the route declaration. `definePage` captures them:
+Per-page concerns (Wrapper, errorFallback, guards) live with the page component, not with the route declaration. `definePage` captures them:
 
 ```tsx
 import { definePage } from '@hono-preact/iso';
@@ -450,4 +450,4 @@ const { mutate } = useAction(serverActions.addReview, {
 
 ## The server/client boundary
 
-Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverGuards`, `serverActions`, or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` or `actionGuards` become empty arrays or Proxies. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

@@ -69,12 +69,19 @@ const guard = defineActionGuard(async (ctx, next) => {
 Throw `ActionGuardError` to reject the request with an HTTP error response:
 
 ```ts
+import { ActionGuardError, type ContentfulStatusCode } from '@hono-preact/iso';
+
 throw new ActionGuardError('Not allowed');         // 403 by default
-throw new ActionGuardError('Unauthorized', 401);   // custom status
+throw new ActionGuardError('Unauthorized', 401);
 throw new ActionGuardError('Rate limited', 429);
+
+const status: ContentfulStatusCode = pickStatus();
+throw new ActionGuardError('Nope', status);
 ```
 
 The error message is returned as `{ "error": "..." }` JSON. The `status` field sets the HTTP response status.
+
+The `status` argument is typed as `ContentfulStatusCode` (Hono's union of status codes that may carry a body). Literal codes like `401`, `403`, `429` are accepted directly; if you compute the code at runtime, annotate the variable with `ContentfulStatusCode`.
 
 ### `next()`
 
@@ -115,4 +122,4 @@ See [Route Guards: Composing guards](/docs/guards#composing-guards) for the full
 
 ## The server/client boundary
 
-`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array, so guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of the permitted named exports from `.server.*` files (`loader`, `serverGuards`, `serverActions`, `actionGuards`). See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array, so guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of the permitted named exports from `.server.*` files (`serverLoaders`, `serverActions`, `actionGuards`). See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
