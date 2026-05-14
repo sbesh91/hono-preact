@@ -1,0 +1,5 @@
+{
+  "name": "guards-treeshake-fixture",
+  "private": true,
+  "type": "module"
+}
