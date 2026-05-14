@@ -7,6 +7,7 @@ import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdC
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
+import { Envelope } from './envelope.js';
 import { useLoaderRunner } from './use-loader-runner.js';
 export { serializeLocationForCache } from './cache-key.js';
 
@@ -41,7 +42,7 @@ export function LoaderHost<T>({
   const suspenseContent = (
     <Suspense fallback={fallback}>
       <DataReader reader={reader} overrideData={overrideData}>
-        {children}
+        <Envelope>{children}</Envelope>
       </DataReader>
     </Suspense>
   );

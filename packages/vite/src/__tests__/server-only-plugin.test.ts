@@ -217,11 +217,14 @@ describe('serverOnlyPlugin viteRoot capture', () => {
 });
 
 describe('dynamic import() rewriting for .server.* sources', () => {
-  it('rewrites a dynamic import() of a .server.* file to Promise.resolve({})', () => {
+  it('rewrites a dynamic import() of a .server.* file to a Promise carrying the module key stub', () => {
     const code = `const m = () => import('./foo.server.ts');`;
     const result = transform(code, '/Users/me/repo/src/routes.ts');
     expect(result).toBeDefined();
-    expect(result?.code).toContain('Promise.resolve({})');
+    // Stub carries __moduleKey so wrapWithRouteLocations on the client knows
+    // which .server module this lazy import represents (the body itself is
+    // server-only and stays out of the client bundle).
+    expect(result?.code).toContain('Promise.resolve({ __moduleKey: "src/foo" })');
     expect(result?.code).not.toContain("import('./foo.server.ts')");
   });
 
@@ -241,7 +244,7 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     expect(result).toBeDefined();
     expect(result?.code).toContain('const serverLoaders = new Proxy(');
     expect(result?.code).toContain('"src/pages/movies"');
-    expect(result?.code).toContain('Promise.resolve({})');
+    expect(result?.code).toContain('Promise.resolve({ __moduleKey: "src/pages/auth" })');
     expect(result?.code).not.toContain("import('./auth.server.js')");
   });
 
@@ -271,11 +274,13 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     expect(result).toBeUndefined();
   });
 
-  it('rewrites dynamic .server.* imports even when configResolved has not fired (no viteRoot needed)', () => {
+  it('rewrites dynamic .server.* imports even when configResolved has not fired (no viteRoot)', () => {
     const plugin = serverOnlyPlugin() as Plugin & {
       transform: TransformFn;
     };
     // Skip configResolved on purpose; dynamic-only files should still be rewritten.
+    // Without viteRoot we cannot derive a __moduleKey, so the stub falls back
+    // to a bare `{}` payload.
     const code = `const m = () => import('./foo.server.ts');`;
     const result = plugin.transform.call(
       { warn: () => {} } as any,

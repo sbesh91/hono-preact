@@ -235,7 +235,19 @@ export function serverOnlyPlugin(): Plugin {
       }
 
       for (const imp of [...dynamicServerImports].reverse()) {
-        s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
+        // Preserve __moduleKey in the client stub so callers (e.g.
+        // defineRoutes' wrapWithRouteLocations) can identify which server
+        // module this lazy import represents, even though the body is
+        // replaced with an empty resolved promise.
+        let stubContent = '{}';
+        if (viteRoot !== undefined) {
+          const absServerPath = path.resolve(importerDir, imp.source);
+          const moduleKey = deriveModuleKey(absServerPath, viteRoot as string);
+          if (!moduleKey.startsWith('..')) {
+            stubContent = `{ __moduleKey: ${JSON.stringify(moduleKey)} }`;
+          }
+        }
+        s.overwrite(imp.start, imp.end, `Promise.resolve(${stubContent})`);
       }
 
       if (needsCreateLoaderStubImport) {

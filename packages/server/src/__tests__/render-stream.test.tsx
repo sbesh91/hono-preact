@@ -76,6 +76,27 @@ describe('renderPage: streaming SSR', () => {
     expect(body.length).toBeGreaterThan(0);
   });
 
+  it('wraps loader output with a data-loader element carrying the first-chunk JSON', async () => {
+    const loader = defineLoader(async () => ({ msg: 'hello-preload' }));
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>static</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    const body = await readBody(res);
+    // The loader's rendered output must be inside an element carrying
+    // data-loader=<JSON>. Client hydration relies on this for preload pickup;
+    // without it Suspense kicks the SSR'd children out during hydration.
+    // Preact escapes the JSON's quotes as &quot; in the attribute, so match
+    // for the entity-escaped form.
+    expect(body).toMatch(/data-loader="\{&quot;msg&quot;:&quot;hello-preload&quot;\}"/);
+  });
+
   it('emits an error script tag when the generator throws', async () => {
     const loader = defineLoader(async function* (): AsyncGenerator<{ count: number }> {
       yield { count: 1 };
