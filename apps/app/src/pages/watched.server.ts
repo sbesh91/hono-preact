@@ -1,6 +1,6 @@
 // apps/app/src/pages/watched.server.ts
 import { getMovie, getMovies } from '@/server/movies.js';
-import { defineAction, defineLoader } from '@hono-preact/iso';
+import { defineAction, defineLoader } from 'hono-preact';
 import type { Movie } from '@/server/data/movie.js';
 import {
   listWatched,

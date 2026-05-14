@@ -6,7 +6,7 @@ import {
   useOptimisticAction,
   useReload,
   type WrapperProps,
-} from '@hono-preact/iso';
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { serverLoaders, serverActions, type DetailStream } from './movie.server.js';

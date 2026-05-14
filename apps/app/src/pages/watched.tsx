@@ -3,7 +3,7 @@ import {
   definePage,
   useAction,
   useReload,
-} from '@hono-preact/iso';
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { serverLoaders, serverActions } from './watched.server.js';

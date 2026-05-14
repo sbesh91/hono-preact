@@ -1,4 +1,4 @@
-import { defineRoutes } from '@hono-preact/iso';
+import { defineRoutes } from 'hono-preact';
 
 const docsView = () => import('./components/DocsRoute.js');
 

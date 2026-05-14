@@ -4,7 +4,7 @@ import {
   defineAction,
   defineLoader,
   type LoaderCtx,
-} from '@hono-preact/iso';
+} from 'hono-preact';
 import {
   getWatched,
   listWatched,
