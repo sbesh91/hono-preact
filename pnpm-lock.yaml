@@ -31,12 +31,6 @@ importers:
 
   apps/app:
     dependencies:
-      '@hono-preact/iso':
-        specifier: workspace:*
-        version: link:../../packages/iso
-      '@hono-preact/server':
-        specifier: workspace:*
-        version: link:../../packages/server
       '@shikijs/rehype':
         specifier: ^4.0.2
         version: 4.0.2
@@ -80,9 +74,6 @@ importers:
       '@emnapi/runtime':
         specifier: ^1.10.0
         version: 1.10.0
-      '@hono-preact/vite':
-        specifier: workspace:*
-        version: link:../../packages/vite
       '@hono/node-server':
         specifier: ^1.19.14
         version: 1.19.14(hono@4.12.14)
