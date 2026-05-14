@@ -194,8 +194,7 @@ export function serverOnlyPlugin(): Plugin {
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
-            (specifier.imported.name === 'serverGuards' ||
-              specifier.imported.name === 'actionGuards')
+            specifier.imported.name === 'actionGuards'
           ) {
             stubs.push(`const ${specifier.local.name} = [];`);
           } else if (
@@ -223,7 +222,7 @@ export function serverOnlyPlugin(): Plugin {
                 : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-              `Allowed: serverLoaders, serverGuards, serverActions, actionGuards.`
+              `Allowed: serverLoaders, serverActions, actionGuards.`
             );
           }
         }

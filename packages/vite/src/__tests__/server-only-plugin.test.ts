@@ -23,10 +23,11 @@ function transform(
 }
 
 describe('serverOnlyPlugin', () => {
-  it('replaces serverGuards named import with an empty array stub', () => {
+  it('throws on serverGuards named import (no longer recognized)', () => {
     const code = `import { serverGuards } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const serverGuards = [];');
+    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
+      /is not a recognized export from a \*\.server\.\* module/,
+    );
   });
 
   it('leaves non-server imports untouched (returns undefined)', () => {
@@ -80,13 +81,6 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('const serverLoaders = new Proxy(');
     expect(result?.code).toContain('const serverActions = new Proxy(');
     expect(result?.code).toContain('__module: "src/pages/movies"');
-  });
-
-  it('handles serverActions alongside serverGuards in the same statement', () => {
-    const code = `import { serverGuards, serverActions } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const serverGuards = [];');
-    expect(result?.code).toContain('const serverActions = new Proxy(');
   });
 
   it('derives module key from nested path correctly', () => {
