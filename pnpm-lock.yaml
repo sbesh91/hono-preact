@@ -171,6 +171,9 @@ importers:
 
   packages/iso:
     dependencies:
+      hono:
+        specifier: '>=4.0.0'
+        version: 4.12.14
       preact:
         specifier: '>=10.0.0'
         version: 10.29.1
