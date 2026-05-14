@@ -6,7 +6,7 @@ import type { JSX } from 'preact';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
-import type { GuardFn } from '../guard.js';
+import { defineServerGuard, defineClientGuard, type GuardFn } from '../guard.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
@@ -76,12 +76,12 @@ describe('definePage', () => {
     expect(await screen.findByText('plain')).toBeInTheDocument();
   });
 
-  it('threads errorFallback, serverGuards, clientGuards into <Page>', async () => {
-    const guard: GuardFn = async (_ctx, next) => next();
+  it('threads errorFallback and guards into <Page>', async () => {
+    const sg = defineServerGuard(async (_ctx, next) => next());
+    const cg = defineClientGuard(async (_ctx, next) => next());
     const bindings: PageBindings = {
       errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
-      serverGuards: [guard],
-      clientGuards: [guard],
+      guards: [sg, cg],
     };
     function Body() {
       return <p>ok</p>;
@@ -106,17 +106,15 @@ describe('definePage', () => {
 });
 
 describe('PageBindings surface', () => {
-  it('accepts errorFallback, serverGuards, clientGuards on the bindings type', () => {
-    const guard: GuardFn = async (_ctx, next) => next();
+  it('accepts errorFallback and guards on the bindings type', () => {
+    const guard = defineServerGuard(async (_ctx, next) => next());
     const bindings: PageBindings = {
       errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
-      serverGuards: [guard],
-      clientGuards: [guard],
+      guards: [guard],
     };
     expectTypeOf(bindings.errorFallback).toMatchTypeOf<
       JSX.Element | ((error: Error, reset: () => void) => JSX.Element) | undefined
     >();
-    expectTypeOf(bindings.serverGuards).toEqualTypeOf<GuardFn[] | undefined>();
-    expectTypeOf(bindings.clientGuards).toEqualTypeOf<GuardFn[] | undefined>();
+    expectTypeOf(bindings.guards).toEqualTypeOf<GuardFn[] | undefined>();
   });
 });

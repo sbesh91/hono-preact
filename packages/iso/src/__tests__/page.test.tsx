@@ -5,7 +5,7 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import { Page } from '../page.js';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
-import { createGuard, GuardRedirect, runGuards } from '../guard.js';
+import { defineServerGuard, defineClientGuard, GuardRedirect, runGuards } from '../guard.js';
 import { env } from '../is-browser.js';
 
 vi.mock('../preload.js', () => ({
@@ -41,11 +41,11 @@ describe('guard { render }', () => {
     const ForbiddenPage = () => (
       <div data-testid="forbidden">403 Forbidden</div>
     );
-    const guard = createGuard(async () => ({ render: ForbiddenPage }));
+    const guard = defineClientGuard(async () => ({ render: ForbiddenPage }));
 
     render(
       <LocationProvider>
-        <Page location={loc} clientGuards={[guard]}>
+        <Page location={loc} guards={[guard]}>
           <div data-testid="page">Protected content</div>
         </Page>
       </LocationProvider>
@@ -59,11 +59,11 @@ describe('guard { render }', () => {
 
 describe('guard { redirect } in browser', () => {
   it('calls route() with the redirect path when a client guard redirects', async () => {
-    const guard = createGuard(async () => ({ redirect: '/login' }));
+    const guard = defineClientGuard(async () => ({ redirect: '/login' }));
 
     render(
       <LocationProvider>
-        <Page location={loc} clientGuards={[guard]}>
+        <Page location={loc} guards={[guard]}>
           <div data-testid="page">Protected</div>
         </Page>
       </LocationProvider>
@@ -77,7 +77,7 @@ describe('guard { redirect } in browser', () => {
 
 describe('guard { redirect } on server', () => {
   it('throws GuardRedirect when a server guard redirects', async () => {
-    const guard = createGuard(async () => ({ redirect: '/login' }));
+    const guard = defineServerGuard(async () => ({ redirect: '/login' }));
     const result = await runGuards([guard], { location: loc });
     expect(result).toHaveProperty('redirect', '/login');
     expect(() => {
@@ -88,16 +88,16 @@ describe('guard { redirect } on server', () => {
 });
 
 describe('guard re-runs on navigation', () => {
-  it('re-evaluates clientGuards when the path changes', async () => {
+  it('re-evaluates guards when the path changes', async () => {
     let currentPath = '/public';
-    const guard = createGuard(async () => {
+    const guard = defineClientGuard(async () => {
       if (currentPath === '/admin') return { redirect: '/login' };
     });
 
     const locPublic = { ...loc, path: '/public' } as unknown as RouteHook;
     const { rerender } = render(
       <LocationProvider>
-        <Page location={locPublic} clientGuards={[guard]}>
+        <Page location={locPublic} guards={[guard]}>
           <div data-testid="page">Content</div>
         </Page>
       </LocationProvider>
@@ -109,7 +109,7 @@ describe('guard re-runs on navigation', () => {
     const locAdmin = { ...loc, path: '/admin' } as unknown as RouteHook;
     rerender(
       <LocationProvider>
-        <Page location={locAdmin} clientGuards={[guard]}>
+        <Page location={locAdmin} guards={[guard]}>
           <div data-testid="page">Content</div>
         </Page>
       </LocationProvider>

@@ -175,7 +175,7 @@ describe('honoPreact plugin assembly', () => {
 
   it('gates the build plugin to non-client build commands', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
-    const buildPlugin = plugins[6];
+    const buildPlugin = plugins[7];
     expect(typeof buildPlugin.apply).toBe('function');
     const apply = buildPlugin.apply as (
       _: unknown,
@@ -188,7 +188,7 @@ describe('honoPreact plugin assembly', () => {
 
   it('gates the dev-server plugin to serve only', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' }) as NamedPlugin[];
-    const devPlugin = plugins[7];
+    const devPlugin = plugins[8];
     expect(devPlugin.apply).toBe('serve');
   });
 });

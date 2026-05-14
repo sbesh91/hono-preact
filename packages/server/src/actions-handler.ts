@@ -130,7 +130,7 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       await runActionGuards(entry.guards, { c, module, action, payload });
     } catch (err) {
       if (err instanceof ActionGuardError) {
-        return c.json({ error: err.message }, err.status as 400 | 401 | 403 | 404 | 429 | 500);
+        return c.json({ error: err.message }, err.status);
       }
       throw err;
     }

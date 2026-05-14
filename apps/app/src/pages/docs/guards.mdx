@@ -1,177 +1,186 @@
 # Route Guards
 
-Pages sometimes need to be protected: requiring authentication, a specific role, or any other condition before rendering. Guards provide this as a middleware-style chain that runs before the page loader, on both the server (initial load) and the client (client-side navigation).
+Pages can be protected by an ordered list of guards: middleware-style functions that run before the page renders. Each guard either passes control downstream by calling `next()`, redirects, or renders a fallback. Guards are environment-aware: each is built by `defineServerGuard` or `defineClientGuard`, and the framework runs only the matching ones for the current environment.
 
 ## How it works
 
-Guards are async functions that receive a context object and a `next()` callback, mirroring Hono's middleware pattern. Each guard either returns a result to short-circuit, or calls `next()` to pass control to the next guard. If all guards pass, the page renders normally.
-
-Like loaders, guards are split by environment:
-
-- `serverGuards`: exported from `*.server.ts`, run during SSR, tree-shaken from the browser bundle
-- `clientGuards`: defined in the page file (or any browser-safe module), run during client-side navigation
-
-Guards live with the page component via `definePage` bindings, alongside the loader. If the same component needs different guards at different mount points, wrap it twice and route to each separately:
+A page declares its guards as a single ordered array:
 
 ```tsx
-export const AdminPage = definePage(Page, { serverGuards: ['admin'] });
-export const SuperAdminPage = definePage(Page, { serverGuards: ['superadmin'] });
+import {
+  defineServerGuard,
+  defineClientGuard,
+  definePage,
+} from '@hono-preact/iso';
+import { checkAdminFromDb } from './admin.server.js';
+
+const adminGuard = defineServerGuard(async (ctx, next) => {
+  const role = await checkAdminFromDb(ctx);
+  if (role !== 'admin') return { redirect: '/forbidden' };
+  return next();
+});
+
+const scrollRestore = defineClientGuard(async ({ location }, next) => {
+  restoreScroll(location.path);
+  return next();
+});
+
+export default definePage(Admin, { guards: [adminGuard, scrollRestore] });
 ```
 
-Then mount each export at its own path in `routes.ts`, pointing the `view` at a sub-export rather than the file's default. (The simplest pattern is one wrapped export per file.)
+At runtime, the framework filters the list by environment and composes the survivors via `next()`. On the server, only `defineServerGuard` entries run. On the client, only `defineClientGuard` entries run. Array order is preserved across both environments.
 
-## API
-
-### `createGuard`
+## The factories
 
 ```ts
-import { createGuard } from '@hono-preact/iso';
+import { defineServerGuard, defineClientGuard } from '@hono-preact/iso';
 
-const authenticated = createGuard(async ({ location }, next) => {
-  const user = await getCurrentUser(); // your auth logic
+// Runs during SSR (initial load) and after server-side navigation.
+const guard = defineServerGuard(async ({ location }, next) => {
+  // location: the current RouteHook (path, params, searchParams)
+  // next(): return this to pass control downstream
+  return next();
+});
+
+// Runs during client-side navigation.
+const clientGuard = defineClientGuard(async ({ location }, next) => next());
+```
+
+A guard returns one of:
+- `{ redirect: '/some/path' }` to redirect.
+- `{ render: FallbackComponent }` to render a component in place of the page (e.g. a 403 page).
+- `return next()` to pass through.
+
+## Order semantics
+
+Guards execute in array order. The first to return a non-void result short-circuits the rest. The order is preserved regardless of which environment the page is rendering in. Opposite-env guards are filtered out, surviving guards run in the same relative order.
+
+```ts
+guards: [
+  defineServerGuard(checkSession),     // 1st on server
+  defineClientGuard(restoreScroll),    // 1st on client
+  defineServerGuard(checkRole),        // 2nd on server
+]
+```
+
+On the server: `checkSession → checkRole`. On the client: `restoreScroll`.
+
+## Bundle stripping
+
+The Vite plugin rewrites every `defineServerGuard(fn)` call to a passthrough stub in the client bundle, and every `defineClientGuard(fn)` call to a passthrough stub in the server bundle. The original function body is eliminated from the opposite-env bundle, and any helpers referenced only inside it tree-shake out.
+
+This means a `defineServerGuard` body can safely call server-only helpers (database queries, secrets, Node-only imports) without leaking to the browser:
+
+```tsx
+import { defineServerGuard } from '@hono-preact/iso';
+import { db } from './db.server.js';
+
+const adminGuard = defineServerGuard(async (ctx, next) => {
+  const user = await db.query(...);   // server-only, stripped from client bundle
   if (!user) return { redirect: '/login' };
-  return next(); // must return next(), not just await it
+  return next();
 });
 ```
 
-A guard receives:
-- `location`: the current `RouteHook` (path, params, searchParams)
-- `next()`: call and **return** this to pass control downstream
+The rewrite recognizes calls to `defineServerGuard` / `defineClientGuard` imported directly from `@hono-preact/iso` or `hono-preact` (including via `import as` aliases). For the stripping guarantee to apply, **use the factories**, don't construct guard records manually, and don't re-export the factories through an intermediate module.
 
-A guard returns one of:
-- `{ redirect: '/some/path' }` to redirect the user
-- `{ render: FallbackComponent }` to render a component in place of the page (e.g. a 403 page)
-- `return next()` to pass through to the next guard or the page
+## The `GuardContext`
 
-### `runGuards`
+Both factories take a function that receives:
 
-Guards are executed in order. The first to return a result short-circuits the rest.
+- `location`: the current `RouteHook` (`path`, `pathParams`, `searchParams`).
+- `next()`: call and **return** this to pass control downstream (`return next()`, not `await next()`).
 
-```ts
-guards: [checkAuthenticated, checkRole('admin')]
-//        ^ runs first          ^ only runs if first passes
-```
+There is no Hono context (`c`) on this surface. Server-side guards that need cookies or headers should obtain them via the helper they call (e.g. through `hono/context-storage`), keeping the guard body small and the helper server-only.
 
-## Example: protected page
+## Same logic in both environments
 
-**`src/pages/admin.server.ts`** holds server guards plus the loader ref (never reaches the browser bundle):
+A guard whose body works identically in both environments lives in both factories:
 
 ```ts
-import { createGuard, defineLoader } from '@hono-preact/iso';
-import { getCurrentUser, getAdminStats } from '@/server/admin.js';
-
-const serverLoader = async () => {
-  const stats = await getAdminStats();
-  return { stats };
-};
-
-export default serverLoader;
-
-export const loader = defineLoader(serverLoader);
-
-export const serverGuards = [
-  createGuard(async (_ctx, next) => {
-    const user = await getCurrentUser();
-    if (!user) return { redirect: '/login' };
-    if (user.role !== 'admin') return { redirect: '/forbidden' };
-    return next();
-  }),
-];
+const checkFlag = (ctx, next) => /* env-agnostic logic */;
+guards: [defineServerGuard(checkFlag), defineClientGuard(checkFlag)],
 ```
 
-**`src/pages/admin.guards.ts`** holds client guards in a browser-safe module:
+The function body is shared; the array is explicit about where it runs. `defineGuard` and a `runs: 'both'` option are deliberately not part of the surface: each guard call site is one place the bundler can rewrite, and one place a reader can see which environment it targets.
+
+## `runGuards`
+
+Internal helper, exported for advanced use. Composes a `GuardFn[]` with `next()`-chaining and returns the first non-void result. Most users do not need to call this directly.
 
 ```ts
-import { createGuard } from '@hono-preact/iso';
-import { getCurrentUser } from '@/client/auth.js';
-
-export const clientGuards = [
-  createGuard(async (_ctx, next) => {
-    const user = await getCurrentUser(); // client-side auth check
-    if (!user) return { redirect: '/login' };
-    if (user.role !== 'admin') return { redirect: '/forbidden' };
-    return next();
-  }),
-];
-```
-
-**`src/pages/admin.tsx`** is a pure component, with all bindings (loader and both guard chains) attached via `definePage`:
-
-```tsx
-import type { FunctionComponent } from 'preact';
-import { definePage } from '@hono-preact/iso';
-import { loader, serverGuards } from './admin.server.js';
-import { clientGuards } from './admin.guards.js';
-
-const Admin: FunctionComponent = () => {
-  const { stats } = loader.useData();
-  return <section>...</section>;
-};
-
-export default definePage(Admin, { loader, serverGuards, clientGuards });
-```
-
-**`src/routes.ts`** just wires the URL to the view + server module; no guard imports needed here:
-
-```ts
-{
-  path: '/admin',
-  view: () => import('./pages/admin.js'),
-  server: () => import('./pages/admin.server.js'),
-}
+import { runGuards } from '@hono-preact/iso';
+const result = await runGuards(guards, { location });
 ```
 
 ## Build conventions
 
-The same Vite plugins that enforce loader conventions also enforce guard conventions.
+`serverLoaderValidationPlugin` enforces the `.server.*` named-export allowlist: `serverLoaders`, `serverActions`, `actionGuards`. Guards do not live in `.server.*` files; they live with the page and are stripped from opposite-env bundles by `guardStripPlugin`.
 
-**`serverLoaderValidationPlugin`:** `.server.ts` files may only export `loader`, `serverGuards`, `serverActions`, and `actionGuards` as named exports (alongside the default loader). Any other named export fails the build:
+`guardStripPlugin` is registered in `honoPreact()` by default. Both passes (client and server) run during a `vite build`; you do not need to wire it manually.
 
-```ts
-// ❌ build error
-export const helper = () => {};
-export default serverLoader;
+## Example: protected admin page
 
-// ✅ allowed
-export const loader = defineLoader(serverLoader);
-export const serverGuards = [...];
-export default serverLoader;
+```tsx
+// src/pages/admin.tsx
+import { defineServerGuard, definePage } from '@hono-preact/iso';
+import { getCurrentUser } from './admin-data.js';
+
+const requireAdmin = defineServerGuard(async (_ctx, next) => {
+  const user = await getCurrentUser();
+  if (!user) return { redirect: '/login' };
+  if (user.role !== 'admin') return { redirect: '/forbidden' };
+  return next();
+});
+
+function Admin() {
+  return <section>Admin dashboard</section>;
+}
+
+export default definePage(Admin, { guards: [requireAdmin] });
 ```
 
-**`serverOnlyPlugin`:** in the client bundle, the default `serverLoader` import is rewritten to an RPC stub and `serverGuards` is replaced with an empty array. Your server-side auth logic never reaches the browser:
+```ts
+// src/pages/admin-data.ts
+// Server-only helper. Because admin.tsx imports it only inside a
+// defineServerGuard body, the guardStripPlugin rewrites that call site
+// in the client bundle and this module tree-shakes out.
+import { db } from '@/server/db.js';
+
+export async function getCurrentUser() {
+  return await db.user.fromSession();
+}
+```
 
 ```ts
-// What you write (in admin.server.ts):
-const serverLoader = async () => ({ /* db calls, secrets, etc. */ });
-export const serverGuards = [/* auth checks */];
+// src/pages/admin.server.ts
+import { defineLoader } from '@hono-preact/iso';
+import { db } from '@/server/db.js';
 
-// What the client bundle sees:
-const serverLoader = /* RPC stub */;
-const serverGuards = [];
+export const serverLoaders = {
+  default: defineLoader(async () => ({ stats: await db.adminStats() })),
+};
 ```
+
+The admin helper lives in a plain module (`admin-data.ts`, not `.server.ts`). `admin.tsx` imports it only inside a `defineServerGuard` body, which `guardStripPlugin` rewrites to a passthrough in the client bundle. Once that body is gone, the helper import is unreferenced and tree-shakes out, so neither the helper code nor its transitive `db` import reaches the browser.
 
 ## Composing guards
 
-Guards are plain functions, so compose them however you like:
+Guards are plain values, so compose them however you like:
 
 ```ts
-const requireAuth = createGuard(async (_ctx, next) => {
+const requireAuth = defineServerGuard(async (_ctx, next) => {
   const user = await getCurrentUser();
   if (!user) return { redirect: '/login' };
   return next();
 });
 
 const requireRole = (role: string) =>
-  createGuard(async (_ctx, next) => {
+  defineServerGuard(async (_ctx, next) => {
     const user = await getCurrentUser();
     if (user?.role !== role) return { redirect: '/forbidden' };
     return next();
   });
 
-// Reuse across pages:
-export const serverGuards = [requireAuth, requireRole('editor')];
+guards: [requireAuth, requireRole('editor')];
 ```
-
-## `getCurrentUser`
-
-Guard functions call `getCurrentUser()` themselves; the framework does not. This keeps the auth layer entirely in your code. On the server, read from the Hono context (cookies, headers, session). On the client, read from whatever auth state store you use.

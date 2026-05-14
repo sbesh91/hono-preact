@@ -57,11 +57,11 @@ MDX content (`pages/docs/*.mdx`) is mounted via `apps/app/src/components/DocsRou
 Isomorphic primitives shared between server and client (`packages/iso/`):
 
 - **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`. The route-table primitive and runtime mounter.
-- **Page bindings**: `definePage(Component, { errorFallback, serverGuards, clientGuards, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need Wrapper or guard bindings. Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX.
+- **Page bindings**: `definePage(Component, { errorFallback, guards, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need Wrapper or guard bindings. The `guards` array holds entries built via `defineServerGuard` and `defineClientGuard`; the framework filters by environment at runtime. Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX.
 - **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`.)
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
 - **Caching**: `createCache` (advanced: shared caches across loaders).
-- **Guards**: `createGuard`, `runGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`.
+- **Guards**: `defineServerGuard`, `defineClientGuard`, `runGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`, `ContentfulStatusCode`.
 - **Utilities**: `prefetch`, `isBrowser`, `env`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
 
 ### `@hono-preact/server` (workspace package)
@@ -80,6 +80,6 @@ Vite plugins for the framework (`packages/vite/`). The primary export is `honoPr
 
 - **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, `@hono/vite-dev-server`, and the client-shim auto-injection.
 - **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing static imports with no-op stubs and dynamic `import('./*.server.*')` calls with `Promise.resolve({})` so server code never reaches the browser.
-- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverGuards`, `serverActions`, or `actionGuards`.
+- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverActions`, or `actionGuards`.
 - **`moduleKeyPlugin`** rewrites each `.server.*` file at build time with a `__moduleKey` derived from the file path, which the loader/action handlers use to dispatch RPC requests.
 - **`clientShimPlugin`** prepends a `globalThis.process ??= { env: { NODE_ENV } }` shim to the client entry so libraries that read `process.env.NODE_ENV` at module-eval time in the browser do not throw.

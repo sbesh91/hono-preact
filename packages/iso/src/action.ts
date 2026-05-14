@@ -1,4 +1,5 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
@@ -205,7 +206,7 @@ export type ActionGuardFn = (
 export class ActionGuardError extends Error {
   constructor(
     message: string,
-    public readonly status: number = 403
+    public readonly status: ContentfulStatusCode = 403,
   ) {
     super(message);
     this.name = 'ActionGuardError';

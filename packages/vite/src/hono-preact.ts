@@ -11,6 +11,7 @@ import {
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
+import { guardStripPlugin } from './guard-strip.js';
 import {
   GENERATED_SERVER_ENTRY_RELATIVE,
   generatedServerEntryAbsPath,
@@ -120,6 +121,7 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     serverOnlyPlugin(),
+    guardStripPlugin(),
     Object.assign(build({ entry: resolvedEntry }), {
       apply: (_: unknown, { command, mode }: { command: string; mode: string }) =>
         command === 'build' && mode !== 'client',

@@ -88,7 +88,7 @@ const serverLoader = async function* (
 };
 
 export const serverLoaders = {
-  default: defineLoader(serverLoader),
+  default: defineLoader(serverLoader, { params: ['q'] }),
 };
 
 export const serverActions = {

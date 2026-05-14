@@ -18,13 +18,28 @@ export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/vite
  * { loaderName -> params } for loaders that declare non-default params.
  * Returns an empty object if the file cannot be parsed or has no serverLoaders.
  */
-function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
-  let src: string;
-  try {
-    src = fs.readFileSync(absServerPath, 'utf8');
-  } catch {
-    return {};
+function readSourceWithExtensionFallback(absServerPath: string): string | null {
+  // TypeScript NodeNext convention: source code imports `.server.js` even
+  // though the file on disk is `.server.ts` (or .tsx). Try the literal path
+  // first (handles plain `.js` cases), then the TS-extension swaps.
+  const tries = [
+    absServerPath,
+    absServerPath.replace(/\.js$/, '.ts'),
+    absServerPath.replace(/\.jsx$/, '.tsx'),
+  ];
+  for (const p of tries) {
+    try {
+      return fs.readFileSync(p, 'utf8');
+    } catch {
+      // try next candidate
+    }
   }
+  return null;
+}
+
+function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
+  const src = readSourceWithExtensionFallback(absServerPath);
+  if (src == null) return {};
 
   let ast;
   try {
@@ -194,8 +209,7 @@ export function serverOnlyPlugin(): Plugin {
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
-            (specifier.imported.name === 'serverGuards' ||
-              specifier.imported.name === 'actionGuards')
+            specifier.imported.name === 'actionGuards'
           ) {
             stubs.push(`const ${specifier.local.name} = [];`);
           } else if (
@@ -223,7 +237,7 @@ export function serverOnlyPlugin(): Plugin {
                 : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-              `Allowed: serverLoaders, serverGuards, serverActions, actionGuards.`
+              `Allowed: serverLoaders, serverActions, actionGuards.`
             );
           }
         }
@@ -236,7 +250,19 @@ export function serverOnlyPlugin(): Plugin {
       }
 
       for (const imp of [...dynamicServerImports].reverse()) {
-        s.overwrite(imp.start, imp.end, 'Promise.resolve({})');
+        // Preserve __moduleKey in the client stub so callers (e.g.
+        // defineRoutes' wrapWithRouteLocations) can identify which server
+        // module this lazy import represents, even though the body is
+        // replaced with an empty resolved promise.
+        let stubContent = '{}';
+        if (viteRoot !== undefined) {
+          const absServerPath = path.resolve(importerDir, imp.source);
+          const moduleKey = deriveModuleKey(absServerPath, viteRoot as string);
+          if (!moduleKey.startsWith('..')) {
+            stubContent = `{ __moduleKey: ${JSON.stringify(moduleKey)} }`;
+          }
+        }
+        s.overwrite(imp.start, imp.end, `Promise.resolve(${stubContent})`);
       }
 
       if (needsCreateLoaderStubImport) {
