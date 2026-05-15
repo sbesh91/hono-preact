@@ -19,7 +19,7 @@ function post(app: Hono, body: unknown) {
 const loc = { path: '/movies', pathParams: {}, searchParams: {} };
 
 describe('loadersHandler', () => {
-  it('calls the matching serverLoader with the location and returns JSON', async () => {
+  it('calls the matching serverLoader with location, signal, and the Hono Context', async () => {
     const loaderFn = vi.fn().mockResolvedValue({ movies: [] });
     const app = makeApp({
       './pages/movies.server.ts': {
@@ -33,7 +33,14 @@ describe('loadersHandler', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ movies: [] });
     expect(loaderFn).toHaveBeenCalledWith(
-      expect.objectContaining({ location: loc, signal: expect.any(AbortSignal) })
+      expect.objectContaining({
+        location: loc,
+        signal: expect.any(AbortSignal),
+        c: expect.objectContaining({
+          req: expect.anything(),
+          header: expect.any(Function),
+        }),
+      })
     );
   });
 

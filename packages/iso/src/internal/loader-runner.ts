@@ -62,7 +62,8 @@ export function runLoader<T>(
   // for the Suspense render and register the rest with the per-request
   // streaming-ssr registry so renderPage can flush further chunks.
   return (async () => {
-    const result = await (loaderRef.fn({ location, signal }) as Promise<unknown>);
+    // Phase 2b will replace `c: undefined` with the seeded Hono Context from runRequestScope.
+    const result = await (loaderRef.fn({ c: undefined as any, location, signal }) as Promise<unknown>);
     if (isAsyncGenerator(result)) {
       const step = await result.next();
       if (step.done) {

@@ -110,6 +110,10 @@ export const serverLoaders = {
 };
 ```
 
+`ctx.c` is the request's Hono `Context`. A server loader can read cookies (`getCookie(ctx.c, …)`), reach app `Bindings` (`ctx.c.env.MY_KV`), or set a response header before yielding. The shape is `Context`; users with typed `Bindings` can narrow inside the function body.
+
+By convention, loaders read; actions write. Setting cookies/headers from a loader is allowed but discouraged.
+
 ## The `.View()` factory
 
 `.View(render, opts)` is the primary way to consume a loader. It returns a Preact component pre-wrapped in the loader's own Suspense boundary, error boundary, data context, and reload context:

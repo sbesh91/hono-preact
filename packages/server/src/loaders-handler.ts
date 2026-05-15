@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { runRequestScope } from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
@@ -21,6 +21,7 @@ type SerializedLocation = {
 };
 
 type LoaderFn = (props: {
+  c: Context;
   location: SerializedLocation;
   signal: AbortSignal;
 }) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
@@ -126,7 +127,7 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
 
     try {
       const result = await runRequestScope(() =>
-        Promise.resolve(loaderFn({ location: validatedLocation, signal }))
+        Promise.resolve(loaderFn({ c, location: validatedLocation, signal }))
       );
 
       if (isAsyncGenerator(result)) {
