@@ -82,4 +82,52 @@ describe('V3 - loader can set a response cookie', () => {
       expect(setCookieHeader).toBeNull();
     }
   });
+
+  it('streaming SSR path: Set-Cookie written before first yield is dropped', async () => {
+    // Pins the observed Set-Cookie drop on the streaming SSR path. The streaming
+    // branch in render.tsx constructs `new Response(stream, { headers: literal })`
+    // without merging c.res.headers. A fix to that branch would flip this assertion;
+    // that fix is tracked as a separate issue.
+    const ref = defineLoader(async function* (ctx) {
+      setCookie(ctx.c, 'rotated-stream', 'stream-value');
+      yield { progress: 50 };
+      yield { progress: 100 };
+    });
+
+    const loc: RouteHook = {
+      path: '/x',
+      url: 'http://localhost/x',
+      searchParams: {},
+      pathParams: {},
+    } as unknown as RouteHook;
+
+    function Page() {
+      return (
+        <html>
+          <body>
+            <Loader loader={ref} location={loc}>
+              <div>ok</div>
+            </Loader>
+          </body>
+        </html>
+      );
+    }
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Page />));
+
+    const res = await app.request('http://localhost/x');
+
+    // Verify this is the streaming path.
+    const contentType = res.headers.get('content-type') ?? '';
+    const transferEncoding = res.headers.get('transfer-encoding') ?? '';
+    const isStreaming =
+      contentType.includes('text/html') &&
+      (transferEncoding.includes('chunked') || res.body !== null);
+    expect(isStreaming).toBe(true);
+
+    // Observed behavior: Set-Cookie is absent on the streaming path.
+    const setCookieHeader = res.headers.get('set-cookie');
+    expect(setCookieHeader).toBeNull();
+  });
 });

@@ -114,6 +114,8 @@ export const serverLoaders = {
 
 By convention, loaders read; actions write. Setting cookies/headers from a loader is allowed but discouraged.
 
+On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response (Hono's `c.html(...)` merges prepared headers). Streaming loaders are different: the streaming response is constructed with literal headers, so any `Set-Cookie` written via `ctx.c` after that point is dropped. Rotate sessions from an action when the page streams.
+
 ## The `.View()` factory
 
 `.View(render, opts)` is the primary way to consume a loader. It returns a Preact component pre-wrapped in the loader's own Suspense boundary, error boundary, data context, and reload context:
