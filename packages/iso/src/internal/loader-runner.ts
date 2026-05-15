@@ -64,8 +64,21 @@ export function runLoader<T>(
   // for the Suspense render and register the rest with the per-request
   // streaming-ssr registry so renderPage can flush further chunks.
   return (async () => {
-    const c = getRequestHonoContext<Context>();
-    const result = await (loaderRef.fn({ c, location, signal }) as Promise<unknown>);
+    const ctx = {
+      location,
+      signal,
+      get c(): Context {
+        const c = getRequestHonoContext<Context>();
+        if (c === undefined) {
+          throw new Error(
+            'ctx.c is not available: this loader was invoked without an active server request scope. ' +
+            'Loaders that read ctx.c run inside loadersHandler (RPC) or renderPage (SSR); test/edge paths must avoid reading it.',
+          );
+        }
+        return c;
+      },
+    };
+    const result = await (loaderRef.fn(ctx) as Promise<unknown>);
     if (isAsyncGenerator(result)) {
       const step = await result.next();
       if (step.done) {

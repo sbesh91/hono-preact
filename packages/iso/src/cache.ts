@@ -43,14 +43,13 @@ export function getRequestStore(): RequestStore | undefined {
   return alsInstance?.getStore();
 }
 
-// Returns the seeded Hono Context for the active server request scope.
-// Throws when an ALS scope exists but was not seeded with { honoContext } (a framework bug).
-// Return type is non-optional because production server callers always have a seed; the
-// browser/no-ALS path returns a phantom undefined typed as T, which is safe by construction
-// because callers in that path never read ctx.c (loaders that touch ctx.c are server-only).
-export function getRequestHonoContext<T>(): T {
+// Returns the seeded value from the active runRequestScope, or undefined when no scope
+// is active (browser / happy-dom: node:async_hooks is unavailable). Throws when a scope
+// IS active but was never seeded with { honoContext } (framework bug, surfaces loud).
+// The `as T` is a typed Map-read, not a value cast.
+export function getRequestHonoContext<T = unknown>(): T | undefined {
   const store = getRequestStore();
-  if (!store) return undefined as T;
+  if (!store) return undefined;
   const ctx = store.get(HONO_CONTEXT_KEY);
   if (ctx === undefined) {
     throw new Error(

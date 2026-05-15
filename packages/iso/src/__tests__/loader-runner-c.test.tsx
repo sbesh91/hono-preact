@@ -57,3 +57,31 @@ describe('getRequestHonoContext contract', () => {
     expect(observed).toBe(fakeC);
   });
 });
+
+describe('LoaderCtx.c getter behavior', () => {
+  it('does not throw when the loader never reads ctx.c (no scope, no seed)', async () => {
+    const ref = defineLoader(async (_ctx) => {
+      return { ok: true };
+    });
+    await expect(
+      runLoader(ref, loc, 'id-noread', new AbortController().signal, {
+        onChunk: () => {},
+        onError: () => {},
+        onEnd: () => {},
+      }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it('throws a clear error when a loader reads ctx.c outside any scope', async () => {
+    const ref = defineLoader(async (ctx) => {
+      return { whatever: ctx.c.req };
+    });
+    await expect(
+      runLoader(ref, loc, 'id-readsC', new AbortController().signal, {
+        onChunk: () => {},
+        onError: () => {},
+        onEnd: () => {},
+      }),
+    ).rejects.toThrow(/ctx\.c is not available/);
+  });
+});
