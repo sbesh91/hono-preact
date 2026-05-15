@@ -1,5 +1,0 @@
-@reference "tailwindcss";
-
-.test {
-  @apply bg-amber-200;
-}
