@@ -1,16 +1,14 @@
-import { Head } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { useMeta, useTitle } from 'hoofd/preact';
 
-const Home: FunctionComponent = () => (
-  <>
-    <Head>
-      <title>hono-preact</title>
-      <meta
-        name="description"
-        content="Hono on the edge, Preact in the browser, manifest driven routes, typed RPC, streaming everywhere."
-      />
-    </Head>
-
+const Home: FunctionComponent = () => {
+  useTitle('hono-preact');
+  useMeta({
+    name: 'description',
+    content:
+      'Hono on the edge, Preact in the browser, manifest driven routes, typed RPC, streaming everywhere.',
+  });
+  return (
     <main class="mx-auto max-w-4xl px-6 py-16 space-y-16">
       {/* Hero */}
       <section class="space-y-4 text-center">
@@ -41,26 +39,26 @@ const Home: FunctionComponent = () => (
       {/* Code block */}
       <section class="space-y-4">
         <h2 class="text-sm uppercase tracking-wide text-gray-600">
-          Four files. That's the spec.
+          Keep it simple
         </h2>
         <div class="grid gap-3 md:grid-cols-2">
           <CodeBlock filename="vite.config.ts">
-{`import { defineApp } from 'hono-preact/vite';
+            {`import { defineApp } from 'hono-preact/vite';
 export default defineApp();`}
           </CodeBlock>
           <CodeBlock filename="src/routes.ts">
-{`import { defineRoutes } from 'hono-preact';
+            {`import { defineRoutes } from 'hono-preact';
 export default defineRoutes([
   { path: '/', view: () => import('./views/home') },
 ]);`}
           </CodeBlock>
           <CodeBlock filename="src/views/home.tsx">
-{`export default function Home() {
+            {`export default function Home() {
   return <h1>Hello</h1>;
 }`}
           </CodeBlock>
           <CodeBlock filename="src/Layout.tsx">
-{`import { ClientScript, Head } from 'hono-preact';
+            {`import { ClientScript, Head } from 'hono-preact';
 export default function Layout({ children }) {
   return (
     <html>
@@ -87,7 +85,7 @@ export default function Layout({ children }) {
         <Card title="Streaming everywhere">
           Loaders, forms, SSE. Built on ReadableStream.
         </Card>
-        <Card title="One package, three subpaths">
+        <Card title="One package">
           <code>hono-preact</code>, <code>hono-preact/server</code>,{' '}
           <code>hono-preact/vite</code>. Nothing else to install.
         </Card>
@@ -107,8 +105,8 @@ export default function Layout({ children }) {
         <span>MIT</span>
       </footer>
     </main>
-  </>
-);
+  );
+};
 Home.displayName = 'Home';
 
 const CodeBlock: FunctionComponent<{
@@ -119,7 +117,9 @@ const CodeBlock: FunctionComponent<{
     <figcaption class="text-xs text-gray-600 px-3 py-1 border-b bg-gray-100">
       {filename}
     </figcaption>
-    <pre class="text-xs p-3 overflow-x-auto"><code>{children}</code></pre>
+    <pre class="text-xs p-3 overflow-x-auto">
+      <code>{children}</code>
+    </pre>
   </figure>
 );
 

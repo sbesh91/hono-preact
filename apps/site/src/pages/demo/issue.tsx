@@ -1,6 +1,7 @@
-import { definePage, Head, useAction } from 'hono-preact';
+import { definePage, useAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
+import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { requireSession } from '../../demo/guard.js';
 import CommentList from '../../components/demo/CommentList.js';
@@ -25,6 +26,8 @@ const IssuePage: FunctionComponent = () => {
     }
   );
 
+  useTitle(issue ? `${issue.title} · demo` : 'Issue not found · demo');
+
   if (!issue) return <p>Issue not found.</p>;
 
   const status = toggling ? optimisticStatus : issue.status;
@@ -32,10 +35,6 @@ const IssuePage: FunctionComponent = () => {
 
   return (
     <article class="space-y-6">
-      <Head>
-        <title>{issue.title} · demo</title>
-      </Head>
-
       <header class="space-y-2">
         <div class="flex items-center gap-2">
           <h2 class="text-xl font-semibold">{issue.title}</h2>

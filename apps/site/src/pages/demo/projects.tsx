@@ -1,5 +1,6 @@
-import { definePage, Head, useAction } from 'hono-preact';
+import { definePage, useAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { useTitle } from 'hoofd/preact';
 import { serverLoaders } from './projects.server.js';
 import { serverActions as loginActions } from './login.server.js';
 import { requireSession } from '../../demo/guard.js';
@@ -31,12 +32,10 @@ const LogoutInline: FunctionComponent<{ user: { name: string } | null }> = ({
 
 const ProjectsPage: FunctionComponent = () => {
   const { user, projects } = projectsLoader.useData();
+  useTitle('Projects · demo');
 
   return (
     <section class="mx-auto max-w-3xl p-6 space-y-4">
-      <Head>
-        <title>Projects · demo</title>
-      </Head>
       <header class="flex items-baseline justify-between">
         <h1 class="text-2xl font-semibold">Your projects</h1>
         <LogoutInline user={user} />
