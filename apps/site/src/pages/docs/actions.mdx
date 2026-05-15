@@ -307,3 +307,15 @@ Guards run before every action in the module. See [Action Guards](/docs/action-g
 ## The server/client boundary
 
 `serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or `actionGuards` as named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+
+## Security: SameSite cookies on `<Form>` posts
+
+`<Form>` posts go to `/__actions` on the same origin. The framework relies on
+`SameSite=Lax` (Hono's cookie default) for CSRF protection. Cross-origin POSTs
+without a credential do not carry the session cookie; cross-origin POSTs from a
+malicious site cannot read the response.
+
+If you need a stricter posture (explicit-origin CSRF middleware on
+`/__actions`), that is not user-configurable in v0.1. See
+[issue #43](https://github.com/sbesh91/hono-preact/issues/43) for the
+post-v0.1 design.
