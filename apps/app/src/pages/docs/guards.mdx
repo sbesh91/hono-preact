@@ -91,7 +91,20 @@ Both factories take a function that receives:
 - `location`: the current `RouteHook` (`path`, `pathParams`, `searchParams`).
 - `next()`: call and **return** this to pass control downstream (`return next()`, not `await next()`).
 
-There is no Hono context (`c`) on this surface. Server-side guards that need cookies or headers should obtain them via the helper they call (e.g. through `hono/context-storage`), keeping the guard body small and the helper server-only.
+`defineServerGuard` additionally receives `ctx.c`, the request's Hono `Context`. That gives a guard everything it needs to enforce auth using Hono's helpers directly. Below is a guard that reads a signed cookie and redirects on failure:
+
+```ts
+import { defineServerGuard } from 'hono-preact';
+import { getSignedCookie } from 'hono/cookie';
+
+export const requireSession = defineServerGuard(async (ctx, next) => {
+  const user = await getSignedCookie(ctx.c, ctx.c.env.SESSION_SECRET, 'session');
+  if (!user) return { redirect: '/login' };
+  return next();
+});
+```
+
+Client guards receive only `{ location }`; cookies, headers, and `Bindings` are server-only. A guard that needs both server- and client-side logic is two declarations: `defineServerGuard(...)` plus `defineClientGuard(...)` in the same `guards` list.
 
 ## Same logic in both environments
 
