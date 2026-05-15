@@ -1,4 +1,5 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
+import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
@@ -14,7 +15,7 @@ export type ActionStub<TPayload, TResult, TChunk = never> = {
 };
 
 export type ActionCtx = {
-  c: unknown;
+  c: Context;
   signal: AbortSignal;
 };
 
@@ -192,7 +193,7 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
 }
 
 export type ActionGuardContext = {
-  c: unknown;
+  c: Context;
   module: string;
   action: string;
   payload: unknown;
