@@ -31,7 +31,7 @@ import { defineRoutes } from 'hono-preact';
 export default defineRoutes([
   { path: '/', view: () => import('./pages/home.js') },
   { path: '/movies', layout: () => import('./pages/movies-layout.js'), children: [...] },
-  { path: '/watched', view: () => import('./pages/watched.js'), server: () => import('./pages/watched.server.js') },
+  { path: '/demo/projects/:projectId', view: () => import('./pages/project.js'), server: () => import('./pages/project.server.js') },
   { path: '*', view: () => import('./pages/not-found.js') },
 ]);
 ```

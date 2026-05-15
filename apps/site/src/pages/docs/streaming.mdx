@@ -56,7 +56,7 @@ export default definePage(DashboardView);
 
 `loader.useData()` always returns the latest yielded value. `loader.useError()` returns the current error or `null`. Components re-render on each new chunk automatically.
 
-See `/movies/:id` for a running example: each section (AI summary, cast, similar movies, box office) is a separate streaming loader declared in `serverLoaders`, each with its own `.View()` component streaming independently. See `/movies?q=drama` for input-driven SSR streaming: the server yields match buckets (exact title, substring, overview, genre) progressively as it scans the catalog.
+See `/demo/projects/:projectId/issues/:issueId` for a running example of multi-loader streaming: the issue detail page declares multiple loaders in `serverLoaders`, each with its own `.View()` component streaming independently.
 
 ## Multi-loader streaming
 
@@ -206,12 +206,12 @@ Streaming loaders and actions use a server-sent event (SSE) wire format. You can
 
 ```bash
 # Streaming loader endpoint
-curl -N 'http://localhost:5173/movies/1241982'
+curl -N 'http://localhost:5173/demo/projects/inf/issues/i-1'
 
 # Streaming action endpoint (replace the module key and action name)
 curl -N -X POST http://localhost:5173/__actions \
   -H 'Content-Type: application/json' \
-  -d '{"module":"src/pages/watched","action":"bulkImport","payload":{"count":5}}'
+  -d '{"module":"src/pages/demo/project","action":"bulkImport","payload":{"count":5}}'
 ```
 
 Each chunk arrives as a `data:` line followed by a blank line (standard SSE framing). The final result for actions arrives as a `result:` line. Parsing is handled automatically by the framework on the client.

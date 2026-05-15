@@ -14,27 +14,27 @@ import { defineRoutes } from 'hono-preact';
 
 export default defineRoutes([
   { path: '/', view: () => import('./pages/home.js') },
-  { path: '/test', view: () => import('./pages/test.js') },
+  { path: '/demo/login', view: () => import('./pages/demo-login.js') },
   {
-    path: '/movies',
-    layout: () => import('./pages/movies-layout.js'),
+    path: '/demo/projects',
+    layout: () => import('./pages/projects-layout.js'),
     children: [
       {
         path: '',
-        view: () => import('./pages/movies-list.js'),
-        server: () => import('./pages/movies-list.server.js'),
+        view: () => import('./pages/projects-list.js'),
+        server: () => import('./pages/projects-list.server.js'),
       },
       {
-        path: ':id',
-        view: () => import('./pages/movie.js'),
-        server: () => import('./pages/movie.server.js'),
+        path: ':projectId/issues/:issueId',
+        view: () => import('./pages/issue.js'),
+        server: () => import('./pages/issue.server.js'),
       },
     ],
   },
   {
-    path: '/watched',
-    view: () => import('./pages/watched.js'),
-    server: () => import('./pages/watched.server.js'),
+    path: '/demo/projects/:projectId',
+    view: () => import('./pages/project.js'),
+    server: () => import('./pages/project.server.js'),
   },
   { path: '*', view: () => import('./pages/not-found.js') },
 ]);
@@ -44,9 +44,9 @@ That table covers four URL behaviours:
 
 | Path | Behaviour |
 |---|---|
-| `/`, `/test`, `/watched` | Plain leaves. The `view` resolves to the page component. `server` (when present) is the sibling `.server.ts` module. |
-| `/movies` | An empty-path child of a layout group. Renders `<MoviesLayout>` wrapping the list view. |
-| `/movies/:id` | A `:id` child of the same layout group. The same `MoviesLayout` instance stays mounted across the navigation. |
+| `/`, `/demo/login`, `/demo/projects/:projectId` | Plain leaves. The `view` resolves to the page component. `server` (when present) is the sibling `.server.ts` module. |
+| `/demo/projects` | An empty-path child of a layout group. Renders `<ProjectsLayout>` wrapping the list view. |
+| `/demo/projects/:projectId/issues/:issueId` | A nested child of the same layout group. The same `ProjectsLayout` instance stays mounted across the navigation. |
 | `*` | Catch-all. Matches anything not matched above. |
 
 ## Route entry fields
