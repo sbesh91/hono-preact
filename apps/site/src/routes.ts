@@ -25,6 +25,11 @@ export default defineRoutes([
             view: () => import('./pages/demo/project-issues.js'),
             server: () => import('./pages/demo/project-issues.server.js'),
           },
+          {
+            path: 'issues/:issueId',
+            view: () => import('./pages/demo/issue.js'),
+            server: () => import('./pages/demo/issue.server.js'),
+          },
         ],
       },
     ],
