@@ -16,6 +16,17 @@ export default defineRoutes([
         view: () => import('./pages/demo/projects.js'),
         server: () => import('./pages/demo/projects.server.js'),
       },
+      {
+        path: 'projects/:projectId',
+        layout: () => import('./pages/demo/project-layout.js'),
+        children: [
+          {
+            path: '',
+            view: () => import('./pages/demo/project-issues.js'),
+            server: () => import('./pages/demo/project-issues.server.js'),
+          },
+        ],
+      },
     ],
   },
   {
