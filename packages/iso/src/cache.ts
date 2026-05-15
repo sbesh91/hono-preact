@@ -45,11 +45,12 @@ export function getRequestStore(): RequestStore | undefined {
 
 // Returns the seeded Hono Context for the active server request scope.
 // Throws when an ALS scope exists but was not seeded with { honoContext } (a framework bug).
-// Returns undefined when no ALS scope is active at all (browser / happy-dom tests),
-// since `node:async_hooks` is skipped on browser-like globals.
-export function getRequestHonoContext<T = unknown>(): T | undefined {
+// Return type is non-optional because production server callers always have a seed; the
+// browser/no-ALS path returns a phantom undefined typed as T, which is safe by construction
+// because callers in that path never read ctx.c (loaders that touch ctx.c are server-only).
+export function getRequestHonoContext<T>(): T {
   const store = getRequestStore();
-  if (!store) return undefined;
+  if (!store) return undefined as T;
   const ctx = store.get(HONO_CONTEXT_KEY);
   if (ctx === undefined) {
     throw new Error(

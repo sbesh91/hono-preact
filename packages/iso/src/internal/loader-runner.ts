@@ -64,9 +64,7 @@ export function runLoader<T>(
   // for the Suspense render and register the rest with the per-request
   // streaming-ssr registry so renderPage can flush further chunks.
   return (async () => {
-    // c is the seeded Context server-side; undefined only in non-ALS environments
-    // (browser / happy-dom tests) where loaders by construction do not read ctx.c.
-    const c = getRequestHonoContext<Context>() as Context;
+    const c = getRequestHonoContext<Context>();
     const result = await (loaderRef.fn({ c, location, signal }) as Promise<unknown>);
     if (isAsyncGenerator(result)) {
       const step = await result.next();
