@@ -10,7 +10,7 @@ Two files must be updated when adding a new docs page. The route is auto-registe
 
 ## 1. Create the MDX file
 
-Create `apps/app/src/pages/docs/<slug>.mdx`. The route will be `/docs/<slug>` automatically via the glob in `apps/app/src/iso.tsx`.
+Create `apps/site/src/pages/docs/<slug>.mdx`. The route will be `/docs/<slug>` automatically via the glob in `apps/site/src/iso.tsx`.
 
 Follow the style of existing docs pages:
 - Use `#` for the page title, `##` for sections
@@ -21,7 +21,7 @@ Follow the style of existing docs pages:
 
 ## 2. Add to nav.ts
 
-Add an entry to `apps/app/src/pages/docs/nav.ts` in the correct `NavSection`:
+Add an entry to `apps/site/src/pages/docs/nav.ts` in the correct `NavSection`:
 
 ```ts
 { title: 'Page Title', route: '/docs/<slug>' },
@@ -42,5 +42,5 @@ Place the entry in reading order within the section (foundational before advance
 
 ## Checklist
 
-- [ ] `apps/app/src/pages/docs/<slug>.mdx` created
-- [ ] Entry added to `apps/app/src/pages/docs/nav.ts` in the correct section
+- [ ] `apps/site/src/pages/docs/<slug>.mdx` created
+- [ ] Entry added to `apps/site/src/pages/docs/nav.ts` in the correct section

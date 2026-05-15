@@ -4,8 +4,8 @@ import { deriveModuleKey } from '../module-key.js';
 describe('deriveModuleKey', () => {
   it('produces a forward-slash path relative to root with the .server.ts extension stripped', () => {
     const root = '/Users/me/repo';
-    const abs = '/Users/me/repo/apps/app/src/pages/movies.server.ts';
-    expect(deriveModuleKey(abs, root)).toBe('apps/app/src/pages/movies');
+    const abs = '/Users/me/repo/apps/site/src/pages/movies.server.ts';
+    expect(deriveModuleKey(abs, root)).toBe('apps/site/src/pages/movies');
   });
 
   it('handles .server.tsx extensions', () => {

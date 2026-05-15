@@ -30,10 +30,10 @@ describe('defineLoader type-level guards', () => {
 describe('defineLoader (path-keyed __moduleKey form)', () => {
   it('accepts (fn, { __moduleKey }) and derives __id from the key', () => {
     const ref = defineLoader(async () => ({}), {
-      __moduleKey: 'apps/app/src/pages/movies',
+      __moduleKey: 'apps/site/src/pages/movies',
     });
     expect(Symbol.keyFor(ref.__id)).toBe(
-      '@hono-preact/loader:apps/app/src/pages/movies'
+      '@hono-preact/loader:apps/site/src/pages/movies'
     );
   });
 

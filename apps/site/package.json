@@ -1,5 +1,5 @@
 {
-  "name": "app",
+  "name": "site",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite --force",

@@ -89,7 +89,7 @@ When several routes share a header, sidebar, or other wrapper, declare a layout 
 
 MDX is supported via the `@mdx-js/rollup` Vite plugin (configured in `vite.config.ts`) plus a small wrapper component that owns the per-file glob.
 
-The demo's `apps/app/src/components/DocsRoute.tsx` discovers every `.mdx` file in `src/pages/docs/` via `import.meta.glob` and registers each as an inner route. Mount it once in `routes.ts` for both the index URL and the wildcard:
+The demo's `apps/site/src/components/DocsRoute.tsx` discovers every `.mdx` file in `src/pages/docs/` via `import.meta.glob` and registers each as an inner route. Mount it once in `routes.ts` for both the index URL and the wildcard:
 
 ```ts
 const docsView = () => import('./components/DocsRoute.js');

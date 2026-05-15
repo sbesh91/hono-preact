@@ -1,4 +1,4 @@
-// apps/app/src/pages/movie.tsx
+// apps/site/src/pages/movie.tsx
 import {
   definePage,
   Form,

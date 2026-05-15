@@ -1,4 +1,4 @@
-// apps/app/src/pages/movies-list.server.ts
+// apps/site/src/pages/movies-list.server.ts
 import { getMovies } from '@/server/movies.js';
 import { defineAction, defineLoader, type LoaderCtx } from 'hono-preact';
 import { listWatched, markWatched, unmarkWatched } from '@/server/watched.js';

@@ -19,7 +19,7 @@ pnpm install
 pnpm dev
 ```
 
-Starts the dev server for the `apps/app` project with hot reload.
+Starts the dev server for the `apps/site` project with hot reload.
 
 ## Testing
 
@@ -35,7 +35,7 @@ pnpm test:coverage  # run tests with coverage report
 pnpm build
 ```
 
-Builds all packages (`packages/*`) and the app (`apps/app`).
+Builds all packages (`packages/*`) and the app (`apps/site`).
 
 ## Deployment
 
@@ -43,13 +43,13 @@ Builds all packages (`packages/*`) and the app (`apps/app`).
 pnpm deploy
 ```
 
-Deploys `apps/app` to Cloudflare Workers.
+Deploys `apps/site` to Cloudflare Workers.
 
 ## Project Structure
 
 ```
 apps/
-  app/          # The demo/reference application
+  site/         # The demo/reference application
 packages/
   hono-preact/  # Core framework package
   iso/          # Isomorphic utilities

@@ -1,4 +1,4 @@
-// apps/app/src/pages/watched.tsx
+// apps/site/src/pages/watched.tsx
 import {
   definePage,
   useAction,

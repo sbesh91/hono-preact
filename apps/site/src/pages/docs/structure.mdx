@@ -3,7 +3,7 @@
 ```
 hono-preact/                    # monorepo root
 ├── apps/
-│   └── app/                    # the deployed application
+│   └── site/                    # the deployed application
 │       ├── src/
 │       │   ├── api.ts          # Optional: custom Hono routes mounted before SSR
 │       │   ├── Layout.tsx      # HTML shell with <Head>, <ClientScript />, <ViewTransitions />
@@ -21,7 +21,7 @@ hono-preact/                    # monorepo root
 
 ## Key files
 
-### `apps/app/src/routes.ts`
+### `apps/site/src/routes.ts`
 
 The single source of truth for URL routing. Exports a `defineRoutes(...)` manifest naming every page in the app, paired with an optional `server` import for any route that needs a loader or actions. See [The Route Table](/docs/routes).
 
@@ -40,17 +40,17 @@ export default defineRoutes([
 
 The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
 
-### `apps/app/src/Layout.tsx`
+### `apps/site/src/Layout.tsx`
 
 Renders the HTML shell. Uses `<Head>`, `<ClientScript />`, and `<ViewTransitions />` from `hono-preact` to declare the document title/meta, inject the client bundle script tag, and opt into View Transitions. Default-exports a component the framework's generated server entry renders for the catch-all route; the framework emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the user's `</head>`.
 
-### `apps/app/src/pages/`
+### `apps/site/src/pages/`
 
 View components and their paired server modules. Files in this folder are referenced by entries in `routes.ts`; nothing is auto-discovered. Naming and folder structure are the user's choice (the demo uses kebab-case `movies-list.tsx` + `movies-list.server.ts` siblings).
 
 `layout.server.ts` is also valid alongside any `layout.tsx`. A loader declared there is auto-scoped to the layout's matched location, not the deepest active child route. The auto-scoping is structural: the framework infers scope from which route entry owns the `.server.*` file, with no opt-in flag required.
 
-MDX content (`pages/docs/*.mdx`) is mounted via `apps/app/src/components/DocsRoute.tsx`, which is registered as the `view` for `/docs` and `/docs/*` in `routes.ts`. The DocsRoute component owns its own `import.meta.glob` and inner `<Router>` for sub-page discovery.
+MDX content (`pages/docs/*.mdx`) is mounted via `apps/site/src/components/DocsRoute.tsx`, which is registered as the `view` for `/docs` and `/docs/*` in `routes.ts`. The DocsRoute component owns its own `import.meta.glob` and inner `<Router>` for sub-page discovery.
 
 ### `hono-preact` (workspace package)
 

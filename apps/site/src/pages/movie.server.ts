@@ -1,4 +1,4 @@
-// apps/app/src/pages/movie.server.ts
+// apps/site/src/pages/movie.server.ts
 import { getMovie } from '@/server/movies.js';
 import {
   defineAction,

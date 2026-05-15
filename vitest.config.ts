@@ -13,7 +13,7 @@ export default defineConfig({
       'hono-preact/vite': path.resolve(__dirname, 'packages/hono-preact/src/vite.ts'),
       'hono-preact/internal': path.resolve(__dirname, 'packages/hono-preact/src/internal.ts'),
       'hono-preact': path.resolve(__dirname, 'packages/hono-preact/src/index.ts'),
-      '@': path.resolve(__dirname, 'apps/app/src'),
+      '@': path.resolve(__dirname, 'apps/site/src'),
     },
   },
   test: {
@@ -22,7 +22,7 @@ export default defineConfig({
       'packages/server/src/**/__tests__/**/*.test.{ts,tsx}',
       'packages/vite/src/**/__tests__/**/*.test.ts',
       'packages/hono-preact/__tests__/**/*.test.{ts,tsx}',
-      'apps/app/src/**/__tests__/**/*.test.{ts,tsx}',
+      'apps/site/src/**/__tests__/**/*.test.{ts,tsx}',
     ],
     setupFiles: ['./vitest.setup.ts'],
     environment: 'node',

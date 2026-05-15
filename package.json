@@ -16,12 +16,12 @@
     }
   },
   "scripts": {
-    "dev": "pnpm --filter app run dev",
-    "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter app build",
-    "deploy": "pnpm --filter app run deploy",
-    "deploy:upload": "pnpm --filter app run deploy:upload",
-    "preview": "pnpm --filter app run preview",
-    "visualize": "pnpm --filter app run visualize",
+    "dev": "pnpm --filter site run dev",
+    "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter site build",
+    "deploy": "pnpm --filter site run deploy",
+    "deploy:upload": "pnpm --filter site run deploy:upload",
+    "preview": "pnpm --filter site run preview",
+    "visualize": "pnpm --filter site run visualize",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

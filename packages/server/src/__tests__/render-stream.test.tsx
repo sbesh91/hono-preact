@@ -4,7 +4,7 @@ import { renderPage } from '../render.js';
 import { defineLoader } from '@hono-preact/iso';
 import { Loader } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
-import { serverLoaders as moviesListServerLoaders } from '../../../../apps/app/src/pages/movies-list.server.js';
+import { serverLoaders as moviesListServerLoaders } from '../../../../apps/site/src/pages/movies-list.server.js';
 
 const moviesListLoader = moviesListServerLoaders.default;
 

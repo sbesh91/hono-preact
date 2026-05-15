@@ -1,4 +1,4 @@
-// apps/app/src/server/__tests__/watched.test.ts
+// apps/site/src/server/__tests__/watched.test.ts
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   __resetForTests,
