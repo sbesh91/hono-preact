@@ -1,58 +1,73 @@
 # hono-preact
 
-A monorepo for a Hono + Preact full-stack framework with isomorphic rendering, built on Cloudflare Workers.
+A small full-stack framework. Hono on the edge, Preact in the browser, manifest driven routes, typed RPC, streaming everywhere.
 
-## Prerequisites
+[**Docs**](https://framework.sbesh.com/docs) · [**Demo**](https://framework.sbesh.com/demo) · [**GitHub**](https://github.com/sbesh91/hono-preact)
 
-- [Node.js](https://nodejs.org/)
-- [pnpm](https://pnpm.io/) — `npm install -g pnpm`
+## What it is
 
-## Setup
+`hono-preact` is a single-package framework that pairs Hono (the runtime that handles requests on Cloudflare Workers) with Preact (the renderer in the browser). Routes are declared in code, not inferred from a folder tree, and loaders, actions, guards, and forms are typed end-to-end.
 
-```bash
-pnpm install
-```
+Four files. That's the whole project shape.
 
-## Development
+## Install
 
 ```bash
-pnpm dev
+pnpm add hono-preact hono preact preact-iso preact-render-to-string hoofd
+pnpm add -D vite
 ```
 
-Starts the dev server for the `apps/site` project with hot reload.
+## Quick start
 
-## Testing
-
-```bash
-pnpm test           # run tests once
-pnpm test:watch     # run tests in watch mode
-pnpm test:coverage  # run tests with coverage report
+```ts
+// vite.config.ts
+import { defineApp } from 'hono-preact/vite';
+export default defineApp();
 ```
 
-## Building
-
-```bash
-pnpm build
+```ts
+// src/routes.ts
+import { defineRoutes } from 'hono-preact';
+export default defineRoutes([
+  { path: '/', view: () => import('./views/home') },
+]);
 ```
 
-Builds all packages (`packages/*`) and the app (`apps/site`).
-
-## Deployment
-
-```bash
-pnpm deploy
+```tsx
+// src/views/home.tsx
+export default function Home() {
+  return <h1>Hello</h1>;
+}
 ```
 
-Deploys `apps/site` to Cloudflare Workers.
-
-## Project Structure
-
+```tsx
+// src/Layout.tsx
+import { ClientScript, Head } from 'hono-preact';
+export default function Layout({ children }) {
+  return (
+    <html>
+      <Head defaultTitle="hono-preact" />
+      <body>
+        <main id="app">{children}</main>
+        <ClientScript />
+      </body>
+    </html>
+  );
+}
 ```
-apps/
-  site/         # The demo/reference application
-packages/
-  hono-preact/  # Core framework package
-  iso/          # Isomorphic utilities
-  server/       # Server-side rendering
-  vite/         # Vite plugin
-```
+
+Full walkthrough: [Docs · Quick start](https://framework.sbesh.com/docs/quick-start).
+
+## Status
+
+`v0.1.0`. Pre-1.0; expect changes between minor versions.
+
+`<Form>` posts to `/__actions` rely on `SameSite=Lax` cookies for CSRF protection. See [Security in docs/actions](https://framework.sbesh.com/docs/actions#security-samesite-cookies-on-form-posts) for the full posture; [issue #43](https://github.com/sbesh91/hono-preact/issues/43) tracks the post-v0.1 explicit-origin design.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## License
+
+[MIT](./LICENSE)
