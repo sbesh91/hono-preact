@@ -1,8 +1,7 @@
-import type { Context } from "hono";
-import { createContext } from "preact";
-import { useContext } from "preact/hooks";
+import { HonoRequestContext } from '@hono-preact/iso/internal';
+import { useContext } from 'preact/hooks';
 
-export const HonoContext = createContext<{ context?: Context }>({});
+export const HonoContext = HonoRequestContext;
 
 export function useHonoContext() {
   return useContext(HonoContext);

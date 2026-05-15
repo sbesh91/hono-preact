@@ -1,5 +1,8 @@
+import type { Context } from 'hono';
 import { createContext } from 'preact';
 import type { GuardResult } from '../guard.js';
+
+export const HonoRequestContext = createContext<{ context?: Context }>({});
 
 export const LoaderIdContext = createContext<string | null>(null);
 

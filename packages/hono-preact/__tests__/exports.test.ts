@@ -50,7 +50,9 @@ describe('hono-preact/internal export', () => {
     expect(typeof m.Envelope).toBe('function');
     expect(typeof m.RouteBoundary).toBe('function');
     expect(typeof m.Guards).toBe('function');
-    expect(typeof m.runGuards).toBe('function');
+    expect(typeof m.runServerGuards).toBe('function');
+    expect(typeof m.runClientGuards).toBe('function');
+    expect(typeof m.HonoRequestContext).toBe('function');
     expect(typeof m.installStreamRegistry).toBe('function');
     expect(typeof m.subscribeToLoaderStream).toBe('function');
     expect(typeof m.registerServerStreamingLoader).toBe('function');

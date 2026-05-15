@@ -5,7 +5,9 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import { Page } from '../page.js';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
-import { defineServerGuard, defineClientGuard, GuardRedirect, runGuards } from '../guard.js';
+import type { Context } from 'hono';
+import { defineServerGuard, defineClientGuard, GuardRedirect, runServerGuards } from '../guard.js';
+import { HonoRequestContext } from '../internal/contexts.js';
 import { env } from '../is-browser.js';
 
 vi.mock('../preload.js', () => ({
@@ -25,6 +27,8 @@ const loc = {
   searchParams: {},
   pathParams: {},
 } as unknown as RouteHook;
+
+const fakeC = {} as Context;
 
 const originalEnv = env.current;
 beforeEach(() => {
@@ -78,7 +82,7 @@ describe('guard { redirect } in browser', () => {
 describe('guard { redirect } on server', () => {
   it('throws GuardRedirect when a server guard redirects', async () => {
     const guard = defineServerGuard(async () => ({ redirect: '/login' }));
-    const result = await runGuards([guard], { location: loc });
+    const result = await runServerGuards([guard], { c: fakeC, location: loc });
     expect(result).toHaveProperty('redirect', '/login');
     expect(() => {
       if (result && 'redirect' in result)
@@ -153,22 +157,24 @@ describe('Page errorFallback catches loader errors', () => {
     }
 
     render(
-      <RouteLocationsContext.Provider value={locMap}>
-        <LocationProvider>
-          <Page
-            location={loc}
-            errorFallback={(err) => (
-              <div data-testid="error">{err.message}</div>
-            )}
-          >
-            <failing.Boundary
-              fallback={<div data-testid="loading">Loading...</div>}
+      <HonoRequestContext.Provider value={{ context: fakeC }}>
+        <RouteLocationsContext.Provider value={locMap}>
+          <LocationProvider>
+            <Page
+              location={loc}
+              errorFallback={(err) => (
+                <div data-testid="error">{err.message}</div>
+              )}
             >
-              <PageContent />
-            </failing.Boundary>
-          </Page>
-        </LocationProvider>
-      </RouteLocationsContext.Provider>
+              <failing.Boundary
+                fallback={<div data-testid="loading">Loading...</div>}
+              >
+                <PageContent />
+              </failing.Boundary>
+            </Page>
+          </LocationProvider>
+        </RouteLocationsContext.Provider>
+      </HonoRequestContext.Provider>
     );
 
     const el = await screen.findByTestId('error');
