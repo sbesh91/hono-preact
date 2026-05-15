@@ -11,6 +11,11 @@ export default defineRoutes([
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
       { path: 'login', view: () => import('./pages/demo/login.js') },
+      {
+        path: 'projects',
+        view: () => import('./pages/demo/projects.js'),
+        server: () => import('./pages/demo/projects.server.js'),
+      },
     ],
   },
   {
