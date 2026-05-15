@@ -37,13 +37,26 @@ if (!looksLikeBrowser) {
   }
 }
 
+const HONO_CONTEXT_KEY = Symbol('@hono-preact/iso/honoContext');
+
 export function getRequestStore(): RequestStore | undefined {
   return alsInstance?.getStore();
 }
 
-export function runRequestScope<R>(fn: () => R | Promise<R>): R | Promise<R> {
+export function getRequestHonoContext<T = unknown>(): T | undefined {
+  return getRequestStore()?.get(HONO_CONTEXT_KEY) as T | undefined;
+}
+
+export function runRequestScope<R>(
+  fn: () => R | Promise<R>,
+  initial?: { honoContext?: unknown }
+): R | Promise<R> {
   if (!alsInstance) return fn();
-  return alsInstance.run(new Map(), fn);
+  const store: RequestStore = new Map();
+  if (initial?.honoContext !== undefined) {
+    store.set(HONO_CONTEXT_KEY, initial.honoContext);
+  }
+  return alsInstance.run(store, fn);
 }
 
 type CacheEntry<T> = { value: T; locKey: string | null };

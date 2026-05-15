@@ -33,11 +33,14 @@ export async function renderPage(
   let html: string;
   let streamingLoaders: ServerLoaderStream[];
   try {
-    const result = await runRequestScope(async () => {
-      const rendered = await prerender(<HoofdProvider value={dispatcher}>{node}</HoofdProvider>);
-      const loaders = takeServerStreamingLoaders();
-      return { html: rendered.html, streamingLoaders: loaders };
-    });
+    const result = await runRequestScope(
+      async () => {
+        const rendered = await prerender(<HoofdProvider value={dispatcher}>{node}</HoofdProvider>);
+        const loaders = takeServerStreamingLoaders();
+        return { html: rendered.html, streamingLoaders: loaders };
+      },
+      { honoContext: c }
+    );
     html = result.html;
     streamingLoaders = result.streamingLoaders;
   } catch (e: unknown) {

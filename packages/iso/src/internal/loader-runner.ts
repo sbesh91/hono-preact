@@ -1,6 +1,7 @@
 import type { RouteHook } from 'preact-iso';
 import type { LoaderRef } from '../define-loader.js';
 import { isBrowser } from '../is-browser.js';
+import { getRequestHonoContext } from '../cache.js';
 import { fetchLoaderData } from './loader-fetch.js';
 import { registerServerStreamingLoader } from './streaming-ssr.js';
 
@@ -62,8 +63,9 @@ export function runLoader<T>(
   // for the Suspense render and register the rest with the per-request
   // streaming-ssr registry so renderPage can flush further chunks.
   return (async () => {
-    // Phase 2b will replace `c: undefined` with the seeded Hono Context from runRequestScope.
-    const result = await (loaderRef.fn({ c: undefined as any, location, signal }) as Promise<unknown>);
+    // getRequestHonoContext() returns undefined on the browser (no ALS scope); browser loaders never access ctx.c, so undefined is safe.
+    const c = getRequestHonoContext();
+    const result = await (loaderRef.fn({ c: c as any, location, signal }) as Promise<unknown>);
     if (isAsyncGenerator(result)) {
       const step = await result.next();
       if (step.done) {

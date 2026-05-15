@@ -126,8 +126,9 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
     const signal = c.req.raw.signal;
 
     try {
-      const result = await runRequestScope(() =>
-        Promise.resolve(loaderFn({ c, location: validatedLocation, signal }))
+      const result = await runRequestScope(
+        () => Promise.resolve(loaderFn({ c, location: validatedLocation, signal })),
+        { honoContext: c }
       );
 
       if (isAsyncGenerator(result)) {
