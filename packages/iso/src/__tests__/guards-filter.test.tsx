@@ -2,12 +2,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
+import type { Context } from 'hono';
 import {
   defineServerGuard,
   defineClientGuard,
 } from '../guard.js';
 import { Guards } from '../internal/guards.js';
+import { HonoRequestContext } from '../internal/contexts.js';
 import { env } from '../is-browser.js';
+
+const fakeC = {} as Context;
 
 vi.mock('preact-iso', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -40,11 +44,13 @@ describe('Guards env filter', () => {
       return next();
     });
     render(
-      <LocationProvider>
-        <Guards guards={[sg, cg]} location={loc}>
-          <div data-testid="page">ok</div>
-        </Guards>
-      </LocationProvider>,
+      <HonoRequestContext.Provider value={{ context: fakeC }}>
+        <LocationProvider>
+          <Guards guards={[sg, cg]} location={loc}>
+            <div data-testid="page">ok</div>
+          </Guards>
+        </LocationProvider>
+      </HonoRequestContext.Provider>,
     );
     await screen.findByTestId('page');
     expect(calls).toEqual(['server']);

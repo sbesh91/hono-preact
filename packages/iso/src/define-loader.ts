@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import type { ComponentChildren, ComponentType, FunctionComponent } from 'preact';
 import { useContext } from 'preact/hooks';
+import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
@@ -8,6 +9,7 @@ import { Loader as LoaderHost } from './internal/loader.js';
 import { ReloadContext } from './reload-context.js';
 
 export type LoaderCtx = {
+  c: Context;
   location: RouteHook;
   signal: AbortSignal;
 };

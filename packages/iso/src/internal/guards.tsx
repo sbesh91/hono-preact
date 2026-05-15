@@ -1,17 +1,20 @@
 import type { ComponentChildren, FunctionComponent, JSX } from 'preact';
+import type { Context } from 'hono';
 import { type RouteHook, useLocation } from 'preact-iso';
 import { Suspense } from 'preact/compat';
 import { useContext, useRef } from 'preact/hooks';
 import {
   type GuardFn,
-  type GuardRunsOn,
+  type ServerGuardFn,
+  type ClientGuardFn,
   GuardRedirect,
   type GuardResult,
-  runGuards,
+  runServerGuards,
+  runClientGuards,
 } from '../guard.js';
 import { isBrowser } from '../is-browser.js';
 import wrapPromise from './wrap-promise.js';
-import { GuardResultContext } from './contexts.js';
+import { GuardResultContext, HonoRequestContext } from './contexts.js';
 
 export function useGuardResult(): GuardResult | null {
   return useContext(GuardResultContext);
@@ -55,19 +58,40 @@ function GuardConsumer({
   );
 }
 
+function startGuardChain(
+  guards: GuardFn[],
+  location: RouteHook,
+  honoCtx: Context | undefined,
+): Promise<GuardResult> {
+  if (isBrowser()) {
+    const active = guards.filter(
+      (g): g is ClientGuardFn => g.runs === 'client',
+    );
+    return runClientGuards(active, { location });
+  }
+  const active = guards.filter((g): g is ServerGuardFn => g.runs === 'server');
+  if (active.length === 0) return Promise.resolve(undefined);
+  if (!honoCtx) {
+    throw new Error(
+      '<Guards> rendered server-side without a HonoContext.Provider. ' +
+      'renderPage must wrap the prerendered tree in <HonoContext.Provider value={{ context: c }}>.',
+    );
+  }
+  return runServerGuards(active, { c: honoCtx, location });
+}
+
 export const Guards: FunctionComponent<{
   guards?: GuardFn[];
   location: RouteHook;
   fallback?: JSX.Element;
   children: ComponentChildren;
 }> = ({ guards = [], location, fallback, children }) => {
-  const env: GuardRunsOn = isBrowser() ? 'client' : 'server';
-  const active = guards.filter((g) => g.runs === env);
+  const honoCtx = useContext(HonoRequestContext).context;
   const prevPath = useRef(location.path);
-  const guardRef = useRef(wrapPromise(runGuards(active, { location })));
+  const guardRef = useRef(wrapPromise(startGuardChain(guards, location, honoCtx)));
   if (prevPath.current !== location.path) {
     prevPath.current = location.path;
-    guardRef.current = wrapPromise(runGuards(active, { location }));
+    guardRef.current = wrapPromise(startGuardChain(guards, location, honoCtx));
   }
   return (
     <Suspense fallback={fallback}>

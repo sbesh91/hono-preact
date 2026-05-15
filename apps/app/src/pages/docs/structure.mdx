@@ -61,7 +61,7 @@ Isomorphic primitives shared between server and client (`packages/iso/`):
 - **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`.)
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
 - **Caching**: `createCache` (advanced: shared caches across loaders).
-- **Guards**: `defineServerGuard`, `defineClientGuard`, `runGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`, `ContentfulStatusCode`.
+- **Guards**: `defineServerGuard`, `defineClientGuard`, `runServerGuards, runClientGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`, `ContentfulStatusCode`.
 - **Utilities**: `prefetch`, `isBrowser`, `env`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
 
 ### `hono-preact/server` (workspace package)

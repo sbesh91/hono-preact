@@ -3,7 +3,7 @@ import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender } from 'preact-iso/prerender';
 import { GuardRedirect, env } from '@hono-preact/iso';
-import { runRequestScope, takeServerStreamingLoaders } from '@hono-preact/iso/internal';
+import { HonoRequestContext, runRequestScope, takeServerStreamingLoaders } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 
 function escapeHtml(str: string): string {
@@ -33,11 +33,18 @@ export async function renderPage(
   let html: string;
   let streamingLoaders: ServerLoaderStream[];
   try {
-    const result = await runRequestScope(async () => {
-      const rendered = await prerender(<HoofdProvider value={dispatcher}>{node}</HoofdProvider>);
-      const loaders = takeServerStreamingLoaders();
-      return { html: rendered.html, streamingLoaders: loaders };
-    });
+    const result = await runRequestScope(
+      async () => {
+        const rendered = await prerender(
+          <HonoRequestContext.Provider value={{ context: c }}>
+            <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+          </HonoRequestContext.Provider>
+        );
+        const loaders = takeServerStreamingLoaders();
+        return { html: rendered.html, streamingLoaders: loaders };
+      },
+      { honoContext: c }
+    );
     html = result.html;
     streamingLoaders = result.streamingLoaders;
   } catch (e: unknown) {

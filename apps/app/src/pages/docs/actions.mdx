@@ -37,6 +37,8 @@ export const serverActions = {
 
 `defineAction` is a no-op at runtime; it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` can infer the payload and result types without codegen.
 
+The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `AbortSignal` tied to the HTTP request) and `c` (the request's Hono `Context`). Use `ctx.c` to read cookies (`getCookie`), set response headers, or reach Hono `Bindings` via `ctx.c.env`.
+
 ## Registering the handler
 
 Register `actionsHandler` on your Hono app before the catch-all route. Build the module map from your `routes.ts` manifest via `routeServerModules`:
@@ -284,11 +286,10 @@ Actions can run middleware-style checks before dispatching, useful for authentic
 ```ts
 // movies.server.ts
 import { defineAction, defineActionGuard, ActionGuardError } from 'hono-preact';
-import type { Context } from 'hono';
 
 export const actionGuards = [
   defineActionGuard(async ({ c }, next) => {
-    const token = (c as Context).req.header('Authorization');
+    const token = c.req.header('Authorization');
     if (!token) throw new ActionGuardError('Authentication required', 401);
     return next();
   }),

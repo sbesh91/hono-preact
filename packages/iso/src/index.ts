@@ -58,12 +58,16 @@ export {
   defineServerGuard,
   defineClientGuard,
   GuardRedirect,
-  runGuards,
+  runServerGuards,
+  runClientGuards,
 } from './guard.js';
 export type {
   GuardFn,
+  ServerGuardFn,
+  ClientGuardFn,
   GuardResult,
-  GuardContext,
+  ServerGuardContext,
+  ClientGuardContext,
   GuardRunsOn,
 } from './guard.js';
 

@@ -37,13 +37,39 @@ if (!looksLikeBrowser) {
   }
 }
 
+const HONO_CONTEXT_KEY = Symbol('@hono-preact/iso/honoContext');
+
 export function getRequestStore(): RequestStore | undefined {
   return alsInstance?.getStore();
 }
 
-export function runRequestScope<R>(fn: () => R | Promise<R>): R | Promise<R> {
+// Returns the seeded value from the active runRequestScope, or undefined when no scope
+// is active (browser / happy-dom: node:async_hooks is unavailable). Throws when a scope
+// IS active but was never seeded with { honoContext } (framework bug, surfaces loud).
+// The `as T` is a typed Map-read, not a value cast.
+export function getRequestHonoContext<T = unknown>(): T | undefined {
+  const store = getRequestStore();
+  if (!store) return undefined;
+  const ctx = store.get(HONO_CONTEXT_KEY);
+  if (ctx === undefined) {
+    throw new Error(
+      'runRequestScope is active but was not seeded with { honoContext }. ' +
+      'The framework must pass { honoContext: c } when entering the scope.',
+    );
+  }
+  return ctx as T;
+}
+
+export function runRequestScope<R>(
+  fn: () => R | Promise<R>,
+  initial?: { honoContext?: unknown }
+): R | Promise<R> {
   if (!alsInstance) return fn();
-  return alsInstance.run(new Map(), fn);
+  const store: RequestStore = new Map();
+  if (initial?.honoContext !== undefined) {
+    store.set(HONO_CONTEXT_KEY, initial.honoContext);
+  }
+  return alsInstance.run(store, fn);
 }
 
 type CacheEntry<T> = { value: T; locKey: string | null };

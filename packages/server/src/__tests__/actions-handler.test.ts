@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { actionsHandler } from '../actions-handler.js';
 import { ActionGuardError } from '@hono-preact/iso';
 
@@ -477,15 +477,22 @@ describe('actionsHandler: streaming', () => {
     expect(body).toContain('"message":"boom"');
   });
 
-  it('passes ctx with c and signal to the action function', async () => {
-    let observed: { hasC: boolean; hasSignal: boolean } = { hasC: false, hasSignal: false };
+  it('passes ctx with a typed Hono Context and signal to the action function', async () => {
+    let observed: { hasReq: boolean; hasVar: boolean; hasHeader: boolean; hasSignal: boolean } = {
+      hasReq: false,
+      hasVar: false,
+      hasHeader: false,
+      hasSignal: false,
+    };
     const app = makeApp({
       './pages/x.server.ts': {
         __moduleKey: 'x',
         serverActions: {
-          probe: async (ctx: { c: unknown; signal: AbortSignal }, _payload: unknown) => {
+          probe: async (ctx: { c: Context; signal: AbortSignal }, _payload: unknown) => {
             observed = {
-              hasC: typeof ctx.c === 'object' && ctx.c !== null,
+              hasReq: typeof ctx.c.req === 'object' && ctx.c.req !== null,
+              hasVar: typeof ctx.c.var === 'object' && ctx.c.var !== null,
+              hasHeader: typeof ctx.c.header === 'function',
               hasSignal: ctx.signal instanceof AbortSignal,
             };
             return { ok: true };
@@ -495,7 +502,9 @@ describe('actionsHandler: streaming', () => {
     });
 
     await post(app, { module: 'x', action: 'probe', payload: {} });
-    expect(observed.hasC).toBe(true);
+    expect(observed.hasReq).toBe(true);
+    expect(observed.hasVar).toBe(true);
+    expect(observed.hasHeader).toBe(true);
     expect(observed.hasSignal).toBe(true);
   });
 });

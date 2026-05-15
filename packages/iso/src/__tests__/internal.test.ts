@@ -24,6 +24,7 @@ describe('@hono-preact/iso/internal', () => {
     expect(typeof internal.deletePreloadedData).toBe('function');
     expect(typeof internal.runRequestScope).toBe('function');
     expect(typeof internal.wrapPromise).toBe('function');
-    expect(typeof internal.runGuards).toBe('function');
+    expect(typeof internal.runServerGuards).toBe('function');
+    expect(typeof internal.runClientGuards).toBe('function');
   });
 });

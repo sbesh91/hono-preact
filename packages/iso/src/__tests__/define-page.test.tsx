@@ -3,10 +3,14 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import type { JSX } from 'preact';
+import type { Context } from 'hono';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import { defineServerGuard, defineClientGuard, type GuardFn } from '../guard.js';
+import { HonoRequestContext } from '../internal/contexts.js';
+
+const fakeC = {} as Context;
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
@@ -53,11 +57,13 @@ describe('definePage', () => {
     const PageRoute = definePage(PageBody);
 
     render(
-      <RouteLocationsContext.Provider value={locMap}>
-        <LocationProvider>
-          <PageRoute {...fakeLocation} />
-        </LocationProvider>
-      </RouteLocationsContext.Provider>
+      <HonoRequestContext.Provider value={{ context: fakeC }}>
+        <RouteLocationsContext.Provider value={locMap}>
+          <LocationProvider>
+            <PageRoute {...fakeLocation} />
+          </LocationProvider>
+        </RouteLocationsContext.Provider>
+      </HonoRequestContext.Provider>
     );
 
     expect(await screen.findByTestId('msg')).toHaveTextContent('hello');
@@ -69,9 +75,11 @@ describe('definePage', () => {
     }
     const PageRoute = definePage(Body);
     render(
-      <LocationProvider>
-        <PageRoute {...fakeLocation} />
-      </LocationProvider>
+      <HonoRequestContext.Provider value={{ context: fakeC }}>
+        <LocationProvider>
+          <PageRoute {...fakeLocation} />
+        </LocationProvider>
+      </HonoRequestContext.Provider>
     );
     expect(await screen.findByText('plain')).toBeInTheDocument();
   });
@@ -88,9 +96,11 @@ describe('definePage', () => {
     }
     const PageRoute = definePage(Body, bindings);
     render(
-      <LocationProvider>
-        <PageRoute {...fakeLocation} />
-      </LocationProvider>
+      <HonoRequestContext.Provider value={{ context: fakeC }}>
+        <LocationProvider>
+          <PageRoute {...fakeLocation} />
+        </LocationProvider>
+      </HonoRequestContext.Provider>
     );
     expect(await screen.findByText('ok')).toBeInTheDocument();
   });
