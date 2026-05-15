@@ -1,6 +1,6 @@
 {
   "name": "@hono-preact/iso",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Internal package for hono-preact. Use the hono-preact umbrella instead.",
   "keywords": ["hono-preact", "internal"],
   "homepage": "https://framework.sbesh.com",
