@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Context } from 'hono';
-import { runRequestScope } from '../cache.js';
+import { runRequestScope, getRequestHonoContext } from '../cache.js';
 import { runLoader } from '../internal/loader-runner.js';
 import { defineLoader } from '../define-loader.js';
 import type { RouteHook } from 'preact-iso';
@@ -32,5 +32,28 @@ describe('runLoader direct-fn path receives Hono Context via runRequestScope', (
     );
 
     expect(observedC).toBe(fakeC);
+  });
+});
+
+describe('getRequestHonoContext contract', () => {
+  it('returns undefined outside any runRequestScope (browser-like / no ALS path)', () => {
+    expect(getRequestHonoContext()).toBeUndefined();
+  });
+
+  it('throws inside a runRequestScope that was not seeded with { honoContext }', async () => {
+    await expect(
+      runRequestScope(async () => {
+        getRequestHonoContext();
+      })
+    ).rejects.toThrow(/runRequestScope is active but was not seeded/);
+  });
+
+  it('returns the seeded context when honoContext is passed to runRequestScope', async () => {
+    const fakeC = { kind: 'fake' } as unknown as Context;
+    const observed = await runRequestScope(
+      async () => getRequestHonoContext<Context>(),
+      { honoContext: fakeC },
+    );
+    expect(observed).toBe(fakeC);
   });
 });
