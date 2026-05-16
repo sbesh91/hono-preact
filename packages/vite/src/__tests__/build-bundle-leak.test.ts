@@ -18,7 +18,14 @@ function readAllFilesRecursive(dir: string): string[] {
 }
 
 describe('client bundle does not leak server-only sources', () => {
-  it('produces no chunk containing a sentinel from a *.server.ts file', async () => {
+  it('blocks the server module body even when imported transitively through a non-.server.ts re-export', async () => {
+    // Fixture has TWO chains importing the same `.server.ts` module:
+    //   1. iso.tsx → foo.server.ts        (direct)
+    //   2. iso.tsx → wrapper.ts → foo.server.ts   (indirect; the test for #7)
+    // The serverOnlyPlugin rewrites every import of a `.server.*` path
+    // regardless of which file the import lives in, so chain #2 must also
+    // strip the module body. If a future regression made the rewrite
+    // direct-only, the sentinel would surface here.
     await build({
       root: fixtureDir,
       logLevel: 'error',
