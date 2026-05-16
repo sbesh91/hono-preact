@@ -43,8 +43,11 @@ describe('demo data', () => {
   });
 
   it('addComment appends to an issue and listComments returns in order', () => {
-    const inf = getProjectBySlug('inf')!;
-    const issue = listIssuesForProject(inf.id)[0];
+    // 'web' has a single seeded issue (i-5) with no seeded comments, so the
+    // test isn't entangled with the i-1/i-2 streaming-demo seed thread.
+    const web = getProjectBySlug('web')!;
+    const issue = listIssuesForProject(web.id)[0];
+    expect(listComments(issue.id)).toEqual([]); // pre-condition
     const c1 = addComment(alice, { issueId: issue.id, body: 'first' });
     const c2 = addComment(alice, { issueId: issue.id, body: 'second' });
     const comments = listComments(issue.id);

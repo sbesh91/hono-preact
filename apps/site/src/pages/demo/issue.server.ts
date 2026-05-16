@@ -50,7 +50,7 @@ const commentsLoader = async function* (
     if (ctx.signal.aborted) return;
     cumulative.push(c);
     yield cumulative;
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 300));
   }
   // Final yield to flush state when there are zero comments.
   if (cumulative.length === 0) yield [];
