@@ -208,7 +208,7 @@ const ActivityView = activityLoader.View(
 // ---- Page: issue loads first, then comments + activity in parallel ----
 
 const IssueView = issueLoader.View(
-  ({ data: issue, reload: reloadIssue }: { data: IssueData | null; reload: () => void }) => {
+  ({ data: issue, reload: reloadIssue }) => {
     if (!issue) return <p>Issue not found.</p>;
     return (
       <article class="space-y-6">

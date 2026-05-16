@@ -24,7 +24,7 @@ export type ServerGuardFn = {
   readonly fn: (
     ctx: ServerGuardContext,
     next: () => Promise<GuardResult>,
-  ) => Promise<GuardResult>;
+  ) => GuardResult | Promise<GuardResult>;
 };
 
 export type ClientGuardFn = {
@@ -32,7 +32,7 @@ export type ClientGuardFn = {
   readonly fn: (
     ctx: ClientGuardContext,
     next: () => Promise<GuardResult>,
-  ) => Promise<GuardResult>;
+  ) => GuardResult | Promise<GuardResult>;
 };
 
 export type GuardFn = ServerGuardFn | ClientGuardFn;
