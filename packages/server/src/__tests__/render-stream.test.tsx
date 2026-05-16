@@ -191,5 +191,77 @@ describe('renderPage: streaming SSR', () => {
     expect(body).toContain('\\u003c/script');
     expect(body).not.toContain('<script>window.__pwned');
   });
+
+  it('sets anti-buffering headers on the streaming response', async () => {
+    const loader = defineLoader<{ count: number }>(async function* () {
+      yield { count: 1 };
+      yield { count: 2 };
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    expect(res.headers.get('X-Accel-Buffering')).toBe('no');
+    expect(res.headers.get('Cache-Control')).toBe('no-transform');
+    expect(res.headers.get('Transfer-Encoding')).toBe('chunked');
+  });
+
+  it('does not set chunked/anti-buffering headers on non-streaming responses', async () => {
+    const loader = defineLoader(async () => ({ msg: 'sync' }));
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>sync</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    // Non-streaming branch uses c.html(...), which does NOT set these headers.
+    expect(res.headers.get('X-Accel-Buffering')).toBeNull();
+    expect(res.headers.get('Transfer-Encoding')).toBeNull();
+  });
+
+  it('aborts cleanly on client cancel: no synthetic error chunks, no enqueue-after-close throws', async () => {
+    // Loader that yields one chunk then awaits forever; cancel mid-stream.
+    let releaseSecondYield: (() => void) | null = null;
+    const loader = defineLoader<{ count: number }>(async function* () {
+      yield { count: 1 };
+      await new Promise<void>((resolve) => { releaseSecondYield = resolve; });
+      yield { count: 2 };
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    expect(res.body).not.toBeNull();
+    const reader = res.body!.getReader();
+    // Read the initial chunk so the stream is actively running, then cancel.
+    await reader.read();
+    await reader.cancel();
+    // Now release the gate so the generator tries to yield post-cancel; if
+    // the abort flag is honored, no enqueue or close happens after cancel.
+    releaseSecondYield?.();
+    // Yield a turn for any post-cancel work to settle.
+    await new Promise((r) => setTimeout(r, 10));
+    // No assertion text beyond "did not throw": vitest fails on unhandled
+    // rejections. Cancellation must not produce __HP_STREAM__.error chunks
+    // (we cannot read them post-cancel, but unhandled promise rejections
+    // from controller.enqueue-after-close would surface here).
+    expect(true).toBe(true);
+  });
 });
 

@@ -141,6 +141,14 @@ export async function renderPage(
   const encoder = new TextEncoder();
   const requestSignal = c.req.raw.signal;
 
+  // Tracks whether the consumer (Hono/runtime) has cancelled or the request
+  // signal has aborted. Set by `cancel()` and by the abort listener below.
+  // Every controller op in the pump short-circuits when this is true so we
+  // do not enqueue or close on an already-terminated controller (which would
+  // throw and, for the per-loader catch, get logged as a synthetic error
+  // chunk that nobody can read anyway).
+  let aborted = false;
+
   const responseStream = new ReadableStream<Uint8Array>({
     start(controller) {
       // Re-enter the captured request scope so generator continuations and
@@ -148,18 +156,16 @@ export async function renderPage(
       // caches) see the same per-request store the initial prerender saw.
       return bindRequestScope(async () => {
         try {
+          if (aborted) return;
           controller.enqueue(encoder.encode(`<!doctype html>${beforeBody}\n${bootstrap}\n`));
 
           // Drive each pending generator in parallel; emit script tags per chunk.
           await Promise.all(
             streamingLoaders.map(async ({ loaderId, gen }) => {
               try {
-                while (true) {
-                  if (requestSignal.aborted) {
-                    await gen.return(undefined).catch(() => { /* swallow */ });
-                    return;
-                  }
+                while (!aborted) {
                   const step = await gen.next();
+                  if (aborted) return;
                   if (step.done) {
                     controller.enqueue(
                       encoder.encode(
@@ -175,6 +181,7 @@ export async function renderPage(
                   );
                 }
               } catch (err) {
+                if (aborted) return;
                 const message = err instanceof Error ? err.message : String(err);
                 const name = err instanceof Error ? err.name : 'Error';
                 controller.enqueue(
@@ -186,13 +193,14 @@ export async function renderPage(
             })
           );
 
-          controller.enqueue(encoder.encode(afterBody));
+          if (!aborted) controller.enqueue(encoder.encode(afterBody));
         } finally {
-          controller.close();
+          if (!aborted) controller.close();
         }
       });
     },
     cancel() {
+      aborted = true;
       for (const { gen } of streamingLoaders) {
         gen.return(undefined).catch(() => { /* swallow */ });
       }
@@ -200,6 +208,7 @@ export async function renderPage(
   });
 
   requestSignal.addEventListener('abort', () => {
+    aborted = true;
     for (const { gen } of streamingLoaders) {
       gen.return(undefined).catch(() => { /* swallow */ });
     }
@@ -210,6 +219,14 @@ export async function renderPage(
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Transfer-Encoding': 'chunked',
+      // Prevent buffering / transformation by intermediate proxies. nginx
+      // honors `X-Accel-Buffering: no` to flush per chunk; `no-transform`
+      // stops middleboxes from rebuffering or gzipping the stream as a
+      // single response. We deliberately do NOT add `no-store`: streamed
+      // HTML can still be legitimately cacheable, and users can override
+      // via their own middleware.
+      'X-Accel-Buffering': 'no',
+      'Cache-Control': 'no-transform',
     },
   });
 }
