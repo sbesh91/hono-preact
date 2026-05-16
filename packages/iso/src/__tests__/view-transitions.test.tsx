@@ -18,7 +18,7 @@ describe('ViewTransitions', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('opts in to view transitions while mounted', () => {
+  it('wraps same-origin link clicks in startViewTransition while mounted', () => {
     const startViewTransition = vi.fn((cb: () => void) => {
       cb();
       return {
@@ -27,16 +27,22 @@ describe('ViewTransitions', () => {
         updateCallbackDone: Promise.resolve(),
       };
     });
-    vi.stubGlobal('document', Object.assign(document, { startViewTransition }));
+    Object.assign(document, { startViewTransition });
 
     const { unmount } = render(<ViewTransitions />);
 
-    __dispatchRouteChange('/a', undefined);
+    const link = document.createElement('a');
+    link.href = location.origin + '/a';
+    document.body.appendChild(link);
+
+    link.click();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
 
     unmount();
 
-    __dispatchRouteChange('/b', '/a');
+    link.click();
     expect(startViewTransition).toHaveBeenCalledTimes(1); // not called after unmount
+
+    document.body.removeChild(link);
   });
 });

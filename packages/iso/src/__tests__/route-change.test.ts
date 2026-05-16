@@ -64,47 +64,67 @@ describe('__enableViewTransitions', () => {
     disable();
   });
 
-  it('triggers document.startViewTransition on dispatch when enabled', () => {
+  it('wraps a same-origin link click in startViewTransition when enabled', () => {
     const startViewTransition = vi.fn((cb: () => void) => {
       cb();
       return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
     });
-    vi.stubGlobal('document', { startViewTransition });
+    Object.assign(document, { startViewTransition });
 
     const disable = __enableViewTransitions();
-    __dispatchRouteChange('/a', undefined);
+
+    const link = document.createElement('a');
+    link.href = location.origin + '/foo';
+    document.body.appendChild(link);
+    link.click();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
+
+    document.body.removeChild(link);
     disable();
   });
 
-  it('does not trigger when no enabler is active', () => {
-    const startViewTransition = vi.fn();
-    vi.stubGlobal('document', { startViewTransition });
-
-    __dispatchRouteChange('/a', undefined);
-    expect(startViewTransition).not.toHaveBeenCalled();
-  });
-
-  it('only triggers once per dispatch even when enabled multiple times', () => {
+  it('does not wrap clicks once no enabler is active', () => {
     const startViewTransition = vi.fn((cb: () => void) => {
       cb();
       return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
     });
-    vi.stubGlobal('document', { startViewTransition });
+    Object.assign(document, { startViewTransition });
+
+    const link = document.createElement('a');
+    link.href = location.origin + '/foo';
+    document.body.appendChild(link);
+    link.click();
+    expect(startViewTransition).not.toHaveBeenCalled();
+
+    document.body.removeChild(link);
+  });
+
+  it('keeps the click interceptor active until the last enabler is disabled', () => {
+    const startViewTransition = vi.fn((cb: () => void) => {
+      cb();
+      return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
+    });
+    Object.assign(document, { startViewTransition });
 
     const d1 = __enableViewTransitions();
     const d2 = __enableViewTransitions();
 
-    __dispatchRouteChange('/a', undefined);
+    const link = document.createElement('a');
+    link.href = location.origin + '/foo';
+    document.body.appendChild(link);
+
+    link.click();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
 
     d1();
-    __dispatchRouteChange('/b', '/a');
+    link.click();
     expect(startViewTransition).toHaveBeenCalledTimes(2); // still enabled by d2
 
     d2();
-    __dispatchRouteChange('/c', '/b');
-    expect(startViewTransition).toHaveBeenCalledTimes(2); // disabled, no extra
+    link.click();
+    expect(startViewTransition).toHaveBeenCalledTimes(2); // fully disabled, no extra
+
+    document.body.removeChild(link);
   });
 
   it('no-ops when document.startViewTransition is unavailable', () => {
