@@ -109,35 +109,29 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activit
 };
 IssuePage.displayName = 'IssuePage';
 
-// Per-loader consumer components defined at module scope (not nested in
-// render) so Preact does not remount them on each render. Each one reads its
-// own loader inside that loader's Boundary, then passes the resolved value
-// down via props.
-const ActivityConsumer: FunctionComponent<{
-  issue: IssueData;
-  comments: CommentData[];
-}> = ({ issue, comments }) => {
-  const activity = activityLoader.useData() ?? [];
-  return <IssuePage issue={issue} comments={comments} activity={activity} />;
-};
+// Chained .View() composition. Each View reads its loader's data via the
+// render callback's `data` arg and threads it down as a prop to the next
+// View in the chain. The outer caller passes the issue prop; the comments
+// View adds comments; the activity View completes the set and renders the
+// final page.
+const ActivityView = activityLoader.View<{ issue: IssueData; comments: CommentData[] }>(
+  ({ data: activity, issue, comments }) => (
+    <IssuePage issue={issue} comments={comments} activity={activity ?? []} />
+  ),
+  { fallback: <p>Loading activity…</p> },
+);
 
-const CommentsConsumer: FunctionComponent<{ issue: IssueData }> = ({ issue }) => {
-  const comments = commentsLoader.useData() ?? [];
-  return (
-    <activityLoader.Boundary fallback={<p>Loading activity…</p>}>
-      <ActivityConsumer issue={issue} comments={comments} />
-    </activityLoader.Boundary>
-  );
-};
+const CommentsView = commentsLoader.View<{ issue: IssueData }>(
+  ({ data: comments, issue }) => (
+    <ActivityView issue={issue} comments={comments ?? []} />
+  ),
+  { fallback: <p>Loading comments…</p> },
+);
 
 const IssueView = issueLoader.View(
   ({ data: issue }: { data: IssueData | null }) => {
     if (!issue) return <p>Issue not found.</p>;
-    return (
-      <commentsLoader.Boundary fallback={<p>Loading comments…</p>}>
-        <CommentsConsumer issue={issue} />
-      </commentsLoader.Boundary>
-    );
+    return <CommentsView issue={issue} />;
   },
   { fallback: <p>Loading issue…</p> },
 );
