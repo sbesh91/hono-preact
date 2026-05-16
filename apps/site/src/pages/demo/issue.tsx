@@ -1,6 +1,5 @@
-import { definePage, useAction } from 'hono-preact';
+import { definePage, useOptimisticAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { requireSession } from '../../demo/guard.js';
@@ -24,18 +23,21 @@ type IssuePageProps = {
 const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activity }) => {
   useTitle(`${issue.title} · demo`);
 
-  // Optimistic status state. Defaults to server state; the action updates this
-  // immediately on click, then the invalidated loader reconciles.
-  const [optimisticStatus, setOptimisticStatus] = useState(issue.status);
-  const { mutate: toggleStatus, pending: toggling } = useAction(
-    serverActions.setStatus,
-    {
-      invalidate: [issueLoader, activityLoader],
-      onError: () => setOptimisticStatus(issue.status), // rollback
-    }
-  );
+  // Optimistic status. useOptimisticAction keeps the applied patch in place
+  // until the loader's base value (issue.status) actually updates, which
+  // handles the case where the framework's invalidate only re-runs the
+  // active-loader's reload (here: the innermost activityLoader, not
+  // issueLoader). The badge stays correct regardless.
+  const {
+    mutate: toggleStatus,
+    pending: toggling,
+    value: status,
+  } = useOptimisticAction(serverActions.setStatus, {
+    base: issue.status,
+    apply: (_current, payload) => payload.status,
+    invalidate: [issueLoader, activityLoader],
+  });
 
-  const status = toggling ? optimisticStatus : issue.status;
   const nextStatus = status === 'open' ? 'closed' : 'open';
 
   return (
@@ -65,7 +67,6 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activit
           class="bg-gray-700 text-white px-3 py-1 text-sm"
           disabled={toggling}
           onClick={() => {
-            setOptimisticStatus(nextStatus);
             toggleStatus({ issueId: issue.id, status: nextStatus });
           }}
         >
