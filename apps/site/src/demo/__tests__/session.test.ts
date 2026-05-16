@@ -13,7 +13,7 @@ function makeApp() {
   const app = new Hono();
   app.post('/sign-in', async (c) => {
     const user = upsertUser('alice@example.com', 'Alice');
-    await signIn(c, user.id);
+    await signIn(c, user);
     return c.text('ok');
   });
   app.post('/sign-out', async (c) => {

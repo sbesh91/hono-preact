@@ -11,7 +11,7 @@ export const serverActions = {
         throw new Error('email is required');
       }
       const user = upsertUser(email, name);
-      await signIn(ctx.c, user.id);
+      await signIn(ctx.c, user);
       return { ok: true };
     }
   ),
