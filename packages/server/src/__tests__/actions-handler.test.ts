@@ -318,6 +318,23 @@ describe('actionsHandler — action guards', () => {
     expect(res.status).toBe(401);
   });
 
+  it('maps ActionGuardError thrown from the action body to its custom status', async () => {
+    const app = makeApp({
+      './pages/issues.server.ts': {
+        __moduleKey: 'issues',
+        serverActions: {
+          close: async () => {
+            throw new ActionGuardError('Only the author can close', 403);
+          },
+        },
+      },
+    });
+
+    const res = await post(app, { module: 'issues', action: 'close', payload: { id: 'i-1' } });
+    expect(res.status).toBe(403);
+    expect((await res.json() as { error: string }).error).toBe('Only the author can close');
+  });
+
   it('stops the chain when a guard does not call next()', async () => {
     const secondGuard = vi.fn();
     const createFn = vi.fn();

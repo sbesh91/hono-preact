@@ -149,6 +149,9 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
         (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(actionCtx, payload)
       );
     } catch (err) {
+      if (err instanceof ActionGuardError) {
+        return c.json({ error: err.message }, err.status);
+      }
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);
     }
