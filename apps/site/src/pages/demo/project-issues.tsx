@@ -74,4 +74,4 @@ const ProjectIssuesView = issuesLoader.View(() => <ProjectIssuesPage />, {
   fallback: <p>Loading issues…</p>,
 });
 
-export default definePage(ProjectIssuesView, { guards: [requireSession] });
+export default definePage(ProjectIssuesView, { guards: requireSession });

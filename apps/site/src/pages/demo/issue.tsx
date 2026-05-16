@@ -118,4 +118,4 @@ const IssueView = issueLoader.View(() => <CommentsView />, {
   fallback: <p>Loading issue…</p>,
 });
 
-export default definePage(IssueView, { guards: [requireSession] });
+export default definePage(IssueView, { guards: requireSession });

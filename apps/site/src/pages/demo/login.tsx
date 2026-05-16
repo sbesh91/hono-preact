@@ -2,12 +2,18 @@ import { definePage, Form, useAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { serverActions } from './login.server.js';
+import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 
 const LoginPage: FunctionComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const { mutate, pending } = useAction(serverActions.login, {
     onSuccess: () => {
       setError(null);
+      try {
+        window.localStorage.setItem(DEMO_AUTHED_KEY, '1');
+      } catch {
+        // localStorage unavailable; full reload still hits the server guard.
+      }
       window.location.assign('/demo/projects');
     },
     onError: (e) => setError(e.message),

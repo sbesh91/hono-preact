@@ -1,24 +1,14 @@
-import { prefetch } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useCallback } from 'preact/hooks';
 import type { Issue } from '../../demo/data.js';
 
 type Props = { issue: Issue; projectSlug: string };
 
 const IssueRow: FunctionComponent<Props> = ({ issue, projectSlug }) => {
   const href = `/demo/projects/${projectSlug}/issues/${issue.id}`;
-  const onMouseEnter = useCallback(() => {
-    prefetch(href);
-  }, [href]);
 
   return (
     <li class="border p-3 flex items-baseline justify-between">
-      <a
-        href={href}
-        onMouseEnter={onMouseEnter}
-        onFocus={onMouseEnter}
-        class="font-medium underline"
-      >
+      <a href={href} class="font-medium underline">
         {issue.title}
       </a>
       <span

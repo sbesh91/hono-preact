@@ -1,9 +1,10 @@
 import { definePage, useAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { useEffect } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders } from './projects.server.js';
 import { serverActions as loginActions } from './login.server.js';
-import { requireSession } from '../../demo/guard.js';
+import { requireSession, DEMO_AUTHED_KEY } from '../../demo/guard.js';
 
 const projectsLoader = serverLoaders.default;
 
@@ -12,6 +13,11 @@ const LogoutInline: FunctionComponent<{ user: { name: string } | null }> = ({
 }) => {
   const { mutate, pending } = useAction(loginActions.logout, {
     onSuccess: () => {
+      try {
+        window.localStorage.removeItem(DEMO_AUTHED_KEY);
+      } catch {
+        // ignore: full reload still drops the in-memory flag.
+      }
       window.location.assign('/demo/login');
     },
   });
@@ -33,6 +39,18 @@ const LogoutInline: FunctionComponent<{ user: { name: string } | null }> = ({
 const ProjectsPage: FunctionComponent = () => {
   const { user, projects } = projectsLoader.useData();
   useTitle('Projects · demo');
+
+  // Bootstrap the client-guard flag from any successful authed render. This
+  // self-heals the case where a user has a valid cookie but no localStorage
+  // flag (e.g. cleared storage, new browser, etc.).
+  useEffect(() => {
+    if (!user) return;
+    try {
+      window.localStorage.setItem(DEMO_AUTHED_KEY, '1');
+    } catch {
+      // ignore
+    }
+  }, [user]);
 
   return (
     <section class="mx-auto max-w-3xl p-6 space-y-4">
@@ -61,4 +79,4 @@ const ProjectsView = projectsLoader.View(() => <ProjectsPage />, {
   fallback: <p class="p-6">Loading projects…</p>,
 });
 
-export default definePage(ProjectsView, { guards: [requireSession] });
+export default definePage(ProjectsView, { guards: requireSession });
