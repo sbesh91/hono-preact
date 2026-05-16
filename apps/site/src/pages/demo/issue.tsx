@@ -15,26 +15,19 @@ type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
 type IssueData = WithAuthor<Issue>;
 type CommentData = WithAuthor<Comment>;
 
-type IssuePageProps = {
-  issue: IssueData;
-  comments: CommentData[];
-  activity: ActivityItem[];
-  reloadIssue: () => void;
-  reloadComments: () => void;
-};
+// ---- Section: issue header + body + status toggle ----
+// Lives inside issueLoader's View context. Owns the status-toggle action;
+// invalidate: [activityLoader] clears the activity cache but does not force
+// it to re-fetch (it isn't the active loader from here). issueLoader IS the
+// active loader so its auto-reload runs, and the header re-renders with
+// the new status.
 
-const IssuePage: FunctionComponent<IssuePageProps> = ({
-  issue,
-  comments,
-  activity,
-  reloadIssue,
-  reloadComments,
-}) => {
+const IssueHeaderAndActions: FunctionComponent<{
+  issue: IssueData;
+  reloadIssue: () => void;
+}> = ({ issue, reloadIssue }) => {
   useTitle(`${issue.title} · demo`);
 
-  // Local optimistic status for the in-flight window. Once the mutation
-  // settles we call reloadIssue() ourselves; the loader returns fresh data,
-  // toggling flips to false, and the badge reads from the updated issue prop.
   const [optimisticStatus, setOptimisticStatus] = useState(issue.status);
   const { mutate: toggleStatus, pending: toggling } = useAction(
     serverActions.setStatus,
@@ -49,7 +42,7 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({
   const nextStatus = status === 'open' ? 'closed' : 'open';
 
   return (
-    <article class="space-y-6">
+    <>
       <header class="space-y-2">
         <div class="flex items-center gap-2">
           <h2 class="text-xl font-semibold">{issue.title}</h2>
@@ -86,81 +79,84 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({
               : 'Reopen issue'}
         </button>
       </div>
-
-      <section class="space-y-3">
-        <h3 class="font-semibold">Comments</h3>
-        <CommentList comments={comments} />
-        <CommentForm issueId={issue.id} onAdded={reloadComments} />
-      </section>
-
-      <aside class="border-t pt-3 text-xs text-gray-700">
-        <h4 class="font-semibold mb-1">Project activity</h4>
-        <ul class="space-y-1">
-          {activity.map((a, i) => (
-            <li key={`${a.kind}-${a.at}-${i}`}>
-              <time class="text-gray-500">
-                {new Date(a.at).toLocaleTimeString()}
-              </time>{' '}
-              {a.kind === 'issue-created' && (
-                <>created <strong>{a.issue.title}</strong></>
-              )}
-              {a.kind === 'issue-closed' && (
-                <>closed <strong>{a.issue.title}</strong></>
-              )}
-              {a.kind === 'comment-added' && (
-                <>commented on <strong>{a.issue.title}</strong></>
-              )}
-            </li>
-          ))}
-        </ul>
-      </aside>
-    </article>
+    </>
   );
 };
-IssuePage.displayName = 'IssuePage';
+IssueHeaderAndActions.displayName = 'IssueHeaderAndActions';
 
-// Chained .View() composition. Each View captures its own loader's `reload`
-// from the render callback's args and threads it down as a prop so deeper
-// components can re-fetch siblings explicitly (the framework's
-// `invalidate: [refs]` only auto-reloads the loader whose id matches the
-// nearest ActiveLoaderIdContext, which here is the innermost activityLoader).
-const ActivityView = activityLoader.View<{
-  issue: IssueData;
+// ---- Section: comments list + new-comment form ----
+// Sibling of the activity view, so each comment chunk re-renders THIS
+// section only; the header/body above and the activity aside below stay
+// stable.
+
+const CommentsSection: FunctionComponent<{
   comments: CommentData[];
-  reloadIssue: () => void;
   reloadComments: () => void;
-}>(
-  ({ data: activity, issue, comments, reloadIssue, reloadComments }) => (
-    <IssuePage
-      issue={issue}
-      comments={comments}
-      activity={activity ?? []}
-      reloadIssue={reloadIssue}
-      reloadComments={reloadComments}
-    />
-  ),
-  { fallback: <p>Loading activity…</p> },
+  issueId: string;
+}> = ({ comments, reloadComments, issueId }) => (
+  <section class="space-y-3">
+    <h3 class="font-semibold">Comments</h3>
+    <CommentList comments={comments} />
+    <CommentForm issueId={issueId} onAdded={reloadComments} />
+  </section>
 );
 
-const CommentsView = commentsLoader.View<{
-  issue: IssueData;
-  reloadIssue: () => void;
-}>(
-  ({ data: comments, reload: reloadComments, issue, reloadIssue }) => (
-    <ActivityView
-      issue={issue}
+const CommentsView = commentsLoader.View<{ issueId: string }>(
+  ({ data: comments, reload: reloadComments, issueId }) => (
+    <CommentsSection
       comments={comments ?? []}
-      reloadIssue={reloadIssue}
       reloadComments={reloadComments}
+      issueId={issueId}
     />
   ),
-  { fallback: <p>Loading comments…</p> },
+  { fallback: <p class="text-sm text-gray-600">Loading comments…</p> },
 );
+
+// ---- Section: project activity feed ----
+
+const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
+  activity,
+}) => (
+  <aside class="border-t pt-3 text-xs text-gray-700">
+    <h4 class="font-semibold mb-1">Project activity</h4>
+    <ul class="space-y-1">
+      {activity.map((a, i) => (
+        <li key={`${a.kind}-${a.at}-${i}`}>
+          <time class="text-gray-500">
+            {new Date(a.at).toLocaleTimeString()}
+          </time>{' '}
+          {a.kind === 'issue-created' && (
+            <>created <strong>{a.issue.title}</strong></>
+          )}
+          {a.kind === 'issue-closed' && (
+            <>closed <strong>{a.issue.title}</strong></>
+          )}
+          {a.kind === 'comment-added' && (
+            <>commented on <strong>{a.issue.title}</strong></>
+          )}
+        </li>
+      ))}
+    </ul>
+  </aside>
+);
+
+const ActivityView = activityLoader.View(
+  ({ data: activity }) => <ActivitySection activity={activity ?? []} />,
+  { fallback: <p class="text-xs text-gray-600">Loading activity…</p> },
+);
+
+// ---- Page: issue loads first, then comments + activity in parallel ----
 
 const IssueView = issueLoader.View(
   ({ data: issue, reload: reloadIssue }: { data: IssueData | null; reload: () => void }) => {
     if (!issue) return <p>Issue not found.</p>;
-    return <CommentsView issue={issue} reloadIssue={reloadIssue} />;
+    return (
+      <article class="space-y-6">
+        <IssueHeaderAndActions issue={issue} reloadIssue={reloadIssue} />
+        <CommentsView issueId={issue.id} />
+        <ActivityView />
+      </article>
+    );
   },
   { fallback: <p>Loading issue…</p> },
 );
