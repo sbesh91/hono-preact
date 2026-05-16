@@ -6,29 +6,34 @@ import { serverLoaders, serverActions } from './issue.server.js';
 import { requireSession } from '../../demo/guard.js';
 import CommentList from '../../components/demo/CommentList.js';
 import CommentForm from '../../components/demo/CommentForm.js';
+import type { ActivityItem, Comment, Issue, User } from '../../demo/data.js';
 
 const { issue: issueLoader, comments: commentsLoader, activity: activityLoader } =
   serverLoaders;
 
-const IssuePage: FunctionComponent = () => {
-  const issue = issueLoader.useData();
-  const comments = commentsLoader.useData();
-  const activity = activityLoader.useData();
+type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
+type IssueData = WithAuthor<Issue>;
+type CommentData = WithAuthor<Comment>;
+
+type IssuePageProps = {
+  issue: IssueData;
+  comments: CommentData[];
+  activity: ActivityItem[];
+};
+
+const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activity }) => {
+  useTitle(`${issue.title} · demo`);
 
   // Optimistic status state. Defaults to server state; the action updates this
   // immediately on click, then the invalidated loader reconciles.
-  const [optimisticStatus, setOptimisticStatus] = useState(issue?.status ?? 'open');
+  const [optimisticStatus, setOptimisticStatus] = useState(issue.status);
   const { mutate: toggleStatus, pending: toggling } = useAction(
     serverActions.setStatus,
     {
       invalidate: [issueLoader, activityLoader],
-      onError: () => setOptimisticStatus(issue?.status ?? 'open'), // rollback
+      onError: () => setOptimisticStatus(issue.status), // rollback
     }
   );
-
-  useTitle(issue ? `${issue.title} · demo` : 'Issue not found · demo');
-
-  if (!issue) return <p>Issue not found.</p>;
 
   const status = toggling ? optimisticStatus : issue.status;
   const nextStatus = status === 'open' ? 'closed' : 'open';
@@ -74,14 +79,14 @@ const IssuePage: FunctionComponent = () => {
 
       <section class="space-y-3">
         <h3 class="font-semibold">Comments</h3>
-        <CommentList comments={comments ?? []} />
+        <CommentList comments={comments} />
         <CommentForm issueId={issue.id} />
       </section>
 
       <aside class="border-t pt-3 text-xs text-gray-700">
         <h4 class="font-semibold mb-1">Project activity</h4>
         <ul class="space-y-1">
-          {(activity ?? []).map((a, i) => (
+          {activity.map((a, i) => (
             <li key={`${a.kind}-${a.at}-${i}`}>
               <time class="text-gray-500">
                 {new Date(a.at).toLocaleTimeString()}
@@ -104,18 +109,37 @@ const IssuePage: FunctionComponent = () => {
 };
 IssuePage.displayName = 'IssuePage';
 
-// Compose multi-loader boundaries from the inside out. Each .View() returns a
-// FunctionComponent that wraps its render in a Boundary for that loader.
-const ActivityView = activityLoader.View(() => <IssuePage />, {
-  fallback: <p>Loading activity…</p>,
-});
+// Per-loader consumer components defined at module scope (not nested in
+// render) so Preact does not remount them on each render. Each one reads its
+// own loader inside that loader's Boundary, then passes the resolved value
+// down via props.
+const ActivityConsumer: FunctionComponent<{
+  issue: IssueData;
+  comments: CommentData[];
+}> = ({ issue, comments }) => {
+  const activity = activityLoader.useData() ?? [];
+  return <IssuePage issue={issue} comments={comments} activity={activity} />;
+};
 
-const CommentsView = commentsLoader.View(() => <ActivityView />, {
-  fallback: <p>Loading comments…</p>,
-});
+const CommentsConsumer: FunctionComponent<{ issue: IssueData }> = ({ issue }) => {
+  const comments = commentsLoader.useData() ?? [];
+  return (
+    <activityLoader.Boundary fallback={<p>Loading activity…</p>}>
+      <ActivityConsumer issue={issue} comments={comments} />
+    </activityLoader.Boundary>
+  );
+};
 
-const IssueView = issueLoader.View(() => <CommentsView />, {
-  fallback: <p>Loading issue…</p>,
-});
+const IssueView = issueLoader.View(
+  ({ data: issue }: { data: IssueData | null }) => {
+    if (!issue) return <p>Issue not found.</p>;
+    return (
+      <commentsLoader.Boundary fallback={<p>Loading comments…</p>}>
+        <CommentsConsumer issue={issue} />
+      </commentsLoader.Boundary>
+    );
+  },
+  { fallback: <p>Loading issue…</p> },
+);
 
 export default definePage(IssueView, { guards: requireSession });
