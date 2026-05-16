@@ -134,8 +134,10 @@ const NotesForm = ({ defaultNotes }) => {
 `<OptimisticOverlay>` projects a list of pending actions onto the loader data that descendant components see via `loader.useData()`. Use it when a child component reads loader data and you want it to render against an optimistic projection without rewriting the child to take a prop.
 
 ```tsx
-import { OptimisticOverlay } from 'hono-preact';
-import { loader as moviesLoader } from './movies.server.js';
+import { OptimisticOverlay } from 'hono-preact/internal';
+import { serverLoaders } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
 
 const MovieList = () => {
   const movies = moviesLoader.useData();
@@ -152,6 +154,8 @@ const MoviesPage = ({ pendingAdds }) => (
   </OptimisticOverlay>
 );
 ```
+
+`OptimisticOverlay` lives in the `hono-preact/internal` subpath, which has no semver guarantee. Use it when you need projection through `loader.useData()`; prefer `useOptimistic` or `useOptimisticAction` for local optimistic state.
 
 `<OptimisticOverlay>` must be inside a route or `<Page>` configured with the same `loader` it references; otherwise it throws.
 

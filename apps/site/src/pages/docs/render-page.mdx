@@ -47,18 +47,22 @@ export default function MoviesPage() {
 
 If a [route guard](/docs/guards) redirects during SSR, it throws a `GuardRedirect`. `renderPage` catches this and turns it into an HTTP redirect via `c.redirect()`, so you don't need to handle it in the route handler.
 
-## Example: full server setup
+## Example: custom server entry (advanced)
+
+Most apps use the framework's generated server entry and never write this file. The block below is the manual escape hatch for projects that need to compose the Hono app themselves (alternate runtimes, non-default middleware ordering, custom layout injection). For everything else, just author `src/api.ts` for your REST routes and let the plugin generate the entry.
 
 ```tsx
 import { Hono } from 'hono';
+import { h } from 'preact';
+import { LocationProvider } from 'preact-iso';
+import { Routes } from 'hono-preact';
 import {
   actionsHandler,
   loadersHandler,
-  location,
   renderPage,
   routeServerModules,
 } from 'hono-preact/server';
-import { Layout } from './server/layout.js';
+import Layout from './Layout.js';
 import routes from './routes.js';
 
 export const app = new Hono();
@@ -72,8 +76,13 @@ app
     const movies = await getMovies();
     return c.json(movies);
   })
-  .use(location)
-  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'My App' }));
+  .get('*', (c) =>
+    renderPage(
+      c,
+      h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),
+      { defaultTitle: 'My App' }
+    )
+  );
 ```
 
-`routeServerModules(routes)` is built once at module scope so every request reuses the same record. The framework handlers (`/__loaders`, `/__actions`) and your own REST routes can share the same Hono instance.
+`routeServerModules(routes)` is built once at module scope so every request reuses the same record. `renderPage` synchronously primes `globalThis.location` immediately before prerender, so no `location` middleware is needed: concurrent SSR renders cannot trample each other's URL.

@@ -109,20 +109,7 @@ Hoisting `docsView` to a const lets the framework share one component reference 
 
 ## View transitions
 
-Route changes trigger a view transition if the browser supports `document.startViewTransition`. This is wired up in `iso.tsx` via the `onRouteChange` prop on `<Routes>`:
-
-```tsx
-import { Routes } from 'hono-preact';
-import routes from './routes.js';
-
-function onRouteChange() {
-  document.startViewTransition(() => flushSync(() => {}));
-}
-
-export const Base = () => <Routes routes={routes} onRouteChange={onRouteChange} />;
-```
-
-`onRouteChange` is forwarded to the underlying preact-iso Router. No per-page setup is needed.
+Route changes trigger a view transition automatically in browsers that support `document.startViewTransition`. The framework's generated client entry wraps the `onRouteChange` callback fired by preact-iso's `<Router>` and dispatches `startViewTransition` for every successful navigation; you do not opt in. Style the transition via `::view-transition-old(root)` / `::view-transition-new(root)` CSS, and respect `prefers-reduced-motion` to disable it.
 
 ## See also
 

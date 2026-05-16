@@ -91,7 +91,7 @@ These are merged on top of the plugin's defaults, so you only need to specify wh
 
 ## Custom client entry path
 
-The plugin defaults to `'./src/client.tsx'` for the client bundle entry. Override it with `clientEntry`:
+The plugin defaults to the framework-generated virtual module `virtual:hono-preact/client`, which hydrates `<Routes>` under `<LocationProvider>` for you. Override it only when you need a hand-written entry:
 
 ```ts
 honoPreact({

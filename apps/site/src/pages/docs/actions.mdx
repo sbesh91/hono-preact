@@ -41,32 +41,9 @@ The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `Abor
 
 ## Registering the handler
 
-Register `actionsHandler` on your Hono app before the catch-all route. Build the module map from your `routes.ts` manifest via `routeServerModules`:
+You do not register `actionsHandler` directly. The framework's Vite plugin generates the server entry, which mounts `actionsHandler` (and `loadersHandler`) on a Hono app before the SSR catch-all and exports it as the worker's default. The handler routes by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`.
 
-**`src/server.tsx`**
-
-```tsx
-import {
-  actionsHandler,
-  loadersHandler,
-  location,
-  renderPage,
-  routeServerModules,
-} from 'hono-preact/server';
-import routes from './routes.js';
-
-const serverModules = routeServerModules(routes);
-
-app
-  .post('/__loaders', loadersHandler(serverModules))
-  .post('/__actions', actionsHandler(serverModules))
-  .use(location)
-  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
-```
-
-`routeServerModules` walks the route manifest and produces every `server` deferred import in the record shape `actionsHandler` consumes. The handler routes by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`.
-
-`actionsHandler` also accepts a raw `import.meta.glob` result if you want to wire it directly; the `routeServerModules` adapter just builds the same shape from the route manifest.
+If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
 
 ## Calling actions with `useAction`
 
@@ -74,10 +51,12 @@ app
 
 ```tsx
 import { useAction } from 'hono-preact';
-import { loader, serverActions } from './movies.server.js';
+import { serverLoaders, serverActions } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
 
 const Movies = () => {
-  const { movies } = loader.useData();
+  const { movies } = moviesLoader.useData();
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (data) => console.log('added', data),
@@ -144,7 +123,7 @@ FormData values are collected with `Object.fromEntries(new FormData(form))`. Str
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { movies } = loader.useData();
+const { movies } = moviesLoader.useData();
 const [items, setItems] = useState(movies.results);
 
 const { mutate } = useAction(serverActions.addMovie, {
@@ -166,8 +145,10 @@ When a mutation on one page should refresh data on another, import the other pag
 ```tsx
 // movies.tsx: an action that should also refresh the ratings sidebar
 import { useAction } from 'hono-preact';
-import { loader as ratingsLoader } from './ratings.server.js';
+import { serverLoaders as ratingsLoaders } from './ratings.server.js';
 import { serverActions } from './movies.server.js';
+
+const ratingsLoader = ratingsLoaders.default;
 
 const { mutate } = useAction(serverActions.addMovie, {
   invalidate: [ratingsLoader], // clears ratingsLoader's cache on success
@@ -184,7 +165,9 @@ Use `'auto'` (instead of an array) to invalidate the current page's own loader a
 
 ```tsx
 import { useAction } from 'hono-preact';
-import { loader as moviesLoader, serverActions } from './movies.server.js';
+import { serverLoaders, serverActions } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
 
 // Method form:
 const { mutate, pending } = serverActions.addMovie.useAction({ invalidate: [moviesLoader] });

@@ -6,7 +6,9 @@
 
 ```ts
 import { prefetch } from 'hono-preact';
-import { loader as movieLoader } from './pages/movie.server.js';
+import { serverLoaders } from './pages/movie.server.js';
+
+const movieLoader = serverLoaders.default;
 
 // On link hover, kick off a fetch for /movies/42 so the route is ready when clicked.
 function onMovieLinkHover(id: number) {

@@ -64,56 +64,16 @@ That table covers four URL behaviours:
 | Shape | Fields | Meaning |
 |---|---|---|
 | **Leaf** | `path`, `view`, optional `server` | A page. Cannot have `children`. |
-| **Layout group** | `path`, `layout`, `children` (required) | A wrapper that renders matched descendants. Cannot have `server` (one loader per leaf). |
+| **Layout group** | `path`, `layout`, `children` (required), optional `server` | A wrapper that renders matched descendants. May declare its own `server` for layout-scoped loaders. |
 | **Path group** | `path`, `children` (no `view`, no `layout`) | Pure URL prefix sharing. Useful for `/admin/*` without shared chrome. |
 
-`defineRoutes` validates the tree at runtime and throws with the offending URL if the shape is wrong: `view` + `layout`, `view` + `children`, `layout` without `children`, `layout` + `server`, child path starting with `/`, or a route declaring none of `view`/`layout`/`children`.
+`defineRoutes` validates the tree at runtime and throws with the offending URL if the shape is wrong: `view` + `layout`, `view` + `children`, `layout` without `children`, child path starting with `/`, or a route declaring none of `view`/`layout`/`children`.
 
-## Mounting in `iso.tsx`
+## Mounting
 
-```tsx
-// src/iso.tsx
-import type { FunctionComponent } from 'preact';
-import { flushSync } from 'preact/compat';
-import { Routes } from 'hono-preact';
-import routes from './routes.js';
+You do not write `iso.tsx` or `server.tsx`. The framework generates both as virtual modules from your `routes.ts` and `Layout.tsx`. The client entry hydrates `<Routes>` inside `<LocationProvider>`; the server entry mounts `loadersHandler`, `actionsHandler`, an optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. See [Project Structure](/docs/structure) for the file layout the plugin assumes.
 
-function onRouteChange() {
-  document.startViewTransition(() => flushSync(() => {}));
-}
-
-export const Base: FunctionComponent = () => (
-  <Routes routes={routes} onRouteChange={onRouteChange} />
-);
-```
-
-`<Routes>` mounts a preact-iso `<Router>` and registers one `<Route>` per leaf in the manifest. The optional `onRouteChange` is forwarded to the underlying `Router`. There is no manual `<Route path component>` JSX in user code.
-
-## Wiring server handlers
-
-`server.tsx` uses `routeServerModules(routes)` to feed the same manifest into `loadersHandler` and `actionsHandler`:
-
-```tsx
-// src/server.tsx
-import {
-  actionsHandler,
-  loadersHandler,
-  location,
-  renderPage,
-  routeServerModules,
-} from 'hono-preact/server';
-import routes from './routes.js';
-
-const serverModules = routeServerModules(routes);
-
-app
-  .post('/__loaders', loadersHandler(serverModules))
-  .post('/__actions', actionsHandler(serverModules))
-  .use(location)
-  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
-```
-
-`routeServerModules` walks the manifest and produces a record of every `server` deferred import. The handlers iterate the values and dispatch by the moduleKey embedded by `moduleKeyPlugin` (the existing wire format). No glob, no filesystem coupling.
+If you need to customize the client or server entry (rare), pass a path override via the Vite plugin's `clientEntry` / `entry` options and follow the patterns in the generated virtual modules.
 
 ## Inline imports stay inline
 

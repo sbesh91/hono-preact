@@ -335,30 +335,9 @@ Navigating `/movies` to `/movies/123` does not unmount the layout, does not chan
 
 ## Registering the loader endpoint
 
-Register `loadersHandler` on your Hono app before the catch-all route. Build its module map from your `routes.ts` manifest via `routeServerModules`:
+You do not wire `loadersHandler` directly. The framework's Vite plugin generates the server entry, which mounts `loadersHandler` on `POST /__loaders`, `actionsHandler` on `POST /__actions`, your optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. `loadersHandler` routes by `moduleKey::loaderName` (the path-derived key injected by `moduleKeyPlugin` combined with the loader's name in the container); modules without `__moduleKey` are silently skipped at map-build time.
 
-```tsx
-import {
-  actionsHandler,
-  loadersHandler,
-  location,
-  renderPage,
-  routeServerModules,
-} from 'hono-preact/server';
-import routes from './routes.js';
-
-const serverModules = routeServerModules(routes);
-
-app
-  .post('/__loaders', loadersHandler(serverModules))
-  .post('/__actions', actionsHandler(serverModules))
-  .use(location)
-  .get('*', (c) => renderPage(c, <Layout context={c} />, { defaultTitle: 'my-app' }));
-```
-
-`routeServerModules` walks the route manifest and returns every `server` deferred import in a record shape the handlers consume. `loadersHandler` routes by `moduleKey::loaderName` (the path-derived key injected by `moduleKeyPlugin` combined with the loader's name in the container). Modules without `__moduleKey` are silently skipped at map-build time.
-
-`loadersHandler` and `actionsHandler` also accept a raw Vite `import.meta.glob` result if you prefer to wire them that way.
+If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
 
 ## Caching navigation results
 

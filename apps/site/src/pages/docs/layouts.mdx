@@ -70,20 +70,20 @@ export default function MoviesLayout({ children }: LayoutProps) {
 | `*` matches anything not matched by siblings | Works at any nesting level. |
 | Trailing slashes normalised | `/movies/` and `/movies` are the same route. |
 
-## One loader per leaf
+## Loaders per layout, per leaf
 
-A layout cannot declare `server`:
+A layout MAY declare its own `server` module. Its loaders are scoped to the layout's matched location, not the deepest active child route, and do not re-fire when navigating between children under the same layout. See [Layout-level loaders](/docs/loaders#layout-level-loaders) for the full pattern.
 
 ```ts
 {
   path: '/movies',
   layout: () => import('./pages/movies-layout.js'),
-  server: () => import('./movies.server.js'),  // ❌ throws at defineRoutes time
+  server: () => import('./pages/movies-layout.server.js'),  // ok: layout-scoped loaders
   children: [...],
 }
 ```
 
-This keeps the data model simple: the matched leaf is the only route with a loader, and it's the only loader that runs per request. If you want chrome plus data at the same URL, structure it as a layout with an empty-path child carrying the loader:
+If you want chrome plus a leaf loader at the same URL, structure it as a layout with an empty-path child carrying the leaf data:
 
 ```ts
 {
@@ -165,11 +165,10 @@ Nesting works recursively: a layout-group child of a layout group registers as a
 | Feature | Status | Workaround |
 |---|---|---|
 | Pathless layout routes (no URL segment) | Not yet | Repeat the wrapper as a regular component imported by each view that needs it. |
-| Parallel parent + child loaders | Out of scope | Hoist the loader onto whichever route owns the data. |
-| `useParentLoaderData` / loader composition | Out of scope | Same. |
+| `useParentLoaderData` / loader composition | Out of scope | Layout loaders and leaf loaders both run, but they do not see each other's data. Read from a context provided by the layout, or pass via props. |
 | Path-prefix middleware beyond guards | Out of scope | Use Hono `.use()` in your `api.ts` for path-prefix middleware. |
 
-These may land in later versions. v0.1 intentionally keeps the data model simple: one loader per leaf, no parallel data graph, no layout-vs-view loader coordination.
+These may land in later versions. Layout-level loaders DO run in parallel with leaf loaders (see [Layout-level loaders](/docs/loaders#layout-level-loaders)); what's out of scope is letting a leaf loader read its parent layout loader's data through framework plumbing.
 
 ## Sharing chrome without a layout
 
