@@ -13,6 +13,7 @@ import {
   Rocket,
   Send,
   Settings,
+  Lock,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -61,6 +62,7 @@ export const nav: NavSection[] = [
     heading: 'Access Control',
     entries: [
       { title: 'Route Guards', route: '/docs/guards', icon: ShieldCheck },
+      { title: 'CSRF Protection', route: '/docs/csrf', icon: Lock },
     ],
   },
   {

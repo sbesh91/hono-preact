@@ -1,0 +1,99 @@
+# CSRF Protection
+
+The framework does NOT enforce CSRF protection out of the box. Whether you need it depends on how your `/__actions` endpoint accepts requests and how your session cookie is configured. This page is a recipe — opt in when you're shipping cookie-authenticated mutations to a real audience.
+
+## When you need it
+
+If your app:
+
+- authenticates users via a cookie (signed session, JWT in `Set-Cookie`, etc.), and
+- uses `SameSite=Lax` or `SameSite=None` on that cookie, and
+- accepts file uploads or any other `multipart/form-data` action
+
+then a malicious page on another origin can submit a top-level `<form action="https://yoursite/__actions" enctype="multipart/form-data">` to your endpoint with the victim's cookie attached, and your action runs as the victim. That's CSRF.
+
+The JSON path through `/__actions` (which `useAction` uses for any payload that does not contain a `File`) is **already protected** by CORS preflight: `Content-Type: application/json` is not a "safelisted" request header, so browsers will not let an attacker page send it cross-origin without a CORS allow. The multipart path is the gap.
+
+You do not need this recipe if any of:
+
+- Your auth cookie is `SameSite=Strict`
+- Your app does not use cookie auth at all (bearer tokens in `Authorization`)
+- Your `/__actions` endpoint is not exposed publicly
+
+## Recipe: custom header check
+
+Add a Hono middleware in your `api.ts` (or wherever you compose framework + custom routes) that rejects multipart POSTs to `/__actions` unless they carry a custom request header. Custom (non-safelisted) headers force a CORS preflight, which a cross-origin attacker page cannot satisfy without your server's explicit allow.
+
+```ts
+// src/api.ts
+import { Hono } from 'hono';
+
+const app = new Hono();
+
+// Reject multipart POSTs to /__actions that lack our custom header.
+// Browsers force a CORS preflight when a request carries a non-safelisted
+// header, so cross-origin attacker pages cannot set this header without
+// your server's CORS allow.
+app.use('/__actions', async (c, next) => {
+  if (c.req.method !== 'POST') return next();
+  const contentType = c.req.header('Content-Type') ?? '';
+  if (!contentType.startsWith('multipart/form-data')) return next();
+  if (c.req.header('X-HP-Action') !== '1') {
+    return c.json({ error: 'CSRF check failed' }, 403);
+  }
+  return next();
+});
+
+export default app;
+```
+
+Then set the header on every action call your client makes. The simplest place is a small wrapper around `useAction` that always sets the header, plus a one-time monkey-patch on `fetch` for any other paths into the endpoint.
+
+Note that the framework's own `useAction` does NOT set this header today; you'll need to fork the call site or intercept at the network layer. The cleanest options are:
+
+**Option 1: intercept `fetch` once at the client entry.**
+
+```ts
+// At the top of your custom client entry (or in any client-only module
+// imported before the first action fires).
+const originalFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
+  if (url.endsWith('/__actions')) {
+    const headers = new Headers(init?.headers);
+    headers.set('X-HP-Action', '1');
+    return originalFetch(input, { ...init, headers });
+  }
+  return originalFetch(input, init);
+};
+```
+
+**Option 2: switch your mutations to JSON only.** If you never need file uploads, do not send multipart at all. Convert files to base64 (small files) or upload them via a separate direct route (large files), and route every action payload through JSON. The CORS preflight is then doing the work for you and no header check is needed.
+
+## Origin-check variant
+
+If you want defense in depth, also reject requests whose `Origin` header does not match your own host. Modern browsers always send `Origin` on cross-origin POSTs:
+
+```ts
+app.use('/__actions', async (c, next) => {
+  if (c.req.method !== 'POST') return next();
+  const origin = c.req.header('Origin');
+  if (origin) {
+    const expected = new URL(c.req.url).origin;
+    if (origin !== expected) {
+      return c.json({ error: 'Cross-origin POST rejected' }, 403);
+    }
+  }
+  return next();
+});
+```
+
+This catches `<form>` posts that omit your custom header too. Pair it with the header check above.
+
+## What this does NOT protect against
+
+- **Subdomain takeovers.** If `a.example.com` is compromised and your cookie is `Domain=example.com`, the attacker is same-origin to you. Use `__Host-` cookies (no `Domain` attribute) to scope auth to a single host.
+- **Stored XSS.** If an attacker can inject script into your origin, none of this matters; they are you. Set Content Security Policy headers.
+- **Logged-out cross-origin reads.** This recipe is about mutations. GETs to your loaders are public surface; do not put authorization-only data behind GET-with-cookie unless you also know `SameSite=Strict` is honored.
+
+For deployment-level controls (CSP, HSTS, frame-ancestors, etc.) see your runtime's documentation — Cloudflare Workers, for example, lets you set response headers from your worker code or via the dashboard.
