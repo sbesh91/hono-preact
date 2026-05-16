@@ -28,11 +28,11 @@ const IssueHeaderAndActions: FunctionComponent<{
   useTitle(`${issue.title} · demo`);
 
   // useOptimisticAction keeps the applied patch in place until the loader's
-  // base value (issue.status) actually reflects it. Without this, the badge
-  // briefly flickers back to the old value between "action settled" and
-  // "reload returned with fresh data". reloadIssue() still runs in onSuccess
-  // to actually refresh the loader; the optimistic value just bridges the
-  // round-trip.
+  // base value (issue.status) actually reflects it. On error the framework
+  // reverts the patch automatically so the badge snaps back to issue.status;
+  // surface the error message inline so the user knows why (most likely:
+  // the action-guard 403 for non-authors closing someone else's issue).
+  const [error, setError] = useState<string | null>(null);
   const {
     mutate: toggleStatus,
     pending: toggling,
@@ -41,7 +41,11 @@ const IssueHeaderAndActions: FunctionComponent<{
     base: issue.status,
     apply: (_current, payload) => payload.status,
     invalidate: [activityLoader],
-    onSuccess: () => reloadIssue(),
+    onSuccess: () => {
+      setError(null);
+      reloadIssue();
+    },
+    onError: (err) => setError(err.message),
   });
 
   const nextStatus = status === 'open' ? 'closed' : 'open';
@@ -67,7 +71,7 @@ const IssueHeaderAndActions: FunctionComponent<{
 
       {issue.body && <p class="whitespace-pre-wrap">{issue.body}</p>}
 
-      <div>
+      <div class="space-y-1">
         <button
           type="button"
           class="bg-gray-700 text-white px-3 py-1 text-sm"
@@ -80,6 +84,7 @@ const IssueHeaderAndActions: FunctionComponent<{
               ? 'Close issue'
               : 'Reopen issue'}
         </button>
+        {error && <p class="text-sm text-red-700">{error}</p>}
       </div>
     </>
   );
