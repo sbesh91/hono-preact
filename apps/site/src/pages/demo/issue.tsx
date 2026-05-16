@@ -1,4 +1,4 @@
-import { definePage, Form, useAction, useOptimisticAction } from 'hono-preact';
+import { definePage, Form, useOptimisticAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
@@ -27,17 +27,23 @@ const IssueHeaderAndActions: FunctionComponent<{
 }> = ({ issue, reloadIssue }) => {
   useTitle(`${issue.title} · demo`);
 
-  const [optimisticStatus, setOptimisticStatus] = useState(issue.status);
-  const { mutate: toggleStatus, pending: toggling } = useAction(
-    serverActions.setStatus,
-    {
-      invalidate: [activityLoader],
-      onSuccess: () => reloadIssue(),
-      onError: () => setOptimisticStatus(issue.status),
-    },
-  );
+  // useOptimisticAction keeps the applied patch in place until the loader's
+  // base value (issue.status) actually reflects it. Without this, the badge
+  // briefly flickers back to the old value between "action settled" and
+  // "reload returned with fresh data". reloadIssue() still runs in onSuccess
+  // to actually refresh the loader; the optimistic value just bridges the
+  // round-trip.
+  const {
+    mutate: toggleStatus,
+    pending: toggling,
+    value: status,
+  } = useOptimisticAction(serverActions.setStatus, {
+    base: issue.status,
+    apply: (_current, payload) => payload.status,
+    invalidate: [activityLoader],
+    onSuccess: () => reloadIssue(),
+  });
 
-  const status = toggling ? optimisticStatus : issue.status;
   const nextStatus = status === 'open' ? 'closed' : 'open';
 
   return (
@@ -66,10 +72,7 @@ const IssueHeaderAndActions: FunctionComponent<{
           type="button"
           class="bg-gray-700 text-white px-3 py-1 text-sm"
           disabled={toggling}
-          onClick={() => {
-            setOptimisticStatus(nextStatus);
-            toggleStatus({ issueId: issue.id, status: nextStatus });
-          }}
+          onClick={() => toggleStatus({ issueId: issue.id, status: nextStatus })}
         >
           {toggling
             ? `${nextStatus === 'closed' ? 'Closing' : 'Reopening'}…`
