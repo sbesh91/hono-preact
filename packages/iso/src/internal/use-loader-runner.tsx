@@ -64,7 +64,15 @@ export function useLoaderRunner<T>(
       id,
       newAbortSignal(),
       {
-        onChunk: (value) => setOverrideData(value),
+        onChunk: (value) => {
+          setOverrideData(value);
+          if (isBrowser()) {
+            loaderRef.cache.set(
+              value,
+              serializeLocationForCache(locationRef.current, loaderRef.params),
+            );
+          }
+        },
         onError: (err) => setLoadError(err),
         onEnd: () => { /* nothing to do */ },
       }
@@ -127,7 +135,10 @@ export function useLoaderRunner<T>(
       readerRef.current = { read: () => preloaded };
       if (isBrowser()) {
         const unsub = subscribeToLoaderStream(id, {
-          push: (value) => setOverrideData(value as T),
+          push: (value) => {
+            setOverrideData(value as T);
+            loaderRef.cache.set(value as T, locKey);
+          },
           end: () => { /* nothing to do */ },
           error: (err) => setLoadError(err),
         });
@@ -158,7 +169,10 @@ export function useLoaderRunner<T>(
         id,
         newAbortSignal(),
         {
-          onChunk: (value) => setOverrideData(value),
+          onChunk: (value) => {
+            setOverrideData(value);
+            if (isBrowser()) loaderRef.cache.set(value, locKey);
+          },
           onError: (err) => setLoadError(err),
           onEnd: () => { /* nothing to do */ },
         }
