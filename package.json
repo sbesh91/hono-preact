@@ -24,7 +24,8 @@
     "visualize": "pnpm --filter site run visualize",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
