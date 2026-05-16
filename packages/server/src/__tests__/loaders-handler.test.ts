@@ -61,16 +61,77 @@ describe('loadersHandler', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 500 when the loader throws', async () => {
+  it('returns 500 with a sanitized message when the loader throws', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'pages/movies',
-        serverLoaders: { default: async () => { throw new Error('DB error'); } },
+        serverLoaders: { default: async () => { throw new Error('DB error: connection refused at 10.0.0.5'); } },
       },
     });
     const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
     expect(res.status).toBe(500);
-    expect((await res.json() as { error: string }).error).toBe('DB error');
+    const body = await res.json() as { error: string };
+    // Production behavior: no raw loader error text reaches the client.
+    expect(body.error).toBe('Loader failed');
+    expect(body.error).not.toContain('10.0.0.5');
+  });
+
+  it('leaks the raw error message to the client only when dev: true', async () => {
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(
+        {
+          './pages/movies.server.ts': {
+            __moduleKey: 'pages/movies',
+            serverLoaders: { default: async () => { throw new Error('DB error: hostname leaked'); } },
+          },
+        },
+        { dev: true }
+      )
+    );
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    expect(res.status).toBe(500);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('DB error: hostname leaked');
+  });
+
+  it('calls onError with the real error and request context when a loader throws', async () => {
+    const onError = vi.fn();
+    const realErr = new Error('full PII');
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(
+        {
+          './pages/movies.server.ts': {
+            __moduleKey: 'pages/movies',
+            serverLoaders: { default: async () => { throw realErr; } },
+          },
+        },
+        { onError }
+      )
+    );
+    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(realErr, { module: 'pages/movies', loader: 'default' });
+  });
+
+  it('maps GuardRedirect thrown from a loader to a __redirect envelope', async () => {
+    const { GuardRedirect } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: {
+          default: async () => { throw new GuardRedirect('/login'); },
+        },
+      },
+    });
+    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    // 200 + envelope: the client RPC stub recognizes __redirect and navigates;
+    // a thrown error here would fire user error boundaries before the redirect.
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ __redirect: '/login' });
   });
 
   it('resolves lazy glob modules before handling requests', async () => {
@@ -130,6 +191,45 @@ describe('loadersHandler', () => {
     );
     const callArg = loaderFn.mock.calls[0][0] as { location: { searchParams: Record<string, string> } };
     expect(callArg.location.searchParams).toEqual({ genre: 'action' });
+  });
+});
+
+describe('loadersHandler dev / caching', () => {
+  it('caches the module map by default (dev defaults to false)', async () => {
+    let resolves = 0;
+    const lazy = async () => {
+      resolves++;
+      return {
+        __moduleKey: 'pages/movies',
+        serverLoaders: { default: async () => ({ ok: true }) },
+      };
+    };
+    const app = new Hono();
+    app.post('/__loaders', loadersHandler({ './pages/movies.server.ts': lazy }));
+
+    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    expect(resolves).toBe(1);
+  });
+
+  it('rebuilds the module map on every request when dev: true', async () => {
+    let resolves = 0;
+    const lazy = async () => {
+      resolves++;
+      return {
+        __moduleKey: 'pages/movies',
+        serverLoaders: { default: async () => ({ ok: true }) },
+      };
+    };
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler({ './pages/movies.server.ts': lazy }, { dev: true })
+    );
+
+    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    expect(resolves).toBe(2);
   });
 });
 

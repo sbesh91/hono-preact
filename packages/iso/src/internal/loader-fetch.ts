@@ -41,7 +41,23 @@ export async function fetchLoaderData<T>(
 
   const contentType = res.headers.get('Content-Type') ?? '';
   if (!contentType.includes('text/event-stream')) {
-    return (await res.json()) as T;
+    const json = (await res.json()) as unknown;
+    // Server-side `GuardRedirect` thrown from a loader (or a guard that runs
+    // inside it) comes back as a `{ __redirect }` envelope. Hand off to the
+    // browser via `location.assign` and return a promise that never settles:
+    // the current document is being replaced, no caller will see a value.
+    if (
+      json !== null &&
+      typeof json === 'object' &&
+      '__redirect' in json &&
+      typeof (json as { __redirect: unknown }).__redirect === 'string'
+    ) {
+      if (typeof window !== 'undefined') {
+        window.location.assign((json as { __redirect: string }).__redirect);
+      }
+      return new Promise<T>(() => { /* never resolves; page is navigating */ });
+    }
+    return json as T;
   }
 
   if (!res.body) {

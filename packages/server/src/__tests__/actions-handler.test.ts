@@ -67,20 +67,90 @@ describe('actionsHandler', () => {
     expect((await res.json() as { error: string }).error).toContain("Action 'destroy' not found");
   });
 
-  it('returns 500 when the action throws', async () => {
+  it('returns 500 with a sanitized message when the action throws', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
         serverActions: {
           create: async () => {
-            throw new Error('DB error');
+            throw new Error('DB error: connection refused at 10.0.0.5');
           },
         },
       },
     });
     const res = await post(app, { module: 'movies', action: 'create', payload: {} });
     expect(res.status).toBe(500);
-    expect((await res.json() as { error: string }).error).toBe('DB error');
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('Action failed');
+    expect(body.error).not.toContain('10.0.0.5');
+  });
+
+  it('leaks the raw error message to the client only when dev: true', async () => {
+    const app = new Hono();
+    app.post(
+      '/__actions',
+      actionsHandler(
+        {
+          './pages/movies.server.ts': {
+            __moduleKey: 'movies',
+            serverActions: { create: async () => { throw new Error('hostname leaked'); } },
+          },
+        },
+        { dev: true }
+      )
+    );
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(500);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('hostname leaked');
+  });
+
+  it('calls onError with the real error and request context when an action throws', async () => {
+    const onError = vi.fn();
+    const realErr = new Error('full PII');
+    const app = new Hono();
+    app.post(
+      '/__actions',
+      actionsHandler(
+        {
+          './pages/movies.server.ts': {
+            __moduleKey: 'movies',
+            serverActions: { create: async () => { throw realErr; } },
+          },
+        },
+        { onError }
+      )
+    );
+    await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(realErr, { module: 'movies', action: 'create' });
+  });
+
+  it('maps GuardRedirect thrown from an action to a __redirect envelope', async () => {
+    const { GuardRedirect } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: async () => { throw new GuardRedirect('/login'); } },
+      },
+    });
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ __redirect: '/login' });
+  });
+
+  it('maps GuardRedirect thrown from an action guard to a __redirect envelope', async () => {
+    const { GuardRedirect } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: vi.fn() },
+        actionGuards: [async () => { throw new GuardRedirect('/login'); }],
+      },
+    });
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ __redirect: '/login' });
   });
 
   it('resolves lazy glob modules before handling requests', async () => {
@@ -94,6 +164,39 @@ describe('actionsHandler', () => {
     const res = await post(app, { module: 'movies', action: 'create', payload: {} });
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalled();
+  });
+
+  it('caches the module map by default (dev defaults to false)', async () => {
+    const createFn = vi.fn().mockResolvedValue({ ok: true });
+    let resolves = 0;
+    const lazy = async () => {
+      resolves++;
+      return { __moduleKey: 'movies', serverActions: { create: createFn } };
+    };
+    const app = new Hono();
+    app.post('/__actions', actionsHandler({ './pages/movies.server.ts': lazy }));
+
+    await post(app, { module: 'movies', action: 'create', payload: {} });
+    await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(resolves).toBe(1);
+  });
+
+  it('rebuilds the module map on every request when dev: true', async () => {
+    const createFn = vi.fn().mockResolvedValue({ ok: true });
+    let resolves = 0;
+    const lazy = async () => {
+      resolves++;
+      return { __moduleKey: 'movies', serverActions: { create: createFn } };
+    };
+    const app = new Hono();
+    app.post(
+      '/__actions',
+      actionsHandler({ './pages/movies.server.ts': lazy }, { dev: true })
+    );
+
+    await post(app, { module: 'movies', action: 'create', payload: {} });
+    await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(resolves).toBe(2);
   });
 
   it('ignores modules without serverActions', async () => {

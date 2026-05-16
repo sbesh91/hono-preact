@@ -1,5 +1,10 @@
 import type { MiddlewareHandler } from 'hono';
-import { ActionGuardError, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
+import {
+  ActionGuardError,
+  GuardRedirect,
+  type ActionGuardFn,
+  type ActionGuardContext,
+} from '@hono-preact/iso';
 import { runRequestScope } from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
@@ -52,17 +57,42 @@ async function runActionGuards(
   await run(0);
 }
 
-export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
+export interface ActionsHandlerOptions {
+  /**
+   * When true, rebuild the actions map on every request (so edits to
+   * `.server.ts` files take effect without a server restart). When false
+   * (default), the map is built once on first request and cached for the
+   * life of the process. The framework's generated server entry passes
+   * `{ dev: import.meta.env.DEV }`; custom wirings should set this
+   * explicitly rather than relying on a Vite-only build-time constant.
+   */
+  dev?: boolean;
+  /**
+   * Called for every error an action throws (other than `ActionGuardError`,
+   * which is treated as a structured response). Use it to hook into your
+   * observability stack (Sentry, console, etc.). The handler still
+   * responds with a sanitized 500; the hook is purely a side channel.
+   */
+  onError?: (
+    err: unknown,
+    ctx: { module: string; action: string }
+  ) => void;
+}
+
+export function actionsHandler(
+  glob: LazyGlob | EagerGlob,
+  opts: ActionsHandlerOptions = {}
+): MiddlewareHandler {
+  const { dev = false, onError } = opts;
   let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
-    const actionsMapPromise =
-      import.meta.env.DEV
-        ? buildActionsMap(glob)
-        : (cachedMapPromise ??= buildActionsMap(glob).catch((err) => {
-            cachedMapPromise = null;
-            return Promise.reject(err);
-          }));
+    const actionsMapPromise = dev
+      ? buildActionsMap(glob)
+      : (cachedMapPromise ??= buildActionsMap(glob).catch((err) => {
+          cachedMapPromise = null;
+          return Promise.reject(err);
+        }));
 
     let actionsMap: Record<string, ModuleEntry>;
     try {
@@ -132,6 +162,9 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       if (err instanceof ActionGuardError) {
         return c.json({ error: err.message }, err.status);
       }
+      if (err instanceof GuardRedirect) {
+        return c.json({ __redirect: err.location });
+      }
       throw err;
     }
 
@@ -152,7 +185,12 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       if (err instanceof ActionGuardError) {
         return c.json({ error: err.message }, err.status);
       }
-      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof GuardRedirect) {
+        return c.json({ __redirect: err.location });
+      }
+      onError?.(err, { module, action });
+      const message =
+        dev && err instanceof Error ? err.message : 'Action failed';
       return c.json({ error: message }, 500);
     }
 

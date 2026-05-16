@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
+import { GuardRedirect } from '@hono-preact/iso';
 import { runRequestScope } from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
@@ -69,17 +70,41 @@ function validateLocation(loc: unknown): SerializedLocation | null {
   };
 }
 
-export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
+export interface LoadersHandlerOptions {
+  /**
+   * When true, rebuild the loaders map on every request (so edits to
+   * `.server.ts` files take effect without a server restart). When false
+   * (default), the map is built once on first request and cached for the
+   * life of the process. The framework's generated server entry passes
+   * `{ dev: import.meta.env.DEV }`; custom wirings should set this
+   * explicitly rather than relying on a Vite-only build-time constant.
+   */
+  dev?: boolean;
+  /**
+   * Called for every error a loader throws. Use it to hook into your
+   * observability stack (Sentry, console, etc.). The handler still
+   * responds with a sanitized 500; the hook is purely a side channel.
+   */
+  onError?: (
+    err: unknown,
+    ctx: { module: string; loader: string }
+  ) => void;
+}
+
+export function loadersHandler(
+  glob: LazyGlob | EagerGlob,
+  opts: LoadersHandlerOptions = {}
+): MiddlewareHandler {
+  const { dev = false, onError } = opts;
   let cachedMapPromise: Promise<Record<string, LoaderFn>> | null = null;
 
   return async (c) => {
-    const loadersMapPromise =
-      import.meta.env.DEV
-        ? buildLoadersMap(glob)
-        : (cachedMapPromise ??= buildLoadersMap(glob).catch((err) => {
-            cachedMapPromise = null;
-            return Promise.reject(err);
-          }));
+    const loadersMapPromise = dev
+      ? buildLoadersMap(glob)
+      : (cachedMapPromise ??= buildLoadersMap(glob).catch((err) => {
+          cachedMapPromise = null;
+          return Promise.reject(err);
+        }));
 
     let loadersMap: Record<string, LoaderFn>;
     try {
@@ -139,7 +164,20 @@ export function loadersHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       }
       return c.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // GuardRedirect thrown from a loader (or a guard that runs inside it)
+      // is a control-flow signal, not an error. The client RPC stub
+      // recognizes the `__redirect` envelope and navigates the browser
+      // rather than surfacing this as a thrown error in user code.
+      if (err instanceof GuardRedirect) {
+        return c.json({ __redirect: err.location });
+      }
+      onError?.(err, { module, loader: loaderName });
+      // In production we never leak the loader's error message: it may
+      // carry PII, internal stack hints, or details that help an attacker
+      // probe the system. Loader errors users want to surface should be
+      // returned as data, not thrown.
+      const message =
+        dev && err instanceof Error ? err.message : 'Loader failed';
       return c.json({ error: message }, 500);
     }
   };

@@ -115,6 +115,26 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
       }
 
       const contentType = response.headers.get('Content-Type') ?? '';
+      // Server-side `GuardRedirect` thrown from an action (or its guards) comes
+      // back as `{ __redirect }`. Hand off to the browser; the rest of this
+      // promise will never settle, but the page is navigating away anyway.
+      if (!contentType.includes('text/event-stream')) {
+        const peek = (await response.clone().json().catch(() => undefined)) as unknown;
+        if (
+          peek !== null &&
+          typeof peek === 'object' &&
+          peek !== undefined &&
+          '__redirect' in peek &&
+          typeof (peek as { __redirect: unknown }).__redirect === 'string'
+        ) {
+          if (typeof window !== 'undefined') {
+            window.location.assign((peek as { __redirect: string }).__redirect);
+          }
+          await new Promise(() => { /* never resolves; page is navigating */ });
+          return;
+        }
+      }
+
       if (contentType.includes('text/event-stream') && response.body) {
         const { readSSE } = await import('./internal/sse-decoder.js');
         let resultValue: TResult | undefined;
