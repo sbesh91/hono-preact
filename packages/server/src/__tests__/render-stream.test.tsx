@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { renderPage } from '../render.js';
 import { defineLoader } from '@hono-preact/iso';
-import { Loader } from '@hono-preact/iso/internal';
+import { Loader, getRequestStore } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
 
 // Helper: read a streaming response body fully to a string.
@@ -112,6 +112,84 @@ describe('renderPage: streaming SSR', () => {
     const body = await readBody(res);
     expect(body).toContain('window.__HP_STREAM__.error');
     expect(body).toContain('"message":"mid-stream"');
+  });
+
+  it('escapes < in streamed JSON payloads so </script> cannot break out of the script context', async () => {
+    const hostile = '</script><script>window.__pwned=true</script>';
+    const loader = defineLoader<{ note: string }>(async function* () {
+      yield { note: 'first' };
+      yield { note: hostile };
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    const body = await readBody(res);
+    // The hostile string survives logically (decodes back to itself), but
+    // every '<' inside the script payload is escaped to < so no nested
+    // </script> tag terminates the stream-chunk script early.
+    expect(body).toContain('\\u003c/script');
+    // Critical: the hostile payload must not appear as a real injected script
+    // tag. The escaped form contains no literal '</script>' until the chunk
+    // script's own closing tag, so '<script>window.__pwned' must never appear.
+    expect(body).not.toContain('<script>window.__pwned');
+  });
+
+  it('preserves the request scope (ALS) across generator yields', async () => {
+    // A streaming loader that yields once, awaits, then reads the per-request
+    // ALS store and yields whether it was visible. If runRequestScope context
+    // is lost between yields, the second yield reports false.
+    const loader = defineLoader<{ scopeVisible: boolean; pass: number }>(
+      async function* () {
+        yield { scopeVisible: getRequestStore() !== undefined, pass: 1 };
+        await new Promise((r) => setTimeout(r, 5));
+        yield { scopeVisible: getRequestStore() !== undefined, pass: 2 };
+      }
+    );
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>scope</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    const body = await readBody(res);
+    // Both yields must observe the ALS store, including the one driven from
+    // ReadableStream.start (which runs after runRequestScope on the outer
+    // call frame has returned). The first yield is baked into the HTML as
+    // a data-loader attribute (Preact escapes quotes as &quot;), the second
+    // arrives via an inline <script> tag (raw JSON).
+    expect(body).toContain('&quot;scopeVisible&quot;:true,&quot;pass&quot;:1');
+    expect(body).toContain('"scopeVisible":true,"pass":2');
+  });
+
+  it('escapes < in error payloads so a hostile error.message cannot break the script', async () => {
+    const loader = defineLoader(async function* (): AsyncGenerator<{ count: number }> {
+      yield { count: 1 };
+      throw new Error('</script><script>window.__pwned=true</script>');
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>
+      )
+    );
+    const res = await app.request('/');
+    const body = await readBody(res);
+    expect(body).toContain('\\u003c/script');
+    expect(body).not.toContain('<script>window.__pwned');
   });
 });
 

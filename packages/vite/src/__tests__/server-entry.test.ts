@@ -11,7 +11,7 @@ import {
 } from '../server-entry.js';
 
 describe('generateServerEntrySource', () => {
-  it('emits the framework imports, mounts loaders/actions/location/catchall, omits api when not provided', () => {
+  it('emits the framework imports, mounts loaders/actions/catchall, omits api when not provided', () => {
     const src = generateServerEntrySource({
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
@@ -22,7 +22,7 @@ describe('generateServerEntrySource', () => {
     expect(src).toContain(`import { Hono } from 'hono';`);
     expect(src).toContain(`import { Routes, env } from '@hono-preact/iso';`);
     expect(src).toContain(
-      `import {\n  actionsHandler,\n  loadersHandler,\n  location,\n  renderPage,\n  routeServerModules,\n} from '@hono-preact/server';`
+      `import {\n  actionsHandler,\n  loadersHandler,\n  renderPage,\n  routeServerModules,\n} from '@hono-preact/server';`
     );
 
     // User imports (absolute paths)
@@ -34,18 +34,21 @@ describe('generateServerEntrySource', () => {
     expect(src).not.toContain('api.ts');
     expect(src).not.toContain('userApp');
 
+    // The location middleware was removed; locationStub now runs synchronously
+    // inside renderPage so concurrent renders cannot race on globalThis.location.
+    expect(src).not.toContain('.use(location)');
+    expect(src).not.toMatch(/^\s*location,\s*$/m);
+
     // env.current is set
     expect(src).toContain(`env.current = 'server';`);
 
     // Hono pipeline in correct order
     const loadersIdx = src.indexOf(`'/__loaders'`);
     const actionsIdx = src.indexOf(`'/__actions'`);
-    const useLocationIdx = src.indexOf(`.use(location)`);
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(loadersIdx).toBeGreaterThan(-1);
     expect(actionsIdx).toBeGreaterThan(loadersIdx);
-    expect(useLocationIdx).toBeGreaterThan(actionsIdx);
-    expect(catchallIdx).toBeGreaterThan(useLocationIdx);
+    expect(catchallIdx).toBeGreaterThan(actionsIdx);
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))))`
     );

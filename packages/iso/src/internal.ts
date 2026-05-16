@@ -24,7 +24,7 @@ export { ReloadContext } from './reload-context.js';
 export { RouteLocationsContext, RouteLocationsProvider } from './internal/route-locations.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
-export { runRequestScope, getRequestStore } from './cache.js';
+export { runRequestScope, getRequestStore, captureRequestScope } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
 export { runServerGuards, runClientGuards } from './guard.js';
 export { HonoRequestContext } from './internal/contexts.js';

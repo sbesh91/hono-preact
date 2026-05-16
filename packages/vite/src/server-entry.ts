@@ -30,7 +30,6 @@ export function generateServerEntrySource(
     `import {\n` +
     `  actionsHandler,\n` +
     `  loadersHandler,\n` +
-    `  location,\n` +
     `  renderPage,\n` +
     `  routeServerModules,\n` +
     `} from '@hono-preact/server';\n` +
@@ -45,7 +44,6 @@ export function generateServerEntrySource(
     `  .post('/__loaders', loadersHandler(serverModules))\n` +
     `  .post('/__actions', actionsHandler(serverModules))\n` +
     apiMount +
-    `  .use(location)\n` +
     `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes })))));\n` +
     `\n` +
     `export default app;\n`
