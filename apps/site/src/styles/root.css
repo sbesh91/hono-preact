@@ -151,27 +151,28 @@
 }
 
 ::view-transition-old(root) {
-  animation: 150ms ease-in both fade-out;
+  animation: 180ms ease-out both fade-out;
 }
 
 ::view-transition-new(root) {
-  animation: 270ms ease-out both fade-in;
+  animation: 220ms ease-out 60ms both fade-in;
 }
 
 @keyframes fade-out {
-  from {
-    opacity: 1;
-  }
   to {
-    opacity: 0.5;
+    opacity: 0;
   }
 }
 
 @keyframes fade-in {
   from {
-    opacity: 0.5;
+    opacity: 0;
   }
-  to {
-    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
   }
 }
