@@ -42,6 +42,13 @@ describe('generateServerEntrySource', () => {
     // env.current is set
     expect(src).toContain(`env.current = 'server';`);
 
+    // Handler options thread dev mode through so the cache-vs-rebuild
+    // branch doesn't rely on a Vite-only build-time constant inside the
+    // library handlers themselves.
+    expect(src).toContain(`const handlerOpts = { dev: import.meta.env.DEV };`);
+    expect(src).toContain(`loadersHandler(serverModules, handlerOpts)`);
+    expect(src).toContain(`actionsHandler(serverModules, handlerOpts)`);
+
     // Hono pipeline in correct order
     const loadersIdx = src.indexOf(`'/__loaders'`);
     const actionsIdx = src.indexOf(`'/__actions'`);
