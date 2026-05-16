@@ -17,7 +17,6 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.Routes).toBe('function');
     expect(typeof m.Head).toBe('function');
     expect(typeof m.ClientScript).toBe('function');
-    expect(typeof m.ViewTransitions).toBe('function');
   });
 
   it('does NOT surface server-only symbols at the root', async () => {

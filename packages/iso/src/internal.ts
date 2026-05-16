@@ -32,7 +32,6 @@ export { HonoRequestContext } from './internal/contexts.js';
 export {
   __dispatchRouteChange,
   __subscribeRouteChange,
-  __enableViewTransitions,
 } from './internal/route-change.js';
 
 export {

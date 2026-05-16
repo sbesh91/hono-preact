@@ -4,7 +4,6 @@ import { renderHook } from '@testing-library/preact';
 import {
   __dispatchRouteChange,
   __subscribeRouteChange,
-  __enableViewTransitions,
 } from '../internal/route-change.js';
 import { useRouteChange } from '../route-change.js';
 
@@ -49,7 +48,7 @@ describe('__subscribeRouteChange', () => {
   });
 });
 
-describe('__enableViewTransitions', () => {
+describe('__dispatchRouteChange view transitions', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
@@ -58,87 +57,31 @@ describe('__enableViewTransitions', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns a disabler function', () => {
-    const disable = __enableViewTransitions();
-    expect(typeof disable).toBe('function');
-    disable();
-  });
-
-  it('wraps a same-origin link click in startViewTransition when enabled', () => {
+  it('triggers document.startViewTransition on every dispatch when available', () => {
     const startViewTransition = vi.fn((cb: () => void) => {
       cb();
-      return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
+      return {
+        ready: Promise.resolve(),
+        finished: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+      };
     });
-    Object.assign(document, { startViewTransition });
+    vi.stubGlobal('document', { startViewTransition });
 
-    const disable = __enableViewTransitions();
+    __dispatchRouteChange('/a', undefined);
+    __dispatchRouteChange('/b', '/a');
 
-    const link = document.createElement('a');
-    link.href = location.origin + '/foo';
-    document.body.appendChild(link);
-    link.click();
-    expect(startViewTransition).toHaveBeenCalledTimes(1);
-
-    document.body.removeChild(link);
-    disable();
-  });
-
-  it('does not wrap clicks once no enabler is active', () => {
-    const startViewTransition = vi.fn((cb: () => void) => {
-      cb();
-      return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
-    });
-    Object.assign(document, { startViewTransition });
-
-    const link = document.createElement('a');
-    link.href = location.origin + '/foo';
-    document.body.appendChild(link);
-    link.click();
-    expect(startViewTransition).not.toHaveBeenCalled();
-
-    document.body.removeChild(link);
-  });
-
-  it('keeps the click interceptor active until the last enabler is disabled', () => {
-    const startViewTransition = vi.fn((cb: () => void) => {
-      cb();
-      return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
-    });
-    Object.assign(document, { startViewTransition });
-
-    const d1 = __enableViewTransitions();
-    const d2 = __enableViewTransitions();
-
-    const link = document.createElement('a');
-    link.href = location.origin + '/foo';
-    document.body.appendChild(link);
-
-    link.click();
-    expect(startViewTransition).toHaveBeenCalledTimes(1);
-
-    d1();
-    link.click();
-    expect(startViewTransition).toHaveBeenCalledTimes(2); // still enabled by d2
-
-    d2();
-    link.click();
-    expect(startViewTransition).toHaveBeenCalledTimes(2); // fully disabled, no extra
-
-    document.body.removeChild(link);
+    expect(startViewTransition).toHaveBeenCalledTimes(2);
   });
 
   it('no-ops when document.startViewTransition is unavailable', () => {
     vi.stubGlobal('document', {});
-    const disable = __enableViewTransitions();
     expect(() => __dispatchRouteChange('/a', undefined)).not.toThrow();
-    disable();
   });
 
   it('no-ops in a non-browser environment (no document at all)', () => {
     vi.stubGlobal('document', undefined);
-    const disable = __enableViewTransitions();
     expect(() => __dispatchRouteChange('/a', undefined)).not.toThrow();
-    disable();
   });
 });
 

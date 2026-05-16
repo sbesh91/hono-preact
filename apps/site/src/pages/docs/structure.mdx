@@ -6,7 +6,7 @@ hono-preact/                    # monorepo root
 │   └── site/                    # the deployed application
 │       ├── src/
 │       │   ├── api.ts          # Optional: custom Hono routes mounted before SSR
-│       │   ├── Layout.tsx      # HTML shell with <Head>, <ClientScript />, <ViewTransitions />
+│       │   ├── Layout.tsx      # HTML shell with <Head>, <ClientScript />
 │       │   ├── routes.ts       # The route table (defineRoutes manifest)
 │       │   ├── pages/          # View components, paired .server.ts files, MDX content
 │       │   ├── components/     # Shared UI components (incl. DocsRoute for MDX)
@@ -42,7 +42,7 @@ The framework owns both entries as virtual modules. The browser entry (`virtual:
 
 ### `apps/site/src/Layout.tsx`
 
-Renders the HTML shell. Uses `<Head>`, `<ClientScript />`, and `<ViewTransitions />` from `hono-preact` to declare the document title/meta, inject the client bundle script tag, and opt into View Transitions. Default-exports a component the framework's generated server entry renders for the catch-all route; the framework emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the user's `</head>`.
+Renders the HTML shell. Uses `<Head>` and `<ClientScript />` from `hono-preact` to declare the document title/meta and inject the client bundle script tag. Default-exports a component the framework's generated server entry renders for the catch-all route; the framework emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the user's `</head>`. View Transitions fire automatically on every client-side route change in browsers that support `document.startViewTransition`; style them via `::view-transition-old(root)` / `::view-transition-new(root)` CSS.
 
 ### `apps/site/src/pages/`
 
