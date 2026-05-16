@@ -17,15 +17,19 @@ pnpm add -D vite
 
 ```ts
 // vite.config.ts
-import { defineApp } from 'hono-preact/vite';
-export default defineApp();
+import { defineConfig } from 'vite';
+import { honoPreact } from 'hono-preact/vite';
+
+export default defineConfig({
+  plugins: [honoPreact()],
+});
 ```
 
 ```ts
 // src/routes.ts
 import { defineRoutes } from 'hono-preact';
 export default defineRoutes([
-  { path: '/', view: () => import('./views/home') },
+  { path: '/', view: () => import('./pages/home.js') },
 ]);
 ```
 
@@ -35,7 +39,7 @@ Full walkthrough: https://framework.sbesh.com/docs/quick-start
 
 - `hono-preact`: iso runtime exports (routes, pages, loaders, actions, forms, guards).
 - `hono-preact/server`: server entry, `renderPage`, SSR streaming helpers.
-- `hono-preact/vite`: `defineApp()` plugin for Vite.
+- `hono-preact/vite`: `honoPreact()` plugin for Vite.
 - `hono-preact/internal`: advanced exports for tooling authors. No stability guarantee.
 
 ## License
