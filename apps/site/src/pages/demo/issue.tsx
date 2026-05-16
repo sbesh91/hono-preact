@@ -1,5 +1,6 @@
-import { definePage, useOptimisticAction } from 'hono-preact';
+import { definePage, useAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { requireSession } from '../../demo/guard.js';
@@ -18,26 +19,33 @@ type IssuePageProps = {
   issue: IssueData;
   comments: CommentData[];
   activity: ActivityItem[];
+  reloadIssue: () => void;
+  reloadComments: () => void;
 };
 
-const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activity }) => {
+const IssuePage: FunctionComponent<IssuePageProps> = ({
+  issue,
+  comments,
+  activity,
+  reloadIssue,
+  reloadComments,
+}) => {
   useTitle(`${issue.title} · demo`);
 
-  // Optimistic status. useOptimisticAction keeps the applied patch in place
-  // until the loader's base value (issue.status) actually updates, which
-  // handles the case where the framework's invalidate only re-runs the
-  // active-loader's reload (here: the innermost activityLoader, not
-  // issueLoader). The badge stays correct regardless.
-  const {
-    mutate: toggleStatus,
-    pending: toggling,
-    value: status,
-  } = useOptimisticAction(serverActions.setStatus, {
-    base: issue.status,
-    apply: (_current, payload) => payload.status,
-    invalidate: [issueLoader, activityLoader],
-  });
+  // Local optimistic status for the in-flight window. Once the mutation
+  // settles we call reloadIssue() ourselves; the loader returns fresh data,
+  // toggling flips to false, and the badge reads from the updated issue prop.
+  const [optimisticStatus, setOptimisticStatus] = useState(issue.status);
+  const { mutate: toggleStatus, pending: toggling } = useAction(
+    serverActions.setStatus,
+    {
+      invalidate: [activityLoader],
+      onSuccess: () => reloadIssue(),
+      onError: () => setOptimisticStatus(issue.status),
+    },
+  );
 
+  const status = toggling ? optimisticStatus : issue.status;
   const nextStatus = status === 'open' ? 'closed' : 'open';
 
   return (
@@ -67,6 +75,7 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activit
           class="bg-gray-700 text-white px-3 py-1 text-sm"
           disabled={toggling}
           onClick={() => {
+            setOptimisticStatus(nextStatus);
             toggleStatus({ issueId: issue.id, status: nextStatus });
           }}
         >
@@ -81,7 +90,7 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activit
       <section class="space-y-3">
         <h3 class="font-semibold">Comments</h3>
         <CommentList comments={comments} />
-        <CommentForm issueId={issue.id} />
+        <CommentForm issueId={issue.id} onAdded={reloadComments} />
       </section>
 
       <aside class="border-t pt-3 text-xs text-gray-700">
@@ -110,29 +119,48 @@ const IssuePage: FunctionComponent<IssuePageProps> = ({ issue, comments, activit
 };
 IssuePage.displayName = 'IssuePage';
 
-// Chained .View() composition. Each View reads its loader's data via the
-// render callback's `data` arg and threads it down as a prop to the next
-// View in the chain. The outer caller passes the issue prop; the comments
-// View adds comments; the activity View completes the set and renders the
-// final page.
-const ActivityView = activityLoader.View<{ issue: IssueData; comments: CommentData[] }>(
-  ({ data: activity, issue, comments }) => (
-    <IssuePage issue={issue} comments={comments} activity={activity ?? []} />
+// Chained .View() composition. Each View captures its own loader's `reload`
+// from the render callback's args and threads it down as a prop so deeper
+// components can re-fetch siblings explicitly (the framework's
+// `invalidate: [refs]` only auto-reloads the loader whose id matches the
+// nearest ActiveLoaderIdContext, which here is the innermost activityLoader).
+const ActivityView = activityLoader.View<{
+  issue: IssueData;
+  comments: CommentData[];
+  reloadIssue: () => void;
+  reloadComments: () => void;
+}>(
+  ({ data: activity, issue, comments, reloadIssue, reloadComments }) => (
+    <IssuePage
+      issue={issue}
+      comments={comments}
+      activity={activity ?? []}
+      reloadIssue={reloadIssue}
+      reloadComments={reloadComments}
+    />
   ),
   { fallback: <p>Loading activity…</p> },
 );
 
-const CommentsView = commentsLoader.View<{ issue: IssueData }>(
-  ({ data: comments, issue }) => (
-    <ActivityView issue={issue} comments={comments ?? []} />
+const CommentsView = commentsLoader.View<{
+  issue: IssueData;
+  reloadIssue: () => void;
+}>(
+  ({ data: comments, reload: reloadComments, issue, reloadIssue }) => (
+    <ActivityView
+      issue={issue}
+      comments={comments ?? []}
+      reloadIssue={reloadIssue}
+      reloadComments={reloadComments}
+    />
   ),
   { fallback: <p>Loading comments…</p> },
 );
 
 const IssueView = issueLoader.View(
-  ({ data: issue }: { data: IssueData | null }) => {
+  ({ data: issue, reload: reloadIssue }: { data: IssueData | null; reload: () => void }) => {
     if (!issue) return <p>Issue not found.</p>;
-    return <CommentsView issue={issue} />;
+    return <CommentsView issue={issue} reloadIssue={reloadIssue} />;
   },
   { fallback: <p>Loading issue…</p> },
 );
