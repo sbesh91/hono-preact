@@ -119,7 +119,15 @@ const CommentsSection: FunctionComponent<{
       } as CommentData,
     ],
     invalidate: [activityLoader],
-    onSuccess: () => setFormKey((k) => k + 1),
+    onSuccess: () => {
+      setFormKey((k) => k + 1);
+      // Clear the comments cache without triggering a reload of this page
+      // (commentsLoader is the active loader here, so passing it into the
+      // invalidate list above would re-stream the whole thread). The current
+      // view keeps showing the new comment via the optimistic patch; the
+      // next mount sees a fresh fetch and the server-rendered comment.
+      commentsLoader.invalidate();
+    },
   });
 
   return (
