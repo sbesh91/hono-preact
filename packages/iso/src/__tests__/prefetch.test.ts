@@ -1,8 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { defineLoader } from '../define-loader.js';
 import { prefetch } from '../prefetch.js';
+import { env } from '../is-browser.js';
 
-describe('prefetch', () => {
+// These tests exercise the SSR / test direct-fn path. The browser RPC path is
+// covered separately by prefetch.browser.test.ts.
+describe('prefetch (direct-fn path)', () => {
+  beforeEach(() => {
+    env.current = 'server';
+  });
+  afterEach(() => {
+    env.current = 'browser';
+  });
+
   it('derives pathParams from url + route', async () => {
     const ref = defineLoader(async ({ location }) => {
       return { id: location.pathParams.id };

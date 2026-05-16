@@ -1,8 +1,9 @@
 import type { RouteHook } from 'preact-iso';
 import { exec } from 'preact-iso';
 import type { LoaderCache } from './cache.js';
-import { isBrowser } from './is-browser.js';
 import type { LoaderRef } from './define-loader.js';
+import { isBrowser } from './is-browser.js';
+import { runLoader } from './internal/loader-runner.js';
 
 export interface PrefetchOptions<T> {
   url?: string;
@@ -36,15 +37,40 @@ function buildLocation(opts: { url?: string; route?: string }): RouteHook {
   return { path, searchParams, pathParams };
 }
 
+let prefetchSeq = 0;
+
+/**
+ * Prefetch a loader's data and write the result into its cache.
+ *
+ * In the browser this delegates to the same RPC path that `loader.View()` uses
+ * at runtime: a POST to `/__loaders`. In SSR or test environments it falls
+ * back to invoking the loader function directly. This matches `runLoader`'s
+ * dispatch and means consumers do not need to know which side they are on.
+ *
+ * For non-streaming loaders the returned promise resolves with the final
+ * value. For streaming loaders it resolves with the first chunk; subsequent
+ * chunks update the cache as they arrive.
+ */
 export async function prefetch<T>(
   ref: LoaderRef<T>,
   opts: PrefetchOptions<T> = {}
 ): Promise<T> {
   const location = opts.location ?? buildLocation({ url: opts.url, route: opts.route });
   const cache = opts.cache ?? ref.cache;
-  // Prefetch is browser-only; loaders that touch `ctx.c` are server-only by contract.
-  // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
-  const result = await (ref.fn({ c: undefined as any, location, signal: new AbortController().signal }) as Promise<T>);
+  const id = `prefetch:${++prefetchSeq}`;
+  const signal = new AbortController().signal;
+
+  const result = await runLoader<T>(ref, location, id, signal, {
+    onChunk: (v) => {
+      cache?.set(v);
+    },
+    onError: () => {
+      // Errors after the first chunk are swallowed: prefetch is best-effort
+      // and the page itself will see the same failure when it actually loads.
+    },
+    onEnd: () => {},
+  });
+
   if (isBrowser()) cache?.set(result);
   return result;
 }
