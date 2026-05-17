@@ -12,6 +12,9 @@
   },
   "license": "MIT",
   "author": "Steven Beshensky",
+  "engines": {
+    "node": ">=20"
+  },
   "files": ["dist", "README.md"],
   "type": "module",
   "exports": {
@@ -22,7 +25,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "tsc"
   },
   "dependencies": {
     "@hono-preact/iso": "workspace:*"
@@ -31,8 +35,8 @@
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
-    "preact-iso": "*",
-    "preact-render-to-string": "*"
+    "preact-iso": ">=2.11.0",
+    "preact-render-to-string": ">=6.0.0"
   },
   "devDependencies": {
     "typescript": "*"

@@ -12,6 +12,9 @@
   },
   "license": "MIT",
   "author": "Steven Beshensky",
+  "engines": {
+    "node": ">=20"
+  },
   "files": ["dist", "README.md"],
   "type": "module",
   "exports": {
@@ -22,7 +25,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "tsc"
   },
   "dependencies": {
     "@babel/parser": "^7.29.2",
