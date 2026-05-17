@@ -137,15 +137,6 @@ importers:
 
   packages/hono-preact:
     dependencies:
-      '@hono-preact/iso':
-        specifier: workspace:*
-        version: link:../iso
-      '@hono-preact/server':
-        specifier: workspace:*
-        version: link:../server
-      '@hono-preact/vite':
-        specifier: workspace:*
-        version: link:../vite
       hono:
         specifier: '>=4.0.0'
         version: 4.12.14
@@ -165,6 +156,15 @@ importers:
         specifier: ^8.0.8
         version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0)
     devDependencies:
+      '@hono-preact/iso':
+        specifier: workspace:*
+        version: link:../iso
+      '@hono-preact/server':
+        specifier: workspace:*
+        version: link:../server
+      '@hono-preact/vite':
+        specifier: workspace:*
+        version: link:../vite
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
