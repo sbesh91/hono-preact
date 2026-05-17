@@ -93,11 +93,7 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
       return {
         ...shared,
         ssr: {
-          noExternal: [
-            'preact-render-to-string',
-            'preact-iso',
-            'hono-preact',
-          ],
+          noExternal: ['preact-render-to-string', 'preact-iso', 'hono-preact'],
         },
         build: {
           ...shared.build,

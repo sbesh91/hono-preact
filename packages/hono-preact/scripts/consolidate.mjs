@@ -11,7 +11,14 @@
 //   3. Strip stale `//# sourceMappingURL=` references since we drop the maps.
 
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,9 +27,21 @@ const PACKAGES_DIR = fileURLToPath(new URL('../..', import.meta.url));
 const DIST = join(ROOT, 'dist');
 
 const SUBPACKAGES = [
-  { name: 'iso', src: join(PACKAGES_DIR, 'iso', 'dist'), dest: join(DIST, 'iso') },
-  { name: 'server', src: join(PACKAGES_DIR, 'server', 'dist'), dest: join(DIST, 'server') },
-  { name: 'vite', src: join(PACKAGES_DIR, 'vite', 'dist'), dest: join(DIST, 'vite') },
+  {
+    name: 'iso',
+    src: join(PACKAGES_DIR, 'iso', 'dist'),
+    dest: join(DIST, 'iso'),
+  },
+  {
+    name: 'server',
+    src: join(PACKAGES_DIR, 'server', 'dist'),
+    dest: join(DIST, 'server'),
+  },
+  {
+    name: 'vite',
+    src: join(PACKAGES_DIR, 'vite', 'dist'),
+    dest: join(DIST, 'vite'),
+  },
 ];
 
 // Maps a published-source string to the consolidated dist path it should point at.
@@ -81,7 +100,7 @@ async function rewriteImports(filePath) {
       const distRel = DIST_PATHS[source];
       if (!distRel) return match;
       return `${q1}${relImport(filePath, distRel, isTypeFile)}${q2}`;
-    },
+    }
   );
 
   // Drop stale sourcemap pointers since we don't copy the .map files.
@@ -94,7 +113,7 @@ async function main() {
   for (const pkg of SUBPACKAGES) {
     if (!existsSync(pkg.src)) {
       throw new Error(
-        `Workspace package dist missing: ${pkg.src}. Run \`pnpm --filter @hono-preact/${pkg.name} build\` first.`,
+        `Workspace package dist missing: ${pkg.src}. Run \`pnpm --filter @hono-preact/${pkg.name} build\` first.`
       );
     }
     if (existsSync(pkg.dest)) await rm(pkg.dest, { recursive: true });
@@ -108,7 +127,7 @@ async function main() {
   });
 
   console.log(
-    `consolidated ${SUBPACKAGES.map((p) => '@hono-preact/' + p.name).join(', ')} into hono-preact/dist/`,
+    `consolidated ${SUBPACKAGES.map((p) => '@hono-preact/' + p.name).join(', ')} into hono-preact/dist/`
   );
 }
 
