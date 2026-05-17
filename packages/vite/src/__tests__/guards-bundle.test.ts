@@ -21,7 +21,7 @@ async function bundleFor(ssr: boolean): Promise<string> {
       ssr: ssr || undefined,
       rollupOptions: {
         input: path.join(fixtureDir, 'page.tsx'),
-        external: ['@hono-preact/iso', '@hono-preact/iso/internal'],
+        external: ['@hono-preact/iso', '@hono-preact/iso/internal', 'hono-preact', 'hono-preact/internal'],
       },
       minify: false,
       target: 'esnext',

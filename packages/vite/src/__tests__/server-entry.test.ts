@@ -20,9 +20,9 @@ describe('generateServerEntrySource', () => {
 
     // Framework imports
     expect(src).toContain(`import { Hono } from 'hono';`);
-    expect(src).toContain(`import { Routes, env } from '@hono-preact/iso';`);
+    expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
     expect(src).toContain(
-      `import {\n  actionsHandler,\n  loadersHandler,\n  renderPage,\n  routeServerModules,\n} from '@hono-preact/server';`
+      `import {\n  actionsHandler,\n  loadersHandler,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
     );
 
     // User imports (absolute paths)

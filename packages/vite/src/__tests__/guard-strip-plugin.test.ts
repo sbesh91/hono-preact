@@ -29,7 +29,7 @@ describe('guardStripPlugin: client pass (non-ssr)', () => {
     `;
     const result = transform(code, '/src/pages/admin.tsx');
     expect(result?.code).toContain(
-      "import { __$guardNoop_hpiso } from '@hono-preact/iso/internal';"
+      "import { __$guardNoop_hpiso } from 'hono-preact/internal';"
     );
     expect(result?.code).toContain('defineServerGuard(__$guardNoop_hpiso)');
     expect(result?.code).not.toContain('await secret()');
@@ -59,7 +59,7 @@ describe('guardStripPlugin: server pass (ssr=true)', () => {
     `;
     const result = transform(code, '/src/pages/admin.tsx', { ssr: true });
     expect(result?.code).toContain(
-      "import { __$guardNoop_hpiso } from '@hono-preact/iso/internal';"
+      "import { __$guardNoop_hpiso } from 'hono-preact/internal';"
     );
     expect(result?.code).toContain('defineClientGuard(__$guardNoop_hpiso)');
     expect(result?.code).not.toContain('await fetchFromBrowser()');

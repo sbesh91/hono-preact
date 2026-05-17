@@ -9,7 +9,7 @@ import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
-const NOOP_IMPORT_SOURCE = '@hono-preact/iso/internal';
+const NOOP_IMPORT_SOURCE = 'hono-preact/internal';
 const NOOP_LOCAL_NAME = '__$guardNoop_hpiso';
 
 type GuardFactory = 'defineServerGuard' | 'defineClientGuard';

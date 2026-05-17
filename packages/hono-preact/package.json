@@ -50,14 +50,9 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/consolidate.mjs",
     "dev": "tsc --watch",
-    "prepublishOnly": "tsc"
-  },
-  "dependencies": {
-    "@hono-preact/iso": "workspace:*",
-    "@hono-preact/server": "workspace:*",
-    "@hono-preact/vite": "workspace:*"
+    "prepublishOnly": "tsc && node scripts/consolidate.mjs"
   },
   "peerDependencies": {
     "hono": ">=4.0.0",
@@ -68,6 +63,9 @@
     "vite": ">=5.0.0"
   },
   "devDependencies": {
+    "@hono-preact/iso": "workspace:*",
+    "@hono-preact/server": "workspace:*",
+    "@hono-preact/vite": "workspace:*",
     "typescript": "*"
   }
 }

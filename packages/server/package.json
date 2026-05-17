@@ -1,6 +1,7 @@
 {
   "name": "@hono-preact/server",
   "version": "0.1.0",
+  "private": true,
   "description": "Internal package for hono-preact. Use the hono-preact umbrella instead.",
   "keywords": [
     "hono-preact",

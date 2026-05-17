@@ -25,13 +25,13 @@ export function generateServerEntrySource(
     `import { Hono } from 'hono';\n` +
     `import { h } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes, env } from '@hono-preact/iso';\n` +
+    `import { Routes, env } from 'hono-preact';\n` +
     `import {\n` +
     `  actionsHandler,\n` +
     `  loadersHandler,\n` +
     `  renderPage,\n` +
     `  routeServerModules,\n` +
-    `} from '@hono-preact/server';\n` +
+    `} from 'hono-preact/server';\n` +
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +

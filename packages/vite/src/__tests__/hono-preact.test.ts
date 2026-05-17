@@ -105,8 +105,6 @@ describe('honoPreact server build config', () => {
       'preact-render-to-string',
       'preact-iso',
       'hono-preact',
-      '@hono-preact/iso',
-      '@hono-preact/server',
     ]);
   });
 

@@ -294,12 +294,12 @@ export function serverOnlyPlugin(): Plugin {
 
       if (needsCreateLoaderStubImport) {
         s.prepend(
-          `import { __$createLoaderStub_hpiso } from '@hono-preact/iso/internal';\n`
+          `import { __$createLoaderStub_hpiso } from 'hono-preact/internal';\n`
         );
       }
       if (needsUseActionImport) {
         s.prepend(
-          `import { useAction as __$useAction_hpiso } from '@hono-preact/iso';\n`
+          `import { useAction as __$useAction_hpiso } from 'hono-preact';\n`
         );
       }
 
