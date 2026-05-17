@@ -11,7 +11,9 @@ describe('__$createLoaderStub_hpiso', () => {
     expect(stub.__moduleKey).toBe('pages/movie');
     expect(stub.__loaderName).toBe('summary');
     expect(typeof stub.__id).toBe('symbol');
-    expect(Symbol.keyFor(stub.__id)).toBe('@hono-preact/loader:pages/movie::summary');
+    expect(Symbol.keyFor(stub.__id)).toBe(
+      '@hono-preact/loader:pages/movie::summary'
+    );
     expect(typeof stub.fn).toBe('function');
     expect(typeof stub.useData).toBe('function');
     expect(typeof stub.useError).toBe('function');
@@ -22,8 +24,14 @@ describe('__$createLoaderStub_hpiso', () => {
   });
 
   it('two stubs with the same key share __id (and thus cache)', () => {
-    const a = __$createLoaderStub_hpiso({ __moduleKey: 'pages/x', __loaderName: 'foo' });
-    const b = __$createLoaderStub_hpiso({ __moduleKey: 'pages/x', __loaderName: 'foo' });
+    const a = __$createLoaderStub_hpiso({
+      __moduleKey: 'pages/x',
+      __loaderName: 'foo',
+    });
+    const b = __$createLoaderStub_hpiso({
+      __moduleKey: 'pages/x',
+      __loaderName: 'foo',
+    });
     expect(a.__id).toBe(b.__id);
   });
 

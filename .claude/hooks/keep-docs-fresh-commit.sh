@@ -22,13 +22,13 @@ docs_changed=0
 while IFS= read -r f; do
   case "$f" in
     packages/*) pkg_changed=1 ;;
-    apps/app/src/pages/docs/*) docs_changed=1 ;;
+    apps/site/src/pages/docs/*) docs_changed=1 ;;
   esac
 done <<< "$staged"
 
 if [ "$pkg_changed" = "1" ] && [ "$docs_changed" = "0" ]; then
   echo "keep-docs-fresh: this commit stages packages/ changes but no docs/ updates." >&2
-  echo "  Grep apps/app/src/pages/docs/ for any changed/added/renamed public symbols and stage doc updates alongside." >&2
+  echo "  Grep apps/site/src/pages/docs/ for any changed/added/renamed public symbols and stage doc updates alongside." >&2
   echo "  If this commit is a pure internal refactor with no public-API surface change, proceed." >&2
 fi
 

@@ -43,8 +43,14 @@ describe('defineLoader: __loaderName opt', () => {
   });
 
   it('two loaders with same moduleKey but different loaderName have different __id', () => {
-    const a = defineLoader(async () => ({}), { __moduleKey: 'pages/movie', __loaderName: 'summary' });
-    const b = defineLoader(async () => ({}), { __moduleKey: 'pages/movie', __loaderName: 'cast' });
+    const a = defineLoader(async () => ({}), {
+      __moduleKey: 'pages/movie',
+      __loaderName: 'summary',
+    });
+    const b = defineLoader(async () => ({}), {
+      __moduleKey: 'pages/movie',
+      __loaderName: 'cast',
+    });
     expect(a.__id).not.toBe(b.__id);
   });
 

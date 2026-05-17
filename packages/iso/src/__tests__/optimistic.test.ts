@@ -10,7 +10,10 @@ afterEach(() => {
 describe('useOptimistic', () => {
   it('returns base value when no entries are queued', () => {
     const { result } = renderHook(() =>
-      useOptimistic([1, 2, 3], (current: number[], p: number) => [...current, p])
+      useOptimistic([1, 2, 3], (current: number[], p: number) => [
+        ...current,
+        p,
+      ])
     );
     expect(result.current[0]).toEqual([1, 2, 3]);
   });

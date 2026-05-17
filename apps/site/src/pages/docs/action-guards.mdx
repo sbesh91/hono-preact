@@ -1,0 +1,149 @@
+# Action Guards
+
+Action guards are middleware-style functions that run before a server action executes. Use them for authentication, authorization, rate limiting, or any cross-cutting concern that should halt execution before the action body runs.
+
+## How it works
+
+Export an `actionGuards` array from your `.server.ts` file alongside `serverActions`. `actionsHandler` runs the guard chain before dispatching to the action function. Guards that call `next()` allow the request through; guards that throw `ActionGuardError` reject it with a 4xx response.
+
+Guards run for every action in the module, so define per-module guards for blanket protection and rely on action-level logic for fine-grained rules.
+
+## Defining guards
+
+```ts
+// src/pages/movies.server.ts
+import { defineAction, defineActionGuard, ActionGuardError } from 'hono-preact';
+import type { Context } from 'hono';
+import { getCurrentUser } from '@/server/auth.js';
+
+export const actionGuards = [
+  defineActionGuard(async ({ c }, next) => {
+    const user = await getCurrentUser(c as Context);
+    if (!user) throw new ActionGuardError('Authentication required', 401);
+    return next();
+  }),
+];
+
+export const serverActions = {
+  addMovie: defineAction<{ title: string }, { ok: boolean }>(
+    async (_ctx, payload) => {
+      await db.insert({ title: payload.title });
+      return { ok: true };
+    }
+  ),
+  deleteMovie: defineAction<{ id: string }, { ok: boolean }>(
+    async (_ctx, { id }) => {
+      await db.delete(id);
+      return { ok: true };
+    }
+  ),
+};
+```
+
+Both `addMovie` and `deleteMovie` run through the guard chain before executing.
+
+## API
+
+### `defineActionGuard`
+
+```ts
+import { defineActionGuard } from 'hono-preact';
+
+const guard = defineActionGuard(async (ctx, next) => {
+  // inspect ctx, then either throw or call next()
+  return next();
+});
+```
+
+`defineActionGuard` is a no-op at runtime; it exists only for type inference. A guard receives:
+
+| Property      | Type      | Description                                                                                                        |
+| ------------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
+| `ctx.c`       | `unknown` | The Hono `Context` for the request. Cast to `import type { Context } from 'hono'` to access headers, cookies, etc. |
+| `ctx.module`  | `string`  | The module name derived from the `.server.ts` filename.                                                            |
+| `ctx.action`  | `string`  | The name of the action being called.                                                                               |
+| `ctx.payload` | `unknown` | The deserialized request payload.                                                                                  |
+
+### `ActionGuardError`
+
+Throw `ActionGuardError` to reject the request with an HTTP error response:
+
+```ts
+import { ActionGuardError, type ContentfulStatusCode } from 'hono-preact';
+
+throw new ActionGuardError('Not allowed'); // 403 by default
+throw new ActionGuardError('Unauthorized', 401);
+throw new ActionGuardError('Rate limited', 429);
+
+const status: ContentfulStatusCode = pickStatus();
+throw new ActionGuardError('Nope', status);
+```
+
+The error message is returned as `{ "error": "..." }` JSON. The `status` field sets the HTTP response status.
+
+The `status` argument is typed as `ContentfulStatusCode` (Hono's union of status codes that may carry a body). Literal codes like `401`, `403`, `429` are accepted directly; if you compute the code at runtime, annotate the variable with `ContentfulStatusCode`.
+
+### `next()`
+
+A guard must either:
+
+- **await (or return) `next()`** to pass control to the next guard in the chain, or to the action if no more guards remain, or
+- **throw `ActionGuardError`** to block the request with a structured status + message.
+
+Returning without doing either is treated as a bug. The framework will reject the request with a 500 and a descriptive error so the silent-passthrough footgun (the OPPOSITE of every other middleware system you've used) cannot become the wire contract by accident.
+
+```ts
+// ✅ pass through to the next guard / action
+defineActionGuard(async (_ctx, next) => {
+  await doSomeAudit();
+  return next();
+});
+
+// ✅ block
+defineActionGuard(async (ctx) => {
+  if (!ok) throw new ActionGuardError('Not allowed', 403);
+  // (unreachable; throw stops the chain)
+});
+
+// ❌ ambiguous — framework throws at runtime so this can't ship silently
+defineActionGuard(async () => {
+  // no next(), no throw
+});
+```
+
+## Guard chains
+
+Guards run in array order. The first to throw stops the chain; subsequent guards and the action are not called:
+
+```ts
+export const actionGuards = [
+  requireAuth, // runs first
+  requireRole('editor'), // only runs if requireAuth passes
+];
+```
+
+## Composing guards
+
+Guards are plain functions, so extract and reuse them across modules:
+
+```ts
+// src/server/guards.ts
+export const requireAuth = defineActionGuard(async ({ c }, next) => {
+  const user = await getCurrentUser(c as Context);
+  if (!user) throw new ActionGuardError('Authentication required', 401);
+  return next();
+});
+```
+
+```ts
+// src/pages/admin.server.ts
+import { requireAuth } from '@/server/guards.js';
+
+export const actionGuards = [requireAuth];
+```
+
+See [Route Guards: Composing guards](/docs/guards#composing-guards) for the full composition pattern. The same approach applies to action guards.
+
+## The server/client boundary
+
+`serverOnlyPlugin` replaces any imported `actionGuards` in the client bundle with an empty array, so guard logic never reaches the browser. `serverLoaderValidationPlugin` enforces that `actionGuards` is one of the permitted named exports from `.server.*` files (`serverLoaders`, `serverActions`, `actionGuards`). See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

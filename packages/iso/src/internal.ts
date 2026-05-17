@@ -6,8 +6,25 @@
 // what you need (e.g. distinct fallbacks for guards vs. loader, custom
 // pipeline ordering, advanced SSR work).
 //
-// The contract here is intentionally less stable than the package's main
-// surface. Internal symbols may change shape between minor versions.
+// STABILITY: this subpath is intentionally less stable than the package's
+// main surface. Symbols may be renamed, retyped, or removed in any
+// non-major release. Pin a specific framework version if your code reaches
+// in here.
+//
+// The file is split into two sections:
+//
+//   1. ADVANCED USER ESCAPE HATCHES — primitives users may reasonably
+//      compose by hand when `definePage` bindings aren't enough. Reach for
+//      these knowingly; expect to read the source.
+//
+//   2. FRAMEWORK-EMITTED (DO NOT IMPORT FROM USER CODE) — symbols the
+//      framework's own Vite plugins emit `import` statements for, then
+//      reference in code they generate. They're exported here only because
+//      the emitted code needs a real import target. Importing them
+//      yourself bypasses everything the public API does and your code
+//      will break at a non-major upgrade.
+
+// ─── Section 1: advanced user escape hatches ─────────────────────────────
 
 export { Loader } from './internal/loader.js';
 export { Envelope } from './internal/envelope.js';
@@ -21,10 +38,17 @@ export {
   GuardResultContext,
 } from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
-export { RouteLocationsContext, RouteLocationsProvider } from './internal/route-locations.js';
+export {
+  RouteLocationsContext,
+  RouteLocationsProvider,
+} from './internal/route-locations.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
-export { runRequestScope, getRequestStore } from './cache.js';
+export {
+  runRequestScope,
+  getRequestStore,
+  captureRequestScope,
+} from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
 export { runServerGuards, runClientGuards } from './guard.js';
 export { HonoRequestContext } from './internal/contexts.js';
@@ -32,7 +56,6 @@ export { HonoRequestContext } from './internal/contexts.js';
 export {
   __dispatchRouteChange,
   __subscribeRouteChange,
-  __enableViewTransitions,
 } from './internal/route-change.js';
 
 export {
@@ -46,6 +69,11 @@ export {
 } from './internal/streaming-ssr.js';
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
 
-export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
+// ─── Section 2: framework-emitted (DO NOT IMPORT FROM USER CODE) ─────────
+// The `__$..._hpiso` naming makes the convention visible at every grep:
+// these symbols are referenced by code the framework's Vite plugins emit
+// (serverOnlyPlugin's loader stubs, guardStripPlugin's no-op replacement).
+// User code that imports them couples to plugin internals.
 
+export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export { __$guardNoop_hpiso } from './internal/guard-noop.js';

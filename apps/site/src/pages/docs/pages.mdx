@@ -1,0 +1,118 @@
+# Adding Pages
+
+A page is two things: a view component (and optionally a sibling `.server.ts` for loader and actions), plus an entry in `routes.ts` that wires the URL to those files. The framework does not auto-discover pages; the route table is the source of truth.
+
+## Standard pages
+
+A view component is a default-exported Preact component. Loaders, guards, and Wrappers attach to it via `definePage`. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module).
+
+### Step 1: Create `src/pages/about.tsx`
+
+```tsx
+import type { FunctionComponent } from 'preact';
+
+const About: FunctionComponent = () => {
+  return <section>About this app.</section>;
+};
+
+About.displayName = 'About';
+
+export default About;
+```
+
+The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs loader, fallback, or guard bindings).
+
+### Step 2: Add to `src/routes.ts`
+
+```ts
+import { defineRoutes } from 'hono-preact';
+
+export default defineRoutes([
+  // ... other routes
+  { path: '/about', view: () => import('./pages/about.js') },
+]);
+```
+
+`view` is a deferred dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.
+
+For pages that need data, import `serverLoaders` from the sibling `.server.ts` and use `.View()` to create the component:
+
+```tsx
+// src/pages/about.tsx
+import { definePage } from 'hono-preact';
+import { serverLoaders } from './about.server.js';
+
+const AboutView = serverLoaders.default.View(({ data }) => (
+  <section>{/* ... */}</section>
+));
+
+export default definePage(AboutView);
+```
+
+```ts
+// src/routes.ts
+{
+  path: '/about',
+  view: () => import('./pages/about.js'),
+  server: () => import('./pages/about.server.js'),
+}
+```
+
+The `server` field declares the sibling `.server.ts` exists; `routeServerModules(routes)` in `server.tsx` wires it into the loader/action handlers automatically.
+
+### Step 3: Link to it
+
+From anywhere in the app:
+
+```tsx
+<a href="/about">About</a>
+```
+
+preact-iso intercepts clicks on same-origin `<a>` tags and handles them as client-side navigations.
+
+## Pages with shared chrome
+
+When several routes share a header, sidebar, or other wrapper, declare a layout group instead of repeating the chrome in every view. See [Layouts & Nested Routes](/docs/layouts) for the full pattern.
+
+```ts
+{
+  path: '/movies',
+  layout: () => import('./pages/movies-layout.js'),
+  children: [
+    { path: '',    view: () => import('./pages/movies-list.js'), server: () => import('./pages/movies-list.server.js') },
+    { path: ':id', view: () => import('./pages/movie.js'),       server: () => import('./pages/movie.server.js') },
+  ],
+}
+```
+
+## MDX content pages
+
+MDX is supported via the `@mdx-js/rollup` Vite plugin (configured in `vite.config.ts`) plus a small wrapper component that owns the per-file glob.
+
+The demo's `apps/site/src/components/DocsRoute.tsx` discovers every `.mdx` file in `src/pages/docs/` via `import.meta.glob` and registers each as an inner route. Mount it once in `routes.ts` for both the index URL and the wildcard:
+
+```ts
+const docsView = () => import('./components/DocsRoute.js');
+
+export default defineRoutes([
+  // ...
+  { path: '/docs', view: docsView },
+  { path: '/docs/*', view: docsView },
+]);
+```
+
+Hoisting `docsView` to a const lets the framework share one component reference across both registrations, preserving the docs sidebar mount across navigations between docs pages.
+
+**To add a new MDX page**, drop a file into `src/pages/docs/<slug>.mdx`. The DocsRoute component picks it up automatically via the glob; no `routes.ts` edit needed for individual MDX pages. (See `.claude/skills/add-docs-page.md` for the project-local skill.)
+
+**Note on `index.mdx`:** The DocsRoute glob handler maps `index.mdx` to the empty path inside the inner router so it serves at `/docs` (rather than `/docs/index`).
+
+## View transitions
+
+Route changes trigger a view transition automatically in browsers that support `document.startViewTransition`. The framework's generated client entry wraps the `onRouteChange` callback fired by preact-iso's `<Router>` and dispatches `startViewTransition` for every successful navigation; you do not opt in. Style the transition via `::view-transition-old(root)` / `::view-transition-new(root)` CSS, and respect `prefers-reduced-motion` to disable it.
+
+## See also
+
+- [The Route Table](/docs/routes) — full reference for `defineRoutes`.
+- [Layouts & Nested Routes](/docs/layouts) — when and how to share chrome across URLs.
+- [Server Loaders](/docs/loaders) — what goes in the `.server.ts` file.

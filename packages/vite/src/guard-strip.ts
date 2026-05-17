@@ -6,6 +6,7 @@ import type {
 } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
 const NOOP_IMPORT_SOURCE = '@hono-preact/iso/internal';
@@ -15,7 +16,7 @@ type GuardFactory = 'defineServerGuard' | 'defineClientGuard';
 
 function collectLocalBindings(
   ast: ReturnType<typeof parse>,
-  targets: Set<GuardFactory>,
+  targets: Set<GuardFactory>
 ): Map<string, GuardFactory> {
   const bindings = new Map<string, GuardFactory>();
   for (const node of ast.program.body) {
@@ -39,7 +40,7 @@ function collectLocalBindings(
 function findCallsByLocalName(
   node: unknown,
   bindings: Map<string, GuardFactory>,
-  hits: Array<{ start: number; end: number; argStart: number; argEnd: number }>,
+  hits: Array<{ start: number; end: number; argStart: number; argEnd: number }>
 ): void {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
@@ -71,8 +72,17 @@ function findCallsByLocalName(
     });
   }
   for (const key of Object.keys(node as object)) {
-    if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
-    findCallsByLocalName((node as Record<string, unknown>)[key], bindings, hits);
+    if (
+      key === 'loc' ||
+      key === 'leadingComments' ||
+      key === 'trailingComments'
+    )
+      continue;
+    findCallsByLocalName(
+      (node as Record<string, unknown>)[key],
+      bindings,
+      hits
+    );
   }
 }
 
@@ -90,14 +100,19 @@ export function guardStripPlugin(): Plugin {
 
       const ast = parse(code, {
         sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
+        plugins: BABEL_PARSER_PLUGINS,
         errorRecovery: true,
       });
 
       const bindings = collectLocalBindings(ast, new Set([stripping]));
       if (bindings.size === 0) return;
 
-      const hits: Array<{ start: number; end: number; argStart: number; argEnd: number }> = [];
+      const hits: Array<{
+        start: number;
+        end: number;
+        argStart: number;
+        argEnd: number;
+      }> = [];
       findCallsByLocalName(ast.program, bindings, hits);
       if (hits.length === 0) return;
 
@@ -105,7 +120,9 @@ export function guardStripPlugin(): Plugin {
       for (const hit of [...hits].reverse()) {
         s.overwrite(hit.argStart, hit.argEnd, NOOP_LOCAL_NAME);
       }
-      s.prepend(`import { ${NOOP_LOCAL_NAME} } from '${NOOP_IMPORT_SOURCE}';\n`);
+      s.prepend(
+        `import { ${NOOP_LOCAL_NAME} } from '${NOOP_IMPORT_SOURCE}';\n`
+      );
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
   };

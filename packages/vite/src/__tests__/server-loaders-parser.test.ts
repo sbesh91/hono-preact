@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { parse } from '@babel/parser';
 import type { Program } from '@babel/types';
 import { parseServerLoaders, readParamsOpt } from '../server-loaders-parser.js';
+import { BABEL_PARSER_PLUGINS } from '../parser-options.js';
 
 function parseProgram(code: string): Program {
   return parse(code, {
     sourceType: 'module',
-    plugins: ['typescript', 'jsx'],
+    plugins: BABEL_PARSER_PLUGINS,
     errorRecovery: true,
   }).program;
 }

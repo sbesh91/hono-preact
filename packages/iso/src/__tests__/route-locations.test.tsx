@@ -10,7 +10,11 @@ import {
 
 describe('RouteLocationsProvider', () => {
   it('exposes the moduleKey -> location map to descendants', () => {
-    const inner = { path: '/movies/123', pathParams: { id: '123' }, searchParams: {} };
+    const inner = {
+      path: '/movies/123',
+      pathParams: { id: '123' },
+      searchParams: {},
+    };
     let observed: any = null;
 
     const Probe = () => {
@@ -32,7 +36,11 @@ describe('RouteLocationsProvider', () => {
 
   it('extends a parent map without mutating it', () => {
     const outer = { path: '/movies', pathParams: {}, searchParams: {} };
-    const inner = { path: '/movies/123', pathParams: { id: '123' }, searchParams: {} };
+    const inner = {
+      path: '/movies/123',
+      pathParams: { id: '123' },
+      searchParams: {},
+    };
     let observed: any = null;
 
     const Probe = () => {

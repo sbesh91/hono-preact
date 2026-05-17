@@ -1,0 +1,94 @@
+# Reloading Data
+
+Sometimes you need to re-run the loader imperatively, for example after a user adds a record to a table. The `useReload` hook lets you do this from within a page component.
+
+## Basic usage
+
+Snippets on this page assume `type MovieList = { results: { id: number; title: string }[] }`.
+
+**`src/pages/movies.server.ts`** holds the loader (the cache is auto-attached):
+
+```ts
+import { defineLoader } from 'hono-preact';
+
+export const serverLoaders = {
+  default: defineLoader(async () => ({
+    movies: await getMovies(),
+  })),
+};
+```
+
+**`src/pages/movies.tsx`** uses `.View()` to create the component. `useReload` is called inside the render function, which runs inside the loader's boundary:
+
+```tsx
+import { definePage, useReload } from 'hono-preact';
+import { serverLoaders } from './movies.server.js';
+
+const dataLoader = serverLoaders.default;
+
+const MoviesView = dataLoader.View(({ data }) => {
+  const { reload, reloading } = useReload();
+
+  const handleAdd = async () => {
+    await addMovie({ title: 'New Movie' });
+    reload();
+  };
+
+  return (
+    <>
+      <button onClick={handleAdd} disabled={reloading}>
+        {reloading ? 'Adding...' : 'Add Movie'}
+      </button>
+      <ul>
+        {data.movies.results.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+    </>
+  );
+});
+
+export default definePage(MoviesView);
+```
+
+**`src/routes.ts`** wires the URL to the view and its server module:
+
+```ts
+{
+  path: '/movies',
+  view: () => import('./pages/movies.js'),
+  server: () => import('./pages/movies.server.js'),
+}
+```
+
+`useReload` must be called inside a component rendered within a loader boundary (inside `.View()` or inside a `loader.Boundary`). Calling it outside throws an error.
+
+## Background refresh
+
+Reload is a background refresh: the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
+
+## Three knobs, three behaviors
+
+The framework has three ways to invalidate or re-run a loader. They look similar at the call site but mean different things at runtime:
+
+| Knob                                      | Triggers fetch now? | Clears cache?                      | Affects what?                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useReload().reload()`                    | **Yes**             | Yes (writes fresh data on success) | The active page's loader (the one whose boundary you're inside).                                                                                                                                                    |
+| `loader.invalidate()`                     | No                  | Yes (drops the entry)              | A specific loader's cache only. Next navigation that mounts the loader will refetch on cache miss.                                                                                                                  |
+| `useAction({ invalidate: 'auto' })`       | **Yes**             | Yes                                | After the action succeeds, re-runs the active page's loader (the one wrapping the `useAction` call). Equivalent to calling `useReload().reload()` inside `onSuccess`.                                               |
+| `useAction({ invalidate: [refA, refB] })` | Sometimes           | Yes                                | After the action succeeds, calls `.invalidate()` on each ref. If any ref is the active page's loader, ALSO re-runs that loader; sibling-page loaders just have their cache cleared and refetch on their next mount. |
+
+The mental model: **`invalidate`** is "mark stale, refetch lazily". **`reload`** is "fetch right now". `useAction`'s `'auto'` mode is sugar over the reload path; its array mode is sugar over `loader.invalidate()` calls plus an opportunistic reload if the active loader is in the list.
+
+A common surprise: `invalidate: 'auto'` is NOT a no-op even when the loader has no observable changes — it triggers a real network request through `/__loaders`. Use `invalidate: false` (the default) if you don't want a refetch after the action.
+
+## API
+
+```ts
+const { reload, reloading } = useReload();
+```
+
+| Value       | Type         | Description                                                                                                                                                                                                                   |
+| ----------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reload`    | `() => void` | Re-runs the `serverLoader`. If called while a fetch (initial load or a previous reload) is still in flight, the call is queued and runs once the in-flight fetch settles; concurrent calls coalesce into a single queued run. |
+| `reloading` | `boolean`    | `true` while the loader is fetching, `false` otherwise.                                                                                                                                                                       |

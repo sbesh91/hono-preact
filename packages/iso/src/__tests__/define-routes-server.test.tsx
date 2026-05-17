@@ -24,9 +24,7 @@ describe('defineRoutes: per-route location plumbing', () => {
     ]);
 
     history.replaceState(null, '', '/foo/123');
-    render(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
-    );
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
 
     await waitFor(() => expect(observed).toBeInstanceOf(Map));
     const loc = observed.get('pages/foo');
@@ -45,7 +43,8 @@ describe('defineRoutes: layout-level server plumbing', () => {
     };
 
     // Layout component that renders the inner Router output as <main>.
-    const Layout = ({ children }: { children: any }) => h('main', null, children);
+    const Layout = ({ children }: { children: any }) =>
+      h('main', null, children);
 
     const manifest = defineRoutes([
       {
@@ -65,9 +64,7 @@ describe('defineRoutes: layout-level server plumbing', () => {
     // Set the URL via history because LocationProvider in this preact-iso
     // version reads from window.location, not from a `url` prop.
     history.replaceState(null, '', '/movies/123');
-    render(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
-    );
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
 
     await waitFor(() => expect(observed?.get('pages/movie')).toBeDefined());
     const layoutLoc = observed.get('pages/movies-layout');

@@ -52,7 +52,7 @@ describe('getRequestHonoContext contract', () => {
     const fakeC = { kind: 'fake' } as unknown as Context;
     const observed = await runRequestScope(
       async () => getRequestHonoContext<Context>(),
-      { honoContext: fakeC },
+      { honoContext: fakeC }
     );
     expect(observed).toBe(fakeC);
   });
@@ -68,7 +68,7 @@ describe('LoaderCtx.c getter behavior', () => {
         onChunk: () => {},
         onError: () => {},
         onEnd: () => {},
-      }),
+      })
     ).resolves.toEqual({ ok: true });
   });
 
@@ -81,7 +81,7 @@ describe('LoaderCtx.c getter behavior', () => {
         onChunk: () => {},
         onError: () => {},
         onEnd: () => {},
-      }),
+      })
     ).rejects.toThrow(/ctx\.c is not available/);
   });
 });

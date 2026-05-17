@@ -6,7 +6,12 @@ import { Page } from '../page.js';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import type { Context } from 'hono';
-import { defineServerGuard, defineClientGuard, GuardRedirect, runServerGuards } from '../guard.js';
+import {
+  defineServerGuard,
+  defineClientGuard,
+  GuardRedirect,
+  runServerGuards,
+} from '../guard.js';
 import { HonoRequestContext } from '../internal/contexts.js';
 import { env } from '../is-browser.js';
 
@@ -144,7 +149,9 @@ describe('Page errorFallback catches loader errors', () => {
     env.current = 'server';
 
     const failing = defineLoader<{ msg: string }>(
-      async () => { throw new Error('boom'); },
+      async () => {
+        throw new Error('boom');
+      },
       { __moduleKey: 'test/page-error-boundary' }
     );
 

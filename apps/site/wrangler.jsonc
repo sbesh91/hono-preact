@@ -1,0 +1,45 @@
+{
+  "name": "hono-preact",
+  "main": "dist/index.js",
+  "compatibility_date": "2026-02-22",
+  "assets": {
+    "directory": "./dist",
+    // The build emits the Worker entry alongside the static client assets in
+    // ./dist (Vite's outDir, also the site's `main`). Workers Static Assets
+    // does NOT exclude `main` from the uploaded asset manifest, so without
+    // this list a request to `/index.js` (or `/tsconfig.tsbuildinfo` from an
+    // incremental typecheck) would be served as a public static file and
+    // leak the Worker source. Force those routes through the Worker; the
+    // catch-all SSR handler will respond, never the asset server.
+    //
+    // Adding new server-only artifacts? Either ensure they're emitted
+    // outside ./dist or extend this list.
+    "run_worker_first": [
+      "/index.js",
+      "/tsconfig.tsbuildinfo",
+    ],
+  },
+  "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "framework.sbesh.com",
+      "custom_domain": true,
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true,
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true,
+      "head_sampling_rate": 1,
+    },
+  },
+}

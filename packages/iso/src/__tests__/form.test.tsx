@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/preact';
+import {
+  render,
+  screen,
+  act,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from '@testing-library/preact';
 import { Form } from '../form.js';
 import { useAction, type ActionStub } from '../action.js';
 
@@ -79,9 +86,56 @@ describe('Form', () => {
       </Form>
     );
     const formEl = screen.getByRole('button').closest('form')!;
-    const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+    const submitEvent = new Event('submit', {
+      cancelable: true,
+      bubbles: true,
+    });
     formEl.dispatchEvent(submitEvent);
     expect(submitEvent.defaultPrevented).toBe(true);
+  });
+
+  it('collects duplicate field names into arrays instead of dropping all but the last', async () => {
+    // Repeated names — checkboxes, multi-select, multi-file inputs — used to
+    // collapse to the last value silently. Now they arrive as arrays, so the
+    // user's action types are forced to declare the shape and silent data
+    // loss is impossible.
+    const mutate = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <Form mutate={mutate}>
+        <input type="checkbox" name="tags" value="a" defaultChecked />
+        <input type="checkbox" name="tags" value="b" defaultChecked />
+        <input type="checkbox" name="tags" value="c" defaultChecked />
+        <input name="title" defaultValue="Dune" />
+        <button type="submit">Submit</button>
+      </Form>
+    );
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+
+    expect(mutate).toHaveBeenCalledWith({
+      tags: ['a', 'b', 'c'],
+      title: 'Dune',
+    });
+  });
+
+  it('keeps single-value fields as scalars (no spurious arrays)', async () => {
+    const mutate = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <Form mutate={mutate}>
+        <input name="title" defaultValue="Dune" />
+        <button type="submit">Submit</button>
+      </Form>
+    );
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+
+    expect(mutate).toHaveBeenCalledWith({ title: 'Dune' });
   });
 
   it('forwards streaming responses through useAction.mutate', async () => {

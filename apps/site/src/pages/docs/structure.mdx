@@ -1,0 +1,85 @@
+# Project Structure
+
+```
+hono-preact/                    # monorepo root
+├── apps/
+│   └── site/                    # the deployed application
+│       ├── src/
+│       │   ├── api.ts          # Optional: custom Hono routes mounted before SSR
+│       │   ├── Layout.tsx      # HTML shell with <Head>, <ClientScript />
+│       │   ├── routes.ts       # The route table (defineRoutes manifest)
+│       │   ├── pages/          # View components, paired .server.ts files, MDX content
+│       │   ├── components/     # Shared UI components (incl. DocsRoute for MDX)
+│       │   └── styles/         # Global CSS
+│       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
+│       └── wrangler.jsonc      # Cloudflare Workers deployment config
+└── packages/
+    ├── iso/                    # hono-preact: routing primitives + isomorphic data
+    ├── server/                 # hono-preact/server: render + handler wiring
+    └── vite/                   # hono-preact/vite: framework Vite plugins
+```
+
+## Key files
+
+### `apps/site/src/routes.ts`
+
+The single source of truth for URL routing. Exports a `defineRoutes(...)` manifest naming every page in the app, paired with an optional `server` import for any route that needs a loader or actions. See [The Route Table](/docs/routes).
+
+```ts
+import { defineRoutes } from 'hono-preact';
+
+export default defineRoutes([
+  { path: '/', view: () => import('./pages/home.js') },
+  { path: '/movies', layout: () => import('./pages/movies-layout.js'), children: [...] },
+  { path: '/demo/projects/:projectId', view: () => import('./pages/project.js'), server: () => import('./pages/project.server.js') },
+  { path: '*', view: () => import('./pages/not-found.js') },
+]);
+```
+
+### Client and server entries (generated)
+
+The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the `__loaders` and `__actions` handlers, the `location` middleware, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
+
+### `apps/site/src/Layout.tsx`
+
+Renders the HTML shell. Uses `<Head>` and `<ClientScript />` from `hono-preact` to declare the document title/meta and inject the client bundle script tag. Default-exports a component the framework's generated server entry renders for the catch-all route; the framework emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the user's `</head>`. View Transitions fire automatically on every client-side route change in browsers that support `document.startViewTransition`; style them via `::view-transition-old(root)` / `::view-transition-new(root)` CSS.
+
+### `apps/site/src/pages/`
+
+View components and their paired server modules. Files in this folder are referenced by entries in `routes.ts`; nothing is auto-discovered. Naming and folder structure are the user's choice (the demo uses kebab-case `movies-list.tsx` + `movies-list.server.ts` siblings).
+
+`layout.server.ts` is also valid alongside any `layout.tsx`. A loader declared there is auto-scoped to the layout's matched location, not the deepest active child route. The auto-scoping is structural: the framework infers scope from which route entry owns the `.server.*` file, with no opt-in flag required.
+
+MDX content (`pages/docs/*.mdx`) is mounted via `apps/site/src/components/DocsRoute.tsx`, which is registered as the `view` for `/docs` and `/docs/*` in `routes.ts`. The DocsRoute component owns its own `import.meta.glob` and inner `<Router>` for sub-page discovery.
+
+### `hono-preact` (workspace package)
+
+Isomorphic primitives shared between server and client (`packages/iso/`):
+
+- **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`. The route-table primitive and runtime mounter.
+- **Page bindings**: `definePage(Component, { errorFallback, guards, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need Wrapper or guard bindings. The `guards` array holds entries built via `defineServerGuard` and `defineClientGuard`; the framework filters by environment at runtime. Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX.
+- **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`.)
+- **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
+- **Caching**: `createCache` (advanced: shared caches across loaders).
+- **Guards**: `defineServerGuard`, `defineClientGuard`, `runServerGuards, runClientGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`, `ContentfulStatusCode`.
+- **Utilities**: `prefetch`, `isBrowser`, `env`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
+
+### `hono-preact/server` (workspace package)
+
+Server-only utilities (`packages/server/`):
+
+- **`renderPage`**: SSR entry that prerenders to HTML, injects head tags via hoofd, and turns `GuardRedirect` throws into HTTP redirects.
+- **`HonoContext`** / **`useHonoContext`**: access the Hono `Context` from Preact components during SSR.
+- **`location`**: middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`.
+- **`actionsHandler`**, **`loadersHandler`**: `POST /__actions` and `POST /__loaders` middleware. Accept either a Vite `import.meta.glob` result or the record produced by `routeServerModules`.
+- **`routeServerModules`**: adapter that converts a `RoutesManifest` into the lazy-glob shape the handlers consume.
+
+### `hono-preact/vite` (workspace package)
+
+Vite plugins for the framework (`packages/vite/`). The primary export is `honoPreact()`, which bundles all framework Vite configuration into a single plugin. See [Vite Configuration](/docs/vite-config) for usage.
+
+- **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, `@hono/vite-dev-server`, and the client-shim auto-injection.
+- **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing static imports with no-op stubs and dynamic `import('./*.server.*')` calls with `Promise.resolve({})` so server code never reaches the browser.
+- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverActions`, or `actionGuards`.
+- **`moduleKeyPlugin`** rewrites each `.server.*` file at build time with a `__moduleKey` derived from the file path, which the loader/action handlers use to dispatch RPC requests.
+- **`clientShimPlugin`** prepends a `globalThis.process ??= { env: { NODE_ENV } }` shim to the client entry so libraries that read `process.env.NODE_ENV` at module-eval time in the browser do not throw.

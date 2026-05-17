@@ -36,8 +36,8 @@ describe('<Guards> server-side', () => {
           <Guards guards={[probe]} location={loc}>
             <div />
           </Guards>
-        </LocationProvider>,
-      ),
+        </LocationProvider>
+      )
     ).toThrow(/HonoContext\.Provider/);
   });
 

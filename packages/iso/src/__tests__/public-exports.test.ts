@@ -6,10 +6,6 @@ describe('public exports for item 4', () => {
     expect(typeof iso.useRouteChange).toBe('function');
   });
 
-  it('exports ViewTransitions', () => {
-    expect(typeof iso.ViewTransitions).toBe('function');
-  });
-
   it('exports Head', () => {
     expect(typeof iso.Head).toBe('function');
   });

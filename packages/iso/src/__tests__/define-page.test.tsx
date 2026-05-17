@@ -7,7 +7,11 @@ import type { Context } from 'hono';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
-import { defineServerGuard, defineClientGuard, type GuardFn } from '../guard.js';
+import {
+  defineServerGuard,
+  defineClientGuard,
+  type GuardFn,
+} from '../guard.js';
 import { HonoRequestContext } from '../internal/contexts.js';
 
 const fakeC = {} as Context;
@@ -88,7 +92,9 @@ describe('definePage', () => {
     const sg = defineServerGuard(async (_ctx, next) => next());
     const cg = defineClientGuard(async (_ctx, next) => next());
     const bindings: PageBindings = {
-      errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
+      errorFallback: (err, reset) => (
+        <button onClick={reset}>{err.message}</button>
+      ),
       guards: [sg, cg],
     };
     function Body() {
@@ -119,11 +125,15 @@ describe('PageBindings surface', () => {
   it('accepts errorFallback and guards on the bindings type', () => {
     const guard = defineServerGuard(async (_ctx, next) => next());
     const bindings: PageBindings = {
-      errorFallback: (err, reset) => <button onClick={reset}>{err.message}</button>,
+      errorFallback: (err, reset) => (
+        <button onClick={reset}>{err.message}</button>
+      ),
       guards: [guard],
     };
     expectTypeOf(bindings.errorFallback).toMatchTypeOf<
-      JSX.Element | ((error: Error, reset: () => void) => JSX.Element) | undefined
+      | JSX.Element
+      | ((error: Error, reset: () => void) => JSX.Element)
+      | undefined
     >();
     expectTypeOf(bindings.guards).toEqualTypeOf<GuardFn[] | undefined>();
   });

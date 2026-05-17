@@ -6,7 +6,11 @@ describe('wrapPromise', () => {
     const { promise, resolve } = Promise.withResolvers<string>();
     const wrapped = wrapPromise(promise);
     let thrown: unknown;
-    try { wrapped.read(); } catch (e) { thrown = e; }
+    try {
+      wrapped.read();
+    } catch (e) {
+      thrown = e;
+    }
     expect(thrown).toBeInstanceOf(Promise);
     resolve('cleanup');
   });

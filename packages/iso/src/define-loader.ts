@@ -1,5 +1,9 @@
 import { h } from 'preact';
-import type { ComponentChildren, ComponentType, FunctionComponent } from 'preact';
+import type {
+  ComponentChildren,
+  ComponentType,
+  FunctionComponent,
+} from 'preact';
 import { useContext } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
@@ -70,6 +74,19 @@ export type DefineLoaderOpts<T> = {
 // would only clear the calling importer's copy. That breaks cross-route
 // invalidation (movie.tsx invalidating `moviesListLoader` no longer flushes
 // the list page's cache).
+//
+// CAVEAT — process-global identity. `Symbol.for(...)` produces a key in the
+// process-wide Symbol registry, so this map is shared across every consumer
+// of @hono-preact/iso running in the same V8 isolate. On Cloudflare Workers
+// (process-per-isolate, short-lived) this is fine. On a long-lived Node
+// process serving multiple tenants from one JS realm, the registry IS
+// shared across tenants — a loader registered by tenant A's
+// `pages/movies.server.ts` and tenant B's are colocated. Per-loader cache
+// keys (the `__moduleKey` + cache identity symbol minted at defineLoader
+// time) prevent cross-tenant DATA leaks; what's shared is the cache
+// registry's identity, not the cache contents. Even so, v0.2 should move
+// this to a per-app registry (via runRequestScope or an explicit app
+// handle) so this is not an implicit footgun.
 const SHARED_CACHES_KEY = Symbol.for('@hono-preact/iso/loaderCaches');
 
 type SharedCacheMap = Map<symbol, LoaderCache<unknown>>;
@@ -161,7 +178,11 @@ export function defineLoader<T>(
     View: null as never,
   };
 
-  const Boundary: LoaderRef<T>['Boundary'] = ({ fallback, errorFallback, children }) => {
+  const Boundary: LoaderRef<T>['Boundary'] = ({
+    fallback,
+    errorFallback,
+    children,
+  }) => {
     return h(LoaderHost as any, {
       loader: ref,
       fallback,

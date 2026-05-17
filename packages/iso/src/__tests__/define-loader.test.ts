@@ -15,7 +15,6 @@ describe('defineLoader', () => {
     expect(typeof ref.__id).toBe('symbol');
     expect(Symbol.keyFor(ref.__id)).toBeUndefined();
   });
-
 });
 
 describe('defineLoader type-level guards', () => {
@@ -30,10 +29,10 @@ describe('defineLoader type-level guards', () => {
 describe('defineLoader (path-keyed __moduleKey form)', () => {
   it('accepts (fn, { __moduleKey }) and derives __id from the key', () => {
     const ref = defineLoader(async () => ({}), {
-      __moduleKey: 'apps/app/src/pages/movies',
+      __moduleKey: 'apps/site/src/pages/movies',
     });
     expect(Symbol.keyFor(ref.__id)).toBe(
-      '@hono-preact/loader:apps/app/src/pages/movies'
+      '@hono-preact/loader:apps/site/src/pages/movies'
     );
   });
 
@@ -102,7 +101,11 @@ describe('LoaderRef methods', () => {
       return h('span', null, JSON.stringify(data));
     };
     const { container } = render(
-      h(LoaderDataContext.Provider, { value: { data: { value: 42 } } }, h(Probe, null))
+      h(
+        LoaderDataContext.Provider,
+        { value: { data: { value: 42 } } },
+        h(Probe, null)
+      )
     );
     expect(container.textContent).toBe('{"value":42}');
   });
@@ -129,10 +132,14 @@ describe('defineLoader: streaming acceptance', () => {
   });
 
   it('accepts a ReadableStream<T>-returning loader', () => {
-    const ref = defineLoader(async (_ctx) =>
-      new ReadableStream<{ tick: number }>({
-        start(c) { c.enqueue({ tick: 1 }); c.close(); },
-      })
+    const ref = defineLoader(
+      async (_ctx) =>
+        new ReadableStream<{ tick: number }>({
+          start(c) {
+            c.enqueue({ tick: 1 });
+            c.close();
+          },
+        })
     );
     expect(typeof ref.fn).toBe('function');
   });
@@ -147,7 +154,10 @@ describe('defineLoader: streaming acceptance', () => {
       return {};
     });
     const ac = new AbortController();
-    const fn = ref.fn as (props: { location: unknown; signal: AbortSignal }) => Promise<unknown>;
+    const fn = ref.fn as (props: {
+      location: unknown;
+      signal: AbortSignal;
+    }) => Promise<unknown>;
     await fn({
       location: { path: '/', pathParams: {}, searchParams: {} },
       signal: ac.signal,

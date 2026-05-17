@@ -1,5 +1,10 @@
 import type { MiddlewareHandler } from 'hono';
-import { ActionGuardError, type ActionGuardFn, type ActionGuardContext } from '@hono-preact/iso';
+import {
+  ActionGuardError,
+  GuardRedirect,
+  type ActionGuardFn,
+  type ActionGuardContext,
+} from '@hono-preact/iso';
 import { runRequestScope } from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
@@ -47,22 +52,63 @@ async function runActionGuards(
 ): Promise<void> {
   const run = async (index: number): Promise<void> => {
     if (index >= guards.length) return;
-    await guards[index](ctx, () => run(index + 1));
+    // Track whether the guard explicitly opted to pass control on. Without
+    // this check a guard that forgets `return next()` (or just `next()`)
+    // would silently fall through to the action body — the OPPOSITE of every
+    // other middleware system users have seen (Express, Hono, Koa: blocked
+    // by default; opt in to pass). Make ambiguous returns loud instead of
+    // silently insecure. To block, throw ActionGuardError. To pass, await
+    // (or return) next().
+    let nextCalled = false;
+    await guards[index](ctx, () => {
+      nextCalled = true;
+      return run(index + 1);
+    });
+    if (!nextCalled) {
+      throw new Error(
+        `ActionGuard for '${ctx.module}.${ctx.action}' returned without ` +
+          `calling next() or throwing. Guards must either: (a) await/return ` +
+          `next() to pass control on, or (b) throw ActionGuardError to block. ` +
+          `Returning silently is ambiguous and would let the action run.`
+      );
+    }
   };
   await run(0);
 }
 
-export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
+export interface ActionsHandlerOptions {
+  /**
+   * When true, rebuild the actions map on every request (so edits to
+   * `.server.ts` files take effect without a server restart). When false
+   * (default), the map is built once on first request and cached for the
+   * life of the process. The framework's generated server entry passes
+   * `{ dev: import.meta.env.DEV }`; custom wirings should set this
+   * explicitly rather than relying on a Vite-only build-time constant.
+   */
+  dev?: boolean;
+  /**
+   * Called for every error an action throws (other than `ActionGuardError`,
+   * which is treated as a structured response). Use it to hook into your
+   * observability stack (Sentry, console, etc.). The handler still
+   * responds with a sanitized 500; the hook is purely a side channel.
+   */
+  onError?: (err: unknown, ctx: { module: string; action: string }) => void;
+}
+
+export function actionsHandler(
+  glob: LazyGlob | EagerGlob,
+  opts: ActionsHandlerOptions = {}
+): MiddlewareHandler {
+  const { dev = false, onError } = opts;
   let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
-    const actionsMapPromise =
-      import.meta.env.DEV
-        ? buildActionsMap(glob)
-        : (cachedMapPromise ??= buildActionsMap(glob).catch((err) => {
-            cachedMapPromise = null;
-            return Promise.reject(err);
-          }));
+    const actionsMapPromise = dev
+      ? buildActionsMap(glob)
+      : (cachedMapPromise ??= buildActionsMap(glob).catch((err) => {
+          cachedMapPromise = null;
+          return Promise.reject(err);
+        }));
 
     let actionsMap: Record<string, ModuleEntry>;
     try {
@@ -88,18 +134,26 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       const rawModule = formData.get('__module');
       const rawAction = formData.get('__action');
       if (typeof rawModule !== 'string' || typeof rawAction !== 'string') {
-        return c.json({ error: 'Form data must include __module and __action fields' }, 400);
+        return c.json(
+          { error: 'Form data must include __module and __action fields' },
+          400
+        );
       }
 
       module = rawModule;
       action = rawAction;
 
-      const payloadObj: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
+      const payloadObj: Record<
+        string,
+        FormDataEntryValue | FormDataEntryValue[]
+      > = {};
       for (const [key, value] of formData.entries()) {
         if (key === '__module' || key === '__action') continue;
         const existing = payloadObj[key];
         if (existing !== undefined) {
-          payloadObj[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+          payloadObj[key] = Array.isArray(existing)
+            ? [...existing, value]
+            : [existing, value];
         } else {
           payloadObj[key] = value;
         }
@@ -114,7 +168,10 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       }
       const { module: m, action: a, payload: p } = body;
       if (typeof m !== 'string' || typeof a !== 'string') {
-        return c.json({ error: 'Request body must include string fields: module, action' }, 400);
+        return c.json(
+          { error: 'Request body must include string fields: module, action' },
+          400
+        );
       }
       module = m;
       action = a;
@@ -132,12 +189,18 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
       if (err instanceof ActionGuardError) {
         return c.json({ error: err.message }, err.status);
       }
+      if (err instanceof GuardRedirect) {
+        return c.json({ __redirect: err.location });
+      }
       throw err;
     }
 
     const fn = entry.actions[action];
     if (typeof fn !== 'function') {
-      return c.json({ error: `Action '${action}' not found in module '${module}'` }, 404);
+      return c.json(
+        { error: `Action '${action}' not found in module '${module}'` },
+        404
+      );
     }
 
     const signal = c.req.raw.signal;
@@ -146,10 +209,21 @@ export function actionsHandler(glob: LazyGlob | EagerGlob): MiddlewareHandler {
     let result: unknown;
     try {
       result = await runRequestScope(() =>
-        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(actionCtx, payload)
+        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(
+          actionCtx,
+          payload
+        )
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof ActionGuardError) {
+        return c.json({ error: err.message }, err.status);
+      }
+      if (err instanceof GuardRedirect) {
+        return c.json({ __redirect: err.location });
+      }
+      onError?.(err, { module, action });
+      const message =
+        dev && err instanceof Error ? err.message : 'Action failed';
       return c.json({ error: message }, 500);
     }
 

@@ -18,7 +18,9 @@ function isAsyncGenerator(
   return (
     value != null &&
     typeof value === 'object' &&
-    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function' &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === 'function' &&
     typeof (value as { next?: unknown }).next === 'function'
   );
 }
@@ -72,7 +74,7 @@ export function runLoader<T>(
         if (c === undefined) {
           throw new Error(
             'ctx.c is not available: this loader was invoked without an active server request scope. ' +
-            'Loaders that read ctx.c run inside loadersHandler (RPC) or renderPage (SSR); test/edge paths must avoid reading it.',
+              'Loaders that read ctx.c run inside loadersHandler (RPC) or renderPage (SSR); test/edge paths must avoid reading it.'
           );
         }
         return c;

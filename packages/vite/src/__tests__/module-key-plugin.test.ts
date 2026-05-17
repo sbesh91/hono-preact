@@ -111,9 +111,7 @@ describe('moduleKeyPlugin defineLoader threading', () => {
       code,
       '/Users/me/repo/src/pages/movies.server.ts'
     );
-    expect(result?.code).toContain(
-      `defineLoader('movies', async () => ({}))`
-    );
+    expect(result?.code).toContain(`defineLoader('movies', async () => ({}))`);
     expect(result?.code).not.toContain('__moduleKey: ');
   });
 });

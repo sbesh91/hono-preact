@@ -1,6 +1,29 @@
 {
   "name": "@hono-preact/server",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Internal package for hono-preact. Use the hono-preact umbrella instead.",
+  "keywords": [
+    "hono-preact",
+    "internal"
+  ],
+  "homepage": "https://framework.sbesh.com",
+  "bugs": {
+    "url": "https://github.com/sbesh91/hono-preact/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sbesh91/hono-preact.git",
+    "directory": "packages/server"
+  },
+  "license": "MIT",
+  "author": "Steven Beshensky",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -10,7 +33,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "tsc"
   },
   "dependencies": {
     "@hono-preact/iso": "workspace:*"
@@ -19,8 +43,8 @@
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
-    "preact-iso": "*",
-    "preact-render-to-string": "*"
+    "preact-iso": ">=2.11.0",
+    "preact-render-to-string": ">=6.0.0"
   },
   "devDependencies": {
     "typescript": "*"

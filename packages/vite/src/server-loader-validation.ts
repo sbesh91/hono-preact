@@ -1,9 +1,16 @@
 import { parse } from '@babel/parser';
 import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
-const ALLOWED_NAMED_EXPORTS = new Set(['serverActions', 'actionGuards', 'serverLoaders']);
-const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS].map((n) => `'${n}'`).join(', ');
+const ALLOWED_NAMED_EXPORTS = new Set([
+  'serverActions',
+  'actionGuards',
+  'serverLoaders',
+]);
+const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS]
+  .map((n) => `'${n}'`)
+  .join(', ');
 
 export function serverLoaderValidationPlugin(): Plugin {
   return {
@@ -14,7 +21,7 @@ export function serverLoaderValidationPlugin(): Plugin {
 
       const ast = parse(code, {
         sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
+        plugins: BABEL_PARSER_PLUGINS,
         errorRecovery: true,
       });
 
@@ -68,7 +75,10 @@ export function serverLoaderValidationPlugin(): Plugin {
             `Use \`export const serverLoaders = { default: defineLoader(...) }\` instead.`
         );
       }
-      if (!namedExports.includes('serverActions') && !namedExports.includes('serverLoaders')) {
+      if (
+        !namedExports.includes('serverActions') &&
+        !namedExports.includes('serverLoaders')
+      ) {
         errors.push(
           `${id}: .server files must export either 'serverLoaders' or 'serverActions'. ` +
             `Use \`export const serverLoaders = { default: defineLoader(fn) }\` to define loaders.`

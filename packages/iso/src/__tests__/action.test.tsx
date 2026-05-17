@@ -4,13 +4,23 @@ import { defineAction } from '../action.js';
 
 describe('defineAction', () => {
   it('returns the function unchanged at runtime', () => {
-    const fn = async (_ctx: unknown, _payload: { name: string }) => ({ ok: true });
+    const fn = async (_ctx: unknown, _payload: { name: string }) => ({
+      ok: true,
+    });
     const stub = defineAction(fn);
     expect(stub).toBe(fn as unknown);
   });
 });
 
-import { render, screen, act, cleanup, waitFor, renderHook, fireEvent } from '@testing-library/preact';
+import {
+  render,
+  screen,
+  act,
+  cleanup,
+  waitFor,
+  renderHook,
+  fireEvent,
+} from '@testing-library/preact';
 import { afterEach, vi } from 'vitest';
 import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
@@ -46,9 +56,7 @@ describe('useAction', () => {
     function TestComponent() {
       const { mutate, pending } = useAction(stub);
       capturedPending.push(pending);
-      return (
-        <button onClick={() => mutate({ title: 'Dune' })}>go</button>
-      );
+      return <button onClick={() => mutate({ title: 'Dune' })}>go</button>;
     }
 
     render(<TestComponent />);
@@ -58,17 +66,17 @@ describe('useAction', () => {
     expect(capturedPending).toContain(true);
 
     await act(async () => {
-      resolveFetch(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      );
+      resolveFetch(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
     await waitFor(() => expect(capturedPending.at(-1)).toBe(false));
   });
 
   it('posts the correct JSON body to /__actions', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     function TestComponent() {
@@ -84,16 +92,22 @@ describe('useAction', () => {
     expect(fetchMock).toHaveBeenCalledWith('/__actions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module: 'movies', action: 'create', payload: { title: 'Dune' } }),
+      body: JSON.stringify({
+        module: 'movies',
+        action: 'create',
+        payload: { title: 'Dune' },
+      }),
     });
   });
 
   it('sets data on success and calls onSuccess', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), { status: 200 })
+        )
     );
     const onSuccess = vi.fn();
 
@@ -120,9 +134,11 @@ describe('useAction', () => {
   it('passes snapshot from onMutate to onSuccess', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), { status: 200 })
+        )
     );
     const onMutate = vi.fn(() => 'snap-success');
     const onSuccess = vi.fn();
@@ -145,9 +161,11 @@ describe('useAction', () => {
   it('sets error on failure and calls onError with snapshot', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+        )
     );
     const onMutate = vi.fn(() => 'snapshot-value');
     const onError = vi.fn();
@@ -175,9 +193,11 @@ describe('useAction', () => {
   it('calls reload when invalidate is "auto"', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), { status: 200 })
+        )
     );
     const reload = vi.fn();
 
@@ -201,9 +221,11 @@ describe('useAction', () => {
   it('does not call reload when invalidate is false', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), { status: 200 })
+        )
     );
     const reload = vi.fn();
 
@@ -351,6 +373,77 @@ describe('useAction', () => {
     });
   });
 
+  it('mutate resolves to { ok: true, data } on success so callers can chain', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ id: 'i-42' }), { status: 200 })
+        )
+    );
+
+    type Result = { id: string };
+    let captured: Awaited<ReturnType<typeof mutateRef.current>> | undefined;
+    const mutateRef = {
+      current: null as unknown as (p: {
+        x: number;
+      }) => Promise<{ ok: true; data: Result } | { ok: false; error: Error }>,
+    };
+
+    function TestComponent() {
+      const { mutate } = useAction(
+        stub as unknown as ActionStub<{ x: number }, Result>
+      );
+      mutateRef.current = mutate;
+      return null;
+    }
+    render(<TestComponent />);
+
+    await act(async () => {
+      captured = await mutateRef.current({ x: 1 });
+    });
+    expect(captured).toEqual({ ok: true, data: { id: 'i-42' } });
+  });
+
+  it('mutate resolves to { ok: false, error } on failure (no throw)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: 'nope' }), { status: 400 })
+        )
+    );
+
+    let captured: { ok: boolean } | undefined;
+    const mutateRef = {
+      current: null as unknown as (p: {
+        x: number;
+      }) => Promise<{ ok: true; data: unknown } | { ok: false; error: Error }>,
+    };
+
+    function TestComponent() {
+      const { mutate } = useAction(
+        stub as unknown as ActionStub<{ x: number }, { id: string }>
+      );
+      mutateRef.current = mutate;
+      return null;
+    }
+    render(<TestComponent />);
+
+    await act(async () => {
+      captured = await mutateRef.current({ x: 1 });
+    });
+    expect(captured?.ok).toBe(false);
+    if (captured && !captured.ok) {
+      // Narrowing: when ok is false the result has an `error` field.
+      expect((captured as { ok: false; error: Error }).error.message).toBe(
+        'nope'
+      );
+    }
+  });
+
   it('exposes useAction as a method on the stub', async () => {
     // Mimic the shape produced by serverOnlyPlugin's client-side Proxy.
     const methodStub: ActionStub<{ x: number }, { ok: true }> = {
@@ -363,11 +456,12 @@ describe('useAction', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () =>
-        new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
       )
     );
 
@@ -383,9 +477,9 @@ describe('useAction', () => {
     render(<Probe />);
 
     await waitFor(() => {
-      expect(
-        captured.some((c) => c.data && (c.data as { ok: true }).ok)
-      ).toBe(true);
+      expect(captured.some((c) => c.data && (c.data as { ok: true }).ok)).toBe(
+        true
+      );
     });
   });
 });
@@ -412,9 +506,7 @@ describe('useAction — streaming (onChunk)', () => {
     );
 
     const onChunk = vi.fn();
-    const { result } = renderHook(() =>
-      useAction(stub, { onChunk })
-    );
+    const { result } = renderHook(() => useAction(stub, { onChunk }));
 
     await act(async () => {
       await result.current.mutate({} as { title: string });
@@ -467,7 +559,10 @@ describe('useAction — FormData (file upload)', () => {
     const { result } = renderHook(() => useAction(mockStub));
 
     await act(async () => {
-      await result.current.mutate({ poster: new File(['data'], 'p.jpg'), count: 5 });
+      await result.current.mutate({
+        poster: new File(['data'], 'p.jpg'),
+        count: 5,
+      });
     });
 
     const fd = fetchMock.mock.calls[0][1]?.body as FormData;
@@ -492,7 +587,9 @@ describe('useAction — FormData (file upload)', () => {
 
     const call = fetchMock.mock.calls[0];
     expect(call[1]?.body).not.toBeInstanceOf(FormData);
-    expect(call[1]?.headers).toMatchObject({ 'Content-Type': 'application/json' });
+    expect(call[1]?.headers).toMatchObject({
+      'Content-Type': 'application/json',
+    });
   });
 });
 
@@ -514,14 +611,29 @@ describe('useAction: streaming via SSE', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, { imported: number }, { count: number }>;
+    const streamingStub = {
+      __module: 'x',
+      __action: 'go',
+    } as unknown as ActionStub<
+      unknown,
+      { imported: number },
+      { count: number }
+    >;
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
-        onChunk: (c) => { chunks.push(c); },
-        onSuccess: (r) => { final = r; },
+        onChunk: (c) => {
+          chunks.push(c);
+        },
+        onSuccess: (r) => {
+          final = r;
+        },
       });
-      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+      return (
+        <button data-testid="go" onClick={() => mutate({})}>
+          go
+        </button>
+      );
     }
 
     const { findByTestId } = render(<Probe />);
@@ -539,22 +651,35 @@ describe('useAction: streaming via SSE', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(sse, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }))
+      vi.fn().mockResolvedValue(
+        new Response(sse, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      )
     );
 
-    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, unknown, { count: number }>;
+    const streamingStub = {
+      __module: 'x',
+      __action: 'go',
+    } as unknown as ActionStub<unknown, unknown, { count: number }>;
     let caught = null as Error | null;
     let chunks = 0;
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
-        onChunk: () => { chunks++; },
-        onError: (err) => { caught = err; },
+        onChunk: () => {
+          chunks++;
+        },
+        onError: (err) => {
+          caught = err;
+        },
       });
-      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+      return (
+        <button data-testid="go" onClick={() => mutate({})}>
+          go
+        </button>
+      );
     }
 
     const { findByTestId } = render(<Probe />);
@@ -566,25 +691,35 @@ describe('useAction: streaming via SSE', () => {
 
   it('surfaces a malformed event: result as an error via onError', async () => {
     const sse =
-      'data: {"count":1}\n\n' +
-      'event: result\ndata: this-is-not-json\n\n';
+      'data: {"count":1}\n\n' + 'event: result\ndata: this-is-not-json\n\n';
 
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(sse, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }))
+      vi.fn().mockResolvedValue(
+        new Response(sse, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      )
     );
 
-    const streamingStub = { __module: 'x', __action: 'go' } as unknown as ActionStub<unknown, { ok: boolean }, { count: number }>;
+    const streamingStub = {
+      __module: 'x',
+      __action: 'go',
+    } as unknown as ActionStub<unknown, { ok: boolean }, { count: number }>;
     let caught = null as Error | null;
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
-        onError: (err) => { caught = err; },
+        onError: (err) => {
+          caught = err;
+        },
       });
-      return <button data-testid="go" onClick={() => mutate({})}>go</button>;
+      return (
+        <button data-testid="go" onClick={() => mutate({})}>
+          go
+        </button>
+      );
     }
 
     const { findByTestId } = render(<Probe />);

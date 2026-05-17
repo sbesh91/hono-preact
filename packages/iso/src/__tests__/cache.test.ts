@@ -25,7 +25,11 @@ describe('createCache', () => {
     const cache = createCache<{ name: string }>();
     const loader = vi.fn().mockResolvedValue({ name: 'fetched' });
     const wrapped = cache.wrap(loader);
-    const result = await wrapped({ c: {} as any, location: {} as any, signal: new AbortController().signal });
+    const result = await wrapped({
+      c: {} as any,
+      location: {} as any,
+      signal: new AbortController().signal,
+    });
     expect(loader).toHaveBeenCalledOnce();
     expect(result).toEqual({ name: 'fetched' });
     expect(cache.get()).toEqual({ name: 'fetched' });
@@ -36,7 +40,11 @@ describe('createCache', () => {
     cache.set({ name: 'cached' });
     const loader = vi.fn();
     const wrapped = cache.wrap(loader);
-    const result = await wrapped({ c: {} as any, location: {} as any, signal: new AbortController().signal });
+    const result = await wrapped({
+      c: {} as any,
+      location: {} as any,
+      signal: new AbortController().signal,
+    });
     expect(loader).not.toHaveBeenCalled();
     expect(result).toEqual({ name: 'cached' });
   });
@@ -48,7 +56,11 @@ describe('createCache', () => {
     expect(cache.get()).toBeNull();
     const loader = vi.fn().mockResolvedValue({ name: 'new' });
     const wrapped = cache.wrap(loader);
-    const result = await wrapped({ c: {} as any, location: {} as any, signal: new AbortController().signal });
+    const result = await wrapped({
+      c: {} as any,
+      location: {} as any,
+      signal: new AbortController().signal,
+    });
     expect(loader).toHaveBeenCalledOnce();
     expect(result).toEqual({ name: 'new' });
   });
@@ -83,7 +95,10 @@ describe('createCache request-scoped storage on the server', () => {
     const previousEnv = env.current;
     env.current = 'server';
     try {
-      const observed: Array<{ before: { user: string } | null; after: { user: string } | null }> = [];
+      const observed: Array<{
+        before: { user: string } | null;
+        after: { user: string } | null;
+      }> = [];
 
       const handleRequest = async (user: string) => {
         return runRequestScope(async () => {
@@ -105,7 +120,11 @@ describe('createCache request-scoped storage on the server', () => {
       for (const o of observed) {
         expect(o.before).toBeNull();
       }
-      expect(observed.map((o) => o.after?.user).sort()).toEqual(['alice', 'bob', 'carol']);
+      expect(observed.map((o) => o.after?.user).sort()).toEqual([
+        'alice',
+        'bob',
+        'carol',
+      ]);
     } finally {
       env.current = previousEnv;
     }
@@ -122,8 +141,16 @@ describe('createCache request-scoped storage on the server', () => {
             await Promise.resolve();
             return { id };
           });
-          const a = await wrapped({ c: {} as any, location: {} as never, signal: new AbortController().signal });
-          const b = await wrapped({ c: {} as any, location: {} as never, signal: new AbortController().signal });
+          const a = await wrapped({
+            c: {} as any,
+            location: {} as never,
+            signal: new AbortController().signal,
+          });
+          const b = await wrapped({
+            c: {} as any,
+            location: {} as never,
+            signal: new AbortController().signal,
+          });
           return { a, b };
         });
 

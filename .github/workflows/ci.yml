@@ -17,6 +17,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+        with:
+          # Pinned: pnpm 11 hit a workspace peer-dep override propagation bug
+          # against the preact-iso v3 GitHub override. Keep aligned with the
+          # `packageManager` field in package.json.
+          version: 10.18.3
 
       - uses: actions/setup-node@v4
         with:
@@ -26,12 +31,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build framework packages first so apps/site tsc resolves their
+      # published dist/ types (workspace exports point at dist).
+      - name: Build framework packages
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact build
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Run tests with coverage
         shell: bash
         run: |
           set -o pipefail
           echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
           pnpm test:coverage 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Build site
+        run: pnpm --filter site build
 
   build-and-tag:
     name: Build and tag next
@@ -44,6 +63,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+        with:
+          # Pinned: pnpm 11 hit a workspace peer-dep override propagation bug
+          # against the preact-iso v3 GitHub override. Keep aligned with the
+          # `packageManager` field in package.json.
+          version: 10.18.3
 
       - uses: actions/setup-node@v4
         with:

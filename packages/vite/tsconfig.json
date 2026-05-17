@@ -9,5 +9,5 @@
     "types": ["vite/client"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/__tests__/fixtures/**"]
+  "exclude": ["src/**/__tests__/**"]
 }

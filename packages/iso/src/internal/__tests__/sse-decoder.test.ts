@@ -15,7 +15,9 @@ function streamOf(...chunks: string[]): ReadableStream<Uint8Array> {
 describe('readSSE', () => {
   it('parses single data events', async () => {
     const events: { event: string; data: string }[] = [];
-    for await (const ev of readSSE(streamOf('data: {"a":1}\n\ndata: {"a":2}\n\n'))) {
+    for await (const ev of readSSE(
+      streamOf('data: {"a":1}\n\ndata: {"a":2}\n\n')
+    )) {
       events.push(ev);
     }
     expect(events).toEqual([
@@ -26,7 +28,9 @@ describe('readSSE', () => {
 
   it('parses named events', async () => {
     const events: { event: string; data: string }[] = [];
-    for await (const ev of readSSE(streamOf('event: result\ndata: {"ok":true}\n\n'))) {
+    for await (const ev of readSSE(
+      streamOf('event: result\ndata: {"ok":true}\n\n')
+    )) {
       events.push(ev);
     }
     expect(events).toEqual([{ event: 'result', data: '{"ok":true}' }]);
@@ -34,7 +38,9 @@ describe('readSSE', () => {
 
   it('ignores comment lines', async () => {
     const events: { event: string; data: string }[] = [];
-    for await (const ev of readSSE(streamOf(': keepalive\n\ndata: {"a":1}\n\n'))) {
+    for await (const ev of readSSE(
+      streamOf(': keepalive\n\ndata: {"a":1}\n\n')
+    )) {
       events.push(ev);
     }
     expect(events).toEqual([{ event: 'message', data: '{"a":1}' }]);

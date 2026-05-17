@@ -1,0 +1,118 @@
+# The Route Table
+
+Routing is declared in one place: `src/routes.ts`. The `defineRoutes` factory takes a tree of route entries and returns a manifest the client uses for routing and the server uses for handler dispatch. There is no filesystem-based discovery: every URL in the app lives in this one file.
+
+## Why one file
+
+A code-defined route table makes URL design a one-edit refactor (rename a path, move a leaf), keeps URL structure independent of file layout (organize files by domain, not by URL), and gives agents and devtools a single source of truth they can grep. The trade you make is a manual entry per route.
+
+## A complete example
+
+```ts
+// src/routes.ts
+import { defineRoutes } from 'hono-preact';
+
+export default defineRoutes([
+  { path: '/', view: () => import('./pages/home.js') },
+  { path: '/demo/login', view: () => import('./pages/demo-login.js') },
+  {
+    path: '/demo/projects',
+    layout: () => import('./pages/projects-layout.js'),
+    children: [
+      {
+        path: '',
+        view: () => import('./pages/projects-list.js'),
+        server: () => import('./pages/projects-list.server.js'),
+      },
+      {
+        path: ':projectId/issues/:issueId',
+        view: () => import('./pages/issue.js'),
+        server: () => import('./pages/issue.server.js'),
+      },
+    ],
+  },
+  {
+    path: '/demo/projects/:projectId',
+    view: () => import('./pages/project.js'),
+    server: () => import('./pages/project.server.js'),
+  },
+  { path: '*', view: () => import('./pages/not-found.js') },
+]);
+```
+
+That table covers four URL behaviours:
+
+| Path                                            | Behaviour                                                                                                            |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/`, `/demo/login`, `/demo/projects/:projectId` | Plain leaves. The `view` resolves to the page component. `server` (when present) is the sibling `.server.ts` module. |
+| `/demo/projects`                                | An empty-path child of a layout group. Renders `<ProjectsLayout>` wrapping the list view.                            |
+| `/demo/projects/:projectId/issues/:issueId`     | A nested child of the same layout group. The same `ProjectsLayout` instance stays mounted across the navigation.     |
+| `*`                                             | Catch-all. Matches anything not matched above.                                                                       |
+
+## Route entry fields
+
+| Field      | Type                                                     | Required                    | What it is                                                                                                                                                                    |
+| ---------- | -------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`     | `string`                                                 | always                      | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings. |
+| `view`     | `() => Promise<{ default: ComponentType }>`              | for leaves                  | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.                                                              |
+| `layout`   | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups           | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts).                                                                                   |
+| `server`   | `() => Promise<unknown>`                                 | optional, leaves only       | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders`, `serverActions`, `actionGuards`.                                                            |
+| `children` | `RouteDef[]`                                             | for layouts and path groups | Nested routes.                                                                                                                                                                |
+
+## The three valid shapes
+
+| Shape            | Fields                                                     | Meaning                                                                                             |
+| ---------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Leaf**         | `path`, `view`, optional `server`                          | A page. Cannot have `children`.                                                                     |
+| **Layout group** | `path`, `layout`, `children` (required), optional `server` | A wrapper that renders matched descendants. May declare its own `server` for layout-scoped loaders. |
+| **Path group**   | `path`, `children` (no `view`, no `layout`)                | Pure URL prefix sharing. Useful for `/admin/*` without shared chrome.                               |
+
+`defineRoutes` validates the tree at runtime and throws with the offending URL if the shape is wrong: `view` + `layout`, `view` + `children`, `layout` without `children`, child path starting with `/`, or a route declaring none of `view`/`layout`/`children`.
+
+## Mounting
+
+You do not write `iso.tsx` or `server.tsx`. The framework generates both as virtual modules from your `routes.ts` and `Layout.tsx`. The client entry hydrates `<Routes>` inside `<LocationProvider>`; the server entry mounts `loadersHandler`, `actionsHandler`, an optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. See [Project Structure](/docs/structure) for the file layout the plugin assumes.
+
+If you need to customize the client or server entry (rare), pass a path override via the Vite plugin's `clientEntry` / `entry` options and follow the patterns in the generated virtual modules.
+
+## Inline imports stay inline
+
+Every `view`, `layout`, and `server` is `() => import('./path')`. The arrow shape is required for code-splitting: bundlers create a separate chunk per `import()` call site. A helper that takes a string (`view: lazy('./pages/home')`) would either lose splitting or require a transform plugin. The five characters of `() => ` per route is the trade for zero magic and full bundler support.
+
+## Sharing references for non-layout routes
+
+When two leaves point at the same component (e.g. mounting one page at multiple paths), hoist the import thunk to a const so the framework's `lazy()` memoization sees the same identity and produces one shared component reference:
+
+```ts
+const docsView = () => import('./components/DocsRoute.js');
+
+defineRoutes([
+  // ...
+  { path: '/docs', view: docsView },
+  { path: '/docs/*', view: docsView },
+]);
+```
+
+For layout groups, identity sharing is automatic: a layout group is registered at both `/path` and `/path/*` with the same component reference, so intra-group navigation does not remount the layout. See [Layouts & Nested Routes](/docs/layouts) for the full pattern.
+
+## What `defineRoutes` returns
+
+```ts
+type RoutesManifest = {
+  tree: ReadonlyArray<RouteDef>; // the original input, for introspection
+  flat: ReadonlyArray<FlatRoute>; // the registered routes
+  serverImports: ReadonlyArray<
+    // every `server` thunk in the tree
+    () => Promise<unknown>
+  >;
+};
+```
+
+`tree` is the original input retained for devtools and dev-time introspection. `flat` is what `<Routes>` registers with preact-iso. `serverImports` is what `routeServerModules` adapts into the existing handler API.
+
+## See also
+
+- [Layouts & Nested Routes](/docs/layouts) — the `layout` field, `LayoutProps`, identity preservation, the inner-router lowering.
+- [Adding Pages](/docs/pages) — the page-authoring side: views, server bindings, definePage.
+- [Server Loaders](/docs/loaders) — what the `server` import contains.
+- [Project Structure](/docs/structure) — where each piece lives in the demo app.

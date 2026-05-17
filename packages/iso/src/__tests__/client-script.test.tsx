@@ -14,7 +14,9 @@ describe('ClientScript', () => {
 
   it('renders a script with a src attribute', () => {
     const { container } = render(<ClientScript />);
-    const script = container.querySelector('script[type="module"]') as HTMLScriptElement;
+    const script = container.querySelector(
+      'script[type="module"]'
+    ) as HTMLScriptElement;
     expect(script.getAttribute('src')).toBeTruthy();
   });
 
@@ -24,8 +26,12 @@ describe('ClientScript', () => {
     // This validates the dev branch; the prod branch is exercised by an actual
     // production build (the static replacement collapses to the prod string).
     const { container } = render(<ClientScript />);
-    const script = container.querySelector('script[type="module"]') as HTMLScriptElement;
-    expect(script.getAttribute('src')).toBe('/@id/__x00__virtual:hono-preact/client');
+    const script = container.querySelector(
+      'script[type="module"]'
+    ) as HTMLScriptElement;
+    expect(script.getAttribute('src')).toBe(
+      '/@id/__x00__virtual:hono-preact/client'
+    );
   });
 
   it('renders the module script with `async` so streaming SSR does not defer hydration', () => {
@@ -37,7 +43,9 @@ describe('ClientScript', () => {
     // entry run as soon as it's downloaded, so subscriptions land before the
     // bulk of the chunks arrive.
     const { container } = render(<ClientScript />);
-    const script = container.querySelector('script[type="module"]') as HTMLScriptElement;
+    const script = container.querySelector(
+      'script[type="module"]'
+    ) as HTMLScriptElement;
     expect(script.hasAttribute('async')).toBe(true);
   });
 });

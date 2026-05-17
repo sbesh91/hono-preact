@@ -1,0 +1,333 @@
+# Server Actions
+
+Pages often need to mutate data: adding a record, toggling a flag, deleting a row. Server actions let you define those mutations as typed functions in your `.server.ts` file and call them from the client with a single hook or form component. No manual `fetch` wiring, no API route plumbing.
+
+For long-running operations that emit progress or results incrementally, see [Streaming](/docs/streaming).
+
+## How it works
+
+Define a `serverActions` map in your `.server.ts` file alongside the loader. Each action is wrapped with `defineAction` to carry its payload and result types.
+
+On the server, the `actionsHandler` middleware exposes a single `POST /__actions` route that dispatches all calls. On the client, the Vite plugin replaces the `serverActions` import with a Proxy: each property access returns an `ActionStub` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
+
+## Defining actions
+
+**`src/pages/movies.server.ts`** (assumes `type MovieList = { results: { id: number; title: string }[] }`):
+
+```ts
+import { getMovies } from '@/server/movies.js';
+import { defineAction } from 'hono-preact';
+
+const serverLoader = async () => {
+  const movies = await getMovies();
+  return { movies };
+};
+
+export default serverLoader;
+
+export const serverActions = {
+  addMovie: defineAction<{ title: string }, { ok: boolean }>(
+    async (_ctx, payload) => {
+      await db.insert({ title: payload.title });
+      return { ok: true };
+    }
+  ),
+};
+```
+
+`defineAction` is a no-op at runtime; it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` can infer the payload and result types without codegen.
+
+The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `AbortSignal` tied to the HTTP request) and `c` (the request's Hono `Context`). Use `ctx.c` to read cookies (`getCookie`), set response headers, or reach Hono `Bindings` via `ctx.c.env`.
+
+## Registering the handler
+
+You do not register `actionsHandler` directly. The framework's Vite plugin generates the server entry, which mounts `actionsHandler` (and `loadersHandler`) on a Hono app before the SSR catch-all and exports it as the worker's default. The handler routes by `mod.__moduleKey` — the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`.
+
+If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
+
+## Calling actions with `useAction`
+
+`useAction` manages pending state, error handling, and optional cache invalidation after the action completes.
+
+```tsx
+import { useAction } from 'hono-preact';
+import { serverLoaders, serverActions } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
+
+const Movies = () => {
+  const { movies } = moviesLoader.useData();
+  const { mutate, pending, error } = useAction(serverActions.addMovie, {
+    invalidate: 'auto',
+    onSuccess: (data) => console.log('added', data),
+  });
+
+  return (
+    <>
+      <button onClick={() => mutate({ title: 'Dune' })} disabled={pending}>
+        {pending ? 'Adding...' : 'Add Movie'}
+      </button>
+      {error && <p>{error.message}</p>}
+    </>
+  );
+};
+```
+
+### Options
+
+| Option       | Type                                      | Description                                                                                                                                                                                                                                      |
+| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of `LoaderRef`s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
+| `onMutate`   | `(payload) => unknown`                    | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback.                                                                                                                                      |
+| `onSuccess`  | `(data) => void`                          | Called with the action's return value on success.                                                                                                                                                                                                |
+| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot on failure.                                                                                                                                                                                    |
+| `onChunk`    | `(chunk: string) => void`                 | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                             |
+
+### Return value
+
+| Value     | Type                                                                               | Description                                                                                                                                                                                                                                                                                               |
+| --------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mutate`  | `(payload) => Promise<{ ok: true; data: TResult } \| { ok: false; error: Error }>` | Fires the action. Resolves with a discriminated union so awaiting callers can chain on the result without leaking unhandled rejections. The same `error` is also written to the `error` state field for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
+| `pending` | `boolean`                                                                          | `true` while the request is in flight.                                                                                                                                                                                                                                                                    |
+| `error`   | `Error \| null`                                                                    | The last error, or `null` if none.                                                                                                                                                                                                                                                                        |
+| `data`    | `TResult \| null`                                                                  | The last successful result, or `null`. Not set for streaming responses.                                                                                                                                                                                                                                   |
+
+#### Chaining on success
+
+```tsx
+const { mutate } = useAction(addMovie);
+
+async function submit(payload) {
+  const result = await mutate(payload);
+  if (result.ok) {
+    navigate(`/movies/${result.data.id}`);
+  } else {
+    showToast(result.error.message);
+  }
+}
+```
+
+Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
+
+## Submitting with `<Form>`
+
+`<Form>` is a thin wrapper around a native `<form>` that serializes the submission to a payload object and calls a `mutate` function you provide (typically from `useAction` or `useOptimisticAction`). When you pass `pending`, the wrapping `<fieldset>` is disabled while the mutation is in flight.
+
+```tsx
+import { Form, useAction } from 'hono-preact';
+import { serverActions } from './movies.server.js';
+
+const AddMovieForm = () => {
+  const { mutate, pending } = useAction(serverActions.addMovie, {
+    invalidate: 'auto',
+  });
+  return (
+    <Form mutate={mutate} pending={pending}>
+      <input name="title" placeholder="Title" />
+      <button type="submit">Add Movie</button>
+    </Form>
+  );
+};
+```
+
+`<Form>` accepts any HTML `<form>` attribute (except `onSubmit`, which it owns), plus `mutate` (required) and `pending` (optional). All action-related options live on the `useAction` call, not on `<Form>`.
+
+FormData values are collected into a plain object before being passed to `mutate`. Single-value fields arrive as scalars (string for text inputs, `File` for file inputs). **Repeated field names** (checkboxes sharing a name, multi-select, `<input type="file" multiple>`) arrive as **arrays** in the order they appeared in the form. Declare the array fields in your `defineAction` payload type:
+
+```ts
+defineAction<{ title: string; tags: string[]; photos: File[] }, ...>
+```
+
+String values are passed as strings; coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
+
+## Optimistic updates
+
+Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
+
+```tsx
+const { movies } = moviesLoader.useData();
+const [items, setItems] = useState(movies.results);
+
+const { mutate } = useAction(serverActions.addMovie, {
+  onMutate: (payload) => {
+    const prev = items;
+    setItems((cur) => [...cur, { id: 'temp', title: payload.title }]);
+    return prev; // snapshot returned to onError
+  },
+  onError: (_err, snapshot) => {
+    setItems(snapshot as typeof items); // restore on failure
+  },
+});
+```
+
+## Cross-page cache invalidation
+
+When a mutation on one page should refresh data on another, import the other page's loader and pass it to `invalidate`. Invalidation is by reference; there are no cache names:
+
+```tsx
+// movies.tsx: an action that should also refresh the ratings sidebar
+import { useAction } from 'hono-preact';
+import { serverLoaders as ratingsLoaders } from './ratings.server.js';
+import { serverActions } from './movies.server.js';
+
+const ratingsLoader = ratingsLoaders.default;
+
+const { mutate } = useAction(serverActions.addMovie, {
+  invalidate: [ratingsLoader], // clears ratingsLoader's cache on success
+});
+```
+
+`invalidate` accepts an array of `LoaderRef`s, so a single action can refresh multiple loaders in one shot: `invalidate: [moviesLoader, ratingsLoader]`. Pass it to `useAction`; `<Form>` itself has no `invalidate` prop.
+
+Use `'auto'` (instead of an array) to invalidate the current page's own loader after the action succeeds.
+
+## Method form: `stub.useAction(opts)`
+
+`useAction(stub, opts)` and `stub.useAction(opts)` are equivalent. Both ship; pick whichever reads better in context.
+
+```tsx
+import { useAction } from 'hono-preact';
+import { serverLoaders, serverActions } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
+
+// Method form:
+const { mutate, pending } = serverActions.addMovie.useAction({
+  invalidate: [moviesLoader],
+});
+
+// Equivalent function form:
+const { mutate, pending } = useAction(serverActions.addMovie, {
+  invalidate: [moviesLoader],
+});
+```
+
+The method form reads more naturally when the action is the focus of the call site; the function form reads better when grouped with other hooks at the top of a component.
+
+## File uploads
+
+`useAction` automatically switches to `multipart/form-data` when the payload contains `File` objects. Since `<Form>` serializes file inputs as `File` instances in the payload, file uploads work transparently when you pair it with `useAction`.
+
+**With `<Form>`:** add a file input; `useAction` detects the `File` value in the payload and sends FormData:
+
+```tsx
+const UploadPosterForm = ({ movieId, setPosterUrl }) => {
+  const { mutate, pending } = useAction(serverActions.uploadPoster, {
+    onSuccess: ({ url }) => setPosterUrl(url),
+  });
+  return (
+    <Form mutate={mutate} pending={pending}>
+      <input type="hidden" name="movieId" value={movieId} />
+      <input type="file" name="poster" accept="image/*" />
+      <button type="submit">Upload Poster</button>
+    </Form>
+  );
+};
+```
+
+**With `useAction`:** include a `File` in the payload object:
+
+```tsx
+const { mutate } = useAction(serverActions.uploadPoster);
+
+const handleChange = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (file) mutate({ movieId: movie.id, poster: file });
+};
+```
+
+The action receives the `File` object directly:
+
+```ts
+export const serverActions = {
+  uploadPoster: defineAction<
+    { movieId: string; poster: File },
+    { url: string }
+  >(async (_ctx, { movieId, poster }) => {
+    const url = await uploadToStorage(movieId, poster);
+    return { url };
+  }),
+};
+```
+
+Non-`File` values in a FormData payload are serialized as strings (numbers and booleans via `JSON.stringify`). Repeated field names (multi-checkbox groups, multi-select, `<input type="file" multiple>`) are forwarded as arrays; type your action's payload accordingly (`tags: string[]`, `photos: File[]`, etc.) instead of expecting a single value.
+
+## Streaming responses
+
+An action can return a `ReadableStream` for long-running operations. `actionsHandler` pipes the stream as `text/event-stream`. On the client, pass `onChunk` to `useAction` to receive each chunk:
+
+```ts
+// movies.server.ts
+export const serverActions = {
+  bulkImport: defineAction<{ url: string }, never>(async (_ctx, { url }) => {
+    const source = await fetch(url);
+    const encoder = new TextEncoder();
+    return new ReadableStream({
+      async start(controller) {
+        let count = 0;
+        for await (const item of parseNDJSON(source.body!)) {
+          await saveMovie(item);
+          count++;
+          controller.enqueue(encoder.encode(JSON.stringify({ count }) + '\n'));
+        }
+        controller.close();
+      },
+    });
+  }),
+};
+```
+
+```tsx
+// movies.tsx
+const [progress, setProgress] = useState(0);
+
+const { mutate, pending } = useAction(serverActions.bulkImport, {
+  onChunk: (chunk) => setProgress(JSON.parse(chunk).count),
+  onSuccess: () => console.log('import complete'),
+});
+```
+
+Each `onChunk` call receives a raw string chunk. Parse it as needed. `onSuccess` is called with `undefined` after the stream closes. `data` is not set for streaming actions.
+
+## Action guards
+
+Actions can run middleware-style checks before dispatching, useful for authentication, authorization, or rate limiting. Export an `actionGuards` array from your `.server.ts` file:
+
+```ts
+// movies.server.ts
+import { defineAction, defineActionGuard, ActionGuardError } from 'hono-preact';
+
+export const actionGuards = [
+  defineActionGuard(async ({ c }, next) => {
+    const token = c.req.header('Authorization');
+    if (!token) throw new ActionGuardError('Authentication required', 401);
+    return next();
+  }),
+];
+
+export const serverActions = {
+  addMovie: defineAction<{ title: string }, { ok: boolean }>(
+    async (_ctx, payload) => {
+      /* ... */
+    }
+  ),
+};
+```
+
+Guards run before every action in the module. See [Action Guards](/docs/action-guards) for the full API.
+
+## The server/client boundary
+
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or `actionGuards` as named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+
+## Security: SameSite cookies on `<Form>` posts
+
+`<Form>` posts go to `/__actions` on the same origin. The framework relies on
+`SameSite=Lax` (Hono's cookie default) for CSRF protection. Cross-origin POSTs
+without a credential do not carry the session cookie; cross-origin POSTs from a
+malicious site cannot read the response.
+
+If you need a stricter posture (explicit-origin CSRF middleware on
+`/__actions`), that is not user-configurable in v0.1. See
+[issue #43](https://github.com/sbesh91/hono-preact/issues/43) for the
+post-v0.1 design.

@@ -39,13 +39,15 @@ describe('streaming loader: client-driven', () => {
   it('renders the first chunk, then re-renders on each subsequent chunk', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        dripSseResponse([
-          'data: {"count":1}\n\n',
-          'data: {"count":2}\n\n',
-          'data: {"count":3}\n\n',
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          dripSseResponse([
+            'data: {"count":1}\n\n',
+            'data: {"count":2}\n\n',
+            'data: {"count":3}\n\n',
+          ])
+        )
     );
 
     // Use __moduleKey so LoaderHost takes the fetch path.
@@ -60,7 +62,10 @@ describe('streaming loader: client-driven', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={{ path: '/', pathParams: {}, searchParams: {} } as never}>
+        <Loader
+          loader={ref}
+          location={{ path: '/', pathParams: {}, searchParams: {} } as never}
+        >
           <Page />
         </Loader>
       </LocationProvider>
@@ -79,13 +84,15 @@ describe('streaming loader: client-driven', () => {
   it('surfaces a post-first-chunk error via useError and keeps last-good data', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        dripSseResponse([
-          'data: {"count":1}\n\n',
-          'data: {"count":2}\n\n',
-          'event: error\ndata: {"message":"mid-stream","name":"Error"}\n\n',
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          dripSseResponse([
+            'data: {"count":1}\n\n',
+            'data: {"count":2}\n\n',
+            'event: error\ndata: {"message":"mid-stream","name":"Error"}\n\n',
+          ])
+        )
     );
 
     const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
@@ -102,7 +109,10 @@ describe('streaming loader: client-driven', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={{ path: '/', pathParams: {}, searchParams: {} } as never}>
+        <Loader
+          loader={ref}
+          location={{ path: '/', pathParams: {}, searchParams: {} } as never}
+        >
           <Page />
         </Loader>
       </LocationProvider>

@@ -4,10 +4,7 @@ import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
 import { type BuildEnvironmentOptions, type Plugin } from 'vite';
 import { clientShimPlugin } from './client-shim.js';
-import {
-  clientEntryPlugin,
-  VIRTUAL_CLIENT_ENTRY_ID,
-} from './client-entry.js';
+import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
@@ -20,10 +17,10 @@ import {
 
 export interface HonoPreactOptions {
   // Source paths (for the generated server entry). All optional.
-  layout?: string;       // default 'src/Layout.tsx'
-  routes?: string;       // default 'src/routes.ts'
-  api?: string;          // default 'src/api.ts' (only loaded if file exists)
-  clientEntry?: string;  // default 'virtual:hono-preact/client'
+  layout?: string; // default 'src/Layout.tsx'
+  routes?: string; // default 'src/routes.ts'
+  api?: string; // default 'src/api.ts' (only loaded if file exists)
+  clientEntry?: string; // default 'virtual:hono-preact/client'
 
   // Server entry. Defaults to a generated file the framework writes into the
   // Vite cache directory. Rare override.
@@ -106,6 +103,14 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
         },
         build: {
           ...shared.build,
+          // Inline sourcemaps so SSR error stacks point at user source
+          // (e.g. `pages/issue.server.ts:42`) instead of the rolled-up
+          // Worker chunk. We pick `inline` over a separate .map file because
+          // SSR is a single bundle and Workers tooling will not look at a
+          // sibling .map. Bundle size grows; for typical app server bundles
+          // this is a few hundred KB at most and is worth the debuggability.
+          // Users can override by passing `serverBuild.sourcemap: false`.
+          sourcemap: 'inline' as const,
           ...serverBuild,
         },
       };
@@ -117,15 +122,24 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
     clientShimPlugin(clientEntry),
     clientEntryPlugin({ routes }),
     ...(useGeneratedEntry
-      ? [serverEntryPlugin({ layout, routes, api, outputPath: generatedServerEntryAbsPath() })]
+      ? [
+          serverEntryPlugin({
+            layout,
+            routes,
+            api,
+            outputPath: generatedServerEntryAbsPath(),
+          }),
+        ]
       : []),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     serverOnlyPlugin(),
     guardStripPlugin(),
     Object.assign(build({ entry: resolvedEntry }), {
-      apply: (_: unknown, { command, mode }: { command: string; mode: string }) =>
-        command === 'build' && mode !== 'client',
+      apply: (
+        _: unknown,
+        { command, mode }: { command: string; mode: string }
+      ) => command === 'build' && mode !== 'client',
     }),
     Object.assign(
       devServer({

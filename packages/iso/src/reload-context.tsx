@@ -13,6 +13,8 @@ export const ReloadContext = createContext<ReloadContextValue | undefined>(
 export function useReload(): ReloadContextValue {
   const ctx = useContext(ReloadContext);
   if (!ctx)
-    throw new Error('useReload() must be called inside a `loader.View` render function or inside a `loader.Boundary`.');
+    throw new Error(
+      'useReload() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
+    );
   return ctx;
 }

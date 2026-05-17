@@ -4,6 +4,7 @@ import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders } from './server-loaders-parser.js';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 /**
  * Transforms `.server.*` files to inject a stable module-level
@@ -44,7 +45,7 @@ export function moduleKeyPlugin(): Plugin {
       try {
         ast = parse(code, {
           sourceType: 'module',
-          plugins: ['typescript', 'jsx'],
+          plugins: BABEL_PARSER_PLUGINS,
           errorRecovery: true,
         });
       } catch {
@@ -58,7 +59,10 @@ export function moduleKeyPlugin(): Plugin {
       // a serverLoaders object, __loaderName. Handles both the single-arg
       // form (appends a new opts object) and the two-arg form (merges into
       // the existing opts ObjectExpression).
-      const visitCallWithName = (node: CallExpression, loaderName: string | undefined) => {
+      const visitCallWithName = (
+        node: CallExpression,
+        loaderName: string | undefined
+      ) => {
         if (
           node.callee.type !== 'Identifier' ||
           node.callee.name !== 'defineLoader'
@@ -72,7 +76,9 @@ export function moduleKeyPlugin(): Plugin {
         if (node.arguments.length === 1) {
           const insertAt = fnArg.end;
           if (insertAt == null) return;
-          const namePart = loaderName ? `, __loaderName: ${JSON.stringify(loaderName)}` : '';
+          const namePart = loaderName
+            ? `, __loaderName: ${JSON.stringify(loaderName)}`
+            : '';
           s.appendRight(
             insertAt,
             `, { __moduleKey: ${JSON.stringify(key)}${namePart} }`
@@ -84,8 +90,10 @@ export function moduleKeyPlugin(): Plugin {
         // existing opts object literal. Bail if it isn't an ObjectExpression.
         const optsArg = node.arguments[1];
         if (optsArg.type !== 'ObjectExpression') return;
-        const insertAt = optsArg.properties[0]?.start ?? (optsArg.start! + 1);
-        const namePart = loaderName ? `__loaderName: ${JSON.stringify(loaderName)}, ` : '';
+        const insertAt = optsArg.properties[0]?.start ?? optsArg.start! + 1;
+        const namePart = loaderName
+          ? `__loaderName: ${JSON.stringify(loaderName)}, `
+          : '';
         s.appendRight(
           insertAt,
           `__moduleKey: ${JSON.stringify(key)}, ${namePart}`

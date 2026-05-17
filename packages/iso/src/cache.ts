@@ -54,7 +54,7 @@ export function getRequestHonoContext<T = unknown>(): T | undefined {
   if (ctx === undefined) {
     throw new Error(
       'runRequestScope is active but was not seeded with { honoContext }. ' +
-      'The framework must pass { honoContext: c } when entering the scope.',
+        'The framework must pass { honoContext: c } when entering the scope.'
     );
   }
   return ctx as T;
@@ -70,6 +70,22 @@ export function runRequestScope<R>(
     store.set(HONO_CONTEXT_KEY, initial.honoContext);
   }
   return alsInstance.run(store, fn);
+}
+
+// Capture the active request scope so work scheduled later (e.g. a
+// `ReadableStream.start` callback that fires after the outer `runRequestScope`
+// frame has already returned) can re-enter the same per-request store.
+// Returns a binder; in a non-ALS environment, the binder runs `fn` directly.
+// Generators that yield and then resume from outside the scope lose ALS
+// propagation on V8; binding their drain restores it.
+export function captureRequestScope(): <R>(
+  fn: () => R | Promise<R>
+) => R | Promise<R> {
+  if (!alsInstance) return (fn) => fn();
+  const store = alsInstance.getStore();
+  if (!store) return (fn) => fn();
+  const als = alsInstance;
+  return (fn) => als.run(store, fn);
 }
 
 type CacheEntry<T> = { value: T; locKey: string | null };

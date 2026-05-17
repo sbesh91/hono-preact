@@ -13,7 +13,7 @@ export type PageBindings = {
 
 export function definePage(
   Component: ComponentType,
-  bindings?: PageBindings,
+  bindings?: PageBindings
 ): FunctionComponent<RouteHook> {
   const PageRoute: FunctionComponent<RouteHook> = (location) => (
     <Page

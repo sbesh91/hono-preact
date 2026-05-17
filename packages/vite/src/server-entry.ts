@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
 import type { Plugin } from 'vite';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 export interface GenerateServerEntrySourceOptions {
   layoutAbsPath: string;
@@ -14,9 +15,7 @@ export function generateServerEntrySource(
 ): string {
   const { layoutAbsPath, routesAbsPath, apiAbsPath } = opts;
 
-  const apiImport = apiAbsPath
-    ? `import userApp from '${apiAbsPath}';\n`
-    : '';
+  const apiImport = apiAbsPath ? `import userApp from '${apiAbsPath}';\n` : '';
   const apiMount = apiAbsPath ? `  .route('/', userApp)\n` : '';
 
   // The generated source is loaded as a virtual module, which Vite/esbuild
@@ -30,7 +29,6 @@ export function generateServerEntrySource(
     `import {\n` +
     `  actionsHandler,\n` +
     `  loadersHandler,\n` +
-    `  location,\n` +
     `  renderPage,\n` +
     `  routeServerModules,\n` +
     `} from '@hono-preact/server';\n` +
@@ -40,12 +38,12 @@ export function generateServerEntrySource(
     `\n` +
     `env.current = 'server';\n` +
     `const serverModules = routeServerModules(routes);\n` +
+    `const handlerOpts = { dev: import.meta.env.DEV };\n` +
     `\n` +
     `export const app = new Hono()\n` +
-    `  .post('/__loaders', loadersHandler(serverModules))\n` +
-    `  .post('/__actions', actionsHandler(serverModules))\n` +
+    `  .post('/__loaders', loadersHandler(serverModules, handlerOpts))\n` +
+    `  .post('/__actions', actionsHandler(serverModules, handlerOpts))\n` +
     apiMount +
-    `  .use(location)\n` +
     `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes })))));\n` +
     `\n` +
     `export default app;\n`
@@ -53,7 +51,12 @@ export function generateServerEntrySource(
 }
 
 export type CatchAllWarning =
-  | { kind: 'wildcard'; method: string; pattern: string; line: number | undefined }
+  | {
+      kind: 'wildcard';
+      method: string;
+      pattern: string;
+      line: number | undefined;
+    }
   | { kind: 'notFound'; line: number | undefined };
 
 const HONO_METHODS = new Set([
@@ -88,12 +91,20 @@ export function findApiCatchAllRoutes(source: string): CatchAllWarning[] {
   try {
     ast = parse(source, {
       sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      plugins: BABEL_PARSER_PLUGINS,
       errorRecovery: true,
     });
-  } catch {
+  } catch (err) {
     // If api.ts won't parse, the build will fail elsewhere with a clearer
-    // error. Don't double-report.
+    // error. Surface a note so the framework user can correlate a missing
+    // catch-all warning with a parse-time syntax issue rather than wondering
+    // why nothing was reported.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[hono-preact] Failed to parse api.ts for catch-all route detection: ${msg}. ` +
+        `The build will surface the real syntax error; this warning explains why ` +
+        `route-overlap warnings may be missing.`
+    );
     return warnings;
   }
 
@@ -150,7 +161,12 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
     typeof n.type === 'string' && FUNCTION_BODY_PARENTS.has(n.type);
 
   for (const key of Object.keys(node as object)) {
-    if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+    if (
+      key === 'loc' ||
+      key === 'leadingComments' ||
+      key === 'trailingComments'
+    )
+      continue;
     if (isFunctionParent && key === 'body') continue;
     walk((node as Record<string, unknown>)[key], warnings);
   }
@@ -171,7 +187,9 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
 export const GENERATED_SERVER_ENTRY_RELATIVE =
   'node_modules/.vite/hono-preact/server-entry.tsx';
 
-export function generatedServerEntryAbsPath(cwd: string = process.cwd()): string {
+export function generatedServerEntryAbsPath(
+  cwd: string = process.cwd()
+): string {
   return path.resolve(cwd, GENERATED_SERVER_ENTRY_RELATIVE);
 }
 
@@ -183,23 +201,40 @@ export interface ServerEntryPluginOptions {
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
+  // Paths resolved during configResolved (cheap) — actual disk write
+  // happens in buildStart so config-only Vite invocations (IDE probes,
+  // typecheck-only runs, dependency-optimizer cold runs) don't side-effect
+  // the cache directory. Writing on every config resolution was a tax that
+  // showed up when integration tests loaded vite.config.ts to inspect the
+  // plugin chain.
+  let layoutAbsPath: string | undefined;
+  let routesAbsPath: string | undefined;
   let apiAbsPath: string | undefined;
 
   return {
     name: 'hono-preact:server-entry',
     enforce: 'pre',
     configResolved(config) {
-      const layoutAbsPath = path.isAbsolute(opts.layout)
+      layoutAbsPath = path.isAbsolute(opts.layout)
         ? opts.layout
         : path.resolve(config.root, opts.layout);
-      const routesAbsPath = path.isAbsolute(opts.routes)
+      routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(config.root, opts.routes);
       const candidateApi = path.isAbsolute(opts.api)
         ? opts.api
         : path.resolve(config.root, opts.api);
       apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
-
+    },
+    buildStart() {
+      // configResolved must have run first. Bail loudly if not — silent
+      // emission of a stub would be much harder to debug.
+      if (!layoutAbsPath || !routesAbsPath) {
+        throw new Error(
+          '[hono-preact] server-entry buildStart fired before configResolved; ' +
+            'layout/routes paths were never resolved.'
+        );
+      }
       const source = generateServerEntrySource({
         layoutAbsPath,
         routesAbsPath,
@@ -207,11 +242,10 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
       });
       fs.mkdirSync(path.dirname(opts.outputPath), { recursive: true });
       fs.writeFileSync(opts.outputPath, source, 'utf8');
-    },
-    buildStart() {
+
       if (!apiAbsPath) return;
-      const source = fs.readFileSync(apiAbsPath, 'utf8');
-      const warnings = findApiCatchAllRoutes(source);
+      const apiSource = fs.readFileSync(apiAbsPath, 'utf8');
+      const warnings = findApiCatchAllRoutes(apiSource);
       for (const w of warnings) {
         const where = `${apiAbsPath}${w.line != null ? `:${w.line}` : ''}`;
         if (w.kind === 'notFound') {

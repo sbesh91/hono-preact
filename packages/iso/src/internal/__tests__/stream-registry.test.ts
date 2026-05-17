@@ -93,7 +93,9 @@ describe('stream-registry', () => {
     subscribeToLoaderStream('L3', {
       push: () => {},
       end: () => {},
-      error: (err) => { caught = err; },
+      error: (err) => {
+        caught = err;
+      },
     });
 
     window.__HP_STREAM__!.error('L3', { message: 'boom', name: 'TypeError' });

@@ -11,14 +11,20 @@ function findConfigPlugin(plugins: ReturnType<typeof honoPreact>) {
   return configPlugin.config as (config: unknown, env: unknown) => unknown;
 }
 
-function getClientConfig(plugins: ReturnType<typeof honoPreact>, userConfig = {}) {
+function getClientConfig(
+  plugins: ReturnType<typeof honoPreact>,
+  userConfig = {}
+) {
   return findConfigPlugin(plugins)(userConfig, {
     mode: 'client',
     command: 'build',
   });
 }
 
-function getServerConfig(plugins: ReturnType<typeof honoPreact>, userConfig = {}) {
+function getServerConfig(
+  plugins: ReturnType<typeof honoPreact>,
+  userConfig = {}
+) {
   return findConfigPlugin(plugins)(userConfig, {
     mode: 'production',
     command: 'build',
@@ -30,7 +36,16 @@ describe('honoPreact rollupOptions merge', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' });
     const config = getClientConfig(plugins);
     expect(config).toBeTruthy();
-    const rollup = (config as { build: { rollupOptions: { input: string[]; output: { entryFileNames: string } } } }).build.rollupOptions;
+    const rollup = (
+      config as {
+        build: {
+          rollupOptions: {
+            input: string[];
+            output: { entryFileNames: string };
+          };
+        };
+      }
+    ).build.rollupOptions;
     expect(rollup.input).toEqual(['virtual:hono-preact/client']);
     expect(rollup.output.entryFileNames).toBe('static/client.js');
   });
@@ -45,7 +60,15 @@ describe('honoPreact rollupOptions merge', () => {
       },
     });
     const config = getClientConfig(plugins);
-    const rollup = (config as { build: { rollupOptions: { output: { entryFileNames: string; chunkFileNames: string } } } }).build.rollupOptions;
+    const rollup = (
+      config as {
+        build: {
+          rollupOptions: {
+            output: { entryFileNames: string; chunkFileNames: string };
+          };
+        };
+      }
+    ).build.rollupOptions;
     expect(rollup.output.entryFileNames).toBe('custom/entry.js');
     expect(rollup.output.chunkFileNames).toBe('static/[name]-[hash].js');
   });
@@ -60,7 +83,11 @@ describe('honoPreact rollupOptions merge', () => {
       },
     });
     const config = getClientConfig(plugins);
-    const rollup = (config as { build: { rollupOptions: { output: { entryFileNames: string } } } }).build.rollupOptions;
+    const rollup = (
+      config as {
+        build: { rollupOptions: { output: { entryFileNames: string } } };
+      }
+    ).build.rollupOptions;
     expect(rollup.output.entryFileNames).toBe('static/client.js');
   });
 });
@@ -103,14 +130,34 @@ describe('honoPreact server build config', () => {
     expect(config.build.assetsDir).toBe('static');
   });
 
-  it('does not include client-only build fields (sourcemap, cssCodeSplit)', () => {
+  it('uses inline sourcemaps on server so SSR stacks point at user source', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' });
     const config = getServerConfig(plugins) as ServerCfg & {
-      build: { sourcemap?: unknown; cssCodeSplit?: unknown; rollupOptions?: unknown };
+      build: { sourcemap?: unknown };
     };
-    expect(config.build.sourcemap).toBeUndefined();
+    // The Worker bundle inlines sourcemaps because Workers tooling won't
+    // follow a sibling .map file. See hono-preact.ts for the rationale.
+    expect(config.build.sourcemap).toBe('inline');
+  });
+
+  it('does not include client-only build fields (cssCodeSplit, rollupOptions)', () => {
+    const plugins = honoPreact({ entry: './src/server.tsx' });
+    const config = getServerConfig(plugins) as ServerCfg & {
+      build: { cssCodeSplit?: unknown; rollupOptions?: unknown };
+    };
     expect(config.build.cssCodeSplit).toBeUndefined();
     expect(config.build.rollupOptions).toBeUndefined();
+  });
+
+  it('lets serverBuild.sourcemap override the inline default (e.g. false to disable)', () => {
+    const plugins = honoPreact({
+      entry: './src/server.tsx',
+      serverBuild: { sourcemap: false },
+    });
+    const config = getServerConfig(plugins) as ServerCfg & {
+      build: { sourcemap?: unknown };
+    };
+    expect(config.build.sourcemap).toBe(false);
   });
 
   it('honors sharedBuild on both client and server configs', () => {
@@ -118,8 +165,12 @@ describe('honoPreact server build config', () => {
       entry: './src/server.tsx',
       sharedBuild: { reportCompressedSize: false },
     });
-    const client = getClientConfig(plugins) as { build: { reportCompressedSize?: boolean } };
-    const server = getServerConfig(plugins) as { build: { reportCompressedSize?: boolean } };
+    const client = getClientConfig(plugins) as {
+      build: { reportCompressedSize?: boolean };
+    };
+    const server = getServerConfig(plugins) as {
+      build: { reportCompressedSize?: boolean };
+    };
     expect(client.build.reportCompressedSize).toBe(false);
     expect(server.build.reportCompressedSize).toBe(false);
   });
@@ -246,7 +297,9 @@ describe('honoPreact client-entry wiring', () => {
     const config = getClientConfig(plugins) as {
       build: { rollupOptions: { input: string[] } };
     };
-    expect(config.build.rollupOptions.input).toEqual(['virtual:hono-preact/client']);
+    expect(config.build.rollupOptions.input).toEqual([
+      'virtual:hono-preact/client',
+    ]);
   });
 
   it('honors a user-provided clientEntry override', () => {
@@ -254,6 +307,8 @@ describe('honoPreact client-entry wiring', () => {
     const config = getClientConfig(plugins) as {
       build: { rollupOptions: { input: string[] } };
     };
-    expect(config.build.rollupOptions.input).toEqual(['./src/custom-client.tsx']);
+    expect(config.build.rollupOptions.input).toEqual([
+      './src/custom-client.tsx',
+    ]);
   });
 });

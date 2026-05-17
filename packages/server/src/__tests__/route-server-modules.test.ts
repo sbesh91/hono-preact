@@ -3,25 +3,34 @@ import { defineRoutes } from '@hono-preact/iso';
 import { routeServerModules } from '../route-server-modules.js';
 
 describe('routeServerModules', () => {
-  it('returns a LazyGlob-shaped record indexed by integer keys', async () => {
+  it('returns an array of lazy server-module loaders preserving manifest order', async () => {
     const sA = () => Promise.resolve({ tag: 'A' });
     const sB = () => Promise.resolve({ tag: 'B' });
     const m = defineRoutes([
-      { path: '/', view: () => Promise.resolve({ default: () => null }), server: sA },
-      { path: '/x', view: () => Promise.resolve({ default: () => null }), server: sB },
+      {
+        path: '/',
+        view: () => Promise.resolve({ default: () => null }),
+        server: sA,
+      },
+      {
+        path: '/x',
+        view: () => Promise.resolve({ default: () => null }),
+        server: sB,
+      },
     ]);
-    const glob = routeServerModules(m);
-    const keys = Object.keys(glob).sort();
-    expect(keys).toEqual(['0', '1']);
-    const values = await Promise.all(Object.values(glob).map((fn) => fn()));
-    const tags = values.map((v) => (v as { tag: string }).tag).sort();
+    const arr = routeServerModules(m);
+    expect(Array.isArray(arr)).toBe(true);
+    expect(arr).toHaveLength(2);
+    const tags = (await Promise.all(arr.map((fn) => fn()))).map(
+      (v) => (v as { tag: string }).tag
+    );
     expect(tags).toEqual(['A', 'B']);
   });
 
-  it('returns an empty record when no server imports exist', () => {
+  it('returns an empty array when no server imports exist', () => {
     const m = defineRoutes([
       { path: '/', view: () => Promise.resolve({ default: () => null }) },
     ]);
-    expect(routeServerModules(m)).toEqual({});
+    expect(routeServerModules(m)).toEqual([]);
   });
 });

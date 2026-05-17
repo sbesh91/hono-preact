@@ -11,7 +11,7 @@ import {
 } from '../server-entry.js';
 
 describe('generateServerEntrySource', () => {
-  it('emits the framework imports, mounts loaders/actions/location/catchall, omits api when not provided', () => {
+  it('emits the framework imports, mounts loaders/actions/catchall, omits api when not provided', () => {
     const src = generateServerEntrySource({
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
@@ -22,7 +22,7 @@ describe('generateServerEntrySource', () => {
     expect(src).toContain(`import { Hono } from 'hono';`);
     expect(src).toContain(`import { Routes, env } from '@hono-preact/iso';`);
     expect(src).toContain(
-      `import {\n  actionsHandler,\n  loadersHandler,\n  location,\n  renderPage,\n  routeServerModules,\n} from '@hono-preact/server';`
+      `import {\n  actionsHandler,\n  loadersHandler,\n  renderPage,\n  routeServerModules,\n} from '@hono-preact/server';`
     );
 
     // User imports (absolute paths)
@@ -34,18 +34,28 @@ describe('generateServerEntrySource', () => {
     expect(src).not.toContain('api.ts');
     expect(src).not.toContain('userApp');
 
+    // The location middleware was removed; locationStub now runs synchronously
+    // inside renderPage so concurrent renders cannot race on globalThis.location.
+    expect(src).not.toContain('.use(location)');
+    expect(src).not.toMatch(/^\s*location,\s*$/m);
+
     // env.current is set
     expect(src).toContain(`env.current = 'server';`);
+
+    // Handler options thread dev mode through so the cache-vs-rebuild
+    // branch doesn't rely on a Vite-only build-time constant inside the
+    // library handlers themselves.
+    expect(src).toContain(`const handlerOpts = { dev: import.meta.env.DEV };`);
+    expect(src).toContain(`loadersHandler(serverModules, handlerOpts)`);
+    expect(src).toContain(`actionsHandler(serverModules, handlerOpts)`);
 
     // Hono pipeline in correct order
     const loadersIdx = src.indexOf(`'/__loaders'`);
     const actionsIdx = src.indexOf(`'/__actions'`);
-    const useLocationIdx = src.indexOf(`.use(location)`);
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(loadersIdx).toBeGreaterThan(-1);
     expect(actionsIdx).toBeGreaterThan(loadersIdx);
-    expect(useLocationIdx).toBeGreaterThan(actionsIdx);
-    expect(catchallIdx).toBeGreaterThan(useLocationIdx);
+    expect(catchallIdx).toBeGreaterThan(actionsIdx);
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))))`
     );
@@ -87,7 +97,11 @@ describe('findApiCatchAllRoutes', () => {
     `;
     const warnings = findApiCatchAllRoutes(src);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatchObject({ kind: 'wildcard', method: 'get', pattern: '*' });
+    expect(warnings[0]).toMatchObject({
+      kind: 'wildcard',
+      method: 'get',
+      pattern: '*',
+    });
   });
 
   it('flags literal "/*"', () => {
@@ -97,7 +111,11 @@ describe('findApiCatchAllRoutes', () => {
     `;
     const warnings = findApiCatchAllRoutes(src);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatchObject({ kind: 'wildcard', method: 'all', pattern: '/*' });
+    expect(warnings[0]).toMatchObject({
+      kind: 'wildcard',
+      method: 'all',
+      pattern: '/*',
+    });
   });
 
   it('flags app.notFound(...)', () => {
@@ -182,9 +200,18 @@ describe('serverEntryPlugin', () => {
     );
   });
 
-  it('configResolved writes the generated entry to outputPath (no api file)', () => {
+  // The disk write happens in buildStart (not configResolved) so config-only
+  // Vite invocations (IDE probes, vitest loading the config, dependency
+  // optimizer cold runs) don't side-effect the cache directory. These tests
+  // drive both lifecycle hooks in order.
+  it('buildStart writes the generated entry to outputPath (no api file)', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
-    const outputPath = path.join(tmp, '.vite', 'hono-preact', 'server-entry.tsx');
+    const outputPath = path.join(
+      tmp,
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
@@ -192,28 +219,47 @@ describe('serverEntryPlugin', () => {
       api: 'src/api.ts', // configured but does not exist on disk
       outputPath,
     });
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({
       root: tmp,
     });
+    // configResolved alone should NOT have written anything.
+    expect(fs.existsSync(outputPath)).toBe(false);
+
+    (
+      plugin as {
+        buildStart?: (this: { warn: (m: string) => void }) => void;
+      }
+    ).buildStart?.call({ warn: () => {} });
 
     expect(fs.existsSync(outputPath)).toBe(true);
     const code = fs.readFileSync(outputPath, 'utf8');
-    expect(code).toContain(`import Layout from '${path.join(tmp, 'src', 'Layout.tsx')}';`);
-    expect(code).toContain(`import routes from '${path.join(tmp, 'src', 'routes.ts')}';`);
+    expect(code).toContain(
+      `import Layout from '${path.join(tmp, 'src', 'Layout.tsx')}';`
+    );
+    expect(code).toContain(
+      `import routes from '${path.join(tmp, 'src', 'routes.ts')}';`
+    );
     // Configured api path that doesn't exist is treated as absent.
     expect(code).not.toContain('api.ts');
 
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('configResolved writes an entry that includes api when the file exists', () => {
+  it('buildStart writes an entry that includes api when the file exists', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('/api/x', (c) => c.text('ok'));\n`
     );
-    const outputPath = path.join(tmp, '.vite', 'hono-preact', 'server-entry.tsx');
+    const outputPath = path.join(
+      tmp,
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
@@ -221,12 +267,21 @@ describe('serverEntryPlugin', () => {
       api: 'src/api.ts',
       outputPath,
     });
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({
       root: tmp,
     });
+    (
+      plugin as {
+        buildStart?: (this: { warn: (m: string) => void }) => void;
+      }
+    ).buildStart?.call({ warn: () => {} });
 
     const code = fs.readFileSync(outputPath, 'utf8');
-    expect(code).toContain(`import userApp from '${path.join(tmp, 'src', 'api.ts')}';`);
+    expect(code).toContain(
+      `import userApp from '${path.join(tmp, 'src', 'api.ts')}';`
+    );
     expect(code).toContain(`.route('/', userApp)`);
 
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -239,7 +294,12 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('*', (c) => c.text('catch'));\n`
     );
-    const outputPath = path.join(tmp, '.vite', 'hono-preact', 'server-entry.tsx');
+    const outputPath = path.join(
+      tmp,
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
@@ -247,15 +307,19 @@ describe('serverEntryPlugin', () => {
       api: 'src/api.ts',
       outputPath,
     });
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({
       root: tmp,
     });
 
     const warnings: string[] = [];
     const ctx = { warn: (msg: string) => warnings.push(msg) };
-    (plugin as {
-      buildStart?: (this: { warn: (m: string) => void }) => void;
-    }).buildStart?.call(ctx);
+    (
+      plugin as {
+        buildStart?: (this: { warn: (m: string) => void }) => void;
+      }
+    ).buildStart?.call(ctx);
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain(`src/api.ts`);

@@ -1,0 +1,114 @@
+# Loading States
+
+By default, a page renders nothing while its loader is fetching. Pass a `fallback` to `loader.View(...)` (or to a `loader.Boundary`) to show a loading UI while a route's loader resolves during client-side navigation.
+
+## Basic usage
+
+```tsx
+// src/pages/movies.tsx
+import { definePage } from 'hono-preact';
+import { serverLoaders } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
+
+const MoviesView = moviesLoader.View(
+  ({ data }) => (
+    <ul>
+      {data.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  ),
+  { fallback: <p>Loading…</p> }
+);
+
+export default definePage(MoviesView);
+```
+
+```ts
+// src/routes.ts
+{
+  path: '/movies',
+  view: () => import('./pages/movies.js'),
+  server: () => import('./pages/movies.server.js'),
+}
+```
+
+`fallback` is rendered by the Suspense boundary `.View()` installs around the loader fetch. It only appears on client-side navigation; SSR and first-load hydration read from preloaded data and render immediately.
+
+## When fallback shows
+
+| Navigation                   | Fallback shown?                                |
+| ---------------------------- | ---------------------------------------------- |
+| SSR (first load)             | No. Data is preloaded into the HTML.           |
+| Hydration                    | No. Client reads from `data-loader` attribute. |
+| Client-side nav (cache miss) | Yes, until the loader resolves.                |
+| Client-side nav (cache hit)  | No. Cached data renders immediately.           |
+
+## Using a skeleton
+
+Any Preact element works as a fallback, including a layout-matching skeleton:
+
+```tsx
+const MoviesSkeleton = () => (
+  <ul>
+    {Array.from({ length: 5 }).map((_, i) => (
+      <li key={i} class="h-6 w-48 animate-pulse bg-gray-200 rounded" />
+    ))}
+  </ul>
+);
+
+const MoviesView = moviesLoader.View(
+  ({ data }) => (
+    <ul>
+      {data.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  ),
+  { fallback: <MoviesSkeleton /> }
+);
+```
+
+## Error fallback
+
+If the loader rejects, the boundary renders `errorFallback` instead of unwinding the page tree. Pass it alongside `fallback` in the same `.View()` options. The fallback may be an element or a function that receives the error and a `reset()` callback:
+
+```tsx
+const MoviesView = moviesLoader.View(
+  ({ data }) => (
+    <ul>
+      {data.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  ),
+  {
+    fallback: <p>Loading…</p>,
+    errorFallback: (err, reset) => (
+      <div role="alert">
+        <p>Couldn't load movies: {err.message}</p>
+        <button onClick={reset}>Retry</button>
+      </div>
+    ),
+  }
+);
+```
+
+Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [cross-page invalidation](/docs/loaders#cross-page-invalidation).
+
+## Page-level fallbacks
+
+`definePage` accepts a page-level `errorFallback` that catches errors from the rest of the page tree (e.g. a guard rejection or a render-time throw outside any loader boundary):
+
+```tsx
+export default definePage(MoviesView, {
+  errorFallback: (err) => <p>Something went wrong: {err.message}</p>,
+});
+```
+
+Loader-specific loading and error UI lives on `.View()` / `.Boundary`. The page-level `errorFallback` is the outer safety net.
+
+## See also
+
+See [Route Guards](/docs/guards) for the `guards` binding, and [Project Structure](/docs/structure) for the full `definePage` bindings list (including `Wrapper`).

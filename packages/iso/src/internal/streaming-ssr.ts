@@ -35,7 +35,8 @@ export function registerServerStreamingLoader(
 export function takeServerStreamingLoaders(): ServerLoaderStream[] {
   const store = getRequestStore();
   if (!store) return [];
-  const list = (store.get(REGISTRY_KEY) as ServerLoaderStream[] | undefined) ?? [];
+  const list =
+    (store.get(REGISTRY_KEY) as ServerLoaderStream[] | undefined) ?? [];
   store.set(REGISTRY_KEY, []);
   return list;
 }

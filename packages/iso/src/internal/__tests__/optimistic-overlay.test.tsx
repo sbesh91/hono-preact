@@ -11,9 +11,7 @@ afterEach(() => {
 });
 
 type Todo = { id: string; text: string };
-type Action =
-  | { kind: 'add'; todo: Todo }
-  | { kind: 'remove'; id: string };
+type Action = { kind: 'add'; todo: Todo } | { kind: 'remove'; id: string };
 
 const todoLoader = defineLoader<Todo[]>(async () => []);
 

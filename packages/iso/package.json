@@ -1,6 +1,29 @@
 {
   "name": "@hono-preact/iso",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Internal package for hono-preact. Use the hono-preact umbrella instead.",
+  "keywords": [
+    "hono-preact",
+    "internal"
+  ],
+  "homepage": "https://framework.sbesh.com",
+  "bugs": {
+    "url": "https://github.com/sbesh91/hono-preact/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sbesh91/hono-preact.git",
+    "directory": "packages/iso"
+  },
+  "license": "MIT",
+  "author": "Steven Beshensky",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -14,12 +37,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "tsc"
   },
   "peerDependencies": {
     "hono": ">=4.0.0",
     "preact": ">=10.0.0",
-    "preact-iso": "*"
+    "preact-iso": ">=2.11.0"
   },
   "devDependencies": {
     "typescript": "*",

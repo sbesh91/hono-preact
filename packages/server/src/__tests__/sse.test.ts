@@ -11,8 +11,12 @@ function makeApp(handler: (c: Context) => Response) {
 
 describe('sseGeneratorResponse', () => {
   it('sets the standard SSE response headers', async () => {
-    async function* gen() { yield { a: 1 }; }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request('/x');
+    async function* gen() {
+      yield { a: 1 };
+    }
+    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
+      '/x'
+    );
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     expect(res.headers.get('Cache-Control')).toBe('no-cache');
   });
@@ -22,7 +26,9 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       yield { a: 2 };
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request('/x');
+    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
+      '/x'
+    );
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
     expect(body).toContain('data: {"a":2}');
@@ -33,7 +39,9 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       return { ok: true };
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen(), { emitResult: true })).request('/x');
+    const res = await makeApp((c) =>
+      sseGeneratorResponse(c, gen(), { emitResult: true })
+    ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
     expect(body).toContain('event: result');
@@ -45,7 +53,9 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       return { ignored: true };
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen(), { emitResult: false })).request('/x');
+    const res = await makeApp((c) =>
+      sseGeneratorResponse(c, gen(), { emitResult: false })
+    ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
     expect(body).not.toContain('event: result');
@@ -57,7 +67,9 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       throw new Error('bad');
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request('/x');
+    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
+      '/x'
+    );
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
     expect(body).toContain('event: error');
@@ -75,7 +87,9 @@ describe('sseReadableStreamResponse', () => {
         controller.close();
       },
     });
-    const res = await makeApp((c) => sseReadableStreamResponse(c, source)).request('/x');
+    const res = await makeApp((c) =>
+      sseReadableStreamResponse(c, source)
+    ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"tick":1}');
     expect(body).toContain('data: {"tick":2}');

@@ -1,0 +1,100 @@
+# Vite Configuration
+
+The `hono-preact/vite` subpath exports a `honoPreact()` plugin that configures Vite for the framework's two-pass build and dev server. Your `vite.config.ts` only needs to wire in the plugins that are specific to your application.
+
+## Minimal setup
+
+```ts
+import { honoPreact } from 'hono-preact/vite';
+import preact from '@preact/preset-vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [honoPreact()],
+});
+```
+
+`honoPreact()` takes no arguments in the common case; it generates the server entry as a virtual module and auto-includes `@preact/preset-vite`. `entry` is an advanced override for projects that need to author their own Hono server entry; it is optional.
+
+## What the plugin handles
+
+`honoPreact()` configures everything the framework requires:
+
+| Concern              | What it sets                                                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso`                                                                                     |
+| SSR bundling         | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `hono-preact`                                                                                  |
+| Client build output  | `dist/static/client.js` entry, hashed chunk and asset filenames                                                                                                  |
+| Server build output  | `esnext` target, `dist/static/` asset dir, minification                                                                                                          |
+| Worker bundling      | `@hono/vite-build` (Cloudflare Workers preset), build-only                                                                                                       |
+| Dev server           | `@hono/vite-dev-server` with Cloudflare adapter, serve-only                                                                                                      |
+| Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle                                       |
+| Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                           |
+| Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                |
+| Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw |
+
+## Peer dependencies
+
+`@hono/vite-build` and `@hono/vite-dev-server` are peer dependencies of `hono-preact`. Install them alongside it:
+
+```bash
+npm install -D @hono/vite-build @hono/vite-dev-server
+```
+
+## Adding MDX
+
+MDX is a user-space choice and not included in the plugin. Add it alongside `honoPreact()`:
+
+```ts
+import { honoPreact } from 'hono-preact/vite';
+import mdx from '@mdx-js/rollup';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [
+    honoPreact(),
+    Object.assign(mdx({ jsxImportSource: 'preact' }), { enforce: 'pre' }),
+  ],
+});
+```
+
+The `enforce: 'pre'` placement ensures MDX files are transformed to JSX before other plugins see them.
+
+## Path aliases
+
+`honoPreact()` does not add path aliases; those belong in your config. A common setup:
+
+```ts
+import { resolve } from 'node:path';
+
+export default defineConfig({
+  resolve: {
+    alias: [{ find: '@', replacement: resolve(__dirname, './src') }],
+  },
+  plugins: [honoPreact()],
+});
+```
+
+## Overriding build options
+
+Pass `clientBuild`, `serverBuild`, or `sharedBuild` to extend the plugin's defaults:
+
+```ts
+honoPreact({
+  clientBuild: { sourcemap: false },
+});
+```
+
+These are merged on top of the plugin's defaults, so you only need to specify what differs.
+
+## Custom client entry path
+
+The plugin defaults to the framework-generated virtual module `virtual:hono-preact/client`, which hydrates `<Routes>` under `<LocationProvider>` for you. Override it only when you need a hand-written entry:
+
+```ts
+honoPreact({
+  clientEntry: 'src/main.tsx',
+});
+```
+
+`clientEntry` is the single source of truth for both the rollup `input` and the `clientShimPlugin` transform target, so you only set it in one place.

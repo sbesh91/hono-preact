@@ -14,7 +14,9 @@ describe('VIRTUAL_CLIENT_ENTRY_ID', () => {
 
 describe('generateClientEntrySource', () => {
   it('emits the framework imports plus the user routes import (absolute path)', () => {
-    const src = generateClientEntrySource({ routesAbsPath: '/proj/src/routes.ts' });
+    const src = generateClientEntrySource({
+      routesAbsPath: '/proj/src/routes.ts',
+    });
 
     expect(src).toContain(`import { h, hydrate } from 'preact';`);
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
@@ -27,7 +29,9 @@ describe('generateClientEntrySource', () => {
   });
 
   it('hydrates into #app and wires onRouteChange to the dispatcher', () => {
-    const src = generateClientEntrySource({ routesAbsPath: '/proj/src/routes.ts' });
+    const src = generateClientEntrySource({
+      routesAbsPath: '/proj/src/routes.ts',
+    });
     expect(src).toContain(`document.getElementById('app')`);
     expect(src).toContain(`onRouteChange`);
     expect(src).toContain(`__dispatchRouteChange`);
@@ -37,40 +41,56 @@ describe('generateClientEntrySource', () => {
 describe('clientEntryPlugin', () => {
   it('resolveId returns the resolved id only for the virtual id', () => {
     const plugin = clientEntryPlugin({ routes: 'src/routes.ts' });
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({
       root: '/proj',
     });
 
-    const resolved = (plugin as {
-      resolveId?: (id: string) => string | undefined;
-    }).resolveId?.(VIRTUAL_CLIENT_ENTRY_ID);
+    const resolved = (
+      plugin as {
+        resolveId?: (id: string) => string | undefined;
+      }
+    ).resolveId?.(VIRTUAL_CLIENT_ENTRY_ID);
     expect(resolved).toBe('\0' + VIRTUAL_CLIENT_ENTRY_ID);
 
-    const other = (plugin as {
-      resolveId?: (id: string) => string | undefined;
-    }).resolveId?.('not-the-virtual');
+    const other = (
+      plugin as {
+        resolveId?: (id: string) => string | undefined;
+      }
+    ).resolveId?.('not-the-virtual');
     expect(other).toBeUndefined();
   });
 
   it('load() returns the generated source for the resolved virtual id', () => {
     const plugin = clientEntryPlugin({ routes: 'src/routes.ts' });
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({
       root: '/proj',
     });
 
-    const code = (plugin as {
-      load?: (id: string) => string | undefined;
-    }).load?.('\0' + VIRTUAL_CLIENT_ENTRY_ID);
+    const code = (
+      plugin as {
+        load?: (id: string) => string | undefined;
+      }
+    ).load?.('\0' + VIRTUAL_CLIENT_ENTRY_ID);
 
-    expect(code).toContain(`import routes from '${path.resolve('/proj', 'src/routes.ts')}';`);
+    expect(code).toContain(
+      `import routes from '${path.resolve('/proj', 'src/routes.ts')}';`
+    );
   });
 
   it('load() returns undefined for non-virtual ids', () => {
     const plugin = clientEntryPlugin({ routes: 'src/routes.ts' });
-    (plugin as { configResolved?: (c: { root: string }) => void }).configResolved?.({
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({
       root: '/proj',
     });
-    const code = (plugin as { load?: (id: string) => string | undefined }).load?.('other-id');
+    const code = (
+      plugin as { load?: (id: string) => string | undefined }
+    ).load?.('other-id');
     expect(code).toBeUndefined();
   });
 });

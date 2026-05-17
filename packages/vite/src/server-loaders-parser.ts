@@ -22,14 +22,16 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
     if (
       stmt.type !== 'ExportNamedDeclaration' ||
       stmt.declaration?.type !== 'VariableDeclaration'
-    ) continue;
+    )
+      continue;
 
     for (const decl of stmt.declaration.declarations) {
       if (
         decl.id.type !== 'Identifier' ||
         decl.id.name !== 'serverLoaders' ||
         decl.init?.type !== 'ObjectExpression'
-      ) continue;
+      )
+        continue;
 
       const obj = decl.init as ObjectExpression;
       for (const prop of obj.properties) {
@@ -37,13 +39,15 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
           prop.type !== 'ObjectProperty' ||
           prop.key.type !== 'Identifier' ||
           prop.value.type !== 'CallExpression'
-        ) continue;
+        )
+          continue;
 
         const call = prop.value as CallExpression;
         if (
           call.callee.type !== 'Identifier' ||
           call.callee.name !== 'defineLoader'
-        ) continue;
+        )
+          continue;
 
         const secondArg = call.arguments[1];
         const optsArg =
@@ -64,13 +68,16 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
  * Returns `string[]` for array literals of string literals, `'*'` for the
  * wildcard string literal, or undefined if not present or unsupported shape.
  */
-export function readParamsOpt(opts: ObjectExpression): string[] | '*' | undefined {
+export function readParamsOpt(
+  opts: ObjectExpression
+): string[] | '*' | undefined {
   for (const prop of opts.properties) {
     if (
       prop.type !== 'ObjectProperty' ||
       prop.key.type !== 'Identifier' ||
       prop.key.name !== 'params'
-    ) continue;
+    )
+      continue;
 
     const val = prop.value;
     if (val.type === 'StringLiteral' && val.value === '*') {

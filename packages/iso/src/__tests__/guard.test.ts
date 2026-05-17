@@ -81,8 +81,98 @@ describe('runServerGuards composes records via .fn', () => {
     const c = defineServerGuard(async (_c, _next) => {
       throw new Error('should not run');
     });
-    const result = await runServerGuards([a, b, c], { c: fakeC, location: loc });
+    const result = await runServerGuards([a, b, c], {
+      c: fakeC,
+      location: loc,
+    });
     expect(result).toEqual({ redirect: '/login' });
+  });
+});
+
+describe('runServerGuards / runClientGuards — composition edge cases', () => {
+  it('propagates a thrown error from a guard (no swallowing)', async () => {
+    // A guard that throws is a structured failure; the runner must NOT
+    // catch + ignore. This contract underpins how `<Guards>` surfaces
+    // unexpected errors to the page-level error boundary (instead of
+    // silently rendering children).
+    const a = defineServerGuard(async (_c, next) => next());
+    const b = defineServerGuard(async () => {
+      throw new Error('boom');
+    });
+    const c = defineServerGuard(async () => {
+      throw new Error('should not run');
+    });
+    await expect(
+      runServerGuards([a, b, c], { c: fakeC, location: loc })
+    ).rejects.toThrow('boom');
+  });
+
+  it('propagates a thrown error from a client guard', async () => {
+    const a = defineClientGuard(async () => {
+      throw new Error('client-boom');
+    });
+    await expect(runClientGuards([a], { location: loc })).rejects.toThrow(
+      'client-boom'
+    );
+  });
+
+  it('accepts the [server, client] array shape the demo uses for shared session guards', async () => {
+    // apps/site/src/demo/guard.ts exports
+    //   `requireSession = [requireSessionServer, requireSessionClient]`
+    // and passes it to `definePage(..., { guards: requireSession })`. That
+    // array is `GuardFn[]` — a flat mix. The runtime filters by `g.runs`,
+    // so each env sees only its own guards in order. This test locks in
+    // the contract: an array of mixed envs is a valid GuardFn[], and
+    // passing it to either runner only invokes the matching environment's
+    // entries.
+    const sCalls: string[] = [];
+    const cCalls: string[] = [];
+    const requireSession = [
+      defineServerGuard(async (_c, next) => {
+        sCalls.push('server');
+        return next();
+      }),
+      defineClientGuard(async (_ctx, next) => {
+        cCalls.push('client');
+        return next();
+      }),
+    ];
+
+    // Server runner: takes only server entries.
+    await runServerGuards(
+      requireSession.filter((g): g is ServerGuardFn => g.runs === 'server'),
+      { c: fakeC, location: loc }
+    );
+    expect(sCalls).toEqual(['server']);
+    expect(cCalls).toEqual([]);
+
+    // Client runner: takes only client entries.
+    await runClientGuards(
+      requireSession.filter((g): g is ClientGuardFn => g.runs === 'client'),
+      { location: loc }
+    );
+    expect(sCalls).toEqual(['server']);
+    expect(cCalls).toEqual(['client']);
+  });
+
+  it('treats a guard returning `next()` (not awaiting) the same as `await next()`', async () => {
+    // Catches a regression where the runner would only honor awaited
+    // continuations. Both forms must be valid.
+    const calls: string[] = [];
+    const a = defineServerGuard(async (_c, next) => {
+      calls.push('a');
+      return next(); // returned, not awaited
+    });
+    const b = defineServerGuard(async (_c, next) => {
+      calls.push('b');
+      await next(); // awaited
+      calls.push('b:after');
+    });
+    const c = defineServerGuard(async (_c, _next) => {
+      calls.push('c');
+    });
+    await runServerGuards([a, b, c], { c: fakeC, location: loc });
+    expect(calls).toEqual(['a', 'b', 'c', 'b:after']);
   });
 });
 
