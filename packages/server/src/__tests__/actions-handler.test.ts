@@ -486,13 +486,44 @@ describe('actionsHandler — action guards', () => {
     expect(createFn).toHaveBeenCalledOnce();
   });
 
-  it('runs the action even when a guard returns without calling next()', async () => {
+  it('rejects with a 500 and a descriptive error when a guard returns without calling next() or throwing', async () => {
+    // Previously this combination silently passed control to the action body
+    // — the opposite of every other middleware system. Now it's a structured
+    // error so the bug is loud instead of insecure.
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
         serverActions: { create: createFn },
         actionGuards: [async () => { /* intentionally does not call next() */ }],
+      },
+    });
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(500);
+    expect(createFn).not.toHaveBeenCalled();
+  });
+
+  it('passes through when a guard explicitly awaits next()', async () => {
+    const createFn = vi.fn().mockResolvedValue({ id: 1 });
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: createFn },
+        actionGuards: [async (_ctx, next) => { await next(); }],
+      },
+    });
+    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+    expect(createFn).toHaveBeenCalledOnce();
+  });
+
+  it('passes through when a guard returns next() directly', async () => {
+    const createFn = vi.fn().mockResolvedValue({ id: 1 });
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: createFn },
+        actionGuards: [async (_ctx, next) => next()],
       },
     });
     const res = await post(app, { module: 'movies', action: 'create', payload: {} });

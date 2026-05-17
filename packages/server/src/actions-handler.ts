@@ -52,7 +52,26 @@ async function runActionGuards(
 ): Promise<void> {
   const run = async (index: number): Promise<void> => {
     if (index >= guards.length) return;
-    await guards[index](ctx, () => run(index + 1));
+    // Track whether the guard explicitly opted to pass control on. Without
+    // this check a guard that forgets `return next()` (or just `next()`)
+    // would silently fall through to the action body — the OPPOSITE of every
+    // other middleware system users have seen (Express, Hono, Koa: blocked
+    // by default; opt in to pass). Make ambiguous returns loud instead of
+    // silently insecure. To block, throw ActionGuardError. To pass, await
+    // (or return) next().
+    let nextCalled = false;
+    await guards[index](ctx, () => {
+      nextCalled = true;
+      return run(index + 1);
+    });
+    if (!nextCalled) {
+      throw new Error(
+        `ActionGuard for '${ctx.module}.${ctx.action}' returned without ` +
+        `calling next() or throwing. Guards must either: (a) await/return ` +
+        `next() to pass control on, or (b) throw ActionGuardError to block. ` +
+        `Returning silently is ambiguous and would let the action run.`
+      );
+    }
   };
   await run(0);
 }

@@ -85,7 +85,31 @@ The `status` argument is typed as `ContentfulStatusCode` (Hono's union of status
 
 ### `next()`
 
-Call `next()` to pass control to the next guard in the chain, or to the action if no more guards remain. A guard that returns without calling `next()` and without throwing will still allow the action to proceed; the only way to block is to throw.
+A guard must either:
+
+- **await (or return) `next()`** to pass control to the next guard in the chain, or to the action if no more guards remain, or
+- **throw `ActionGuardError`** to block the request with a structured status + message.
+
+Returning without doing either is treated as a bug. The framework will reject the request with a 500 and a descriptive error so the silent-passthrough footgun (the OPPOSITE of every other middleware system you've used) cannot become the wire contract by accident.
+
+```ts
+// ✅ pass through to the next guard / action
+defineActionGuard(async (_ctx, next) => {
+  await doSomeAudit();
+  return next();
+});
+
+// ✅ block
+defineActionGuard(async (ctx) => {
+  if (!ok) throw new ActionGuardError('Not allowed', 403);
+  // (unreachable; throw stops the chain)
+});
+
+// ❌ ambiguous — framework throws at runtime so this can't ship silently
+defineActionGuard(async () => {
+  // no next(), no throw
+});
+```
 
 ## Guard chains
 
