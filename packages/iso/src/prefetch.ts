@@ -4,6 +4,7 @@ import type { LoaderCache } from './cache.js';
 import type { LoaderRef } from './define-loader.js';
 import { isBrowser } from './is-browser.js';
 import { runLoader } from './internal/loader-runner.js';
+import { serializeLocationForCache } from './internal/cache-key.js';
 
 export interface PrefetchOptions<T> {
   url?: string;
@@ -62,12 +63,25 @@ export async function prefetch<T>(
   const location =
     opts.location ?? buildLocation({ url: opts.url, route: opts.route });
   const cache = opts.cache ?? ref.cache;
+  // Compute the cache key the loader runtime would use, so a warm cache for
+  // THIS specific location short-circuits the fetch. Without this check, a
+  // hover handler that fires repeatedly (mouse over → off → back over the
+  // same link, an intersection observer re-entering visibility, an idle
+  // prefetch scheduled twice) would issue a redundant request every time.
+  // The docs already promise no-op-on-cache-hit behavior; this makes the
+  // code match.
+  const locKey = serializeLocationForCache(location, ref.params);
+  if (cache?.has(locKey)) {
+    const cached = cache.get(locKey);
+    if (cached !== null) return cached;
+  }
+
   const id = `prefetch:${++prefetchSeq}`;
   const signal = new AbortController().signal;
 
   const result = await runLoader<T>(ref, location, id, signal, {
     onChunk: (v) => {
-      cache?.set(v);
+      cache?.set(v, locKey);
     },
     onError: () => {
       // Errors after the first chunk are swallowed: prefetch is best-effort
@@ -76,6 +90,10 @@ export async function prefetch<T>(
     onEnd: () => {},
   });
 
-  if (isBrowser()) cache?.set(result);
+  // Key the final write on locKey so two prefetches for different URLs
+  // (hovering /movies/41 then /movies/42) don't collide on the legacy
+  // single-slot "locKey: null matches any" fallback the cache supports for
+  // back-compat.
+  if (isBrowser()) cache?.set(result, locKey);
   return result;
 }
