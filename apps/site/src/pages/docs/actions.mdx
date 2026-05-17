@@ -90,10 +90,27 @@ const Movies = () => {
 
 | Value | Type | Description |
 |-------|------|-------------|
-| `mutate` | `(payload) => Promise<void>` | Fires the action. Stable reference, safe to pass to `useEffect` or memoized children. |
+| `mutate` | `(payload) => Promise<{ ok: true; data: TResult } \| { ok: false; error: Error }>` | Fires the action. Resolves with a discriminated union so awaiting callers can chain on the result without leaking unhandled rejections. The same `error` is also written to the `error` state field for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
 | `pending` | `boolean` | `true` while the request is in flight. |
 | `error` | `Error \| null` | The last error, or `null` if none. |
 | `data` | `TResult \| null` | The last successful result, or `null`. Not set for streaming responses. |
+
+#### Chaining on success
+
+```tsx
+const { mutate } = useAction(addMovie);
+
+async function submit(payload) {
+  const result = await mutate(payload);
+  if (result.ok) {
+    navigate(`/movies/${result.data.id}`);
+  } else {
+    showToast(result.error.message);
+  }
+}
+```
+
+Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
 
 ## Submitting with `<Form>`
 
@@ -116,7 +133,13 @@ const AddMovieForm = () => {
 
 `<Form>` accepts any HTML `<form>` attribute (except `onSubmit`, which it owns), plus `mutate` (required) and `pending` (optional). All action-related options live on the `useAction` call, not on `<Form>`.
 
-FormData values are collected with `Object.fromEntries(new FormData(form))`. String values are passed as strings; coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
+FormData values are collected into a plain object before being passed to `mutate`. Single-value fields arrive as scalars (string for text inputs, `File` for file inputs). **Repeated field names** (checkboxes sharing a name, multi-select, `<input type="file" multiple>`) arrive as **arrays** in the order they appeared in the form. Declare the array fields in your `defineAction` payload type:
+
+```ts
+defineAction<{ title: string; tags: string[]; photos: File[] }, ...>
+```
+
+String values are passed as strings; coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
 
 ## Optimistic updates
 
@@ -223,7 +246,7 @@ export const serverActions = {
 };
 ```
 
-Non-`File` values in a FormData payload are serialized as strings (numbers and booleans via `JSON.stringify`). Multi-value fields (e.g. checkboxes sharing a name) are collapsed to their last value, so handle that case in your action body if needed.
+Non-`File` values in a FormData payload are serialized as strings (numbers and booleans via `JSON.stringify`). Repeated field names (multi-checkbox groups, multi-select, `<input type="file" multiple>`) are forwarded as arrays; type your action's payload accordingly (`tags: string[]`, `photos: File[]`, etc.) instead of expecting a single value.
 
 ## Streaming responses
 
