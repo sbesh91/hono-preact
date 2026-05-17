@@ -36,6 +36,9 @@ jobs:
       - name: Build framework packages
         run: pnpm --filter '@hono-preact/*' --filter hono-preact build
 
+      - name: Format check
+        run: pnpm format:check
+
       - name: Typecheck
         run: pnpm typecheck
 

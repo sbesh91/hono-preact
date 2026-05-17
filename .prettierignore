@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.vite
+.wrangler
+pnpm-lock.yaml
+docs/superpowers
+# Generated server entry is plugin output, not human-edited
+**/.vite/hono-preact
+# Fixtures intentionally have non-pretty shapes for the tests they exercise
+packages/vite/src/__tests__/fixtures
