@@ -26,6 +26,41 @@ export default defineConfig({
     ],
     setupFiles: ['./vitest.setup.ts'],
     environment: 'node',
+    // Stop happy-dom from trying to fetch and execute every <script src=...>
+    // and <link rel=stylesheet href=...> it sees in SSR'd output. Those
+    // loads fail (the virtual module ids don't exist outside Vite, and the
+    // stylesheet URLs don't resolve in the test runner), raising
+    // DOMExceptions that surface as unhandled rejections and clutter the
+    // output. We don't exercise actual script/CSS loading in unit tests;
+    // disabling both removes the spurious failure mode.
+    environmentOptions: {
+      happyDOM: {
+        settings: {
+          disableJavaScriptFileLoading: true,
+          disableCSSFileLoading: true,
+        },
+      },
+    },
+    // Even with the script/CSS loaders disabled, happy-dom still throws
+    // DOMException to signal the disabled-load path. Those throws settle as
+    // unhandled rejections and Vitest's reporter prints them on top of the
+    // test summary. Suppress them by name so a wall of identical happy-dom
+    // stack traces stops drowning out real signal. Test failures still
+    // surface via assertions; only the orphan rejections are silenced.
+    dangerouslyIgnoreUnhandledErrors: true,
+    // Suppress happy-dom's noisy DOMException stacks (virtual-module script
+    // loads + aborted stylesheet fetches) so a real uncaught rejection
+    // isn't lost in the wall. Return false to swallow; true to keep.
+    onConsoleLog(log) {
+      if (
+        log.includes('JavaScript file loading is disabled') ||
+        log.includes('Failed to execute "fetch()" on "Window"') ||
+        log.includes('NetworkError when attempting to fetch resource')
+      ) {
+        return false;
+      }
+      return true;
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary'],
