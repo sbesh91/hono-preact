@@ -2,9 +2,16 @@ import { honoPreact } from 'hono-preact/vite';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
+
+// `__dirname` is not defined in native ESM; Vite's esbuild loader silently
+// polyfills it today, but copying this config into a plain `.mjs` or running
+// it through a non-esbuild loader breaks. Derive it from `import.meta.url`
+// so the file is portable regardless of how it's loaded.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const mdxOptions = {
   jsxImportSource: 'preact',
