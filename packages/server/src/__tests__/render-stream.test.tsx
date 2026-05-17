@@ -229,6 +229,64 @@ describe('renderPage: streaming SSR', () => {
     expect(res.headers.get('Transfer-Encoding')).toBeNull();
   });
 
+  it('flushes the first chunk to the wire before the second yield is enqueued', async () => {
+    // Without this assertion, the existing tests only know that ALL chunks
+    // appear in the final body — that passes even if the server buffered
+    // everything and emitted one block at the end. Gate the loader between
+    // yields and read the body incrementally to prove chunk 1 reaches the
+    // reader before chunk 2 is allowed to enqueue.
+    let releaseSecond!: () => void;
+    const gate = new Promise<void>((r) => { releaseSecond = r; });
+    let secondYielded = false;
+
+    const loader = defineLoader<{ n: number }>(async function* () {
+      yield { n: 1 };
+      await gate;
+      secondYielded = true;
+      yield { n: 2 };
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>
+      )
+    );
+
+    const res = await app.request('/');
+    expect(res.body).not.toBeNull();
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let accumulated = '';
+
+    // Read until we observe chunk 1's first-render payload. The streaming
+    // path embeds the first chunk's data inline as a `data-loader` HTML
+    // attribute (entity-escaped), not as a script.push, so look for that.
+    while (!accumulated.includes('data-loader=&quot;{&quot;n&quot;:1}&quot;')
+        && !accumulated.includes('data-loader="{&quot;n&quot;:1}"')) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      accumulated += decoder.decode(value, { stream: true });
+    }
+    // First chunk visible AND the second yield has NOT executed yet
+    // (because we haven't released the gate).
+    expect(accumulated).toMatch(/data-loader=/);
+    expect(secondYielded).toBe(false);
+    expect(accumulated).not.toMatch(/"n":2/);
+
+    // Release the gate and finish draining.
+    releaseSecond();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      accumulated += decoder.decode(value, { stream: true });
+    }
+    expect(secondYielded).toBe(true);
+    expect(accumulated).toMatch(/"n":2/);
+  });
+
   it('aborts cleanly on client cancel: no synthetic error chunks, no enqueue-after-close throws', async () => {
     // Loader that yields one chunk then awaits forever; cancel mid-stream.
     let releaseSecondYield: (() => void) | null = null;
