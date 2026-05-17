@@ -54,6 +54,14 @@
     "dev": "tsc --watch",
     "prepublishOnly": "tsc && node scripts/consolidate.mjs"
   },
+  "dependencies": {
+    "@babel/parser": "^7.29.2",
+    "@babel/types": "^7.29.0",
+    "@hono/vite-build": "^1.11.1",
+    "@hono/vite-dev-server": "^0.25.1",
+    "@preact/preset-vite": "^2.10.5",
+    "magic-string": "^0.30.21"
+  },
   "peerDependencies": {
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
