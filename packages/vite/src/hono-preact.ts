@@ -106,6 +106,14 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
         },
         build: {
           ...shared.build,
+          // Inline sourcemaps so SSR error stacks point at user source
+          // (e.g. `pages/issue.server.ts:42`) instead of the rolled-up
+          // Worker chunk. We pick `inline` over a separate .map file because
+          // SSR is a single bundle and Workers tooling will not look at a
+          // sibling .map. Bundle size grows; for typical app server bundles
+          // this is a few hundred KB at most and is worth the debuggability.
+          // Users can override by passing `serverBuild.sourcemap: false`.
+          sourcemap: 'inline' as const,
           ...serverBuild,
         },
       };
