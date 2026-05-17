@@ -1,7 +1,11 @@
 type StreamEvent =
   | { type: 'push'; loaderId: string; value: unknown }
   | { type: 'end'; loaderId: string }
-  | { type: 'error'; loaderId: string; error: { message: string; name: string } };
+  | {
+      type: 'error';
+      loaderId: string;
+      error: { message: string; name: string };
+    };
 
 type Subscriber = {
   push: (value: unknown) => void;
@@ -97,6 +101,8 @@ export function installStreamRegistry(): void {
   if (typeof window === 'undefined') return;
   const existing = window.__HP_STREAM__;
   const initialQueue = existing?.queue ?? [];
+  const wasCapped =
+    (existing as { capped?: boolean } | undefined)?.capped === true;
 
   window.__HP_STREAM__ = {
     push(loaderId: string, value: unknown) {
@@ -111,6 +117,18 @@ export function installStreamRegistry(): void {
   };
 
   for (const ev of initialQueue) dispatchOrBuffer(ev);
+
+  if (wasCapped) {
+    // The SSR-emitted bootstrap dropped events because the buffer hit its
+    // cap before this function ran. Surface to the dev console so a slow
+    // bundle-load / blocked CDN scenario is debuggable, not just silently
+    // lossy on the client.
+    console.warn(
+      '[hono-preact] streaming bootstrap buffer was capped before the client ' +
+        'bundle loaded — some streaming-loader events were dropped. Likely ' +
+        'cause: slow or blocked client bundle load.'
+    );
+  }
 }
 
 /**

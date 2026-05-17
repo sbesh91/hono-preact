@@ -52,7 +52,9 @@ export async function renderPage(
   // frame returns) lose ALS propagation on V8. Wrapping the drain in this
   // binder restores per-request isolation for `getRequestStore` /
   // `getRequestHonoContext` reads from generator continuations.
-  let bindRequestScope: <R>(fn: () => R | Promise<R>) => R | Promise<R> = (fn) => fn();
+  let bindRequestScope: <R>(fn: () => R | Promise<R>) => R | Promise<R> = (
+    fn
+  ) => fn();
   try {
     const result = await runRequestScope(
       async () => {
@@ -110,9 +112,9 @@ export async function renderPage(
   const startsWithHtml = /^\s*<html(\s|>)/i.test(inner);
 
   const fullHtml = startsWithHtml
-    ? (lang != null
-        ? inner.replace(/<html(\s|>)/i, `<html lang="${escapeHtml(lang)}"$1`)
-        : inner)
+    ? lang != null
+      ? inner.replace(/<html(\s|>)/i, `<html lang="${escapeHtml(lang)}"$1`)
+      : inner
     : `<html lang="${escapeHtml(lang ?? 'en-US')}">\n${inner}\n</html>`;
 
   // Non-streaming case: preserve existing single-shot behavior.
@@ -123,7 +125,8 @@ export async function renderPage(
   // Streaming case: split at </body> so we can interleave per-loader chunk
   // script tags between the rendered body and the closing tags.
   const bodyCloseIdx = fullHtml.lastIndexOf('</body>');
-  const beforeBody = bodyCloseIdx >= 0 ? fullHtml.slice(0, bodyCloseIdx) : fullHtml;
+  const beforeBody =
+    bodyCloseIdx >= 0 ? fullHtml.slice(0, bodyCloseIdx) : fullHtml;
   const afterBody = bodyCloseIdx >= 0 ? fullHtml.slice(bodyCloseIdx) : '';
 
   // Inline bootstrap installs a queue on window.__HP_STREAM__ so that
@@ -131,12 +134,22 @@ export async function renderPage(
   // client entry calls installStreamRegistry() which drains the queue.
   // Each emitted script self-removes after running so the DOM doesn't
   // accumulate inert <script> nodes over the life of the page.
+  //
+  // The queue is capped at HP_STREAM_QUEUE_CAP events. If the client bundle
+  // never loads (slow network, blocked CDN, ad-blocker on the script URL),
+  // a long-running streaming page would otherwise grow this buffer without
+  // bound. When the cap is hit, additional events are silently dropped and
+  // `capped` is set so installStreamRegistry can see lossage occurred.
+  // Picked 1000 so realistic apps (50-100 chunks per page is high) never
+  // hit it; pathological cases trade data loss for bounded memory.
+  const HP_STREAM_QUEUE_CAP = 1000;
   const bootstrap =
-    '<script>window.__HP_STREAM__=window.__HP_STREAM__||{queue:[],' +
-    'push(id,v){this.queue.push({type:"push",loaderId:id,value:v})},' +
-    'end(id){this.queue.push({type:"end",loaderId:id})},' +
-    'error(id,e){this.queue.push({type:"error",loaderId:id,error:e})}};' +
-    'document.currentScript.remove()</script>';
+    `<script>window.__HP_STREAM__=window.__HP_STREAM__||{queue:[],capped:false,` +
+    `_p(e){if(this.queue.length>=${HP_STREAM_QUEUE_CAP}){this.capped=true;return}this.queue.push(e)},` +
+    `push(id,v){this._p({type:"push",loaderId:id,value:v})},` +
+    `end(id){this._p({type:"end",loaderId:id})},` +
+    `error(id,e){this._p({type:"error",loaderId:id,error:e})}};` +
+    `document.currentScript.remove()</script>`;
 
   const encoder = new TextEncoder();
   const requestSignal = c.req.raw.signal;
@@ -157,7 +170,9 @@ export async function renderPage(
       return bindRequestScope(async () => {
         try {
           if (aborted) return;
-          controller.enqueue(encoder.encode(`<!doctype html>${beforeBody}\n${bootstrap}\n`));
+          controller.enqueue(
+            encoder.encode(`<!doctype html>${beforeBody}\n${bootstrap}\n`)
+          );
 
           // Drive each pending generator in parallel; emit script tags per chunk.
           await Promise.all(
@@ -182,7 +197,8 @@ export async function renderPage(
                 }
               } catch (err) {
                 if (aborted) return;
-                const message = err instanceof Error ? err.message : String(err);
+                const message =
+                  err instanceof Error ? err.message : String(err);
                 const name = err instanceof Error ? err.name : 'Error';
                 controller.enqueue(
                   encoder.encode(
@@ -202,7 +218,9 @@ export async function renderPage(
     cancel() {
       aborted = true;
       for (const { gen } of streamingLoaders) {
-        gen.return(undefined).catch(() => { /* swallow */ });
+        gen.return(undefined).catch(() => {
+          /* swallow */
+        });
       }
     },
   });
@@ -210,7 +228,9 @@ export async function renderPage(
   requestSignal.addEventListener('abort', () => {
     aborted = true;
     for (const { gen } of streamingLoaders) {
-      gen.return(undefined).catch(() => { /* swallow */ });
+      gen.return(undefined).catch(() => {
+        /* swallow */
+      });
     }
   });
 
