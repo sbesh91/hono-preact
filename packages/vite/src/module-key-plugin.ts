@@ -4,6 +4,7 @@ import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders } from './server-loaders-parser.js';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 /**
  * Transforms `.server.*` files to inject a stable module-level
@@ -44,7 +45,7 @@ export function moduleKeyPlugin(): Plugin {
       try {
         ast = parse(code, {
           sourceType: 'module',
-          plugins: ['typescript', 'jsx'],
+          plugins: BABEL_PARSER_PLUGINS,
           errorRecovery: true,
         });
       } catch {

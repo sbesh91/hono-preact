@@ -6,6 +6,7 @@ import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 // Symbol-keyed accessor used by unit tests to verify `configResolved` fires
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
@@ -45,7 +46,7 @@ function extractServerLoadersMeta(absServerPath: string): Record<string, string[
   try {
     ast = parse(src, {
       sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      plugins: BABEL_PARSER_PLUGINS,
       errorRecovery: true,
     });
   } catch {
@@ -114,7 +115,7 @@ export function serverOnlyPlugin(): Plugin {
 
       const ast = parse(code, {
         sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
+        plugins: BABEL_PARSER_PLUGINS,
         errorRecovery: true,
       });
 

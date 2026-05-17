@@ -1,6 +1,7 @@
 import { parse } from '@babel/parser';
 import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ALLOWED_NAMED_EXPORTS = new Set(['serverActions', 'actionGuards', 'serverLoaders']);
 const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS].map((n) => `'${n}'`).join(', ');
@@ -14,7 +15,7 @@ export function serverLoaderValidationPlugin(): Plugin {
 
       const ast = parse(code, {
         sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
+        plugins: BABEL_PARSER_PLUGINS,
         errorRecovery: true,
       });
 

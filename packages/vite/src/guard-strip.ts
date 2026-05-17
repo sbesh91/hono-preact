@@ -6,6 +6,7 @@ import type {
 } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
 const NOOP_IMPORT_SOURCE = '@hono-preact/iso/internal';
@@ -90,7 +91,7 @@ export function guardStripPlugin(): Plugin {
 
       const ast = parse(code, {
         sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
+        plugins: BABEL_PARSER_PLUGINS,
         errorRecovery: true,
       });
 

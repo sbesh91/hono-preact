@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
 import type { Plugin } from 'vite';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 export interface GenerateServerEntrySourceOptions {
   layoutAbsPath: string;
@@ -87,12 +88,20 @@ export function findApiCatchAllRoutes(source: string): CatchAllWarning[] {
   try {
     ast = parse(source, {
       sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      plugins: BABEL_PARSER_PLUGINS,
       errorRecovery: true,
     });
-  } catch {
+  } catch (err) {
     // If api.ts won't parse, the build will fail elsewhere with a clearer
-    // error. Don't double-report.
+    // error. Surface a note so the framework user can correlate a missing
+    // catch-all warning with a parse-time syntax issue rather than wondering
+    // why nothing was reported.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[hono-preact] Failed to parse api.ts for catch-all route detection: ${msg}. ` +
+        `The build will surface the real syntax error; this warning explains why ` +
+        `route-overlap warnings may be missing.`
+    );
     return warnings;
   }
 
