@@ -364,6 +364,12 @@ export const serverLoaders = {
 
 `createCache<T>()` takes no arguments. Loader caches are referenced by the loader, not by name.
 
+### Cache registry scope
+
+The loader-cache registry that lets `loader.invalidate()` work across importers is keyed off a global `Symbol.for('@hono-preact/iso/loaderCaches')`. The map is therefore shared across every consumer of `@hono-preact/iso` running in the same JavaScript realm.
+
+On Cloudflare Workers (the framework's primary target) each request runs in a short-lived isolate, so this is effectively per-process and per-tenant. On a long-lived Node server hosting multiple tenants from one realm, the *registry* is shared across tenants. The cache contents are NOT cross-leaking (each loader's cache is keyed by its own `__moduleKey` + a private symbol minted at `defineLoader` time), but multi-tenant operators should be aware that the framework currently assumes per-realm isolation. A future minor will move this onto a per-app registry; track [the issue](https://github.com/sbesh91/hono-preact/issues) if it affects you.
+
 ## Page bindings with `definePage`
 
 Per-page concerns (Wrapper, errorFallback, guards) live with the page component, not with the route declaration. `definePage` captures them:
