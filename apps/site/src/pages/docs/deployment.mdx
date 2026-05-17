@@ -21,6 +21,7 @@ This runs two Vite builds sequentially:
 Produces the browser bundle in `dist/static/`. The `serverOnlyPlugin` replaces all `*.server.*` imports with no-op stubs so server code never enters the browser bundle.
 
 Output:
+
 ```
 dist/static/client.js        # main client entry
 dist/static/<name>-<hash>.js # lazy page chunks
@@ -47,13 +48,13 @@ Before deploying, update `wrangler.jsonc`:
 
 ```jsonc
 {
-  "name": "your-app-name",       // ← change this to your Worker name
+  "name": "your-app-name", // ← change this to your Worker name
   "main": "dist/index.js",
   "compatibility_date": "2026-02-22",
   "assets": {
-    "directory": "./dist"        // serves dist/static/* as static assets
+    "directory": "./dist", // serves dist/static/* as static assets
   },
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
 }
 ```
 

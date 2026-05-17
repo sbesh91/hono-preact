@@ -1,5 +1,9 @@
 import { h } from 'preact';
-import type { ComponentChildren, ComponentType, FunctionComponent } from 'preact';
+import type {
+  ComponentChildren,
+  ComponentType,
+  FunctionComponent,
+} from 'preact';
 import { useContext } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
@@ -174,7 +178,11 @@ export function defineLoader<T>(
     View: null as never,
   };
 
-  const Boundary: LoaderRef<T>['Boundary'] = ({ fallback, errorFallback, children }) => {
+  const Boundary: LoaderRef<T>['Boundary'] = ({
+    fallback,
+    errorFallback,
+    children,
+  }) => {
     return h(LoaderHost as any, {
       loader: ref,
       fallback,

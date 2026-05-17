@@ -11,7 +11,9 @@ import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 // Symbol-keyed accessor used by unit tests to verify `configResolved` fires
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
 // autocomplete for the public Plugin surface.
-export const VITE_ROOT_ACCESSOR = Symbol.for('@hono-preact/vite/server-only/viteRoot');
+export const VITE_ROOT_ACCESSOR = Symbol.for(
+  '@hono-preact/vite/server-only/viteRoot'
+);
 
 /**
  * Reads a .server.* file synchronously and extracts the `params` option from
@@ -38,7 +40,9 @@ function readSourceWithExtensionFallback(absServerPath: string): string | null {
   return null;
 }
 
-function extractServerLoadersMeta(absServerPath: string): Record<string, string[] | '*'> {
+function extractServerLoadersMeta(
+  absServerPath: string
+): Record<string, string[] | '*'> {
   const src = readSourceWithExtensionFallback(absServerPath);
   if (src == null) return {};
 
@@ -66,7 +70,10 @@ function extractServerLoadersMeta(absServerPath: string): Record<string, string[
 
 type DynamicServerImport = { start: number; end: number; source: string };
 
-function findDynamicServerImports(node: unknown, found: DynamicServerImport[]): void {
+function findDynamicServerImports(
+  node: unknown,
+  found: DynamicServerImport[]
+): void {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
     for (const child of node) findDynamicServerImports(child, found);
@@ -93,7 +100,12 @@ function findDynamicServerImports(node: unknown, found: DynamicServerImport[]): 
     });
   }
   for (const key of Object.keys(node as object)) {
-    if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
+    if (
+      key === 'loc' ||
+      key === 'leadingComments' ||
+      key === 'trailingComments'
+    )
+      continue;
     findDynamicServerImports((node as Record<string, unknown>)[key], found);
   }
 }
@@ -121,14 +133,15 @@ export function serverOnlyPlugin(): Plugin {
 
       for (const node of ast.program.body) {
         if (
-          (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') &&
+          (node.type === 'ExportNamedDeclaration' ||
+            node.type === 'ExportAllDeclaration') &&
           node.source &&
           /\.server(\.[jt]sx?)?$/.test(node.source.value)
         ) {
           throw new Error(
             `${id}: re-export from '${node.source.value}' (a .server.* module) is not supported. ` +
-            `Import the named member directly instead, e.g. ` +
-            `\`import { loader } from '${node.source.value}';\``
+              `Import the named member directly instead, e.g. ` +
+              `\`import { loader } from '${node.source.value}';\``
           );
         }
       }
@@ -142,13 +155,14 @@ export function serverOnlyPlugin(): Plugin {
       const dynamicServerImports: DynamicServerImport[] = [];
       findDynamicServerImports(ast.program, dynamicServerImports);
 
-      if (serverImports.length === 0 && dynamicServerImports.length === 0) return;
+      if (serverImports.length === 0 && dynamicServerImports.length === 0)
+        return;
 
       if (serverImports.length > 0 && viteRoot === undefined) {
         this.warn(
           `serverOnlyPlugin: configResolved hasn't fired before transform on ${id}. ` +
-          `.server.* imports will not be transformed; this can leak server code into the client bundle. ` +
-          `Ensure moduleKeyPlugin and serverOnlyPlugin are added to the Vite config under the standard plugin pipeline.`
+            `.server.* imports will not be transformed; this can leak server code into the client bundle. ` +
+            `Ensure moduleKeyPlugin and serverOnlyPlugin are added to the Vite config under the standard plugin pipeline.`
         );
         return;
       }
@@ -159,7 +173,10 @@ export function serverOnlyPlugin(): Plugin {
       let needsUseActionImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
-        if ((serverImport as unknown as { importKind?: string }).importKind === 'type') {
+        if (
+          (serverImport as unknown as { importKind?: string }).importKind ===
+          'type'
+        ) {
           s.overwrite(serverImport.start!, serverImport.end!, '');
           continue;
         }
@@ -167,20 +184,26 @@ export function serverOnlyPlugin(): Plugin {
         // viteRoot is guaranteed defined here: the early-return above bails when
         // we have static imports without a viteRoot. Dynamic-only files skip this
         // loop entirely.
-        const absServerPath = path.resolve(importerDir, serverImport.source.value);
+        const absServerPath = path.resolve(
+          importerDir,
+          serverImport.source.value
+        );
         const moduleKey = deriveModuleKey(absServerPath, viteRoot as string);
         if (moduleKey.startsWith('..')) {
           this.warn(
             `serverOnlyPlugin: import of '${serverImport.source.value}' from '${id}' resolves outside the Vite root (${viteRoot}). ` +
-            `Generated module key '${moduleKey}' will not match any server-side moduleKeyPlugin output, so RPC calls will return 404. ` +
-            `Move the .server.* file inside the Vite root, or restructure the import.`
+              `Generated module key '${moduleKey}' will not match any server-side moduleKeyPlugin output, so RPC calls will return 404. ` +
+              `Move the .server.* file inside the Vite root, or restructure the import.`
           );
         }
         const stubs: string[] = [];
         let hasValueSpecifier = false;
 
         for (const specifier of serverImport.specifiers) {
-          if ((specifier as unknown as { importKind?: string }).importKind === 'type') {
+          if (
+            (specifier as unknown as { importKind?: string }).importKind ===
+            'type'
+          ) {
             continue;
           }
           hasValueSpecifier = true;
@@ -190,22 +213,25 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverLoaders'
           ) {
             needsCreateLoaderStubImport = true;
-            const absServerPath = path.resolve(importerDir, serverImport.source.value);
+            const absServerPath = path.resolve(
+              importerDir,
+              serverImport.source.value
+            );
             const loadersMeta = extractServerLoadersMeta(absServerPath);
             const metaVar = `__$serverLoadersMeta_${specifier.local.name}`;
             const metaJson = JSON.stringify(loadersMeta);
             stubs.push(
               `const ${metaVar} = ${metaJson};\n` +
-              `const ${specifier.local.name} = new Proxy({}, {\n` +
-              `  get(_, name) {\n` +
-              `    const __meta = ${metaVar}[String(name)];\n` +
-              `    return __$createLoaderStub_hpiso({\n` +
-              `      __moduleKey: ${JSON.stringify(moduleKey)},\n` +
-              `      __loaderName: String(name),\n` +
-              `      params: __meta,\n` +
-              `    });\n` +
-              `  }\n` +
-              `});`
+                `const ${specifier.local.name} = new Proxy({}, {\n` +
+                `  get(_, name) {\n` +
+                `    const __meta = ${metaVar}[String(name)];\n` +
+                `    return __$createLoaderStub_hpiso({\n` +
+                `      __moduleKey: ${JSON.stringify(moduleKey)},\n` +
+                `      __loaderName: String(name),\n` +
+                `      params: __meta,\n` +
+                `    });\n` +
+                `  }\n` +
+                `});`
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -221,12 +247,12 @@ export function serverOnlyPlugin(): Plugin {
             needsUseActionImport = true;
             stubs.push(
               `const ${specifier.local.name} = new Proxy({}, {\n` +
-              `  get(_, action) {\n` +
-              `    const stub = { __module: ${JSON.stringify(moduleKey)}, __action: String(action) };\n` +
-              `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
-              `    return stub;\n` +
-              `  }\n` +
-              `});`
+                `  get(_, action) {\n` +
+                `    const stub = { __module: ${JSON.stringify(moduleKey)}, __action: String(action) };\n` +
+                `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
+                `    return stub;\n` +
+                `  }\n` +
+                `});`
             );
           } else {
             const importedName =
@@ -234,11 +260,11 @@ export function serverOnlyPlugin(): Plugin {
               specifier.imported.type === 'Identifier'
                 ? specifier.imported.name
                 : specifier.type === 'ImportNamespaceSpecifier'
-                ? '* as ' + specifier.local.name
-                : '<unknown>';
+                  ? '* as ' + specifier.local.name
+                  : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-              `Allowed: serverLoaders, serverActions, actionGuards.`
+                `Allowed: serverLoaders, serverActions, actionGuards.`
             );
           }
         }
@@ -267,10 +293,14 @@ export function serverOnlyPlugin(): Plugin {
       }
 
       if (needsCreateLoaderStubImport) {
-        s.prepend(`import { __$createLoaderStub_hpiso } from '@hono-preact/iso/internal';\n`);
+        s.prepend(
+          `import { __$createLoaderStub_hpiso } from '@hono-preact/iso/internal';\n`
+        );
       }
       if (needsUseActionImport) {
-        s.prepend(`import { useAction as __$useAction_hpiso } from '@hono-preact/iso';\n`);
+        s.prepend(
+          `import { useAction as __$useAction_hpiso } from '@hono-preact/iso';\n`
+        );
       }
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };

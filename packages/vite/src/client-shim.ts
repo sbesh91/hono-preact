@@ -51,7 +51,8 @@ export function clientShimPlugin(clientEntry: string): Plugin {
       // Disk-based entry: equal, or `<entry>?<query>`.
       if (!id.startsWith(resolvedEntry)) return;
       const tail = id.length - resolvedEntry.length;
-      if (tail !== 0 && id.charCodeAt(resolvedEntry.length) !== 63 /* '?' */) return;
+      if (tail !== 0 && id.charCodeAt(resolvedEntry.length) !== 63 /* '?' */)
+        return;
       return {
         code: `import '${VIRTUAL_ID}';\n${code}`,
         map: null,

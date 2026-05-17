@@ -5,17 +5,23 @@ import { h } from 'preact';
 import { useState } from 'preact/hooks';
 import { fireEvent, render, waitFor } from '@testing-library/preact';
 import { LocationProvider, Router } from 'preact-iso';
-import { defineRoutes, Routes, type LayoutProps, type ViewProps } from '../define-routes.js';
+import {
+  defineRoutes,
+  Routes,
+  type LayoutProps,
+  type ViewProps,
+} from '../define-routes.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
-const noopLayout = () => Promise.resolve({ default: ({ children }: { children: unknown }) => children as never });
+const noopLayout = () =>
+  Promise.resolve({
+    default: ({ children }: { children: unknown }) => children as never,
+  });
 const noopServer = () => Promise.resolve({});
 
 describe('defineRoutes validation', () => {
   it('accepts a leaf route with view', () => {
-    expect(() =>
-      defineRoutes([{ path: '/', view: noopView }])
-    ).not.toThrow();
+    expect(() => defineRoutes([{ path: '/', view: noopView }])).not.toThrow();
   });
 
   it('accepts a leaf with view + server', () => {
@@ -27,7 +33,11 @@ describe('defineRoutes validation', () => {
   it('accepts a layout with children', () => {
     expect(() =>
       defineRoutes([
-        { path: '/x', layout: noopLayout, children: [{ path: '', view: noopView }] },
+        {
+          path: '/x',
+          layout: noopLayout,
+          children: [{ path: '', view: noopView }],
+        },
       ])
     ).not.toThrow();
   });
@@ -42,26 +52,39 @@ describe('defineRoutes validation', () => {
 
   it('rejects view + layout', () => {
     expect(() =>
-      defineRoutes([{ path: '/', view: noopView, layout: noopLayout, children: [] }])
+      defineRoutes([
+        { path: '/', view: noopView, layout: noopLayout, children: [] },
+      ])
     ).toThrow(/cannot declare both `view` and `layout`/);
   });
 
   it('rejects view + children', () => {
     expect(() =>
-      defineRoutes([{ path: '/', view: noopView, children: [{ path: 'x', view: noopView }] }])
+      defineRoutes([
+        {
+          path: '/',
+          view: noopView,
+          children: [{ path: 'x', view: noopView }],
+        },
+      ])
     ).toThrow(/`view` route cannot have `children`/);
   });
 
   it('rejects layout without children', () => {
-    expect(() =>
-      defineRoutes([{ path: '/', layout: noopLayout }])
-    ).toThrow(/`layout` requires `children`/);
+    expect(() => defineRoutes([{ path: '/', layout: noopLayout }])).toThrow(
+      /`layout` requires `children`/
+    );
   });
 
   it('allows layout + server (layout can declare a server module)', () => {
     expect(() =>
       defineRoutes([
-        { path: '/', layout: noopLayout, server: noopServer, children: [{ path: '', view: noopView }] },
+        {
+          path: '/',
+          layout: noopLayout,
+          server: noopServer,
+          children: [{ path: '', view: noopView }],
+        },
       ])
     ).not.toThrow();
   });
@@ -69,7 +92,11 @@ describe('defineRoutes validation', () => {
   it('rejects child path starting with `/`', () => {
     expect(() =>
       defineRoutes([
-        { path: '/x', layout: noopLayout, children: [{ path: '/y', view: noopView }] },
+        {
+          path: '/x',
+          layout: noopLayout,
+          children: [{ path: '/y', view: noopView }],
+        },
       ])
     ).toThrow(/child path must not start with `\/`/);
   });
@@ -120,7 +147,9 @@ describe('defineRoutes validation', () => {
           ],
         },
       ])
-    ).toThrow(/path-grouping inside a layout group may only contain view leaves/);
+    ).toThrow(
+      /path-grouping inside a layout group may only contain view leaves/
+    );
   });
 
   it('rejects further path-grouping inside a path-grouping that is inside a layout group', () => {
@@ -139,7 +168,9 @@ describe('defineRoutes validation', () => {
           ],
         },
       ])
-    ).toThrow(/path-grouping inside a layout group may only contain view leaves/);
+    ).toThrow(
+      /path-grouping inside a layout group may only contain view leaves/
+    );
   });
 
   it('still allows layouts inside top-level path-groupings (no restriction at top)', () => {
@@ -200,7 +231,6 @@ describe('flatten — flat (no layouts)', () => {
     ]);
     expect(m.flat.map((f) => f.path)).toEqual(['/b', '/a']);
   });
-
 });
 
 describe('flatten — view-thunk identity sharing', () => {
@@ -315,21 +345,27 @@ describe('<Routes>', () => {
     const cb = () => {};
     const m = defineRoutes([{ path: '/', view: noopView }]);
     // Call the function component directly to inspect what it returns.
-    const result = (Routes as unknown as (props: {
-      routes: typeof m;
-      onRouteChange?: () => void;
-    }) => VNode)({ routes: m, onRouteChange: cb });
+    const result = (
+      Routes as unknown as (props: {
+        routes: typeof m;
+        onRouteChange?: () => void;
+      }) => VNode
+    )({ routes: m, onRouteChange: cb });
     expect(result.type).toBe(Router);
-    expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBe(cb);
+    expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBe(
+      cb
+    );
   });
 
   it('omits onRouteChange from Router when not provided', () => {
     const m = defineRoutes([{ path: '/', view: noopView }]);
-    const result = (Routes as unknown as (props: {
-      routes: typeof m;
-    }) => VNode)({ routes: m });
+    const result = (
+      Routes as unknown as (props: { routes: typeof m }) => VNode
+    )({ routes: m });
     expect(result.type).toBe(Router);
-    expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBeUndefined();
+    expect(
+      (result.props as { onRouteChange?: unknown }).onRouteChange
+    ).toBeUndefined();
   });
 });
 
@@ -380,7 +416,8 @@ describe('layout integration: state survives intra-group navigation', () => {
     fireEvent.input(input, { target: { value: 'hello' } });
     await waitFor(() => {
       expect(
-        (document.querySelector('[data-testid=filter]') as HTMLInputElement).value
+        (document.querySelector('[data-testid=filter]') as HTMLInputElement)
+          .value
       ).toBe('hello');
     });
 
@@ -389,16 +426,16 @@ describe('layout integration: state survives intra-group navigation', () => {
     fireEvent.click(toDetail);
     await findByTestId('to-index');
     expect(layoutMounts).toBe(1);
-    expect(
-      ((await findByTestId('filter')) as HTMLInputElement).value
-    ).toBe('hello');
+    expect(((await findByTestId('filter')) as HTMLInputElement).value).toBe(
+      'hello'
+    );
 
     const toIndex = (await findByTestId('to-index')) as HTMLAnchorElement;
     fireEvent.click(toIndex);
     await findByTestId('to-detail');
     expect(layoutMounts).toBe(1);
-    expect(
-      ((await findByTestId('filter')) as HTMLInputElement).value
-    ).toBe('hello');
+    expect(((await findByTestId('filter')) as HTMLInputElement).value).toBe(
+      'hello'
+    );
   });
 });

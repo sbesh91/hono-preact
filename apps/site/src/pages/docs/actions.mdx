@@ -64,10 +64,7 @@ const Movies = () => {
 
   return (
     <>
-      <button
-        onClick={() => mutate({ title: 'Dune' })}
-        disabled={pending}
-      >
+      <button onClick={() => mutate({ title: 'Dune' })} disabled={pending}>
         {pending ? 'Adding...' : 'Add Movie'}
       </button>
       {error && <p>{error.message}</p>}
@@ -78,22 +75,22 @@ const Movies = () => {
 
 ### Options
 
-| Option | Type | Description |
-|--------|------|-------------|
+| Option       | Type                                      | Description                                                                                                                                                                                                                                      |
+| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of `LoaderRef`s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
-| `onMutate` | `(payload) => unknown` | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback. |
-| `onSuccess` | `(data) => void` | Called with the action's return value on success. |
-| `onError` | `(err, snapshot) => void` | Called with the error and the `onMutate` snapshot on failure. |
-| `onChunk` | `(chunk: string) => void` | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses). |
+| `onMutate`   | `(payload) => unknown`                    | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback.                                                                                                                                      |
+| `onSuccess`  | `(data) => void`                          | Called with the action's return value on success.                                                                                                                                                                                                |
+| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot on failure.                                                                                                                                                                                    |
+| `onChunk`    | `(chunk: string) => void`                 | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                             |
 
 ### Return value
 
-| Value | Type | Description |
-|-------|------|-------------|
-| `mutate` | `(payload) => Promise<{ ok: true; data: TResult } \| { ok: false; error: Error }>` | Fires the action. Resolves with a discriminated union so awaiting callers can chain on the result without leaking unhandled rejections. The same `error` is also written to the `error` state field for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
-| `pending` | `boolean` | `true` while the request is in flight. |
-| `error` | `Error \| null` | The last error, or `null` if none. |
-| `data` | `TResult \| null` | The last successful result, or `null`. Not set for streaming responses. |
+| Value     | Type                                                                               | Description                                                                                                                                                                                                                                                                                               |
+| --------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mutate`  | `(payload) => Promise<{ ok: true; data: TResult } \| { ok: false; error: Error }>` | Fires the action. Resolves with a discriminated union so awaiting callers can chain on the result without leaking unhandled rejections. The same `error` is also written to the `error` state field for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
+| `pending` | `boolean`                                                                          | `true` while the request is in flight.                                                                                                                                                                                                                                                                    |
+| `error`   | `Error \| null`                                                                    | The last error, or `null` if none.                                                                                                                                                                                                                                                                        |
+| `data`    | `TResult \| null`                                                                  | The last successful result, or `null`. Not set for streaming responses.                                                                                                                                                                                                                                   |
 
 #### Chaining on success
 
@@ -121,7 +118,9 @@ import { Form, useAction } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const AddMovieForm = () => {
-  const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: 'auto' });
+  const { mutate, pending } = useAction(serverActions.addMovie, {
+    invalidate: 'auto',
+  });
   return (
     <Form mutate={mutate} pending={pending}>
       <input name="title" placeholder="Title" />
@@ -193,10 +192,14 @@ import { serverLoaders, serverActions } from './movies.server.js';
 const moviesLoader = serverLoaders.default;
 
 // Method form:
-const { mutate, pending } = serverActions.addMovie.useAction({ invalidate: [moviesLoader] });
+const { mutate, pending } = serverActions.addMovie.useAction({
+  invalidate: [moviesLoader],
+});
 
 // Equivalent function form:
-const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: [moviesLoader] });
+const { mutate, pending } = useAction(serverActions.addMovie, {
+  invalidate: [moviesLoader],
+});
 ```
 
 The method form reads more naturally when the action is the focus of the call site; the function form reads better when grouped with other hooks at the top of a component.
@@ -237,12 +240,13 @@ The action receives the `File` object directly:
 
 ```ts
 export const serverActions = {
-  uploadPoster: defineAction<{ movieId: string; poster: File }, { url: string }>(
-    async (_ctx, { movieId, poster }) => {
-      const url = await uploadToStorage(movieId, poster);
-      return { url };
-    }
-  ),
+  uploadPoster: defineAction<
+    { movieId: string; poster: File },
+    { url: string }
+  >(async (_ctx, { movieId, poster }) => {
+    const url = await uploadToStorage(movieId, poster);
+    return { url };
+  }),
 };
 ```
 
@@ -303,7 +307,9 @@ export const actionGuards = [
 
 export const serverActions = {
   addMovie: defineAction<{ title: string }, { ok: boolean }>(
-    async (_ctx, payload) => { /* ... */ }
+    async (_ctx, payload) => {
+      /* ... */
+    }
   ),
 };
 ```

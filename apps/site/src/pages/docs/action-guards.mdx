@@ -57,12 +57,12 @@ const guard = defineActionGuard(async (ctx, next) => {
 
 `defineActionGuard` is a no-op at runtime; it exists only for type inference. A guard receives:
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `ctx.c` | `unknown` | The Hono `Context` for the request. Cast to `import type { Context } from 'hono'` to access headers, cookies, etc. |
-| `ctx.module` | `string` | The module name derived from the `.server.ts` filename. |
-| `ctx.action` | `string` | The name of the action being called. |
-| `ctx.payload` | `unknown` | The deserialized request payload. |
+| Property      | Type      | Description                                                                                                        |
+| ------------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
+| `ctx.c`       | `unknown` | The Hono `Context` for the request. Cast to `import type { Context } from 'hono'` to access headers, cookies, etc. |
+| `ctx.module`  | `string`  | The module name derived from the `.server.ts` filename.                                                            |
+| `ctx.action`  | `string`  | The name of the action being called.                                                                               |
+| `ctx.payload` | `unknown` | The deserialized request payload.                                                                                  |
 
 ### `ActionGuardError`
 
@@ -71,7 +71,7 @@ Throw `ActionGuardError` to reject the request with an HTTP error response:
 ```ts
 import { ActionGuardError, type ContentfulStatusCode } from 'hono-preact';
 
-throw new ActionGuardError('Not allowed');         // 403 by default
+throw new ActionGuardError('Not allowed'); // 403 by default
 throw new ActionGuardError('Unauthorized', 401);
 throw new ActionGuardError('Rate limited', 429);
 
@@ -117,7 +117,7 @@ Guards run in array order. The first to throw stops the chain; subsequent guards
 
 ```ts
 export const actionGuards = [
-  requireAuth,        // runs first
+  requireAuth, // runs first
   requireRole('editor'), // only runs if requireAuth passes
 ];
 ```

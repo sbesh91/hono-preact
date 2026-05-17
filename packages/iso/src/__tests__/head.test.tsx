@@ -12,7 +12,9 @@ describe('Head', () => {
     expect(head).not.toBeNull();
     expect(head?.querySelector('meta[charset="utf-8"]')).not.toBeNull();
     expect(
-      head?.querySelector('meta[name="viewport"][content="width=device-width,initial-scale=1.0"]')
+      head?.querySelector(
+        'meta[name="viewport"][content="width=device-width,initial-scale=1.0"]'
+      )
     ).not.toBeNull();
   });
 
@@ -37,7 +39,11 @@ describe('Head', () => {
       </Head>
     );
     const head = container.querySelector('head');
-    expect(head?.querySelector('link[rel="stylesheet"][href="/styles.css"]')).not.toBeNull();
-    expect(head?.querySelector('meta[name="theme-color"][content="#000"]')).not.toBeNull();
+    expect(
+      head?.querySelector('link[rel="stylesheet"][href="/styles.css"]')
+    ).not.toBeNull();
+    expect(
+      head?.querySelector('meta[name="theme-color"][content="#000"]')
+    ).not.toBeNull();
   });
 });

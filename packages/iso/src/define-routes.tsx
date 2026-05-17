@@ -1,5 +1,10 @@
 import { h } from 'preact';
-import type { AnyComponent, ComponentChildren, ComponentType, VNode } from 'preact';
+import type {
+  AnyComponent,
+  ComponentChildren,
+  ComponentType,
+  VNode,
+} from 'preact';
 import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
@@ -9,7 +14,8 @@ function wrapWithRouteLocations(
   location: RouteHook,
   node: VNode<any>
 ): VNode<any> {
-  const moduleKey = (serverMod as { __moduleKey?: string } | undefined)?.__moduleKey;
+  const moduleKey = (serverMod as { __moduleKey?: string } | undefined)
+    ?.__moduleKey;
   return moduleKey
     ? h(RouteLocationsProvider, { moduleKey, location }, node)
     : node;
@@ -88,17 +94,23 @@ function validate(
     const hasChildren = !!(r.children && r.children.length > 0);
 
     if (hasView && hasLayout) {
-      throw new Error(`Route ${here}: cannot declare both \`view\` and \`layout\`.`);
+      throw new Error(
+        `Route ${here}: cannot declare both \`view\` and \`layout\`.`
+      );
     }
     if (hasView && hasChildren) {
-      throw new Error(`Route ${here}: \`view\` route cannot have \`children\`.`);
+      throw new Error(
+        `Route ${here}: \`view\` route cannot have \`children\`.`
+      );
     }
     if (hasLayout && !hasChildren) {
       throw new Error(`Route ${here}: \`layout\` requires \`children\`.`);
     }
 
     if (!hasView && !hasLayout && !hasChildren) {
-      throw new Error(`Route ${here}: must declare \`view\`, \`layout\`+\`children\`, or \`children\`.`);
+      throw new Error(
+        `Route ${here}: must declare \`view\`, \`layout\`+\`children\`, or \`children\`.`
+      );
     }
 
     if (parentPath !== '' && r.path.startsWith('/')) {
@@ -123,7 +135,9 @@ function validate(
   }
 }
 
-function collectServerImports(routes: ReadonlyArray<RouteDef>): LazyServerImport[] {
+function collectServerImports(
+  routes: ReadonlyArray<RouteDef>
+): LazyServerImport[] {
   const out: LazyServerImport[] = [];
   const walk = (rs: ReadonlyArray<RouteDef>) => {
     for (const r of rs) {
@@ -209,7 +223,10 @@ function makeLayoutGroupComponent(
       ]);
       const inner = buildInnerRoutes(children, viewCache);
       const Wrapper: ComponentType<ViewProps> = (location) => {
-        const layoutLocation = deriveLayoutLocation(location, layoutPathPattern);
+        const layoutLocation = deriveLayoutLocation(
+          location,
+          layoutPathPattern
+        );
         const layoutNode = h(Layout, null, h(Router, null, ...inner));
         return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
       };
@@ -225,7 +242,10 @@ function makeLayoutGroupComponent(
  * the child segment. The layout's location should be the path up to and
  * including the layout's own segments, with the wildcard stripped.
  */
-function deriveLayoutLocation(active: ViewProps, layoutPathPattern: string): ViewProps {
+function deriveLayoutLocation(
+  active: ViewProps,
+  layoutPathPattern: string
+): ViewProps {
   const params = active.pathParams ?? {};
   const path = layoutPathPattern
     .split('/')
@@ -265,15 +285,28 @@ function buildInnerRoutes(
       nodes.push(
         h(Route, {
           path: child.path,
-          component: asRouteComponent(getOrCreateLazyView(child.view, child.server, viewCache)),
+          component: asRouteComponent(
+            getOrCreateLazyView(child.view, child.server, viewCache)
+          ),
         })
       );
     } else if (child.layout && child.children) {
-      const Group = makeLayoutGroupComponent(child.layout, child.server, child.path, child.children, viewCache);
+      const Group = makeLayoutGroupComponent(
+        child.layout,
+        child.server,
+        child.path,
+        child.children,
+        viewCache
+      );
       // Same shared-component trick at this nesting level.
-      nodes.push(h(Route, { path: child.path, component: asRouteComponent(Group) }));
       nodes.push(
-        h(Route, { path: child.path + '/*', component: asRouteComponent(Group) })
+        h(Route, { path: child.path, component: asRouteComponent(Group) })
+      );
+      nodes.push(
+        h(Route, {
+          path: child.path + '/*',
+          component: asRouteComponent(Group),
+        })
       );
     } else if (child.children) {
       // Path-grouping inside a layout. `validate()` already enforces that all
@@ -285,7 +318,9 @@ function buildInnerRoutes(
           nodes.push(
             h(Route, {
               path: joined,
-              component: asRouteComponent(getOrCreateLazyView(grand.view, grand.server, viewCache)),
+              component: asRouteComponent(
+                getOrCreateLazyView(grand.view, grand.server, viewCache)
+              ),
             })
           );
         }
@@ -320,7 +355,13 @@ function flattenTree(
       const component = getOrCreateLazyView(r.view, r.server, viewCache);
       out.push({ path: here, component, key: keyFor(component) });
     } else if (r.layout && r.children) {
-      const Group = makeLayoutGroupComponent(r.layout, r.server, here, r.children, viewCache);
+      const Group = makeLayoutGroupComponent(
+        r.layout,
+        r.server,
+        here,
+        r.children,
+        viewCache
+      );
       const key = keyFor(Group);
       out.push({ path: here, component: Group, key });
       out.push({ path: here + '/*', component: Group, key });
@@ -349,7 +390,10 @@ export type RoutesProps = {
   onRouteChange?: (url: string) => void;
 };
 
-export const Routes: ComponentType<RoutesProps> = ({ routes, onRouteChange }) => {
+export const Routes: ComponentType<RoutesProps> = ({
+  routes,
+  onRouteChange,
+}) => {
   return h(
     asRouteComponent(Router),
     onRouteChange ? { onRouteChange } : null,

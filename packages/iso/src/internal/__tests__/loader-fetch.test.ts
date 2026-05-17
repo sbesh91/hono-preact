@@ -47,7 +47,13 @@ describe('fetchLoaderData: __redirect envelope', () => {
       value: assignSpy,
     });
 
-    const p = fetchLoaderData('m', 'default', loc, new AbortController().signal, noopCbs);
+    const p = fetchLoaderData(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal,
+      noopCbs
+    );
     // Race against a short timeout to confirm the promise does NOT settle.
     const result = await Promise.race([
       p,
@@ -64,7 +70,13 @@ describe('fetchLoaderData: __redirect envelope', () => {
         headers: { 'Content-Type': 'application/json' },
       })
     );
-    const result = await fetchLoaderData('m', 'default', loc, new AbortController().signal, noopCbs);
+    const result = await fetchLoaderData(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal,
+      noopCbs
+    );
     expect(result).toEqual({ movies: [1, 2, 3] });
   });
 });

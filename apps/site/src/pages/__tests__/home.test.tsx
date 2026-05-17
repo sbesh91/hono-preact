@@ -8,9 +8,7 @@ afterEach(() => cleanup());
 describe('home (marketing landing)', () => {
   it('renders the pitch sentence', () => {
     render(<Home />);
-    expect(
-      screen.getByText(/manifest driven routes/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/manifest driven routes/i)).toBeInTheDocument();
   });
 
   it('links to /docs/quick-start as the primary CTA', () => {
@@ -28,8 +26,12 @@ describe('home (marketing landing)', () => {
   it('shows all four feature cards', () => {
     render(<Home />);
     // Use unique card-caption text to avoid colliding with hero/footer/etc.
-    expect(screen.getByText(/your routes are a data structure/i)).toBeInTheDocument();
-    expect(screen.getByText(/loaders and actions are typed functions/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/your routes are a data structure/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/loaders and actions are typed functions/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/loaders, forms, sse/i)).toBeInTheDocument();
     expect(screen.getByText(/nothing else to install/i)).toBeInTheDocument();
   });

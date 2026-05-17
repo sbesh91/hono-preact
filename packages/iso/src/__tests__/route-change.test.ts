@@ -109,9 +109,12 @@ describe('useRouteChange', () => {
     const handlerA = (to: string) => callsA.push(to);
     const handlerB = (to: string) => callsB.push(to);
 
-    const { rerender } = renderHook(({ h }: { h: (to: string) => void }) => useRouteChange(h), {
-      initialProps: { h: handlerA },
-    });
+    const { rerender } = renderHook(
+      ({ h }: { h: (to: string) => void }) => useRouteChange(h),
+      {
+        initialProps: { h: handlerA },
+      }
+    );
 
     __dispatchRouteChange('/x', undefined);
     expect(callsA).toEqual(['/x']);

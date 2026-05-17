@@ -155,7 +155,9 @@ import { serverLoaders, serverActions } from './movies.server.js';
 const dataLoader = serverLoaders.default;
 
 const AddMovieForm: FunctionComponent = () => {
-  const { mutate, pending } = useAction(serverActions.addMovie, { invalidate: 'auto' });
+  const { mutate, pending } = useAction(serverActions.addMovie, {
+    invalidate: 'auto',
+  });
   return (
     <Form mutate={mutate} pending={pending}>
       <input name="title" placeholder="Movie title" required />

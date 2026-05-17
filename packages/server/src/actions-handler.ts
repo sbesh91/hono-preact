@@ -67,9 +67,9 @@ async function runActionGuards(
     if (!nextCalled) {
       throw new Error(
         `ActionGuard for '${ctx.module}.${ctx.action}' returned without ` +
-        `calling next() or throwing. Guards must either: (a) await/return ` +
-        `next() to pass control on, or (b) throw ActionGuardError to block. ` +
-        `Returning silently is ambiguous and would let the action run.`
+          `calling next() or throwing. Guards must either: (a) await/return ` +
+          `next() to pass control on, or (b) throw ActionGuardError to block. ` +
+          `Returning silently is ambiguous and would let the action run.`
       );
     }
   };
@@ -92,10 +92,7 @@ export interface ActionsHandlerOptions {
    * observability stack (Sentry, console, etc.). The handler still
    * responds with a sanitized 500; the hook is purely a side channel.
    */
-  onError?: (
-    err: unknown,
-    ctx: { module: string; action: string }
-  ) => void;
+  onError?: (err: unknown, ctx: { module: string; action: string }) => void;
 }
 
 export function actionsHandler(
@@ -137,18 +134,26 @@ export function actionsHandler(
       const rawModule = formData.get('__module');
       const rawAction = formData.get('__action');
       if (typeof rawModule !== 'string' || typeof rawAction !== 'string') {
-        return c.json({ error: 'Form data must include __module and __action fields' }, 400);
+        return c.json(
+          { error: 'Form data must include __module and __action fields' },
+          400
+        );
       }
 
       module = rawModule;
       action = rawAction;
 
-      const payloadObj: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
+      const payloadObj: Record<
+        string,
+        FormDataEntryValue | FormDataEntryValue[]
+      > = {};
       for (const [key, value] of formData.entries()) {
         if (key === '__module' || key === '__action') continue;
         const existing = payloadObj[key];
         if (existing !== undefined) {
-          payloadObj[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+          payloadObj[key] = Array.isArray(existing)
+            ? [...existing, value]
+            : [existing, value];
         } else {
           payloadObj[key] = value;
         }
@@ -163,7 +168,10 @@ export function actionsHandler(
       }
       const { module: m, action: a, payload: p } = body;
       if (typeof m !== 'string' || typeof a !== 'string') {
-        return c.json({ error: 'Request body must include string fields: module, action' }, 400);
+        return c.json(
+          { error: 'Request body must include string fields: module, action' },
+          400
+        );
       }
       module = m;
       action = a;
@@ -189,7 +197,10 @@ export function actionsHandler(
 
     const fn = entry.actions[action];
     if (typeof fn !== 'function') {
-      return c.json({ error: `Action '${action}' not found in module '${module}'` }, 404);
+      return c.json(
+        { error: `Action '${action}' not found in module '${module}'` },
+        404
+      );
     }
 
     const signal = c.req.raw.signal;
@@ -198,7 +209,10 @@ export function actionsHandler(
     let result: unknown;
     try {
       result = await runRequestScope(() =>
-        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(actionCtx, payload)
+        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(
+          actionCtx,
+          payload
+        )
       );
     } catch (err) {
       if (err instanceof ActionGuardError) {

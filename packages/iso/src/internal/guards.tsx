@@ -61,11 +61,11 @@ function GuardConsumer({
 function startGuardChain(
   guards: GuardFn[],
   location: RouteHook,
-  honoCtx: Context | undefined,
+  honoCtx: Context | undefined
 ): Promise<GuardResult> {
   if (isBrowser()) {
     const active = guards.filter(
-      (g): g is ClientGuardFn => g.runs === 'client',
+      (g): g is ClientGuardFn => g.runs === 'client'
     );
     return runClientGuards(active, { location });
   }
@@ -74,7 +74,7 @@ function startGuardChain(
   if (!honoCtx) {
     throw new Error(
       '<Guards> rendered server-side without a HonoContext.Provider. ' +
-      'renderPage must wrap the prerendered tree in <HonoContext.Provider value={{ context: c }}>.',
+        'renderPage must wrap the prerendered tree in <HonoContext.Provider value={{ context: c }}>.'
     );
   }
   return runServerGuards(active, { c: honoCtx, location });
@@ -88,7 +88,9 @@ export const Guards: FunctionComponent<{
 }> = ({ guards = [], location, fallback, children }) => {
   const honoCtx = useContext(HonoRequestContext).context;
   const prevPath = useRef(location.path);
-  const guardRef = useRef(wrapPromise(startGuardChain(guards, location, honoCtx)));
+  const guardRef = useRef(
+    wrapPromise(startGuardChain(guards, location, honoCtx))
+  );
   if (prevPath.current !== location.path) {
     prevPath.current = location.path;
     guardRef.current = wrapPromise(startGuardChain(guards, location, honoCtx));

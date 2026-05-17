@@ -46,7 +46,9 @@ describe('demo session', () => {
     const cookie = signIn.headers.get('set-cookie')!;
     const cookieHeader = cookie.split(';')[0];
 
-    const who = await app.request('/who', { headers: { cookie: cookieHeader } });
+    const who = await app.request('/who', {
+      headers: { cookie: cookieHeader },
+    });
     const body = (await who.json()) as { user: { name: string } | null };
     expect(body.user?.name).toBe('Alice');
   });

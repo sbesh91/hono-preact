@@ -17,7 +17,9 @@ import { defineLoader, type LoaderCtx } from 'hono-preact';
 export type Snapshot = { count: number; load: number };
 
 export const serverLoaders = {
-  default: defineLoader(async function* (ctx: LoaderCtx): AsyncGenerator<Snapshot> {
+  default: defineLoader(async function* (
+    ctx: LoaderCtx
+  ): AsyncGenerator<Snapshot> {
     while (!ctx.signal.aborted) {
       yield await currentSnapshot();
       await new Promise((r) => setTimeout(r, 1000));
@@ -45,7 +47,9 @@ const DashboardView = dataLoader.View(
   ({ data, error, reload }) => (
     <>
       {error && <p>Live updates paused: {error.message}</p>}
-      <p>Count: {data.count}, load: {data.load}</p>
+      <p>
+        Count: {data.count}, load: {data.load}
+      </p>
     </>
   ),
   { fallback: <p>Loading...</p> }
@@ -84,15 +88,13 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast } = serverLoaders;
 
-const Summary = summary.View(
-  ({ data }) => <SummaryCard data={data} />,
-  { fallback: <SummarySkeleton /> }
-);
+const Summary = summary.View(({ data }) => <SummaryCard data={data} />, {
+  fallback: <SummarySkeleton />,
+});
 
-const Cast = cast.View(
-  ({ data }) => <CastList items={data} />,
-  { fallback: <CastSkeleton /> }
-);
+const Cast = cast.View(({ data }) => <CastList items={data} />, {
+  fallback: <CastSkeleton />,
+});
 
 function MovieDetail() {
   return (
@@ -123,14 +125,12 @@ The first-load experience is full SSR with progressive enhancement: the user see
 **After the first chunk:** the stream is already open and the page is rendered. `error` in the `.View()` render function surfaces the error; `data` keeps returning the last good value. The page stays mounted with stale data visible.
 
 ```tsx
-const StatsView = dataLoader.View(
-  ({ data, error }) => (
-    <>
-      {error && <p>Live updates paused: {error.message}</p>}
-      <p>Visitors: {data.visitors}</p>
-    </>
-  )
-);
+const StatsView = dataLoader.View(({ data, error }) => (
+  <>
+    {error && <p>Live updates paused: {error.message}</p>}
+    <p>Visitors: {data.visitors}</p>
+  </>
+));
 ```
 
 ## Abort and cleanup
@@ -140,7 +140,9 @@ The framework aborts `ctx.signal` when the client disconnects (server side) or w
 ```ts
 const serverLoaders = {
   feed: defineLoader(async function* (ctx) {
-    const res = await fetch('https://api.example.com/feed', { signal: ctx.signal });
+    const res = await fetch('https://api.example.com/feed', {
+      signal: ctx.signal,
+    });
     for await (const chunk of parseStream(res.body!)) {
       yield chunk;
     }
@@ -178,7 +180,10 @@ Yielded values are the chunk type (`TChunk`). The return value is the final resu
 ### Consumer shape
 
 ```tsx
-const [progress, setProgress] = useState<{ count: number; total: number } | null>(null);
+const [progress, setProgress] = useState<{
+  count: number;
+  total: number;
+} | null>(null);
 
 const { mutate, data, pending } = useAction(serverActions.bulkImport, {
   onChunk: (p) => setProgress(p),

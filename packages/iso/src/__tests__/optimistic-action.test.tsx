@@ -65,9 +65,11 @@ describe('useOptimisticAction', () => {
   it('reverts to base on mutation failure', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+        )
     );
 
     function TestComponent() {
@@ -103,7 +105,9 @@ describe('useOptimisticAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ id: 1, title: 'Dune' }), { status: 200 })
+        new Response(JSON.stringify({ id: 1, title: 'Dune' }), {
+          status: 200,
+        })
       )
     );
     const onSuccess = vi.fn();
@@ -160,7 +164,11 @@ describe('useOptimisticAction', () => {
     const streamStub = {
       __module: 'movies',
       __action: 'upload',
-    } as unknown as ActionStub<{ title: string }, { id: number; title: string }, Chunk>;
+    } as unknown as ActionStub<
+      { title: string },
+      { id: number; title: string },
+      Chunk
+    >;
     const onChunk = vi.fn<(chunk: Chunk) => void>();
 
     function TestComponent() {
@@ -195,9 +203,11 @@ describe('useOptimisticAction', () => {
   it('calls user-supplied onError(err) without exposing snapshot', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+        )
     );
     const onError = vi.fn();
 

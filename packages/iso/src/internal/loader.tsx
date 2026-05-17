@@ -3,7 +3,12 @@ import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
 import { useContext, useId } from 'preact/hooks';
 import { ReloadContext } from '../reload-context.js';
-import { ActiveLoaderIdContext, LoaderDataContext, LoaderErrorContext, LoaderIdContext } from './contexts.js';
+import {
+  ActiveLoaderIdContext,
+  LoaderDataContext,
+  LoaderErrorContext,
+  LoaderIdContext,
+} from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
@@ -15,7 +20,9 @@ type LoaderHostProps<T> = {
   loader: LoaderRef<T>;
   location?: RouteHook;
   fallback?: JSX.Element;
-  errorFallback?: ComponentChildren | ((err: Error, reset: () => void) => ComponentChildren);
+  errorFallback?:
+    | ComponentChildren
+    | ((err: Error, reset: () => void) => ComponentChildren);
   children: ComponentChildren;
 };
 
@@ -28,16 +35,22 @@ export function LoaderHost<T>({
 }: LoaderHostProps<T>) {
   const id = useId();
   const locMap = useContext(RouteLocationsContext);
-  const ctxLocation = loaderRef.__moduleKey ? locMap?.get(loaderRef.__moduleKey) : undefined;
+  const ctxLocation = loaderRef.__moduleKey
+    ? locMap?.get(loaderRef.__moduleKey)
+    : undefined;
   const location = (locationProp ?? ctxLocation) as RouteHook | undefined;
   if (!location) {
     throw new Error(
       `Loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' has no location: ` +
-      `wrap the page in a route that owns this server module, or pass location explicitly.`
+        `wrap the page in a route that owns this server module, or pass location explicitly.`
     );
   }
 
-  const { reader, overrideData, error, reload, reloading } = useLoaderRunner<T>(loaderRef, location, id);
+  const { reader, overrideData, error, reload, reloading } = useLoaderRunner<T>(
+    loaderRef,
+    location,
+    id
+  );
 
   const suspenseContent = (
     <Suspense fallback={fallback}>
@@ -56,7 +69,9 @@ export function LoaderHost<T>({
               <ErrorBoundary fallback={errorFallback as any}>
                 {suspenseContent}
               </ErrorBoundary>
-            ) : suspenseContent}
+            ) : (
+              suspenseContent
+            )}
           </LoaderErrorContext.Provider>
         </ReloadContext.Provider>
       </ActiveLoaderIdContext.Provider>
@@ -73,11 +88,7 @@ type DataReaderProps<T> = {
   children: ComponentChildren;
 };
 
-function DataReader<T>({
-  reader,
-  overrideData,
-  children,
-}: DataReaderProps<T>) {
+function DataReader<T>({ reader, overrideData, children }: DataReaderProps<T>) {
   const data = overrideData !== undefined ? overrideData : reader.read();
   return (
     <LoaderDataContext.Provider value={{ data }}>

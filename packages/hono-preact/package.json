@@ -2,9 +2,20 @@
   "name": "hono-preact",
   "version": "0.1.0",
   "description": "Hono on the edge, Preact in the browser, manifest driven routes, typed RPC, streaming everywhere.",
-  "keywords": ["hono", "preact", "framework", "ssr", "streaming", "rpc", "cloudflare-workers", "vite"],
+  "keywords": [
+    "hono",
+    "preact",
+    "framework",
+    "ssr",
+    "streaming",
+    "rpc",
+    "cloudflare-workers",
+    "vite"
+  ],
   "homepage": "https://framework.sbesh.com",
-  "bugs": { "url": "https://github.com/sbesh91/hono-preact/issues" },
+  "bugs": {
+    "url": "https://github.com/sbesh91/hono-preact/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sbesh91/hono-preact.git",
@@ -15,7 +26,10 @@
   "engines": {
     "node": ">=20"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {

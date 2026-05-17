@@ -62,7 +62,8 @@ function validateLocation(loc: unknown): SerializedLocation | null {
   const o = loc as Record<string, unknown>;
   if (typeof o.path !== 'string') return null;
   if (typeof o.pathParams !== 'object' || o.pathParams === null) return null;
-  if (typeof o.searchParams !== 'object' || o.searchParams === null) return null;
+  if (typeof o.searchParams !== 'object' || o.searchParams === null)
+    return null;
   return {
     path: o.path,
     pathParams: o.pathParams as Record<string, string>,
@@ -85,10 +86,7 @@ export interface LoadersHandlerOptions {
    * observability stack (Sentry, console, etc.). The handler still
    * responds with a sanitized 500; the hook is purely a side channel.
    */
-  onError?: (
-    err: unknown,
-    ctx: { module: string; loader: string }
-  ) => void;
+  onError?: (err: unknown, ctx: { module: string; loader: string }) => void;
 }
 
 export function loadersHandler(
@@ -129,7 +127,10 @@ export function loadersHandler(
       );
     }
     if (typeof loaderName !== 'string') {
-      return c.json({ error: 'Request body must include string field: loader' }, 400);
+      return c.json(
+        { error: 'Request body must include string field: loader' },
+        400
+      );
     }
 
     const validatedLocation = validateLocation(location);
@@ -145,14 +146,18 @@ export function loadersHandler(
 
     const loaderFn = loadersMap[`${module}::${loaderName}`];
     if (!loaderFn) {
-      return c.json({ error: `Loader '${module}::${loaderName}' not found` }, 404);
+      return c.json(
+        { error: `Loader '${module}::${loaderName}' not found` },
+        404
+      );
     }
 
     const signal = c.req.raw.signal;
 
     try {
       const result = await runRequestScope(
-        () => Promise.resolve(loaderFn({ c, location: validatedLocation, signal })),
+        () =>
+          Promise.resolve(loaderFn({ c, location: validatedLocation, signal })),
         { honoContext: c }
       );
 

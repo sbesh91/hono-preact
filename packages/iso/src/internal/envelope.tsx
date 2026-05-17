@@ -20,8 +20,7 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
 }) => {
   const id = useContext(LoaderIdContext);
   const ctx = useContext(LoaderDataContext);
-  if (!id || !ctx)
-    throw new Error('<Envelope> must be inside a <Loader>');
+  if (!id || !ctx) throw new Error('<Envelope> must be inside a <Loader>');
 
   // Coerce undefined → null so JSON.stringify(undefined) (which returns
   // undefined and serializes as the literal string "undefined") never

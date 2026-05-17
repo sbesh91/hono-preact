@@ -26,11 +26,7 @@ const LoginPage: FunctionComponent = () => {
         This is a feature showcase. Enter any email; the demo will create that
         user and sign you in. There is no real magic link.
       </p>
-      <Form
-        mutate={mutate}
-        pending={pending}
-        class="space-y-3"
-      >
+      <Form mutate={mutate} pending={pending} class="space-y-3">
         <label class="block">
           <span class="text-sm">Email</span>
           <input

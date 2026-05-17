@@ -19,7 +19,10 @@ describe('LoaderRef.Boundary', () => {
   it('renders the loader fallback then transitions to children with data', async () => {
     let resolveData: (v: { value: number }) => void = () => {};
     const ref = defineLoader<{ value: number }>(
-      () => new Promise<{ value: number }>((res) => { resolveData = res; }),
+      () =>
+        new Promise<{ value: number }>((res) => {
+          resolveData = res;
+        }),
       { __moduleKey: 'pages/test-boundary' }
     );
 
@@ -29,7 +32,11 @@ describe('LoaderRef.Boundary', () => {
     };
 
     const locMap = new Map();
-    locMap.set('pages/test-boundary', { path: '/', pathParams: {}, searchParams: {} });
+    locMap.set('pages/test-boundary', {
+      path: '/',
+      pathParams: {},
+      searchParams: {},
+    });
 
     const tree = (
       <RouteLocationsContext.Provider value={locMap}>
@@ -51,7 +58,10 @@ describe('LoaderRef.View', () => {
   it('renders fallback then provides data, error, reload to render fn', async () => {
     let resolveData: (v: { name: string }) => void = () => {};
     const ref = defineLoader<{ name: string }>(
-      () => new Promise<{ name: string }>((res) => { resolveData = res; }),
+      () =>
+        new Promise<{ name: string }>((res) => {
+          resolveData = res;
+        }),
       { __moduleKey: 'pages/test-view-1' }
     );
 
@@ -61,7 +71,11 @@ describe('LoaderRef.View', () => {
     );
 
     const locMap = new Map();
-    locMap.set('pages/test-view-1', { path: '/', pathParams: {}, searchParams: {} });
+    locMap.set('pages/test-view-1', {
+      path: '/',
+      pathParams: {},
+      searchParams: {},
+    });
 
     const { queryByTestId, findByTestId } = render(
       <RouteLocationsContext.Provider value={locMap}>
@@ -75,18 +89,25 @@ describe('LoaderRef.View', () => {
   });
 
   it('forwards arbitrary props to the render function', async () => {
-    const ref = defineLoader<{ value: number }>(
-      async () => ({ value: 1 }),
-      { __moduleKey: 'pages/test-view-2' }
-    );
-    const View: FunctionComponent<{ label: string }> = ref.View<{ label: string }>(
+    const ref = defineLoader<{ value: number }>(async () => ({ value: 1 }), {
+      __moduleKey: 'pages/test-view-2',
+    });
+    const View: FunctionComponent<{ label: string }> = ref.View<{
+      label: string;
+    }>(
       ({ data, label }) => (
-        <span data-testid="composed">{label}:{data.value}</span>
+        <span data-testid="composed">
+          {label}:{data.value}
+        </span>
       ),
       { fallback: <span /> }
     );
     const locMap = new Map();
-    locMap.set('pages/test-view-2', { path: '/', pathParams: {}, searchParams: {} });
+    locMap.set('pages/test-view-2', {
+      path: '/',
+      pathParams: {},
+      searchParams: {},
+    });
 
     const { findByTestId } = render(
       <RouteLocationsContext.Provider value={locMap}>
@@ -101,12 +122,18 @@ describe('LoaderRef.View', () => {
 describe('LoaderRef.Boundary: errorFallback', () => {
   it('renders errorFallback when the loader fn throws', async () => {
     const ref = defineLoader<{ value: number }>(
-      async () => { throw new Error('boom'); },
+      async () => {
+        throw new Error('boom');
+      },
       { __moduleKey: 'pages/test-error-boundary' }
     );
 
     const locMap = new Map();
-    locMap.set('pages/test-error-boundary', { path: '/', pathParams: {}, searchParams: {} });
+    locMap.set('pages/test-error-boundary', {
+      path: '/',
+      pathParams: {},
+      searchParams: {},
+    });
 
     const { findByTestId } = render(
       <RouteLocationsContext.Provider value={locMap}>
@@ -125,7 +152,9 @@ describe('LoaderRef.Boundary: errorFallback', () => {
 
   it('renders errorFallback from View opts when the loader fn throws', async () => {
     const ref = defineLoader<{ value: number }>(
-      async () => { throw new Error('view-boom'); },
+      async () => {
+        throw new Error('view-boom');
+      },
       { __moduleKey: 'pages/test-error-view' }
     );
 
@@ -135,7 +164,11 @@ describe('LoaderRef.Boundary: errorFallback', () => {
     );
 
     const locMap = new Map();
-    locMap.set('pages/test-error-view', { path: '/', pathParams: {}, searchParams: {} });
+    locMap.set('pages/test-error-view', {
+      path: '/',
+      pathParams: {},
+      searchParams: {},
+    });
 
     const { findByTestId } = render(
       <RouteLocationsContext.Provider value={locMap}>
@@ -164,14 +197,28 @@ describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => 
       return <span data-testid="path">{data.path}</span>;
     };
 
-    const layoutLoc = { path: '/movies', pathParams: {}, searchParams: {} } as any;
-    const pageLoc = { path: '/movies/123', pathParams: { id: '123' }, searchParams: {} } as any;
+    const layoutLoc = {
+      path: '/movies',
+      pathParams: {},
+      searchParams: {},
+    } as any;
+    const pageLoc = {
+      path: '/movies/123',
+      pathParams: { id: '123' },
+      searchParams: {},
+    } as any;
 
     history.replaceState(null, '', '/movies/123');
     const { findByTestId } = render(
       <LocationProvider>
-        <RouteLocationsProvider moduleKey="pages/movies-layout-test" location={layoutLoc}>
-          <RouteLocationsProvider moduleKey="pages/test-context-loc" location={pageLoc}>
+        <RouteLocationsProvider
+          moduleKey="pages/movies-layout-test"
+          location={layoutLoc}
+        >
+          <RouteLocationsProvider
+            moduleKey="pages/test-context-loc"
+            location={pageLoc}
+          >
             <ref.Boundary fallback={<span />}>
               <Probe />
             </ref.Boundary>

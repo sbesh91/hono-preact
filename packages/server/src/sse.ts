@@ -44,9 +44,13 @@ export function sseGeneratorResponse(
         await stream.writeSSE({ data: JSON.stringify(step.value) });
       }
       // Aborted; release the generator cleanly.
-      await gen.return(undefined).catch(() => { /* swallow */ });
+      await gen.return(undefined).catch(() => {
+        /* swallow */
+      });
     } catch (err) {
-      await gen.return(undefined).catch(() => { /* swallow */ });
+      await gen.return(undefined).catch(() => {
+        /* swallow */
+      });
       await stream.writeSSE({
         event: 'error',
         data: encodeErrorPayload(err),
@@ -77,7 +81,9 @@ export function sseReadableStreamResponse(
         data: encodeErrorPayload(err),
       });
     } finally {
-      reader.cancel().catch(() => { /* swallow */ });
+      reader.cancel().catch(() => {
+        /* swallow */
+      });
     }
   });
 }
@@ -88,7 +94,9 @@ export function isAsyncGenerator(
   return (
     value != null &&
     typeof value === 'object' &&
-    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function' &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === 'function' &&
     typeof (value as { next?: unknown }).next === 'function'
   );
 }

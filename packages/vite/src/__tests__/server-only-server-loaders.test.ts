@@ -16,7 +16,12 @@ function transform(
     configResolved?: (c: { root: string }) => void;
   };
   plugin.configResolved?.({ root: options.root ?? '/Users/me/repo' });
-  return plugin.transform.call({} as any, code, id, options.ssr ? { ssr: options.ssr } : {});
+  return plugin.transform.call(
+    {} as any,
+    code,
+    id,
+    options.ssr ? { ssr: options.ssr } : {}
+  );
 }
 
 describe('serverOnlyPlugin: serverLoaders Proxy stub', () => {
@@ -37,23 +42,23 @@ describe('serverOnlyPlugin: serverLoaders Proxy stub', () => {
 
   it('rejects an unknown named import from a *.server.* file with a helpful message', () => {
     const code = `import { somethingElse } from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
-      /not a recognized export/
-    );
+    expect(() =>
+      transform(code, '/Users/me/repo/src/pages/movies.tsx')
+    ).toThrow(/not a recognized export/);
   });
 
   it('no longer accepts the legacy `loader` named import', () => {
     const code = `import { loader } from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
-      /not a recognized export/
-    );
+    expect(() =>
+      transform(code, '/Users/me/repo/src/pages/movies.tsx')
+    ).toThrow(/not a recognized export/);
   });
 
   it('no longer accepts a default import from a *.server.* file', () => {
     const code = `import serverLoader from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
-      /not a recognized export/
-    );
+    expect(() =>
+      transform(code, '/Users/me/repo/src/pages/movies.tsx')
+    ).toThrow(/not a recognized export/);
   });
 });
 
@@ -94,7 +99,9 @@ describe('serverOnlyPlugin: params threading from .server.ts to client Proxy', (
     const importerId = path.join(fixtureDir, 'page.tsx');
     const result = transform(code, importerId, { root: fixtureRoot });
     // "default" key should NOT appear in meta since it has no params
-    const metaMatch = result?.code.match(/__\$serverLoadersMeta_serverLoaders\s*=\s*(\{[^}]*\})/);
+    const metaMatch = result?.code.match(
+      /__\$serverLoadersMeta_serverLoaders\s*=\s*(\{[^}]*\})/
+    );
     expect(metaMatch).not.toBeNull();
     expect(metaMatch![1]).not.toContain('"default"');
   });

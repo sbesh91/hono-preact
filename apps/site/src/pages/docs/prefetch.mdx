@@ -29,12 +29,12 @@ If you don't read any of those fields, omit both arguments and `prefetch(loader)
 
 ## Options
 
-| Option | Type | Description |
-|---|---|---|
-| `url` | `string` | Target URL or path. Drives `path` and `searchParams`. |
-| `route` | `string` | Route pattern (e.g. `/movies/:id`). Combined with `url` to derive `pathParams`. |
-| `location` | `RouteHook` | Escape hatch: pass a fully-formed `RouteHook` directly. Overrides `url`/`route`. |
-| `cache` | `LoaderCache<T>` | Override the cache the result is written to. Defaults to the cache attached to the loader. |
+| Option     | Type             | Description                                                                                |
+| ---------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| `url`      | `string`         | Target URL or path. Drives `path` and `searchParams`.                                      |
+| `route`    | `string`         | Route pattern (e.g. `/movies/:id`). Combined with `url` to derive `pathParams`.            |
+| `location` | `RouteHook`      | Escape hatch: pass a fully-formed `RouteHook` directly. Overrides `url`/`route`.           |
+| `cache`    | `LoaderCache<T>` | Override the cache the result is written to. Defaults to the cache attached to the loader. |
 
 ## Common patterns
 

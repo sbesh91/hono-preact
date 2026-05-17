@@ -41,7 +41,9 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
   });
 
   it('a server guard can short-circuit by returning a redirect, surfaced by renderPage', async () => {
-    const redirectGuard = defineServerGuard(async () => ({ redirect: '/login' }));
+    const redirectGuard = defineServerGuard(async () => ({
+      redirect: '/login',
+    }));
 
     const Page = () => (
       <html>

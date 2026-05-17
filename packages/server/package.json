@@ -2,9 +2,14 @@
   "name": "@hono-preact/server",
   "version": "0.1.0",
   "description": "Internal package for hono-preact. Use the hono-preact umbrella instead.",
-  "keywords": ["hono-preact", "internal"],
+  "keywords": [
+    "hono-preact",
+    "internal"
+  ],
   "homepage": "https://framework.sbesh.com",
-  "bugs": { "url": "https://github.com/sbesh91/hono-preact/issues" },
+  "bugs": {
+    "url": "https://github.com/sbesh91/hono-preact/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sbesh91/hono-preact.git",
@@ -15,7 +20,10 @@
   "engines": {
     "node": ">=20"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {

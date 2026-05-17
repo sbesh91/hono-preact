@@ -50,9 +50,7 @@ describe('path-key parity across moduleKeyPlugin and serverOnlyPlugin', () => {
       `${ROOT}/src/pages/movies.tsx`
     );
     // The Proxy stub receives the same moduleKey string.
-    expect(clientResult?.code).toContain(
-      `__moduleKey: "src/pages/movies"`
-    );
+    expect(clientResult?.code).toContain(`__moduleKey: "src/pages/movies"`);
   });
 
   it('derives distinct keys for cross-folder same-basename collisions', () => {

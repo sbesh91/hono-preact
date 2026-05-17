@@ -16,20 +16,23 @@ import { useOptimisticAction } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const Movies = ({ loaderData }) => {
-  const { mutate, pending, value: movies } = useOptimisticAction(
-    serverActions.create,
-    {
-      base: loaderData.movies,
-      apply: (current, payload) => [...current, payload],
-      invalidate: 'auto',
-      onSuccess: (data) => console.log('created', data),
-      onError: (err) => console.error(err),
-    }
-  );
+  const {
+    mutate,
+    pending,
+    value: movies,
+  } = useOptimisticAction(serverActions.create, {
+    base: loaderData.movies,
+    apply: (current, payload) => [...current, payload],
+    invalidate: 'auto',
+    onSuccess: (data) => console.log('created', data),
+    onError: (err) => console.error(err),
+  });
 
   return (
     <ul>
-      {movies.map((m) => <li key={m.id}>{m.title}</li>)}
+      {movies.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
     </ul>
   );
 };
@@ -39,13 +42,13 @@ const Movies = ({ loaderData }) => {
 
 ### Options
 
-| Option | Type | Description |
-|---|---|---|
-| `base` | `TBase` | The base value (typically loader data) the projection layers over |
-| `apply` | `(current, payload) => TBase` | Reducer that produces the next projection |
-| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below). |
-| `onSuccess` | `(data) => void` | Called after a successful mutation. Snapshot is internal; not exposed here. |
-| `onError` | `(err) => void` | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
+| Option       | Type                             | Description                                                                                       |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `base`       | `TBase`                          | The base value (typically loader data) the projection layers over                                 |
+| `apply`      | `(current, payload) => TBase`    | Reducer that produces the next projection                                                         |
+| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below).        |
+| `onSuccess`  | `(data) => void`                 | Called after a successful mutation. Snapshot is internal; not exposed here.                       |
+| `onError`    | `(err) => void`                  | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
 
 Other `useAction` options (`onChunk`) pass through.
 
@@ -71,7 +74,13 @@ const Movies = ({ loaderData }) => {
     onError: (_err, handle) => handle.revert(),
   });
 
-  return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
+  return (
+    <ul>
+      {movies.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  );
 };
 ```
 
@@ -79,8 +88,8 @@ const Movies = ({ loaderData }) => {
 
 ```ts
 type OptimisticHandle = {
-  settle: () => void;  // success: linger until base ref changes
-  revert: () => void;  // error: remove immediately
+  settle: () => void; // success: linger until base ref changes
+  revert: () => void; // error: remove immediately
 };
 ```
 
@@ -108,14 +117,15 @@ No special configuration needed.
 
 ```tsx
 const NotesForm = ({ defaultNotes }) => {
-  const { mutate, pending, value: notes } = useOptimisticAction(
-    serverActions.setNotes,
-    {
-      base: defaultNotes,
-      apply: (_current, payload) => payload.notes,
-      invalidate: 'auto',
-    }
-  );
+  const {
+    mutate,
+    pending,
+    value: notes,
+  } = useOptimisticAction(serverActions.setNotes, {
+    base: defaultNotes,
+    apply: (_current, payload) => payload.notes,
+    invalidate: 'auto',
+  });
 
   return (
     <>
@@ -141,7 +151,13 @@ const moviesLoader = serverLoaders.default;
 
 const MovieList = () => {
   const movies = moviesLoader.useData();
-  return <ul>{movies.map((m) => <li key={m.id}>{m.title}</li>)}</ul>;
+  return (
+    <ul>
+      {movies.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  );
 };
 
 const MoviesPage = ({ pendingAdds }) => (
@@ -159,10 +175,10 @@ const MoviesPage = ({ pendingAdds }) => (
 
 `<OptimisticOverlay>` must be inside a route or `<Page>` configured with the same `loader` it references; otherwise it throws.
 
-| Prop | Type | Description |
-|---|---|---|
-| `loader` | `LoaderRef<T>` | The loader whose data is being projected. Must match the surrounding route's loader. |
-| `reducer` | `(base: T, action: A) => T` | Folds each pending action into the base value. |
-| `pending` | `A[]` | Pending actions to project. Defaults to `[]`. |
+| Prop      | Type                        | Description                                                                          |
+| --------- | --------------------------- | ------------------------------------------------------------------------------------ |
+| `loader`  | `LoaderRef<T>`              | The loader whose data is being projected. Must match the surrounding route's loader. |
+| `reducer` | `(base: T, action: A) => T` | Folds each pending action into the base value.                                       |
+| `pending` | `A[]`                       | Pending actions to project. Defaults to `[]`.                                        |
 
 Prefer `useOptimistic` or `useOptimisticAction` when the optimistic state is local to the component that owns the mutation. Reach for `<OptimisticOverlay>` when the optimistic projection needs to flow through `loader.useData()` for descendants you don't want to thread props through.

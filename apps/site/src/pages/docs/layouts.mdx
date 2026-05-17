@@ -48,8 +48,12 @@ export default function MoviesLayout({ children }: LayoutProps) {
   return (
     <section class="p-1">
       <header class="flex gap-2">
-        <a href="/" class="bg-amber-200">home</a>
-        <a href="/demo/projects" class="bg-emerald-200">projects</a>
+        <a href="/" class="bg-amber-200">
+          home
+        </a>
+        <a href="/demo/projects" class="bg-emerald-200">
+          projects
+        </a>
       </header>
       <div class="mt-2">{children}</div>
     </section>
@@ -61,14 +65,14 @@ export default function MoviesLayout({ children }: LayoutProps) {
 
 ## URL composition rules
 
-| Rule | Why |
-|---|---|
-| Top-level paths start with `/` | `/movies`, `/admin`, etc. Standard. |
-| Child paths must NOT start with `/` | A child path is appended to its parent (`/movies` + `:id` → `/movies/:id`). |
-| Empty child path (`''`) matches the parent's URL exactly | The "index" child of a layout group. |
-| Routes match in source order | First match wins, including catchalls like `*`. |
-| `*` matches anything not matched by siblings | Works at any nesting level. |
-| Trailing slashes normalised | `/movies/` and `/movies` are the same route. |
+| Rule                                                     | Why                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Top-level paths start with `/`                           | `/movies`, `/admin`, etc. Standard.                                         |
+| Child paths must NOT start with `/`                      | A child path is appended to its parent (`/movies` + `:id` → `/movies/:id`). |
+| Empty child path (`''`) matches the parent's URL exactly | The "index" child of a layout group.                                        |
+| Routes match in source order                             | First match wins, including catchalls like `*`.                             |
+| `*` matches anything not matched by siblings             | Works at any nesting level.                                                 |
+| Trailing slashes normalised                              | `/movies/` and `/movies` are the same route.                                |
 
 ## Loaders per layout, per leaf
 
@@ -162,11 +166,11 @@ Nesting works recursively: a layout-group child of a layout group registers as a
 
 ## What's out of scope at v0.1
 
-| Feature | Status | Workaround |
-|---|---|---|
-| Pathless layout routes (no URL segment) | Not yet | Repeat the wrapper as a regular component imported by each view that needs it. |
+| Feature                                    | Status       | Workaround                                                                                                                                      |
+| ------------------------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pathless layout routes (no URL segment)    | Not yet      | Repeat the wrapper as a regular component imported by each view that needs it.                                                                  |
 | `useParentLoaderData` / loader composition | Out of scope | Layout loaders and leaf loaders both run, but they do not see each other's data. Read from a context provided by the layout, or pass via props. |
-| Path-prefix middleware beyond guards | Out of scope | Use Hono `.use()` in your `api.ts` for path-prefix middleware. |
+| Path-prefix middleware beyond guards       | Out of scope | Use Hono `.use()` in your `api.ts` for path-prefix middleware.                                                                                  |
 
 These may land in later versions. Layout-level loaders DO run in parallel with leaf loaders (see [Layout-level loaders](/docs/loaders#layout-level-loaders)); what's out of scope is letting a leaf loader read its parent layout loader's data through framework plumbing.
 
@@ -177,13 +181,22 @@ If you want chrome shared across unrelated URLs (not a contiguous URL prefix), d
 ```tsx
 // src/components/MarketingChrome.tsx
 export function MarketingChrome({ children }: { children: ComponentChildren }) {
-  return <div class="marketing-bg"><nav>...</nav>{children}</div>;
+  return (
+    <div class="marketing-bg">
+      <nav>...</nav>
+      {children}
+    </div>
+  );
 }
 
 // src/pages/about.tsx
 import { MarketingChrome } from '../components/MarketingChrome.js';
 export default function About() {
-  return <MarketingChrome><h1>About</h1></MarketingChrome>;
+  return (
+    <MarketingChrome>
+      <h1>About</h1>
+    </MarketingChrome>
+  );
 }
 ```
 

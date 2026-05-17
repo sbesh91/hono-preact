@@ -23,7 +23,7 @@ export type ServerGuardFn = {
   readonly runs: 'server';
   readonly fn: (
     ctx: ServerGuardContext,
-    next: () => Promise<GuardResult>,
+    next: () => Promise<GuardResult>
   ) => GuardResult | Promise<GuardResult>;
 };
 
@@ -31,7 +31,7 @@ export type ClientGuardFn = {
   readonly runs: 'client';
   readonly fn: (
     ctx: ClientGuardContext,
-    next: () => Promise<GuardResult>,
+    next: () => Promise<GuardResult>
   ) => GuardResult | Promise<GuardResult>;
 };
 
@@ -49,7 +49,7 @@ export const defineClientGuard = (fn: ClientGuardFn['fn']): ClientGuardFn => ({
 
 export const runServerGuards = async (
   guards: ServerGuardFn[],
-  ctx: ServerGuardContext,
+  ctx: ServerGuardContext
 ): Promise<GuardResult> => {
   const run = async (index: number): Promise<GuardResult> => {
     if (index >= guards.length) return;
@@ -60,7 +60,7 @@ export const runServerGuards = async (
 
 export const runClientGuards = async (
   guards: ClientGuardFn[],
-  ctx: ClientGuardContext,
+  ctx: ClientGuardContext
 ): Promise<GuardResult> => {
   const run = async (index: number): Promise<GuardResult> => {
     if (index >= guards.length) return;

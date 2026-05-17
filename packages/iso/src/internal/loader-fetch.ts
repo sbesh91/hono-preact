@@ -35,7 +35,7 @@ export async function fetchLoaderData<T>(
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string };
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Loader failed with status ${res.status}`);
   }
 
@@ -55,7 +55,9 @@ export async function fetchLoaderData<T>(
       if (typeof window !== 'undefined') {
         window.location.assign((json as { __redirect: string }).__redirect);
       }
-      return new Promise<T>(() => { /* never resolves; page is navigating */ });
+      return new Promise<T>(() => {
+        /* never resolves; page is navigating */
+      });
     }
     return json as T;
   }
@@ -86,7 +88,10 @@ export async function fetchLoaderData<T>(
     }
     if (ev.event === 'error') {
       try {
-        const parsed = JSON.parse(ev.data) as { message?: string; name?: string };
+        const parsed = JSON.parse(ev.data) as {
+          message?: string;
+          name?: string;
+        };
         const err = new Error(parsed.message ?? 'Streamed error');
         if (parsed.name) err.name = parsed.name;
         throw err;
@@ -119,7 +124,10 @@ export async function fetchLoaderData<T>(
           }
         } else if (ev.event === 'error') {
           try {
-            const parsed = JSON.parse(ev.data) as { message?: string; name?: string };
+            const parsed = JSON.parse(ev.data) as {
+              message?: string;
+              name?: string;
+            };
             const err = new Error(parsed.message ?? 'Streamed error');
             if (parsed.name) err.name = parsed.name;
             callbacks.onError(err);

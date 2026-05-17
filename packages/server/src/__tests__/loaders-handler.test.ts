@@ -28,7 +28,11 @@ describe('loadersHandler', () => {
       },
     });
 
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ movies: [] });
@@ -45,9 +49,15 @@ describe('loadersHandler', () => {
   });
 
   it('returns 404 when the module is not found', async () => {
-    const res = await post(makeApp({}), { module: 'missing', loader: 'default', location: loc });
+    const res = await post(makeApp({}), {
+      module: 'missing',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(404);
-    expect((await res.json() as { error: string }).error).toContain("not found");
+    expect(((await res.json()) as { error: string }).error).toContain(
+      'not found'
+    );
   });
 
   it('returns 404 when the module has no serverLoaders', async () => {
@@ -57,7 +67,11 @@ describe('loadersHandler', () => {
         serverActions: { create: vi.fn() },
       },
     });
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(404);
   });
 
@@ -65,12 +79,20 @@ describe('loadersHandler', () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'pages/movies',
-        serverLoaders: { default: async () => { throw new Error('DB error: connection refused at 10.0.0.5'); } },
+        serverLoaders: {
+          default: async () => {
+            throw new Error('DB error: connection refused at 10.0.0.5');
+          },
+        },
       },
     });
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(500);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     // Production behavior: no raw loader error text reaches the client.
     expect(body.error).toBe('Loader failed');
     expect(body.error).not.toContain('10.0.0.5');
@@ -84,15 +106,23 @@ describe('loadersHandler', () => {
         {
           './pages/movies.server.ts': {
             __moduleKey: 'pages/movies',
-            serverLoaders: { default: async () => { throw new Error('DB error: hostname leaked'); } },
+            serverLoaders: {
+              default: async () => {
+                throw new Error('DB error: hostname leaked');
+              },
+            },
           },
         },
         { dev: true }
       )
     );
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(500);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe('DB error: hostname leaked');
   });
 
@@ -106,15 +136,26 @@ describe('loadersHandler', () => {
         {
           './pages/movies.server.ts': {
             __moduleKey: 'pages/movies',
-            serverLoaders: { default: async () => { throw realErr; } },
+            serverLoaders: {
+              default: async () => {
+                throw realErr;
+              },
+            },
           },
         },
         { onError }
       )
     );
-    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(onError).toHaveBeenCalledOnce();
-    expect(onError).toHaveBeenCalledWith(realErr, { module: 'pages/movies', loader: 'default' });
+    expect(onError).toHaveBeenCalledWith(realErr, {
+      module: 'pages/movies',
+      loader: 'default',
+    });
   });
 
   it('maps GuardRedirect thrown from a loader to a __redirect envelope', async () => {
@@ -123,11 +164,17 @@ describe('loadersHandler', () => {
       './pages/movies.server.ts': {
         __moduleKey: 'pages/movies',
         serverLoaders: {
-          default: async () => { throw new GuardRedirect('/login'); },
+          default: async () => {
+            throw new GuardRedirect('/login');
+          },
         },
       },
     });
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     // 200 + envelope: the client RPC stub recognizes __redirect and navigates;
     // a thrown error here would fire user error boundaries before the redirect.
     expect(res.status).toBe(200);
@@ -145,7 +192,11 @@ describe('loadersHandler', () => {
     };
     const app = makeApp(lazyGlob);
 
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(200);
     expect(loaderFn).toHaveBeenCalled();
   });
@@ -159,16 +210,23 @@ describe('loadersHandler', () => {
     });
     const res = await post(app, { loader: 'default', location: loc });
     expect(res.status).toBe(400);
-    expect((await res.json() as { error: string }).error).toContain('module');
+    expect(((await res.json()) as { error: string }).error).toContain('module');
   });
 
   it('returns 503 when a lazy module loader rejects', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': () => Promise.reject(new Error('load failed')),
+      './pages/movies.server.ts': () =>
+        Promise.reject(new Error('load failed')),
     });
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(503);
-    expect((await res.json() as { error: string }).error).toContain('load failed');
+    expect(((await res.json()) as { error: string }).error).toContain(
+      'load failed'
+    );
   });
 
   it('propagates location.searchParams through to the loader', async () => {
@@ -184,12 +242,21 @@ describe('loadersHandler', () => {
       pathParams: {},
       searchParams: { genre: 'action' },
     };
-    const res = await post(app, { module: 'pages/movies', loader: 'default', location: locWithParams });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: locWithParams,
+    });
     expect(res.status).toBe(200);
     expect(loaderFn).toHaveBeenCalledWith(
-      expect.objectContaining({ location: locWithParams, signal: expect.any(AbortSignal) })
+      expect.objectContaining({
+        location: locWithParams,
+        signal: expect.any(AbortSignal),
+      })
     );
-    const callArg = loaderFn.mock.calls[0][0] as { location: { searchParams: Record<string, string> } };
+    const callArg = loaderFn.mock.calls[0][0] as {
+      location: { searchParams: Record<string, string> };
+    };
     expect(callArg.location.searchParams).toEqual({ genre: 'action' });
   });
 });
@@ -205,10 +272,21 @@ describe('loadersHandler dev / caching', () => {
       };
     };
     const app = new Hono();
-    app.post('/__loaders', loadersHandler({ './pages/movies.server.ts': lazy }));
+    app.post(
+      '/__loaders',
+      loadersHandler({ './pages/movies.server.ts': lazy })
+    );
 
-    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
-    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(resolves).toBe(1);
   });
 
@@ -227,8 +305,16 @@ describe('loadersHandler dev / caching', () => {
       loadersHandler({ './pages/movies.server.ts': lazy }, { dev: true })
     );
 
-    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
-    await post(app, { module: 'pages/movies', loader: 'default', location: loc });
+    await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
     expect(resolves).toBe(2);
   });
 });
@@ -256,9 +342,16 @@ describe('loadersHandler path-keyed routing', () => {
 
   it('returns 404 when the requested module key does not match any export', async () => {
     const app = makeApp({
-      '/x.server.ts': { __moduleKey: 'a', serverLoaders: { default: async () => ({}) } },
+      '/x.server.ts': {
+        __moduleKey: 'a',
+        serverLoaders: { default: async () => ({}) },
+      },
     });
-    const res = await post(app, { module: 'b', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'b',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(404);
   });
 
@@ -268,7 +361,11 @@ describe('loadersHandler path-keyed routing', () => {
     const app = makeApp({
       '/no-key.server.ts': { serverLoaders: { default: async () => ({}) } },
     });
-    const res = await post(app, { module: 'no-key', loader: 'default', location: loc });
+    const res = await post(app, {
+      module: 'no-key',
+      loader: 'default',
+      location: loc,
+    });
     expect(res.status).toBe(404);
   });
 });
@@ -336,7 +433,7 @@ describe('loadersHandler: location validation', () => {
     });
     const res = await post(app, { module: 'x', loader: 'default' });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/location/);
   });
 
@@ -347,7 +444,11 @@ describe('loadersHandler: location validation', () => {
         serverLoaders: { default: async () => ({}) },
       },
     });
-    const res = await post(app, { module: 'x', loader: 'default', location: { searchParams: {} } });
+    const res = await post(app, {
+      module: 'x',
+      loader: 'default',
+      location: { searchParams: {} },
+    });
     expect(res.status).toBe(400);
   });
 });

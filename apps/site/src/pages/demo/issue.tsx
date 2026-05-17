@@ -7,8 +7,11 @@ import { requireSession } from '../../demo/guard.js';
 import CommentList from '../../components/demo/CommentList.js';
 import type { ActivityItem, Comment, Issue, User } from '../../demo/data.js';
 
-const { issue: issueLoader, comments: commentsLoader, activity: activityLoader } =
-  serverLoaders;
+const {
+  issue: issueLoader,
+  comments: commentsLoader,
+  activity: activityLoader,
+} = serverLoaders;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
 type IssueData = WithAuthor<Issue>;
@@ -76,7 +79,9 @@ const IssueHeaderAndActions: FunctionComponent<{
           type="button"
           class="bg-gray-700 text-white px-3 py-1 text-sm"
           disabled={toggling}
-          onClick={() => toggleStatus({ issueId: issue.id, status: nextStatus })}
+          onClick={() =>
+            toggleStatus({ issueId: issue.id, status: nextStatus })
+          }
         >
           {toggling
             ? `${nextStatus === 'closed' ? 'Closing' : 'Reopening'}…`
@@ -169,7 +174,7 @@ const CommentsView = commentsLoader.View<{ issueId: string }>(
   ({ data: comments, issueId }) => (
     <CommentsSection comments={comments ?? []} issueId={issueId} />
   ),
-  { fallback: <p class="text-sm text-gray-600">Loading comments…</p> },
+  { fallback: <p class="text-sm text-gray-600">Loading comments…</p> }
 );
 
 // ---- Section: project activity feed ----
@@ -186,13 +191,19 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
             {new Date(a.at).toLocaleTimeString()}
           </time>{' '}
           {a.kind === 'issue-created' && (
-            <>created <strong>{a.issue.title}</strong></>
+            <>
+              created <strong>{a.issue.title}</strong>
+            </>
           )}
           {a.kind === 'issue-closed' && (
-            <>closed <strong>{a.issue.title}</strong></>
+            <>
+              closed <strong>{a.issue.title}</strong>
+            </>
           )}
           {a.kind === 'comment-added' && (
-            <>commented on <strong>{a.issue.title}</strong></>
+            <>
+              commented on <strong>{a.issue.title}</strong>
+            </>
           )}
         </li>
       ))}
@@ -202,7 +213,7 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
 
 const ActivityView = activityLoader.View(
   ({ data: activity }) => <ActivitySection activity={activity ?? []} />,
-  { fallback: <p class="text-xs text-gray-600">Loading activity…</p> },
+  { fallback: <p class="text-xs text-gray-600">Loading activity…</p> }
 );
 
 // ---- Page: issue loads first, then comments + activity in parallel ----
@@ -218,7 +229,7 @@ const IssueView = issueLoader.View(
       </article>
     );
   },
-  { fallback: <p>Loading issue…</p> },
+  { fallback: <p>Loading issue…</p> }
 );
 
 export default definePage(IssueView, { guards: requireSession });

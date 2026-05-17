@@ -81,7 +81,10 @@ describe('runServerGuards composes records via .fn', () => {
     const c = defineServerGuard(async (_c, _next) => {
       throw new Error('should not run');
     });
-    const result = await runServerGuards([a, b, c], { c: fakeC, location: loc });
+    const result = await runServerGuards([a, b, c], {
+      c: fakeC,
+      location: loc,
+    });
     expect(result).toEqual({ redirect: '/login' });
   });
 });
@@ -93,16 +96,24 @@ describe('runServerGuards / runClientGuards — composition edge cases', () => {
     // unexpected errors to the page-level error boundary (instead of
     // silently rendering children).
     const a = defineServerGuard(async (_c, next) => next());
-    const b = defineServerGuard(async () => { throw new Error('boom'); });
+    const b = defineServerGuard(async () => {
+      throw new Error('boom');
+    });
     const c = defineServerGuard(async () => {
       throw new Error('should not run');
     });
-    await expect(runServerGuards([a, b, c], { c: fakeC, location: loc })).rejects.toThrow('boom');
+    await expect(
+      runServerGuards([a, b, c], { c: fakeC, location: loc })
+    ).rejects.toThrow('boom');
   });
 
   it('propagates a thrown error from a client guard', async () => {
-    const a = defineClientGuard(async () => { throw new Error('client-boom'); });
-    await expect(runClientGuards([a], { location: loc })).rejects.toThrow('client-boom');
+    const a = defineClientGuard(async () => {
+      throw new Error('client-boom');
+    });
+    await expect(runClientGuards([a], { location: loc })).rejects.toThrow(
+      'client-boom'
+    );
   });
 
   it('accepts the [server, client] array shape the demo uses for shared session guards', async () => {
@@ -117,14 +128,20 @@ describe('runServerGuards / runClientGuards — composition edge cases', () => {
     const sCalls: string[] = [];
     const cCalls: string[] = [];
     const requireSession = [
-      defineServerGuard(async (_c, next) => { sCalls.push('server'); return next(); }),
-      defineClientGuard(async (_ctx, next) => { cCalls.push('client'); return next(); }),
+      defineServerGuard(async (_c, next) => {
+        sCalls.push('server');
+        return next();
+      }),
+      defineClientGuard(async (_ctx, next) => {
+        cCalls.push('client');
+        return next();
+      }),
     ];
 
     // Server runner: takes only server entries.
     await runServerGuards(
       requireSession.filter((g): g is ServerGuardFn => g.runs === 'server'),
-      { c: fakeC, location: loc },
+      { c: fakeC, location: loc }
     );
     expect(sCalls).toEqual(['server']);
     expect(cCalls).toEqual([]);
@@ -132,7 +149,7 @@ describe('runServerGuards / runClientGuards — composition edge cases', () => {
     // Client runner: takes only client entries.
     await runClientGuards(
       requireSession.filter((g): g is ClientGuardFn => g.runs === 'client'),
-      { location: loc },
+      { location: loc }
     );
     expect(sCalls).toEqual(['server']);
     expect(cCalls).toEqual(['client']);
@@ -144,11 +161,11 @@ describe('runServerGuards / runClientGuards — composition edge cases', () => {
     const calls: string[] = [];
     const a = defineServerGuard(async (_c, next) => {
       calls.push('a');
-      return next();  // returned, not awaited
+      return next(); // returned, not awaited
     });
     const b = defineServerGuard(async (_c, next) => {
       calls.push('b');
-      await next();   // awaited
+      await next(); // awaited
       calls.push('b:after');
     });
     const c = defineServerGuard(async (_c, _next) => {

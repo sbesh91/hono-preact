@@ -1,8 +1,4 @@
-import {
-  defineAction,
-  defineLoader,
-  type LoaderCtx,
-} from 'hono-preact';
+import { defineAction, defineLoader, type LoaderCtx } from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -56,9 +52,7 @@ const commentsLoader = async function* (
   if (cumulative.length === 0) yield [];
 };
 
-const activityLoader = async (
-  ctx: LoaderCtx
-): Promise<ActivityItem[]> => {
+const activityLoader = async (ctx: LoaderCtx): Promise<ActivityItem[]> => {
   const issueId = ctx.location.pathParams.issueId;
   const issue = issueId ? getIssue(issueId) : null;
   if (!issue) return [];
@@ -72,18 +66,17 @@ export const serverLoaders = {
 };
 
 export const serverActions = {
-  addComment: defineAction<
-    { issueId: string; body: string },
-    { id: string }
-  >(async (ctx, input) => {
-    const user = await currentUser(ctx.c);
-    if (!user) throw new Error('not signed in');
-    const c = addComment(user, {
-      issueId: input.issueId,
-      body: input.body.trim(),
-    });
-    return { id: c.id };
-  }),
+  addComment: defineAction<{ issueId: string; body: string }, { id: string }>(
+    async (ctx, input) => {
+      const user = await currentUser(ctx.c);
+      if (!user) throw new Error('not signed in');
+      const c = addComment(user, {
+        issueId: input.issueId,
+        body: input.body.trim(),
+      });
+      return { id: c.id };
+    }
+  ),
 
   setStatus: defineAction<
     { issueId: string; status: IssueStatus },

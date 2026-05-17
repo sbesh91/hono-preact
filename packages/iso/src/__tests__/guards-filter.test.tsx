@@ -3,10 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import type { Context } from 'hono';
-import {
-  defineServerGuard,
-  defineClientGuard,
-} from '../guard.js';
+import { defineServerGuard, defineClientGuard } from '../guard.js';
 import { Guards } from '../internal/guards.js';
 import { HonoRequestContext } from '../internal/contexts.js';
 import { env } from '../is-browser.js';
@@ -50,7 +47,7 @@ describe('Guards env filter', () => {
             <div data-testid="page">ok</div>
           </Guards>
         </LocationProvider>
-      </HonoRequestContext.Provider>,
+      </HonoRequestContext.Provider>
     );
     await screen.findByTestId('page');
     expect(calls).toEqual(['server']);
@@ -72,7 +69,7 @@ describe('Guards env filter', () => {
         <Guards guards={[sg, cg]} location={loc}>
           <div data-testid="page">ok</div>
         </Guards>
-      </LocationProvider>,
+      </LocationProvider>
     );
     await screen.findByTestId('page');
     expect(calls).toEqual(['client']);
@@ -98,7 +95,7 @@ describe('Guards env filter', () => {
         <Guards guards={[a, b, c]} location={loc}>
           <div data-testid="page">ok</div>
         </Guards>
-      </LocationProvider>,
+      </LocationProvider>
     );
     await screen.findByTestId('page');
     expect(calls).toEqual(['a', 'c']);

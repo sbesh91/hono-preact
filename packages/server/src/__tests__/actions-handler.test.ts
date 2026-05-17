@@ -28,7 +28,10 @@ describe('actionsHandler', () => {
   it('calls the matching action with the Hono context and payload', async () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: createFn } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: createFn },
+      },
     });
 
     const res = await post(app, {
@@ -55,16 +58,27 @@ describe('actionsHandler', () => {
       payload: {},
     });
     expect(res.status).toBe(404);
-    expect((await res.json() as { error: string }).error).toContain("Module 'missing' not found");
+    expect(((await res.json()) as { error: string }).error).toContain(
+      "Module 'missing' not found"
+    );
   });
 
   it('returns 404 when the action is not found in the module', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: vi.fn() } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: vi.fn() },
+      },
     });
-    const res = await post(app, { module: 'movies', action: 'destroy', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'destroy',
+      payload: {},
+    });
     expect(res.status).toBe(404);
-    expect((await res.json() as { error: string }).error).toContain("Action 'destroy' not found");
+    expect(((await res.json()) as { error: string }).error).toContain(
+      "Action 'destroy' not found"
+    );
   });
 
   it('returns 500 with a sanitized message when the action throws', async () => {
@@ -78,9 +92,13 @@ describe('actionsHandler', () => {
         },
       },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(500);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe('Action failed');
     expect(body.error).not.toContain('10.0.0.5');
   });
@@ -93,15 +111,23 @@ describe('actionsHandler', () => {
         {
           './pages/movies.server.ts': {
             __moduleKey: 'movies',
-            serverActions: { create: async () => { throw new Error('hostname leaked'); } },
+            serverActions: {
+              create: async () => {
+                throw new Error('hostname leaked');
+              },
+            },
           },
         },
         { dev: true }
       )
     );
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(500);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe('hostname leaked');
   });
 
@@ -115,7 +141,11 @@ describe('actionsHandler', () => {
         {
           './pages/movies.server.ts': {
             __moduleKey: 'movies',
-            serverActions: { create: async () => { throw realErr; } },
+            serverActions: {
+              create: async () => {
+                throw realErr;
+              },
+            },
           },
         },
         { onError }
@@ -123,7 +153,10 @@ describe('actionsHandler', () => {
     );
     await post(app, { module: 'movies', action: 'create', payload: {} });
     expect(onError).toHaveBeenCalledOnce();
-    expect(onError).toHaveBeenCalledWith(realErr, { module: 'movies', action: 'create' });
+    expect(onError).toHaveBeenCalledWith(realErr, {
+      module: 'movies',
+      action: 'create',
+    });
   });
 
   it('maps GuardRedirect thrown from an action to a __redirect envelope', async () => {
@@ -131,10 +164,18 @@ describe('actionsHandler', () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
-        serverActions: { create: async () => { throw new GuardRedirect('/login'); } },
+        serverActions: {
+          create: async () => {
+            throw new GuardRedirect('/login');
+          },
+        },
       },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ __redirect: '/login' });
   });
@@ -145,10 +186,18 @@ describe('actionsHandler', () => {
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
         serverActions: { create: vi.fn() },
-        actionGuards: [async () => { throw new GuardRedirect('/login'); }],
+        actionGuards: [
+          async () => {
+            throw new GuardRedirect('/login');
+          },
+        ],
       },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ __redirect: '/login' });
   });
@@ -157,11 +206,18 @@ describe('actionsHandler', () => {
     const createFn = vi.fn().mockResolvedValue({ ok: true });
     const lazyGlob = {
       './pages/movies.server.ts': () =>
-        Promise.resolve({ __moduleKey: 'movies', serverActions: { create: createFn } }),
+        Promise.resolve({
+          __moduleKey: 'movies',
+          serverActions: { create: createFn },
+        }),
     };
     const app = makeApp(lazyGlob);
 
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalled();
   });
@@ -174,7 +230,10 @@ describe('actionsHandler', () => {
       return { __moduleKey: 'movies', serverActions: { create: createFn } };
     };
     const app = new Hono();
-    app.post('/__actions', actionsHandler({ './pages/movies.server.ts': lazy }));
+    app.post(
+      '/__actions',
+      actionsHandler({ './pages/movies.server.ts': lazy })
+    );
 
     await post(app, { module: 'movies', action: 'create', payload: {} });
     await post(app, { module: 'movies', action: 'create', payload: {} });
@@ -201,37 +260,61 @@ describe('actionsHandler', () => {
 
   it('ignores modules without serverActions', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverLoader: async () => ({}) },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverLoader: async () => ({}),
+      },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(404);
   });
 
   it('routes by __moduleKey rather than filename basename', async () => {
     const createFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './src/pages/movies.server.tsx': { __moduleKey: 'src/pages/movies', serverActions: { create: createFn } },
+      './src/pages/movies.server.tsx': {
+        __moduleKey: 'src/pages/movies',
+        serverActions: { create: createFn },
+      },
     });
-    const res = await post(app, { module: 'src/pages/movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'src/pages/movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
   });
 
   it('returns 503 when a lazy module loader rejects', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': () => Promise.reject(new Error('load failed')),
+      './pages/movies.server.ts': () =>
+        Promise.reject(new Error('load failed')),
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(503);
-    expect((await res.json() as { error: string }).error).toContain('load failed');
+    expect(((await res.json()) as { error: string }).error).toContain(
+      'load failed'
+    );
   });
 
   it('returns 400 when body is missing module or action fields', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: vi.fn() } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: vi.fn() },
+      },
     });
     const res = await post(app, { payload: {} });
     expect(res.status).toBe(400);
-    expect((await res.json() as { error: string }).error).toContain('module');
+    expect(((await res.json()) as { error: string }).error).toContain('module');
   });
 
   it('frames a ReadableStream return value as SSE', async () => {
@@ -250,7 +333,11 @@ describe('actionsHandler', () => {
       },
     });
 
-    const res = await post(app, { module: 'movies', action: 'process', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'process',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     const body = await res.text();
@@ -263,7 +350,10 @@ describe('actionsHandler — multipart/form-data', () => {
   it('dispatches action from multipart form data with __module and __action fields', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { upload: uploadFn },
+      },
     });
 
     const fd = new FormData();
@@ -281,13 +371,19 @@ describe('actionsHandler — multipart/form-data', () => {
   it('surfaces File objects in the action payload', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ stored: true });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { upload: uploadFn },
+      },
     });
 
     const fd = new FormData();
     fd.append('__module', 'movies');
     fd.append('__action', 'upload');
-    fd.append('poster', new File(['<binary>'], 'poster.jpg', { type: 'image/jpeg' }));
+    fd.append(
+      'poster',
+      new File(['<binary>'], 'poster.jpg', { type: 'image/jpeg' })
+    );
 
     const res = await postFormData(app, fd);
     expect(res.status).toBe(200);
@@ -298,20 +394,28 @@ describe('actionsHandler — multipart/form-data', () => {
 
   it('returns 400 when __module or __action is missing from form data', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: vi.fn() } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { upload: vi.fn() },
+      },
     });
     const fd = new FormData();
     fd.append('title', 'Dune');
 
     const res = await postFormData(app, fd);
     expect(res.status).toBe(400);
-    expect((await res.json() as { error: string }).error).toContain('__module');
+    expect(((await res.json()) as { error: string }).error).toContain(
+      '__module'
+    );
   });
 
   it('collects repeated form field names into an array', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { upload: uploadFn },
+      },
     });
 
     const fd = new FormData();
@@ -328,7 +432,10 @@ describe('actionsHandler — multipart/form-data', () => {
   it('detects multipart/form-data even with boundary suffix in Content-Type', async () => {
     const uploadFn = vi.fn().mockResolvedValue({ ok: true });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: uploadFn } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { upload: uploadFn },
+      },
     });
 
     // Manually build a minimal multipart body to test the Content-Type detection
@@ -356,7 +463,10 @@ describe('actionsHandler — multipart/form-data', () => {
 
   it('returns 400 when form data body is malformed', async () => {
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { upload: vi.fn() } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { upload: vi.fn() },
+      },
     });
 
     const res = await app.request('http://localhost/__actions', {
@@ -370,7 +480,11 @@ describe('actionsHandler — multipart/form-data', () => {
 
 describe('actionsHandler — action guards', () => {
   it('runs guards before the action and allows through when next() is called', async () => {
-    const guardFn = vi.fn().mockImplementation(async (_ctx: unknown, next: () => Promise<void>) => next());
+    const guardFn = vi
+      .fn()
+      .mockImplementation(async (_ctx: unknown, next: () => Promise<void>) =>
+        next()
+      );
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
       './pages/movies.server.ts': {
@@ -380,7 +494,11 @@ describe('actionsHandler — action guards', () => {
       },
     });
 
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(guardFn).toHaveBeenCalledOnce();
     expect(createFn).toHaveBeenCalledOnce();
@@ -399,9 +517,13 @@ describe('actionsHandler — action guards', () => {
       },
     });
 
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(403);
-    expect((await res.json() as { error: string }).error).toBe('Not allowed');
+    expect(((await res.json()) as { error: string }).error).toBe('Not allowed');
   });
 
   it('uses the status from ActionGuardError', async () => {
@@ -417,7 +539,11 @@ describe('actionsHandler — action guards', () => {
       },
     });
 
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(401);
   });
 
@@ -433,9 +559,15 @@ describe('actionsHandler — action guards', () => {
       },
     });
 
-    const res = await post(app, { module: 'issues', action: 'close', payload: { id: 'i-1' } });
+    const res = await post(app, {
+      module: 'issues',
+      action: 'close',
+      payload: { id: 'i-1' },
+    });
     expect(res.status).toBe(403);
-    expect((await res.json() as { error: string }).error).toBe('Only the author can close');
+    expect(((await res.json()) as { error: string }).error).toBe(
+      'Only the author can close'
+    );
   });
 
   it('stops the chain when a guard does not call next()', async () => {
@@ -446,20 +578,30 @@ describe('actionsHandler — action guards', () => {
         __moduleKey: 'movies',
         serverActions: { create: createFn },
         actionGuards: [
-          async () => { throw new ActionGuardError('Blocked'); },
+          async () => {
+            throw new ActionGuardError('Blocked');
+          },
           secondGuard,
         ],
       },
     });
 
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(403);
     expect(secondGuard).not.toHaveBeenCalled();
     expect(createFn).not.toHaveBeenCalled();
   });
 
   it('passes module, action, and payload to the guard context', async () => {
-    const guardFn = vi.fn().mockImplementation(async (_ctx: unknown, next: () => Promise<void>) => next());
+    const guardFn = vi
+      .fn()
+      .mockImplementation(async (_ctx: unknown, next: () => Promise<void>) =>
+        next()
+      );
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
@@ -468,7 +610,11 @@ describe('actionsHandler — action guards', () => {
       },
     });
 
-    await post(app, { module: 'movies', action: 'create', payload: { title: 'Dune' } });
+    await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: { title: 'Dune' },
+    });
     const [ctx] = guardFn.mock.calls[0];
     expect(ctx.module).toBe('movies');
     expect(ctx.action).toBe('create');
@@ -478,10 +624,17 @@ describe('actionsHandler — action guards', () => {
   it('works for modules without actionGuards', async () => {
     const createFn = vi.fn().mockResolvedValue({ id: 1 });
     const app = makeApp({
-      './pages/movies.server.ts': { __moduleKey: 'movies', serverActions: { create: createFn } },
+      './pages/movies.server.ts': {
+        __moduleKey: 'movies',
+        serverActions: { create: createFn },
+      },
     });
 
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalledOnce();
   });
@@ -495,10 +648,18 @@ describe('actionsHandler — action guards', () => {
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
         serverActions: { create: createFn },
-        actionGuards: [async () => { /* intentionally does not call next() */ }],
+        actionGuards: [
+          async () => {
+            /* intentionally does not call next() */
+          },
+        ],
       },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(500);
     expect(createFn).not.toHaveBeenCalled();
   });
@@ -509,10 +670,18 @@ describe('actionsHandler — action guards', () => {
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
         serverActions: { create: createFn },
-        actionGuards: [async (_ctx, next) => { await next(); }],
+        actionGuards: [
+          async (_ctx, next) => {
+            await next();
+          },
+        ],
       },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalledOnce();
   });
@@ -526,7 +695,11 @@ describe('actionsHandler — action guards', () => {
         actionGuards: [async (_ctx, next) => next()],
       },
     });
-    const res = await post(app, { module: 'movies', action: 'create', payload: {} });
+    const res = await post(app, {
+      module: 'movies',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
     expect(createFn).toHaveBeenCalledOnce();
   });
@@ -629,7 +802,12 @@ describe('actionsHandler: streaming', () => {
   });
 
   it('passes ctx with a typed Hono Context and signal to the action function', async () => {
-    let observed: { hasReq: boolean; hasVar: boolean; hasHeader: boolean; hasSignal: boolean } = {
+    let observed: {
+      hasReq: boolean;
+      hasVar: boolean;
+      hasHeader: boolean;
+      hasSignal: boolean;
+    } = {
       hasReq: false,
       hasVar: false,
       hasHeader: false,
@@ -639,7 +817,10 @@ describe('actionsHandler: streaming', () => {
       './pages/x.server.ts': {
         __moduleKey: 'x',
         serverActions: {
-          probe: async (ctx: { c: Context; signal: AbortSignal }, _payload: unknown) => {
+          probe: async (
+            ctx: { c: Context; signal: AbortSignal },
+            _payload: unknown
+          ) => {
             observed = {
               hasReq: typeof ctx.c.req === 'object' && ctx.c.req !== null,
               hasVar: typeof ctx.c.var === 'object' && ctx.c.var !== null,

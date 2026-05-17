@@ -11,7 +11,9 @@ function TitledPage() {
   return (
     <html>
       <head></head>
-      <body><div>hello</div></body>
+      <body>
+        <div>hello</div>
+      </body>
     </html>
   );
 }
@@ -20,7 +22,9 @@ function UntitledPage() {
   return (
     <html>
       <head></head>
-      <body><div>no title</div></body>
+      <body>
+        <div>no title</div>
+      </body>
     </html>
   );
 }
@@ -31,37 +35,65 @@ function RedirectingPage(): never {
 
 function XssTitle() {
   useTitle('</title><script>alert(1)</script><title>');
-  return <html><head></head><body></body></html>;
+  return (
+    <html>
+      <head></head>
+      <body></body>
+    </html>
+  );
 }
 
 function XssLang() {
   useLang('en" onload="alert(1)');
-  return <html><head></head><body></body></html>;
+  return (
+    <html>
+      <head></head>
+      <body></body>
+    </html>
+  );
 }
 
 function MetaPage() {
   useMeta({ name: 'description', content: 'A test page' });
-  return <html><head></head><body></body></html>;
+  return (
+    <html>
+      <head></head>
+      <body></body>
+    </html>
+  );
 }
 
 function LinkPage() {
   useLink({ rel: 'stylesheet', href: '/styles.css' });
-  return <html><head></head><body></body></html>;
+  return (
+    <html>
+      <head></head>
+      <body></body>
+    </html>
+  );
 }
 
 function LangPage() {
   useLang('fr-FR');
-  return <html><head></head><body></body></html>;
+  return (
+    <html>
+      <head></head>
+      <body></body>
+    </html>
+  );
 }
 
 function NoHeadPage() {
-  return <html><body><div>no head tag</div></body></html>;
+  return (
+    <html>
+      <body>
+        <div>no head tag</div>
+      </body>
+    </html>
+  );
 }
 
-function makeApp(
-  Page: () => JSX.Element,
-  options?: { defaultTitle?: string }
-) {
+function makeApp(Page: () => JSX.Element, options?: { defaultTitle?: string }) {
   const app = new Hono();
   app.get('*', (c) => renderPage(c, <Page />, options));
   return app;
@@ -76,9 +108,9 @@ describe('renderPage', () => {
   });
 
   it('falls back to defaultTitle when no useTitle is called', async () => {
-    const res = await makeApp(UntitledPage, { defaultTitle: 'Fallback' }).request(
-      'http://localhost/'
-    );
+    const res = await makeApp(UntitledPage, {
+      defaultTitle: 'Fallback',
+    }).request('http://localhost/');
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('<title>Fallback</title>');
@@ -102,7 +134,9 @@ describe('renderPage', () => {
     const html = await res.text();
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;/title&gt;');
-    expect(html).toContain('<title>&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;title&gt;</title>');
+    expect(html).toContain(
+      '<title>&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;title&gt;</title>'
+    );
   });
 
   it('escapes special characters in the lang attribute', async () => {
@@ -117,7 +151,12 @@ describe('renderPage', () => {
 
     function EnvSnoop() {
       envDuringRender = env.current;
-      return <html><head></head><body></body></html>;
+      return (
+        <html>
+          <head></head>
+          <body></body>
+        </html>
+      );
     }
 
     const originalEnv = env.current;
@@ -158,7 +197,9 @@ describe('renderPage', () => {
       return (
         <>
           <head></head>
-          <body><div>fragment</div></body>
+          <body>
+            <div>fragment</div>
+          </body>
         </>
       );
     }
@@ -185,7 +226,9 @@ describe('renderPage', () => {
       return (
         <html>
           <head></head>
-          <body><div id="p">{path}</div></body>
+          <body>
+            <div id="p">{path}</div>
+          </body>
         </html>
       );
     }
@@ -195,8 +238,12 @@ describe('renderPage', () => {
     // point, allowing globalThis.location to be rewritten in between.
     let releaseA: () => void = () => {};
     let releaseB: () => void = () => {};
-    const gateA = new Promise<void>((r) => { releaseA = r; });
-    const gateB = new Promise<void>((r) => { releaseB = r; });
+    const gateA = new Promise<void>((r) => {
+      releaseA = r;
+    });
+    const gateB = new Promise<void>((r) => {
+      releaseB = r;
+    });
     let aSuspended = false;
     let bSuspended = false;
 

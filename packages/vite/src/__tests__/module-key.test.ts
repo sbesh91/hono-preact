@@ -9,9 +9,9 @@ describe('deriveModuleKey', () => {
   });
 
   it('handles .server.tsx extensions', () => {
-    expect(
-      deriveModuleKey('/r/src/pages/admin.server.tsx', '/r')
-    ).toBe('src/pages/admin');
+    expect(deriveModuleKey('/r/src/pages/admin.server.tsx', '/r')).toBe(
+      'src/pages/admin'
+    );
   });
 
   it('handles .server.js and .server.jsx extensions', () => {

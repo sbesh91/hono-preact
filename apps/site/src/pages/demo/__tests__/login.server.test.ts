@@ -14,7 +14,10 @@ describe('login action', () => {
 
   it('upserts the user and sets a session cookie', async () => {
     const app = new Hono();
-    let captured: { user: ReturnType<typeof findUserByEmail>; cookieSet: string | null } = {
+    let captured: {
+      user: ReturnType<typeof findUserByEmail>;
+      cookieSet: string | null;
+    } = {
       user: null,
       cookieSet: null,
     };

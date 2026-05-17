@@ -68,7 +68,9 @@ describe('view transitions: end-to-end wiring', () => {
     );
 
     // Wait for the lazy Home view to mount.
-    await waitFor(() => expect(container.querySelector('button')).not.toBeNull());
+    await waitFor(() =>
+      expect(container.querySelector('button')).not.toBeNull()
+    );
 
     // Initial mount does not fire onRouteChange (preact-iso's Router only
     // fires onRouteChange when prevRoute.current !== path). startViewTransition
@@ -107,9 +109,13 @@ describe('view transitions: end-to-end wiring', () => {
     const { container } = render(
       h(LocationProvider, null, h(Routes, { routes, onRouteChange }))
     );
-    await waitFor(() => expect(container.querySelector('button')).not.toBeNull());
+    await waitFor(() =>
+      expect(container.querySelector('button')).not.toBeNull()
+    );
 
     // Should NOT throw and should NOT call any view-transition API.
-    expect(() => fireEvent.click(container.querySelector('button')!)).not.toThrow();
+    expect(() =>
+      fireEvent.click(container.querySelector('button')!)
+    ).not.toThrow();
   });
 });

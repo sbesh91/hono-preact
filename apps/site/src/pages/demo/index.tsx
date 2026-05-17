@@ -12,8 +12,8 @@ const DemoIndex: FunctionComponent = () => (
       </p>
     </header>
     <p>
-      The data is in-memory and resets when the Worker restarts.
-      Anything you create here is temporary.
+      The data is in-memory and resets when the Worker restarts. Anything you
+      create here is temporary.
     </p>
     <p>
       <a href="/demo/projects" class="text-blue-700 underline">
@@ -22,10 +22,22 @@ const DemoIndex: FunctionComponent = () => (
     </p>
     <footer class="text-xs text-gray-600 pt-6">
       Behind the scenes: see{' '}
-      <a href="/docs/loaders" class="underline">loaders</a>,{' '}
-      <a href="/docs/actions" class="underline">actions</a>,{' '}
-      <a href="/docs/streaming" class="underline">streaming</a>,{' '}
-      <a href="/docs/guards" class="underline">guards</a>.
+      <a href="/docs/loaders" class="underline">
+        loaders
+      </a>
+      ,{' '}
+      <a href="/docs/actions" class="underline">
+        actions
+      </a>
+      ,{' '}
+      <a href="/docs/streaming" class="underline">
+        streaming
+      </a>
+      ,{' '}
+      <a href="/docs/guards" class="underline">
+        guards
+      </a>
+      .
     </footer>
   </section>
 );

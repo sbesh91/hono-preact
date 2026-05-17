@@ -91,11 +91,15 @@ describe('renderPage: streaming SSR', () => {
     // without it Suspense kicks the SSR'd children out during hydration.
     // Preact escapes the JSON's quotes as &quot; in the attribute, so match
     // for the entity-escaped form.
-    expect(body).toMatch(/data-loader="\{&quot;msg&quot;:&quot;hello-preload&quot;\}"/);
+    expect(body).toMatch(
+      /data-loader="\{&quot;msg&quot;:&quot;hello-preload&quot;\}"/
+    );
   });
 
   it('emits an error script tag when the generator throws', async () => {
-    const loader = defineLoader(async function* (): AsyncGenerator<{ count: number }> {
+    const loader = defineLoader(async function* (): AsyncGenerator<{
+      count: number;
+    }> {
       yield { count: 1 };
       throw new Error('mid-stream');
     });
@@ -173,7 +177,9 @@ describe('renderPage: streaming SSR', () => {
   });
 
   it('escapes < in error payloads so a hostile error.message cannot break the script', async () => {
-    const loader = defineLoader(async function* (): AsyncGenerator<{ count: number }> {
+    const loader = defineLoader(async function* (): AsyncGenerator<{
+      count: number;
+    }> {
       yield { count: 1 };
       throw new Error('</script><script>window.__pwned=true</script>');
     });
@@ -236,7 +242,9 @@ describe('renderPage: streaming SSR', () => {
     // yields and read the body incrementally to prove chunk 1 reaches the
     // reader before chunk 2 is allowed to enqueue.
     let releaseSecond!: () => void;
-    const gate = new Promise<void>((r) => { releaseSecond = r; });
+    const gate = new Promise<void>((r) => {
+      releaseSecond = r;
+    });
     let secondYielded = false;
 
     const loader = defineLoader<{ n: number }>(async function* () {
@@ -264,8 +272,10 @@ describe('renderPage: streaming SSR', () => {
     // Read until we observe chunk 1's first-render payload. The streaming
     // path embeds the first chunk's data inline as a `data-loader` HTML
     // attribute (entity-escaped), not as a script.push, so look for that.
-    while (!accumulated.includes('data-loader=&quot;{&quot;n&quot;:1}&quot;')
-        && !accumulated.includes('data-loader="{&quot;n&quot;:1}"')) {
+    while (
+      !accumulated.includes('data-loader=&quot;{&quot;n&quot;:1}&quot;') &&
+      !accumulated.includes('data-loader="{&quot;n&quot;:1}"')
+    ) {
       const { done, value } = await reader.read();
       if (done) break;
       accumulated += decoder.decode(value, { stream: true });
@@ -292,7 +302,9 @@ describe('renderPage: streaming SSR', () => {
     let releaseSecondYield: (() => void) | null = null;
     const loader = defineLoader<{ count: number }>(async function* () {
       yield { count: 1 };
-      await new Promise<void>((resolve) => { releaseSecondYield = resolve; });
+      await new Promise<void>((resolve) => {
+        releaseSecondYield = resolve;
+      });
       yield { count: 2 };
     });
     const app = new Hono();
@@ -322,4 +334,3 @@ describe('renderPage: streaming SSR', () => {
     expect(true).toBe(true);
   });
 });
-

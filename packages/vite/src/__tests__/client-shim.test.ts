@@ -62,7 +62,9 @@ describe('clientShimPlugin', () => {
     const entryAbs = path.resolve('/repo', './src/client.tsx');
     const result = plugin.transform('hydrate(<App />, app);', entryAbs);
     expect(result).toBeDefined();
-    expect(result!.code.startsWith("import 'virtual:hono-preact/client-shim';\n")).toBe(true);
+    expect(
+      result!.code.startsWith("import 'virtual:hono-preact/client-shim';\n")
+    ).toBe(true);
     expect(result!.code).toContain('hydrate(<App />, app);');
   });
 
@@ -71,7 +73,9 @@ describe('clientShimPlugin', () => {
     const entryAbs = path.resolve('/repo', './src/client.tsx');
     const result = plugin.transform('// entry', `${entryAbs}?v=abc`);
     expect(result).toBeDefined();
-    expect(result!.code.startsWith("import 'virtual:hono-preact/client-shim';\n")).toBe(true);
+    expect(
+      result!.code.startsWith("import 'virtual:hono-preact/client-shim';\n")
+    ).toBe(true);
   });
 
   it('does not transform unrelated modules', () => {
@@ -84,14 +88,20 @@ describe('clientShimPlugin', () => {
 describe('clientShimPlugin virtual client entry', () => {
   it('injects the shim into the resolved virtual client entry id', () => {
     const plugin = clientShimPlugin(VIRTUAL_CLIENT_ENTRY_ID);
-    (plugin as { configResolved?: (c: { root: string; isProduction: boolean }) => void }).configResolved?.({
+    (
+      plugin as {
+        configResolved?: (c: { root: string; isProduction: boolean }) => void;
+      }
+    ).configResolved?.({
       root: '/proj',
       isProduction: false,
     });
 
-    const result = (plugin as {
-      transform?: (code: string, id: string) => { code: string } | undefined;
-    }).transform?.('console.log("client");', '\0virtual:hono-preact/client');
+    const result = (
+      plugin as {
+        transform?: (code: string, id: string) => { code: string } | undefined;
+      }
+    ).transform?.('console.log("client");', '\0virtual:hono-preact/client');
 
     expect(result).toBeDefined();
     expect(result?.code).toContain(`import 'virtual:hono-preact/client-shim';`);

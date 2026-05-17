@@ -5,7 +5,9 @@ import * as path from 'node:path';
 import { guardStripPlugin } from '../guard-strip.js';
 
 const fixtureDir = path.dirname(
-  fileURLToPath(new URL('./fixtures/guards-treeshake/src/page.tsx', import.meta.url)),
+  fileURLToPath(
+    new URL('./fixtures/guards-treeshake/src/page.tsx', import.meta.url)
+  )
 );
 
 async function bundleFor(ssr: boolean): Promise<string> {
@@ -27,7 +29,9 @@ async function bundleFor(ssr: boolean): Promise<string> {
   };
   const out = (await build(config)) as Rollup.RollupOutput;
   const chunks = Array.isArray(out) ? out : [out];
-  const chunk = chunks[0].output.find((o: { type: string }) => o.type === 'chunk') as Rollup.OutputChunk;
+  const chunk = chunks[0].output.find(
+    (o: { type: string }) => o.type === 'chunk'
+  ) as Rollup.OutputChunk;
   return chunk.code;
 }
 

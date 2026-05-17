@@ -7,11 +7,7 @@ Pages can be protected by an ordered list of guards: middleware-style functions 
 A page declares its guards as a single ordered array:
 
 ```tsx
-import {
-  defineServerGuard,
-  defineClientGuard,
-  definePage,
-} from 'hono-preact';
+import { defineServerGuard, defineClientGuard, definePage } from 'hono-preact';
 import { checkAdminFromDb } from './admin.server.js';
 
 const adminGuard = defineServerGuard(async (ctx, next) => {
@@ -47,6 +43,7 @@ const clientGuard = defineClientGuard(async ({ location }, next) => next());
 ```
 
 A guard returns one of:
+
 - `{ redirect: '/some/path' }` to redirect.
 - `{ render: FallbackComponent }` to render a component in place of the page (e.g. a 403 page).
 - `return next()` to pass through.
@@ -57,10 +54,10 @@ Guards execute in array order. The first to return a non-void result short-circu
 
 ```ts
 guards: [
-  defineServerGuard(checkSession),     // 1st on server
-  defineClientGuard(restoreScroll),    // 1st on client
-  defineServerGuard(checkRole),        // 2nd on server
-]
+  defineServerGuard(checkSession), // 1st on server
+  defineClientGuard(restoreScroll), // 1st on client
+  defineServerGuard(checkRole), // 2nd on server
+];
 ```
 
 On the server: `checkSession → checkRole`. On the client: `restoreScroll`.
@@ -98,7 +95,11 @@ import { defineServerGuard } from 'hono-preact';
 import { getSignedCookie } from 'hono/cookie';
 
 export const requireSession = defineServerGuard(async (ctx, next) => {
-  const user = await getSignedCookie(ctx.c, ctx.c.env.SESSION_SECRET, 'session');
+  const user = await getSignedCookie(
+    ctx.c,
+    ctx.c.env.SESSION_SECRET,
+    'session'
+  );
   if (!user) return { redirect: '/login' };
   return next();
 });

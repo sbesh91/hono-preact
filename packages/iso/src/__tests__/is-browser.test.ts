@@ -2,7 +2,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { env, isBrowser } from '../is-browser.js';
 
 const original = env.current;
-afterEach(() => { env.current = original; });
+afterEach(() => {
+  env.current = original;
+});
 
 describe('isBrowser', () => {
   it('returns false when env.current is server', () => {

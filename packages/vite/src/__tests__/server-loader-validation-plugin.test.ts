@@ -5,9 +5,13 @@ import type { Plugin } from 'vite';
 type TransformFn = (code: string, id: string) => void;
 
 function transform(code: string, id: string): { error: string | null } {
-  const plugin = serverLoaderValidationPlugin() as Plugin & { transform: TransformFn };
+  const plugin = serverLoaderValidationPlugin() as Plugin & {
+    transform: TransformFn;
+  };
   const context = {
-    error: vi.fn((msg: string) => { throw new Error(msg); }),
+    error: vi.fn((msg: string) => {
+      throw new Error(msg);
+    }),
   };
   try {
     plugin.transform.call(context as any, code, id);
@@ -50,7 +54,9 @@ describe('serverLoaderValidationPlugin', () => {
   it('fails when a *.server.* file has neither serverLoaders nor serverActions', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toContain("must export either 'serverLoaders' or 'serverActions'");
+    expect(error).toContain(
+      "must export either 'serverLoaders' or 'serverActions'"
+    );
   });
 
   it('fails when a *.server.* file has multiple disallowed named exports', () => {
@@ -77,7 +83,9 @@ describe('serverLoaderValidationPlugin', () => {
     const code = `export const helper = () => {};`;
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain('found: helper');
-    expect(error).toContain("must export either 'serverLoaders' or 'serverActions'");
+    expect(error).toContain(
+      "must export either 'serverLoaders' or 'serverActions'"
+    );
   });
 
   it('rejects a *.server.* file with default + serverActions named export', () => {
@@ -106,7 +114,9 @@ describe('serverLoaderValidationPlugin', () => {
   it('still fails when a *.server.* file has no serverLoaders and no serverActions', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toContain("must export either 'serverLoaders' or 'serverActions'");
+    expect(error).toContain(
+      "must export either 'serverLoaders' or 'serverActions'"
+    );
   });
 
   it('rejects a *.server.* file with serverGuards named export (removed from allowlist)', () => {
@@ -176,7 +186,7 @@ describe('serverLoaderValidationPlugin', () => {
 
     it('rejects "cache" named export', () => {
       const code = [
-        "export const serverLoaders = {};",
+        'export const serverLoaders = {};',
         "export const cache = createCache('movies-list');",
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
@@ -185,8 +195,8 @@ describe('serverLoaderValidationPlugin', () => {
 
     it('rejects a default export (use serverLoaders instead)', () => {
       const code = [
-        "export const serverLoaders = {};",
-        "export default async function serverLoader() { return {}; }",
+        'export const serverLoaders = {};',
+        'export default async function serverLoader() { return {}; }',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
       expect(error).toContain('may not use a default export');

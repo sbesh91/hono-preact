@@ -42,30 +42,30 @@ export default defineRoutes([
 
 That table covers four URL behaviours:
 
-| Path | Behaviour |
-|---|---|
+| Path                                            | Behaviour                                                                                                            |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `/`, `/demo/login`, `/demo/projects/:projectId` | Plain leaves. The `view` resolves to the page component. `server` (when present) is the sibling `.server.ts` module. |
-| `/demo/projects` | An empty-path child of a layout group. Renders `<ProjectsLayout>` wrapping the list view. |
-| `/demo/projects/:projectId/issues/:issueId` | A nested child of the same layout group. The same `ProjectsLayout` instance stays mounted across the navigation. |
-| `*` | Catch-all. Matches anything not matched above. |
+| `/demo/projects`                                | An empty-path child of a layout group. Renders `<ProjectsLayout>` wrapping the list view.                            |
+| `/demo/projects/:projectId/issues/:issueId`     | A nested child of the same layout group. The same `ProjectsLayout` instance stays mounted across the navigation.     |
+| `*`                                             | Catch-all. Matches anything not matched above.                                                                       |
 
 ## Route entry fields
 
-| Field | Type | Required | What it is |
-|---|---|---|---|
-| `path` | `string` | always | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings. |
-| `view` | `() => Promise<{ default: ComponentType }>` | for leaves | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting. |
-| `layout` | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts). |
-| `server` | `() => Promise<unknown>` | optional, leaves only | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders`, `serverActions`, `actionGuards`. |
-| `children` | `RouteDef[]` | for layouts and path groups | Nested routes. |
+| Field      | Type                                                     | Required                    | What it is                                                                                                                                                                    |
+| ---------- | -------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`     | `string`                                                 | always                      | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings. |
+| `view`     | `() => Promise<{ default: ComponentType }>`              | for leaves                  | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.                                                              |
+| `layout`   | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups           | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts).                                                                                   |
+| `server`   | `() => Promise<unknown>`                                 | optional, leaves only       | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders`, `serverActions`, `actionGuards`.                                                            |
+| `children` | `RouteDef[]`                                             | for layouts and path groups | Nested routes.                                                                                                                                                                |
 
 ## The three valid shapes
 
-| Shape | Fields | Meaning |
-|---|---|---|
-| **Leaf** | `path`, `view`, optional `server` | A page. Cannot have `children`. |
+| Shape            | Fields                                                     | Meaning                                                                                             |
+| ---------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Leaf**         | `path`, `view`, optional `server`                          | A page. Cannot have `children`.                                                                     |
 | **Layout group** | `path`, `layout`, `children` (required), optional `server` | A wrapper that renders matched descendants. May declare its own `server` for layout-scoped loaders. |
-| **Path group** | `path`, `children` (no `view`, no `layout`) | Pure URL prefix sharing. Useful for `/admin/*` without shared chrome. |
+| **Path group**   | `path`, `children` (no `view`, no `layout`)                | Pure URL prefix sharing. Useful for `/admin/*` without shared chrome.                               |
 
 `defineRoutes` validates the tree at runtime and throws with the offending URL if the shape is wrong: `view` + `layout`, `view` + `children`, `layout` without `children`, child path starting with `/`, or a route declaring none of `view`/`layout`/`children`.
 
@@ -88,7 +88,7 @@ const docsView = () => import('./components/DocsRoute.js');
 
 defineRoutes([
   // ...
-  { path: '/docs',   view: docsView },
+  { path: '/docs', view: docsView },
   { path: '/docs/*', view: docsView },
 ]);
 ```
@@ -99,9 +99,10 @@ For layout groups, identity sharing is automatic: a layout group is registered a
 
 ```ts
 type RoutesManifest = {
-  tree: ReadonlyArray<RouteDef>;          // the original input, for introspection
-  flat: ReadonlyArray<FlatRoute>;         // the registered routes
-  serverImports: ReadonlyArray<           // every `server` thunk in the tree
+  tree: ReadonlyArray<RouteDef>; // the original input, for introspection
+  flat: ReadonlyArray<FlatRoute>; // the registered routes
+  serverImports: ReadonlyArray<
+    // every `server` thunk in the tree
     () => Promise<unknown>
   >;
 };

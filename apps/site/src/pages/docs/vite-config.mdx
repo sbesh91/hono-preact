@@ -10,9 +10,7 @@ import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [
-    honoPreact(),
-  ],
+  plugins: [honoPreact()],
 });
 ```
 
@@ -22,18 +20,18 @@ export default defineConfig({
 
 `honoPreact()` configures everything the framework requires:
 
-| Concern | What it sets |
-|---------|-------------|
-| Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso` |
-| SSR bundling | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `hono-preact` |
-| Client build output | `dist/static/client.js` entry, hashed chunk and asset filenames |
-| Server build output | `esnext` target, `dist/static/` asset dir, minification |
-| Worker bundling | `@hono/vite-build` (Cloudflare Workers preset), build-only |
-| Dev server | `@hono/vite-dev-server` with Cloudflare adapter, serve-only |
-| Server-only imports | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle |
-| Loader validation | `serverLoaderValidationPlugin` enforces `.server.*` export conventions |
-| Module identity | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing |
-| Browser shim | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw |
+| Concern              | What it sets                                                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso`                                                                                     |
+| SSR bundling         | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `hono-preact`                                                                                  |
+| Client build output  | `dist/static/client.js` entry, hashed chunk and asset filenames                                                                                                  |
+| Server build output  | `esnext` target, `dist/static/` asset dir, minification                                                                                                          |
+| Worker bundling      | `@hono/vite-build` (Cloudflare Workers preset), build-only                                                                                                       |
+| Dev server           | `@hono/vite-dev-server` with Cloudflare adapter, serve-only                                                                                                      |
+| Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle                                       |
+| Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                           |
+| Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                |
+| Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw |
 
 ## Peer dependencies
 
@@ -84,7 +82,7 @@ Pass `clientBuild`, `serverBuild`, or `sharedBuild` to extend the plugin's defau
 ```ts
 honoPreact({
   clientBuild: { sourcemap: false },
-})
+});
 ```
 
 These are merged on top of the plugin's defaults, so you only need to specify what differs.
@@ -96,7 +94,7 @@ The plugin defaults to the framework-generated virtual module `virtual:hono-prea
 ```ts
 honoPreact({
   clientEntry: 'src/main.tsx',
-})
+});
 ```
 
 `clientEntry` is the single source of truth for both the rollup `input` and the `clientShimPlugin` transform target, so you only set it in one place.

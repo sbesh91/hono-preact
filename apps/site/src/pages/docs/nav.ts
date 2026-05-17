@@ -54,7 +54,11 @@ export const nav: NavSection[] = [
     heading: 'Mutations',
     entries: [
       { title: 'Server Actions', route: '/docs/actions', icon: Send },
-      { title: 'Action Guards', route: '/docs/action-guards', icon: ShieldAlert },
+      {
+        title: 'Action Guards',
+        route: '/docs/action-guards',
+        icon: ShieldAlert,
+      },
       { title: 'Optimistic UI', route: '/docs/optimistic-ui', icon: Sparkles },
     ],
   },
@@ -69,7 +73,11 @@ export const nav: NavSection[] = [
     heading: 'Infrastructure',
     entries: [
       { title: 'Vite Config', route: '/docs/vite-config', icon: Settings },
-      { title: 'Project Structure', route: '/docs/structure', icon: FolderTree },
+      {
+        title: 'Project Structure',
+        route: '/docs/structure',
+        icon: FolderTree,
+      },
       { title: 'renderPage', route: '/docs/render-page', icon: Layers },
       { title: 'Build & Deploy', route: '/docs/deployment', icon: Cloud },
     ],

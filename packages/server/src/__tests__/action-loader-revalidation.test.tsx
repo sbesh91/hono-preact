@@ -1,7 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { Hono } from 'hono';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/preact';
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import {
   defineLoader,
@@ -43,7 +49,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
 
     const countLoader = defineLoader<{ count: number }>(
       async () => ({ count: serverCount }),
-      { __moduleKey: 'pages/items', __loaderName: 'default' },
+      { __moduleKey: 'pages/items', __loaderName: 'default' }
     );
 
     const increment = defineAction<void, { ok: true }>(async () => {
@@ -68,29 +74,31 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     // (`/__loaders`) and the action mutate (`/__actions`) call through
     // `fetch(...)`; pointing both at the same Hono app exercises the real
     // wire format on both sides.
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : input.url;
-      const absolute = url.startsWith('http')
-        ? url
-        : `http://localhost${url}`;
-      // Hono's Response may not interop cleanly with happy-dom's Response
-      // (different prototypes between the test-env's web Fetch API and
-      // Hono's). Re-materialize the body into a fresh Response so the
-      // caller's `.json()` / `.text()` use happy-dom's implementations.
-      const honoRes = await honoApp.request(absolute, init);
-      const body = await honoRes.text();
-      const headers = new Headers();
-      honoRes.headers.forEach((v, k) => headers.set(k, v));
-      return new Response(body, {
-        status: honoRes.status,
-        headers,
-      });
-    });
+    const fetchSpy = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        const absolute = url.startsWith('http')
+          ? url
+          : `http://localhost${url}`;
+        // Hono's Response may not interop cleanly with happy-dom's Response
+        // (different prototypes between the test-env's web Fetch API and
+        // Hono's). Re-materialize the body into a fresh Response so the
+        // caller's `.json()` / `.text()` use happy-dom's implementations.
+        const honoRes = await honoApp.request(absolute, init);
+        const body = await honoRes.text();
+        const headers = new Headers();
+        honoRes.headers.forEach((v, k) => headers.set(k, v));
+        return new Response(body, {
+          status: honoRes.status,
+          headers,
+        });
+      }
+    );
     vi.stubGlobal('fetch', fetchSpy);
 
     // Action stub matching what the Vite plugin would emit on the client
@@ -125,12 +133,16 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     // Click triggers the action; server increments; auto-invalidate
     // refetches the loader; UI updates to count: 2.
     fireEvent.click(screen.getByRole('button'));
-    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('count: 2'));
+    await waitFor(() =>
+      expect(screen.getByTestId('count')).toHaveTextContent('count: 2')
+    );
 
     // One more for good measure — confirms the cycle is repeatable, not
     // a one-shot artifact.
     fireEvent.click(screen.getByRole('button'));
-    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('count: 3'));
+    await waitFor(() =>
+      expect(screen.getByTestId('count')).toHaveTextContent('count: 3')
+    );
 
     expect(serverCount).toBe(3);
   });

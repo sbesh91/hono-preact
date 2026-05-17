@@ -54,7 +54,10 @@ const ProjectIssuesPage: FunctionComponent = () => {
             rows={3}
             class="block w-full border px-2 py-1"
           />
-          <button type="submit" class="bg-blue-600 text-white px-3 py-1 text-sm">
+          <button
+            type="submit"
+            class="bg-blue-600 text-white px-3 py-1 text-sm"
+          >
             {creating ? 'Creating…' : 'Create'}
           </button>
         </Form>

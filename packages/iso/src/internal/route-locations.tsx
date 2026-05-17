@@ -4,7 +4,8 @@ import { useContext, useMemo } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 
 const EMPTY_MAP: ReadonlyMap<string, RouteHook> = Object.freeze(new Map());
-export const RouteLocationsContext = createContext<ReadonlyMap<string, RouteHook>>(EMPTY_MAP);
+export const RouteLocationsContext =
+  createContext<ReadonlyMap<string, RouteHook>>(EMPTY_MAP);
 
 export function RouteLocationsProvider({
   moduleKey,

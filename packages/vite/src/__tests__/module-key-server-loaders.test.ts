@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { moduleKeyPlugin } from '../module-key-plugin.js';
 import type { Plugin } from 'vite';
 
-function transform(code: string, id: string, root = '/Users/me/repo'): string | undefined {
+function transform(
+  code: string,
+  id: string,
+  root = '/Users/me/repo'
+): string | undefined {
   const plugin = moduleKeyPlugin() as Plugin & {
     transform: any;
     configResolved?: (c: { root: string }) => void;
@@ -22,8 +26,12 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
       };
     `;
     const out = transform(code, '/Users/me/repo/src/pages/movie.server.ts');
-    expect(out).toContain('__moduleKey: "src/pages/movie", __loaderName: "summary"');
-    expect(out).toContain('__moduleKey: "src/pages/movie", __loaderName: "cast"');
+    expect(out).toContain(
+      '__moduleKey: "src/pages/movie", __loaderName: "summary"'
+    );
+    expect(out).toContain(
+      '__moduleKey: "src/pages/movie", __loaderName: "cast"'
+    );
   });
 
   it('still injects __moduleKey for top-level export const loader = defineLoader(...)', () => {

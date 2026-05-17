@@ -25,9 +25,9 @@ function transform(
 describe('serverOnlyPlugin', () => {
   it('throws on serverGuards named import (no longer recognized)', () => {
     const code = `import { serverGuards } from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
-      /is not a recognized export from a \*\.server\.\* module/,
-    );
+    expect(() =>
+      transform(code, '/Users/me/repo/src/pages/movies.tsx')
+    ).toThrow(/is not a recognized export from a \*\.server\.\* module/);
   });
 
   it('leaves non-server imports untouched (returns undefined)', () => {
@@ -71,8 +71,12 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('__module: "src/pages/movies"');
     expect(result?.code).toContain('__action: String(action)');
     // The stub also exposes useAction wired via the iso re-export.
-    expect(result?.code).toContain("import { useAction as __$useAction_hpiso } from '@hono-preact/iso';");
-    expect(result?.code).toMatch(/stub\.useAction\s*=\s*\(opts\)\s*=>\s*__\$useAction_hpiso\(stub,\s*opts\)/);
+    expect(result?.code).toContain(
+      "import { useAction as __$useAction_hpiso } from '@hono-preact/iso';"
+    );
+    expect(result?.code).toMatch(
+      /stub\.useAction\s*=\s*\(opts\)\s*=>\s*__\$useAction_hpiso\(stub,\s*opts\)/
+    );
   });
 
   it('handles serverActions alongside serverLoaders in the same statement', () => {
@@ -91,7 +95,9 @@ describe('serverOnlyPlugin', () => {
 
   it('leaves serverActions import untouched in SSR builds', () => {
     const code = `import { serverActions } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx', { ssr: true });
+    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx', {
+      ssr: true,
+    });
     expect(result).toBeUndefined();
   });
 
@@ -120,7 +126,10 @@ describe('serverOnlyPlugin', () => {
 
   it('derives module key for serverLoaders stub from the import source, not the consumer file', () => {
     const code = `import { serverLoaders } from './profile.server.ts';`;
-    const result = transform(code, '/Users/me/repo/src/pages/some-other-page.tsx');
+    const result = transform(
+      code,
+      '/Users/me/repo/src/pages/some-other-page.tsx'
+    );
     expect(result?.code).toContain('"src/pages/profile"');
     expect(result?.code).not.toContain('"src/pages/some-other-page"');
   });
@@ -136,9 +145,9 @@ describe('cache specifier rejection', () => {
 
   it('rejects a mixed cache + serverActions import on the cache specifier', () => {
     const code = `import { cache, serverActions } from './movies.server.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/pages/movies.tsx')).toThrow(
-      /`cache` is not a recognized export/
-    );
+    expect(() =>
+      transform(code, '/Users/me/repo/src/pages/movies.tsx')
+    ).toThrow(/`cache` is not a recognized export/);
   });
 });
 
@@ -200,7 +209,9 @@ describe('re-exports from .server.* are rejected', () => {
 
   it('does not throw on regular `export * from` of a non-server module', () => {
     const code = `export * from './utils.js';`;
-    expect(() => transform(code, '/Users/me/repo/src/aggregator.ts')).not.toThrow();
+    expect(() =>
+      transform(code, '/Users/me/repo/src/aggregator.ts')
+    ).not.toThrow();
   });
 });
 
@@ -224,7 +235,9 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     // Stub carries __moduleKey so wrapWithRouteLocations on the client knows
     // which .server module this lazy import represents (the body itself is
     // server-only and stays out of the client bundle).
-    expect(result?.code).toContain('Promise.resolve({ __moduleKey: "src/foo" })');
+    expect(result?.code).toContain(
+      'Promise.resolve({ __moduleKey: "src/foo" })'
+    );
     expect(result?.code).not.toContain("import('./foo.server.ts')");
   });
 
@@ -244,7 +257,9 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     expect(result).toBeDefined();
     expect(result?.code).toContain('const serverLoaders = new Proxy(');
     expect(result?.code).toContain('"src/pages/movies"');
-    expect(result?.code).toContain('Promise.resolve({ __moduleKey: "src/pages/auth" })');
+    expect(result?.code).toContain(
+      'Promise.resolve({ __moduleKey: "src/pages/auth" })'
+    );
     expect(result?.code).not.toContain("import('./auth.server.js')");
   });
 
@@ -270,7 +285,9 @@ describe('dynamic import() rewriting for .server.* sources', () => {
 
   it('leaves dynamic .server.* imports untouched in SSR builds', () => {
     const code = `const m = () => import('./foo.server.ts');`;
-    const result = transform(code, '/Users/me/repo/src/routes.ts', { ssr: true });
+    const result = transform(code, '/Users/me/repo/src/routes.ts', {
+      ssr: true,
+    });
     expect(result).toBeUndefined();
   });
 

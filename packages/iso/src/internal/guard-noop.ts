@@ -7,5 +7,5 @@ import type { GuardResult } from '../guard.js';
  */
 export const __$guardNoop_hpiso = (
   _ctx: unknown,
-  next: () => Promise<GuardResult>,
+  next: () => Promise<GuardResult>
 ): Promise<GuardResult> => next();

@@ -11,14 +11,20 @@ function findConfigPlugin(plugins: ReturnType<typeof honoPreact>) {
   return configPlugin.config as (config: unknown, env: unknown) => unknown;
 }
 
-function getClientConfig(plugins: ReturnType<typeof honoPreact>, userConfig = {}) {
+function getClientConfig(
+  plugins: ReturnType<typeof honoPreact>,
+  userConfig = {}
+) {
   return findConfigPlugin(plugins)(userConfig, {
     mode: 'client',
     command: 'build',
   });
 }
 
-function getServerConfig(plugins: ReturnType<typeof honoPreact>, userConfig = {}) {
+function getServerConfig(
+  plugins: ReturnType<typeof honoPreact>,
+  userConfig = {}
+) {
   return findConfigPlugin(plugins)(userConfig, {
     mode: 'production',
     command: 'build',
@@ -30,7 +36,16 @@ describe('honoPreact rollupOptions merge', () => {
     const plugins = honoPreact({ entry: './src/server.tsx' });
     const config = getClientConfig(plugins);
     expect(config).toBeTruthy();
-    const rollup = (config as { build: { rollupOptions: { input: string[]; output: { entryFileNames: string } } } }).build.rollupOptions;
+    const rollup = (
+      config as {
+        build: {
+          rollupOptions: {
+            input: string[];
+            output: { entryFileNames: string };
+          };
+        };
+      }
+    ).build.rollupOptions;
     expect(rollup.input).toEqual(['virtual:hono-preact/client']);
     expect(rollup.output.entryFileNames).toBe('static/client.js');
   });
@@ -45,7 +60,15 @@ describe('honoPreact rollupOptions merge', () => {
       },
     });
     const config = getClientConfig(plugins);
-    const rollup = (config as { build: { rollupOptions: { output: { entryFileNames: string; chunkFileNames: string } } } }).build.rollupOptions;
+    const rollup = (
+      config as {
+        build: {
+          rollupOptions: {
+            output: { entryFileNames: string; chunkFileNames: string };
+          };
+        };
+      }
+    ).build.rollupOptions;
     expect(rollup.output.entryFileNames).toBe('custom/entry.js');
     expect(rollup.output.chunkFileNames).toBe('static/[name]-[hash].js');
   });
@@ -60,7 +83,11 @@ describe('honoPreact rollupOptions merge', () => {
       },
     });
     const config = getClientConfig(plugins);
-    const rollup = (config as { build: { rollupOptions: { output: { entryFileNames: string } } } }).build.rollupOptions;
+    const rollup = (
+      config as {
+        build: { rollupOptions: { output: { entryFileNames: string } } };
+      }
+    ).build.rollupOptions;
     expect(rollup.output.entryFileNames).toBe('static/client.js');
   });
 });
@@ -138,8 +165,12 @@ describe('honoPreact server build config', () => {
       entry: './src/server.tsx',
       sharedBuild: { reportCompressedSize: false },
     });
-    const client = getClientConfig(plugins) as { build: { reportCompressedSize?: boolean } };
-    const server = getServerConfig(plugins) as { build: { reportCompressedSize?: boolean } };
+    const client = getClientConfig(plugins) as {
+      build: { reportCompressedSize?: boolean };
+    };
+    const server = getServerConfig(plugins) as {
+      build: { reportCompressedSize?: boolean };
+    };
     expect(client.build.reportCompressedSize).toBe(false);
     expect(server.build.reportCompressedSize).toBe(false);
   });
@@ -266,7 +297,9 @@ describe('honoPreact client-entry wiring', () => {
     const config = getClientConfig(plugins) as {
       build: { rollupOptions: { input: string[] } };
     };
-    expect(config.build.rollupOptions.input).toEqual(['virtual:hono-preact/client']);
+    expect(config.build.rollupOptions.input).toEqual([
+      'virtual:hono-preact/client',
+    ]);
   });
 
   it('honors a user-provided clientEntry override', () => {
@@ -274,6 +307,8 @@ describe('honoPreact client-entry wiring', () => {
     const config = getClientConfig(plugins) as {
       build: { rollupOptions: { input: string[] } };
     };
-    expect(config.build.rollupOptions.input).toEqual(['./src/custom-client.tsx']);
+    expect(config.build.rollupOptions.input).toEqual([
+      './src/custom-client.tsx',
+    ]);
   });
 });

@@ -13,7 +13,11 @@ const moviesLoader = serverLoaders.default;
 
 const MoviesView = moviesLoader.View(
   ({ data }) => (
-    <ul>{data.movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>
+    <ul>
+      {data.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
   ),
   { fallback: <p>Loading…</p> }
 );
@@ -34,12 +38,12 @@ export default definePage(MoviesView);
 
 ## When fallback shows
 
-| Navigation | Fallback shown? |
-|---|---|
-| SSR (first load) | No. Data is preloaded into the HTML. |
-| Hydration | No. Client reads from `data-loader` attribute. |
-| Client-side nav (cache miss) | Yes, until the loader resolves. |
-| Client-side nav (cache hit) | No. Cached data renders immediately. |
+| Navigation                   | Fallback shown?                                |
+| ---------------------------- | ---------------------------------------------- |
+| SSR (first load)             | No. Data is preloaded into the HTML.           |
+| Hydration                    | No. Client reads from `data-loader` attribute. |
+| Client-side nav (cache miss) | Yes, until the loader resolves.                |
+| Client-side nav (cache hit)  | No. Cached data renders immediately.           |
 
 ## Using a skeleton
 
@@ -56,7 +60,11 @@ const MoviesSkeleton = () => (
 
 const MoviesView = moviesLoader.View(
   ({ data }) => (
-    <ul>{data.movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>
+    <ul>
+      {data.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
   ),
   { fallback: <MoviesSkeleton /> }
 );
@@ -69,7 +77,11 @@ If the loader rejects, the boundary renders `errorFallback` instead of unwinding
 ```tsx
 const MoviesView = moviesLoader.View(
   ({ data }) => (
-    <ul>{data.movies.results.map((m) => <li key={m.id}>{m.title}</li>)}</ul>
+    <ul>
+      {data.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
   ),
   {
     fallback: <p>Loading…</p>,

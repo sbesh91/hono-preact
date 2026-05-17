@@ -31,6 +31,8 @@ describe('issue actions', () => {
     const issue = listIssuesForProject(inf.id)[0];
 
     const { assertCanClose } = await import('../issue-guards.js');
-    await expect(assertCanClose(issue.id, issue.authorId)).resolves.toBeUndefined();
+    await expect(
+      assertCanClose(issue.id, issue.authorId)
+    ).resolves.toBeUndefined();
   });
 });

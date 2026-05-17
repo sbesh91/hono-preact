@@ -1,9 +1,5 @@
 import type { Context } from 'hono';
-import {
-  deleteCookie,
-  getSignedCookie,
-  setSignedCookie,
-} from 'hono/cookie';
+import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie';
 import { upsertUser, type User } from './data.js';
 
 export const DEMO_SESSION_COOKIE = 'demo_session';
@@ -47,7 +43,11 @@ export function signOut(c: Context): void {
 }
 
 export async function currentUser(c: Context): Promise<User | null> {
-  const raw = await getSignedCookie(c, DEMO_SESSION_SECRET, DEMO_SESSION_COOKIE);
+  const raw = await getSignedCookie(
+    c,
+    DEMO_SESSION_SECRET,
+    DEMO_SESSION_COOKIE
+  );
   if (!raw || typeof raw !== 'string') return null;
   let parsed: CookiePayload;
   try {
@@ -55,10 +55,7 @@ export async function currentUser(c: Context): Promise<User | null> {
   } catch {
     return null;
   }
-  if (
-    typeof parsed?.email !== 'string' ||
-    typeof parsed?.name !== 'string'
-  ) {
+  if (typeof parsed?.email !== 'string' || typeof parsed?.name !== 'string') {
     return null;
   }
   // Self-heal: the in-memory store may not have this user (cold isolate);

@@ -28,7 +28,11 @@ function buildLocation(opts: { url?: string; route?: string }): RouteHook {
 
   let pathParams: Record<string, string> = {};
   if (opts.route) {
-    const matched = exec(path, opts.route, { path, query: searchParams, params: {} });
+    const matched = exec(path, opts.route, {
+      path,
+      query: searchParams,
+      params: {},
+    });
     if (matched && matched.pathParams) {
       pathParams = matched.pathParams as Record<string, string>;
     }
@@ -55,7 +59,8 @@ export async function prefetch<T>(
   ref: LoaderRef<T>,
   opts: PrefetchOptions<T> = {}
 ): Promise<T> {
-  const location = opts.location ?? buildLocation({ url: opts.url, route: opts.route });
+  const location =
+    opts.location ?? buildLocation({ url: opts.url, route: opts.route });
   const cache = opts.cache ?? ref.cache;
   const id = `prefetch:${++prefetchSeq}`;
   const signal = new AbortController().signal;

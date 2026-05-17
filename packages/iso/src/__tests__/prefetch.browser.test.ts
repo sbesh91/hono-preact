@@ -11,7 +11,7 @@ describe('prefetch (browser)', () => {
       new Response(JSON.stringify({ id: '42' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -21,10 +21,13 @@ describe('prefetch (browser)', () => {
         fnInvoked = true;
         return { id: location.pathParams.id };
       },
-      { __moduleKey: 'movie-by-id' },
+      { __moduleKey: 'movie-by-id' }
     );
 
-    const result = await prefetch(ref, { url: '/movies/42', route: '/movies/:id' });
+    const result = await prefetch(ref, {
+      url: '/movies/42',
+      route: '/movies/:id',
+    });
 
     expect(fnInvoked).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -46,13 +49,13 @@ describe('prefetch (browser)', () => {
         new Response(JSON.stringify({ q: 'hi' }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
-        }),
-      ),
+        })
+      )
     );
 
     const ref = defineLoader(
       async ({ location }) => ({ q: location.searchParams.q }),
-      { __moduleKey: 'search-by-q' },
+      { __moduleKey: 'search-by-q' }
     );
     await prefetch(ref, { url: '/search?q=hi' });
     expect(ref.cache?.get()).toEqual({ q: 'hi' });
@@ -63,7 +66,7 @@ describe('prefetch (browser)', () => {
       new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
     vi.stubGlobal('fetch', fetchMock);
 
