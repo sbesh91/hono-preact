@@ -40,7 +40,9 @@ const MoviesView = dataLoader.View(({ data }) => {
         {reloading ? 'Adding...' : 'Add Movie'}
       </button>
       <ul>
-        {data.movies.results.map((m) => <li key={m.id}>{m.title}</li>)}
+        {data.movies.results.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
       </ul>
     </>
   );
@@ -65,11 +67,20 @@ export default definePage(MoviesView);
 
 Reload is a background refresh: the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
 
-## `reload()` vs `loader.invalidate()`
+## Three knobs, three behaviors
 
-`reload()` always re-runs the loader and writes the fresh result into the cache, no matter what the cache currently holds. There is no need to invalidate first.
+The framework has three ways to invalidate or re-run a loader. They look similar at the call site but mean different things at runtime:
 
-`loader.invalidate()` clears the cache without re-fetching. The next client-side navigation that mounts this loader will refetch (cache miss). Use it when you want to mark data stale but don't need to refresh right now (for example, inside `useAction({ invalidate: [otherLoader] })` to invalidate a sibling page's cache, leaving the current page untouched).
+| Knob                                      | Triggers fetch now? | Clears cache?                      | Affects what?                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useReload().reload()`                    | **Yes**             | Yes (writes fresh data on success) | The active page's loader (the one whose boundary you're inside).                                                                                                                                                    |
+| `loader.invalidate()`                     | No                  | Yes (drops the entry)              | A specific loader's cache only. Next navigation that mounts the loader will refetch on cache miss.                                                                                                                  |
+| `useAction({ invalidate: 'auto' })`       | **Yes**             | Yes                                | After the action succeeds, re-runs the active page's loader (the one wrapping the `useAction` call). Equivalent to calling `useReload().reload()` inside `onSuccess`.                                               |
+| `useAction({ invalidate: [refA, refB] })` | Sometimes           | Yes                                | After the action succeeds, calls `.invalidate()` on each ref. If any ref is the active page's loader, ALSO re-runs that loader; sibling-page loaders just have their cache cleared and refetch on their next mount. |
+
+The mental model: **`invalidate`** is "mark stale, refetch lazily". **`reload`** is "fetch right now". `useAction`'s `'auto'` mode is sugar over the reload path; its array mode is sugar over `loader.invalidate()` calls plus an opportunistic reload if the active loader is in the list.
+
+A common surprise: `invalidate: 'auto'` is NOT a no-op even when the loader has no observable changes — it triggers a real network request through `/__loaders`. Use `invalidate: false` (the default) if you don't want a refetch after the action.
 
 ## API
 
@@ -77,7 +88,7 @@ Reload is a background refresh: the current content stays visible while the new 
 const { reload, reloading } = useReload();
 ```
 
-| Value | Type | Description |
-|---|---|---|
-| `reload` | `() => void` | Re-runs the `serverLoader`. If called while a fetch (initial load or a previous reload) is still in flight, the call is queued and runs once the in-flight fetch settles; concurrent calls coalesce into a single queued run. |
-| `reloading` | `boolean` | `true` while the loader is fetching, `false` otherwise. |
+| Value       | Type         | Description                                                                                                                                                                                                                   |
+| ----------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reload`    | `() => void` | Re-runs the `serverLoader`. If called while a fetch (initial load or a previous reload) is still in flight, the call is queued and runs once the in-flight fetch settles; concurrent calls coalesce into a single queued run. |
+| `reloading` | `boolean`    | `true` while the loader is fetching, `false` otherwise.                                                                                                                                                                       |
