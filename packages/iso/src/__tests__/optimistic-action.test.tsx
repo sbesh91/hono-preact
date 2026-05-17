@@ -133,6 +133,65 @@ describe('useOptimisticAction', () => {
     expect(onSuccess.mock.calls[0]).toHaveLength(1);
   });
 
+  it('threads TChunk through to onChunk for a streaming action stub', async () => {
+    // Smoke test for the TChunk generic. Previously the optimistic wrapper
+    // hard-coded TChunk = never, so a streaming action could not be wrapped
+    // with typed onChunk. Now `TChunk` is inferred from the stub's third
+    // generic and propagates into the onChunk callback signature.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"progress":50}\n\n'));
+        controller.enqueue(encoder.encode('data: {"progress":100}\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      )
+    );
+
+    type Chunk = { progress: number };
+    const streamStub = {
+      __module: 'movies',
+      __action: 'upload',
+    } as unknown as ActionStub<{ title: string }, { id: number; title: string }, Chunk>;
+    const onChunk = vi.fn<(chunk: Chunk) => void>();
+
+    function TestComponent() {
+      const { mutate, value } = useOptimisticAction<
+        { title: string },
+        { id: number; title: string },
+        string[],
+        Chunk
+      >(streamStub, {
+        base: ['Alien'],
+        apply: (current, payload) => [...current, payload.title],
+        onChunk,
+      });
+      return (
+        <>
+          <button onClick={() => mutate({ title: 'Dune' })}>go</button>
+          <span data-testid="value">{value.join(',')}</span>
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    await act(async () => {
+      screen.getByRole('button').click();
+    });
+
+    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(2));
+    expect(onChunk).toHaveBeenNthCalledWith(1, { progress: 50 });
+    expect(onChunk).toHaveBeenNthCalledWith(2, { progress: 100 });
+  });
+
   it('calls user-supplied onError(err) without exposing snapshot', async () => {
     vi.stubGlobal(
       'fetch',
