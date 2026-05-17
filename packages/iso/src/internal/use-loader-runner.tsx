@@ -2,7 +2,7 @@ import type { RouteHook } from 'preact-iso';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { LoaderRef } from '../define-loader.js';
 import { isBrowser } from '../is-browser.js';
-import { getPreloadedData } from './preload.js';
+import { getPreloadedData, deletePreloadedData } from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { runLoader } from './loader-runner.js';
@@ -45,6 +45,21 @@ export function useLoaderRunner<T>(
     []
   );
 
+  // Cleanup of the SSR preload attribute is deferred to after commit so
+  // we never mutate the DOM during the render pass (Preact reconciliation
+  // doesn't formally support that, and re-renders could observe a phantom
+  // half-cleared element). The render path sets `preloadConsumedRef` when
+  // it reads the payload; this effect clears the attribute exactly once,
+  // on the first commit that consumed it.
+  const preloadConsumedRef = useRef(false);
+  const preloadClearedRef = useRef(false);
+  useEffect(() => {
+    if (preloadConsumedRef.current && !preloadClearedRef.current) {
+      preloadClearedRef.current = true;
+      deletePreloadedData(id);
+    }
+  });
+
   // True while either the initial Suspense fetch or an explicit reload is in
   // flight. Tracked via a ref so reload() can read it without recapturing on
   // every state change, and so the wrapPromise branch below can flip it
@@ -69,18 +84,24 @@ export function useLoaderRunner<T>(
           if (isBrowser()) {
             loaderRef.cache.set(
               value,
-              serializeLocationForCache(locationRef.current, loaderRef.params),
+              serializeLocationForCache(locationRef.current, loaderRef.params)
             );
           }
         },
         onError: (err) => setLoadError(err),
-        onEnd: () => { /* nothing to do */ },
+        onEnd: () => {
+          /* nothing to do */
+        },
       }
     );
 
     promise
       .then((result) => {
-        if (isBrowser()) loaderRef.cache.set(result, serializeLocationForCache(locationRef.current, loaderRef.params));
+        if (isBrowser())
+          loaderRef.cache.set(
+            result,
+            serializeLocationForCache(locationRef.current, loaderRef.params)
+          );
         setOverrideData(result);
         setReloading(false);
         inFlightRef.current = false;
@@ -131,6 +152,10 @@ export function useLoaderRunner<T>(
     const preloaded = getPreloadedData<T>(id);
     const isFirstRender = readerRef.current === null;
     if (preloaded !== null) {
+      // Record that we consumed the SSR preload payload so the useEffect
+      // below can clear the DOM attribute AFTER commit instead of mutating
+      // the DOM during render.
+      preloadConsumedRef.current = true;
       loaderRef.cache.set(preloaded, locKey);
       readerRef.current = { read: () => preloaded };
       if (isBrowser()) {
@@ -139,7 +164,9 @@ export function useLoaderRunner<T>(
             setOverrideData(value as T);
             loaderRef.cache.set(value as T, locKey);
           },
-          end: () => { /* nothing to do */ },
+          end: () => {
+            /* nothing to do */
+          },
           error: (err) => setLoadError(err),
         });
         // Unsubscribe on unmount: attach to the abortRef signal.
@@ -174,7 +201,9 @@ export function useLoaderRunner<T>(
             if (isBrowser()) loaderRef.cache.set(value, locKey);
           },
           onError: (err) => setLoadError(err),
-          onEnd: () => { /* nothing to do */ },
+          onEnd: () => {
+            /* nothing to do */
+          },
         }
       );
 

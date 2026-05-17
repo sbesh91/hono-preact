@@ -49,22 +49,21 @@ describe('getPreloadedData', () => {
     expect(getPreloadedData('test-id')).toBeNull();
   });
 
-  it('deletes data-loader from the element after reading (finally block)', () => {
+  it('does NOT delete data-loader on read (pure read; caller schedules delete in useEffect)', () => {
     const el = makeElement('test-id', '{"msg":"hi"}');
     getPreloadedData('test-id');
-    expect(el.dataset.loader).toBeUndefined();
+    // Previously this function mutated the DOM during render via a `finally`
+    // block. Now reading is pure; cleanup is the caller's responsibility
+    // (use-loader-runner.tsx schedules a `deletePreloadedData` in useEffect
+    // after commit). Tests that previously asserted the side effect are
+    // inverted: they now lock in the purity guarantee.
+    expect(el.dataset.loader).toBe('{"msg":"hi"}');
   });
 
-  it('deletes data-loader even when JSON parse throws', () => {
-    const el = makeElement('test-id', '{bad}');
-    getPreloadedData('test-id');
-    expect(el.dataset.loader).toBeUndefined();
-  });
-
-  it('returns null on a second call to the same id (data was deleted on first call)', () => {
+  it('returns the same value on a second call (read is idempotent)', () => {
     makeElement('test-id', '{"msg":"hi"}');
-    getPreloadedData('test-id');
-    expect(getPreloadedData('test-id')).toBeNull();
+    expect(getPreloadedData('test-id')).toEqual({ msg: 'hi' });
+    expect(getPreloadedData('test-id')).toEqual({ msg: 'hi' });
   });
 });
 
