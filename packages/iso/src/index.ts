@@ -30,6 +30,7 @@ export type {
   ActionStub,
   UseActionOptions,
   UseActionResult,
+  MutateResult,
   ActionGuardContext,
   ActionGuardFn,
 } from './action.js';

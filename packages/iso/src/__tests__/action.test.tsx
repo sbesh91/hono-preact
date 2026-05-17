@@ -351,6 +351,59 @@ describe('useAction', () => {
     });
   });
 
+  it('mutate resolves to { ok: true, data } on success so callers can chain', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: 'i-42' }), { status: 200 })
+      )
+    );
+
+    type Result = { id: string };
+    let captured: Awaited<ReturnType<typeof mutateRef.current>> | undefined;
+    const mutateRef = { current: null as unknown as (p: { x: number }) => Promise<{ ok: true; data: Result } | { ok: false; error: Error }> };
+
+    function TestComponent() {
+      const { mutate } = useAction(stub as unknown as ActionStub<{ x: number }, Result>);
+      mutateRef.current = mutate;
+      return null;
+    }
+    render(<TestComponent />);
+
+    await act(async () => {
+      captured = await mutateRef.current({ x: 1 });
+    });
+    expect(captured).toEqual({ ok: true, data: { id: 'i-42' } });
+  });
+
+  it('mutate resolves to { ok: false, error } on failure (no throw)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'nope' }), { status: 400 })
+      )
+    );
+
+    let captured: { ok: boolean } | undefined;
+    const mutateRef = { current: null as unknown as (p: { x: number }) => Promise<{ ok: true; data: unknown } | { ok: false; error: Error }> };
+
+    function TestComponent() {
+      const { mutate } = useAction(stub as unknown as ActionStub<{ x: number }, { id: string }>);
+      mutateRef.current = mutate;
+      return null;
+    }
+    render(<TestComponent />);
+
+    await act(async () => {
+      captured = await mutateRef.current({ x: 1 });
+    });
+    expect(captured?.ok).toBe(false);
+    if (captured && !captured.ok) {
+      // Narrowing: when ok is false the result has an `error` field.
+      expect((captured as { ok: false; error: Error }).error.message).toBe('nope');
+    }
+  });
+
   it('exposes useAction as a method on the stub', async () => {
     // Mimic the shape produced by serverOnlyPlugin's client-side Proxy.
     const methodStub: ActionStub<{ x: number }, { ok: true }> = {

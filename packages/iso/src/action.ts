@@ -40,8 +40,28 @@ export type UseActionOptions<TPayload, TResult, TChunk = never, TSnapshot = unkn
   onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
 };
 
+/**
+ * The value `mutate` resolves to. A discriminated union so callers can
+ * chain on success without awaiting then probing the hook's `data`/`error`
+ * state, and without leaking unhandled rejections in fire-and-forget callers.
+ *
+ * - Success: `{ ok: true, data }`. For streaming actions that emit no
+ *   `result` SSE event, `data` is `undefined`; declare `TResult = void` (or
+ *   include `undefined` in its union) if your action doesn't emit a result.
+ * - Failure: `{ ok: false, error }`. The same `Error` instance is also
+ *   written to the hook's `error` state and passed to `onError`.
+ *
+ * Returning a union (rather than throwing) keeps `mutate(...)` ergonomic
+ * for non-awaiting call sites — the existing `error` state field is the
+ * idiomatic way to render an error UI — while still letting awaiting
+ * callers do `if (result.ok) navigate(...)`.
+ */
+export type MutateResult<TResult> =
+  | { ok: true; data: TResult }
+  | { ok: false; error: Error };
+
 export type UseActionResult<TPayload, TResult> = {
-  mutate: (payload: TPayload) => Promise<void>;
+  mutate: (payload: TPayload) => Promise<MutateResult<TResult>>;
   pending: boolean;
   error: Error | null;
   data: TResult | null;
@@ -68,7 +88,7 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const mutate = useCallback(async (payload: TPayload) => {
+  const mutate = useCallback(async (payload: TPayload): Promise<MutateResult<TResult>> => {
     setPending(true);
     setError(null);
 
@@ -79,6 +99,7 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
       snapshot = currentOptions.onMutate(payload);
     }
 
+    let finalResult: TResult | undefined;
     try {
       const stub = currentStub as unknown as { __module: string; __action: string };
       let response: Response;
@@ -130,8 +151,8 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
           if (typeof window !== 'undefined') {
             window.location.assign((peek as { __redirect: string }).__redirect);
           }
-          await new Promise(() => { /* never resolves; page is navigating */ });
-          return;
+          // Cast through `as` because TS can't see this promise never settles.
+          return await new Promise<MutateResult<TResult>>(() => {});
         }
       }
 
@@ -173,13 +194,19 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
         if (resultValue !== undefined) {
           setData(resultValue);
           currentOptions?.onSuccess?.(resultValue, snapshot as TSnapshot);
+          finalResult = resultValue;
         } else {
           currentOptions?.onSuccess?.(undefined as unknown as TResult, snapshot as TSnapshot);
+          // Streaming actions with no `result` event resolve with undefined.
+          // Consumers should type `TResult = void` (or include `undefined`)
+          // when their action doesn't emit a result.
+          finalResult = undefined as unknown as TResult;
         }
       } else {
         const result = (await response.json()) as TResult;
         setData(result);
         currentOptions?.onSuccess?.(result, snapshot as TSnapshot);
+        finalResult = result;
       }
 
       if (currentOptions?.invalidate === 'auto') {
@@ -204,9 +231,11 @@ export function useAction<TPayload, TResult, TChunk = never, TSnapshot = unknown
       const e = err instanceof Error ? err : new Error(String(err));
       setError(e);
       currentOptions?.onError?.(e, snapshot as TSnapshot);
-    } finally {
       setPending(false);
+      return { ok: false, error: e };
     }
+    setPending(false);
+    return { ok: true, data: finalResult as TResult };
   }, []);
 
   return { mutate, pending, error, data };
