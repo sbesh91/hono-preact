@@ -47,6 +47,8 @@ app.use('/__actions', async (c, next) => {
 export default app;
 ```
 
+This works because the framework mounts your `api.ts` app **ahead of** its own reserved paths (`/__loaders`, `/__actions`) and the page renderer. Middleware you register in `api.ts` therefore runs before the framework's RPC and SSR handlers — `app.use('/__actions', …)` reaches the actions endpoint, and `app.use('*', …)` is effectively app-wide. The flip side: do not register a catch-all route (`*`, `/*`, `app.on(...)` on `'*'`) or the literal paths `/__loaders` / `/__actions` in `api.ts` — they would shadow the framework's handlers, so the build rejects them.
+
 ### Configure the allowed origin
 
 Hard-code the production origin or read it from an environment variable. **Do not derive it from the request** (e.g. `new URL(c.req.url).origin`); behind a CDN or reverse proxy, the request URL the worker sees may use a different scheme or host than the browser sent, and the comparison will silently mis-match or, worse, silently allow.
