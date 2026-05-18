@@ -16,8 +16,13 @@ import {
 const stubAdapter = {
   name: 'stub',
   vitePlugins: () => [],
-  wrapEntry: ({ coreAppModuleId }: { root: string; coreAppModuleId: string; entryWrapperId: string }) =>
-    `// stub wrapper\nexport { default } from '${coreAppModuleId}';\n`,
+  wrapEntry: ({
+    coreAppModuleId,
+  }: {
+    root: string;
+    coreAppModuleId: string;
+    entryWrapperId: string;
+  }) => `// stub wrapper\nexport { default } from '${coreAppModuleId}';\n`,
 };
 
 describe('generateCoreAppModule', () => {
@@ -27,9 +32,9 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
     });
-    expect(src).toContain("loadersHandler");
-    expect(src).toContain("actionsHandler");
-    expect(src).toContain("renderPage");
+    expect(src).toContain('loadersHandler');
+    expect(src).toContain('actionsHandler');
+    expect(src).toContain('renderPage');
     expect(src).toContain('export default app;');
   });
 
@@ -146,7 +151,9 @@ describe('generated entry paths', () => {
     expect(GENERATED_CORE_APP_RELATIVE).toBe(
       'node_modules/.vite/hono-preact/core-app.tsx'
     );
-    expect(GENERATED_CORE_APP_RELATIVE).not.toBe(GENERATED_ENTRY_WRAPPER_RELATIVE);
+    expect(GENERATED_CORE_APP_RELATIVE).not.toBe(
+      GENERATED_ENTRY_WRAPPER_RELATIVE
+    );
   });
 
   it('generatedEntryWrapperAbsPath() resolves against cwd by default', () => {
@@ -355,9 +362,7 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (
-      plugin as { config?: (c: { root: string }) => void }
-    ).config?.({
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
       root: tmp,
     });
 
@@ -406,9 +411,7 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (
-      plugin as { config?: (c: { root: string }) => void }
-    ).config?.({
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
       root: tmp,
     });
 
@@ -450,7 +453,9 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({ root: tmp });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
 
     // Rollup's this.error throws; mimic that.
     const ctx = {
@@ -497,7 +502,9 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({ root: tmp });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
 
     const ctx = {
       warn: () => {},
@@ -543,7 +550,9 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({ root: tmp });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
 
     const warnings: string[] = [];
     const ctx = {

@@ -6,7 +6,8 @@ function fakeAdapter(): HonoPreactAdapter {
   return {
     name: 'fake',
     vitePlugins: () => [{ name: 'fake-adapter:plugin' }],
-    wrapEntry: (c) => `export { default } from ${JSON.stringify(c.coreAppModuleId)};\n`,
+    wrapEntry: (c) =>
+      `export { default } from ${JSON.stringify(c.coreAppModuleId)};\n`,
   };
 }
 
@@ -71,8 +72,14 @@ describe('honoPreact config plugin', () => {
   it('does not branch on mode (no client-only rollupOptions)', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() });
     const cfg = plugins.find((p) => p.name === 'hono-preact:config');
-    const a = (cfg!.config as Function)({}, { command: 'build', mode: 'client' });
-    const b = (cfg!.config as Function)({}, { command: 'build', mode: 'production' });
+    const a = (cfg!.config as Function)(
+      {},
+      { command: 'build', mode: 'client' }
+    );
+    const b = (cfg!.config as Function)(
+      {},
+      { command: 'build', mode: 'production' }
+    );
     expect(a).toEqual(b);
   });
 

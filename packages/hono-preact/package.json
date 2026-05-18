@@ -75,8 +75,12 @@
     "wrangler": "^4.92.0"
   },
   "peerDependenciesMeta": {
-    "@cloudflare/vite-plugin": { "optional": true },
-    "wrangler": { "optional": true }
+    "@cloudflare/vite-plugin": {
+      "optional": true
+    },
+    "wrangler": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@hono-preact/iso": "workspace:*",
