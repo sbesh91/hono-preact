@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import {
   GENERATED_SERVER_ENTRY_RELATIVE,
-  findApiCatchAllRoutes,
+  findApiShadowingRoutes,
   generateServerEntrySource,
   generatedServerEntryAbsPath,
   serverEntryPlugin,
@@ -71,7 +71,7 @@ describe('generateServerEntrySource', () => {
     expect(src).not.toContain('<Layout');
   });
 
-  it('emits the api import and mount when apiAbsPath is provided, before the catchall', () => {
+  it('emits the api import and mounts userApp before the reserved paths and catchall', () => {
     const src = generateServerEntrySource({
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
@@ -81,53 +81,121 @@ describe('generateServerEntrySource', () => {
     expect(src).toContain(`import userApp from '/proj/src/api.ts';`);
     expect(src).toContain(`.route('/', userApp)`);
 
-    // The user's app must be mounted BEFORE the catchall.
+    // The user's app must be mounted BEFORE the reserved paths so that
+    // middleware registered in api.ts composes ahead of loadersHandler /
+    // actionsHandler. See docs/superpowers/specs/2026-05-17-reserved-path-middleware-design.md
     const apiIdx = src.indexOf(`.route('/', userApp)`);
+    const loadersIdx = src.indexOf(`'/__loaders'`);
+    const actionsIdx = src.indexOf(`'/__actions'`);
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(apiIdx).toBeGreaterThan(-1);
-    expect(catchallIdx).toBeGreaterThan(apiIdx);
+    expect(loadersIdx).toBeGreaterThan(apiIdx);
+    expect(actionsIdx).toBeGreaterThan(loadersIdx);
+    expect(catchallIdx).toBeGreaterThan(actionsIdx);
   });
 });
 
-describe('findApiCatchAllRoutes', () => {
-  it('flags literal "*" on any HTTP method', () => {
+describe('findApiShadowingRoutes', () => {
+  it('flags literal "*" on any HTTP method as an error', () => {
     const src = `
       import { Hono } from 'hono';
       export default new Hono().get('*', (c) => c.text('catch'));
     `;
-    const warnings = findApiCatchAllRoutes(src);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatchObject({
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
       kind: 'wildcard',
       method: 'get',
       pattern: '*',
+      severity: 'error',
     });
   });
 
-  it('flags literal "/*"', () => {
+  it('flags literal "/*" as an error', () => {
     const src = `
       import { Hono } from 'hono';
       export default new Hono().all('/*', (c) => c.text('catch'));
     `;
-    const warnings = findApiCatchAllRoutes(src);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatchObject({
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
       kind: 'wildcard',
       method: 'all',
       pattern: '/*',
+      severity: 'error',
     });
   });
 
-  it('flags app.notFound(...)', () => {
+  it('flags an app.on() catch-all (path is the second argument)', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().on('GET', '*', (c) => c.text('catch'));
+    `;
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      kind: 'wildcard',
+      method: 'on',
+      pattern: '*',
+      severity: 'error',
+    });
+  });
+
+  it('flags a literal /__actions registration as a reserved-path error', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().post('/__actions', (c) => c.text('mine'));
+    `;
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      kind: 'reserved',
+      method: 'post',
+      pattern: '/__actions',
+      severity: 'error',
+    });
+  });
+
+  it('flags a literal /__loaders registration as a reserved-path error', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().get('/__loaders', (c) => c.text('mine'));
+    `;
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      kind: 'reserved',
+      method: 'get',
+      pattern: '/__loaders',
+      severity: 'error',
+    });
+  });
+
+  it('flags an app.on() registration of a reserved path (path is the second argument)', () => {
+    const src = `
+      import { Hono } from 'hono';
+      export default new Hono().on('POST', '/__actions', (c) => c.text('mine'));
+    `;
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      kind: 'reserved',
+      method: 'on',
+      pattern: '/__actions',
+      severity: 'error',
+    });
+  });
+
+  it('flags app.notFound(...) as a warning, not an error', () => {
     const src = `
       import { Hono } from 'hono';
       const app = new Hono();
       app.notFound((c) => c.text('nope', 404));
       export default app;
     `;
-    const warnings = findApiCatchAllRoutes(src);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatchObject({ kind: 'notFound' });
+    const found = findApiShadowingRoutes(src);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ kind: 'notFound', severity: 'warning' });
   });
 
   it('does not flag variable-arg routes', () => {
@@ -136,7 +204,7 @@ describe('findApiCatchAllRoutes', () => {
       const path = '/api/foo';
       export default new Hono().get(path, (c) => c.text('ok'));
     `;
-    expect(findApiCatchAllRoutes(src)).toEqual([]);
+    expect(findApiShadowingRoutes(src)).toEqual([]);
   });
 
   it('does not flag pathless app.use(...) middleware', () => {
@@ -144,7 +212,7 @@ describe('findApiCatchAllRoutes', () => {
       import { Hono } from 'hono';
       export default new Hono().use((c, next) => next());
     `;
-    expect(findApiCatchAllRoutes(src)).toEqual([]);
+    expect(findApiShadowingRoutes(src)).toEqual([]);
   });
 
   it('does not flag a specific path on a chained call', () => {
@@ -154,10 +222,10 @@ describe('findApiCatchAllRoutes', () => {
         .get('/api/watched/:id/photo', (c) => c.text('ok'))
         .post('/api/watched', (c) => c.text('ok'));
     `;
-    expect(findApiCatchAllRoutes(src)).toEqual([]);
+    expect(findApiShadowingRoutes(src)).toEqual([]);
   });
 
-  it('returns multiple warnings if multiple catchalls are present', () => {
+  it('returns multiple entries if multiple shadowing routes are present', () => {
     const src = `
       import { Hono } from 'hono';
       const app = new Hono();
@@ -165,8 +233,7 @@ describe('findApiCatchAllRoutes', () => {
       app.notFound((c) => c.text('b'));
       export default app;
     `;
-    const warnings = findApiCatchAllRoutes(src);
-    expect(warnings).toHaveLength(2);
+    expect(findApiShadowingRoutes(src)).toHaveLength(2);
   });
 
   it('does not flag c.notFound() inside a handler body', () => {
@@ -178,7 +245,7 @@ describe('findApiCatchAllRoutes', () => {
         return c.text('ok');
       });
     `;
-    expect(findApiCatchAllRoutes(src)).toEqual([]);
+    expect(findApiShadowingRoutes(src)).toEqual([]);
   });
 });
 
@@ -227,11 +294,15 @@ describe('serverEntryPlugin', () => {
     // configResolved alone should NOT have written anything.
     expect(fs.existsSync(outputPath)).toBe(false);
 
-    (
-      plugin as {
-        buildStart?: (this: { warn: (m: string) => void }) => void;
-      }
-    ).buildStart?.call({ warn: () => {} });
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+      ctx
+    );
 
     expect(fs.existsSync(outputPath)).toBe(true);
     const code = fs.readFileSync(outputPath, 'utf8');
@@ -272,11 +343,15 @@ describe('serverEntryPlugin', () => {
     ).configResolved?.({
       root: tmp,
     });
-    (
-      plugin as {
-        buildStart?: (this: { warn: (m: string) => void }) => void;
-      }
-    ).buildStart?.call({ warn: () => {} });
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+      ctx
+    );
 
     const code = fs.readFileSync(outputPath, 'utf8');
     expect(code).toContain(
@@ -287,7 +362,7 @@ describe('serverEntryPlugin', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('buildStart emits this.warn for catchall routes in api.ts', () => {
+  it('buildStart throws via this.error for a catch-all route in api.ts', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
     fs.writeFileSync(
@@ -300,7 +375,6 @@ describe('serverEntryPlugin', () => {
       'hono-preact',
       'server-entry.tsx'
     );
-
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -309,22 +383,141 @@ describe('serverEntryPlugin', () => {
     });
     (
       plugin as { configResolved?: (c: { root: string }) => void }
-    ).configResolved?.({
-      root: tmp,
-    });
+    ).configResolved?.({ root: tmp });
 
-    const warnings: string[] = [];
-    const ctx = { warn: (msg: string) => warnings.push(msg) };
-    (
-      plugin as {
-        buildStart?: (this: { warn: (m: string) => void }) => void;
-      }
-    ).buildStart?.call(ctx);
-
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain(`src/api.ts`);
-    expect(warnings[0]).toContain(`catch-all`);
+    // Rollup's this.error throws; mimic that.
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).toThrow(/catch-all/);
 
     fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart throws via this.error for a literal /__actions registration', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'api.ts'),
+      `import { Hono } from 'hono';\nexport default new Hono().post('/__actions', (c) => c.text('mine'));\n`
+    );
+    const outputPath = path.join(
+      tmp,
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      outputPath,
+    });
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({ root: tmp });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).toThrow(/reserved/);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart warns (does not throw) for app.notFound in api.ts', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'api.ts'),
+      `import { Hono } from 'hono';\nconst app = new Hono();\napp.notFound((c) => c.text('nope', 404));\nexport default app;\n`
+    );
+    const outputPath = path.join(
+      tmp,
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      outputPath,
+    });
+    (
+      plugin as { configResolved?: (c: { root: string }) => void }
+    ).configResolved?.({ root: tmp });
+
+    const warnings: string[] = [];
+    const ctx = {
+      warn: (m: string) => warnings.push(m),
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).not.toThrow();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('notFound');
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+});
+
+describe('mount-order composition (why api.ts is mounted first)', () => {
+  it('middleware in the user app guards the reserved /__actions path', async () => {
+    const { Hono } = await import('hono');
+    const { csrf } = await import('hono/csrf');
+
+    let actionRan = false;
+    const userApp = new Hono();
+    userApp.use('*', csrf({ origin: 'https://example.com' }));
+
+    // Mirrors the order generateServerEntrySource emits: userApp first.
+    const app = new Hono().route('/', userApp).post('/__actions', (c) => {
+      actionRan = true;
+      return c.json({ ok: true });
+    });
+
+    // Cross-origin form post: csrf rejects before the action handler runs.
+    const blocked = await app.request('https://example.com/__actions', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://evil.example',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'x=1',
+    });
+    expect(blocked.status).toBe(403);
+    expect(actionRan).toBe(false);
+
+    // Same-origin form post: passes csrf, reaches the action handler.
+    const ok = await app.request('https://example.com/__actions', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://example.com',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'x=1',
+    });
+    expect(ok.status).toBe(200);
+    expect(actionRan).toBe(true);
   });
 });
