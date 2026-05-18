@@ -334,3 +334,46 @@ describe('serverEntryPlugin', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 });
+
+describe('mount-order composition (why api.ts is mounted first)', () => {
+  it('middleware in the user app guards the reserved /__actions path', async () => {
+    const { Hono } = await import('hono');
+    const { csrf } = await import('hono/csrf');
+
+    let actionRan = false;
+    const userApp = new Hono();
+    userApp.use('*', csrf({ origin: 'https://example.com' }));
+
+    // Mirrors the order generateServerEntrySource emits: userApp first.
+    const app = new Hono()
+      .route('/', userApp)
+      .post('/__actions', (c) => {
+        actionRan = true;
+        return c.json({ ok: true });
+      });
+
+    // Cross-origin form post: csrf rejects before the action handler runs.
+    const blocked = await app.request('https://example.com/__actions', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://evil.example',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'x=1',
+    });
+    expect(blocked.status).toBe(403);
+    expect(actionRan).toBe(false);
+
+    // Same-origin form post: passes csrf, reaches the action handler.
+    const ok = await app.request('https://example.com/__actions', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://example.com',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'x=1',
+    });
+    expect(ok.status).toBe(200);
+    expect(actionRan).toBe(true);
+  });
+});
