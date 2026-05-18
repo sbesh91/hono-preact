@@ -6,8 +6,8 @@
     "build": "NODE_ENV=production vite build",
     "visualize": "NODE_ENV=production VISUALIZE=1 vite build --mode client",
     "updates": "npx npm-check-updates -i --format group",
-    "deploy": "wrangler deploy",
-    "deploy:upload": "wrangler versions upload",
+    "deploy": "wrangler deploy -c dist/hono_preact/wrangler.json",
+    "deploy:upload": "wrangler versions upload -c dist/hono_preact/wrangler.json",
     "preview": "vite preview"
   },
   "dependencies": {
