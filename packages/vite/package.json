@@ -49,6 +49,7 @@
     "vite": ">=5.0.0"
   },
   "devDependencies": {
+    "hono": "^4.12.14",
     "preact": "^10.29.1",
     "preact-iso": "github:preactjs/preact-iso#v3",
     "typescript": "*",

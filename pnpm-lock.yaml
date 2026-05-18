@@ -252,6 +252,9 @@ importers:
         specifier: ^0.30.21
         version: 0.30.21
     devDependencies:
+      hono:
+        specifier: ^4.12.14
+        version: 4.12.14
       preact:
         specifier: ^10.29.1
         version: 10.29.1
