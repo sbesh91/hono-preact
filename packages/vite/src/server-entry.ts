@@ -50,14 +50,27 @@ export function generateServerEntrySource(
   );
 }
 
-export type CatchAllWarning =
+export type ApiShadowingRoute =
   | {
       kind: 'wildcard';
       method: string;
       pattern: string;
       line: number | undefined;
+      severity: 'error';
     }
-  | { kind: 'notFound'; line: number | undefined };
+  | {
+      kind: 'reserved';
+      method: string;
+      pattern: string;
+      line: number | undefined;
+      severity: 'error';
+    }
+  | { kind: 'notFound'; line: number | undefined; severity: 'warning' };
+
+// Framework-reserved request paths. A literal registration of either in
+// api.ts shadows the framework's RPC handler now that the user app mounts
+// ahead of them.
+const RESERVED_PATHS = new Set(['/__loaders', '/__actions']);
 
 const HONO_METHODS = new Set([
   'get',
@@ -84,8 +97,8 @@ const FUNCTION_BODY_PARENTS = new Set([
   'ClassMethod',
 ]);
 
-export function findApiCatchAllRoutes(source: string): CatchAllWarning[] {
-  const warnings: CatchAllWarning[] = [];
+export function findApiShadowingRoutes(source: string): ApiShadowingRoute[] {
+  const found: ApiShadowingRoute[] = [];
 
   let ast: ReturnType<typeof parse>;
   try {
@@ -97,25 +110,25 @@ export function findApiCatchAllRoutes(source: string): CatchAllWarning[] {
   } catch (err) {
     // If api.ts won't parse, the build will fail elsewhere with a clearer
     // error. Surface a note so the framework user can correlate a missing
-    // catch-all warning with a parse-time syntax issue rather than wondering
+    // shadowing warning with a parse-time syntax issue rather than wondering
     // why nothing was reported.
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(
-      `[hono-preact] Failed to parse api.ts for catch-all route detection: ${msg}. ` +
+      `[hono-preact] Failed to parse api.ts for shadowing-route detection: ${msg}. ` +
         `The build will surface the real syntax error; this warning explains why ` +
-        `route-overlap warnings may be missing.`
+        `route-overlap diagnostics may be missing.`
     );
-    return warnings;
+    return found;
   }
 
-  walk(ast.program, warnings);
-  return warnings;
+  walk(ast.program, found);
+  return found;
 }
 
-function walk(node: unknown, warnings: CatchAllWarning[]): void {
+function walk(node: unknown, found: ApiShadowingRoute[]): void {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
-    for (const child of node) walk(child, warnings);
+    for (const child of node) walk(child, found);
     return;
   }
 
@@ -139,20 +152,32 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
     const line = n.loc?.start?.line;
 
     if (method === 'notFound') {
-      warnings.push({ kind: 'notFound', line });
+      found.push({ kind: 'notFound', line, severity: 'warning' });
     } else if (HONO_METHODS.has(method)) {
-      const firstArg = n.arguments?.[0];
+      // `app.on(method, path, ...)` puts the path at argument index 1;
+      // every other Hono routing method takes the path as argument 0.
+      const pathArg = n.arguments?.[method === 'on' ? 1 : 0];
       if (
-        firstArg?.type === 'StringLiteral' &&
-        typeof firstArg.value === 'string' &&
-        WILDCARD_PATTERNS.has(firstArg.value)
+        pathArg?.type === 'StringLiteral' &&
+        typeof pathArg.value === 'string'
       ) {
-        warnings.push({
-          kind: 'wildcard',
-          method,
-          pattern: firstArg.value,
-          line,
-        });
+        if (WILDCARD_PATTERNS.has(pathArg.value)) {
+          found.push({
+            kind: 'wildcard',
+            method,
+            pattern: pathArg.value,
+            line,
+            severity: 'error',
+          });
+        } else if (RESERVED_PATHS.has(pathArg.value)) {
+          found.push({
+            kind: 'reserved',
+            method,
+            pattern: pathArg.value,
+            line,
+            severity: 'error',
+          });
+        }
       }
     }
   }
@@ -168,7 +193,7 @@ function walk(node: unknown, warnings: CatchAllWarning[]): void {
     )
       continue;
     if (isFunctionParent && key === 'body') continue;
-    walk((node as Record<string, unknown>)[key], warnings);
+    walk((node as Record<string, unknown>)[key], found);
   }
 }
 
@@ -245,22 +270,35 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
 
       if (!apiAbsPath) return;
       const apiSource = fs.readFileSync(apiAbsPath, 'utf8');
-      const warnings = findApiCatchAllRoutes(apiSource);
-      for (const w of warnings) {
-        const where = `${apiAbsPath}${w.line != null ? `:${w.line}` : ''}`;
-        if (w.kind === 'notFound') {
+      const shadowing = findApiShadowingRoutes(apiSource);
+      const errors: string[] = [];
+      for (const r of shadowing) {
+        const where = `${apiAbsPath}${r.line != null ? `:${r.line}` : ''}`;
+        if (r.kind === 'notFound') {
           this.warn(
-            `[hono-preact] ${where}: app.notFound(...) acts as a catch-all and ` +
-              `will be shadowed by the framework's renderPage handler. ` +
-              `Move the behavior to a more specific path, or accept that it won't fire.`
+            `[hono-preact] ${where}: app.notFound(...) will not fire — the ` +
+              `framework's renderPage handler matches every unmatched request. ` +
+              `Move the behavior to a specific path, or accept that it won't fire.`
+          );
+        } else if (r.kind === 'wildcard') {
+          errors.push(
+            `${where}: app.${r.method}('${r.pattern}', ...) is a catch-all route`
           );
         } else {
-          this.warn(
-            `[hono-preact] ${where}: app.${w.method}('${w.pattern}', ...) is a ` +
-              `catch-all route and will be shadowed by the framework's renderPage ` +
-              `handler. Move it to a more specific path, or accept that it won't fire.`
+          errors.push(
+            `${where}: app.${r.method}('${r.pattern}', ...) registers the ` +
+              `framework-reserved path '${r.pattern}'`
           );
         }
+      }
+      if (errors.length > 0) {
+        this.error(
+          `[hono-preact] api.ts registers routes that shadow framework handlers:\n` +
+            errors.map((e) => `  - ${e}`).join('\n') +
+            `\nThe framework mounts your app ahead of its reserved paths ` +
+            `(/__loaders, /__actions) and the SSR handler, so these routes break ` +
+            `loaders/actions and/or page rendering. Use specific, non-wildcard paths.`
+        );
       }
     },
   };
