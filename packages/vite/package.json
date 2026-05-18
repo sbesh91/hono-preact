@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./adapter-cloudflare": {
+      "types": "./dist/adapter-cloudflare.d.ts",
+      "import": "./dist/adapter-cloudflare.js"
     }
   },
   "scripts": {

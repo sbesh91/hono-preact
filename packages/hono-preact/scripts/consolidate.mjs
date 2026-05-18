@@ -50,6 +50,7 @@ const DIST_PATHS = {
   '@hono-preact/iso': 'iso/index.js',
   '@hono-preact/server': 'server/index.js',
   '@hono-preact/vite': 'vite/index.js',
+  '@hono-preact/vite/adapter-cloudflare': 'vite/adapter-cloudflare.js',
 };
 
 async function copyTree(src, dest) {
@@ -95,7 +96,7 @@ async function rewriteImports(filePath) {
   const isTypeFile = filePath.endsWith('.d.ts');
 
   let rewritten = original.replace(
-    /(['"])(@hono-preact\/(?:iso\/internal|iso|server|vite))(['"])/g,
+    /(['"])(@hono-preact\/(?:iso\/internal|iso|server|vite\/adapter-cloudflare|vite))(['"])/g,
     (match, q1, source, q2) => {
       const distRel = DIST_PATHS[source];
       if (!distRel) return match;
