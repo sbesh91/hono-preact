@@ -25,7 +25,10 @@ describe('nodeAdapter', () => {
   });
 
   it('wrapEntry re-exports injectWebSocket when an api module is present', () => {
-    const tail = nodeAdapter().wrapEntry({ ...ctx, apiModuleId: '/p/src/api.ts' });
+    const tail = nodeAdapter().wrapEntry({
+      ...ctx,
+      apiModuleId: '/p/src/api.ts',
+    });
     expect(tail).toContain('/p/src/api.ts');
     expect(tail).toContain('injectWebSocket');
   });

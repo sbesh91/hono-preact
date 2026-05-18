@@ -16,13 +16,21 @@ describe('nodeBuildPlugin', () => {
     ) as {
       environments: {
         client: { build: { outDir: string } };
-        ssr: { build: { outDir: string; ssr: boolean; rollupOptions: { input: string[] } } };
+        ssr: {
+          build: {
+            outDir: string;
+            ssr: boolean;
+            rollupOptions: { input: string[] };
+          };
+        };
       };
     };
     expect(cfg.environments.client.build.outDir).toBe('dist/client');
     expect(cfg.environments.ssr.build.outDir).toBe('dist/server');
     expect(cfg.environments.ssr.build.ssr).toBe(true);
-    expect(cfg.environments.ssr.build.rollupOptions.input).toEqual([ctx.entryWrapperId]);
+    expect(cfg.environments.ssr.build.rollupOptions.input).toEqual([
+      ctx.entryWrapperId,
+    ]);
   });
 
   it('builds the app via a builder.buildApp orchestrator', () => {

@@ -54,7 +54,10 @@ export function nodeDevServerPlugin(ctx: HonoPreactAdapterContext): Plugin {
             | ((req: unknown, socket: unknown, head: unknown) => void)
             | undefined;
           (injectWebSocket as (target: unknown) => void)({
-            on(event: string, fn: (req: unknown, socket: unknown, head: unknown) => void) {
+            on(
+              event: string,
+              fn: (req: unknown, socket: unknown, head: unknown) => void
+            ) {
               if (event === 'upgrade') handler = fn;
             },
           });
