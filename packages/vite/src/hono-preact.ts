@@ -49,8 +49,13 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     entryWrapperId: entryWrapperPath,
   };
 
-  // Only genuinely platform-agnostic config lives here. Client-vs-server
-  // build config is owned by the adapter's plugins (Environment API).
+  // Shared config plus the `client` build environment's input. The worker
+  // environment is configured by the adapter's plugins; the `client`
+  // environment's entry is framework-owned (every adapter needs the same
+  // browser bundle) so it lives here. Without it, the client environment has
+  // no input and `vite build` emits no client JavaScript. The
+  // `static/client.js` entry name is the URL the SSR layer references and
+  // must stay stable.
   const configPlugin: Plugin = {
     name: 'hono-preact:config',
     config() {
@@ -61,6 +66,20 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
         build: {
           target: 'esnext' as const,
           assetsDir: 'static',
+        },
+        environments: {
+          client: {
+            build: {
+              rollupOptions: {
+                input: [clientEntry],
+                output: {
+                  entryFileNames: 'static/client.js',
+                  chunkFileNames: 'static/[name]-[hash].js',
+                  assetFileNames: 'static/[name]-[hash].[ext]',
+                },
+              },
+            },
+          },
         },
       };
     },

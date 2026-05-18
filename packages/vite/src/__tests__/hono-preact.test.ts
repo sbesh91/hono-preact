@@ -52,7 +52,7 @@ describe('honoPreact plugin assembly', () => {
 });
 
 describe('honoPreact config plugin', () => {
-  it('contributes only shared config: preact dedupe, esnext target, static assetsDir', () => {
+  it('contributes shared config: preact dedupe, esnext target, static assetsDir', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() });
     const cfg = plugins.find((p) => p.name === 'hono-preact:config');
     if (!cfg || typeof cfg.config !== 'function') {
@@ -74,5 +74,29 @@ describe('honoPreact config plugin', () => {
     const a = (cfg!.config as Function)({}, { command: 'build', mode: 'client' });
     const b = (cfg!.config as Function)({}, { command: 'build', mode: 'production' });
     expect(a).toEqual(b);
+  });
+
+  it('configures the client build environment input to the client entry', () => {
+    const plugins = honoPreact({ adapter: fakeAdapter() });
+    const cfg = plugins.find((p) => p.name === 'hono-preact:config');
+    const result = (cfg!.config as Function)(
+      {},
+      { command: 'build', mode: 'production' }
+    ) as {
+      environments: {
+        client: {
+          build: {
+            rollupOptions: {
+              input: string[];
+              output: { entryFileNames: string; chunkFileNames: string };
+            };
+          };
+        };
+      };
+    };
+    const ro = result.environments.client.build.rollupOptions;
+    expect(ro.input).toEqual(['virtual:hono-preact/client']);
+    expect(ro.output.entryFileNames).toBe('static/client.js');
+    expect(ro.output.chunkFileNames).toBe('static/[name]-[hash].js');
   });
 });
