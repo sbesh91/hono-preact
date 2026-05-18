@@ -47,7 +47,7 @@ app.use('/__actions', async (c, next) => {
 export default app;
 ```
 
-This works because the framework mounts your `api.ts` app **ahead of** its own reserved paths (`/__loaders`, `/__actions`) and the page renderer. Middleware you register in `api.ts` therefore runs before the framework's RPC and SSR handlers — `app.use('/__actions', …)` reaches the actions endpoint, and `app.use('*', …)` is effectively app-wide. Middleware via `app.use(…)` is always safe: it calls `next()` and composes ahead of the framework handlers rather than replacing them. What you must not do is register a catch-all _route_ — `app.get('*', …)`, `app.all('/*', …)`, or `app.on(…)` with `'*'` as the path — or the literal paths `/__loaders` / `/__actions` in `api.ts`: those shadow the framework's handlers, so the build rejects them.
+This works because the framework mounts your `api.ts` app **ahead of** its own reserved paths (`/__loaders`, `/__actions`) and the page renderer. Middleware you register in `api.ts` therefore runs before the framework's RPC and SSR handlers: `app.use('/__actions', …)` reaches the actions endpoint, and `app.use('*', …)` is effectively app-wide. Middleware via `app.use(…)` is always safe: it calls `next()` and composes ahead of the framework handlers rather than replacing them. What you must not do is register a catch-all _route_ (`app.get('*', …)`, `app.all('/*', …)`, or `app.on(…)` with `'*'` as the path) or the literal paths `/__loaders` / `/__actions` in `api.ts`: those shadow the framework's handlers, so the build rejects them.
 
 ### Configure the allowed origin
 
