@@ -256,31 +256,65 @@ export function generatedEntryWrapperAbsPath(
 }
 ```
 
-- [ ] **Step 4: Update `serverEntryPlugin` to write both files**
+- [ ] **Step 4: Update `serverEntryPlugin` to write both files in the `config` hook**
+
+> **Resolved by Task 0's spike:** `@cloudflare/vite-plugin@1.37.1` reads `wrangler.jsonc` `main` and does `fs.existsSync` on it inside Vite's `config` hook — the earliest hook. The generated entry wrapper MUST exist on disk before the adapter's plugins run their `config` hook. `serverEntryPlugin` is `enforce: 'pre'` and ordered ahead of `...adapter.vitePlugins()` in the `honoPreact()` array, so its own `config` hook runs first — write the files there. Files are then written on every config resolution (including IDE probes / typecheck-only runs); that side-effect is unavoidable given the spike finding and is accepted.
 
 Change `ServerEntryPluginOptions`: remove `outputPath`; add `adapter: HonoPreactAdapter`, `coreAppPath: string`, `entryWrapperPath: string`. Add `import type { HonoPreactAdapter } from './adapter.js';`.
 
-In `buildStart`, after computing `source` from `generateCoreAppModule(...)`:
+Replace the plugin's `configResolved` + `buildStart` hooks (and drop the now-unneeded "buildStart fired before configResolved" guard) so the shape is:
 
 ```ts
-fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
-fs.writeFileSync(opts.coreAppPath, source, 'utf8');
+export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
+  let apiAbsPath: string | undefined;
 
-// process.cwd() matches how honoPreact() builds the adapter context's
-// `root`; the generated paths are already absolute, so `root` is only an
-// informational field for adapters that want it.
-const wrapper = opts.adapter.wrapEntry({
-  root: process.cwd(),
-  coreAppModuleId: opts.coreAppPath,
-  entryWrapperId: opts.entryWrapperPath,
-});
-fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
+  return {
+    name: 'hono-preact:server-entry',
+    enforce: 'pre',
+    // Write generated files in `config` — the earliest hook — so the entry
+    // wrapper exists before @cloudflare/vite-plugin's own `config` hook does
+    // fs.existsSync on wrangler.jsonc `main`.
+    config(userConfig) {
+      const root = userConfig.root
+        ? path.resolve(userConfig.root)
+        : process.cwd();
+      const layoutAbsPath = path.isAbsolute(opts.layout)
+        ? opts.layout
+        : path.resolve(root, opts.layout);
+      const routesAbsPath = path.isAbsolute(opts.routes)
+        ? opts.routes
+        : path.resolve(root, opts.routes);
+      const candidateApi = path.isAbsolute(opts.api)
+        ? opts.api
+        : path.resolve(root, opts.api);
+      apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
+
+      const source = generateCoreAppModule({
+        layoutAbsPath,
+        routesAbsPath,
+        apiAbsPath,
+      });
+      fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
+      fs.writeFileSync(opts.coreAppPath, source, 'utf8');
+
+      const wrapper = opts.adapter.wrapEntry({
+        root,
+        coreAppModuleId: opts.coreAppPath,
+        entryWrapperId: opts.entryWrapperPath,
+      });
+      fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
+    },
+    buildStart() {
+      // The api.ts shadowing diagnostic stays in buildStart: it needs
+      // this.warn / this.error, which the `config` hook context lacks.
+      if (!apiAbsPath) return;
+      // ... existing findApiShadowingRoutes warn/error block, verbatim ...
+    },
+  };
+}
 ```
 
-Keep the existing `findApiShadowingRoutes` block (the api.ts shadowing
-warnings + build-failure `this.error`, from PR #49) unchanged.
-
-> **Spike dependency:** Task 0 Step 4 Q2 determines whether `buildStart` is early enough for `@cloudflare/vite-plugin` to find the entry. If the spike found the entry must exist before config resolution, move both `writeFileSync` calls into `configResolved` instead of `buildStart` (accepting the IDE-probe side-effect the current `buildStart` placement was avoiding).
+Keep the existing `findApiShadowingRoutes` block (the api.ts shadowing warnings + build-failure `this.error`, from PR #49) verbatim inside `buildStart`.
 
 - [ ] **Step 5: Update `packages/vite/src/index.ts` exports**
 
@@ -331,7 +365,7 @@ git commit -m "feat(vite): split server-entry into core app module and adapter w
 `adapter-cloudflare.ts` statically imports `@cloudflare/vite-plugin`, so the package must be resolvable from `packages/vite` for the test (and the package build) to run. Add to `packages/vite/package.json` `devDependencies`, at the version Task 0's spike validated:
 
 ```json
-    "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/vite-plugin": "^1.37.1",
 ```
 
 Run: `pnpm install`
@@ -407,7 +441,7 @@ export function cloudflareAdapter(): HonoPreactAdapter {
 }
 ```
 
-> **Spike dependency:** if Task 0 found `cloudflare()` needs explicit options on Vite 8 (e.g. a `configPath` or `viteEnvironment` setting), add them here per the spike findings.
+> **Resolved by Task 0's spike:** `cloudflare()` works on Vite 8.0.8 with no arguments — no `configPath` or `viteEnvironment` options are required. Call it bare as shown.
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -707,10 +741,10 @@ In `packages/vite/package.json`, replace the existing `peerDependencies` block (
 
 ```json
   "peerDependencies": {
-    "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/vite-plugin": "^1.37.1",
     "@preact/preset-vite": "^2.10.5",
     "vite": ">=6.0.0",
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.92.0"
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": { "optional": true },
@@ -783,14 +817,14 @@ Remove `@hono/vite-build` and `@hono/vite-dev-server` from `dependencies` (lines
 
 ```json
   "peerDependencies": {
-    "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/vite-plugin": "^1.37.1",
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
     "preact-iso": ">=2.11.0",
     "preact-render-to-string": ">=6.0.0",
     "vite": ">=6.0.0",
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.92.0"
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": { "optional": true },
@@ -879,6 +913,51 @@ Expected: build succeeds; the worker bundle and client assets are emitted. Confi
 git add apps/site/vite.config.ts apps/site/package.json apps/site/wrangler.jsonc pnpm-lock.yaml
 git commit -m "feat(site): migrate to the Cloudflare adapter"
 ```
+
+---
+
+## Task 8B: Framework client build-environment config
+
+**Plan gap discovered during Task 8.** With the legacy `mode === 'client'` two-pass build removed (Task 4), nothing configured the `client` build environment's input, so `vite build` produced no browser JavaScript — `apps/site/dist/client/` held only CSS.
+
+**Fix (verified end to end):** the framework `configPlugin` contributes the `client` environment's build input from its `config()` hook. The client entry (`virtual:hono-preact/client`) is framework-owned (every adapter needs the identical browser bundle), so it belongs in `configPlugin`, not an adapter, and it stays zero-config: no user wiring, no API addition.
+
+> **Investigation note (for Plan B and future framework work):** an earlier round of this task wrongly concluded a plugin could not set the client input and proposed a user-wired `honoPreactEnvironments()` export. That was an artifact of testing against a stale built umbrella `dist/`. A consuming app's `vite.config.ts` imports `honoPreact` from the *built* `hono-preact` package, not from workspace source, so framework edits do not take effect until the umbrella is rebuilt. Always run `pnpm --filter '@hono-preact/*' --filter hono-preact build` before building a consuming app after changing framework source. With that done, the plugin `config()` approach works.
+
+**Files:**
+- Modify: `packages/vite/src/hono-preact.ts`
+- Modify: `packages/vite/src/__tests__/hono-preact.test.ts`
+
+- [x] **Step 1: Failing test.** Added an `it` to the `describe('honoPreact config plugin', ...)` block asserting `configPlugin.config()` returns `environments.client.build.rollupOptions` with `input: ['virtual:hono-preact/client']` and `output.entryFileNames === 'static/client.js'`.
+
+- [x] **Step 2: Run — fails** (`environments` undefined).
+
+- [x] **Step 3: Extend `configPlugin.config()`** in `hono-preact.ts` to return, alongside `resolve` + `build`:
+
+```ts
+        environments: {
+          client: {
+            build: {
+              rollupOptions: {
+                input: [clientEntry],
+                output: {
+                  entryFileNames: 'static/client.js',
+                  chunkFileNames: 'static/[name]-[hash].js',
+                  assetFileNames: 'static/[name]-[hash].[ext]',
+                },
+              },
+            },
+          },
+        },
+```
+
+`clientEntry` is already in scope in `honoPreact()`.
+
+- [x] **Step 4: Run tests — pass** (`pnpm vitest run packages/vite/src/__tests__/hono-preact.test.ts`, 8/8).
+
+- [x] **Step 5: Re-verify the `apps/site` build.** Rebuild the umbrella, then `pnpm --filter site build`; confirmed `apps/site/dist/client/static/client.js` plus the route chunks exist and no `__cloudflare_fallback_entry__` is emitted.
+
+- [x] **Step 6: Commit** — `fix(vite): build the client bundle via the client environment config` (commit `63a51a8`).
 
 ---
 

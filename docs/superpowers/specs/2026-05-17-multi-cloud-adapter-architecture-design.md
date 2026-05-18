@@ -131,10 +131,29 @@ adapter's plugins build/serve.
 
 The current `configPlugin` (`hono-preact.ts:50-112`) encodes the legacy
 `mode === 'client'` two-pass build model. Both adapters use Vite's Environment
-API instead, so this branching is removed. The framework `configPlugin` shrinks
-to only genuinely shared config (`preact` dedupe, `target: 'esnext'`,
-`assetsDir`). Each adapter contributes its own `environments` / `builder`
-config through a `config` hook on one of its `vitePlugins()`.
+API instead, so this branching is removed.
+
+The framework `configPlugin` keeps two things: genuinely shared config
+(`preact` dedupe, `target: 'esnext'`, `assetsDir`), and the `client` build
+environment's input. It contributes the latter from its `config()` hook as
+`environments.client.build.rollupOptions` (`input: ['virtual:hono-preact/client']`
+plus the `static/client.js` output naming the SSR layer references).
+
+The client entry (`virtual:hono-preact/client`) is framework-owned: every
+adapter needs the identical browser bundle built from it, so this config
+belongs in the framework `configPlugin`, not in any adapter. Without it the
+`client` environment has no input and `vite build` emits no client JavaScript.
+This was verified end to end against `@cloudflare/vite-plugin`: a plugin
+`config()` hook returning `environments.client` merges correctly into the
+resolved client environment. (Implementation note: this only works when the
+consuming app's built umbrella `dist/` is current — the app's `vite.config.ts`
+imports `honoPreact` from the built package, so framework changes require an
+umbrella rebuild before they take effect.)
+
+Each adapter contributes only its *worker/server* environment and `builder`
+config, through a `config` hook on one of its `vitePlugins()` (the worker
+environment input — `wrangler.jsonc` `main` for Cloudflare — is adapter
+territory).
 
 Framework plugins that branch on client-vs-server must be audited for the
 discriminator change: `serverOnlyPlugin` uses `options.ssr` (environment-safe,
