@@ -63,7 +63,7 @@ Status legend:
 | `hono/html` | unused | sidestep | **keep** | We have a full Preact pipeline; raw HTML template strings would compete with `prerender()`. Users wanting raw HTML responses can import `hono/html` for non-page Hono routes. |
 | `hono/context-storage` | unused | **replace** | **keep our `runRequestScope`** | Hono's helper only stashes `c`; we need a per-request `Map<unknown, unknown>` for loader-cache memoization, and our store has to be isomorphic (server + browser via a same-shape no-op on the client). See `packages/iso/src/cache.ts:32-63`. Documented decision from PR #41 prework. |
 | `hono/cors` | unused | sidestep | **keep, document** | Per-route CORS policy is opinionated; mounting it framework-wide would push a default users would have to undo. Worth a "recommended Hono middleware" docs page. |
-| `hono/csrf` | unused | sidestep | **keep** | Users mount `csrf()` on their `c.api` like in any other Hono app. The framework deliberately doesn't pre-decide for them. If a user wants CSRF on `/__actions/*` specifically, they wrap the handler or use middleware composition; framework auto-mounting would violate "use Hono as normal." |
+| `hono/csrf` | unused | sidestep | **keep** | Users mount `csrf()` on their `c.api` like in any other Hono app. The framework deliberately doesn't pre-decide for them. A user who wants CSRF on `/__actions` specifically registers `app.use('/__actions', …)` in their `api.ts`: #43 mounts the user app ahead of the reserved paths, so that middleware reaches the endpoint. Framework auto-mounting would still violate "use Hono as normal." |
 | `hono/secure-headers` | unused | sidestep | **keep, document** | Recommend in docs; default policy is user-specific. |
 | `hono/cache` | unused | sidestep | **keep** | Page-level HTTP caching is a render-side concern that interacts badly with our streaming responses. Loader-side caching is already in-process via `runRequestScope`. |
 | `hono/etag` | unused | sidestep | **keep** | SSR-streamed responses can't be ETag'd cleanly. Out of hot path. |
@@ -174,7 +174,7 @@ None of these block v0.1; all are docs / examples that reinforce the "use Hono a
 
 Two non-recommendations explicitly recorded:
 
-- **Do not auto-mount `hono/csrf` on `/__actions`.** Earlier draft proposed this; it violates the guiding principle.
+- **Do not auto-mount `hono/csrf` on `/__actions`.** Earlier draft proposed this; it violates the guiding principle. Resolved by #43 (`docs/superpowers/specs/2026-05-17-reserved-path-middleware-design.md`): the user app now mounts ahead of the reserved paths, so users compose `csrf()` themselves with no framework auto-mount.
 - **Do not ship a framework `serverTiming()` helper that auto-mounts `hono/timing`.** If we later expose timing marks at SSR seams, expose them as opt-in primitives users wire into their own `hono/timing` middleware, not as a framework-managed default.
 
 ---
