@@ -53,6 +53,18 @@ runtime is a true production mirror.
 - A framework-provided WebSocket abstraction (see WebSockets section).
 - Changes to loaders, actions, routing, or guards.
 
+## Step 0: Compatibility spike (implementation gate)
+
+Before any architecture work begins, a spike must confirm
+`@cloudflare/vite-plugin` works against the repo's pinned Vite 8.0.8 (root
+`package.json` override). Minimum bar: a throwaway project with the plugin
+runs `vite dev` (workerd) and `vite build` successfully on Vite 8.
+
+This is a hard go/no-go gate. If `@cloudflare/vite-plugin` does not support
+Vite 8, the Cloudflare leg of this design is blocked and the spec must be
+revisited (options: pin Vite back, wait for plugin support, or rescope). All
+subsequent steps depend on this spike passing.
+
 ## Architecture
 
 ### Entry-generation split
