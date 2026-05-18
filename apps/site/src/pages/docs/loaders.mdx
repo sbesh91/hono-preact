@@ -117,7 +117,7 @@ export const serverLoaders = {
 
 By convention, loaders read; actions write. Setting cookies/headers from a loader is allowed but discouraged.
 
-On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response (Hono's `c.html(...)` merges prepared headers). Streaming loaders are different: the streaming response is constructed with literal headers, so any `Set-Cookie` written via `ctx.c` after that point is dropped. Rotate sessions from an action when the page streams.
+On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response. Streaming loaders can set cookies too, but only **before their first `yield`**: that part of the loader runs during the server render, while the response headers are still open. Anything written after the first `yield` runs while the stream is already in flight, with headers committed, and is dropped. When in doubt, rotate sessions from an action.
 
 ## The `.View()` factory
 

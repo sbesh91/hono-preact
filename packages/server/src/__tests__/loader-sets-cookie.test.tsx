@@ -89,11 +89,12 @@ describe('V3 - loader can set a response cookie', () => {
     }
   });
 
-  it('streaming SSR path: Set-Cookie written before first yield is dropped', async () => {
-    // Pins the observed Set-Cookie drop on the streaming SSR path. The streaming
-    // branch in render.tsx constructs `new Response(stream, { headers: literal })`
-    // without merging c.res.headers. A fix to that branch would flip this assertion;
-    // that fix is tracked as a separate issue.
+  it('streaming SSR path: Set-Cookie written before the first yield survives', async () => {
+    // A streaming loader's body runs up to its first `yield` during prerender
+    // (runLoader pulls the first step before renderPage builds the response),
+    // so a cookie set before that yield is still recoverable. The streaming
+    // branch routes the response through `c.body()` so Hono merges the
+    // prepared headers, just as the non-streaming branch does via `c.html()`.
     const ref = defineLoader(async function* (ctx) {
       setCookie(ctx.c, 'rotated-stream', 'stream-value');
       yield { progress: 50 };
@@ -132,8 +133,45 @@ describe('V3 - loader can set a response cookie', () => {
       (transferEncoding.includes('chunked') || res.body !== null);
     expect(isStreaming).toBe(true);
 
-    // Observed behavior: Set-Cookie is absent on the streaming path.
     const setCookieHeader = res.headers.get('set-cookie');
-    expect(setCookieHeader).toBeNull();
+    expect(setCookieHeader).toContain('rotated-stream=stream-value');
+  });
+
+  it('streaming SSR path: Set-Cookie written after a yield is dropped', async () => {
+    // The inherent constraint: once the streaming response is committed, the
+    // pump advances generators with the headers already sent. A cookie set
+    // between yields never reaches the response. Rotate sessions from an
+    // action (or before the first yield) when the page streams.
+    const ref = defineLoader(async function* (ctx) {
+      yield { progress: 50 };
+      setCookie(ctx.c, 'too-late', 'nope');
+      yield { progress: 100 };
+    });
+
+    const loc: RouteHook = {
+      path: '/x',
+      url: 'http://localhost/x',
+      searchParams: {},
+      pathParams: {},
+    } as unknown as RouteHook;
+
+    function Page() {
+      return (
+        <html>
+          <body>
+            <Loader loader={ref} location={loc}>
+              <div>ok</div>
+            </Loader>
+          </body>
+        </html>
+      );
+    }
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Page />));
+
+    const res = await app.request('http://localhost/x');
+
+    expect(res.headers.get('set-cookie')).toBeNull();
   });
 });

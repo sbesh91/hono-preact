@@ -174,6 +174,17 @@ export async function renderPage(
             encoder.encode(`<!doctype html>${beforeBody}\n${bootstrap}\n`)
           );
 
+          // Yield one microtask before advancing any loader generator past
+          // its first yield. `renderPage` is still on the synchronous frame
+          // that constructs this response (`new ReadableStream(...)` returns,
+          // then `c.body(...)` runs and commits the headers). Resuming a
+          // generator can call `setCookie(ctx.c, ...)`, which mutates Hono's
+          // prepared headers; deferring the pump guarantees the response is
+          // built first, so post-first-yield header writes are consistently
+          // excluded rather than racing construction. Cookies must be set
+          // before the loader's first yield to reach the streamed response.
+          await Promise.resolve();
+
           // Drive each pending generator in parallel; emit script tags per chunk.
           await Promise.all(
             streamingLoaders.map(async ({ loaderId, gen }) => {
@@ -234,19 +245,24 @@ export async function renderPage(
     }
   });
 
-  return new Response(responseStream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
-      // Prevent buffering / transformation by intermediate proxies. nginx
-      // honors `X-Accel-Buffering: no` to flush per chunk; `no-transform`
-      // stops middleboxes from rebuffering or gzipping the stream as a
-      // single response. We deliberately do NOT add `no-store`: streamed
-      // HTML can still be legitimately cacheable, and users can override
-      // via their own middleware.
-      'X-Accel-Buffering': 'no',
-      'Cache-Control': 'no-transform',
-    },
+  // Route through `c.body()` rather than `new Response(...)` so Hono merges
+  // its prepared headers into the streamed response. A streaming loader's
+  // body runs up to its first `yield` during prerender, so a `Set-Cookie`
+  // written via `ctx.c` before that yield is sitting in Hono's prepared
+  // headers by now; constructing the Response directly would drop it. The
+  // non-streaming branch above gets this for free via `c.html()`. Cookies
+  // written after a yield run in the pump below, once headers are already
+  // sent, and are unavoidably lost.
+  return c.body(responseStream, 200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Transfer-Encoding': 'chunked',
+    // Prevent buffering / transformation by intermediate proxies. nginx
+    // honors `X-Accel-Buffering: no` to flush per chunk; `no-transform`
+    // stops middleboxes from rebuffering or gzipping the stream as a
+    // single response. We deliberately do NOT add `no-store`: streamed
+    // HTML can still be legitimately cacheable, and users can override
+    // via their own middleware.
+    'X-Accel-Buffering': 'no',
+    'Cache-Control': 'no-transform',
   });
 }
