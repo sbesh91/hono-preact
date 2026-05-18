@@ -3,15 +3,16 @@ import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
 import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
+import type { HonoPreactAdapter } from './adapter.js';
 
-export interface GenerateServerEntrySourceOptions {
+export interface GenerateCoreAppModuleOptions {
   layoutAbsPath: string;
   routesAbsPath: string;
   apiAbsPath: string | undefined;
 }
 
-export function generateServerEntrySource(
-  opts: GenerateServerEntrySourceOptions
+export function generateCoreAppModule(
+  opts: GenerateCoreAppModuleOptions
 ): string {
   const { layoutAbsPath, routesAbsPath, apiAbsPath } = opts;
 
@@ -197,77 +198,76 @@ function walk(node: unknown, found: ApiShadowingRoute[]): void {
   }
 }
 
-// Project-relative path of the on-disk file the plugin writes during
-// configResolved. We use a relative path because @hono/vite-build prepends
-// `/` to the entry when constructing its `import.meta.glob([...])`, and
-// absolute paths produce a `//Users/...` double-slash that's brittle in the
-// Cloudflare Workers runtime. Project-relative keeps the resulting glob
-// pattern (`/node_modules/.vite/hono-preact/server-entry.tsx`) clean.
-//
-// We write to disk rather than register a virtual module because
-// @hono/vite-build resolves its entry via `import.meta.glob([entry])`, which
-// cannot match a `virtual:*` id. The Cloudflare Workers runtime then fails
-// with "Can't import modules from ['/virtual:...']" when it tries to load the
-// generated bundle.
-export const GENERATED_SERVER_ENTRY_RELATIVE =
+// Both generated files live in the Vite cache dir. The wrapper keeps the
+// `server-entry.tsx` name because that is the file the adapter's build/dev
+// plugins (and wrangler.jsonc `main`) point at; the core app module is a
+// separate file the wrapper imports.
+export const GENERATED_CORE_APP_RELATIVE =
+  'node_modules/.vite/hono-preact/core-app.tsx';
+export const GENERATED_ENTRY_WRAPPER_RELATIVE =
   'node_modules/.vite/hono-preact/server-entry.tsx';
 
-export function generatedServerEntryAbsPath(
+export function generatedCoreAppAbsPath(cwd: string = process.cwd()): string {
+  return path.resolve(cwd, GENERATED_CORE_APP_RELATIVE);
+}
+
+export function generatedEntryWrapperAbsPath(
   cwd: string = process.cwd()
 ): string {
-  return path.resolve(cwd, GENERATED_SERVER_ENTRY_RELATIVE);
+  return path.resolve(cwd, GENERATED_ENTRY_WRAPPER_RELATIVE);
 }
 
 export interface ServerEntryPluginOptions {
   layout: string; // project-relative or absolute
   routes: string;
   api: string; // project-relative or absolute; absence treated as "no api"
-  outputPath: string; // absolute path to write the generated entry file
+  adapter: HonoPreactAdapter;
+  coreAppPath: string; // absolute path to write the core app module
+  entryWrapperPath: string; // absolute path to write the adapter wrapper
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
-  // Paths resolved during configResolved (cheap) — actual disk write
-  // happens in buildStart so config-only Vite invocations (IDE probes,
-  // typecheck-only runs, dependency-optimizer cold runs) don't side-effect
-  // the cache directory. Writing on every config resolution was a tax that
-  // showed up when integration tests loaded vite.config.ts to inspect the
-  // plugin chain.
-  let layoutAbsPath: string | undefined;
-  let routesAbsPath: string | undefined;
   let apiAbsPath: string | undefined;
 
   return {
     name: 'hono-preact:server-entry',
     enforce: 'pre',
-    configResolved(config) {
-      layoutAbsPath = path.isAbsolute(opts.layout)
+    // Write generated files in `config` -- the earliest hook -- so the entry
+    // wrapper exists before @cloudflare/vite-plugin's own `config` hook does
+    // fs.existsSync on wrangler.jsonc `main`.
+    config(userConfig) {
+      const root = userConfig.root
+        ? path.resolve(userConfig.root)
+        : process.cwd();
+      const layoutAbsPath = path.isAbsolute(opts.layout)
         ? opts.layout
-        : path.resolve(config.root, opts.layout);
-      routesAbsPath = path.isAbsolute(opts.routes)
+        : path.resolve(root, opts.layout);
+      const routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
-        : path.resolve(config.root, opts.routes);
+        : path.resolve(root, opts.routes);
       const candidateApi = path.isAbsolute(opts.api)
         ? opts.api
-        : path.resolve(config.root, opts.api);
+        : path.resolve(root, opts.api);
       apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
-    },
-    buildStart() {
-      // configResolved must have run first. Bail loudly if not — silent
-      // emission of a stub would be much harder to debug.
-      if (!layoutAbsPath || !routesAbsPath) {
-        throw new Error(
-          '[hono-preact] server-entry buildStart fired before configResolved; ' +
-            'layout/routes paths were never resolved.'
-        );
-      }
-      const source = generateServerEntrySource({
+
+      const source = generateCoreAppModule({
         layoutAbsPath,
         routesAbsPath,
         apiAbsPath,
       });
-      fs.mkdirSync(path.dirname(opts.outputPath), { recursive: true });
-      fs.writeFileSync(opts.outputPath, source, 'utf8');
+      fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
+      fs.writeFileSync(opts.coreAppPath, source, 'utf8');
 
+      const wrapper = opts.adapter.wrapEntry({
+        root,
+        coreAppModuleId: opts.coreAppPath,
+        entryWrapperId: opts.entryWrapperPath,
+      });
+      fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
+    },
+    buildStart() {
+      // The api.ts shadowing diagnostic stays in buildStart: it needs
+      // this.warn / this.error, which the `config` hook context lacks.
       if (!apiAbsPath) return;
       const apiSource = fs.readFileSync(apiAbsPath, 'utf8');
       const shadowing = findApiShadowingRoutes(apiSource);

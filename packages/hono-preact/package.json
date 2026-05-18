@@ -44,6 +44,10 @@
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
     },
+    "./adapter-cloudflare": {
+      "types": "./dist/adapter-cloudflare.d.ts",
+      "import": "./dist/adapter-cloudflare.js"
+    },
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./dist/internal.js"
@@ -57,18 +61,26 @@
   "dependencies": {
     "@babel/parser": "^7.29.2",
     "@babel/types": "^7.29.0",
-    "@hono/vite-build": "^1.11.1",
-    "@hono/vite-dev-server": "^0.25.1",
     "@preact/preset-vite": "^2.10.5",
     "magic-string": "^0.30.21"
   },
   "peerDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
     "preact-iso": ">=2.11.0",
     "preact-render-to-string": ">=6.0.0",
-    "vite": ">=5.0.0"
+    "vite": ">=6.0.0",
+    "wrangler": "^4.92.0"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/vite-plugin": {
+      "optional": true
+    },
+    "wrangler": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@hono-preact/iso": "workspace:*",

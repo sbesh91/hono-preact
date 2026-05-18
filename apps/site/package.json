@@ -3,12 +3,12 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite --force",
-    "build": "NODE_ENV=production vite build --mode client && vite build",
+    "build": "NODE_ENV=production vite build",
     "visualize": "NODE_ENV=production VISUALIZE=1 vite build --mode client",
     "updates": "npx npm-check-updates -i --format group",
-    "deploy": "wrangler deploy",
-    "deploy:upload": "wrangler versions upload",
-    "preview": "npm run build && wrangler dev"
+    "deploy": "wrangler deploy -c dist/hono_preact/wrangler.json",
+    "deploy:upload": "wrangler versions upload -c dist/hono_preact/wrangler.json",
+    "preview": "vite preview"
   },
   "dependencies": {
     "hono-preact": "workspace:*",
@@ -27,15 +27,13 @@
     "@babel/types": "^7.29.0",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
+    "@cloudflare/vite-plugin": "^1.37.1",
     "@hono/node-server": "^1.19.14",
-    "@hono/vite-build": "^1.11.1",
-    "@hono/vite-dev-server": "^0.25.1",
     "@mdx-js/rollup": "^3.1.1",
     "@preact/preset-vite": "^2.10.5",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.6.0",
     "magic-string": "^0.30.21",
-    "miniflare": "^4.20260415.0",
     "postcss": "^8.5.10",
     "preact-render-to-string": "^6.6.7",
     "prettier": "^3.8.3",
@@ -45,6 +43,6 @@
     "tailwindcss": "^4.2.2",
     "typescript": "*",
     "vite": "*",
-    "wrangler": "^4.83.0"
+    "wrangler": "^4.92.0"
   }
 }
