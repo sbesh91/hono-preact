@@ -25,6 +25,10 @@ export interface HonoPreactOptions {
 }
 
 export function honoPreact(options: HonoPreactOptions): Plugin[] {
+  // `?? {}` is deliberate: TypeScript types `options` as required, but a
+  // zero-arg `honoPreact()` call still reaches here at runtime. Without the
+  // fallback, destructuring `undefined` throws a cryptic TypeError; with it,
+  // the friendly `adapter`-required guard below fires instead.
   const {
     adapter,
     layout = 'src/Layout.tsx',

@@ -368,6 +368,10 @@ describe('serverEntryPlugin', () => {
 
     expect(fs.existsSync(coreAppPath)).toBe(true);
     expect(fs.existsSync(entryWrapperPath)).toBe(true);
+    // The entry wrapper is the adapter's wrapEntry() output, importing the
+    // core app module by its absolute path.
+    const wrapperCode = fs.readFileSync(entryWrapperPath, 'utf8');
+    expect(wrapperCode).toContain(`export { default } from '${coreAppPath}';`);
     const code = fs.readFileSync(coreAppPath, 'utf8');
     expect(code).toContain(
       `import Layout from '${path.join(tmp, 'src', 'Layout.tsx')}';`
