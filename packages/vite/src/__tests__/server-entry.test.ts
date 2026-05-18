@@ -3,16 +3,53 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import {
-  GENERATED_SERVER_ENTRY_RELATIVE,
+  GENERATED_CORE_APP_RELATIVE,
+  GENERATED_ENTRY_WRAPPER_RELATIVE,
   findApiShadowingRoutes,
-  generateServerEntrySource,
-  generatedServerEntryAbsPath,
+  generateCoreAppModule,
+  generatedCoreAppAbsPath,
+  generatedEntryWrapperAbsPath,
   serverEntryPlugin,
 } from '../server-entry.js';
 
-describe('generateServerEntrySource', () => {
+// Minimal adapter stub for plugin tests that only check file-writing behavior.
+const stubAdapter = {
+  name: 'stub',
+  vitePlugins: () => [],
+  wrapEntry: ({
+    coreAppModuleId,
+  }: {
+    root: string;
+    coreAppModuleId: string;
+    entryWrapperId: string;
+  }) => `// stub wrapper\nexport { default } from '${coreAppModuleId}';\n`,
+};
+
+describe('generateCoreAppModule', () => {
+  it('emits the Hono app with loaders, actions, renderPage and a default export', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+    });
+    expect(src).toContain('loadersHandler');
+    expect(src).toContain('actionsHandler');
+    expect(src).toContain('renderPage');
+    expect(src).toContain('export default app;');
+  });
+
+  it('mounts the user api app when apiAbsPath is provided', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: '/p/src/api.ts',
+    });
+    expect(src).toContain("import userApp from '/p/src/api.ts'");
+    expect(src).toContain(".route('/', userApp)");
+  });
+
   it('emits the framework imports, mounts loaders/actions/catchall, omits api when not provided', () => {
-    const src = generateServerEntrySource({
+    const src = generateCoreAppModule({
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: undefined,
@@ -72,7 +109,7 @@ describe('generateServerEntrySource', () => {
   });
 
   it('emits the api import and mounts userApp before the reserved paths and catchall', () => {
-    const src = generateServerEntrySource({
+    const src = generateCoreAppModule({
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: '/proj/src/api.ts',
@@ -92,6 +129,53 @@ describe('generateServerEntrySource', () => {
     expect(loadersIdx).toBeGreaterThan(apiIdx);
     expect(actionsIdx).toBeGreaterThan(loadersIdx);
     expect(catchallIdx).toBeGreaterThan(actionsIdx);
+  });
+});
+
+describe('generated entry paths', () => {
+  it('core app and entry wrapper resolve to distinct files under the vite cache', () => {
+    const core = generatedCoreAppAbsPath('/p');
+    const wrapper = generatedEntryWrapperAbsPath('/p');
+    expect(core).toContain('node_modules/.vite/hono-preact/');
+    expect(wrapper).toContain('node_modules/.vite/hono-preact/');
+    expect(core).not.toBe(wrapper);
+  });
+
+  it('GENERATED_ENTRY_WRAPPER_RELATIVE is the documented project-relative entry path', () => {
+    expect(GENERATED_ENTRY_WRAPPER_RELATIVE).toBe(
+      'node_modules/.vite/hono-preact/server-entry.tsx'
+    );
+  });
+
+  it('GENERATED_CORE_APP_RELATIVE is distinct from the entry wrapper', () => {
+    expect(GENERATED_CORE_APP_RELATIVE).toBe(
+      'node_modules/.vite/hono-preact/core-app.tsx'
+    );
+    expect(GENERATED_CORE_APP_RELATIVE).not.toBe(
+      GENERATED_ENTRY_WRAPPER_RELATIVE
+    );
+  });
+
+  it('generatedEntryWrapperAbsPath() resolves against cwd by default', () => {
+    const p = generatedEntryWrapperAbsPath();
+    expect(path.isAbsolute(p)).toBe(true);
+    expect(p.endsWith(GENERATED_ENTRY_WRAPPER_RELATIVE)).toBe(true);
+
+    const overridden = generatedEntryWrapperAbsPath('/some/other/root');
+    expect(overridden).toBe(
+      path.join('/some/other/root', GENERATED_ENTRY_WRAPPER_RELATIVE)
+    );
+  });
+
+  it('generatedCoreAppAbsPath() resolves against cwd by default', () => {
+    const p = generatedCoreAppAbsPath();
+    expect(path.isAbsolute(p)).toBe(true);
+    expect(p.endsWith(GENERATED_CORE_APP_RELATIVE)).toBe(true);
+
+    const overridden = generatedCoreAppAbsPath('/some/other/root');
+    expect(overridden).toBe(
+      path.join('/some/other/root', GENERATED_CORE_APP_RELATIVE)
+    );
   });
 });
 
@@ -250,31 +334,21 @@ describe('findApiShadowingRoutes', () => {
 });
 
 describe('serverEntryPlugin', () => {
-  it('GENERATED_SERVER_ENTRY_RELATIVE is the documented project-relative entry path', () => {
-    expect(GENERATED_SERVER_ENTRY_RELATIVE).toBe(
-      'node_modules/.vite/hono-preact/server-entry.tsx'
-    );
-  });
-
-  it('generatedServerEntryAbsPath() resolves against cwd by default', () => {
-    const p = generatedServerEntryAbsPath();
-    expect(path.isAbsolute(p)).toBe(true);
-    expect(p.endsWith(GENERATED_SERVER_ENTRY_RELATIVE)).toBe(true);
-
-    const overridden = generatedServerEntryAbsPath('/some/other/root');
-    expect(overridden).toBe(
-      path.join('/some/other/root', GENERATED_SERVER_ENTRY_RELATIVE)
-    );
-  });
-
-  // The disk write happens in buildStart (not configResolved) so config-only
-  // Vite invocations (IDE probes, vitest loading the config, dependency
-  // optimizer cold runs) don't side-effect the cache directory. These tests
-  // drive both lifecycle hooks in order.
-  it('buildStart writes the generated entry to outputPath (no api file)', () => {
+  // The disk write happens in config (the earliest Vite hook) so the entry
+  // wrapper exists before @cloudflare/vite-plugin's own `config` hook does
+  // fs.existsSync on wrangler.jsonc `main`. These tests drive config + buildStart.
+  it('config writes the core app module and entry wrapper (no api file)', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
-    const outputPath = path.join(
+    const coreAppPath = path.join(
       tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
       '.vite',
       'hono-preact',
       'server-entry.tsx'
@@ -284,28 +358,21 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts', // configured but does not exist on disk
-      outputPath,
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
     });
-    (
-      plugin as { configResolved?: (c: { root: string }) => void }
-    ).configResolved?.({
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
       root: tmp,
     });
-    // configResolved alone should NOT have written anything.
-    expect(fs.existsSync(outputPath)).toBe(false);
 
-    const ctx = {
-      warn: () => {},
-      error: (m: unknown) => {
-        throw new Error(typeof m === 'string' ? m : String(m));
-      },
-    };
-    (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
-      ctx
-    );
-
-    expect(fs.existsSync(outputPath)).toBe(true);
-    const code = fs.readFileSync(outputPath, 'utf8');
+    expect(fs.existsSync(coreAppPath)).toBe(true);
+    expect(fs.existsSync(entryWrapperPath)).toBe(true);
+    // The entry wrapper is the adapter's wrapEntry() output, importing the
+    // core app module by its absolute path.
+    const wrapperCode = fs.readFileSync(entryWrapperPath, 'utf8');
+    expect(wrapperCode).toContain(`export { default } from '${coreAppPath}';`);
+    const code = fs.readFileSync(coreAppPath, 'utf8');
     expect(code).toContain(
       `import Layout from '${path.join(tmp, 'src', 'Layout.tsx')}';`
     );
@@ -318,15 +385,23 @@ describe('serverEntryPlugin', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('buildStart writes an entry that includes api when the file exists', () => {
+  it('config writes a core app that includes api when the file exists', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('/api/x', (c) => c.text('ok'));\n`
     );
-    const outputPath = path.join(
+    const coreAppPath = path.join(
       tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
       '.vite',
       'hono-preact',
       'server-entry.tsx'
@@ -336,24 +411,15 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
-      outputPath,
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
     });
-    (
-      plugin as { configResolved?: (c: { root: string }) => void }
-    ).configResolved?.({
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
       root: tmp,
     });
-    const ctx = {
-      warn: () => {},
-      error: (m: unknown) => {
-        throw new Error(typeof m === 'string' ? m : String(m));
-      },
-    };
-    (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
-      ctx
-    );
 
-    const code = fs.readFileSync(outputPath, 'utf8');
+    const code = fs.readFileSync(coreAppPath, 'utf8');
     expect(code).toContain(
       `import userApp from '${path.join(tmp, 'src', 'api.ts')}';`
     );
@@ -369,8 +435,16 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('*', (c) => c.text('catch'));\n`
     );
-    const outputPath = path.join(
+    const coreAppPath = path.join(
       tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
       '.vite',
       'hono-preact',
       'server-entry.tsx'
@@ -379,11 +453,13 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
-      outputPath,
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
     });
-    (
-      plugin as { configResolved?: (c: { root: string }) => void }
-    ).configResolved?.({ root: tmp });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
 
     // Rollup's this.error throws; mimic that.
     const ctx = {
@@ -408,8 +484,16 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().post('/__actions', (c) => c.text('mine'));\n`
     );
-    const outputPath = path.join(
+    const coreAppPath = path.join(
       tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
       '.vite',
       'hono-preact',
       'server-entry.tsx'
@@ -418,11 +502,13 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
-      outputPath,
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
     });
-    (
-      plugin as { configResolved?: (c: { root: string }) => void }
-    ).configResolved?.({ root: tmp });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
 
     const ctx = {
       warn: () => {},
@@ -446,8 +532,16 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nconst app = new Hono();\napp.notFound((c) => c.text('nope', 404));\nexport default app;\n`
     );
-    const outputPath = path.join(
+    const coreAppPath = path.join(
       tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
       '.vite',
       'hono-preact',
       'server-entry.tsx'
@@ -456,11 +550,13 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
-      outputPath,
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
     });
-    (
-      plugin as { configResolved?: (c: { root: string }) => void }
-    ).configResolved?.({ root: tmp });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
 
     const warnings: string[] = [];
     const ctx = {
@@ -490,7 +586,7 @@ describe('mount-order composition (why api.ts is mounted first)', () => {
     const userApp = new Hono();
     userApp.use('*', csrf({ origin: 'https://example.com' }));
 
-    // Mirrors the order generateServerEntrySource emits: userApp first.
+    // Mirrors the order generateCoreAppModule emits: userApp first.
     const app = new Hono().route('/', userApp).post('/__actions', (c) => {
       actionRan = true;
       return c.json({ ok: true });

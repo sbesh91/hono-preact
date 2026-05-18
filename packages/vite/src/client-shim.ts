@@ -21,10 +21,11 @@ export function clientShimPlugin(clientEntry: string): Plugin {
   return {
     name: 'hono-preact:client-shim',
     enforce: 'pre',
-    apply(_, { command, mode }) {
-      // Inject during dev (`vite serve`) and the client build only. The SSR
-      // build runs in Node/Workers and does not need the shim.
-      return command === 'serve' || (command === 'build' && mode === 'client');
+    apply(_, { command }) {
+      // The shim is needed for dev and for the build. The `transform` hook
+      // below self-gates to the client entry module, so it never injects
+      // into SSR/worker code regardless of build environment.
+      return command === 'serve' || command === 'build';
     },
     configResolved(config) {
       resolvedEntry = path.resolve(config.root, clientEntry);

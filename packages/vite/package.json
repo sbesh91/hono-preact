@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./adapter-cloudflare": {
+      "types": "./dist/adapter-cloudflare.d.ts",
+      "import": "./dist/adapter-cloudflare.js"
     }
   },
   "scripts": {
@@ -43,12 +47,21 @@
     "magic-string": "^0.30.21"
   },
   "peerDependencies": {
-    "@hono/vite-build": "^1.11.1",
-    "@hono/vite-dev-server": "^0.25.1",
+    "@cloudflare/vite-plugin": "^1.37.1",
     "@preact/preset-vite": "^2.10.5",
-    "vite": ">=5.0.0"
+    "vite": ">=6.0.0",
+    "wrangler": "^4.92.0"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/vite-plugin": {
+      "optional": true
+    },
+    "wrangler": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
     "hono": "^4.12.14",
     "preact": "^10.29.1",
     "preact-iso": "github:preactjs/preact-iso#v3",

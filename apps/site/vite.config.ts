@@ -1,4 +1,5 @@
 import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
@@ -43,6 +44,10 @@ export default defineConfig((env) => ({
         replacement: resolve(__dirname, '../../packages/hono-preact/src/vite.ts'),
       },
       {
+        find: 'hono-preact/adapter-cloudflare',
+        replacement: resolve(__dirname, '../../packages/hono-preact/src/adapter-cloudflare.ts'),
+      },
+      {
         find: 'hono-preact',
         replacement: resolve(__dirname, '../../packages/hono-preact/src/index.ts'),
       },
@@ -67,7 +72,7 @@ export default defineConfig((env) => ({
     sourcemap: visualize && env.mode === 'client',
   },
   plugins: [
-    honoPreact(),
+    honoPreact({ adapter: cloudflareAdapter() }),
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
     ...(visualize && env.mode === 'client'
       ? [
