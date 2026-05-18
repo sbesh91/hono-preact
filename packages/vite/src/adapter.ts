@@ -14,6 +14,10 @@ export interface HonoPreactAdapterContext {
   coreAppModuleId: string;
   /** Absolute path where the adapter's wrapEntry() output is written. */
   entryWrapperId: string;
+  /** Absolute path of the user's api module, if it exists. Used by adapters
+   *  that need to reach api-module exports (e.g. the Node adapter's
+   *  WebSocket `injectWebSocket`). Undefined when the project has no api.ts. */
+  apiModuleId?: string;
 }
 
 /**

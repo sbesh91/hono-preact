@@ -262,6 +262,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         root,
         coreAppModuleId: opts.coreAppPath,
         entryWrapperId: opts.entryWrapperPath,
+        apiModuleId: apiAbsPath,
       });
       fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
     },
