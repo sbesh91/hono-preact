@@ -26,11 +26,10 @@ function makePlugin(entry = './src/client.tsx', root = '/repo'): ShimPlugin {
 }
 
 describe('clientShimPlugin', () => {
-  it('runs in dev (serve) and in client builds, but not in SSR builds', () => {
+  it('runs in dev (serve) and in builds', () => {
     const apply = (clientShimPlugin('./src/client.tsx') as ShimPlugin).apply!;
     expect(apply({}, { command: 'serve', mode: 'development' })).toBe(true);
-    expect(apply({}, { command: 'build', mode: 'client' })).toBe(true);
-    expect(apply({}, { command: 'build', mode: 'production' })).toBe(false);
+    expect(apply({}, { command: 'build', mode: 'production' })).toBe(true);
   });
 
   it('resolves the virtual id to a private resolved id', () => {
@@ -82,6 +81,20 @@ describe('clientShimPlugin', () => {
     const plugin = makePlugin('./src/client.tsx', '/repo');
     const result = plugin.transform('// other', '/repo/src/iso.tsx');
     expect(result).toBeUndefined();
+  });
+});
+
+describe('clientShimPlugin apply gate', () => {
+  it('applies during serve', () => {
+    const p = clientShimPlugin('virtual:hono-preact/client');
+    const apply = p.apply as Function;
+    expect(apply({}, { command: 'serve', mode: 'development' })).toBe(true);
+  });
+
+  it('applies during a unified build (no client mode)', () => {
+    const p = clientShimPlugin('virtual:hono-preact/client');
+    const apply = p.apply as Function;
+    expect(apply({}, { command: 'build', mode: 'production' })).toBe(true);
   });
 });
 
