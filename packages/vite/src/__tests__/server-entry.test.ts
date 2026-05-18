@@ -71,7 +71,7 @@ describe('generateServerEntrySource', () => {
     expect(src).not.toContain('<Layout');
   });
 
-  it('emits the api import and mount when apiAbsPath is provided, before the catchall', () => {
+  it('emits the api import and mounts userApp before the reserved paths and catchall', () => {
     const src = generateServerEntrySource({
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
@@ -81,11 +81,17 @@ describe('generateServerEntrySource', () => {
     expect(src).toContain(`import userApp from '/proj/src/api.ts';`);
     expect(src).toContain(`.route('/', userApp)`);
 
-    // The user's app must be mounted BEFORE the catchall.
+    // The user's app must be mounted BEFORE the reserved paths so that
+    // middleware registered in api.ts composes ahead of loadersHandler /
+    // actionsHandler. See docs/superpowers/specs/2026-05-17-reserved-path-middleware-design.md
     const apiIdx = src.indexOf(`.route('/', userApp)`);
+    const loadersIdx = src.indexOf(`'/__loaders'`);
+    const actionsIdx = src.indexOf(`'/__actions'`);
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(apiIdx).toBeGreaterThan(-1);
-    expect(catchallIdx).toBeGreaterThan(apiIdx);
+    expect(loadersIdx).toBeGreaterThan(apiIdx);
+    expect(actionsIdx).toBeGreaterThan(loadersIdx);
+    expect(catchallIdx).toBeGreaterThan(actionsIdx);
   });
 });
 

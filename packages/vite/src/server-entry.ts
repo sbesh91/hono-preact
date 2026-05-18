@@ -41,9 +41,9 @@ export function generateServerEntrySource(
     `const handlerOpts = { dev: import.meta.env.DEV };\n` +
     `\n` +
     `export const app = new Hono()\n` +
+    apiMount +
     `  .post('/__loaders', loadersHandler(serverModules, handlerOpts))\n` +
     `  .post('/__actions', actionsHandler(serverModules, handlerOpts))\n` +
-    apiMount +
     `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes })))));\n` +
     `\n` +
     `export default app;\n`
