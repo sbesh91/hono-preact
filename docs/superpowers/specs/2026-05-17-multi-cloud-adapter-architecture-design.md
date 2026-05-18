@@ -195,8 +195,10 @@ In `packages/vite/src/server-entry.ts`:
 - The `server-entry` plugin writes two files under
   `node_modules/.vite/hono-preact/`: the core app module and the adapter's
   `wrapEntry()` output.
-- `findApiCatchAllRoutes()` and the catch-all warnings are platform-agnostic
-  and unchanged.
+- `findApiShadowingRoutes()` and the api.ts shadowing diagnostics (introduced
+  by PR #49 / issue #43 — it fails the build on api.ts routes that shadow the
+  reserved `/__loaders` and `/__actions` paths) are platform-agnostic and
+  unchanged.
 - **The `entry` escape-hatch option is removed.** With the adapter owning the
   platform tail, a user-supplied monolithic entry has no coherent plug-in
   point. The `useGeneratedEntry` branching (`hono-preact.ts:47-48, 118-127`) is

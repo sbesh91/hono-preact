@@ -173,7 +173,9 @@ Rename `generateServerEntrySource` to `generateCoreAppModule` (its body is uncha
 
 **Files:**
 - Modify: `packages/vite/src/server-entry.ts`
-- Test: `packages/vite/src/__tests__/server-entry.test.ts` (create if absent; otherwise extend)
+- Modify: `packages/vite/src/__tests__/server-entry.test.ts` — this file already exists (PR #49 added ~285 lines of tests). It references the symbols this task renames/removes (`generateServerEntrySource`, `GENERATED_SERVER_ENTRY_RELATIVE`, `generatedServerEntryAbsPath`), so its existing references must be migrated, not just extended.
+
+> **PR #49 context:** `server-entry.ts` was rewritten by the reserved-path-middleware merge. `generateServerEntrySource` now emits `.route('/', userApp)` ahead of `/__loaders` / `/__actions`, and `findApiShadowingRoutes` (formerly `findApiCatchAllRoutes`) fails the build on shadowing routes. This task only renames/splits; it does not change that route ordering or the shadowing logic.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -275,7 +277,8 @@ const wrapper = opts.adapter.wrapEntry({
 fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
 ```
 
-Keep the existing `findApiCatchAllRoutes` warning block unchanged.
+Keep the existing `findApiShadowingRoutes` block (the api.ts shadowing
+warnings + build-failure `this.error`, from PR #49) unchanged.
 
 > **Spike dependency:** Task 0 Step 4 Q2 determines whether `buildStart` is early enough for `@cloudflare/vite-plugin` to find the entry. If the spike found the entry must exist before config resolution, move both `writeFileSync` calls into `configResolved` instead of `buildStart` (accepting the IDE-probe side-effect the current `buildStart` placement was avoiding).
 
@@ -294,12 +297,20 @@ export {
 export type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 6: Migrate the existing `server-entry.test.ts` references**
+
+The PR #49 tests reference the renamed/removed symbols. Update `packages/vite/src/__tests__/server-entry.test.ts`:
+- In the import block and the `describe('generateServerEntrySource', ...)` block: rename every `generateServerEntrySource` call to `generateCoreAppModule`. Rename the `describe` title to `'generateCoreAppModule'`. The option fields (`layoutAbsPath`, `routesAbsPath`, `apiAbsPath`) are unchanged, and the asserted output is unchanged, so only the function name moves.
+- Replace the `describe('serverEntryPlugin', ...)` block's assertions on `GENERATED_SERVER_ENTRY_RELATIVE` and `generatedServerEntryAbsPath` with equivalent assertions on `GENERATED_ENTRY_WRAPPER_RELATIVE` + `generatedEntryWrapperAbsPath` and `GENERATED_CORE_APP_RELATIVE` + `generatedCoreAppAbsPath` (both new path pairs from Step 3). Update the import block to match.
+- Update the stale comment in the `describe('mount-order composition', ...)` block that says "Mirrors the order generateServerEntrySource emits" to name `generateCoreAppModule`.
+- Leave every `findApiShadowingRoutes` test untouched — that symbol is unchanged.
+
+- [ ] **Step 7: Run tests to verify they pass**
 
 Run: `pnpm vitest run packages/vite/src/__tests__/server-entry.test.ts`
-Expected: PASS.
+Expected: PASS — both the new tests from Step 1 and the migrated PR #49 tests.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add packages/vite/src/server-entry.ts packages/vite/src/index.ts packages/vite/src/__tests__/server-entry.test.ts
