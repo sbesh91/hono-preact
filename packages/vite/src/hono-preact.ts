@@ -1,8 +1,5 @@
-import build from '@hono/vite-build/cloudflare-workers';
-import devServer, { defaultOptions } from '@hono/vite-dev-server';
-import cloudflareAdapter from '@hono/vite-dev-server/cloudflare';
 import preact from '@preact/preset-vite';
-import { type BuildEnvironmentOptions, type Plugin } from 'vite';
+import { type Plugin } from 'vite';
 import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
@@ -10,102 +7,60 @@ import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
 import { guardStripPlugin } from './guard-strip.js';
 import {
-  GENERATED_SERVER_ENTRY_RELATIVE,
-  generatedServerEntryAbsPath,
+  generatedCoreAppAbsPath,
+  generatedEntryWrapperAbsPath,
   serverEntryPlugin,
 } from './server-entry.js';
+import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 
 export interface HonoPreactOptions {
-  // Source paths (for the generated server entry). All optional.
+  /** Deployment target. Required. See hono-preact/adapter-cloudflare. */
+  adapter: HonoPreactAdapter;
+
+  // Source paths (for the generated core app module). All optional.
   layout?: string; // default 'src/Layout.tsx'
   routes?: string; // default 'src/routes.ts'
   api?: string; // default 'src/api.ts' (only loaded if file exists)
   clientEntry?: string; // default 'virtual:hono-preact/client'
-
-  // Server entry. Defaults to a generated file the framework writes into the
-  // Vite cache directory. Rare override.
-  entry?: string;
-
-  // Build-tuning escape hatches (preserved).
-  clientBuild?: BuildEnvironmentOptions;
-  serverBuild?: BuildEnvironmentOptions;
-  sharedBuild?: BuildEnvironmentOptions;
 }
 
-export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
+export function honoPreact(options: HonoPreactOptions): Plugin[] {
   const {
+    adapter,
     layout = 'src/Layout.tsx',
     routes = 'src/routes.ts',
     api = 'src/api.ts',
     clientEntry = VIRTUAL_CLIENT_ENTRY_ID,
-    entry,
-    clientBuild = {},
-    serverBuild = {},
-    sharedBuild = {},
-  } = options;
+  } = options ?? {};
 
-  const useGeneratedEntry = entry === undefined;
-  const resolvedEntry = entry ?? GENERATED_SERVER_ENTRY_RELATIVE;
+  if (!adapter) {
+    throw new Error(
+      '[hono-preact] honoPreact() requires an `adapter` option. ' +
+        "Import one, e.g. `import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare'`, " +
+        'and pass `honoPreact({ adapter: cloudflareAdapter() })`.'
+    );
+  }
 
+  const coreAppPath = generatedCoreAppAbsPath();
+  const entryWrapperPath = generatedEntryWrapperAbsPath();
+  const ctx: HonoPreactAdapterContext = {
+    root: process.cwd(),
+    coreAppModuleId: coreAppPath,
+    entryWrapperId: entryWrapperPath,
+  };
+
+  // Only genuinely platform-agnostic config lives here. Client-vs-server
+  // build config is owned by the adapter's plugins (Environment API).
   const configPlugin: Plugin = {
     name: 'hono-preact:config',
-    config(_, { mode }) {
-      const shared = {
+    config() {
+      return {
         resolve: {
           dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
         },
         build: {
           target: 'esnext' as const,
           assetsDir: 'static',
-          ssrEmitAssets: true,
-          minify: true,
-          ...sharedBuild,
-        },
-      };
-
-      if (mode === 'client') {
-        const { rollupOptions: userRollup, ...restClientBuild } = clientBuild;
-        return {
-          ...shared,
-          build: {
-            ...shared.build,
-            sourcemap: true,
-            cssCodeSplit: true,
-            copyPublicDir: false,
-            ...restClientBuild,
-            rollupOptions: {
-              input: userRollup?.input ?? [clientEntry],
-              output: {
-                entryFileNames: 'static/client.js',
-                chunkFileNames: 'static/[name]-[hash].js',
-                assetFileNames: 'static/[name]-[hash].[ext]',
-                // Array-form output is not supported; use an OutputOptions object to
-                // override individual fields (entryFileNames, chunkFileNames, etc.).
-                ...(userRollup?.output && !Array.isArray(userRollup.output)
-                  ? userRollup.output
-                  : {}),
-              },
-            },
-          },
-        };
-      }
-
-      return {
-        ...shared,
-        ssr: {
-          noExternal: ['preact-render-to-string', 'preact-iso', 'hono-preact'],
-        },
-        build: {
-          ...shared.build,
-          // Inline sourcemaps so SSR error stacks point at user source
-          // (e.g. `pages/issue.server.ts:42`) instead of the rolled-up
-          // Worker chunk. We pick `inline` over a separate .map file because
-          // SSR is a single bundle and Workers tooling will not look at a
-          // sibling .map. Bundle size grows; for typical app server bundles
-          // this is a few hundred KB at most and is worth the debuggability.
-          // Users can override by passing `serverBuild.sourcemap: false`.
-          sourcemap: 'inline' as const,
-          ...serverBuild,
         },
       };
     },
@@ -115,40 +70,19 @@ export function honoPreact(options: HonoPreactOptions = {}): Plugin[] {
     configPlugin,
     clientShimPlugin(clientEntry),
     clientEntryPlugin({ routes }),
-    ...(useGeneratedEntry
-      ? [
-          serverEntryPlugin({
-            layout,
-            routes,
-            api,
-            outputPath: generatedServerEntryAbsPath(),
-          }),
-        ]
-      : []),
+    serverEntryPlugin({
+      layout,
+      routes,
+      api,
+      adapter,
+      coreAppPath,
+      entryWrapperPath,
+    }),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     serverOnlyPlugin(),
     guardStripPlugin(),
-    Object.assign(build({ entry: resolvedEntry }), {
-      apply: (
-        _: unknown,
-        { command, mode }: { command: string; mode: string }
-      ) => command === 'build' && mode !== 'client',
-    }),
-    Object.assign(
-      devServer({
-        entry: resolvedEntry,
-        exclude: [
-          ...defaultOptions.exclude,
-          /\.scss/,
-          /\.css/,
-          /\?url/,
-          /\?inline/,
-        ],
-        adapter: cloudflareAdapter,
-      }),
-      { apply: 'serve' as const }
-    ),
+    ...adapter.vitePlugins(ctx),
     ...preact(),
   ];
 }
