@@ -38,14 +38,23 @@ function echoOverWs(port: number, message: string): Promise<string> {
 
 describe('Node adapter: WebSocket in dev', () => {
   let server: ViteDevServer;
+  let originalCwd: string;
 
   beforeAll(async () => {
+    // honoPreact() writes its generated server-entry files relative to
+    // process.cwd(), and the entry wrapper's bare imports (@hono/node-server)
+    // resolve through the app's own node_modules. The app is normally run
+    // from its own directory (pnpm --filter example-node dev); mirror that so
+    // the generated files land under apps/example-node, not the repo root.
+    originalCwd = process.cwd();
+    process.chdir(exampleNodeRoot);
     server = await createServer({ root: exampleNodeRoot, server: { port: 0 } });
     await server.listen();
   }, 60_000);
 
   afterAll(async () => {
     await server?.close();
+    process.chdir(originalCwd);
   });
 
   it('echoes a message over /ws', async () => {
