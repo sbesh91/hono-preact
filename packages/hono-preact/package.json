@@ -48,6 +48,10 @@
       "types": "./dist/adapter-cloudflare.d.ts",
       "import": "./dist/adapter-cloudflare.js"
     },
+    "./adapter-node": {
+      "types": "./dist/adapter-node.d.ts",
+      "import": "./dist/adapter-node.js"
+    },
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./dist/internal.js"
@@ -66,6 +70,8 @@
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
+    "@hono/node-server": "^1.19.14",
+    "@hono/node-ws": "^1.3.1",
     "hono": ">=4.0.0",
     "hoofd": ">=1.0.0",
     "preact": ">=10.0.0",
@@ -76,6 +82,12 @@
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": {
+      "optional": true
+    },
+    "@hono/node-server": {
+      "optional": true
+    },
+    "@hono/node-ws": {
       "optional": true
     },
     "wrangler": {
