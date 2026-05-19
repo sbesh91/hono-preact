@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, configDefaults } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
@@ -23,6 +23,13 @@ export default defineConfig({
       'packages/vite/src/**/__tests__/**/*.test.ts',
       'packages/hono-preact/__tests__/**/*.test.{ts,tsx}',
       'apps/site/src/**/__tests__/**/*.test.{ts,tsx}',
+    ],
+    // websocket-dev.test.ts boots real Vite dev servers (and workerd); it is
+    // CPU-heavy and starves the parallel pool. It runs separately via
+    // `pnpm test:integration` (vitest.integration.config.ts).
+    exclude: [
+      ...configDefaults.exclude,
+      'packages/vite/src/__tests__/websocket-dev.test.ts',
     ],
     setupFiles: ['./vitest.setup.ts'],
     environment: 'node',

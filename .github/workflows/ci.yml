@@ -49,6 +49,11 @@ jobs:
           echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
           pnpm test:coverage 2>&1 | tee -a $GITHUB_STEP_SUMMARY
 
+      # Heavy dev-server/WebSocket integration tests, run isolated so they
+      # neither flake under nor starve the parallel unit-test pool.
+      - name: Integration tests (WebSocket in dev)
+        run: pnpm test:integration
+
       - name: Build site
         run: pnpm --filter site build
 

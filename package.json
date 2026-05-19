@@ -25,6 +25,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,mjs,json}\" \"apps/**/src/**/*.{ts,tsx,mdx}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,js,mjs,json}\" \"apps/**/src/**/*.{ts,tsx,mdx}\""
