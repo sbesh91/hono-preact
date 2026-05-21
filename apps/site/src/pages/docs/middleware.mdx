@@ -2,7 +2,7 @@
 
 Middleware wraps loader, action, and page calls in an outer/inner chain. Each middleware receives a `ctx` and a `next` continuation; the framework calls them in order, then unwinds. Throw a [redirect, deny, or render outcome](#outcomes) to short-circuit. Use middleware for auth gates, request-scoped setup/teardown, tracing, timing, and request logging.
 
-The same primitive replaces the old `defineServerGuard` / `defineClientGuard` / `defineActionGuard` family. Page bindings, loaders, and actions all accept the same `use` array, and the framework partitions server- vs client-bound members by their `runs` tag.
+Page bindings, loaders, and actions all accept the same `use` array, and the framework partitions server- vs client-bound members by their `runs` tag.
 
 ## The three layers
 
