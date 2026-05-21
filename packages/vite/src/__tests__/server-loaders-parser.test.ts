@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@babel/parser';
 import type { Program } from '@babel/types';
-import { parseServerLoaders, readParamsOpt } from '../server-loaders-parser.js';
+import {
+  parseServerLoaders,
+  readParamsOpt,
+  hasNamedUseExport,
+  RECOGNIZED_USE_EXPORTS,
+} from '../server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from '../parser-options.js';
 
 function parseProgram(code: string): Program {
@@ -110,6 +115,43 @@ describe('parseServerLoaders', () => {
     `);
     const [entry] = parseServerLoaders(program);
     expect(entry.optsArg).toBeNull();
+  });
+});
+
+describe('use exports', () => {
+  it('lists the recognized use-export names', () => {
+    expect(RECOGNIZED_USE_EXPORTS.has('pageUse')).toBe(true);
+    expect(RECOGNIZED_USE_EXPORTS.has('loaderUse')).toBe(true);
+    expect(RECOGNIZED_USE_EXPORTS.has('actionUse')).toBe(true);
+  });
+
+  it('detects a top-level pageUse named export', () => {
+    const program = parseProgram(`
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      const mw = defineServerMiddleware(async (_c, next) => { await next(); });
+      export const pageUse = [mw];
+      export const serverLoaders = { x: defineLoader(async () => ({})) };
+    `);
+    expect(hasNamedUseExport(program, 'pageUse')).toBe(true);
+  });
+
+  it('returns false when pageUse is absent', () => {
+    const program = parseProgram(`
+      export const serverLoaders = { x: defineLoader(async () => ({})) };
+    `);
+    expect(hasNamedUseExport(program, 'pageUse')).toBe(false);
+  });
+
+  it('parseServerLoaders ignores a sibling pageUse export', () => {
+    const program = parseProgram(`
+      export const pageUse = [];
+      export const serverLoaders = {
+        x: defineLoader(async () => ({})),
+      };
+    `);
+    const entries = parseServerLoaders(program);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe('x');
   });
 });
 

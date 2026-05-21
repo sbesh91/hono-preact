@@ -1,5 +1,38 @@
 import type { Program, CallExpression, ObjectExpression } from '@babel/types';
 
+// Recognized middleware-carrying named exports on .server.* modules. The
+// parser does not need to extract them (they're plain top-level exports
+// already accessible through the runtime module shape); this set documents
+// the contract so route-server-modules and the handler-side resolvers
+// agree on the export names.
+//
+// - loaderUse / actionUse: per-unit middleware now rides on the
+//   LoaderRef / ActionStub via .use; these are reserved names for
+//   parallel-style future opt-in (e.g. attaching middleware without a
+//   defineLoader call).
+// - pageUse: page-layer middleware. The .server.* file declares its own
+//   pageUse, and route-server-modules indexes the value by route path so
+//   loaders/actions handlers can compose [appConfig.use, pageUse, unitUse].
+export const RECOGNIZED_USE_EXPORTS = new Set([
+  'loaderUse',
+  'actionUse',
+  'pageUse',
+] as const);
+
+export function hasNamedUseExport(program: Program, name: string): boolean {
+  for (const stmt of program.body) {
+    if (
+      stmt.type !== 'ExportNamedDeclaration' ||
+      stmt.declaration?.type !== 'VariableDeclaration'
+    )
+      continue;
+    for (const decl of stmt.declaration.declarations) {
+      if (decl.id.type === 'Identifier' && decl.id.name === name) return true;
+    }
+  }
+  return false;
+}
+
 export type ParsedLoaderEntry = {
   /** Loader name (the key in serverLoaders, e.g. "summary"). */
   name: string;
