@@ -12,6 +12,12 @@ import type {
 } from '../define-middleware.js';
 import { dispatchServer } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
+import {
+  fanStart,
+  fanChunk,
+  fanEnd,
+  fanError,
+} from './stream-observer-runner.js';
 
 export type LoaderRunCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -88,33 +94,21 @@ export function runLoader<T>(
       },
     };
 
-    const runInner = async (): Promise<unknown> => {
-      const result = await (loaderRef.fn(ctx) as Promise<unknown>);
-      if (isAsyncGenerator(result)) {
-        const step = await result.next();
-        if (step.done) return undefined; // generator returned without yielding
-        registerServerStreamingLoader(id, result);
-        return step.value;
-      }
-      return result;
-    };
-
-    // If per-loader middleware is attached, dispatch the chain around the
-    // loader fn. We pre-build a ServerLoaderCtx that proxies `c` through the
-    // same lazy getter to keep test paths (no request scope) compatible when
-    // middleware doesn't read c. Empty middleware path bypasses the dispatcher
-    // so existing call sites keep their exact prior behavior.
-    const allMiddleware = partitionUse(
+    // Partition the loader's `use` array into middleware + observers. The
+    // dispatcher only consumes middleware; observers attach to the streaming
+    // pump below so chunks emitted during SSR flush observer hooks the same
+    // way the RPC/SSE path does.
+    const { middleware: allMiddleware, observers } = partitionUse(
       (loaderRef.use ?? []) as ReadonlyArray<Middleware>
-    ).middleware;
+    );
     const serverMw = allMiddleware.filter(
       (m): m is ServerMiddleware<'loader'> => m.runs === 'server'
     );
 
-    if (serverMw.length === 0) {
-      return (await runInner()) as T;
-    }
-
+    // Pre-build a ServerLoaderCtx so observers and middleware see the same
+    // ctx shape they see on the RPC path. `c` proxies through the lazy
+    // getter so test paths (no request scope) keep working when no consumer
+    // reads it.
     const serverCtx: ServerLoaderCtx = Object.defineProperties(
       {
         scope: 'loader' as const,
@@ -130,6 +124,86 @@ export function runLoader<T>(
         },
       }
     ) as ServerLoaderCtx;
+
+    /**
+     * Wrap a generator that has already yielded its first chunk so that
+     * subsequent yields fire observer hooks. Index 0 has already fired
+     * before this wrapper runs (see runInner below), so we count from 1.
+     *
+     * Implemented as a real `async function*` (not a hand-rolled object)
+     * so the result conforms to AsyncGenerator's full structural contract
+     * (including `[Symbol.asyncDispose]` on newer libs).
+     */
+    function wrapGeneratorWithObservers(
+      gen: AsyncGenerator<unknown, unknown, unknown>,
+      startIndex: number
+    ): AsyncGenerator<unknown, unknown, unknown> {
+      async function* wrapped() {
+        let chunks = startIndex;
+        try {
+          while (true) {
+            const step = await gen.next();
+            if (step.done) {
+              fanEnd(observers, serverCtx, {
+                chunks,
+                result: step.value,
+              });
+              return step.value;
+            }
+            fanChunk(observers, serverCtx, step.value, chunks);
+            chunks += 1;
+            yield step.value;
+          }
+        } catch (err) {
+          fanError(observers, serverCtx, err, { chunks });
+          throw err;
+        }
+      }
+      return wrapped();
+    }
+
+    const runInner = async (): Promise<unknown> => {
+      const result = await (loaderRef.fn(ctx) as Promise<unknown>);
+      if (isAsyncGenerator(result)) {
+        if (observers.length > 0) {
+          fanStart(observers, serverCtx);
+        }
+        const step = await result.next();
+        if (step.done) {
+          // Generator returned without yielding. Fire onEnd with chunks=0
+          // so observers see a clean lifecycle even on empty streams.
+          if (observers.length > 0) {
+            fanEnd(observers, serverCtx, {
+              chunks: 0,
+              result: step.value,
+            });
+          }
+          return undefined;
+        }
+        if (observers.length > 0) {
+          fanChunk(observers, serverCtx, step.value, 0);
+          // Register the OBSERVED wrapper so renderPage's drain fires
+          // onChunk for every subsequent yield and onEnd / onError at
+          // termination.
+          registerServerStreamingLoader(
+            id,
+            wrapGeneratorWithObservers(result, 1)
+          );
+        } else {
+          registerServerStreamingLoader(id, result);
+        }
+        return step.value;
+      }
+      return result;
+    };
+
+    // Empty middleware path bypasses the dispatcher so existing call sites
+    // keep their exact prior behavior. Observer fanout above still fires
+    // through runInner; the dispatcher is only about ordered middleware
+    // before/after the inner.
+    if (serverMw.length === 0) {
+      return (await runInner()) as T;
+    }
 
     const dispatch = await dispatchServer<unknown, 'loader'>({
       middleware: serverMw,

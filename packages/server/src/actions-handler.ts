@@ -6,6 +6,7 @@ import {
   type ServerMiddleware,
   type ServerActionCtx,
   type Middleware,
+  type StreamObserver,
 } from '@hono-preact/iso';
 import {
   runRequestScope,
@@ -228,12 +229,11 @@ export function actionsHandler(
     const rootUse = appConfig?.use ?? [];
     const pageUse = (await resolvePageUse?.(module)) ?? [];
     const actionUse = (fn as { use?: ReadonlyArray<unknown> }).use ?? [];
-    const fullUse = [
-      ...rootUse,
-      ...pageUse,
-      ...actionUse,
-    ] as ReadonlyArray<Middleware>;
-    const allMiddleware = partitionUse(fullUse).middleware;
+    const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
+      [...rootUse, ...pageUse, ...actionUse] as ReadonlyArray<
+        Middleware | StreamObserver<unknown, never>
+      >;
+    const { middleware: allMiddleware, observers } = partitionUse(fullUse);
     const serverMw = allMiddleware.filter(
       (m): m is ServerMiddleware<'action'> => m.runs === 'server'
     );
@@ -274,10 +274,17 @@ export function actionsHandler(
     }
 
     if (isAsyncGenerator(result)) {
-      return sseGeneratorResponse(c, result, { emitResult: true });
+      return sseGeneratorResponse(c, result, {
+        emitResult: true,
+        observers,
+        observerCtx: ctx,
+      });
     }
     if (result instanceof ReadableStream) {
-      return sseReadableStreamResponse(c, result as ReadableStream<unknown>);
+      return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
+        observers,
+        observerCtx: ctx,
+      });
     }
     return c.json(result);
   };

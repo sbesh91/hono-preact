@@ -17,7 +17,7 @@ function safeCall(fn: (() => void) | undefined): void {
 }
 
 export function fanStart(
-  observers: ReadonlyArray<StreamObserver<unknown, unknown>>,
+  observers: ReadonlyArray<StreamObserver<unknown, never>>,
   ctx: ServerStreamCtx
 ): void {
   for (const o of observers) {
@@ -26,7 +26,7 @@ export function fanStart(
 }
 
 export function fanChunk(
-  observers: ReadonlyArray<StreamObserver<unknown, unknown>>,
+  observers: ReadonlyArray<StreamObserver<unknown, never>>,
   ctx: ServerStreamCtx,
   chunk: unknown,
   index: number
@@ -37,17 +37,33 @@ export function fanChunk(
 }
 
 export function fanEnd(
-  observers: ReadonlyArray<StreamObserver<unknown, unknown>>,
+  observers: ReadonlyArray<StreamObserver<unknown, never>>,
   ctx: ServerStreamCtx,
   info: { chunks: number; result: unknown }
 ): void {
   for (const o of observers) {
-    safeCall(o.onEnd ? () => o.onEnd!(ctx, info) : undefined);
+    safeCall(
+      o.onEnd
+        ? () =>
+            // The partitioner widens observers to TResult=never (the only
+            // shape that admits arbitrary user-declared TResult); the call
+            // site provides whatever the underlying stream produced. The
+            // cast bridges the invariance gap and is safe because TS
+            // can't reason about the contravariant function-parameter
+            // shape across the array boundary.
+            (
+              o.onEnd as (
+                ctx: ServerStreamCtx,
+                info: { chunks: number; result: unknown }
+              ) => void
+            )(ctx, info)
+        : undefined
+    );
   }
 }
 
 export function fanError(
-  observers: ReadonlyArray<StreamObserver<unknown, unknown>>,
+  observers: ReadonlyArray<StreamObserver<unknown, never>>,
   ctx: ServerStreamCtx,
   err: unknown,
   info: { chunks: number }
@@ -58,7 +74,7 @@ export function fanError(
 }
 
 export function fanAbort(
-  observers: ReadonlyArray<StreamObserver<unknown, unknown>>,
+  observers: ReadonlyArray<StreamObserver<unknown, never>>,
   ctx: ServerStreamCtx,
   info: { chunks: number }
 ): void {
