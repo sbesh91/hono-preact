@@ -50,9 +50,9 @@ export function generateCoreAppModule(
     appConfigImport +
     `\n` +
     `env.current = 'server';\n` +
-    `const serverModules = routeServerModules(routes);\n` +
-    `const pageUseResolvers = makePageUseResolvers(routes.serverRoutes);\n` +
     `const dev = import.meta.env.DEV;\n` +
+    `const serverModules = routeServerModules(routes);\n` +
+    `const pageUseResolvers = makePageUseResolvers(routes.serverRoutes, { dev });\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +

@@ -61,7 +61,7 @@ describe('generateCoreAppModule', () => {
     expect(src).not.toContain('app-config');
     expect(src).toContain('const appConfig = { use: [] };');
     // The handler options still thread it through, plus the page-use resolvers.
-    expect(src).toContain('makePageUseResolvers(routes.serverRoutes)');
+    expect(src).toContain('makePageUseResolvers(routes.serverRoutes, { dev })');
     expect(src).toContain('resolvePageUse: pageUseResolvers.byPath');
     expect(src).toContain('resolvePageUse: pageUseResolvers.byModuleKey');
     // renderPage receives appConfig as a third argument.
@@ -119,7 +119,7 @@ describe('generateCoreAppModule', () => {
     // resolvePageUse closures so the framework's middleware chain composes
     // correctly.
     expect(src).toContain(`const dev = import.meta.env.DEV;`);
-    expect(src).toContain(`makePageUseResolvers(routes.serverRoutes)`);
+    expect(src).toContain(`makePageUseResolvers(routes.serverRoutes, { dev })`);
     expect(src).toContain(
       `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath })`
     );
