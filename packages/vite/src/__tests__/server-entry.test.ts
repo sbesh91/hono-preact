@@ -31,6 +31,7 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
     });
     expect(src).toContain('loadersHandler');
     expect(src).toContain('actionsHandler');
@@ -43,9 +44,40 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: '/p/src/api.ts',
+      appConfigAbsPath: undefined,
     });
     expect(src).toContain("import userApp from '/p/src/api.ts'");
     expect(src).toContain(".route('/', userApp)");
+  });
+
+  it('falls back to an empty appConfig when no app-config file exists', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+    });
+    // No import; an inline empty config so the middleware chain still works.
+    expect(src).not.toContain('app-config');
+    expect(src).toContain('const appConfig = { use: [] };');
+    // The handler options still thread it through, plus the pageUse stub.
+    expect(src).toContain('appConfig,');
+    expect(src).toContain('resolvePageUse: () => [],');
+    // renderPage receives appConfig as a third argument.
+    expect(src).toContain(
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
+    );
+  });
+
+  it('imports the user appConfig when appConfigAbsPath is provided', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: '/p/src/app-config.ts',
+    });
+    expect(src).toContain(`import appConfig from '/p/src/app-config.ts';`);
+    expect(src).not.toContain('const appConfig = { use: [] };');
   });
 
   it('emits the framework imports, mounts loaders/actions/catchall, omits api when not provided', () => {
@@ -53,6 +85,7 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
     });
 
     // Framework imports
@@ -81,8 +114,11 @@ describe('generateCoreAppModule', () => {
 
     // Handler options thread dev mode through so the cache-vs-rebuild
     // branch doesn't rely on a Vite-only build-time constant inside the
-    // library handlers themselves.
-    expect(src).toContain(`const handlerOpts = { dev: import.meta.env.DEV };`);
+    // library handlers themselves. They also carry appConfig + resolvePageUse
+    // so the framework's middleware chain composes correctly.
+    expect(src).toContain(`dev: import.meta.env.DEV,`);
+    expect(src).toContain(`appConfig,`);
+    expect(src).toContain(`resolvePageUse: () => [],`);
     expect(src).toContain(`loadersHandler(serverModules, handlerOpts)`);
     expect(src).toContain(`actionsHandler(serverModules, handlerOpts)`);
 
@@ -94,7 +130,7 @@ describe('generateCoreAppModule', () => {
     expect(actionsIdx).toBeGreaterThan(loadersIdx);
     expect(catchallIdx).toBeGreaterThan(actionsIdx);
     expect(src).toContain(
-      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))))`
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
     );
     // defaultTitle is no longer threaded through renderPage by the framework.
     expect(src).not.toContain('defaultTitle');
@@ -113,6 +149,7 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: '/proj/src/api.ts',
+      appConfigAbsPath: undefined,
     });
 
     expect(src).toContain(`import userApp from '/proj/src/api.ts';`);
@@ -358,6 +395,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts', // configured but does not exist on disk
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -411,6 +449,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -453,6 +492,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -502,6 +542,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -550,6 +591,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,

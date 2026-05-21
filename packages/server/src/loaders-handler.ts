@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import {
   GuardRedirect,
   isOutcome,
+  type AppConfig,
   type Outcome,
   type ServerMiddleware,
   type ServerLoaderCtx,
@@ -105,6 +106,21 @@ export interface LoadersHandlerOptions {
    * responds with a sanitized 500; the hook is purely a side channel.
    */
   onError?: (err: unknown, ctx: { module: string; loader: string }) => void;
+  /**
+   * Root layer of the middleware chain. The framework's generated server
+   * entry threads the user's `defineApp({ use })` result here. Each loader
+   * request composes the chain as
+   * `[...appConfig.use, ...resolvePageUse(path), ...loader.use]`.
+   */
+  appConfig?: AppConfig;
+  /**
+   * Per-page layer lookup keyed by the matched route's location path.
+   * Returns the `use` array declared on `definePage(..., { use })` for the
+   * matching page. Defaults to an empty array; the framework's generated
+   * server entry will populate it once the route-server-modules consumer
+   * indexes pageUse by route.
+   */
+  resolvePageUse?: (path: string) => ReadonlyArray<unknown>;
 }
 
 function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
@@ -145,7 +161,7 @@ export function loadersHandler(
   glob: LazyGlob | EagerGlob,
   opts: LoadersHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError } = opts;
+  const { dev = false, onError, appConfig, resolvePageUse } = opts;
   let cachedMapPromise: Promise<Record<string, LoaderEntry>> | null = null;
 
   return async (c) => {
@@ -206,9 +222,19 @@ export function loadersHandler(
 
     const signal = c.req.raw.signal;
 
-    const allMiddleware = partitionUse(
-      entry.use as ReadonlyArray<Middleware>
-    ).middleware;
+    // Chain ordering is outer -> inner: app-level middleware wraps every
+    // request, page-level wraps loaders owned by that page, and per-loader
+    // middleware wraps just this call. Outer middleware runs first on the
+    // way in and last on the way out, matching every middleware system
+    // users have seen (Hono, Express, Koa).
+    const rootUse = appConfig?.use ?? [];
+    const pageUse = resolvePageUse?.(validatedLocation.path) ?? [];
+    const fullUse = [
+      ...rootUse,
+      ...pageUse,
+      ...entry.use,
+    ] as ReadonlyArray<Middleware>;
+    const allMiddleware = partitionUse(fullUse).middleware;
     const serverMw = allMiddleware.filter(
       (m): m is ServerMiddleware<'loader'> => m.runs === 'server'
     );

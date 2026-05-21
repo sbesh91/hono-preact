@@ -5,6 +5,7 @@ import {
   isOutcome,
   type ActionGuardFn,
   type ActionGuardContext,
+  type AppConfig,
   type Outcome,
   type ServerMiddleware,
   type ServerActionCtx,
@@ -136,13 +137,28 @@ export interface ActionsHandlerOptions {
    * responds with a sanitized 500; the hook is purely a side channel.
    */
   onError?: (err: unknown, ctx: { module: string; action: string }) => void;
+  /**
+   * Root layer of the middleware chain. The framework's generated server
+   * entry threads the user's `defineApp({ use })` result here. Each action
+   * request composes the chain as
+   * `[...appConfig.use, ...resolvePageUse(module), ...action.use]`.
+   */
+  appConfig?: AppConfig;
+  /**
+   * Per-page layer lookup keyed by the action's owning module key (since an
+   * action always belongs unambiguously to one page module). Returns the
+   * `use` array declared on `definePage(..., { use })` for that page.
+   * Defaults to an empty array; populated by the framework's generated
+   * server entry once route-server-modules indexes pageUse by route.
+   */
+  resolvePageUse?: (moduleKey: string) => ReadonlyArray<unknown>;
 }
 
 export function actionsHandler(
   glob: LazyGlob | EagerGlob,
   opts: ActionsHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError } = opts;
+  const { dev = false, onError, appConfig, resolvePageUse } = opts;
   let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
@@ -249,10 +265,22 @@ export function actionsHandler(
     const signal = c.req.raw.signal;
     const actionCtx = { c, signal };
 
-    // Per-action middleware attached via defineAction(fn, { use: [...] }).
-    const actionUse = ((fn as { use?: ReadonlyArray<unknown> }).use ??
-      []) as ReadonlyArray<Middleware>;
-    const allMiddleware = partitionUse(actionUse).middleware;
+    // Chain ordering is outer -> inner: app-level middleware wraps every
+    // request, page-level wraps actions owned by that page, and per-action
+    // middleware (attached via defineAction(fn, { use })) wraps just this
+    // call. Outer middleware runs first on the way in and last on the way
+    // out, matching every middleware system users have seen (Hono, Express,
+    // Koa). The action's owning page is unambiguous from `module`, so the
+    // page-layer lookup keys by module rather than by location path.
+    const rootUse = appConfig?.use ?? [];
+    const pageUse = resolvePageUse?.(module) ?? [];
+    const actionUse = (fn as { use?: ReadonlyArray<unknown> }).use ?? [];
+    const fullUse = [
+      ...rootUse,
+      ...pageUse,
+      ...actionUse,
+    ] as ReadonlyArray<Middleware>;
+    const allMiddleware = partitionUse(fullUse).middleware;
     const serverMw = allMiddleware.filter(
       (m): m is ServerMiddleware<'action'> => m.runs === 'server'
     );

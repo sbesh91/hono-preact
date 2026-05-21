@@ -9,15 +9,32 @@ export interface GenerateCoreAppModuleOptions {
   layoutAbsPath: string;
   routesAbsPath: string;
   apiAbsPath: string | undefined;
+  appConfigAbsPath: string | undefined;
 }
 
 export function generateCoreAppModule(
   opts: GenerateCoreAppModuleOptions
 ): string {
-  const { layoutAbsPath, routesAbsPath, apiAbsPath } = opts;
+  const { layoutAbsPath, routesAbsPath, apiAbsPath, appConfigAbsPath } = opts;
 
   const apiImport = apiAbsPath ? `import userApp from '${apiAbsPath}';\n` : '';
   const apiMount = apiAbsPath ? `  .route('/', userApp)\n` : '';
+
+  // appConfig is optional: when no app-config.ts file exists, fall back to
+  // an empty config so the handler chain composition (root -> page -> unit)
+  // still works without the user authoring anything. The default-export
+  // shape mirrors the `import appConfig from './app-config'` convention so
+  // consumers can adopt the file later without other entry changes.
+  const appConfigImport = appConfigAbsPath
+    ? `import appConfig from '${appConfigAbsPath}';\n`
+    : `const appConfig = { use: [] };\n`;
+
+  // resolvePageUse is a placeholder until route-server-modules indexes the
+  // per-page `use` array by route. Once that lands, both handlers will
+  // receive real per-page middleware lookups; today they get an empty list
+  // which means the page layer is effectively a no-op in handler-side
+  // dispatch. The root + per-unit layers are wired and exercised by tests.
+  const noPageUse = `() => []`;
 
   // The generated source is loaded as a virtual module, which Vite/esbuild
   // treats as plain JS by default. Use h() to construct vnodes rather than
@@ -36,16 +53,21 @@ export function generateCoreAppModule(
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +
+    appConfigImport +
     `\n` +
     `env.current = 'server';\n` +
     `const serverModules = routeServerModules(routes);\n` +
-    `const handlerOpts = { dev: import.meta.env.DEV };\n` +
+    `const handlerOpts = {\n` +
+    `  dev: import.meta.env.DEV,\n` +
+    `  appConfig,\n` +
+    `  resolvePageUse: ${noPageUse},\n` +
+    `};\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
     `  .post('/__loaders', loadersHandler(serverModules, handlerOpts))\n` +
     `  .post('/__actions', actionsHandler(serverModules, handlerOpts))\n` +
-    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes })))));\n` +
+    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig }));\n` +
     `\n` +
     `export default app;\n`
   );
@@ -221,6 +243,7 @@ export interface ServerEntryPluginOptions {
   layout: string; // project-relative or absolute
   routes: string;
   api: string; // project-relative or absolute; absence treated as "no api"
+  appConfig: string; // project-relative or absolute; absence treated as empty
   adapter: HonoPreactAdapter;
   coreAppPath: string; // absolute path to write the core app module
   entryWrapperPath: string; // absolute path to write the adapter wrapper
@@ -249,11 +272,18 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         ? opts.api
         : path.resolve(root, opts.api);
       apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
+      const candidateAppConfig = path.isAbsolute(opts.appConfig)
+        ? opts.appConfig
+        : path.resolve(root, opts.appConfig);
+      const appConfigAbsPath = fs.existsSync(candidateAppConfig)
+        ? candidateAppConfig
+        : undefined;
 
       const source = generateCoreAppModule({
         layoutAbsPath,
         routesAbsPath,
         apiAbsPath,
+        appConfigAbsPath,
       });
       fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
       fs.writeFileSync(opts.coreAppPath, source, 'utf8');
