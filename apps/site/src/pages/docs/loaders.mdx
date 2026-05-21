@@ -113,6 +113,34 @@ export const serverLoaders = {
 };
 ```
 
+### The loader context
+
+Every loader is called with a single context argument with the same three fields, regardless of whether it returns a value or streams:
+
+```ts
+type LoaderCtx = {
+  c: Context; // typed Hono Context, always available
+  location: RouteHook; // route-change location info
+  signal: AbortSignal; // aborts when the user navigates away
+};
+```
+
+| Field      | Description                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c`        | The request's Hono `Context`. Use it for headers, cookies, KV/D1/env `Bindings`, the request URL, etc. With typed `Bindings`, narrow inside the function body. |
+| `location` | Current route navigation info (the same shape as `useLocation()`). Carries `pathParams`, `searchParams`, the resolved path, and the route's metadata.          |
+| `signal`   | An `AbortSignal` that aborts when the user navigates away mid-load. Forward it to `fetch` and any cancellable server work to short-circuit on navigation.      |
+
+Destructure whichever fields a loader needs:
+
+```ts
+defineLoader(async ({ c, location, signal }) => {
+  const token = getCookie(c, 'session');
+  const res = await fetch(`/api/movies/${location.pathParams.id}`, { signal });
+  return res.json();
+});
+```
+
 `ctx.c` is the request's Hono `Context`. A server loader can read cookies (`getCookie(ctx.c, …)`), reach app `Bindings` (`ctx.c.env.MY_KV`), or set a response header before yielding. The shape is `Context`; users with typed `Bindings` can narrow inside the function body.
 
 By convention, loaders read; actions write. Setting cookies/headers from a loader is allowed but discouraged.
@@ -186,9 +214,11 @@ const StatsView = statsLoader.View(
 );
 ```
 
-## Multi-loader pages
+## Composing multiple loaders per route
 
-A page can declare any number of loaders in one `serverLoaders` container. Each loader gets its own independent Suspense boundary, error boundary, and streaming section:
+This is the supported pattern when a route needs more than one data source. Declare each source as its own loader in the same `serverLoaders` container; the framework wires each one independently. There is no separate "parallel fetch" or "loader group" API; composition is just adding another key.
+
+Each loader gets its own independent Suspense boundary, error boundary, cache key, and streaming section, so a slow or failing source never blocks the rest of the page:
 
 ```ts
 // src/pages/movie.server.ts
