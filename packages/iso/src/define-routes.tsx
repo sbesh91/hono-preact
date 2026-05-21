@@ -26,7 +26,7 @@ export type LayoutProps = { children: ComponentChildren };
 export type ViewProps = RouteHook;
 
 type LazyImport<T> = () => Promise<{ default: T }>;
-type LazyServerImport = () => Promise<unknown>;
+export type LazyServerImport = () => Promise<unknown>;
 
 export type RouteDef = {
   path: string;
@@ -52,6 +52,15 @@ export type ServerRoute = {
   path: string;
   /** Lazy `.server.*` module loader. */
   server: LazyServerImport;
+  /**
+   * Lazy server-module loaders for every server-bearing ancestor in the
+   * route tree, outermost first, NOT including this route's own server.
+   * Used by the server-side pageUse resolver to compose page-layer
+   * middleware along the actual tree of layouts rather than relying on
+   * URL-prefix matching (which conflates siblings that share a path
+   * prefix, e.g. `/demo/projects` and `/demo/projects/:projectId/...`).
+   */
+  ancestors: ReadonlyArray<LazyServerImport>;
 };
 
 export type RoutesManifest = {
@@ -169,15 +178,39 @@ function collectServerRoutes(
   parentPath = ''
 ): ServerRoute[] {
   const out: ServerRoute[] = [];
-  const walk = (rs: ReadonlyArray<RouteDef>, pp: string) => {
+  // `serverStack` tracks the lazy server-thunks for every server-bearing
+  // route on the path from the tree root down to (but not including) the
+  // node being emitted. Pushing on the way in / popping on the way out
+  // means each emitted ServerRoute captures its TRUE tree-walk ancestry,
+  // not whichever other patterns happen to share a URL prefix.
+  const walk = (
+    rs: ReadonlyArray<RouteDef>,
+    pp: string,
+    serverStack: LazyServerImport[]
+  ) => {
     for (const r of rs) {
       const here =
         pp === '' ? r.path : pp + (r.path === '' ? '' : '/' + r.path);
-      if (r.server) out.push({ path: here, server: r.server });
-      if (r.children) walk(r.children, here);
+      if (r.server) {
+        // Capture the stack BEFORE pushing self -- ancestors exclude self.
+        out.push({
+          path: here,
+          server: r.server,
+          ancestors: serverStack.slice(),
+        });
+      }
+      if (r.children) {
+        if (r.server) {
+          serverStack.push(r.server);
+          walk(r.children, here, serverStack);
+          serverStack.pop();
+        } else {
+          walk(r.children, here, serverStack);
+        }
+      }
     }
   };
-  walk(routes, parentPath);
+  walk(routes, parentPath, []);
   return out;
 }
 

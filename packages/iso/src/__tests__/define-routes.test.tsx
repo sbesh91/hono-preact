@@ -214,6 +214,101 @@ describe('serverImports collection', () => {
   });
 });
 
+describe('serverRoutes ancestor walk', () => {
+  it('captures server-bearing ancestors from the route-tree walk', () => {
+    const layoutServer = () => Promise.resolve({ tag: 'layout' });
+    const leafServer = () => Promise.resolve({ tag: 'leaf' });
+    const m = defineRoutes([
+      {
+        path: '/admin',
+        layout: noopLayout,
+        server: layoutServer,
+        children: [
+          {
+            path: 'users/:id',
+            view: noopView,
+            server: leafServer,
+          },
+        ],
+      },
+    ]);
+    const leaf = m.serverRoutes.find((r) => r.path === '/admin/users/:id');
+    expect(leaf).toBeDefined();
+    // The leaf's ancestors stack contains the layout's server thunk -- the
+    // real parent edge in the tree.
+    expect(leaf!.ancestors).toEqual([layoutServer]);
+    expect(leaf!.server).toBe(leafServer);
+  });
+
+  it('does NOT cross siblings that share a URL prefix', () => {
+    // Mirrors the demo: /demo/projects and /demo/projects/:projectId/...
+    // are siblings of the /demo path-grouping; neither layout has a
+    // server. The nested leaf must NOT inherit /demo/projects's server as
+    // an ancestor merely because the URL prefix matches.
+    const projectsServer = () => Promise.resolve({ tag: 'projects' });
+    const issueServer = () => Promise.resolve({ tag: 'issue' });
+    const m = defineRoutes([
+      {
+        path: '/demo',
+        children: [
+          { path: 'projects', view: noopView, server: projectsServer },
+          {
+            path: 'projects/:projectId',
+            layout: noopLayout,
+            children: [
+              {
+                path: 'issues/:issueId',
+                view: noopView,
+                server: issueServer,
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    const issue = m.serverRoutes.find(
+      (r) => r.path === '/demo/projects/:projectId/issues/:issueId'
+    );
+    expect(issue).toBeDefined();
+    // No server-bearing ancestor: neither /demo (path-grouping) nor
+    // /demo/projects/:projectId (layout without server) emits a thunk.
+    // /demo/projects is a SIBLING -- not an ancestor -- so its server
+    // thunk is correctly absent.
+    expect(issue!.ancestors).toEqual([]);
+  });
+
+  it('emits an empty ancestors array for top-level server-bearing routes', () => {
+    const s = () => Promise.resolve({ tag: 's' });
+    const m = defineRoutes([{ path: '/p', view: noopView, server: s }]);
+    expect(m.serverRoutes).toHaveLength(1);
+    expect(m.serverRoutes[0].ancestors).toEqual([]);
+  });
+
+  it('stacks multiple ancestors outer-first', () => {
+    const outerS = () => Promise.resolve({ tag: 'outer' });
+    const middleS = () => Promise.resolve({ tag: 'middle' });
+    const innerS = () => Promise.resolve({ tag: 'inner' });
+    const m = defineRoutes([
+      {
+        path: '/a',
+        layout: noopLayout,
+        server: outerS,
+        children: [
+          {
+            path: 'b',
+            layout: noopLayout,
+            server: middleS,
+            children: [{ path: 'c', view: noopView, server: innerS }],
+          },
+        ],
+      },
+    ]);
+    const inner = m.serverRoutes.find((r) => r.path === '/a/b/c');
+    expect(inner).toBeDefined();
+    expect(inner!.ancestors).toEqual([outerS, middleS]);
+  });
+});
+
 describe('flatten — flat (no layouts)', () => {
   it('emits one FlatRoute per leaf with full URL path', () => {
     const m = defineRoutes([
