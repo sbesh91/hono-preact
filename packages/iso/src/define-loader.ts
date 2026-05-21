@@ -11,6 +11,7 @@ import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ReloadContext } from './reload-context.js';
+import type { LoaderUse } from './internal/use-types.js';
 
 export type LoaderCtx = {
   c: Context;
@@ -30,6 +31,7 @@ export interface LoaderRef<T> {
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
+  readonly use: ReadonlyArray<unknown>;
   useData(): T;
   useError(): Error | null;
   invalidate(): void;
@@ -64,6 +66,13 @@ export type DefineLoaderOpts<T> = {
   __loaderName?: string;
   cache?: LoaderCache<T>;
   params?: string[] | '*';
+  /**
+   * Per-loader middleware and (for streaming loaders) stream observers.
+   * The element type LoaderUse<T, Streaming> structurally gates stream
+   * observers off non-streaming loaders, but a tighter compile-time gate
+   * via defineLoader overloads can be added in a follow-up if needed.
+   */
+  use?: LoaderUse<T, boolean>;
 };
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -159,6 +168,7 @@ export function defineLoader<T>(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
+    use: opts?.use ?? [],
     useData() {
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {
