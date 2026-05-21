@@ -1,11 +1,20 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import {
   ActionGuardError,
   GuardRedirect,
+  isOutcome,
   type ActionGuardFn,
   type ActionGuardContext,
+  type Outcome,
+  type ServerMiddleware,
+  type ServerActionCtx,
+  type Middleware,
 } from '@hono-preact/iso';
-import { runRequestScope } from '@hono-preact/iso/internal';
+import {
+  runRequestScope,
+  dispatchServer,
+  partitionUse,
+} from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
   sseReadableStreamResponse,
@@ -74,6 +83,40 @@ async function runActionGuards(
     }
   };
   await run(0);
+}
+
+function translateOutcomeForAction(c: Context, outcome: Outcome): Response {
+  if (outcome.__outcome === 'redirect') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      {
+        __outcome: 'redirect',
+        to: outcome.to,
+        status: outcome.status,
+        headers: outcome.headers,
+      },
+      200
+    );
+  }
+  if (outcome.__outcome === 'deny') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      { __outcome: 'deny', message: outcome.message },
+      outcome.status
+    );
+  }
+  // render outcome should never reach the action RPC.
+  return c.json(
+    {
+      __outcome: 'error',
+      message: 'render outcome is page-scope only',
+    },
+    500
+  );
 }
 
 export interface ActionsHandlerOptions {
@@ -206,15 +249,43 @@ export function actionsHandler(
     const signal = c.req.raw.signal;
     const actionCtx = { c, signal };
 
+    // Per-action middleware attached via defineAction(fn, { use: [...] }).
+    const actionUse = ((fn as { use?: ReadonlyArray<unknown> }).use ??
+      []) as ReadonlyArray<Middleware>;
+    const allMiddleware = partitionUse(actionUse).middleware;
+    const serverMw = allMiddleware.filter(
+      (m): m is ServerMiddleware<'action'> => m.runs === 'server'
+    );
+    const ctx: ServerActionCtx = {
+      scope: 'action',
+      c,
+      signal,
+      module,
+      action,
+      payload,
+    };
+
     let result: unknown;
     try {
-      result = await runRequestScope(() =>
-        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(
-          actionCtx,
-          payload
-        )
-      );
+      result = await runRequestScope(async () => {
+        const dispatch = await dispatchServer<unknown, 'action'>({
+          middleware: serverMw,
+          ctx,
+          inner: async () =>
+            (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(
+              actionCtx,
+              payload
+            ),
+        });
+        if (dispatch.kind === 'outcome') {
+          throw dispatch.outcome;
+        }
+        return dispatch.value;
+      });
     } catch (err) {
+      if (isOutcome(err)) {
+        return translateOutcomeForAction(c, err);
+      }
       if (err instanceof ActionGuardError) {
         return c.json({ error: err.message }, err.status);
       }
