@@ -10,6 +10,27 @@ Clone the starter and install dependencies:
 git clone <repo-url> my-app
 cd my-app
 pnpm install
+```
+
+## Configure Vite
+
+`honoPreact()` requires an `adapter` option; without one it throws a clear "adapter required" error at startup. A minimal `vite.config.ts` looks like:
+
+```ts
+import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [honoPreact({ adapter: cloudflareAdapter() })],
+});
+```
+
+The framework also ships a `nodeAdapter()` from `hono-preact/adapter-node` for non-Cloudflare deployments; see [Build & Deploy](./deployment) for the full picture.
+
+Now start the dev server:
+
+```bash
 pnpm dev
 ```
 

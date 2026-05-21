@@ -1,6 +1,27 @@
 # Build & Deploy
 
-## Development
+## Adapters
+
+The framework targets whichever adapter you choose. Two adapters ship today:
+`cloudflareAdapter()` from `hono-preact/adapter-cloudflare` and `nodeAdapter()`
+from `hono-preact/adapter-node`. You select one in `vite.config.ts` by passing
+it to the framework plugin: `honoPreact({ adapter: ... })`. An adapter is
+required.
+
+Dev, build, and deploy all behave per-adapter. The rest of this page covers
+both flows.
+
+## Cloudflare Workers
+
+This section assumes a `cloudflareAdapter()` in `vite.config.ts`:
+
+```ts
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+// ...
+plugins: [honoPreact({ adapter: cloudflareAdapter() })],
+```
+
+### Development
 
 ```bash
 npm run dev
@@ -12,7 +33,7 @@ so development mirrors production: Cloudflare bindings, the SSR runtime, and
 WebSocket upgrades all behave the same as a deployed Worker. Hot module
 replacement works for both client components and server code.
 
-## Production build
+### Production build
 
 ```bash
 npm run build
@@ -40,7 +61,7 @@ dist/
 The Worker directory name is derived from the `name` field in `wrangler.jsonc`
 (hyphens become underscores), so `hono-preact` produces `dist/hono_preact/`.
 
-## Local preview
+### Local preview
 
 ```bash
 npm run preview
@@ -48,7 +69,7 @@ npm run preview
 
 Runs `vite preview`, which serves the production build through `workerd` again.
 
-## Configuring `wrangler.jsonc`
+### Configuring `wrangler.jsonc`
 
 `wrangler.jsonc` is the source of truth `@cloudflare/vite-plugin` reads:
 
@@ -72,7 +93,7 @@ source is never exposed through the asset store. The build also writes a
 `.assetsignore` into `dist/client/` that excludes the generated config from the
 asset upload.
 
-## Deploy
+### Deploy
 
 ```bash
 npm run deploy
@@ -81,3 +102,51 @@ npm run deploy
 This runs `wrangler deploy` against the generated config in the Worker output
 directory (`dist/hono_preact/wrangler.json`), which references the built Worker
 and the `dist/client/` assets. Run `npm run build` first so the output exists.
+
+## Node.js
+
+### Setup
+
+Register the Node adapter in `vite.config.ts`:
+
+```ts
+import { honoPreact } from 'hono-preact/vite';
+import { nodeAdapter } from 'hono-preact/adapter-node';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [honoPreact({ adapter: nodeAdapter() })],
+});
+```
+
+`@hono/node-server` is a peer dependency, so install it alongside the
+framework: `npm install @hono/node-server`. `@hono/node-ws` is an optional peer
+if you need WebSocket upgrades.
+
+### Development
+
+```bash
+npm run dev
+```
+
+Starts the Vite dev server. The Node adapter handles SSR through Vite's SSR
+module runner, so HMR works for both client and server code.
+
+### Production build and start
+
+`vite build` emits a server entry at `dist/server/server-entry.js` and the
+client bundle under `dist/client/`. Start production with:
+
+```bash
+node dist/server/server-entry.js
+```
+
+The server listens on `PORT` (default 3000).
+
+### Deploying
+
+Deploy the same way you would any Node server: a container image (Docker),
+a system service (systemd), or a PaaS that runs Node processes. Static assets
+must be served from `dist/client/`; the Node adapter serves them in-process
+when you run the bundled server, so a single `node` process handles both
+assets and SSR.

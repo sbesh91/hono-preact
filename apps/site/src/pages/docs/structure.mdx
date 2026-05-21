@@ -78,7 +78,7 @@ Server-only utilities (`packages/server/`):
 
 Vite plugins for the framework (`packages/vite/`). The primary export is `honoPreact()`, which bundles all framework Vite configuration into a single plugin. See [Vite Configuration](/docs/vite-config) for usage.
 
-- **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, `@hono/vite-build`, `@hono/vite-dev-server`, and the client-shim auto-injection.
+- **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, and the client-shim auto-injection. Deployment target plugins (the worker or dev-server toolchain) come from the required `adapter` option, currently `cloudflareAdapter()` from `hono-preact/adapter-cloudflare` or `nodeAdapter()` from `hono-preact/adapter-node`.
 - **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing static imports with no-op stubs and dynamic `import('./*.server.*')` calls with `Promise.resolve({})` so server code never reaches the browser.
 - **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverActions`, or `actionGuards`.
 - **`moduleKeyPlugin`** rewrites each `.server.*` file at build time with a `__moduleKey` derived from the file path, which the loader/action handlers use to dispatch RPC requests.
