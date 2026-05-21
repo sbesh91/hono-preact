@@ -42,7 +42,11 @@ describe('deny()', () => {
   });
 
   it('accepts an object form with headers', () => {
-    const o = deny({ status: 429, message: 'Slow', headers: { 'Retry-After': '5' } });
+    const o = deny({
+      status: 429,
+      message: 'Slow',
+      headers: { 'Retry-After': '5' },
+    });
     expect(o.status).toBe(429);
     expect(o.headers).toEqual({ 'Retry-After': '5' });
   });
@@ -60,6 +64,11 @@ describe('predicates', () => {
     expect(isOutcome({})).toBe(false);
     expect(isOutcome(null)).toBe(false);
     expect(isOutcome(new Error('x'))).toBe(false);
+  });
+
+  it('isOutcome rejects objects with an unknown __outcome tag', () => {
+    expect(isOutcome({ __outcome: 'unknown_variant' })).toBe(false);
+    expect(isOutcome({ __outcome: undefined })).toBe(false);
   });
 
   it('isRedirect / isDeny / isRender discriminate the variants', () => {

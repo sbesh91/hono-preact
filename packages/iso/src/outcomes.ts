@@ -39,7 +39,12 @@ type RedirectInput =
 
 export function redirect(input: RedirectInput): RedirectOutcome {
   if (typeof input === 'string') {
-    return { __outcome: 'redirect', to: input, status: 302, headers: undefined };
+    return {
+      __outcome: 'redirect',
+      to: input,
+      status: 302,
+      headers: undefined,
+    };
   }
   return {
     __outcome: 'redirect',
@@ -75,12 +80,10 @@ export function deny(a: ErrorStatusCode | DenyInput, b?: string): DenyOutcome {
 }
 
 export function isOutcome(value: unknown): value is Outcome {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    '__outcome' in value &&
-    (value as { __outcome: unknown }).__outcome !== undefined
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('__outcome' in value)) return false;
+  const tag = (value as { __outcome: unknown }).__outcome;
+  return tag === 'redirect' || tag === 'deny' || tag === 'render';
 }
 
 export function isRedirect(value: unknown): value is RedirectOutcome {
