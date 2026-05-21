@@ -127,6 +127,10 @@ export interface LoadersHandlerOptions {
 
 function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
   if (outcome.__outcome === 'redirect') {
+    // Headers from the outcome ride the HTTP response via `c.header()`. They
+    // are deliberately NOT embedded in the JSON envelope: the client only
+    // reads `to` and calls `window.location.assign(to)`; any embedded
+    // headers would be dead bytes the client never inspects.
     if (outcome.headers) {
       for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
     }
@@ -135,7 +139,6 @@ function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
         __outcome: 'redirect',
         to: outcome.to,
         status: outcome.status,
-        headers: outcome.headers,
       },
       200
     );
@@ -254,8 +257,20 @@ export function loadersHandler(
           const dispatch = await dispatchServer<unknown, 'loader'>({
             middleware: serverMw,
             ctx,
-            inner: async () =>
-              entry.fn({ c, location: validatedLocation, signal }),
+            inner: async () => {
+              const inner = await entry.fn({
+                c,
+                location: validatedLocation,
+                signal,
+              });
+              // A loader that does `return redirect('/login')` instead of
+              // `throw redirect('/login')` would otherwise ship the outcome
+              // JSON shape as a normal 200 response and bypass envelope
+              // translation. Normalize by re-throwing so the existing
+              // outcome-catching path translates it.
+              if (isOutcome(inner)) throw inner;
+              return inner;
+            },
           });
           if (dispatch.kind === 'outcome') {
             // Throw to unify with non-outcome error translation below.

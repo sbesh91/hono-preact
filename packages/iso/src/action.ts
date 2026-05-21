@@ -43,11 +43,20 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   // Runtime no-op for the call itself: returns fn as-is. The ActionStub type
   // is enforced only by TypeScript and the Vite plugin. The dispatcher reads
   // `use` off the function-as-stub when running the chain.
-  const stub = fn as unknown as ActionStub<TPayload, TResult, TChunk> & {
-    use?: ReadonlyArray<unknown>;
-  };
-  if (opts?.use) stub.use = opts.use;
-  return stub;
+  //
+  // Use `Object.defineProperty` instead of direct assignment so a frozen
+  // module export (strict ESM, HMR-frozen modules) doesn't throw. The
+  // actions-handler reads via `(fn as { use?: ReadonlyArray<unknown> }).use`,
+  // which works whether the property was set by assignment or defineProperty.
+  if (opts?.use) {
+    Object.defineProperty(fn, 'use', {
+      value: opts.use,
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    });
+  }
+  return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 
 export type UseActionOptions<
@@ -187,11 +196,21 @@ export function useAction<
             message?: string;
           };
           // Deny outcomes carry `message` instead of the legacy `error`
-          // field; prefer the descriptive message when present.
-          const msg =
-            body.__outcome === 'deny' && typeof body.message === 'string'
-              ? body.message
-              : (body.error ?? `Action failed with status ${response.status}`);
+          // field; prefer the descriptive message when present. The deny()
+          // constructor defaults the message for first-party callers, but a
+          // hand-rolled envelope from custom server middleware might still
+          // ship without one; fall back to a deny-aware label so the user
+          // sees a hint that the status came from an explicit deny rather
+          // than a generic transport failure.
+          let msg: string;
+          if (body.__outcome === 'deny') {
+            msg =
+              typeof body.message === 'string'
+                ? body.message
+                : `Request denied (${response.status})`;
+          } else {
+            msg = body.error ?? `Action failed with status ${response.status}`;
+          }
           throw new Error(msg);
         }
 
@@ -200,6 +219,19 @@ export function useAction<
         // a redirect outcome envelope. Hand off to the browser; the rest of
         // this promise will never settle, but the page is navigating away
         // anyway.
+        //
+        // Trust boundary: `to` is taken straight from the JSON body and
+        // passed to `window.location.assign`. The framework's own handlers
+        // emit safe (typically same-origin) values, but a compromised or
+        // misconfigured server (or a proxy injecting JSON) could push the
+        // client anywhere. We don't validate origin here for v0.1; treat
+        // your own server as part of the trusted boundary. A same-origin
+        // check is a deferred enhancement (see C4 in the middleware review).
+        //
+        // We use `response.clone().json()` to peek at the body without
+        // consuming it: if the response is NOT a redirect outcome the
+        // downstream `await response.json()` still needs to read it. Clone
+        // is cheap on a small JSON payload.
         if (!contentType.includes('text/event-stream')) {
           const peek = (await response
             .clone()

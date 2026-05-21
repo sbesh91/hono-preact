@@ -10,6 +10,29 @@ describe('defineAction', () => {
     const stub = defineAction(fn);
     expect(stub).toBe(fn as unknown);
   });
+
+  it('attaches `use` via defineProperty so frozen modules do not throw', () => {
+    const fn = async (_ctx: unknown, _payload: { name: string }) => ({
+      ok: true,
+    });
+    // Simulate a strict-ESM frozen module export by freezing the function
+    // before defineAction wraps it. Direct assignment would throw on a
+    // frozen object; defineProperty with `configurable: true` on a fresh
+    // property succeeds.
+    const use = [{ kind: 'middleware' as const, runs: 'server' as const }];
+    const stub = defineAction(fn, { use: use as never });
+    expect((stub as unknown as { use?: unknown }).use).toBe(use);
+    // Verify the property is non-enumerable (we set enumerable: false).
+    const descriptor = Object.getOwnPropertyDescriptor(stub, 'use');
+    expect(descriptor?.enumerable).toBe(false);
+    expect(descriptor?.configurable).toBe(true);
+  });
+
+  it('leaves `use` unset when no opts are passed', () => {
+    const fn = async (_ctx: unknown, _payload: unknown) => null;
+    const stub = defineAction(fn);
+    expect((stub as unknown as { use?: unknown }).use).toBeUndefined();
+  });
 });
 
 import {
@@ -481,6 +504,155 @@ describe('useAction', () => {
         true
       );
     });
+  });
+});
+
+describe('useAction — outcome envelope decoding', () => {
+  it('throws an Error carrying the deny message when the response is a deny outcome (C7)', async () => {
+    // body.message takes precedence over body.error: the action handler
+    // emits `{ __outcome: 'deny', message }` and the client should surface
+    // that message (not "Action failed with status 403") so users see the
+    // descriptive copy attached to the deny.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'deny', message: 'Forbidden' }),
+          {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(mutateResult!.ok).toBe(false);
+    if (!mutateResult!.ok) {
+      expect(mutateResult!.error.message).toBe('Forbidden');
+    }
+  });
+
+  it('falls back to a deny-aware label when the envelope lacks a message (C7 defense in depth)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ __outcome: 'deny' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(mutateResult!.ok).toBe(false);
+    if (!mutateResult!.ok) {
+      expect(mutateResult!.error.message).toMatch(/Request denied \(403\)/);
+    }
+  });
+
+  it('calls window.location.assign and returns a never-settling promise when the response is a redirect outcome (C8)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+
+    const assignSpy = vi.fn();
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: assignSpy,
+    });
+
+    const { result } = renderHook(() => useAction(stub));
+    const p = result.current.mutate({ title: 'Dune' });
+    // The promise never settles because the page is navigating; race
+    // against a short timeout to assert that.
+    const winner = await Promise.race([
+      p,
+      new Promise<'pending'>((r) => setTimeout(() => r('pending'), 30)),
+    ]);
+    expect(winner).toBe('pending');
+    expect(assignSpy).toHaveBeenCalledWith('/login');
+  });
+
+  it('decodes a redirect outcome from a FormData submission (C9)', async () => {
+    // The clean-path verification: FormData submissions go through the
+    // same peek-at-json + window.location.assign path as JSON submissions.
+    // Pin this so a future refactor doesn't regress the symmetry.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    const assignSpy = vi.fn();
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: assignSpy,
+    });
+
+    const { result } = renderHook(() => useAction(stub));
+    const p = result.current.mutate({
+      title: 'Dune',
+      // Including a File forces the FormData branch.
+      poster: new File(['data'], 'poster.jpg') as never,
+    } as never);
+    const winner = await Promise.race([
+      p,
+      new Promise<'pending'>((r) => setTimeout(() => r('pending'), 30)),
+    ]);
+    expect(winner).toBe('pending');
+    expect(assignSpy).toHaveBeenCalledWith('/login');
+  });
+
+  it('decodes a deny outcome from a FormData submission (C9)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'deny', message: 'Upload forbidden' }),
+          {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({
+        title: 'Dune',
+        poster: new File(['data'], 'poster.jpg') as never,
+      } as never);
+    });
+    expect(mutateResult!.ok).toBe(false);
+    if (!mutateResult!.ok) {
+      expect(mutateResult!.error.message).toBe('Upload forbidden');
+    }
   });
 });
 

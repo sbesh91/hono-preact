@@ -83,3 +83,66 @@ describe('fetchLoaderData: redirect outcome envelope', () => {
     expect(result).toEqual({ movies: [1, 2, 3] });
   });
 });
+
+describe('fetchLoaderData: deny outcome envelope', () => {
+  it('throws an Error with the deny message when the envelope carries one', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ __outcome: 'deny', message: 'Forbidden' }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow('Forbidden');
+  });
+
+  it('falls back to a deny-aware label when the envelope lacks a message', async () => {
+    // Defense in depth: deny() now defaults the message at construction time,
+    // but a hand-rolled envelope (custom server middleware) could still ship
+    // without one. The client should still surface the deny intent rather
+    // than the generic "Loader failed with status N".
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'deny' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow(/Request denied \(403\)/);
+  });
+
+  it('falls back to the legacy { error } shape for non-deny error responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'boom' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow('boom');
+  });
+});

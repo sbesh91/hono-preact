@@ -51,9 +51,17 @@ describe('deny()', () => {
     expect(o.headers).toEqual({ 'Retry-After': '5' });
   });
 
-  it('makes message optional', () => {
+  it('defaults the message when none is provided (positional form)', () => {
     const o = deny(401);
-    expect(o.message).toBeUndefined();
+    // `JSON.stringify` drops `undefined`, so the constructor defaults the
+    // message to a status-aware string to guarantee the wire envelope always
+    // carries something the client can surface as Error.message.
+    expect(o.message).toBe('Request denied (401)');
+  });
+
+  it('defaults the message when none is provided (object form)', () => {
+    const o = deny({ status: 403 });
+    expect(o.message).toBe('Request denied (403)');
   });
 });
 

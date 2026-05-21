@@ -18,7 +18,7 @@ export type RedirectOutcome = {
 export type DenyOutcome = {
   __outcome: 'deny';
   status: ErrorStatusCode;
-  message: string | undefined;
+  message: string;
   headers: Record<string, string> | undefined;
 };
 
@@ -63,18 +63,25 @@ type DenyInput = {
 export function deny(status: ErrorStatusCode, message?: string): DenyOutcome;
 export function deny(spec: DenyInput): DenyOutcome;
 export function deny(a: ErrorStatusCode | DenyInput, b?: string): DenyOutcome {
+  // `JSON.stringify` drops `undefined` properties, so a deny outcome with no
+  // message would arrive at the client without a `message` field and the
+  // client decoders would fall back to a generic "Loader/Action failed with
+  // status N" string. Default to a status-aware message at construction time
+  // so the wire envelope always carries something useful. Callers can still
+  // pass a richer message; defense-in-depth on the client side fills in a
+  // similar fallback if a hand-rolled envelope ships without `message`.
   if (typeof a === 'object') {
     return {
       __outcome: 'deny',
       status: a.status,
-      message: a.message,
+      message: a.message ?? `Request denied (${a.status})`,
       headers: a.headers,
     };
   }
   return {
     __outcome: 'deny',
     status: a,
-    message: b,
+    message: b ?? `Request denied (${a})`,
     headers: undefined,
   };
 }
