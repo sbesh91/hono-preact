@@ -23,9 +23,35 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.ClientScript).toBe('function');
   });
 
+  it('surfaces the outcome predicates at the root', async () => {
+    const m = await import('hono-preact');
+    expect(typeof m.isOutcome).toBe('function');
+    expect(typeof m.isRedirect).toBe('function');
+    expect(typeof m.isDeny).toBe('function');
+    expect(typeof m.isRender).toBe('function');
+  });
+
   it('does NOT surface server-only symbols at the root', async () => {
     const m = await import('hono-preact');
     expect((m as Record<string, unknown>).renderPage).toBeUndefined();
+  });
+
+  it('does NOT surface render() (page-scope only) at the root', async () => {
+    const m = await import('hono-preact');
+    expect((m as Record<string, unknown>).render).toBeUndefined();
+  });
+});
+
+describe('hono-preact/page export (page-scope kitchen sink)', () => {
+  it('surfaces every outcome constructor and predicate the docs reference', async () => {
+    const m = await import('hono-preact/page');
+    expect(typeof m.redirect).toBe('function');
+    expect(typeof m.deny).toBe('function');
+    expect(typeof m.render).toBe('function');
+    expect(typeof m.isOutcome).toBe('function');
+    expect(typeof m.isRedirect).toBe('function');
+    expect(typeof m.isDeny).toBe('function');
+    expect(typeof m.isRender).toBe('function');
   });
 });
 

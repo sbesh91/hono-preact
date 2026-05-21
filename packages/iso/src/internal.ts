@@ -3,8 +3,8 @@
 // These primitives compose the default <Page> pipeline. They're kept
 // behind a subpath so the front door (@hono-preact/iso) stays small.
 // Use them when definePage bindings or <Page> props don't express
-// what you need (e.g. distinct fallbacks for guards vs. loader, custom
-// pipeline ordering, advanced SSR work).
+// what you need (e.g. custom middleware composition, distinct fallbacks
+// for the middleware host vs. the loader, advanced SSR work).
 //
 // STABILITY: this subpath is intentionally less stable than the package's
 // main surface. Symbols may be renamed, retyped, or removed in any

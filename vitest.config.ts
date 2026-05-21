@@ -4,16 +4,47 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@hono-preact/iso/internal': path.resolve(__dirname, 'packages/iso/src/internal.ts'),
-      '@hono-preact/iso/is-browser.js': path.resolve(__dirname, 'packages/iso/src/is-browser.tsx'),
-      '@hono-preact/iso/page': path.resolve(__dirname, 'packages/iso/src/page-only.ts'),
+      '@hono-preact/iso/internal': path.resolve(
+        __dirname,
+        'packages/iso/src/internal.ts'
+      ),
+      '@hono-preact/iso/is-browser.js': path.resolve(
+        __dirname,
+        'packages/iso/src/is-browser.tsx'
+      ),
+      '@hono-preact/iso/page': path.resolve(
+        __dirname,
+        'packages/iso/src/page-only.ts'
+      ),
       '@hono-preact/iso': path.resolve(__dirname, 'packages/iso/src/index.ts'),
-      '@hono-preact/server': path.resolve(__dirname, 'packages/server/src/index.ts'),
-      '@hono-preact/vite': path.resolve(__dirname, 'packages/vite/src/index.ts'),
-      'hono-preact/server': path.resolve(__dirname, 'packages/hono-preact/src/server.ts'),
-      'hono-preact/vite': path.resolve(__dirname, 'packages/hono-preact/src/vite.ts'),
-      'hono-preact/internal': path.resolve(__dirname, 'packages/hono-preact/src/internal.ts'),
-      'hono-preact': path.resolve(__dirname, 'packages/hono-preact/src/index.ts'),
+      '@hono-preact/server': path.resolve(
+        __dirname,
+        'packages/server/src/index.ts'
+      ),
+      '@hono-preact/vite': path.resolve(
+        __dirname,
+        'packages/vite/src/index.ts'
+      ),
+      'hono-preact/server': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/server.ts'
+      ),
+      'hono-preact/vite': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/vite.ts'
+      ),
+      'hono-preact/internal': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/internal.ts'
+      ),
+      'hono-preact/page': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/page.ts'
+      ),
+      'hono-preact': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/index.ts'
+      ),
       '@': path.resolve(__dirname, 'apps/site/src'),
     },
   },
