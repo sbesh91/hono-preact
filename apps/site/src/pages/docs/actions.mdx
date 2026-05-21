@@ -327,6 +327,6 @@ without a credential do not carry the session cookie; cross-origin POSTs from a
 malicious site cannot read the response.
 
 If you need a stricter posture (explicit-origin CSRF middleware on
-`/__actions`), that is not user-configurable in v0.1. See
-[issue #43](https://github.com/sbesh91/hono-preact/issues/43) for the
-post-v0.1 design.
+`/__actions`), the framework's reserved paths are mounted ahead of user
+middleware in the generated entry, so a Hono `csrf()` middleware on
+`/__actions` is not user-configurable.

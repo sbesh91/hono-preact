@@ -164,15 +164,15 @@ For a layout group, the framework registers ONE shared component at the outer ro
 
 Nesting works recursively: a layout-group child of a layout group registers as a single component within its parent's inner Router, and so on.
 
-## What's out of scope at v0.1
+## What's out of scope
 
-| Feature                                    | Status       | Workaround                                                                                                                                      |
-| ------------------------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pathless layout routes (no URL segment)    | Not yet      | Repeat the wrapper as a regular component imported by each view that needs it.                                                                  |
-| `useParentLoaderData` / loader composition | Out of scope | Layout loaders and leaf loaders both run, but they do not see each other's data. Read from a context provided by the layout, or pass via props. |
-| Path-prefix middleware beyond guards       | Out of scope | Use Hono `.use()` in your `api.ts` for path-prefix middleware.                                                                                  |
+| Feature                                    | Workaround                                                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pathless layout routes (no URL segment)    | Repeat the wrapper as a regular component imported by each view that needs it.                                                                  |
+| `useParentLoaderData` / loader composition | Layout loaders and leaf loaders both run, but they do not see each other's data. Read from a context provided by the layout, or pass via props. |
+| Path-prefix middleware                     | Use Hono `.use()` in your `api.ts` for path-prefix middleware.                                                                                  |
 
-These may land in later versions. Layout-level loaders DO run in parallel with leaf loaders (see [Layout-level loaders](/docs/loaders#layout-level-loaders)); what's out of scope is letting a leaf loader read its parent layout loader's data through framework plumbing.
+Layout-level loaders DO run in parallel with leaf loaders (see [Layout-level loaders](/docs/loaders#layout-level-loaders)); what's out of scope is letting a leaf loader read its parent layout loader's data through framework plumbing.
 
 ## Sharing chrome without a layout
 

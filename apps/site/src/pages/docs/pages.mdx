@@ -20,7 +20,7 @@ About.displayName = 'About';
 export default About;
 ```
 
-The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs loader, fallback, or guard bindings).
+The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs a Wrapper, an `errorFallback`, or a `use` middleware list).
 
 ### Step 2: Add to `src/routes.ts`
 
