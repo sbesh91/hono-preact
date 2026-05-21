@@ -168,42 +168,45 @@ describe('serverLoaderValidationPlugin', () => {
     );
   });
 
-  // F3 / F11: a `pageUse` (or loaderUse/actionUse) declared as a bare
-  // reference rather than an array literal silently disables the gate at
-  // runtime. Surface it as a build error.
+  // F3 / F11: a `pageUse` (or loaderUse/actionUse) declared as an
+  // obviously-non-array literal silently disables the gate at runtime.
+  // Reject the literal denylist here; let identifiers/member-expressions
+  // through and rely on the runtime guard in makePageUseResolvers.
   describe('use-export shape validation', () => {
-    it('rejects pageUse = singleMw (non-array initializer)', () => {
+    it('accepts pageUse = identifier (e.g. re-exporting a shared array)', () => {
+      // This is the legitimate share-pattern: definePage({ use: requireSession })
+      // on the page-tsx and `export const pageUse = requireSession` on the
+      // .server.ts so both surfaces gate identically. Build-time can't prove
+      // `requireSession` is an array (it's imported from another module), so
+      // we accept and let the runtime guard catch any non-array value at
+      // first request.
       const code = [
-        "import { defineServerMiddleware } from '@hono-preact/iso';",
-        'const requireAuth = defineServerMiddleware(async (_c, next) => next());',
-        'export const pageUse = requireAuth;',
+        "import { requireSession } from '../auth.js';",
+        'export const pageUse = requireSession;',
         'export const serverLoaders = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
-      expect(error).toContain('`pageUse` must be an array literal');
-      expect(error).toContain('[requireAuth]');
+      expect(error).toBeNull();
     });
 
-    it('rejects loaderUse = singleMw (non-array initializer)', () => {
+    it('accepts loaderUse = identifier', () => {
       const code = [
-        "import { defineServerMiddleware } from '@hono-preact/iso';",
-        'const requireAuth = defineServerMiddleware(async (_c, next) => next());',
-        'export const loaderUse = requireAuth;',
+        "import { audit } from '../audit.js';",
+        'export const loaderUse = audit;',
         'export const serverLoaders = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
-      expect(error).toContain('`loaderUse` must be an array literal');
+      expect(error).toBeNull();
     });
 
-    it('rejects actionUse = singleMw (non-array initializer)', () => {
+    it('accepts actionUse = identifier', () => {
       const code = [
-        "import { defineServerMiddleware } from '@hono-preact/iso';",
-        'const requireAuth = defineServerMiddleware(async (_c, next) => next());',
-        'export const actionUse = requireAuth;',
+        "import { audit } from '../audit.js';",
+        'export const actionUse = audit;',
         'export const serverActions = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
-      expect(error).toContain('`actionUse` must be an array literal');
+      expect(error).toBeNull();
     });
 
     it('accepts pageUse = [mw, mw2] (array literal)', () => {
@@ -227,9 +230,37 @@ describe('serverLoaderValidationPlugin', () => {
       expect(error).toBeNull();
     });
 
+    it('accepts pageUse = auth.requireSession (member expression)', () => {
+      const code = [
+        "import * as auth from '../auth.js';",
+        'export const pageUse = auth.requireSession;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
     it('rejects pageUse = someObjectLiteral (object expression is not an array)', () => {
       const code = [
         'export const pageUse = { x: 1 };',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`pageUse` must be an array literal');
+    });
+
+    it('rejects pageUse = 42 (numeric literal)', () => {
+      const code = [
+        'export const pageUse = 42;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`pageUse` must be an array literal');
+    });
+
+    it('rejects pageUse = "foo" (string literal)', () => {
+      const code = [
+        'export const pageUse = "foo";',
         'export const serverLoaders = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');

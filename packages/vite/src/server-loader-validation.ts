@@ -61,21 +61,38 @@ export function serverLoaderValidationPlugin(): Plugin {
         }
       }
 
-      // F3: pageUse / loaderUse / actionUse must be array literals so the
-      // route-map builder and dispatcher receive a real ReadonlyArray. A
-      // bare reference (`export const pageUse = singleMw`) silently
-      // disables the gate at runtime; reject it here so the build fails
-      // fast with a helpful message. findUseExports is shared with the
-      // server-loaders-parser surface so the recognized-name list stays in
-      // one place.
+      // F3: pageUse / loaderUse / actionUse must resolve to an array at
+      // runtime so the route-map builder and dispatcher receive a real
+      // ReadonlyArray. We can't statically prove that an identifier (e.g.
+      // `pageUse = requireSession` re-exporting an array from another
+      // module) holds an array, so we reject only the obviously-wrong
+      // literal shapes here and let the runtime guard in
+      // `makePageUseResolvers` catch indirect non-array values at first
+      // request. The literal denylist still catches the canonical typo
+      // case (`pageUse = singleMwObject`). findUseExports is shared with
+      // server-loaders-parser so the recognized-name list stays in one
+      // place.
+      const REJECTED_LITERAL_TYPES = new Set([
+        'ObjectExpression',
+        'NumericLiteral',
+        'StringLiteral',
+        'BooleanLiteral',
+        'NullLiteral',
+        'RegExpLiteral',
+        'TemplateLiteral',
+        'BigIntLiteral',
+      ]);
       for (const useExport of findUseExports(ast.program)) {
         if (useExport.init == null) continue;
-        if (useExport.init.type === 'ArrayExpression') continue;
-        errors.push(
-          `${id}: \`${useExport.name}\` must be an array literal ` +
-            `(e.g. \`export const ${useExport.name} = [requireAuth]\`). ` +
-            `A bare reference silently disables the middleware at runtime.`
-        );
+        if (REJECTED_LITERAL_TYPES.has(useExport.init.type)) {
+          errors.push(
+            `${id}: \`${useExport.name}\` must be an array literal or an ` +
+              `identifier that points to an array ` +
+              `(e.g. \`export const ${useExport.name} = [requireAuth]\` or ` +
+              `\`export const ${useExport.name} = requireSession\`). ` +
+              `A non-array value silently disables the middleware at runtime.`
+          );
+        }
       }
 
       const disallowedExports = namedExports.filter(
