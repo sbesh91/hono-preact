@@ -31,6 +31,14 @@ export async function dispatchServer<T, S extends Scope = Scope>(
     const mw = args.middleware[index];
     let nextCalled = false;
     const next: Next = async () => {
+      if (nextCalled) {
+        throw new Error(
+          `Middleware at index ${index} called next() more than once. ` +
+            `Each middleware must call next() exactly once: a second call ` +
+            `would re-run the downstream chain (and the inner function) ` +
+            `with the original ctx, producing duplicate side effects.`
+        );
+      }
       nextCalled = true;
       await runChain(index + 1);
       return innerResult;
@@ -79,6 +87,14 @@ export async function dispatchClient<T>(
     const mw = args.middleware[index];
     let nextCalled = false;
     const next: Next = async () => {
+      if (nextCalled) {
+        throw new Error(
+          `Middleware at index ${index} called next() more than once. ` +
+            `Each middleware must call next() exactly once: a second call ` +
+            `would re-run the downstream chain (and the inner function) ` +
+            `with the original ctx, producing duplicate side effects.`
+        );
+      }
       nextCalled = true;
       await runChain(index + 1);
       return innerResult;

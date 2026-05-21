@@ -174,4 +174,144 @@ describe('dispatchServer — outcomes', () => {
       expect(result.outcome.__outcome).toBe('redirect');
     }
   });
+
+  it('middle-mw outcome short-circuits inner but lets outer after-block run', async () => {
+    // Simulates root -> page -> unit ordering: when the page-layer middleware
+    // throws an outcome before calling next(), the unit middleware and inner
+    // body must not run, but the root middleware's after-block must still
+    // execute (so cleanup like timing/logging fires).
+    const calls: string[] = [];
+    const root = defineServerMiddleware(async (_ctx, next) => {
+      calls.push('root:before');
+      try {
+        await next();
+        calls.push('root:after-ok');
+      } catch (e) {
+        // Re-throw the outcome so the dispatcher can translate it; record
+        // that we ran the after-block on the error path.
+        calls.push('root:after-outcome');
+        throw e;
+      }
+    });
+    const page = defineServerMiddleware(async () => {
+      calls.push('page:before-throw');
+      throw deny(403, 'nope');
+    });
+    const unit = defineServerMiddleware(async (_ctx, next) => {
+      calls.push('unit:before');
+      await next();
+      calls.push('unit:after');
+    });
+
+    const result = await dispatchServer({
+      middleware: [root, page, unit],
+      ctx: {
+        scope: 'loader',
+        c: fakeC,
+        signal,
+        location: { path: '/' } as never,
+        module: 'm',
+        loader: 'l',
+      },
+      inner: async () => {
+        calls.push('inner');
+        return 'unreached';
+      },
+    });
+
+    expect(result.kind).toBe('outcome');
+    if (result.kind === 'outcome') {
+      expect(result.outcome.__outcome).toBe('deny');
+    }
+    expect(calls).toEqual([
+      'root:before',
+      'page:before-throw',
+      'root:after-outcome',
+    ]);
+    // Belt-and-suspenders: unit middleware and the inner body must NOT
+    // appear anywhere in the call log.
+    expect(calls).not.toContain('unit:before');
+    expect(calls).not.toContain('unit:after');
+    expect(calls).not.toContain('inner');
+  });
+
+  it('detects double-next() and throws a structured error', async () => {
+    const bad = defineServerMiddleware(async (_ctx, next) => {
+      await next();
+      await next();
+    });
+    await expect(
+      dispatchServer({
+        middleware: [bad],
+        ctx: {
+          scope: 'loader',
+          c: fakeC,
+          signal,
+          location: { path: '/' } as never,
+          module: 'm',
+          loader: 'l',
+        },
+        inner: async () => 'x',
+      })
+    ).rejects.toThrow(/called next\(\) more than once/);
+  });
+
+  it('rethrows a non-outcome error thrown from inner via the mw chain', async () => {
+    // Existing tests cover deny thrown from inner; this asserts a generic
+    // Error from inner propagates through outer middleware without being
+    // swallowed or coerced.
+    const outer = defineServerMiddleware(async (_ctx, next) => {
+      await next();
+    });
+    await expect(
+      dispatchServer({
+        middleware: [outer],
+        ctx: {
+          scope: 'loader',
+          c: fakeC,
+          signal,
+          location: { path: '/' } as never,
+          module: 'm',
+          loader: 'l',
+        },
+        inner: async () => {
+          throw new Error('inner-boom');
+        },
+      })
+    ).rejects.toThrow('inner-boom');
+  });
+
+  it('AbortSignal aborted mid-chain does not short-circuit (by design)', async () => {
+    // The dispatcher intentionally does not read ctx.signal: cancellation is
+    // the inner function's responsibility (loaders/actions check signal in
+    // their own body). This test pins that behavior so a future change to
+    // make the dispatcher signal-aware is an explicit decision.
+    const controller = new AbortController();
+    const calls: string[] = [];
+    const mw = defineServerMiddleware(async (_ctx, next) => {
+      calls.push('mw:before');
+      controller.abort();
+      await next();
+      calls.push('mw:after');
+    });
+    const result = await dispatchServer({
+      middleware: [mw],
+      ctx: {
+        scope: 'loader',
+        c: fakeC,
+        signal: controller.signal,
+        location: { path: '/' } as never,
+        module: 'm',
+        loader: 'l',
+      },
+      inner: async () => {
+        calls.push('inner');
+        return 'value';
+      },
+    });
+
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') expect(result.value).toBe('value');
+    expect(calls).toEqual(['mw:before', 'inner', 'mw:after']);
+  });
 });
