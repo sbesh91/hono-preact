@@ -1,15 +1,18 @@
-import { defineServerGuard, defineClientGuard } from '@hono-preact/iso';
+import {
+  defineServerMiddleware,
+  defineClientMiddleware,
+} from '@hono-preact/iso';
 import { SECRET_SERVER_TOKEN } from './server-secrets.js';
 import { CLIENT_USER_KEY } from './client-state.js';
 
-const adminGuard = defineServerGuard(async (ctx, next) => {
+const adminMiddleware = defineServerMiddleware<'page'>(async (ctx, next) => {
   (ctx as unknown as { token?: string }).token = SECRET_SERVER_TOKEN;
-  return next();
+  await next();
 });
 
-const scrollRestore = defineClientGuard(async (ctx, next) => {
+const scrollRestore = defineClientMiddleware(async (ctx, next) => {
   (ctx as unknown as { userKey?: string }).userKey = CLIENT_USER_KEY;
-  return next();
+  await next();
 });
 
-export const guards = [adminGuard, scrollRestore];
+export const use = [adminMiddleware, scrollRestore];

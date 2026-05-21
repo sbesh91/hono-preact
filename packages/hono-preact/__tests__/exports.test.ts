@@ -7,8 +7,12 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.defineRoutes).toBe('function');
     expect(typeof m.defineLoader).toBe('function');
     expect(typeof m.defineAction).toBe('function');
-    expect(typeof m.defineServerGuard).toBe('function');
-    expect(typeof m.defineClientGuard).toBe('function');
+    expect(typeof m.defineServerMiddleware).toBe('function');
+    expect(typeof m.defineClientMiddleware).toBe('function');
+    expect(typeof m.defineStreamObserver).toBe('function');
+    expect(typeof m.defineApp).toBe('function');
+    expect(typeof m.redirect).toBe('function');
+    expect(typeof m.deny).toBe('function');
     expect(typeof m.useAction).toBe('function');
     expect(typeof m.useOptimisticAction).toBe('function');
     expect(typeof m.useReload).toBe('function');
@@ -49,9 +53,10 @@ describe('hono-preact/internal export', () => {
     expect(typeof m.Loader).toBe('function');
     expect(typeof m.Envelope).toBe('function');
     expect(typeof m.RouteBoundary).toBe('function');
-    expect(typeof m.Guards).toBe('function');
-    expect(typeof m.runServerGuards).toBe('function');
-    expect(typeof m.runClientGuards).toBe('function');
+    expect(typeof m.PageMiddlewareHost).toBe('function');
+    expect(typeof m.dispatchServer).toBe('function');
+    expect(typeof m.dispatchClient).toBe('function');
+    expect(typeof m.partitionUse).toBe('function');
     expect(typeof m.HonoRequestContext).toBe('function');
     expect(typeof m.installStreamRegistry).toBe('function');
     expect(typeof m.subscribeToLoaderStream).toBe('function');

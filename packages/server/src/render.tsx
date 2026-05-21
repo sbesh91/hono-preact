@@ -3,7 +3,6 @@ import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender, locationStub } from 'preact-iso/prerender';
 import {
-  GuardRedirect,
   env,
   isOutcome,
   type AppConfig,
@@ -164,7 +163,6 @@ export async function renderPage(
       { honoContext: c }
     );
   } catch (e: unknown) {
-    if (e instanceof GuardRedirect) return c.redirect(e.location);
     if (isOutcome(e)) return translateRootOutcome(c, e);
     throw e;
   } finally {

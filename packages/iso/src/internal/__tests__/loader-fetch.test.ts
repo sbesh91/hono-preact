@@ -32,13 +32,16 @@ describe('fetchLoaderData: separate module + loader args', () => {
   });
 });
 
-describe('fetchLoaderData: __redirect envelope', () => {
-  it('calls window.location.assign and returns a never-settling promise when the response carries __redirect', async () => {
+describe('fetchLoaderData: redirect outcome envelope', () => {
+  it('calls window.location.assign and returns a never-settling promise when the response carries a redirect outcome', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ __redirect: '/login' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     const assignSpy = vi.fn();
     // happy-dom's window.location is read-only; replace just assign.
@@ -63,7 +66,7 @@ describe('fetchLoaderData: __redirect envelope', () => {
     expect(assignSpy).toHaveBeenCalledWith('/login');
   });
 
-  it('returns the JSON value when the response is a plain object (not a __redirect)', async () => {
+  it('returns the JSON value when the response is a plain object (not a redirect outcome)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ movies: [1, 2, 3] }), {
         status: 200,

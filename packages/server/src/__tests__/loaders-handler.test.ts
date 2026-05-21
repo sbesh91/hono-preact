@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
+import { redirect } from '@hono-preact/iso';
 import { loadersHandler } from '../loaders-handler.js';
 
 function makeApp(glob: Parameters<typeof loadersHandler>[0]) {
@@ -158,14 +159,13 @@ describe('loadersHandler', () => {
     });
   });
 
-  it('maps GuardRedirect thrown from a loader to a __redirect envelope', async () => {
-    const { GuardRedirect } = await import('@hono-preact/iso');
+  it('maps redirect() thrown from a loader to a redirect outcome envelope', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'pages/movies',
         serverLoaders: {
           default: async () => {
-            throw new GuardRedirect('/login');
+            throw redirect('/login');
           },
         },
       },
@@ -175,10 +175,13 @@ describe('loadersHandler', () => {
       loader: 'default',
       location: loc,
     });
-    // 200 + envelope: the client RPC stub recognizes __redirect and navigates;
-    // a thrown error here would fire user error boundaries before the redirect.
+    // 200 + envelope: the client RPC stub recognizes the outcome and
+    // navigates; a thrown error here would fire user error boundaries
+    // before the redirect.
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ __redirect: '/login' });
+    const body = (await res.json()) as { __outcome: string; to: string };
+    expect(body.__outcome).toBe('redirect');
+    expect(body.to).toBe('/login');
   });
 
   it('resolves lazy glob modules before handling requests', async () => {

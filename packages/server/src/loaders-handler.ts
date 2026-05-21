@@ -1,6 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import {
-  GuardRedirect,
   isOutcome,
   type AppConfig,
   type Outcome,
@@ -277,13 +276,6 @@ export function loadersHandler(
     } catch (err) {
       if (isOutcome(err)) {
         return translateOutcomeForLoader(c, err);
-      }
-      // GuardRedirect (legacy) is still thrown by guards.tsx until Phase 8.
-      // Keep the legacy `{ __redirect }` wire shape so existing client stubs
-      // and tests continue to work; the new `__outcome` envelope replaces it
-      // when callers migrate to middleware outcomes.
-      if (err instanceof GuardRedirect) {
-        return c.json({ __redirect: err.location });
       }
       onError?.(err, { module, loader: loaderName });
       // In production we never leak the loader's error message: it may

@@ -1,6 +1,5 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
@@ -197,37 +196,27 @@ export function useAction<
         }
 
         const contentType = response.headers.get('Content-Type') ?? '';
-        // Server-side middleware that throws `redirect(...)` (or the legacy
-        // `GuardRedirect` from a guard) comes back as an outcome envelope.
-        // Hand off to the browser; the rest of this promise will never
-        // settle, but the page is navigating away anyway. Both the legacy
-        // `{ __redirect }` shape and the new `{ __outcome: 'redirect', to }`
-        // shape are handled.
+        // Server-side middleware that throws `redirect(...)` comes back as
+        // a redirect outcome envelope. Hand off to the browser; the rest of
+        // this promise will never settle, but the page is navigating away
+        // anyway.
         if (!contentType.includes('text/event-stream')) {
           const peek = (await response
             .clone()
             .json()
             .catch(() => undefined)) as unknown;
-          if (peek !== null && typeof peek === 'object') {
-            const obj = peek as {
-              __redirect?: unknown;
-              __outcome?: unknown;
-              to?: unknown;
-            };
-            const legacyTo =
-              typeof obj.__redirect === 'string' ? obj.__redirect : undefined;
-            const outcomeTo =
-              obj.__outcome === 'redirect' && typeof obj.to === 'string'
-                ? obj.to
-                : undefined;
-            const to = legacyTo ?? outcomeTo;
-            if (to) {
-              if (typeof window !== 'undefined') {
-                window.location.assign(to);
-              }
-              // Cast through `as` because TS can't see this promise never settles.
-              return await new Promise<MutateResult<TResult>>(() => {});
+          if (
+            peek !== null &&
+            typeof peek === 'object' &&
+            (peek as { __outcome?: unknown }).__outcome === 'redirect' &&
+            typeof (peek as { to?: unknown }).to === 'string'
+          ) {
+            const to = (peek as { to: string }).to;
+            if (typeof window !== 'undefined') {
+              window.location.assign(to);
             }
+            // Cast through `as` because TS can't see this promise never settles.
+            return await new Promise<MutateResult<TResult>>(() => {});
           }
         }
 
@@ -323,27 +312,3 @@ export function useAction<
 
   return { mutate, pending, error, data };
 }
-
-export type ActionGuardContext = {
-  c: Context;
-  module: string;
-  action: string;
-  payload: unknown;
-};
-
-export type ActionGuardFn = (
-  ctx: ActionGuardContext,
-  next: () => Promise<void>
-) => Promise<void>;
-
-export class ActionGuardError extends Error {
-  constructor(
-    message: string,
-    public readonly status: ContentfulStatusCode = 403
-  ) {
-    super(message);
-    this.name = 'ActionGuardError';
-  }
-}
-
-export const defineActionGuard = (fn: ActionGuardFn): ActionGuardFn => fn;

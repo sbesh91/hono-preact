@@ -51,33 +51,23 @@ export async function fetchLoaderData<T>(
   const contentType = res.headers.get('Content-Type') ?? '';
   if (!contentType.includes('text/event-stream')) {
     const json = (await res.json()) as unknown;
-    // Server-side middleware that throws `redirect(...)` (or the legacy
-    // `GuardRedirect` thrown by a guard) comes back as an outcome envelope.
-    // Hand off to the browser via `location.assign` and return a promise
-    // that never settles: the current document is being replaced, no
-    // caller will see a value. Both the legacy `{ __redirect }` shape and
-    // the new `{ __outcome: 'redirect', to }` shape are handled.
-    if (json !== null && typeof json === 'object') {
-      const obj = json as {
-        __redirect?: unknown;
-        __outcome?: unknown;
-        to?: unknown;
-      };
-      const legacyTo =
-        typeof obj.__redirect === 'string' ? obj.__redirect : undefined;
-      const outcomeTo =
-        obj.__outcome === 'redirect' && typeof obj.to === 'string'
-          ? obj.to
-          : undefined;
-      const to = legacyTo ?? outcomeTo;
-      if (to) {
-        if (typeof window !== 'undefined') {
-          window.location.assign(to);
-        }
-        return new Promise<T>(() => {
-          /* never resolves; page is navigating */
-        });
+    // Server-side middleware that throws `redirect(...)` comes back as a
+    // redirect outcome envelope. Hand off to the browser via
+    // `location.assign` and return a promise that never settles: the
+    // current document is being replaced, no caller will see a value.
+    if (
+      json !== null &&
+      typeof json === 'object' &&
+      (json as { __outcome?: unknown }).__outcome === 'redirect' &&
+      typeof (json as { to?: unknown }).to === 'string'
+    ) {
+      const to = (json as { to: string }).to;
+      if (typeof window !== 'undefined') {
+        window.location.assign(to);
       }
+      return new Promise<T>(() => {
+        /* never resolves; page is navigating */
+      });
     }
     return json as T;
   }

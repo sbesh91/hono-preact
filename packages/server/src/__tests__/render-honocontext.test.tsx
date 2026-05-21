@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { defineServerGuard } from '@hono-preact/iso';
-import { Guards } from '@hono-preact/iso/internal';
+import { defineServerMiddleware, redirect } from '@hono-preact/iso';
+import { PageMiddlewareHost } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
 import { renderPage } from '../render.js';
 
@@ -13,19 +13,19 @@ const loc = {
 } as unknown as RouteHook;
 
 describe('renderPage installs HonoRequestContext.Provider', () => {
-  it('a server guard inside the rendered tree receives the request c', async () => {
+  it('a server middleware inside the rendered tree receives the request c', async () => {
     let observedHeader: string | undefined = undefined;
-    const probe = defineServerGuard(async (ctx, next) => {
+    const probe = defineServerMiddleware<'page'>(async (ctx, next) => {
       observedHeader = ctx.c.req.header('x-test');
-      return next();
+      await next();
     });
 
     const Page = () => (
       <html>
         <body>
-          <Guards guards={[probe]} location={loc}>
+          <PageMiddlewareHost use={[probe]} location={loc}>
             <div>ok</div>
-          </Guards>
+          </PageMiddlewareHost>
         </body>
       </html>
     );
@@ -40,17 +40,17 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
     expect(observedHeader).toBe('hello');
   });
 
-  it('a server guard can short-circuit by returning a redirect, surfaced by renderPage', async () => {
-    const redirectGuard = defineServerGuard(async () => ({
-      redirect: '/login',
-    }));
+  it('a server middleware can short-circuit by throwing a redirect outcome', async () => {
+    const gate = defineServerMiddleware<'page'>(async () => {
+      throw redirect('/login');
+    });
 
     const Page = () => (
       <html>
         <body>
-          <Guards guards={[redirectGuard]} location={loc}>
+          <PageMiddlewareHost use={[gate]} location={loc}>
             <div>protected</div>
-          </Guards>
+          </PageMiddlewareHost>
         </body>
       </html>
     );

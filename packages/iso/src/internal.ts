@@ -29,14 +29,9 @@
 export { Loader } from './internal/loader.js';
 export { Envelope } from './internal/envelope.js';
 export { RouteBoundary } from './internal/route-boundary.js';
-export { Guards, GuardGate, useGuardResult } from './internal/guards.js';
 export { OptimisticOverlay } from './internal/optimistic-overlay.js';
 
-export {
-  LoaderIdContext,
-  LoaderDataContext,
-  GuardResultContext,
-} from './internal/contexts.js';
+export { LoaderIdContext, LoaderDataContext } from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
 export {
   RouteLocationsContext,
@@ -50,8 +45,8 @@ export {
   captureRequestScope,
 } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
-export { runServerGuards, runClientGuards } from './guard.js';
 export { HonoRequestContext } from './internal/contexts.js';
+export { PageMiddlewareHost } from './internal/page-middleware-host.js';
 
 export {
   __dispatchRouteChange,
@@ -91,4 +86,3 @@ export {
 // User code that imports them couples to plugin internals.
 
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
-export { __$guardNoop_hpiso } from './internal/guard-noop.js';

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { useTitle, useLang, useMeta, useLink } from 'hoofd/preact';
 import type { JSX } from 'preact';
 import { LocationProvider, useLocation } from 'preact-iso';
-import { GuardRedirect, env } from '@hono-preact/iso';
+import { env, redirect } from '@hono-preact/iso';
 import { renderPage } from '../render.js';
 
 function TitledPage() {
@@ -30,7 +30,7 @@ function UntitledPage() {
 }
 
 function RedirectingPage(): never {
-  throw new GuardRedirect('/login');
+  throw redirect('/login');
 }
 
 function XssTitle() {
@@ -123,7 +123,7 @@ describe('renderPage', () => {
     expect(html).not.toContain('<title>');
   });
 
-  it('returns a redirect when GuardRedirect is thrown during render', async () => {
+  it('returns an HTTP redirect when a page throws a redirect outcome during render', async () => {
     const res = await makeApp(RedirectingPage).request('http://localhost/');
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/login');

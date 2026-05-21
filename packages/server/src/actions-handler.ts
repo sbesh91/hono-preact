@@ -1,10 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import {
-  ActionGuardError,
-  GuardRedirect,
   isOutcome,
-  type ActionGuardFn,
-  type ActionGuardContext,
   type AppConfig,
   type Outcome,
   type ServerMiddleware,
@@ -25,7 +21,6 @@ import {
 type GlobModule = {
   __moduleKey?: unknown;
   serverActions?: Record<string, unknown>;
-  actionGuards?: ActionGuardFn[];
   [key: string]: unknown;
 };
 type LazyGlob = Record<string, () => Promise<unknown>>;
@@ -33,7 +28,6 @@ type EagerGlob = Record<string, GlobModule>;
 
 type ModuleEntry = {
   actions: Record<string, unknown>;
-  guards: ActionGuardFn[];
 };
 
 async function buildActionsMap(
@@ -49,41 +43,10 @@ async function buildActionsMap(
     if (typeof key === 'string' && mod.serverActions) {
       result[key] = {
         actions: mod.serverActions as Record<string, unknown>,
-        guards: (mod.actionGuards as ActionGuardFn[] | undefined) ?? [],
       };
     }
   }
   return result;
-}
-
-async function runActionGuards(
-  guards: ActionGuardFn[],
-  ctx: ActionGuardContext
-): Promise<void> {
-  const run = async (index: number): Promise<void> => {
-    if (index >= guards.length) return;
-    // Track whether the guard explicitly opted to pass control on. Without
-    // this check a guard that forgets `return next()` (or just `next()`)
-    // would silently fall through to the action body — the OPPOSITE of every
-    // other middleware system users have seen (Express, Hono, Koa: blocked
-    // by default; opt in to pass). Make ambiguous returns loud instead of
-    // silently insecure. To block, throw ActionGuardError. To pass, await
-    // (or return) next().
-    let nextCalled = false;
-    await guards[index](ctx, () => {
-      nextCalled = true;
-      return run(index + 1);
-    });
-    if (!nextCalled) {
-      throw new Error(
-        `ActionGuard for '${ctx.module}.${ctx.action}' returned without ` +
-          `calling next() or throwing. Guards must either: (a) await/return ` +
-          `next() to pass control on, or (b) throw ActionGuardError to block. ` +
-          `Returning silently is ambiguous and would let the action run.`
-      );
-    }
-  };
-  await run(0);
 }
 
 function translateOutcomeForAction(c: Context, outcome: Outcome): Response {
@@ -244,18 +207,6 @@ export function actionsHandler(
       return c.json({ error: `Module '${module}' not found` }, 404);
     }
 
-    try {
-      await runActionGuards(entry.guards, { c, module, action, payload });
-    } catch (err) {
-      if (err instanceof ActionGuardError) {
-        return c.json({ error: err.message }, err.status);
-      }
-      if (err instanceof GuardRedirect) {
-        return c.json({ __redirect: err.location });
-      }
-      throw err;
-    }
-
     const fn = entry.actions[action];
     if (typeof fn !== 'function') {
       return c.json(
@@ -315,12 +266,6 @@ export function actionsHandler(
     } catch (err) {
       if (isOutcome(err)) {
         return translateOutcomeForAction(c, err);
-      }
-      if (err instanceof ActionGuardError) {
-        return c.json({ error: err.message }, err.status);
-      }
-      if (err instanceof GuardRedirect) {
-        return c.json({ __redirect: err.location });
       }
       onError?.(err, { module, action });
       const message =

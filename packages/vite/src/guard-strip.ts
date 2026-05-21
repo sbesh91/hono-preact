@@ -9,35 +9,16 @@ import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
-const NOOP_IMPORT_SOURCE = 'hono-preact/internal';
-const NOOP_LOCAL_NAME = '__$guardNoop_hpiso';
 
-// Two rewrite strategies live behind the same allowlist:
-//
-//   * `arg-noop`: replace the factory's argument (the user-supplied fn)
-//     with a shared noop import. The factory call still runs and the
-//     resulting object retains its real shape — only the fn body is gone.
-//     Used for guards because the guard's body is what carries server-only
-//     code (DB calls, secret reads); the wrapping factory call is trivial.
-//
-//   * `whole-call`: replace the entire call expression with a literal
-//     brand object. Used for middleware/observer helpers whose factory
-//     output is itself a small descriptor record — no point keeping the
-//     factory call when the descriptor can be inlined. Tree-shakes the
-//     entire user function plus any modules it pulls in.
-//
-// Both strategies serve the same purpose: ensure the wrong-env user code
-// never reaches the wrong-env bundle even if a module is shared across
-// page-level page.tsx (which Vite imports into both bundles).
-type StripStrategy =
-  | { kind: 'arg-noop'; name: string }
-  | { kind: 'whole-call'; name: string; replacement: string };
+// Each strip replaces the entire call expression with a literal brand
+// object. The middleware/observer factory output IS a small descriptor
+// record, so inlining the brand object lets the user's fn body and any
+// modules it pulls in tree-shake out of the wrong-env bundle.
+type StripStrategy = { name: string; replacement: string };
 
 // In the server bundle we strip anything client-only.
 const SERVER_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
-  { kind: 'arg-noop', name: 'defineClientGuard' },
   {
-    kind: 'whole-call',
     name: 'defineClientMiddleware',
     replacement: `{ __kind: 'middleware', runs: 'client', fn: () => Promise.resolve() }`,
   },
@@ -47,14 +28,11 @@ const SERVER_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
 // fire on the server-side streaming pipeline (start/chunk/end/error/abort)
 // so they're server-only too.
 const CLIENT_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
-  { kind: 'arg-noop', name: 'defineServerGuard' },
   {
-    kind: 'whole-call',
     name: 'defineServerMiddleware',
     replacement: `{ __kind: 'middleware', runs: 'server', fn: () => Promise.resolve() }`,
   },
   {
-    kind: 'whole-call',
     name: 'defineStreamObserver',
     replacement: `{ __kind: 'observer' }`,
   },
@@ -86,8 +64,6 @@ type Hit = {
   strategy: StripStrategy;
   start: number;
   end: number;
-  argStart: number;
-  argEnd: number;
 };
 
 function findCallsByLocalName(
@@ -113,19 +89,11 @@ function findCallsByLocalName(
     n.callee.name
   ) {
     const strategy = bindings.get(n.callee.name);
-    if (
-      strategy &&
-      n.arguments &&
-      n.arguments.length >= 1 &&
-      n.arguments[0].start !== undefined &&
-      n.arguments[0].end !== undefined
-    ) {
+    if (strategy && n.start !== undefined && n.end !== undefined) {
       hits.push({
         strategy,
-        start: n.start!,
-        end: n.end!,
-        argStart: n.arguments[0].start!,
-        argEnd: n.arguments[0].end!,
+        start: n.start,
+        end: n.end,
       });
     }
   }
@@ -172,19 +140,8 @@ export function guardStripPlugin(): Plugin {
       if (hits.length === 0) return;
 
       const s = new MagicString(code);
-      let needsNoopImport = false;
       for (const hit of [...hits].reverse()) {
-        if (hit.strategy.kind === 'arg-noop') {
-          s.overwrite(hit.argStart, hit.argEnd, NOOP_LOCAL_NAME);
-          needsNoopImport = true;
-        } else {
-          s.overwrite(hit.start, hit.end, hit.strategy.replacement);
-        }
-      }
-      if (needsNoopImport) {
-        s.prepend(
-          `import { ${NOOP_LOCAL_NAME} } from '${NOOP_IMPORT_SOURCE}';\n`
-        );
+        s.overwrite(hit.start, hit.end, hit.strategy.replacement);
       }
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },

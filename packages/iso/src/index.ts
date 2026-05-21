@@ -32,10 +32,7 @@ export type {
   UseActionOptions,
   UseActionResult,
   MutateResult,
-  ActionGuardContext,
-  ActionGuardFn,
 } from './action.js';
-export { ActionGuardError, defineActionGuard } from './action.js';
 export type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 // Hooks.
@@ -54,24 +51,6 @@ export { Form } from './form.js';
 // Cache + invalidation.
 export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
-
-// Guards (legacy; removed in Phase 8 demolition).
-export {
-  defineServerGuard,
-  defineClientGuard,
-  GuardRedirect,
-  runServerGuards,
-  runClientGuards,
-} from './guard.js';
-export type {
-  GuardFn,
-  ServerGuardFn,
-  ClientGuardFn,
-  GuardResult,
-  ServerGuardContext,
-  ClientGuardContext,
-  GuardRunsOn,
-} from './guard.js';
 
 // Middleware + outcomes (the new system).
 export {
