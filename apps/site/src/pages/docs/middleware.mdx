@@ -87,6 +87,44 @@ root:after
 
 A `throw` in any ring propagates up through the surrounding `after` blocks (so a `try { await next() } finally { ... }` middleware still runs its cleanup on failure).
 
+### Nested routes compose down the tree
+
+When routes nest under a layout, the page layer composes every ancestor `.server.*` module's `pageUse` outermost first, then the matched route's own. So with a tree like:
+
+```ts
+// src/routes.ts
+defineRoutes([
+  {
+    path: '/admin',
+    layout: () => import('./admin/layout.js'),
+    server: () => import('./admin/layout.server.js'), // exports pageUse = [adminGate]
+    children: [
+      {
+        path: 'users/:id',
+        view: () => import('./admin/users.js'),
+        server: () => import('./admin/users.server.js'), // exports pageUse = [auditLog]
+      },
+    ],
+  },
+]);
+```
+
+a request to `/admin/users/42` runs:
+
+```
+root:before                     // appConfig.use
+  admin:before                  // /admin layout's pageUse: adminGate
+    audit:before                // /admin/users/:id leaf's pageUse: auditLog
+      unit:before               // defineLoader({ use })
+        inner
+      unit:after
+    audit:after
+  admin:after
+root:after
+```
+
+You don't have to repeat the ancestor's gate in every leaf. The composition is keyed by route-pattern prefix: any `.server.*` module whose route is an ancestor of the matched route contributes its `pageUse` to the chain. Path parameters at the same position are treated as structurally equivalent for prefix matching (`:projectId` in the layout aligns with `:projectId` in the leaf).
+
 ## Server vs client middleware
 
 `defineServerMiddleware` runs on the server side: during SSR, during the page-tsx pre-render, and during loader/action RPC calls. It receives the Hono `Context`, so cookies, headers, and signed-cookie helpers work as you'd expect.
