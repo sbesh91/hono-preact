@@ -182,35 +182,52 @@ export function useAction<
         }
 
         if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          throw new Error(
-            body.error ?? `Action failed with status ${response.status}`
-          );
+          const body = (await response.json().catch(() => ({}))) as {
+            error?: string;
+            __outcome?: string;
+            message?: string;
+          };
+          // Deny outcomes carry `message` instead of the legacy `error`
+          // field; prefer the descriptive message when present.
+          const msg =
+            body.__outcome === 'deny' && typeof body.message === 'string'
+              ? body.message
+              : (body.error ?? `Action failed with status ${response.status}`);
+          throw new Error(msg);
         }
 
         const contentType = response.headers.get('Content-Type') ?? '';
-        // Server-side `GuardRedirect` thrown from an action (or its guards) comes
-        // back as `{ __redirect }`. Hand off to the browser; the rest of this
-        // promise will never settle, but the page is navigating away anyway.
+        // Server-side middleware that throws `redirect(...)` (or the legacy
+        // `GuardRedirect` from a guard) comes back as an outcome envelope.
+        // Hand off to the browser; the rest of this promise will never
+        // settle, but the page is navigating away anyway. Both the legacy
+        // `{ __redirect }` shape and the new `{ __outcome: 'redirect', to }`
+        // shape are handled.
         if (!contentType.includes('text/event-stream')) {
           const peek = (await response
             .clone()
             .json()
             .catch(() => undefined)) as unknown;
-          if (
-            peek !== null &&
-            typeof peek === 'object' &&
-            peek !== undefined &&
-            '__redirect' in peek &&
-            typeof (peek as { __redirect: unknown }).__redirect === 'string'
-          ) {
-            if (typeof window !== 'undefined') {
-              window.location.assign(
-                (peek as { __redirect: string }).__redirect
-              );
+          if (peek !== null && typeof peek === 'object') {
+            const obj = peek as {
+              __redirect?: unknown;
+              __outcome?: unknown;
+              to?: unknown;
+            };
+            const legacyTo =
+              typeof obj.__redirect === 'string' ? obj.__redirect : undefined;
+            const outcomeTo =
+              obj.__outcome === 'redirect' && typeof obj.to === 'string'
+                ? obj.to
+                : undefined;
+            const to = legacyTo ?? outcomeTo;
+            if (to) {
+              if (typeof window !== 'undefined') {
+                window.location.assign(to);
+              }
+              // Cast through `as` because TS can't see this promise never settles.
+              return await new Promise<MutateResult<TResult>>(() => {});
             }
-            // Cast through `as` because TS can't see this promise never settles.
-            return await new Promise<MutateResult<TResult>>(() => {});
           }
         }
 

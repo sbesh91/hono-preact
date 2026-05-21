@@ -13,7 +13,10 @@ import {
   type ActivityItem,
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
+import { requireSession } from '../../demo/guard.js';
 import { assertCanClose } from './issue-guards.js';
+
+export const pageUse = requireSession;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
 const withAuthor = <T extends { authorId: string }>(x: T): WithAuthor<T> => ({

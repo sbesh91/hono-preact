@@ -232,4 +232,4 @@ const IssueView = issueLoader.View(
   { fallback: <p>Loading issue…</p> }
 );
 
-export default definePage(IssueView, { guards: requireSession });
+export default definePage(IssueView, { use: requireSession });
