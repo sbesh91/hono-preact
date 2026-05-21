@@ -161,6 +161,25 @@ describe('unknown specifiers from .server.* imports', () => {
       /unknownExport.*not a recognized.*server/i
     );
   });
+
+  // F1: the "Allowed: ..." list in the error message is derived from the
+  // shared contract constant. A regression that splits the list back into
+  // a hard-coded string and drifts from the validation plugin would
+  // surface here.
+  it('error message names every recognized export', () => {
+    const code = `import { unknownExport } from './movies.server.js';`;
+    try {
+      transform(code, '/Users/me/repo/src/iso.tsx');
+      throw new Error('expected the plugin to throw');
+    } catch (err) {
+      const msg = (err as Error).message;
+      expect(msg).toContain('serverActions');
+      expect(msg).toContain('serverLoaders');
+      expect(msg).toContain('pageUse');
+      expect(msg).toContain('loaderUse');
+      expect(msg).toContain('actionUse');
+    }
+  });
 });
 
 describe('side-effect and type-only imports', () => {

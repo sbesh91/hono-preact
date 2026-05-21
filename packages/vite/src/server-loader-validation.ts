@@ -2,22 +2,15 @@ import { parse } from '@babel/parser';
 import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
+import {
+  RECOGNIZED_SERVER_EXPORTS,
+  RECOGNIZED_SERVER_EXPORTS_SET,
+} from './server-exports-contract.js';
+import { findUseExports } from './server-loaders-parser.js';
 
-const ALLOWED_NAMED_EXPORTS = new Set([
-  'serverActions',
-  'serverLoaders',
-  // Middleware-carrying named exports (Tasks 21-22). The runtime reads
-  // `pageUse` to apply page-layer middleware to loaders/actions; `loaderUse`
-  // and `actionUse` are reserved for future per-unit declarations without
-  // a defineLoader/defineAction call (middleware already rides on the ref
-  // for the call form).
-  'pageUse',
-  'loaderUse',
-  'actionUse',
-]);
-const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS]
-  .map((n) => `'${n}'`)
-  .join(', ');
+const ALLOWED_NAMED_EXPORTS_LIST = RECOGNIZED_SERVER_EXPORTS.map(
+  (n) => `'${n}'`
+).join(', ');
 
 export function serverLoaderValidationPlugin(): Plugin {
   return {
@@ -67,8 +60,26 @@ export function serverLoaderValidationPlugin(): Plugin {
           }
         }
       }
+
+      // F3: pageUse / loaderUse / actionUse must be array literals so the
+      // route-map builder and dispatcher receive a real ReadonlyArray. A
+      // bare reference (`export const pageUse = singleMw`) silently
+      // disables the gate at runtime; reject it here so the build fails
+      // fast with a helpful message. findUseExports is shared with the
+      // server-loaders-parser surface so the recognized-name list stays in
+      // one place.
+      for (const useExport of findUseExports(ast.program)) {
+        if (useExport.init == null) continue;
+        if (useExport.init.type === 'ArrayExpression') continue;
+        errors.push(
+          `${id}: \`${useExport.name}\` must be an array literal ` +
+            `(e.g. \`export const ${useExport.name} = [requireAuth]\`). ` +
+            `A bare reference silently disables the middleware at runtime.`
+        );
+      }
+
       const disallowedExports = namedExports.filter(
-        (n) => !ALLOWED_NAMED_EXPORTS.has(n)
+        (n) => !RECOGNIZED_SERVER_EXPORTS_SET.has(n)
       );
       if (disallowedExports.length > 0) {
         errors.push(

@@ -6,6 +6,7 @@ import {
   readParamsOpt,
   hasNamedUseExport,
   RECOGNIZED_USE_EXPORTS,
+  findUseExports,
 } from '../server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from '../parser-options.js';
 
@@ -152,6 +153,45 @@ describe('use exports', () => {
     const entries = parseServerLoaders(program);
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('x');
+  });
+});
+
+describe('findUseExports', () => {
+  it('returns one entry per recognized use-export, with the init expression captured', () => {
+    const program = parseProgram(`
+      export const pageUse = [];
+      export const loaderUse = [a, b];
+      export const actionUse = c;
+      export const serverLoaders = {};
+    `);
+    const found = findUseExports(program);
+    expect(found.map((e) => e.name).sort()).toEqual([
+      'actionUse',
+      'loaderUse',
+      'pageUse',
+    ]);
+    const pageEntry = found.find((e) => e.name === 'pageUse');
+    expect(pageEntry?.init?.type).toBe('ArrayExpression');
+    const loaderEntry = found.find((e) => e.name === 'loaderUse');
+    expect(loaderEntry?.init?.type).toBe('ArrayExpression');
+    const actionEntry = found.find((e) => e.name === 'actionUse');
+    expect(actionEntry?.init?.type).toBe('Identifier');
+  });
+
+  it('returns [] when none of the recognized names are exported', () => {
+    const program = parseProgram(`
+      export const serverLoaders = {};
+      export const serverActions = {};
+    `);
+    expect(findUseExports(program)).toEqual([]);
+  });
+
+  it('ignores unrecognized export names sharing a similar shape', () => {
+    const program = parseProgram(`
+      export const otherUse = [];
+      export const serverLoaders = {};
+    `);
+    expect(findUseExports(program)).toEqual([]);
   });
 });
 

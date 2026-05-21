@@ -1,23 +1,17 @@
-import type { Program, CallExpression, ObjectExpression } from '@babel/types';
+import type {
+  Program,
+  CallExpression,
+  ObjectExpression,
+  Expression,
+} from '@babel/types';
+import { RECOGNIZED_USE_EXPORTS_SET } from './server-exports-contract.js';
 
-// Recognized middleware-carrying named exports on .server.* modules. The
-// parser does not need to extract them (they're plain top-level exports
-// already accessible through the runtime module shape); this set documents
-// the contract so route-server-modules and the handler-side resolvers
-// agree on the export names.
-//
-// - loaderUse / actionUse: per-unit middleware now rides on the
-//   LoaderRef / ActionStub via .use; these are reserved names for
-//   parallel-style future opt-in (e.g. attaching middleware without a
-//   defineLoader call).
-// - pageUse: page-layer middleware. The .server.* file declares its own
-//   pageUse, and route-server-modules indexes the value by route path so
-//   loaders/actions handlers can compose [appConfig.use, pageUse, unitUse].
-export const RECOGNIZED_USE_EXPORTS = new Set([
-  'loaderUse',
-  'actionUse',
-  'pageUse',
-] as const);
+// Re-exported for backward compatibility. The canonical list now lives in
+// `server-exports-contract.ts` so the server-only stub plugin, the
+// validation plugin, and this parser all agree by import. New consumers
+// should import directly from the contract file.
+export const RECOGNIZED_USE_EXPORTS: ReadonlySet<string> =
+  RECOGNIZED_USE_EXPORTS_SET;
 
 export function hasNamedUseExport(program: Program, name: string): boolean {
   for (const stmt of program.body) {
@@ -31,6 +25,37 @@ export function hasNamedUseExport(program: Program, name: string): boolean {
     }
   }
   return false;
+}
+
+export type ParsedUseExport = {
+  /** The export name -- one of pageUse / loaderUse / actionUse. */
+  name: string;
+  /** The initializer expression, or null if `export const foo;` with no init. */
+  init: Expression | null;
+};
+
+/**
+ * Walk a parsed program for top-level `export const <use> = ...` declarations
+ * where `<use>` is one of the recognized middleware-carrying names
+ * (`pageUse` / `loaderUse` / `actionUse`). Returns each one with its
+ * initializer expression so callers can validate the shape (e.g. require
+ * an ArrayExpression literal).
+ */
+export function findUseExports(program: Program): ParsedUseExport[] {
+  const found: ParsedUseExport[] = [];
+  for (const stmt of program.body) {
+    if (
+      stmt.type !== 'ExportNamedDeclaration' ||
+      stmt.declaration?.type !== 'VariableDeclaration'
+    )
+      continue;
+    for (const decl of stmt.declaration.declarations) {
+      if (decl.id.type !== 'Identifier') continue;
+      if (!RECOGNIZED_USE_EXPORTS_SET.has(decl.id.name)) continue;
+      found.push({ name: decl.id.name, init: decl.init ?? null });
+    }
+  }
+  return found;
 }
 
 export type ParsedLoaderEntry = {

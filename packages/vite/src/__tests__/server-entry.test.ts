@@ -571,6 +571,162 @@ describe('serverEntryPlugin', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
+  // F4 / F12: when the user authors an app-config.ts but exports the
+  // config as a named export (`export const appConfig = ...`) instead of
+  // `export default ...`, the generated `import appConfig from '...'`
+  // resolves to undefined and the app-level middleware silently never
+  // runs. The buildStart diagnostic catches the misuse at build time.
+  it('buildStart throws when app-config.ts is present but lacks a default export', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'app-config.ts'),
+      [
+        "import { defineApp } from '@hono-preact/iso';",
+        'export const appConfig = defineApp({ use: [] });',
+        '',
+      ].join('\n')
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts', // intentionally missing on disk
+      appConfig: 'src/app-config.ts',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+    });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).toThrow(/must default-export/);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart accepts an app-config.ts with a default export', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'app-config.ts'),
+      [
+        "import { defineApp } from '@hono-preact/iso';",
+        'export default defineApp({ use: [] });',
+        '',
+      ].join('\n')
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts', // intentionally missing on disk
+      appConfig: 'src/app-config.ts',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+    });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).not.toThrow();
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart does not error when app-config.ts is absent (fall back to inline empty config)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    // No src/app-config.ts written on disk.
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+    });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).not.toThrow();
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
   it('buildStart warns (does not throw) for app.notFound in api.ts', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });

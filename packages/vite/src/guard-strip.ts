@@ -16,11 +16,15 @@ const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
 // modules it pulls in tree-shake out of the wrong-env bundle.
 type StripStrategy = { name: string; replacement: string };
 
-// In the server bundle we strip anything client-only.
+// In the server bundle we strip anything client-only. The replacement
+// `fn` arity matches the documented `(ctx, next) => Promise<void | Outcome>`
+// shape so any user introspecting `mw.fn` sees the right signature; the
+// framework path filters on `runs` before invoking and never executes a
+// wrong-env body.
 const SERVER_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
   {
     name: 'defineClientMiddleware',
-    replacement: `{ __kind: 'middleware', runs: 'client', fn: () => Promise.resolve() }`,
+    replacement: `{ __kind: 'middleware', runs: 'client', fn: (_ctx, next) => next() }`,
   },
 ];
 
@@ -30,7 +34,7 @@ const SERVER_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
 const CLIENT_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
   {
     name: 'defineServerMiddleware',
-    replacement: `{ __kind: 'middleware', runs: 'server', fn: () => Promise.resolve() }`,
+    replacement: `{ __kind: 'middleware', runs: 'server', fn: (_ctx, next) => next() }`,
   },
   {
     name: 'defineStreamObserver',
@@ -118,6 +122,13 @@ export function guardStripPlugin(): Plugin {
     enforce: 'pre',
     transform(code: string, id: string, options?: { ssr?: boolean }) {
       if (!/\.[jt]sx?$/.test(id)) return;
+      // F7: `.server.*` files are intentionally skipped in both bundles.
+      // In the client bundle the server-only stub plugin already rewrites
+      // imports of these files; in the server bundle the file's own
+      // body stays as-authored. The validation plugin restricts a
+      // `.server.*` module's named exports to the allowlist, so a user
+      // cannot land a `defineClientMiddleware(...)` value as a recognized
+      // export and ship it to the server.
       if (/\.server\.[jt]sx?$/.test(id)) return;
       const strips = options?.ssr ? SERVER_BUNDLE_STRIPS : CLIENT_BUNDLE_STRIPS;
 
