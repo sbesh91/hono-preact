@@ -125,11 +125,11 @@ type LoaderCtx = {
 };
 ```
 
-| Field      | Description                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field      | Description                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `c`        | The request's Hono `Context`. Use it for headers, cookies, KV/D1/env `Bindings`, the request URL, etc. With typed `Bindings`, narrow inside the function body. |
-| `location` | Current route navigation info (the same shape as `useLocation()`). Carries `pathParams`, `searchParams`, the resolved path, and the route's metadata. |
-| `signal`   | An `AbortSignal` that aborts when the user navigates away mid-load. Forward it to `fetch` and any cancellable server work to short-circuit on navigation. |
+| `location` | Current route navigation info (the same shape as `useLocation()`). Carries `pathParams`, `searchParams`, the resolved path, and the route's metadata.          |
+| `signal`   | An `AbortSignal` that aborts when the user navigates away mid-load. Forward it to `fetch` and any cancellable server work to short-circuit on navigation.      |
 
 Destructure whichever fields a loader needs:
 
