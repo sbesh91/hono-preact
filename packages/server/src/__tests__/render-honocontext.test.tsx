@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { defineServerMiddleware, redirect } from '@hono-preact/iso';
+import { Page, defineServerMiddleware, redirect, deny } from '@hono-preact/iso';
 import { PageMiddlewareHost } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
 import { renderPage } from '../render.js';
@@ -61,5 +61,43 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
     const res = await app.request('http://localhost/admin');
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/login');
+  });
+
+  // B6: deny() thrown by a page-scope server middleware during SSR must
+  // produce an HTTP error response (not an HTML fallback). The path goes:
+  // dispatchServer returns { kind: 'outcome', outcome: deny(...) }, the
+  // HostConsumer rethrows the outcome, RouteBoundary's ErrorBoundary must
+  // detect isOutcome and rethrow (rather than coercing to new Error and
+  // rendering errorFallback), and renderPage's outer catch translates to
+  // a status-coded text response.
+  //
+  // Wrap in <Page> here (not just <PageMiddlewareHost>) so RouteBoundary
+  // is in the tree; that's the exact path that B1 fixes. Without the B1
+  // fix the deny outcome would be coerced to `new Error('[object Object]')`
+  // by getDerivedStateFromError, the boundary would render its null
+  // errorFallback, and the response would arrive as 200 with empty body
+  // instead of 403 with the deny message.
+  it('a server middleware can short-circuit by throwing a deny outcome', async () => {
+    const gate = defineServerMiddleware<'page'>(async () => {
+      throw deny(403, 'Forbidden');
+    });
+
+    const Layout = () => (
+      <html>
+        <body>
+          <Page location={loc} use={[gate]}>
+            <div>secret</div>
+          </Page>
+        </body>
+      </html>
+    );
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+
+    const res = await app.request('http://localhost/admin');
+    expect(res.status).toBe(403);
+    const body = await res.text();
+    expect(body).toBe('Forbidden');
   });
 });

@@ -6,7 +6,7 @@ import {
 import type { Context } from 'hono';
 import { type RouteHook, useLocation } from 'preact-iso';
 import { Suspense } from 'preact/compat';
-import { useContext, useRef } from 'preact/hooks';
+import { useContext, useEffect, useRef } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { isRedirect, isRender, type Outcome } from '../outcomes.js';
 import type {
@@ -55,9 +55,16 @@ function startChain(
   );
   if (server.length === 0) return Promise.resolve({ outcome: undefined });
   if (!honoCtx) {
-    throw new Error(
-      '<PageMiddlewareHost> rendered server-side without a HonoContext.Provider. ' +
-        'renderPage must wrap the prerendered tree in <HonoContext.Provider value={{ context: c }}>.'
+    // Reject (don't throw synchronously). `wrapPromise` consumes a Promise;
+    // a sync throw here never reaches it, so the Suspense/ErrorBoundary path
+    // ends up surfacing a coerced "[object Object]"-style message instead of
+    // this explicit one. Returning a rejected promise routes the message
+    // through `wrapPromise.read()` -> the boundary's error state correctly.
+    return Promise.reject(
+      new Error(
+        '<PageMiddlewareHost> rendered server-side without a HonoContext.Provider. ' +
+          'renderPage must wrap the prerendered tree in <HonoContext.Provider value={{ context: c }}>.'
+      )
     );
   }
   return dispatchServer({
@@ -75,7 +82,8 @@ function startChain(
   );
 }
 
-type RefValue = { current: { read: () => HostResult } };
+type WrappedResult = { read: () => HostResult };
+type RefValue = { current: WrappedResult | null };
 
 function HostConsumer({
   resultRef,
@@ -84,15 +92,35 @@ function HostConsumer({
   resultRef: RefValue;
   children: ComponentChildren;
 }) {
-  const { outcome } = resultRef.current.read();
+  // resultRef.current is populated by the parent before this consumer
+  // renders; the null branch is just a type-narrow guard.
+  const wrapped = resultRef.current;
+  const { outcome } = wrapped ? wrapped.read() : { outcome: undefined };
   const { route } = useLocation();
+
+  // Client-side redirect: navigate in an effect rather than during render.
+  // Render-time side effects are forbidden by Suspense semantics; doing
+  // route() in render would also fire on every Preact re-entry during
+  // suspension resume. Keyed on the resolved target so a fresh outcome
+  // for the same path doesn't refire (the outcome is cached per chain,
+  // so this only changes when the path itself changes and a new chain
+  // produces a redirect to a different target).
+  const redirectTo = isRedirect(outcome) && isBrowser() ? outcome.to : null;
+  useEffect(() => {
+    if (redirectTo !== null) route(redirectTo);
+    // `route` is intentionally omitted from deps: it comes from
+    // useLocation() which is stable per LocationProvider mount, and
+    // referencing it here would re-fire the effect on every render the
+    // provider produces.
+  }, [redirectTo]);
 
   if (outcome === undefined) {
     return <>{children}</>;
   }
   if (isRedirect(outcome)) {
     if (isBrowser()) {
-      route(outcome.to);
+      // Effect above will schedule the navigation; render nothing in the
+      // meantime so the old tree doesn't briefly flash.
       return null;
     }
     // Server: rethrow so renderPage's outer handler can translate to HTTP redirect.
@@ -100,6 +128,16 @@ function HostConsumer({
   }
   if (isRender(outcome)) {
     const Alt = outcome.Component;
+    // Equality-by-reference semantics: each `render(Component)` call
+    // returns a fresh outcome object, but the wrapped chain caches its
+    // result for the lifetime of a path. Within the same path render
+    // outcomes are stable. Across paths, the `resultRef` is rewrapped
+    // (see PageMiddlewareHost below), so a fresh chain produces a fresh
+    // outcome and Preact remounts naturally when `Alt` differs. If a
+    // middleware returns the SAME component reference across paths,
+    // Preact treats it as the same element and preserves state. That's
+    // the documented semantic; if callers need a forced remount, they
+    // can wrap the returned component or vary props.
     return <Alt />;
   }
   // Deny on the page-render path: rethrow so the outer error boundary or
@@ -114,9 +152,19 @@ export const PageMiddlewareHost: FunctionComponent<{
   children: ComponentChildren;
 }> = ({ use = [], location, fallback, children }) => {
   const honoCtx = useContext(HonoRequestContext).context;
+  // Lazy ref pattern. `useRef(null)` serves a dual purpose: it's the
+  // "not-yet-computed" sentinel AND the persistent slot for the wrapped
+  // chain result. We compute on first render and on subsequent renders
+  // ONLY when the path changed. `useRef(wrapPromise(startChain(...)))`
+  // would evaluate `startChain` every render before useRef decided whether
+  // to keep it, which synchronously fires `dispatchServer`/`dispatchClient`
+  // every render. That's O(renders) middleware invocations instead of
+  // O(navigations); auth checks, analytics, redirects would all repeat.
+  const resultRef = useRef<WrappedResult | null>(null);
   const prevPath = useRef(location.path);
-  const resultRef = useRef(wrapPromise(startChain(use, location, honoCtx)));
-  if (prevPath.current !== location.path) {
+  if (resultRef.current === null) {
+    resultRef.current = wrapPromise(startChain(use, location, honoCtx));
+  } else if (prevPath.current !== location.path) {
     prevPath.current = location.path;
     resultRef.current = wrapPromise(startChain(use, location, honoCtx));
   }
