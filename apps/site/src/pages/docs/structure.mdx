@@ -56,19 +56,35 @@ MDX content (`pages/docs/*.mdx`) is mounted via `apps/site/src/components/DocsRo
 
 Isomorphic primitives shared between server and client (`packages/iso/`):
 
-- **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`. The route-table primitive and runtime mounter.
-- **Page bindings**: `definePage(Component, { errorFallback, guards, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need Wrapper or guard bindings. The `guards` array holds entries built via `defineServerGuard` and `defineClientGuard`; the framework filters by environment at runtime. Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX.
+- **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`, `ServerRoute`. The route-table primitive and runtime mounter.
+- **Page bindings**: `definePage(Component, { errorFallback, use, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need a Wrapper or page-level middleware. The `use` array holds entries built via `defineServerMiddleware`, `defineClientMiddleware`, and `defineStreamObserver`; the dispatcher partitions members by environment at runtime. Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX.
 - **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`.)
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
 - **Caching**: `createCache` (advanced: shared caches across loaders).
-- **Guards**: `defineServerGuard`, `defineClientGuard`, `runServerGuards, runClientGuards`, `GuardRedirect`, `defineActionGuard`, `ActionGuardError`, `ContentfulStatusCode`.
+- **Middleware**: `defineServerMiddleware`, `defineClientMiddleware`, `defineStreamObserver`, `defineApp`, plus the outcome constructors `redirect`, `deny` (and `render` at the `hono-preact/page` subpath) and predicates `isOutcome` / `isRedirect` / `isDeny` / `isRender`. See [Middleware](/docs/middleware).
 - **Utilities**: `prefetch`, `isBrowser`, `env`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
+
+### App-level config (optional)
+
+```ts
+// apps/site/src/app-config.ts
+import { defineApp, defineServerMiddleware } from 'hono-preact';
+
+const withRequestId = defineServerMiddleware(async (ctx, next) => {
+  ctx.c.header('X-Request-Id', crypto.randomUUID());
+  await next();
+});
+
+export default defineApp({ use: [withRequestId] });
+```
+
+The framework's generated server entry imports the default export from `src/app-config.ts` (configurable via the `appConfig` option to `honoPreact()`). If the file doesn't exist, the framework treats it as `defineApp({})`. The `appConfig.use` array is the outermost layer of the middleware chain: it wraps every loader, action, and page render. See [Middleware: The three layers](/docs/middleware#the-three-layers).
 
 ### `hono-preact/server` (workspace package)
 
 Server-only utilities (`packages/server/`):
 
-- **`renderPage`**: SSR entry that prerenders to HTML, injects head tags via hoofd, and turns `GuardRedirect` throws into HTTP redirects.
+- **`renderPage`**: SSR entry that prerenders to HTML, injects head tags via hoofd, and turns middleware-thrown redirect / deny / render outcomes into the appropriate HTTP response.
 - **`HonoContext`** / **`useHonoContext`**: access the Hono `Context` from Preact components during SSR.
 - **`location`**: middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`.
 - **`actionsHandler`**, **`loadersHandler`**: `POST /__actions` and `POST /__loaders` middleware. Accept either a Vite `import.meta.glob` result or the record produced by `routeServerModules`.
@@ -80,6 +96,6 @@ Vite plugins for the framework (`packages/vite/`). The primary export is `honoPr
 
 - **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, and the client-shim auto-injection. Deployment target plugins (the worker or dev-server toolchain) come from the required `adapter` option, currently `cloudflareAdapter()` from `hono-preact/adapter-cloudflare` or `nodeAdapter()` from `hono-preact/adapter-node`.
 - **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing static imports with no-op stubs and dynamic `import('./*.server.*')` calls with `Promise.resolve({})` so server code never reaches the browser.
-- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverActions`, or `actionGuards`.
+- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverActions`, or the recognized `use` exports (`pageUse`, `loaderUse`, `actionUse`).
 - **`moduleKeyPlugin`** rewrites each `.server.*` file at build time with a `__moduleKey` derived from the file path, which the loader/action handlers use to dispatch RPC requests.
 - **`clientShimPlugin`** prepends a `globalThis.process ??= { env: { NODE_ENV } }` shim to the client entry so libraries that read `process.env.NODE_ENV` at module-eval time in the browser do not throw.

@@ -43,9 +43,9 @@ export default function MoviesPage() {
 
 `renderPage` injects the collected tags into the `<head>` of the rendered HTML before returning the response.
 
-## GuardRedirect
+## Redirect outcomes
 
-If a [route guard](/docs/guards) redirects during SSR, it throws a `GuardRedirect`. `renderPage` catches this and turns it into an HTTP redirect via `c.redirect()`, so you don't need to handle it in the route handler.
+If a [middleware](/docs/middleware) throws `redirect('/path')` during SSR, `renderPage` catches the outcome and turns it into an HTTP redirect via `c.redirect()`, so you don't need to handle it in the route handler. Deny outcomes thrown during SSR map to an HTTP response at the deny's status; render outcomes substitute an alternative component into the prerender tree.
 
 ## Example: custom server entry (advanced)
 

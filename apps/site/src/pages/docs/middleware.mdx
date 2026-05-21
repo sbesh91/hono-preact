@@ -1,0 +1,274 @@
+# Middleware
+
+Middleware wraps loader, action, and page calls in an outer/inner chain. Each middleware receives a `ctx` and a `next` continuation; the framework calls them in order, then unwinds. Throw a [redirect, deny, or render outcome](#outcomes) to short-circuit. Use middleware for auth gates, request-scoped setup/teardown, tracing, timing, and request logging.
+
+The same primitive replaces the old `defineServerGuard` / `defineClientGuard` / `defineActionGuard` family. Page bindings, loaders, and actions all accept the same `use` array, and the framework partitions server- vs client-bound members by their `runs` tag.
+
+## The three layers
+
+```ts
+// apps/site/src/app-config.ts (optional file)
+import { defineApp, defineServerMiddleware } from 'hono-preact';
+
+const requestId = defineServerMiddleware(async (ctx, next) => {
+  ctx.c.header('X-Request-Id', crypto.randomUUID());
+  await next();
+});
+
+export default defineApp({ use: [requestId] });
+```
+
+```tsx
+// apps/site/src/pages/admin/page.tsx
+import { definePage } from 'hono-preact';
+import { requireSession } from '../../auth/guard.js';
+
+export default definePage(AdminView, { use: requireSession });
+```
+
+```ts
+// apps/site/src/pages/admin/page.server.ts
+import { defineLoader, defineAction } from 'hono-preact';
+import { auditLog } from '../../audit.js';
+import { requireSession } from '../../auth/guard.js';
+
+// Same array can be used for the page (above) and the server side. The
+// dispatcher partitions by `runs`; server middleware fires for SSR + RPC,
+// client middleware fires for intra-app navigation.
+export const pageUse = requireSession;
+
+export const serverLoaders = {
+  default: defineLoader(async () => listAdminRows()),
+};
+
+export const serverActions = {
+  promote: defineAction(async (ctx, payload) => promoteUser(payload.id), {
+    use: [auditLog],
+  }),
+};
+```
+
+Outer-to-inner the chain is `appConfig.use → pageUse → unit-level use`. The dispatcher runs each `before` body in order, then `next()` enters the next ring, then each `after` body unwinds in reverse:
+
+```
+root:before
+  page:before
+    unit:before
+      inner (loader / action body)
+    unit:after
+  page:after
+root:after
+```
+
+A `throw` in any ring propagates up through the surrounding `after` blocks (so a `try { await next() } finally { ... }` middleware still runs its cleanup on failure).
+
+## Server vs client middleware
+
+`defineServerMiddleware` runs on the server side: during SSR, during the page-tsx pre-render, and during loader/action RPC calls. It receives the Hono `Context`, so cookies, headers, and signed-cookie helpers work as you'd expect.
+
+`defineClientMiddleware` runs only on the browser side, when the user navigates intra-app. It receives a minimal context with `scope: 'page'` and `location`; there's no Hono context because there's no server request.
+
+Both factories produce a brand object with a `runs` tag. The framework's Vite plugin strips the wrong-env body at build time: a `defineServerMiddleware(...)` call in the client bundle is rewritten to a no-op brand object, and vice versa. Server-only modules pulled in by a server middleware body tree-shake out of the client bundle automatically.
+
+```ts
+import {
+  defineServerMiddleware,
+  defineClientMiddleware,
+  redirect,
+} from 'hono-preact';
+import { currentUser } from './session.js';
+
+// Server check (SSR + RPC): validates the signed cookie via Hono helpers.
+const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
+  const user = await currentUser(ctx.c);
+  if (!user) throw redirect('/login');
+  await next();
+});
+
+// Client check (intra-app navigation): reads a localStorage hint set by
+// the login view. On full reload the server middleware reconciles drift.
+const requireSessionClient = defineClientMiddleware(async (_ctx, next) => {
+  if (typeof window === 'undefined') {
+    await next();
+    return;
+  }
+  if (!window.localStorage.getItem('app:authed')) {
+    throw redirect('/login');
+  }
+  await next();
+});
+
+export const requireSession = [requireSessionServer, requireSessionClient];
+```
+
+## Outcomes
+
+A middleware short-circuits by throwing one of three outcomes:
+
+| Outcome                 | Where it makes sense | Result                                                                                                         |
+| ----------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `redirect(to)`          | any scope            | HTTP redirect on SSR; `route(to)` on the client; `{ __outcome: 'redirect', to }` envelope on loader/action RPC |
+| `deny(status, message)` | any scope            | HTTP response at `status` with `message`; on RPC paths the client surfaces `message` as the thrown `Error`     |
+| `render(Component)`     | page scope only      | Renders `<Component />` in place of the matched page                                                           |
+
+```ts
+import { redirect, deny, render } from 'hono-preact/page';
+
+const adminOnly = defineServerMiddleware<'page'>(async (ctx, next) => {
+  const user = await currentUser(ctx.c);
+  if (!user) throw redirect('/login');
+  if (!user.isAdmin) throw render(NotAuthorizedPage);
+  await next();
+});
+
+const rateLimit = defineServerMiddleware<'action'>(async (ctx, next) => {
+  if (await isRateLimited(ctx.c)) throw deny(429, 'Slow down');
+  await next();
+});
+```
+
+`render` is page-scope only and lives at the `hono-preact/page` subpath, so loader/action code can't accidentally import it and trigger a `render outcome is page-scope only` 500 at runtime.
+
+## Stream observers
+
+Streaming loaders and actions accept `defineStreamObserver` entries in the same `use` array. Observers are passive: they see lifecycle events but never short-circuit. The dispatcher fires `onStart` before the first chunk, `onChunk` for each chunk in order, `onEnd` once the stream completes, `onError` if it throws, and `onAbort` if the request signal aborts.
+
+Failure isolation: if one observer's callback throws, the framework logs it and continues firing the remaining observers and the stream itself. Observers cannot break the stream.
+
+```ts
+import { defineStreamObserver, defineLoader } from 'hono-preact';
+
+const trace = defineStreamObserver({
+  onStart: (ctx) => console.log('stream:start', ctx.loader),
+  onChunk: (_ctx, chunk, i) => console.log(`chunk[${i}]`, chunk),
+  onEnd: (_ctx, { chunks, result }) =>
+    console.log('stream:end', { chunks, result }),
+  onError: (_ctx, err, { chunks }) =>
+    console.error('stream:error', err, { chunks }),
+  onAbort: (_ctx, { chunks }) => console.log('aborted', { chunks }),
+});
+
+export const serverLoaders = {
+  default: defineLoader(
+    async function* () {
+      for (const row of cursorRows()) yield row;
+    },
+    { use: [trace] }
+  ),
+};
+```
+
+## The `use` array
+
+`use` is a flat array. The dispatcher walks it once and partitions into middleware (server + client) and stream observers, then runs each group with the right strategy. You can mix everything in one list:
+
+```ts
+use: [requireSessionServer, requireSessionClient, rateLimit, trace];
+```
+
+Ordering matters for middleware: outer-to-inner is `appConfig.use` first, then `pageUse`, then per-unit `use`, in the order each array lists them. Observers have no relative ordering: they all fire on every chunk in registration order, and one observer's slowness doesn't gate the others.
+
+## Worked examples
+
+### Auth gate with server + client legs
+
+```ts
+// auth/guard.ts
+import {
+  defineServerMiddleware,
+  defineClientMiddleware,
+  redirect,
+} from 'hono-preact';
+import { currentUser } from './session.js';
+
+const server = defineServerMiddleware(async (ctx, next) => {
+  if (!(await currentUser(ctx.c))) throw redirect('/login');
+  await next();
+});
+
+const client = defineClientMiddleware(async (_ctx, next) => {
+  if (
+    typeof window !== 'undefined' &&
+    !window.localStorage.getItem('app:authed')
+  ) {
+    throw redirect('/login');
+  }
+  await next();
+});
+
+export const requireSession = [server, client];
+```
+
+### Timing middleware that logs duration
+
+```ts
+import { defineServerMiddleware } from 'hono-preact';
+
+export const timing = defineServerMiddleware(async (ctx, next) => {
+  const t0 = performance.now();
+  try {
+    await next();
+  } finally {
+    const ms = (performance.now() - t0).toFixed(1);
+    console.log(`[${ctx.scope}] ${ctx.c.req.path} ${ms}ms`);
+  }
+});
+```
+
+### Tracing middleware around a span
+
+```ts
+import { defineServerMiddleware } from 'hono-preact';
+import { tracer } from './otel.js';
+
+export const traced = defineServerMiddleware(async (ctx, next) => {
+  await tracer.startActiveSpan(`hp:${ctx.scope}`, async (span) => {
+    try {
+      await next();
+    } catch (err) {
+      span.recordException(err);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+});
+```
+
+### Per-chunk audit observer
+
+```ts
+import { defineStreamObserver } from 'hono-preact';
+
+export const auditChunks = defineStreamObserver({
+  onChunk: (ctx, chunk, i) => {
+    auditLog.push({
+      module: ctx.module,
+      loader: ctx.loader,
+      index: i,
+      bytes: JSON.stringify(chunk).length,
+    });
+  },
+});
+```
+
+### Page render replacement
+
+```ts
+// hono-preact/page is the page-scope-only subpath where `render` lives.
+import { defineServerMiddleware, redirect } from 'hono-preact';
+import { render } from 'hono-preact/page';
+import { LoginModal } from './LoginModal.js';
+import { currentUser } from './session.js';
+
+export const showLoginModal = defineServerMiddleware<'page'>(
+  async (ctx, next) => {
+    if (!(await currentUser(ctx.c))) {
+      // Render an alternative component in place of the matched page.
+      // The page tree is replaced; the user keeps the current URL.
+      throw render(LoginModal);
+    }
+    await next();
+  }
+);
+```

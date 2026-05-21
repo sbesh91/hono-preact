@@ -289,36 +289,35 @@ const { mutate, pending } = useAction(serverActions.bulkImport, {
 
 Each `onChunk` call receives a raw string chunk. Parse it as needed. `onSuccess` is called with `undefined` after the stream closes. `data` is not set for streaming actions.
 
-## Action guards
+## Gating actions with middleware
 
-Actions can run middleware-style checks before dispatching, useful for authentication, authorization, or rate limiting. Export an `actionGuards` array from your `.server.ts` file:
+Actions accept the same `use` array as loaders and pages. Use it for authentication, authorization, rate limiting, or any other gate that should fire before the action body runs:
 
 ```ts
 // movies.server.ts
-import { defineAction, defineActionGuard, ActionGuardError } from 'hono-preact';
+import { defineAction, defineServerMiddleware, deny } from 'hono-preact';
 
-export const actionGuards = [
-  defineActionGuard(async ({ c }, next) => {
-    const token = c.req.header('Authorization');
-    if (!token) throw new ActionGuardError('Authentication required', 401);
-    return next();
-  }),
-];
+const requireAuth = defineServerMiddleware<'action'>(async (ctx, next) => {
+  const token = ctx.c.req.header('Authorization');
+  if (!token) throw deny(401, 'Authentication required');
+  await next();
+});
 
 export const serverActions = {
   addMovie: defineAction<{ title: string }, { ok: boolean }>(
     async (_ctx, payload) => {
       /* ... */
-    }
+    },
+    { use: [requireAuth] }
   ),
 };
 ```
 
-Guards run before every action in the module. See [Action Guards](/docs/action-guards) for the full API.
+For module-wide gating (every action plus every loader), export `pageUse` from the `.server.ts` file instead. See [Middleware](/docs/middleware) for the full chain model.
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `actionGuards` become empty arrays. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or `actionGuards` as named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `pageUse` / `loaderUse` / `actionUse` named exports become empty arrays on the client. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or the recognized `use` exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
 
 ## Security: SameSite cookies on `<Form>` posts
 

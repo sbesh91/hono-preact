@@ -14,8 +14,7 @@ import {
   Send,
   Settings,
   Lock,
-  ShieldAlert,
-  ShieldCheck,
+  Shield,
   Sparkles,
   type LucideIcon,
   Zap,
@@ -54,18 +53,13 @@ export const nav: NavSection[] = [
     heading: 'Mutations',
     entries: [
       { title: 'Server Actions', route: '/docs/actions', icon: Send },
-      {
-        title: 'Action Guards',
-        route: '/docs/action-guards',
-        icon: ShieldAlert,
-      },
       { title: 'Optimistic UI', route: '/docs/optimistic-ui', icon: Sparkles },
     ],
   },
   {
     heading: 'Access Control',
     entries: [
-      { title: 'Route Guards', route: '/docs/guards', icon: ShieldCheck },
+      { title: 'Middleware', route: '/docs/middleware', icon: Shield },
       { title: 'CSRF Protection', route: '/docs/csrf', icon: Lock },
     ],
   },
