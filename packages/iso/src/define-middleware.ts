@@ -56,3 +56,15 @@ export type ClientMiddleware = {
 };
 
 export type Middleware = ServerMiddleware | ClientMiddleware;
+
+export function defineServerMiddleware<S extends Scope = Scope>(
+  fn: ServerMiddleware<S>['fn']
+): ServerMiddleware<S> {
+  return { __kind: 'middleware', runs: 'server', fn };
+}
+
+export function defineClientMiddleware(
+  fn: ClientMiddleware['fn']
+): ClientMiddleware {
+  return { __kind: 'middleware', runs: 'client', fn };
+}
