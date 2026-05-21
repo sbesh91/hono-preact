@@ -69,6 +69,21 @@ export {
 } from './internal/streaming-ssr.js';
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
 
+// Middleware dispatcher + observer fanout. Internal-stability subpath.
+export {
+  dispatchServer,
+  dispatchClient,
+  type DispatchResult,
+} from './internal/middleware-runner.js';
+export { partitionUse } from './internal/use-partitioner.js';
+export {
+  fanStart,
+  fanChunk,
+  fanEnd,
+  fanError,
+  fanAbort,
+} from './internal/stream-observer-runner.js';
+
 // ─── Section 2: framework-emitted (DO NOT IMPORT FROM USER CODE) ─────────
 // The `__$..._hpiso` naming makes the convention visible at every grep:
 // these symbols are referenced by code the framework's Vite plugins emit

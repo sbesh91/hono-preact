@@ -5,6 +5,13 @@ import { isBrowser } from '../is-browser.js';
 import { getRequestHonoContext } from '../cache.js';
 import { fetchLoaderData } from './loader-fetch.js';
 import { registerServerStreamingLoader } from './streaming-ssr.js';
+import type {
+  ServerMiddleware,
+  ServerLoaderCtx,
+  Middleware,
+} from '../define-middleware.js';
+import { dispatchServer } from './middleware-runner.js';
+import { partitionUse } from './use-partitioner.js';
 
 export type LoaderRunCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -80,15 +87,59 @@ export function runLoader<T>(
         return c;
       },
     };
-    const result = await (loaderRef.fn(ctx) as Promise<unknown>);
-    if (isAsyncGenerator(result)) {
-      const step = await result.next();
-      if (step.done) {
-        return undefined as T; // generator returned without yielding
+
+    const runInner = async (): Promise<unknown> => {
+      const result = await (loaderRef.fn(ctx) as Promise<unknown>);
+      if (isAsyncGenerator(result)) {
+        const step = await result.next();
+        if (step.done) return undefined; // generator returned without yielding
+        registerServerStreamingLoader(id, result);
+        return step.value;
       }
-      registerServerStreamingLoader(id, result);
-      return step.value as T;
+      return result;
+    };
+
+    // If per-loader middleware is attached, dispatch the chain around the
+    // loader fn. We pre-build a ServerLoaderCtx that proxies `c` through the
+    // same lazy getter to keep test paths (no request scope) compatible when
+    // middleware doesn't read c. Empty middleware path bypasses the dispatcher
+    // so existing call sites keep their exact prior behavior.
+    const allMiddleware = partitionUse(
+      (loaderRef.use ?? []) as ReadonlyArray<Middleware>
+    ).middleware;
+    const serverMw = allMiddleware.filter(
+      (m): m is ServerMiddleware<'loader'> => m.runs === 'server'
+    );
+
+    if (serverMw.length === 0) {
+      return (await runInner()) as T;
     }
-    return result as T;
+
+    const serverCtx: ServerLoaderCtx = Object.defineProperties(
+      {
+        scope: 'loader' as const,
+        signal,
+        location,
+        module: loaderRef.__moduleKey ?? '<unkeyed>',
+        loader: loaderName,
+      } as Omit<ServerLoaderCtx, 'c'>,
+      {
+        c: {
+          get: () => ctx.c,
+          enumerable: true,
+        },
+      }
+    ) as ServerLoaderCtx;
+
+    const dispatch = await dispatchServer<unknown, 'loader'>({
+      middleware: serverMw,
+      ctx: serverCtx,
+      inner: runInner,
+    });
+
+    if (dispatch.kind === 'outcome') {
+      throw dispatch.outcome;
+    }
+    return dispatch.value as T;
   })();
 }

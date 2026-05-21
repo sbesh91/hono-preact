@@ -54,7 +54,7 @@ export { Form } from './form.js';
 export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
 
-// Guards.
+// Guards (legacy; removed in Phase 8 demolition).
 export {
   defineServerGuard,
   defineClientGuard,
@@ -71,6 +71,51 @@ export type {
   ClientGuardContext,
   GuardRunsOn,
 } from './guard.js';
+
+// Middleware + outcomes (the new system).
+export {
+  defineServerMiddleware,
+  defineClientMiddleware,
+} from './define-middleware.js';
+export type {
+  ServerMiddleware,
+  ClientMiddleware,
+  Middleware,
+  ServerBaseCtx,
+  ServerPageCtx,
+  ServerLoaderCtx,
+  ServerActionCtx,
+  ServerCtx,
+  ClientPageCtx,
+  Scope,
+  Next,
+} from './define-middleware.js';
+
+export { defineStreamObserver } from './define-stream-observer.js';
+export type {
+  StreamObserver,
+  ServerStreamCtx,
+} from './define-stream-observer.js';
+
+export { defineApp } from './define-app.js';
+export type { AppConfig, AppUseElement } from './define-app.js';
+
+export {
+  redirect,
+  deny,
+  isOutcome,
+  isRedirect,
+  isDeny,
+  isRender,
+} from './outcomes.js';
+export type {
+  Outcome,
+  RedirectOutcome,
+  DenyOutcome,
+  RenderOutcome,
+  RedirectStatusCode,
+  ErrorStatusCode,
+} from './outcomes.js';
 
 // Utilities.
 export { prefetch } from './prefetch.js';

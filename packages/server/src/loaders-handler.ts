@@ -1,6 +1,17 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { GuardRedirect } from '@hono-preact/iso';
-import { runRequestScope } from '@hono-preact/iso/internal';
+import {
+  GuardRedirect,
+  isOutcome,
+  type Outcome,
+  type ServerMiddleware,
+  type ServerLoaderCtx,
+  type Middleware,
+} from '@hono-preact/iso';
+import {
+  runRequestScope,
+  dispatchServer,
+  partitionUse,
+} from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
   sseReadableStreamResponse,
@@ -27,10 +38,15 @@ type LoaderFn = (props: {
   signal: AbortSignal;
 }) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
 
+type LoaderEntry = {
+  fn: LoaderFn;
+  use: ReadonlyArray<unknown>;
+};
+
 async function buildLoadersMap(
   glob: LazyGlob | EagerGlob
-): Promise<Record<string, LoaderFn>> {
-  const result: Record<string, LoaderFn> = {};
+): Promise<Record<string, LoaderEntry>> {
+  const result: Record<string, LoaderEntry> = {};
   for (const [, moduleOrLoader] of Object.entries(glob)) {
     const mod =
       typeof moduleOrLoader === 'function'
@@ -45,11 +61,13 @@ async function buildLoadersMap(
         // Two accepted shapes:
         //   1. a raw loader function `(ctx) => ...` (used by unit-test fixtures)
         //   2. a `LoaderRef` returned by `defineLoader(fn)`, whose `.fn`
-        //      property carries the original loader (used by user code)
+        //      property carries the original loader and `.use` carries any
+        //      attached middleware/observers.
         if (typeof val === 'function') {
-          result[`${moduleKey}::${name}`] = val as LoaderFn;
+          result[`${moduleKey}::${name}`] = { fn: val as LoaderFn, use: [] };
         } else if (val && typeof (val as { fn?: unknown }).fn === 'function') {
-          result[`${moduleKey}::${name}`] = (val as { fn: LoaderFn }).fn;
+          const ref = val as { fn: LoaderFn; use?: ReadonlyArray<unknown> };
+          result[`${moduleKey}::${name}`] = { fn: ref.fn, use: ref.use ?? [] };
         }
       }
     }
@@ -89,12 +107,46 @@ export interface LoadersHandlerOptions {
   onError?: (err: unknown, ctx: { module: string; loader: string }) => void;
 }
 
+function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
+  if (outcome.__outcome === 'redirect') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      {
+        __outcome: 'redirect',
+        to: outcome.to,
+        status: outcome.status,
+        headers: outcome.headers,
+      },
+      200
+    );
+  }
+  if (outcome.__outcome === 'deny') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      { __outcome: 'deny', message: outcome.message },
+      outcome.status
+    );
+  }
+  // render outcome should never reach the loader RPC; this is defense in depth.
+  return c.json(
+    {
+      __outcome: 'error',
+      message: 'render outcome is page-scope only',
+    },
+    500
+  );
+}
+
 export function loadersHandler(
   glob: LazyGlob | EagerGlob,
   opts: LoadersHandlerOptions = {}
 ): MiddlewareHandler {
   const { dev = false, onError } = opts;
-  let cachedMapPromise: Promise<Record<string, LoaderFn>> | null = null;
+  let cachedMapPromise: Promise<Record<string, LoaderEntry>> | null = null;
 
   return async (c) => {
     const loadersMapPromise = dev
@@ -104,7 +156,7 @@ export function loadersHandler(
           return Promise.reject(err);
         }));
 
-    let loadersMap: Record<string, LoaderFn>;
+    let loadersMap: Record<string, LoaderEntry>;
     try {
       loadersMap = await loadersMapPromise;
     } catch (err) {
@@ -144,8 +196,8 @@ export function loadersHandler(
       );
     }
 
-    const loaderFn = loadersMap[`${module}::${loaderName}`];
-    if (!loaderFn) {
+    const entry = loadersMap[`${module}::${loaderName}`];
+    if (!entry) {
       return c.json(
         { error: `Loader '${module}::${loaderName}' not found` },
         404
@@ -154,10 +206,36 @@ export function loadersHandler(
 
     const signal = c.req.raw.signal;
 
+    const allMiddleware = partitionUse(
+      entry.use as ReadonlyArray<Middleware>
+    ).middleware;
+    const serverMw = allMiddleware.filter(
+      (m): m is ServerMiddleware<'loader'> => m.runs === 'server'
+    );
+    const ctx: ServerLoaderCtx = {
+      scope: 'loader',
+      c,
+      signal,
+      location: validatedLocation as never,
+      module,
+      loader: loaderName,
+    };
+
     try {
       const result = await runRequestScope(
-        () =>
-          Promise.resolve(loaderFn({ c, location: validatedLocation, signal })),
+        async () => {
+          const dispatch = await dispatchServer<unknown, 'loader'>({
+            middleware: serverMw,
+            ctx,
+            inner: async () =>
+              entry.fn({ c, location: validatedLocation, signal }),
+          });
+          if (dispatch.kind === 'outcome') {
+            // Throw to unify with non-outcome error translation below.
+            throw dispatch.outcome;
+          }
+          return dispatch.value;
+        },
         { honoContext: c }
       );
 
@@ -169,10 +247,13 @@ export function loadersHandler(
       }
       return c.json(result);
     } catch (err) {
-      // GuardRedirect thrown from a loader (or a guard that runs inside it)
-      // is a control-flow signal, not an error. The client RPC stub
-      // recognizes the `__redirect` envelope and navigates the browser
-      // rather than surfacing this as a thrown error in user code.
+      if (isOutcome(err)) {
+        return translateOutcomeForLoader(c, err);
+      }
+      // GuardRedirect (legacy) is still thrown by guards.tsx until Phase 8.
+      // Keep the legacy `{ __redirect }` wire shape so existing client stubs
+      // and tests continue to work; the new `__outcome` envelope replaces it
+      // when callers migrate to middleware outcomes.
       if (err instanceof GuardRedirect) {
         return c.json({ __redirect: err.location });
       }
