@@ -1,6 +1,5 @@
 import type { ComponentType, FunctionComponent, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import type { GuardFn } from './guard.js';
 import type { PageUse } from './internal/use-types.js';
 import { Page, type WrapperProps } from './page.js';
 
@@ -9,11 +8,10 @@ export type PageBindings = {
   errorFallback?:
     | JSX.Element
     | ((error: Error, reset: () => void) => JSX.Element);
-  guards?: GuardFn[];
   /**
-   * Page-scope middleware and stream observers. Replaces `guards` in a later
-   * task (Phase 8 demolition). For now both fields are accepted; only
-   * `guards` is wired to the runtime.
+   * Page-scope middleware and stream observers. The dispatcher partitions
+   * server vs client members by their `runs` tag, so mixed arrays of
+   * defineServerMiddleware + defineClientMiddleware work as one list.
    */
   use?: PageUse;
 };
@@ -26,7 +24,6 @@ export function definePage(
     <Page
       Wrapper={bindings?.Wrapper}
       errorFallback={bindings?.errorFallback}
-      guards={bindings?.guards}
       use={bindings?.use}
       location={location}
     >

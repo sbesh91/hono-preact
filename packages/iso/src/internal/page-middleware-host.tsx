@@ -20,7 +20,12 @@ import { partitionUse } from './use-partitioner.js';
 import wrapPromise from './wrap-promise.js';
 import { HonoRequestContext } from './contexts.js';
 
-type UseEntry = Middleware | StreamObserver<unknown, unknown>;
+// Widest accepted observer shape: TResult defaults to `void` in
+// defineStreamObserver, so `StreamObserver<unknown, unknown>` would reject
+// the natural `StreamObserver<unknown, void>` produced by zero-arg
+// defineStreamObserver calls. Accept any TResult here.
+type AnyObserver = StreamObserver<unknown, never>;
+type UseEntry = Middleware | AnyObserver;
 
 type HostResult = { outcome: Outcome | undefined };
 
