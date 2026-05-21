@@ -24,8 +24,9 @@ export type LoaderUse<T, Streaming extends boolean> = Use<
   T,
   void
 >;
-export type ActionUse<
+export type ActionUse<TChunk, TResult, Streaming extends boolean> = Use<
+  'action',
+  Streaming,
   TChunk,
-  TResult,
-  Streaming extends boolean,
-> = Use<'action', Streaming, TChunk, TResult>;
+  TResult
+>;

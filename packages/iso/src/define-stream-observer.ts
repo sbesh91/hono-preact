@@ -1,7 +1,4 @@
-import type {
-  ServerLoaderCtx,
-  ServerActionCtx,
-} from './define-middleware.js';
+import type { ServerLoaderCtx, ServerActionCtx } from './define-middleware.js';
 
 export type ServerStreamCtx = ServerLoaderCtx | ServerActionCtx;
 
