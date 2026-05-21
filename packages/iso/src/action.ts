@@ -4,6 +4,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
+import type { ActionUse } from './internal/use-types.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -27,12 +28,27 @@ export type ActionFn<TPayload, TResult, TChunk = never> =
       payload: TPayload
     ) => AsyncGenerator<TChunk, TResult, unknown>);
 
+export type DefineActionOpts<TChunk = never, TResult = unknown> = {
+  /**
+   * Per-action middleware and (for streaming actions) stream observers.
+   * Attached to the function as a non-enumerable-feeling property; the
+   * actions-handler reads it via the dispatcher (Task 18).
+   */
+  use?: ActionUse<TChunk, TResult, boolean>;
+};
+
 export function defineAction<TPayload, TResult, TChunk = never>(
-  fn: ActionFn<TPayload, TResult, TChunk>
+  fn: ActionFn<TPayload, TResult, TChunk>,
+  opts?: DefineActionOpts<TChunk, TResult>
 ): ActionStub<TPayload, TResult, TChunk> {
-  // Runtime no-op: returns fn as-is. actionsHandler casts it back to a function.
-  // The ActionStub type is enforced only by TypeScript and the Vite plugin.
-  return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
+  // Runtime no-op for the call itself: returns fn as-is. The ActionStub type
+  // is enforced only by TypeScript and the Vite plugin. The dispatcher reads
+  // `use` off the function-as-stub when running the chain.
+  const stub = fn as unknown as ActionStub<TPayload, TResult, TChunk> & {
+    use?: ReadonlyArray<unknown>;
+  };
+  if (opts?.use) stub.use = opts.use;
+  return stub;
 }
 
 export type UseActionOptions<
