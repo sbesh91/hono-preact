@@ -6,6 +6,14 @@ Page bindings, loaders, and actions all accept the same `use` array, and the fra
 
 ## The three layers
 
+Each layer attaches its `use` array through a different surface:
+
+| Layer | Where you declare it                                                | What it wraps                                    |
+| ----- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| App   | `defineApp({ use })` default-exported from `src/app-config.ts`      | Every page render, every loader, every action.   |
+| Page  | `definePage(View, { use })` and `export const pageUse` (.server.ts) | The matched page tree and its loaders / actions. |
+| Unit  | `defineLoader(fn, { use })` / `defineAction(fn, { use })`           | Just that one loader or action call.             |
+
 ```ts
 // apps/site/src/app-config.ts (optional file)
 import { defineApp, defineServerMiddleware } from 'hono-preact';
@@ -21,8 +29,11 @@ export default defineApp({ use: [requestId] });
 ```tsx
 // apps/site/src/pages/admin/page.tsx
 import { definePage } from 'hono-preact';
-import { requireSession } from '../../auth/guard.js';
+import { requireSession } from '../../auth/session.js';
 
+// The `use` binding on definePage drives the page React tree:
+// PageMiddlewareHost runs server members during SSR prerender and
+// client members during intra-app navigation.
 export default definePage(AdminView, { use: requireSession });
 ```
 
@@ -30,11 +41,14 @@ export default definePage(AdminView, { use: requireSession });
 // apps/site/src/pages/admin/page.server.ts
 import { defineLoader, defineAction } from 'hono-preact';
 import { auditLog } from '../../audit.js';
-import { requireSession } from '../../auth/guard.js';
+import { requireSession } from '../../auth/session.js';
 
-// Same array can be used for the page (above) and the server side. The
-// dispatcher partitions by `runs`; server middleware fires for SSR + RPC,
-// client middleware fires for intra-app navigation.
+// `pageUse` is a recognized named export on .server.* modules. The
+// loader and action handlers read it at runtime and apply the same
+// middleware around every loader and action defined in this file.
+// Reference the same array you passed to definePage so the page tree
+// and the RPC paths gate identically. (`loaderUse` and `actionUse`
+// are reserved alongside it; today only `pageUse` is wired.)
 export const pageUse = requireSession;
 
 export const serverLoaders = {
@@ -47,6 +61,17 @@ export const serverActions = {
   }),
 };
 ```
+
+### Why two declarations for the page layer
+
+`definePage({ use })` and `pageUse` cover two different dispatch paths for the same page:
+
+- **`definePage({ use })`** is consumed by `PageMiddlewareHost` inside the page's React tree. It runs during SSR prerender and during intra-app navigation. This is the path a `redirect` outcome takes when a logged-out user clicks a link to the page.
+- **`pageUse` on `.server.*`** is consumed by `loadersHandler` and `actionsHandler` directly, around every `POST /__loaders` and `POST /__actions` request that belongs to this page. The page React tree never renders for those calls, so the page-tsx `use` binding wouldn't fire.
+
+Export the same array from both surfaces so a user can't hit a loader behind a back-door RPC call when the page-tsx binding would have blocked them.
+
+### Chain order
 
 Outer-to-inner the chain is `appConfig.use → pageUse → unit-level use`. The dispatcher runs each `before` body in order, then `next()` enters the next ring, then each `after` body unwinds in reverse:
 
@@ -173,7 +198,7 @@ Ordering matters for middleware: outer-to-inner is `appConfig.use` first, then `
 ### Auth gate with server + client legs
 
 ```ts
-// auth/guard.ts
+// auth/session.ts
 import {
   defineServerMiddleware,
   defineClientMiddleware,
