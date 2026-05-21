@@ -60,9 +60,10 @@ describe('generateCoreAppModule', () => {
     // No import; an inline empty config so the middleware chain still works.
     expect(src).not.toContain('app-config');
     expect(src).toContain('const appConfig = { use: [] };');
-    // The handler options still thread it through, plus the pageUse stub.
-    expect(src).toContain('appConfig,');
-    expect(src).toContain('resolvePageUse: () => [],');
+    // The handler options still thread it through, plus the page-use resolvers.
+    expect(src).toContain('makePageUseResolvers(routes.serverRoutes)');
+    expect(src).toContain('resolvePageUse: pageUseResolvers.byPath');
+    expect(src).toContain('resolvePageUse: pageUseResolvers.byModuleKey');
     // renderPage receives appConfig as a third argument.
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
@@ -92,7 +93,7 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain(`import { Hono } from 'hono';`);
     expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
     expect(src).toContain(
-      `import {\n  actionsHandler,\n  loadersHandler,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
+      `import {\n  actionsHandler,\n  loadersHandler,\n  makePageUseResolvers,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
     );
 
     // User imports (absolute paths)
@@ -114,13 +115,17 @@ describe('generateCoreAppModule', () => {
 
     // Handler options thread dev mode through so the cache-vs-rebuild
     // branch doesn't rely on a Vite-only build-time constant inside the
-    // library handlers themselves. They also carry appConfig + resolvePageUse
-    // so the framework's middleware chain composes correctly.
-    expect(src).toContain(`dev: import.meta.env.DEV,`);
-    expect(src).toContain(`appConfig,`);
-    expect(src).toContain(`resolvePageUse: () => [],`);
-    expect(src).toContain(`loadersHandler(serverModules, handlerOpts)`);
-    expect(src).toContain(`actionsHandler(serverModules, handlerOpts)`);
+    // library handlers themselves. They also carry appConfig + per-handler
+    // resolvePageUse closures so the framework's middleware chain composes
+    // correctly.
+    expect(src).toContain(`const dev = import.meta.env.DEV;`);
+    expect(src).toContain(`makePageUseResolvers(routes.serverRoutes)`);
+    expect(src).toContain(
+      `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath })`
+    );
+    expect(src).toContain(
+      `actionsHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byModuleKey })`
+    );
 
     // Hono pipeline in correct order
     const loadersIdx = src.indexOf(`'/__loaders'`);

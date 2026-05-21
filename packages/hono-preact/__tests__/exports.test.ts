@@ -32,6 +32,7 @@ describe('hono-preact/server export', () => {
     expect(typeof m.loadersHandler).toBe('function');
     expect(typeof m.actionsHandler).toBe('function');
     expect(typeof m.routeServerModules).toBe('function');
+    expect(typeof m.makePageUseResolvers).toBe('function');
   });
 });
 

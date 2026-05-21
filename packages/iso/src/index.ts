@@ -14,6 +14,7 @@ export type {
   RouteDef,
   RoutesManifest,
   FlatRoute,
+  ServerRoute,
   LayoutProps,
   ViewProps,
 } from './define-routes.js';

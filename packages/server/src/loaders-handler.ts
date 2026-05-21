@@ -115,12 +115,14 @@ export interface LoadersHandlerOptions {
   appConfig?: AppConfig;
   /**
    * Per-page layer lookup keyed by the matched route's location path.
-   * Returns the `use` array declared on `definePage(..., { use })` for the
-   * matching page. Defaults to an empty array; the framework's generated
-   * server entry will populate it once the route-server-modules consumer
-   * indexes pageUse by route.
+   * Returns the `use` array declared on the matching page's `.server.*`
+   * module (as `export const pageUse = [...]`). The lookup may be sync
+   * (an in-memory map) or async (loaded lazily on first request). The
+   * handler awaits the result either way. Default returns an empty array.
    */
-  resolvePageUse?: (path: string) => ReadonlyArray<unknown>;
+  resolvePageUse?: (
+    path: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
 }
 
 function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
@@ -228,7 +230,7 @@ export function loadersHandler(
     // way in and last on the way out, matching every middleware system
     // users have seen (Hono, Express, Koa).
     const rootUse = appConfig?.use ?? [];
-    const pageUse = resolvePageUse?.(validatedLocation.path) ?? [];
+    const pageUse = (await resolvePageUse?.(validatedLocation.path)) ?? [];
     const fullUse = [
       ...rootUse,
       ...pageUse,

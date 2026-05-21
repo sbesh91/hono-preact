@@ -47,10 +47,25 @@ export type FlatRoute = {
   key: string;
 };
 
+export type ServerRoute = {
+  /** Absolute route path the server module belongs to. */
+  path: string;
+  /** Lazy `.server.*` module loader. */
+  server: LazyServerImport;
+};
+
 export type RoutesManifest = {
   tree: ReadonlyArray<RouteDef>;
   flat: ReadonlyArray<FlatRoute>;
   serverImports: ReadonlyArray<LazyServerImport>;
+  /**
+   * Path-keyed view of every server module in the tree. Lets server-side
+   * consumers (e.g. the page-layer `use` resolver) load a per-page module
+   * by the route path that matched, without re-walking the tree. The order
+   * mirrors `serverImports`; the two arrays exist side-by-side because most
+   * existing call sites only need the lazy thunks.
+   */
+  serverRoutes: ReadonlyArray<ServerRoute>;
 };
 
 // preact-iso's `Route<P>` and `Router` carry strict generics that reject our
@@ -146,6 +161,23 @@ function collectServerImports(
     }
   };
   walk(routes);
+  return out;
+}
+
+function collectServerRoutes(
+  routes: ReadonlyArray<RouteDef>,
+  parentPath = ''
+): ServerRoute[] {
+  const out: ServerRoute[] = [];
+  const walk = (rs: ReadonlyArray<RouteDef>, pp: string) => {
+    for (const r of rs) {
+      const here =
+        pp === '' ? r.path : pp + (r.path === '' ? '' : '/' + r.path);
+      if (r.server) out.push({ path: here, server: r.server });
+      if (r.children) walk(r.children, here);
+    }
+  };
+  walk(routes, parentPath);
   return out;
 }
 
@@ -382,6 +414,7 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
     tree,
     flat: flattenTree(tree, viewCache, keyCache),
     serverImports: collectServerImports(tree),
+    serverRoutes: collectServerRoutes(tree),
   };
 }
 

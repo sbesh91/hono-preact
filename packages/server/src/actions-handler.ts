@@ -147,11 +147,13 @@ export interface ActionsHandlerOptions {
   /**
    * Per-page layer lookup keyed by the action's owning module key (since an
    * action always belongs unambiguously to one page module). Returns the
-   * `use` array declared on `definePage(..., { use })` for that page.
-   * Defaults to an empty array; populated by the framework's generated
-   * server entry once route-server-modules indexes pageUse by route.
+   * `use` array declared on the matching page's `.server.*` module (as
+   * `export const pageUse = [...]`). May be sync or async; the handler
+   * awaits the result either way. Default returns an empty array.
    */
-  resolvePageUse?: (moduleKey: string) => ReadonlyArray<unknown>;
+  resolvePageUse?: (
+    moduleKey: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
 }
 
 export function actionsHandler(
@@ -273,7 +275,7 @@ export function actionsHandler(
     // Koa). The action's owning page is unambiguous from `module`, so the
     // page-layer lookup keys by module rather than by location path.
     const rootUse = appConfig?.use ?? [];
-    const pageUse = resolvePageUse?.(module) ?? [];
+    const pageUse = (await resolvePageUse?.(module)) ?? [];
     const actionUse = (fn as { use?: ReadonlyArray<unknown> }).use ?? [];
     const fullUse = [
       ...rootUse,

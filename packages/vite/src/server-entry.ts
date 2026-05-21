@@ -29,13 +29,6 @@ export function generateCoreAppModule(
     ? `import appConfig from '${appConfigAbsPath}';\n`
     : `const appConfig = { use: [] };\n`;
 
-  // resolvePageUse is a placeholder until route-server-modules indexes the
-  // per-page `use` array by route. Once that lands, both handlers will
-  // receive real per-page middleware lookups; today they get an empty list
-  // which means the page layer is effectively a no-op in handler-side
-  // dispatch. The root + per-unit layers are wired and exercised by tests.
-  const noPageUse = `() => []`;
-
   // The generated source is loaded as a virtual module, which Vite/esbuild
   // treats as plain JS by default. Use h() to construct vnodes rather than
   // JSX so the source compiles without a TSX loader hint.
@@ -47,6 +40,7 @@ export function generateCoreAppModule(
     `import {\n` +
     `  actionsHandler,\n` +
     `  loadersHandler,\n` +
+    `  makePageUseResolvers,\n` +
     `  renderPage,\n` +
     `  routeServerModules,\n` +
     `} from 'hono-preact/server';\n` +
@@ -57,16 +51,13 @@ export function generateCoreAppModule(
     `\n` +
     `env.current = 'server';\n` +
     `const serverModules = routeServerModules(routes);\n` +
-    `const handlerOpts = {\n` +
-    `  dev: import.meta.env.DEV,\n` +
-    `  appConfig,\n` +
-    `  resolvePageUse: ${noPageUse},\n` +
-    `};\n` +
+    `const pageUseResolvers = makePageUseResolvers(routes.serverRoutes);\n` +
+    `const dev = import.meta.env.DEV;\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
-    `  .post('/__loaders', loadersHandler(serverModules, handlerOpts))\n` +
-    `  .post('/__actions', actionsHandler(serverModules, handlerOpts))\n` +
+    `  .post('/__loaders', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
+    `  .post('/__actions', actionsHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byModuleKey }))\n` +
     `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig }));\n` +
     `\n` +
     `export default app;\n`
