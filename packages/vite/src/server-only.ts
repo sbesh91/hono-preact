@@ -236,8 +236,14 @@ export function serverOnlyPlugin(): Plugin {
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'actionGuards'
+            (specifier.imported.name === 'pageUse' ||
+              specifier.imported.name === 'loaderUse' ||
+              specifier.imported.name === 'actionUse')
           ) {
+            // Middleware-carrying named exports never run on the client; the
+            // client only needs the array to exist so user imports don't
+            // crash. The real `use` arrays live on the server side and are
+            // wired into the dispatcher via pageUse resolvers.
             stubs.push(`const ${specifier.local.name} = [];`);
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -264,7 +270,7 @@ export function serverOnlyPlugin(): Plugin {
                   : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-                `Allowed: serverLoaders, serverActions, actionGuards.`
+                `Allowed: serverLoaders, serverActions, pageUse, loaderUse, actionUse.`
             );
           }
         }

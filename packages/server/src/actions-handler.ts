@@ -94,10 +94,10 @@ export interface ActionsHandlerOptions {
    */
   dev?: boolean;
   /**
-   * Called for every error an action throws (other than `ActionGuardError`,
-   * which is treated as a structured response). Use it to hook into your
-   * observability stack (Sentry, console, etc.). The handler still
-   * responds with a sanitized 500; the hook is purely a side channel.
+   * Called for every error an action throws (other than an outcome thrown
+   * by middleware, which is translated to its wire shape). Use it to hook
+   * into your observability stack (Sentry, console, etc.). The handler
+   * still responds with a sanitized 500; the hook is purely a side channel.
    */
   onError?: (err: unknown, ctx: { module: string; action: string }) => void;
   /**

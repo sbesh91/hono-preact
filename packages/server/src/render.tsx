@@ -92,7 +92,7 @@ export async function renderPage(
   // Sentinel returned by the root chain when middleware short-circuits with
   // a redirect or deny outcome. We translate to a Response outside the scope
   // (after env.current restoration) so the abort-before-render path stays
-  // symmetric with the existing GuardRedirect handling.
+  // symmetric with the regular outcome path.
   type RootOutcome = { kind: 'outcome'; outcome: Outcome };
   type RootValue = {
     kind: 'value';

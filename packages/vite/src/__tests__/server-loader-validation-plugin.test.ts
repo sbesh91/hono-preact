@@ -128,25 +128,27 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('found: serverGuards');
   });
 
-  it('passes a *.server.* file with actionGuards as a named export', () => {
+  it('passes a *.server.* file with pageUse as a named export', () => {
     const code = [
-      'export const actionGuards = [];',
+      'export const pageUse = [];',
       'export const serverActions = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toBeNull();
   });
 
-  it('error message lists all allowed named exports (no longer includes loader or serverGuards)', () => {
+  it('error message lists all allowed named exports', () => {
     const code = [
       'export const unauthorized = () => {};',
       'export const serverLoaders = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain("'serverActions'");
-    expect(error).toContain("'actionGuards'");
     expect(error).toContain("'serverLoaders'");
-    expect(error).not.toContain("'serverGuards'");
+    expect(error).toContain("'pageUse'");
+    expect(error).toContain("'loaderUse'");
+    expect(error).toContain("'actionUse'");
+    expect(error).not.toContain("'actionGuards'");
     expect(error).not.toContain("'loader'");
     expect(error).not.toContain("'cache'");
   });

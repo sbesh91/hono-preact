@@ -5,8 +5,15 @@ import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ALLOWED_NAMED_EXPORTS = new Set([
   'serverActions',
-  'actionGuards',
   'serverLoaders',
+  // Middleware-carrying named exports (Tasks 21-22). The runtime reads
+  // `pageUse` to apply page-layer middleware to loaders/actions; `loaderUse`
+  // and `actionUse` are reserved for future per-unit declarations without
+  // a defineLoader/defineAction call (middleware already rides on the ref
+  // for the call form).
+  'pageUse',
+  'loaderUse',
+  'actionUse',
 ]);
 const ALLOWED_NAMED_EXPORTS_LIST = [...ALLOWED_NAMED_EXPORTS]
   .map((n) => `'${n}'`)
