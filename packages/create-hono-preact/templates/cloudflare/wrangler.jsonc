@@ -1,0 +1,9 @@
+{
+  "name": "{{name}}",
+  "main": "node_modules/.vite/hono-preact/server-entry.tsx",
+  "compatibility_date": "2026-02-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client"
+  }
+}
