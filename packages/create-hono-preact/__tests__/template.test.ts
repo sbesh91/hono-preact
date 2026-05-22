@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error -- plain JS module
-import { copyTemplate, renameDotfiles, substituteName } from '../lib/template.mjs';
+import {
+  copyTemplate,
+  renameDotfiles,
+  substituteName,
+} from '../lib/template.mjs';
 
 const here = resolve(fileURLToPath(import.meta.url), '..');
 const fixture = join(here, 'fixtures', 'sample-template');

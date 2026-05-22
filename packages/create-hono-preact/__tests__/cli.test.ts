@@ -31,7 +31,9 @@ describe('run() — node adapter', () => {
     expect(existsSync(join(target, 'src', 'Layout.tsx'))).toBe(true);
     expect(existsSync(join(target, 'src', 'routes.ts'))).toBe(true);
     expect(existsSync(join(target, 'src', 'pages', 'home.tsx'))).toBe(true);
-    expect(existsSync(join(target, 'src', 'pages', 'home.server.ts'))).toBe(true);
+    expect(existsSync(join(target, 'src', 'pages', 'home.server.ts'))).toBe(
+      true
+    );
     expect(existsSync(join(target, 'src', 'pages', 'about.tsx'))).toBe(true);
 
     const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
@@ -63,7 +65,9 @@ describe('run() — cloudflare adapter', () => {
       cwd: workDir,
       env: {},
     });
-    expect(existsSync(join(workDir, 'default-cf', 'wrangler.jsonc'))).toBe(true);
+    expect(existsSync(join(workDir, 'default-cf', 'wrangler.jsonc'))).toBe(
+      true
+    );
   });
 });
 
@@ -112,7 +116,9 @@ describe('run() — install step', () => {
     const code = await run({
       argv: ['installed-app', '--adapter=node', '--no-git'],
       cwd: workDir,
-      env: { npm_config_user_agent: 'pnpm/10.18.3 npm/? node/v20 darwin arm64' },
+      env: {
+        npm_config_user_agent: 'pnpm/10.18.3 npm/? node/v20 darwin arm64',
+      },
       spawnFn: fakeSpawn,
     });
 
@@ -127,7 +133,10 @@ describe('run() — install step', () => {
     const calls: Array<{ cmd: string }> = [];
     const fakeSpawn = (cmd: string) => {
       calls.push({ cmd });
-      return { on: (_e: string, cb: (c: number) => void) => queueMicrotask(() => cb(0)) };
+      return {
+        on: (_e: string, cb: (c: number) => void) =>
+          queueMicrotask(() => cb(0)),
+      };
     };
 
     await run({
@@ -254,7 +263,9 @@ describe('run() — prompt for target dir', () => {
     expect(code).toBe(0);
     expect(calls.length).toBe(1);
     expect(calls[0].toLowerCase()).toContain('project');
-    expect(existsSync(join(workDir, 'prompted-app', 'package.json'))).toBe(true);
+    expect(existsSync(join(workDir, 'prompted-app', 'package.json'))).toBe(
+      true
+    );
   });
 
   it('returns 1 when the user provides an empty answer', async () => {

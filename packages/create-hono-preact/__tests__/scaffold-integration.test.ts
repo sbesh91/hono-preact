@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  readdirSync,
+} from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
@@ -32,17 +39,23 @@ beforeAll(() => {
       'hono-preact',
       'build',
     ],
-    { cwd: repoRoot, stdio: 'inherit' },
+    { cwd: repoRoot, stdio: 'inherit' }
   );
 
   const packDir = join(workDir, 'tarballs');
-  execFileSync('pnpm', ['pack', '--filter', 'hono-preact', '--pack-destination', packDir], {
-    cwd: repoRoot,
-    stdio: 'inherit',
-  });
+  execFileSync(
+    'pnpm',
+    ['pack', '--filter', 'hono-preact', '--pack-destination', packDir],
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    }
+  );
 
   const entries = readdirSync(packDir);
-  const tgz = entries.find((f) => f.startsWith('hono-preact-') && f.endsWith('.tgz'));
+  const tgz = entries.find(
+    (f) => f.startsWith('hono-preact-') && f.endsWith('.tgz')
+  );
   if (!tgz) throw new Error('failed to locate packed hono-preact tarball');
   tarballPath = join(packDir, tgz);
 }, 180_000);
@@ -51,7 +64,10 @@ afterAll(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-async function scaffold(name: string, adapter: 'cloudflare' | 'node'): Promise<string> {
+async function scaffold(
+  name: string,
+  adapter: 'cloudflare' | 'node'
+): Promise<string> {
   const code = await run({
     argv: [name, `--adapter=${adapter}`, '--no-install', '--no-git'],
     cwd: workDir,
@@ -74,15 +90,21 @@ describe('scaffold + install + build — node adapter', () => {
   it('produces a buildable Node app', async () => {
     const target = await scaffold('integration-node', 'node');
 
-    execFileSync('pnpm', ['install', '--prefer-offline', '--no-frozen-lockfile'], {
-      cwd: target,
-      stdio: 'inherit',
-    });
+    execFileSync(
+      'pnpm',
+      ['install', '--prefer-offline', '--no-frozen-lockfile'],
+      {
+        cwd: target,
+        stdio: 'inherit',
+      }
+    );
 
     execFileSync('pnpm', ['build'], { cwd: target, stdio: 'inherit' });
 
     expect(existsSync(join(target, 'dist', 'client'))).toBe(true);
-    expect(existsSync(join(target, 'dist', 'server', 'server-entry.js'))).toBe(true);
+    expect(existsSync(join(target, 'dist', 'server', 'server-entry.js'))).toBe(
+      true
+    );
   }, 180_000);
 });
 
@@ -90,16 +112,22 @@ describe('scaffold + install + build — cloudflare adapter', () => {
   it('produces a buildable Cloudflare app', async () => {
     const target = await scaffold('integration-cf', 'cloudflare');
 
-    execFileSync('pnpm', ['install', '--prefer-offline', '--no-frozen-lockfile'], {
-      cwd: target,
-      stdio: 'inherit',
-    });
+    execFileSync(
+      'pnpm',
+      ['install', '--prefer-offline', '--no-frozen-lockfile'],
+      {
+        cwd: target,
+        stdio: 'inherit',
+      }
+    );
 
     execFileSync('pnpm', ['build'], { cwd: target, stdio: 'inherit' });
 
     expect(existsSync(join(target, 'dist', 'client'))).toBe(true);
     // Worker output dir: name with hyphens -> underscores ("integration-cf" -> "integration_cf").
     expect(existsSync(join(target, 'dist', 'integration_cf'))).toBe(true);
-    expect(existsSync(join(target, 'dist', 'integration_cf', 'index.js'))).toBe(true);
+    expect(existsSync(join(target, 'dist', 'integration_cf', 'index.js'))).toBe(
+      true
+    );
   }, 180_000);
 });

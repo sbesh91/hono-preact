@@ -22,7 +22,9 @@ describe('parseArgs', () => {
   });
 
   it('accepts --adapter=cloudflare', () => {
-    expect(parseArgs(['my-app', '--adapter=cloudflare']).adapter).toBe('cloudflare');
+    expect(parseArgs(['my-app', '--adapter=cloudflare']).adapter).toBe(
+      'cloudflare'
+    );
   });
 
   it('rejects an unknown adapter', () => {

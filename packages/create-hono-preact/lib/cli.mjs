@@ -21,7 +21,13 @@ const templatesRoot = resolve(here, '..', 'templates');
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
-export async function run({ argv, cwd, env, spawnFn = realSpawn, prompt = defaultPrompt }) {
+export async function run({
+  argv,
+  cwd,
+  env,
+  spawnFn = realSpawn,
+  prompt = defaultPrompt,
+}) {
   const parsed = parseArgs(argv);
 
   if (parsed.kind === 'help') {
@@ -80,7 +86,9 @@ export async function run({ argv, cwd, env, spawnFn = realSpawn, prompt = defaul
   if (git) {
     const gitExit = await runChild(spawnFn, 'git', ['init'], targetPath);
     if (gitExit !== 0) {
-      console.warn('warning: git init failed (is git installed?); continuing without git');
+      console.warn(
+        'warning: git init failed (is git installed?); continuing without git'
+      );
     }
   }
 
@@ -126,7 +134,10 @@ function printNextSteps(targetDir, pm, installed) {
  * @returns {Promise<string>}
  */
 async function defaultPrompt(message) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   try {
     return await rl.question(message);
   } finally {

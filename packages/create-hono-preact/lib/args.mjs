@@ -23,7 +23,10 @@ export function parseArgs(argv) {
     } else if (arg.startsWith('--adapter=')) {
       const value = arg.slice('--adapter='.length);
       if (value !== 'cloudflare' && value !== 'node') {
-        return { kind: 'error', message: `unknown adapter: ${value} (expected 'cloudflare' or 'node')` };
+        return {
+          kind: 'error',
+          message: `unknown adapter: ${value} (expected 'cloudflare' or 'node')`,
+        };
       }
       adapter = value;
     } else if (arg.startsWith('-')) {
@@ -31,7 +34,10 @@ export function parseArgs(argv) {
     } else if (targetDir === undefined) {
       targetDir = arg;
     } else {
-      return { kind: 'error', message: `unexpected positional argument: ${arg}` };
+      return {
+        kind: 'error',
+        message: `unexpected positional argument: ${arg}`,
+      };
     }
   }
 

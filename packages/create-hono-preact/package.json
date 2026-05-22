@@ -2,7 +2,12 @@
   "name": "create-hono-preact",
   "version": "0.1.0",
   "description": "Scaffold a new hono-preact app.",
-  "keywords": ["hono-preact", "create", "scaffold", "cli"],
+  "keywords": [
+    "hono-preact",
+    "create",
+    "scaffold",
+    "cli"
+  ],
   "homepage": "https://framework.sbesh.com",
   "bugs": {
     "url": "https://github.com/sbesh91/hono-preact/issues"
@@ -29,5 +34,9 @@
   ],
   "dependencies": {
     "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*"
   }
 }
