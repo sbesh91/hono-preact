@@ -268,3 +268,64 @@ describe('run() — prompt for target dir', () => {
     expect(code).toBe(1);
   });
 });
+
+describe('run() — help and version', () => {
+  it('--help returns 0 and prints usage', async () => {
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args) => lines.push(args.join(' '));
+    try {
+      const code = await run({ argv: ['--help'], cwd: workDir, env: {} });
+      expect(code).toBe(0);
+      expect(lines.join('\n').toLowerCase()).toContain('usage');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('--version returns 0 and prints the version', async () => {
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args) => lines.push(args.join(' '));
+    try {
+      const code = await run({ argv: ['--version'], cwd: workDir, env: {} });
+      expect(code).toBe(0);
+      expect(lines.join(' ')).toMatch(/create-hono-preact\s+\d+\.\d+\.\d+/);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('unknown flag returns 2', async () => {
+    const code = await run({ argv: ['--bogus'], cwd: workDir, env: {} });
+    expect(code).toBe(2);
+  });
+});
+
+describe('run() — next-steps output', () => {
+  it('prints next steps after a successful scaffold', async () => {
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args) => lines.push(args.join(' '));
+    try {
+      const fakeSpawn = () => ({
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      });
+      await run({
+        argv: ['next-app', '--adapter=node', '--no-install', '--no-git'],
+        cwd: workDir,
+        env: { npm_config_user_agent: 'pnpm/10' },
+        spawnFn: fakeSpawn,
+      });
+      const out = lines.join('\n');
+      expect(out).toMatch(/next steps/i);
+      expect(out).toContain('cd next-app');
+      expect(out).toMatch(/pnpm/);
+      expect(out).toContain('dev');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});

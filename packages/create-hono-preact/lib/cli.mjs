@@ -3,6 +3,7 @@ import { spawn as realSpawn } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { resolve, join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pc from 'picocolors';
 import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
 import { copyTemplate, renameDotfiles, substituteName } from './template.mjs';
@@ -83,6 +84,7 @@ export async function run({ argv, cwd, env, spawnFn = realSpawn, prompt = defaul
     }
   }
 
+  printNextSteps(targetDir, pm, install);
   return 0;
 }
 
@@ -98,6 +100,25 @@ function runChild(spawnFn, cmd, args, cwd) {
     const child = spawnFn(cmd, args, { cwd, stdio: 'inherit' });
     child.on('close', (code) => res(code ?? 0));
   });
+}
+
+/**
+ * @param {string} targetDir
+ * @param {string} pm
+ * @param {boolean} installed
+ */
+function printNextSteps(targetDir, pm, installed) {
+  const dev = pm === 'npm' ? 'npm run dev' : `${pm} dev`;
+  console.log('');
+  console.log(pc.green(pc.bold('Done!')) + ' Next steps:');
+  console.log('');
+  console.log(`  cd ${targetDir}`);
+  if (!installed) {
+    const installCmd = pm === 'npm' ? 'npm install' : `${pm} install`;
+    console.log(`  ${installCmd}`);
+  }
+  console.log(`  ${dev}`);
+  console.log('');
 }
 
 /**
