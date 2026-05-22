@@ -22,10 +22,10 @@ renderPage(
 ): Promise<Response>
 ```
 
-| Param                  | Description                                                                                                                                                                                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `c`                    | The Hono `Context` from your route handler                                                                                                                                                                                                                                  |
-| `node`                 | The root Preact element to render, typically your `<Layout>`                                                                                                                                                                                                                |
+| Param                  | Description                                                                                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `c`                    | The Hono `Context` from your route handler                                                                                                                                                                                                 |
+| `node`                 | The root Preact element to render, typically your `<Layout>`                                                                                                                                                                               |
 | `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''`. Express defaults via `<Head defaultTitle="...">` in your `Layout` for the common case; the option is here for custom server entries that call `renderPage` directly. |
 
 ## Head tags
