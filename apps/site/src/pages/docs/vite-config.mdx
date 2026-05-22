@@ -7,7 +7,6 @@ The `hono-preact/vite` subpath exports a `honoPreact()` plugin that configures V
 ```ts
 import { honoPreact } from 'hono-preact/vite';
 import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
-import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -15,7 +14,7 @@ export default defineConfig({
 });
 ```
 
-`adapter` is required; `honoPreact()` throws a clear error if it is omitted. The framework ships two adapters today: `cloudflareAdapter()` for Cloudflare Workers, imported from `hono-preact/adapter-cloudflare`, and `nodeAdapter()` for Node.js (via `@hono/node-server`), imported from `hono-preact/adapter-node`. Each adapter supplies its own Vite plugins and entry wrapper, so the framework core stays target-agnostic.
+`adapter` is required; `honoPreact()` throws a clear error if it is omitted. The plugin auto-includes `@preact/preset-vite` internally, so you don't import it yourself. The framework ships two adapters today: `cloudflareAdapter()` for Cloudflare Workers, imported from `hono-preact/adapter-cloudflare`, and `nodeAdapter()` for Node.js (via `@hono/node-server`), imported from `hono-preact/adapter-node`. Each adapter supplies its own Vite plugins and entry wrapper, so the framework core stays target-agnostic.
 
 ## What the plugin handles
 
@@ -24,13 +23,13 @@ export default defineConfig({
 | Concern              | What it sets                                                                                                                                                     |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso`                                                                                     |
-| SSR bundling         | `ssr.noExternal` for `preact-render-to-string`, `preact-iso`, and `hono-preact`                                                                                  |
-| Client build output  | `dist/static/client.js` entry, hashed chunk and asset filenames                                                                                                  |
-| Server build output  | `esnext` target, `dist/static/` asset dir, minification                                                                                                          |
+| Build target         | `build.target: 'esnext'`, `build.assetsDir: 'static'`                                                                                                            |
+| Client build output  | `static/client.js` entry, hashed chunk and asset filenames in the `client` environment                                                                           |
 | Deployment target    | Delegated to the configured adapter (Cloudflare Workers, Node.js, etc.), which supplies its own Vite plugins and entry wrapper                                   |
 | Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle                                       |
 | Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                           |
 | Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                |
+| Guard strip          | `guardStripPlugin` rewrites opposite-environment middleware bodies to no-ops so server-only code tree-shakes out of the client bundle                            |
 | Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw |
 
 ## Peer dependencies
@@ -83,19 +82,6 @@ export default defineConfig({
   plugins: [honoPreact({ adapter: cloudflareAdapter() })],
 });
 ```
-
-## Overriding build options
-
-Pass `clientBuild`, `serverBuild`, or `sharedBuild` to extend the plugin's defaults:
-
-```ts
-honoPreact({
-  adapter: cloudflareAdapter(),
-  clientBuild: { sourcemap: false },
-});
-```
-
-These are merged on top of the plugin's defaults, so you only need to specify what differs.
 
 ## Custom client entry path
 

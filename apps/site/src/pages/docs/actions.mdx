@@ -326,7 +326,8 @@ For module-wide gating (every action plus every loader), export `pageUse` from t
 without a credential do not carry the session cookie; cross-origin POSTs from a
 malicious site cannot read the response.
 
-If you need a stricter posture (explicit-origin CSRF middleware on
-`/__actions`), the framework's reserved paths are mounted ahead of user
-middleware in the generated entry, so a Hono `csrf()` middleware on
-`/__actions` is not user-configurable.
+If you need a stricter posture, mount Hono's `csrf()` middleware on
+`/__actions` from your `src/api.ts` user app. The user app is mounted
+ahead of the framework's reserved RPC paths, so user middleware runs
+before the action dispatcher. See [CSRF Protection](/docs/csrf) for the
+full recipe.

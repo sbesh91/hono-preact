@@ -4,7 +4,7 @@ A page is two things: a view component (and optionally a sibling `.server.ts` fo
 
 ## Standard pages
 
-A view component is a default-exported Preact component. Loaders, guards, and Wrappers attach to it via `definePage`. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module).
+A view component is a default-exported Preact component. Loaders, middleware, and Wrappers attach to it via `definePage`. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module).
 
 ### Step 1: Create `src/pages/about.tsx`
 

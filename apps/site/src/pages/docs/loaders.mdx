@@ -424,7 +424,7 @@ import { definePage } from 'hono-preact';
 export default definePage(Component, { Wrapper });
 ```
 
-Loader and fallback bindings are no longer part of `definePage`; they live on `serverLoaders.name.View()` inside the page's JSX tree.
+Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX tree, not on `definePage`.
 
 A page with no loader simply skips `definePage` and exports the component directly:
 
