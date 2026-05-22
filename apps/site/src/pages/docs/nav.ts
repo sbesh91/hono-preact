@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Cable,
   Cloud,
   Database,
   FileText,
@@ -8,6 +9,7 @@ import {
   LayoutGrid,
   Loader,
   Map as MapIcon,
+  Plug,
   Radio,
   RefreshCw,
   Rocket,
@@ -72,6 +74,12 @@ export const nav: NavSection[] = [
         route: '/docs/structure',
         icon: FolderTree,
       },
+      {
+        title: 'Composing Hono Middleware',
+        route: '/docs/hono-middleware',
+        icon: Plug,
+      },
+      { title: 'WebSockets', route: '/docs/websockets', icon: Cable },
       { title: 'renderPage', route: '/docs/render-page', icon: Layers },
       { title: 'Build & Deploy', route: '/docs/deployment', icon: Cloud },
     ],

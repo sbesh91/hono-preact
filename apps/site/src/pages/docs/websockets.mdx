@@ -1,0 +1,86 @@
+# WebSockets
+
+Hono supports WebSocket upgrades via `upgradeWebSocket`. In hono-preact you register the WS route in your project's `api.ts`, and the framework's adapter wires the upgrade for both dev (`vite dev`) and the production build. This page shows the worked example for each adapter.
+
+For the rules around the `api.ts` mount point and framework-reserved paths, see [Composing Hono Middleware](/docs/hono-middleware).
+
+## Cloudflare Workers
+
+The Cloudflare adapter runs your code inside `workerd`, so the Worker runtime handles the upgrade. Import `upgradeWebSocket` from `hono/cloudflare-workers`:
+
+```ts
+// src/api.ts
+import { Hono } from 'hono';
+import { upgradeWebSocket } from 'hono/cloudflare-workers';
+
+const app = new Hono();
+
+app.get(
+  '/ws',
+  upgradeWebSocket(() => ({
+    onMessage(event, ws) {
+      ws.send(`echo: ${event.data}`);
+    },
+    onClose() {
+      // cleanup
+    },
+  }))
+);
+
+export default app;
+```
+
+Connect from the browser with `new WebSocket('wss://your-app.example/ws')`. The same handler runs in `vite dev` (because the Cloudflare adapter boots workerd via `@cloudflare/vite-plugin`) and in a deployed Worker.
+
+For long-lived stateful connections, Cloudflare's recommended pattern is to pair `upgradeWebSocket` with a Durable Object: the Hono handler accepts the upgrade and forwards the WebSocket to a Durable Object instance that owns the connection state. See the Cloudflare Workers WebSocket and Durable Object docs for the binding pattern; from Hono's perspective the handler is unchanged.
+
+## Node.js
+
+The Node adapter uses `@hono/node-ws` to host the upgrade on the Node HTTP server. Install the peer dependency:
+
+```bash
+npm install @hono/node-ws
+```
+
+Then create the upgrade factory in `api.ts` and re-export `injectWebSocket`:
+
+```ts
+// src/api.ts
+import { Hono } from 'hono';
+import { createNodeWebSocket } from '@hono/node-ws';
+
+const app = new Hono();
+const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
+
+app.get(
+  '/ws',
+  upgradeWebSocket(() => ({
+    onMessage(event, ws) {
+      ws.send(`echo: ${event.data}`);
+    },
+  }))
+);
+
+export { injectWebSocket };
+export default app;
+```
+
+The `injectWebSocket` named export is the contract: the framework's Node adapter looks for it on `api.ts` and attaches the upgrade handler to the underlying HTTP server. Re-export it exactly as shown. You do not call `injectWebSocket(server)` yourself; the adapter does, in both passes:
+
+- In `vite dev`, it attaches to Vite's dev HTTP server.
+- In production, it attaches to the `@hono/node-server` instance that the bundled entry boots.
+
+A working end-to-end example lives at `apps/example-node/` in the repo.
+
+## Avoiding reserved paths
+
+The framework reserves `POST /__loaders`, `POST /__actions`, and the catch-all SSR `GET`. Register WebSocket routes on any non-colliding path. The build rejects catch-all and reserved-path route registrations in `api.ts`. See [Composing Hono Middleware](/docs/hono-middleware) for the full rules.
+
+## Other long-lived patterns
+
+`upgradeWebSocket` is the right answer for bidirectional connections. For one-way pushes from the server to the browser, two simpler patterns are often a better fit:
+
+- **Streaming loaders.** If the push is page data that should hydrate the initial UI, prefer a [streaming loader](/docs/streaming). The page renders shell-first and the loader's yielded chunks land in the React tree as they arrive.
+- **Server-Sent Events.** Hono ships `streamSSE` from `hono/streaming`. SSE runs over plain HTTP and requires none of the upgrade plumbing above, so a `GET` route in `api.ts` is enough.
+
+WebSockets are worth the extra moving parts when the browser also pushes upstream, or when the protocol is something other than `text/event-stream`.

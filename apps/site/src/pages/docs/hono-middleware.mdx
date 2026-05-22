@@ -1,0 +1,151 @@
+# Composing Hono Middleware
+
+A `hono-preact` server is a Hono app. You can use any `hono/*` or `@hono/*` middleware package by mounting it inside your project's `api.ts`. This page covers the mount point, the rules around framework-reserved paths, and short recipes for the middleware packages most users reach for first.
+
+If you're looking for the in-app middleware that wraps page renders, loaders, and actions (auth gates, request-scoped context, tracing across server and client), see [Middleware](/docs/middleware). That layer runs inside the RPC pipeline; this page is about the HTTP layer above it.
+
+## api.ts: your Hono mount point
+
+Create `src/api.ts` and default-export a Hono app:
+
+```ts
+// src/api.ts
+import { Hono } from 'hono';
+
+const app = new Hono();
+
+export default app;
+```
+
+The framework mounts your app at the root, ahead of its reserved paths and the SSR catch-all:
+
+```
+api.ts (your Hono app)   <- composes first
+  POST /__loaders        <- framework RPC
+  POST /__actions        <- framework RPC
+  GET *                  <- framework SSR
+```
+
+That ordering is the whole story. A `.use('*', ...)` in `api.ts` runs on every request the framework will see, including the SSR page render and both RPC endpoints. A `.use('/__actions', ...)` runs on RPC actions. A `.get('/healthz', ...)` works the same way it does in any Hono app.
+
+## Reserved paths
+
+The framework owns three URL surfaces:
+
+| Path              | Purpose           |
+| ----------------- | ----------------- |
+| `POST /__loaders` | Server loader RPC |
+| `POST /__actions` | Server action RPC |
+| `GET *`           | SSR page renderer |
+
+`.use(...)` on those paths in `api.ts` is fine and is exactly how you compose middleware around them. What you cannot do is register a _route_ on those paths or a wildcard that swallows them. The build rejects these cases:
+
+```ts
+// All of these fail the build
+app.get('*', handler);
+app.all('/*', handler);
+app.on(['GET'], '/*', handler);
+app.post('/__actions', handler);
+app.post('/__loaders', handler);
+```
+
+If you need broad scope, use `app.use('*', middleware)` (which calls `next()` and composes) instead of `app.get('*', handler)` (which terminates the request).
+
+## Recipes
+
+### CORS
+
+```ts
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+
+const app = new Hono();
+
+app.use(
+  '*',
+  cors({
+    origin: ['https://your-app.example'],
+    credentials: true,
+  })
+);
+
+export default app;
+```
+
+Scope to `/__actions` if you only want CORS on the RPC surface, or to your custom API routes if your SSR pages are same-origin only.
+
+### CSRF protection
+
+For cookie-authenticated `multipart/form-data` actions, see the dedicated [CSRF Protection](/docs/csrf) page. It explains when you need it, why the JSON path through `/__actions` is already protected by browser CORS preflight, and how to write an Origin check that covers the multipart gap.
+
+### Security headers
+
+Apply a baseline of HTTP security headers to every response, including SSR pages:
+
+```ts
+import { secureHeaders } from 'hono/secure-headers';
+
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      // tighten per your app
+    },
+  })
+);
+```
+
+### Request logging
+
+```ts
+import { logger } from 'hono/logger';
+
+app.use('*', logger());
+```
+
+Logs each request the framework handles, including loader and action RPC calls.
+
+### Server-Timing
+
+Emit `Server-Timing` headers so the browser's network panel can render a latency breakdown:
+
+```ts
+import { timing, setMetric } from 'hono/timing';
+
+app.use('*', timing());
+```
+
+`setMetric(c, name, ms)` works anywhere you hold the Hono `Context`. Loaders and actions both see the same `c`, so a `defineServerMiddleware` can record timings that span the HTTP and RPC layers.
+
+### Sentry
+
+```ts
+import { sentry } from '@hono/sentry';
+
+app.use('*', sentry({ dsn: process.env.SENTRY_DSN }));
+```
+
+On Cloudflare Workers, read the DSN from `c.env` rather than `process.env`. See the `@hono/sentry` package docs for per-runtime setup.
+
+### OpenTelemetry
+
+```ts
+import { otel } from '@hono/otel';
+
+app.use('*', otel());
+```
+
+`@hono/otel` requires that an OpenTelemetry SDK is initialized before the Hono app loads. For Node, configure the SDK in your startup script; for Cloudflare, follow the Workers-specific tracing guide.
+
+## API routes alongside middleware
+
+`api.ts` is also where you write custom HTTP endpoints that are not framework loaders or actions:
+
+```ts
+app.get('/healthz', (c) => c.text('ok'));
+app.post('/webhooks/stripe', stripeWebhookHandler);
+```
+
+Specific, non-wildcard patterns compose freely with the framework's reserved paths. For a larger surface, organize routes into sub-apps and mount them: `app.route('/api', subApp)`.
