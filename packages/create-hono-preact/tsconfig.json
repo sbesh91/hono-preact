@@ -5,5 +5,5 @@
     "allowJs": false,
     "types": ["node"]
   },
-  "include": ["__tests__/**/*.ts"]
+  "include": ["__tests__/**/*.ts", "lib/**/*.d.mts"]
 }

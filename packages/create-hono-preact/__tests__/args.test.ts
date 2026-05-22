@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error -- plain JS module, no .d.ts
 import { parseArgs } from '../lib/args.mjs';
 
 describe('parseArgs', () => {

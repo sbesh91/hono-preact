@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error -- plain JS module
 import { detectPackageManager } from '../lib/detect-pm.mjs';
 
 describe('detectPackageManager', () => {

@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// @ts-expect-error -- plain JS module
 import {
   copyTemplate,
   renameDotfiles,

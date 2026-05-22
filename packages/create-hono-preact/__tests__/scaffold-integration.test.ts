@@ -11,7 +11,6 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// @ts-expect-error -- plain JS module, no .d.ts
 import { run } from '../lib/cli.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
