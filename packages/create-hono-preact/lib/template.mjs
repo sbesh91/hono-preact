@@ -32,13 +32,17 @@ export async function renameDotfiles(target) {
 }
 
 /**
- * Replace `{{name}}` in `package.json` and (if present) `wrangler.jsonc`.
+ * Replace `{{name}}` and `{{name_underscore}}` in manifest and root README files
+ * (the Cloudflare adapter writes its bundle to `dist/<name_with_underscores>/`,
+ * so the underscored form is needed in deploy scripts and READMEs). Source files
+ * keep the literal `{{name}}` placeholder as a discoverable edit-me marker.
  *
  * @param {string} target absolute path to the scaffolded dir
  * @param {string} name new project name
  */
 export async function substituteName(target, name) {
-  for (const file of ['package.json', 'wrangler.jsonc']) {
+  const underscored = name.replaceAll('-', '_');
+  for (const file of ['package.json', 'wrangler.jsonc', 'README.md']) {
     const path = join(target, file);
     try {
       await access(path);
@@ -46,7 +50,9 @@ export async function substituteName(target, name) {
       continue;
     }
     const original = await readFile(path, 'utf8');
-    const updated = original.replaceAll('{{name}}', name);
+    const updated = original
+      .replaceAll('{{name_underscore}}', underscored)
+      .replaceAll('{{name}}', name);
     if (updated !== original) {
       await writeFile(path, updated);
     }

@@ -211,6 +211,58 @@ describe('run() — git step', () => {
     expect(calls.find((c) => c.cmd === 'git')).toBeUndefined();
   });
 
+  it('warns but does not abort when git is missing from PATH (error event)', async () => {
+    const fakeSpawn = (cmd: string) => {
+      if (cmd === 'git') {
+        return {
+          on: (e: string, cb: (arg: unknown) => void) => {
+            if (e === 'error') queueMicrotask(() => cb(new Error('ENOENT')));
+          },
+        };
+      }
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    const code = await run({
+      argv: ['git-missing-app', '--adapter=node', '--no-install'],
+      cwd: workDir,
+      env: {},
+      spawnFn: fakeSpawn,
+    });
+
+    expect(code).toBe(0);
+  });
+
+  it('returns non-zero when install binary is missing from PATH', async () => {
+    const fakeSpawn = (cmd: string) => {
+      if (cmd === 'pnpm') {
+        return {
+          on: (e: string, cb: (arg: unknown) => void) => {
+            if (e === 'error') queueMicrotask(() => cb(new Error('ENOENT')));
+          },
+        };
+      }
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    const code = await run({
+      argv: ['pm-missing-app', '--adapter=node', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'pnpm/10' },
+      spawnFn: fakeSpawn,
+    });
+
+    expect(code).toBe(1);
+  });
+
   it('warns but does not abort when git init fails (git may be absent)', async () => {
     const fakeSpawn = (cmd: string) => {
       if (cmd === 'git') {

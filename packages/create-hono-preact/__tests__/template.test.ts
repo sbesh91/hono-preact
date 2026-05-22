@@ -51,12 +51,27 @@ describe('substituteName', () => {
     expect(pkg.name).toBe('my-app');
   });
 
-  it('does not touch files without the placeholder', async () => {
+  it('replaces {{name}} in README.md', async () => {
+    await copyTemplate(fixture, target);
+    await substituteName(target, 'my-app');
+    const readme = readFileSync(join(target, 'README.md'), 'utf8');
+    expect(readme).toContain('# my-app');
+    expect(readme).not.toContain('{{name}}');
+  });
+
+  it('replaces {{name_underscore}} with the hyphen-to-underscore form', async () => {
+    await copyTemplate(fixture, target);
+    await substituteName(target, 'my-cool-app');
+    const wrangler = readFileSync(join(target, 'wrangler.jsonc'), 'utf8');
+    expect(wrangler).toContain('"name": "my-cool-app"');
+    expect(wrangler).toContain('"main": "dist/my_cool_app/index.js"');
+  });
+
+  it('does not touch source files (only top-level manifests and README)', async () => {
     await copyTemplate(fixture, target);
     const before = readFileSync(join(target, 'src', 'index.ts'), 'utf8');
     await substituteName(target, 'my-app');
     const after = readFileSync(join(target, 'src', 'index.ts'), 'utf8');
-    // substituteName only touches package.json and wrangler.jsonc, not source files
     expect(after).toBe(before);
   });
 });

@@ -25,9 +25,10 @@ Outputs:
 
 ```bash
 pnpm build
-cd dist/{{name}}     # NOTE: if your project name has hyphens, the dir name has underscores (e.g. "my-app" -> "my_app")
-wrangler deploy
+pnpm deploy
 ```
+
+The framework writes the Worker bundle to `dist/{{name_underscore}}/` (hyphens in your project name become underscores in the bundle dir). The `deploy` script reads the bundle's generated `wrangler.json` from there.
 
 ## Learn more
 

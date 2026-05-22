@@ -106,7 +106,19 @@ export async function run({
 function runChild(spawnFn, cmd, args, cwd) {
   return new Promise((res) => {
     const child = spawnFn(cmd, args, { cwd, stdio: 'inherit' });
-    child.on('close', (code) => res(code ?? 0));
+    let settled = false;
+    const settle = (/** @type {number} */ code) => {
+      if (settled) return;
+      settled = true;
+      res(code);
+    };
+    child.on('close', (code) => settle(code ?? 0));
+    // 'error' fires when the binary isn't found on PATH (ENOENT) etc.
+    // Without this listener the Promise would hang and 'close' would never fire.
+    child.on('error', (err) => {
+      console.error(`error: failed to run '${cmd}': ${err.message}`);
+      settle(127);
+    });
   });
 }
 
