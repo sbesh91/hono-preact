@@ -229,3 +229,42 @@ describe('run() — git step', () => {
     expect(code).toBe(0);
   });
 });
+
+describe('run() — prompt for target dir', () => {
+  it('prompts when target dir is missing and uses the answer', async () => {
+    const calls: string[] = [];
+    const fakeSpawn = () => ({
+      on: (e: string, cb: (c: number) => void) => {
+        if (e === 'close') queueMicrotask(() => cb(0));
+      },
+    });
+    const fakePrompt = async (msg: string) => {
+      calls.push(msg);
+      return 'prompted-app';
+    };
+
+    const code = await run({
+      argv: ['--adapter=node', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      spawnFn: fakeSpawn,
+      prompt: fakePrompt,
+    });
+
+    expect(code).toBe(0);
+    expect(calls.length).toBe(1);
+    expect(calls[0].toLowerCase()).toContain('project');
+    expect(existsSync(join(workDir, 'prompted-app', 'package.json'))).toBe(true);
+  });
+
+  it('returns 1 when the user provides an empty answer', async () => {
+    const fakePrompt = async () => '';
+    const code = await run({
+      argv: ['--adapter=node', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      prompt: fakePrompt,
+    });
+    expect(code).toBe(1);
+  });
+});

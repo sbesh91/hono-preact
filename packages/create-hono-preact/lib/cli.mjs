@@ -1,5 +1,6 @@
 import { readdir, mkdir } from 'node:fs/promises';
 import { spawn as realSpawn } from 'node:child_process';
+import readline from 'node:readline/promises';
 import { resolve, join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.mjs';
@@ -15,10 +16,11 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   cwd: string,
  *   env: Record<string, string | undefined>,
  *   spawnFn?: typeof realSpawn,
+ *   prompt?: (message: string) => Promise<string>,
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
-export async function run({ argv, cwd, env, spawnFn = realSpawn }) {
+export async function run({ argv, cwd, env, spawnFn = realSpawn, prompt = defaultPrompt }) {
   const parsed = parseArgs(argv);
 
   if (parsed.kind === 'help') {
@@ -38,9 +40,12 @@ export async function run({ argv, cwd, env, spawnFn = realSpawn }) {
   let { targetDir, adapter, install, git } = parsed;
 
   if (!targetDir) {
-    console.error('error: target directory is required');
-    printHelp();
-    return 2;
+    const answer = (await prompt('Project directory name: ')).trim();
+    if (!answer) {
+      console.error('error: a project directory name is required');
+      return 1;
+    }
+    targetDir = answer;
   }
 
   const targetPath = resolve(cwd, targetDir);
@@ -93,6 +98,19 @@ function runChild(spawnFn, cmd, args, cwd) {
     const child = spawnFn(cmd, args, { cwd, stdio: 'inherit' });
     child.on('close', (code) => res(code ?? 0));
   });
+}
+
+/**
+ * @param {string} message
+ * @returns {Promise<string>}
+ */
+async function defaultPrompt(message) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(message);
+  } finally {
+    rl.close();
+  }
 }
 
 function printHelp() {
