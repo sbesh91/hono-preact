@@ -46,7 +46,7 @@ const SUBPACKAGES = [
 
 // Maps a published-source string to the consolidated dist path it should point at.
 const DIST_PATHS = {
-  '@hono-preact/iso/internal': 'iso/internal/index.js',
+  '@hono-preact/iso/internal': 'iso/internal.js',
   '@hono-preact/iso/page': 'iso/page-only.js',
   '@hono-preact/iso': 'iso/index.js',
   '@hono-preact/server': 'server/index.js',

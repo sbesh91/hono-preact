@@ -4,12 +4,19 @@ import { defineConfig } from 'vitest/config';
 // for the Cloudflare case). They are CPU-heavy and unreliable inside the
 // parallel unit-test pool: contention starves both these tests and their
 // neighbors. They run here instead, isolated and without file parallelism.
+//
+// The create-hono-preact scaffold-integration test packs the umbrella, scaffolds
+// a fresh app, installs, and builds for both adapters. It can take 60-180s per
+// adapter, so the per-test timeout is bumped accordingly.
 export default defineConfig({
   test: {
-    include: ['packages/vite/src/__tests__/websocket-dev.test.ts'],
+    include: [
+      'packages/vite/src/__tests__/websocket-dev.test.ts',
+      'packages/create-hono-preact/__tests__/scaffold-integration.test.ts',
+    ],
     environment: 'node',
     fileParallelism: false,
-    testTimeout: 30_000,
-    hookTimeout: 60_000,
+    testTimeout: 180_000,
+    hookTimeout: 180_000,
   },
 });

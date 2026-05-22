@@ -1,0 +1,4 @@
+{
+  "name": "{{name}}",
+  "main": "dist/{{name_underscore}}/index.js"
+}

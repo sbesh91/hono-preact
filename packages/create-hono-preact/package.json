@@ -1,0 +1,42 @@
+{
+  "name": "create-hono-preact",
+  "version": "0.1.0",
+  "description": "Scaffold a new hono-preact app.",
+  "keywords": [
+    "hono-preact",
+    "create",
+    "scaffold",
+    "cli"
+  ],
+  "homepage": "https://framework.sbesh.com",
+  "bugs": {
+    "url": "https://github.com/sbesh91/hono-preact/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sbesh91/hono-preact.git",
+    "directory": "packages/create-hono-preact"
+  },
+  "license": "MIT",
+  "author": "Steven Beshensky",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "bin": {
+    "create-hono-preact": "./bin/index.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "templates",
+    "README.md"
+  ],
+  "dependencies": {
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*"
+  }
+}
