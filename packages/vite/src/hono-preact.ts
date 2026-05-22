@@ -21,6 +21,7 @@ export interface HonoPreactOptions {
   layout?: string; // default 'src/Layout.tsx'
   routes?: string; // default 'src/routes.ts'
   api?: string; // default 'src/api.ts' (only loaded if file exists)
+  appConfig?: string; // default 'src/app-config.ts' (only loaded if file exists)
   clientEntry?: string; // default 'virtual:hono-preact/client'
 }
 
@@ -34,6 +35,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     layout = 'src/Layout.tsx',
     routes = 'src/routes.ts',
     api = 'src/api.ts',
+    appConfig = 'src/app-config.ts',
     clientEntry = VIRTUAL_CLIENT_ENTRY_ID,
   } = options ?? {};
 
@@ -97,6 +99,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       layout,
       routes,
       api,
+      appConfig,
       adapter,
       coreAppPath,
       entryWrapperPath,

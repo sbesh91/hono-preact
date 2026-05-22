@@ -7,8 +7,12 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.defineRoutes).toBe('function');
     expect(typeof m.defineLoader).toBe('function');
     expect(typeof m.defineAction).toBe('function');
-    expect(typeof m.defineServerGuard).toBe('function');
-    expect(typeof m.defineClientGuard).toBe('function');
+    expect(typeof m.defineServerMiddleware).toBe('function');
+    expect(typeof m.defineClientMiddleware).toBe('function');
+    expect(typeof m.defineStreamObserver).toBe('function');
+    expect(typeof m.defineApp).toBe('function');
+    expect(typeof m.redirect).toBe('function');
+    expect(typeof m.deny).toBe('function');
     expect(typeof m.useAction).toBe('function');
     expect(typeof m.useOptimisticAction).toBe('function');
     expect(typeof m.useReload).toBe('function');
@@ -19,9 +23,35 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.ClientScript).toBe('function');
   });
 
+  it('surfaces the outcome predicates at the root', async () => {
+    const m = await import('hono-preact');
+    expect(typeof m.isOutcome).toBe('function');
+    expect(typeof m.isRedirect).toBe('function');
+    expect(typeof m.isDeny).toBe('function');
+    expect(typeof m.isRender).toBe('function');
+  });
+
   it('does NOT surface server-only symbols at the root', async () => {
     const m = await import('hono-preact');
     expect((m as Record<string, unknown>).renderPage).toBeUndefined();
+  });
+
+  it('does NOT surface render() (page-scope only) at the root', async () => {
+    const m = await import('hono-preact');
+    expect((m as Record<string, unknown>).render).toBeUndefined();
+  });
+});
+
+describe('hono-preact/page export (page-scope kitchen sink)', () => {
+  it('surfaces every outcome constructor and predicate the docs reference', async () => {
+    const m = await import('hono-preact/page');
+    expect(typeof m.redirect).toBe('function');
+    expect(typeof m.deny).toBe('function');
+    expect(typeof m.render).toBe('function');
+    expect(typeof m.isOutcome).toBe('function');
+    expect(typeof m.isRedirect).toBe('function');
+    expect(typeof m.isDeny).toBe('function');
+    expect(typeof m.isRender).toBe('function');
   });
 });
 
@@ -32,6 +62,7 @@ describe('hono-preact/server export', () => {
     expect(typeof m.loadersHandler).toBe('function');
     expect(typeof m.actionsHandler).toBe('function');
     expect(typeof m.routeServerModules).toBe('function');
+    expect(typeof m.makePageUseResolvers).toBe('function');
   });
 });
 
@@ -48,9 +79,10 @@ describe('hono-preact/internal export', () => {
     expect(typeof m.Loader).toBe('function');
     expect(typeof m.Envelope).toBe('function');
     expect(typeof m.RouteBoundary).toBe('function');
-    expect(typeof m.Guards).toBe('function');
-    expect(typeof m.runServerGuards).toBe('function');
-    expect(typeof m.runClientGuards).toBe('function');
+    expect(typeof m.PageMiddlewareHost).toBe('function');
+    expect(typeof m.dispatchServer).toBe('function');
+    expect(typeof m.dispatchClient).toBe('function');
+    expect(typeof m.partitionUse).toBe('function');
     expect(typeof m.HonoRequestContext).toBe('function');
     expect(typeof m.installStreamRegistry).toBe('function');
     expect(typeof m.subscribeToLoaderStream).toBe('function');

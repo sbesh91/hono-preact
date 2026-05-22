@@ -1,6 +1,18 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { GuardRedirect } from '@hono-preact/iso';
-import { runRequestScope } from '@hono-preact/iso/internal';
+import {
+  isOutcome,
+  type AppConfig,
+  type Outcome,
+  type ServerMiddleware,
+  type ServerLoaderCtx,
+  type Middleware,
+  type StreamObserver,
+} from '@hono-preact/iso';
+import {
+  runRequestScope,
+  dispatchServer,
+  partitionUse,
+} from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
   sseReadableStreamResponse,
@@ -27,10 +39,15 @@ type LoaderFn = (props: {
   signal: AbortSignal;
 }) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
 
+type LoaderEntry = {
+  fn: LoaderFn;
+  use: ReadonlyArray<unknown>;
+};
+
 async function buildLoadersMap(
   glob: LazyGlob | EagerGlob
-): Promise<Record<string, LoaderFn>> {
-  const result: Record<string, LoaderFn> = {};
+): Promise<Record<string, LoaderEntry>> {
+  const result: Record<string, LoaderEntry> = {};
   for (const [, moduleOrLoader] of Object.entries(glob)) {
     const mod =
       typeof moduleOrLoader === 'function'
@@ -45,11 +62,13 @@ async function buildLoadersMap(
         // Two accepted shapes:
         //   1. a raw loader function `(ctx) => ...` (used by unit-test fixtures)
         //   2. a `LoaderRef` returned by `defineLoader(fn)`, whose `.fn`
-        //      property carries the original loader (used by user code)
+        //      property carries the original loader and `.use` carries any
+        //      attached middleware/observers.
         if (typeof val === 'function') {
-          result[`${moduleKey}::${name}`] = val as LoaderFn;
+          result[`${moduleKey}::${name}`] = { fn: val as LoaderFn, use: [] };
         } else if (val && typeof (val as { fn?: unknown }).fn === 'function') {
-          result[`${moduleKey}::${name}`] = (val as { fn: LoaderFn }).fn;
+          const ref = val as { fn: LoaderFn; use?: ReadonlyArray<unknown> };
+          result[`${moduleKey}::${name}`] = { fn: ref.fn, use: ref.use ?? [] };
         }
       }
     }
@@ -87,14 +106,68 @@ export interface LoadersHandlerOptions {
    * responds with a sanitized 500; the hook is purely a side channel.
    */
   onError?: (err: unknown, ctx: { module: string; loader: string }) => void;
+  /**
+   * Root layer of the middleware chain. The framework's generated server
+   * entry threads the user's `defineApp({ use })` result here. Each loader
+   * request composes the chain as
+   * `[...appConfig.use, ...resolvePageUse(path), ...loader.use]`.
+   */
+  appConfig?: AppConfig;
+  /**
+   * Per-page layer lookup keyed by the matched route's location path.
+   * Returns the `use` array declared on the matching page's `.server.*`
+   * module (as `export const pageUse = [...]`). The lookup may be sync
+   * (an in-memory map) or async (loaded lazily on first request). The
+   * handler awaits the result either way. Default returns an empty array.
+   */
+  resolvePageUse?: (
+    path: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+}
+
+function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
+  if (outcome.__outcome === 'redirect') {
+    // Headers from the outcome ride the HTTP response via `c.header()`. They
+    // are deliberately NOT embedded in the JSON envelope: the client only
+    // reads `to` and calls `window.location.assign(to)`; any embedded
+    // headers would be dead bytes the client never inspects.
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      {
+        __outcome: 'redirect',
+        to: outcome.to,
+        status: outcome.status,
+      },
+      200
+    );
+  }
+  if (outcome.__outcome === 'deny') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      { __outcome: 'deny', message: outcome.message },
+      outcome.status
+    );
+  }
+  // render outcome should never reach the loader RPC; this is defense in depth.
+  return c.json(
+    {
+      __outcome: 'error',
+      message: 'render outcome is page-scope only',
+    },
+    500
+  );
 }
 
 export function loadersHandler(
   glob: LazyGlob | EagerGlob,
   opts: LoadersHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError } = opts;
-  let cachedMapPromise: Promise<Record<string, LoaderFn>> | null = null;
+  const { dev = false, onError, appConfig, resolvePageUse } = opts;
+  let cachedMapPromise: Promise<Record<string, LoaderEntry>> | null = null;
 
   return async (c) => {
     const loadersMapPromise = dev
@@ -104,7 +177,7 @@ export function loadersHandler(
           return Promise.reject(err);
         }));
 
-    let loadersMap: Record<string, LoaderFn>;
+    let loadersMap: Record<string, LoaderEntry>;
     try {
       loadersMap = await loadersMapPromise;
     } catch (err) {
@@ -144,8 +217,8 @@ export function loadersHandler(
       );
     }
 
-    const loaderFn = loadersMap[`${module}::${loaderName}`];
-    if (!loaderFn) {
+    const entry = loadersMap[`${module}::${loaderName}`];
+    if (!entry) {
       return c.json(
         { error: `Loader '${module}::${loaderName}' not found` },
         404
@@ -154,27 +227,77 @@ export function loadersHandler(
 
     const signal = c.req.raw.signal;
 
+    // Chain ordering is outer -> inner: app-level middleware wraps every
+    // request, page-level wraps loaders owned by that page, and per-loader
+    // middleware wraps just this call. Outer middleware runs first on the
+    // way in and last on the way out, matching every middleware system
+    // users have seen (Hono, Express, Koa).
+    const rootUse = appConfig?.use ?? [];
+    const pageUse = (await resolvePageUse?.(validatedLocation.path)) ?? [];
+    const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
+      [...rootUse, ...pageUse, ...entry.use] as ReadonlyArray<
+        Middleware | StreamObserver<unknown, never>
+      >;
+    const { middleware: allMiddleware, observers } = partitionUse(fullUse);
+    const serverMw = allMiddleware.filter(
+      (m): m is ServerMiddleware<'loader'> => m.runs === 'server'
+    );
+    const ctx: ServerLoaderCtx = {
+      scope: 'loader',
+      c,
+      signal,
+      location: validatedLocation as never,
+      module,
+      loader: loaderName,
+    };
+
     try {
       const result = await runRequestScope(
-        () =>
-          Promise.resolve(loaderFn({ c, location: validatedLocation, signal })),
+        async () => {
+          const dispatch = await dispatchServer<unknown, 'loader'>({
+            middleware: serverMw,
+            ctx,
+            inner: async () => {
+              const inner = await entry.fn({
+                c,
+                location: validatedLocation,
+                signal,
+              });
+              // A loader that does `return redirect('/login')` instead of
+              // `throw redirect('/login')` would otherwise ship the outcome
+              // JSON shape as a normal 200 response and bypass envelope
+              // translation. Normalize by re-throwing so the existing
+              // outcome-catching path translates it.
+              if (isOutcome(inner)) throw inner;
+              return inner;
+            },
+          });
+          if (dispatch.kind === 'outcome') {
+            // Throw to unify with non-outcome error translation below.
+            throw dispatch.outcome;
+          }
+          return dispatch.value;
+        },
         { honoContext: c }
       );
 
       if (isAsyncGenerator(result)) {
-        return sseGeneratorResponse(c, result, { emitResult: false });
+        return sseGeneratorResponse(c, result, {
+          emitResult: false,
+          observers,
+          observerCtx: ctx,
+        });
       }
       if (result instanceof ReadableStream) {
-        return sseReadableStreamResponse(c, result as ReadableStream<unknown>);
+        return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
+          observers,
+          observerCtx: ctx,
+        });
       }
       return c.json(result);
     } catch (err) {
-      // GuardRedirect thrown from a loader (or a guard that runs inside it)
-      // is a control-flow signal, not an error. The client RPC stub
-      // recognizes the `__redirect` envelope and navigates the browser
-      // rather than surfacing this as a thrown error in user code.
-      if (err instanceof GuardRedirect) {
-        return c.json({ __redirect: err.location });
+      if (isOutcome(err)) {
+        return translateOutcomeForLoader(c, err);
       }
       onError?.(err, { module, loader: loaderName });
       // In production we never leak the loader's error message: it may

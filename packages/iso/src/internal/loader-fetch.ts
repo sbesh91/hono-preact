@@ -35,25 +35,60 @@ export async function fetchLoaderData<T>(
   });
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    // Try to parse a deny outcome envelope first; it carries `message`
+    // rather than `error`. Fall back to the legacy `{ error }` shape.
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      __outcome?: string;
+      message?: string;
+    };
+    if (body.__outcome === 'deny') {
+      // The `deny()` constructor defaults `message` for first-party
+      // callers, but a hand-rolled envelope from custom server middleware
+      // might still arrive without one. Surface a deny-aware fallback
+      // instead of the generic "Loader failed" so the user sees a hint
+      // that the status came from an explicit deny.
+      const msg =
+        typeof body.message === 'string'
+          ? body.message
+          : `Request denied (${res.status})`;
+      throw new Error(msg);
+    }
     throw new Error(body.error ?? `Loader failed with status ${res.status}`);
   }
 
   const contentType = res.headers.get('Content-Type') ?? '';
   if (!contentType.includes('text/event-stream')) {
     const json = (await res.json()) as unknown;
-    // Server-side `GuardRedirect` thrown from a loader (or a guard that runs
-    // inside it) comes back as a `{ __redirect }` envelope. Hand off to the
-    // browser via `location.assign` and return a promise that never settles:
-    // the current document is being replaced, no caller will see a value.
+    // Collision risk note (deferred from middleware review C6): a loader
+    // that legitimately returns data shaped `{ __outcome: 'redirect', to:
+    // <string> }` would be misinterpreted here and navigate the browser.
+    // The probability is low (the magic key is namespaced and unusual) and
+    // a wire-version sentinel like `__envelope: 'hono-preact/redirect'` or
+    // a `X-Hono-Preact-Outcome: redirect` response header would close the
+    // gap. Deferred for v0.2: body-key sniffing is the documented contract
+    // for v0.1.
+    // Server-side middleware that throws `redirect(...)` comes back as a
+    // redirect outcome envelope. Hand off to the browser via
+    // `location.assign` and return a promise that never settles: the
+    // current document is being replaced, no caller will see a value.
+    //
+    // Trust boundary: `to` is taken straight from the JSON body and passed
+    // to `window.location.assign`. The framework's own handlers emit safe
+    // (typically same-origin) values, but a compromised or misconfigured
+    // server (or a proxy injecting JSON) could push the client anywhere.
+    // We don't validate origin here for v0.1; treat your own server as
+    // part of the trusted boundary. A same-origin check is a deferred
+    // enhancement (see C4 in the middleware review).
     if (
       json !== null &&
       typeof json === 'object' &&
-      '__redirect' in json &&
-      typeof (json as { __redirect: unknown }).__redirect === 'string'
+      (json as { __outcome?: unknown }).__outcome === 'redirect' &&
+      typeof (json as { to?: unknown }).to === 'string'
     ) {
+      const to = (json as { to: string }).to;
       if (typeof window !== 'undefined') {
-        window.location.assign((json as { __redirect: string }).__redirect);
+        window.location.assign(to);
       }
       return new Promise<T>(() => {
         /* never resolves; page is navigating */

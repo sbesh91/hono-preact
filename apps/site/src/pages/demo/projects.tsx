@@ -79,4 +79,4 @@ const ProjectsView = projectsLoader.View(() => <ProjectsPage />, {
   fallback: <p class="p-6">Loading projects…</p>,
 });
 
-export default definePage(ProjectsView, { guards: requireSession });
+export default definePage(ProjectsView, { use: requireSession });

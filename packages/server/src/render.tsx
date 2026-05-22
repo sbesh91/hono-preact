@@ -2,12 +2,22 @@ import type { Context } from 'hono';
 import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender, locationStub } from 'preact-iso/prerender';
-import { GuardRedirect, env } from '@hono-preact/iso';
+import {
+  env,
+  isOutcome,
+  type AppConfig,
+  type Middleware,
+  type Outcome,
+  type ServerMiddleware,
+  type ServerPageCtx,
+} from '@hono-preact/iso';
 import {
   HonoRequestContext,
   runRequestScope,
   captureRequestScope,
   takeServerStreamingLoaders,
+  dispatchServer,
+  partitionUse,
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 
@@ -35,10 +45,33 @@ function toAttrs(obj: Record<string, string | undefined>): string {
     .join(' ');
 }
 
+// Outcome translation for the root chain dispatched around prerender. The
+// root layer (appConfig.use) only legitimately produces `redirect` or
+// `deny`; a `render` outcome is page-scope and must not flow through here.
+// Defense-in-depth: surface programmer error as a 500 rather than crash.
+function translateRootOutcome(c: Context, outcome: Outcome): Response {
+  if (outcome.__outcome === 'redirect') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.redirect(outcome.to, outcome.status);
+  }
+  if (outcome.__outcome === 'deny') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.text(outcome.message ?? 'Forbidden', outcome.status);
+  }
+  return c.text(
+    'render outcome is page-scope only and cannot be issued by root middleware',
+    500
+  );
+}
+
 export async function renderPage(
   c: Context,
   node: VNode,
-  options?: { defaultTitle?: string }
+  options?: { defaultTitle?: string; appConfig?: AppConfig }
 ): Promise<Response> {
   const dispatcher = createDispatcher();
   const previousEnv = env.current;
@@ -55,37 +88,92 @@ export async function renderPage(
   let bindRequestScope: <R>(fn: () => R | Promise<R>) => R | Promise<R> = (
     fn
   ) => fn();
+
+  // Sentinel returned by the root chain when middleware short-circuits with
+  // a redirect or deny outcome. We translate to a Response outside the scope
+  // (after env.current restoration) so the abort-before-render path stays
+  // symmetric with the regular outcome path.
+  type RootOutcome = { kind: 'outcome'; outcome: Outcome };
+  type RootValue = {
+    kind: 'value';
+    html: string;
+    streamingLoaders: ServerLoaderStream[];
+  };
+  let rootResult: RootOutcome | RootValue;
   try {
-    const result = await runRequestScope(
-      async () => {
-        // preact-iso's `LocationProvider` reads `globalThis.location` once,
-        // synchronously, when it mounts. Set it on the same microtask as the
-        // `prerender` call so no other request can interleave and trample
-        // the global between us writing it and the provider reading it.
-        // Children resume from reducer state, never re-reading the global,
-        // so the rest of this render is safe even if another request resets
-        // `globalThis.location` while we await suspended children.
+    rootResult = await runRequestScope(
+      async (): Promise<RootOutcome | RootValue> => {
         const reqUrl = new URL(c.req.url);
-        locationStub(reqUrl.pathname + reqUrl.search);
-        bindRequestScope = captureRequestScope();
-        const rendered = await prerender(
-          <HonoRequestContext.Provider value={{ context: c }}>
-            <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
-          </HonoRequestContext.Provider>
+        const location = {
+          path: reqUrl.pathname,
+          searchParams: Object.fromEntries(reqUrl.searchParams),
+          // Path params are route-match output; the root layer runs before
+          // route matching, so they're empty here. Page-layer middleware
+          // (added in a follow-up) will have them populated.
+          pathParams: {},
+        };
+
+        const rootUse = options?.appConfig?.use ?? [];
+        const serverMw = partitionUse(
+          rootUse as ReadonlyArray<Middleware>
+        ).middleware.filter(
+          (m): m is ServerMiddleware<'page'> => m.runs === 'server'
         );
-        const loaders = takeServerStreamingLoaders();
-        return { html: rendered.html, streamingLoaders: loaders };
+
+        const ctx: ServerPageCtx = {
+          scope: 'page',
+          c,
+          signal: c.req.raw.signal,
+          location,
+        };
+
+        const dispatch = await dispatchServer<RootValue, 'page'>({
+          middleware: serverMw,
+          ctx,
+          inner: async (): Promise<RootValue> => {
+            // preact-iso's `LocationProvider` reads `globalThis.location`
+            // once, synchronously, when it mounts. Set it on the same
+            // microtask as the `prerender` call so no other request can
+            // interleave and trample the global between us writing it and
+            // the provider reading it. Children resume from reducer state,
+            // never re-reading the global, so the rest of this render is
+            // safe even if another request resets `globalThis.location`
+            // while we await suspended children.
+            locationStub(reqUrl.pathname + reqUrl.search);
+            bindRequestScope = captureRequestScope();
+            const rendered = await prerender(
+              <HonoRequestContext.Provider value={{ context: c }}>
+                <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+              </HonoRequestContext.Provider>
+            );
+            const loaders = takeServerStreamingLoaders();
+            return {
+              kind: 'value',
+              html: rendered.html,
+              streamingLoaders: loaders,
+            };
+          },
+        });
+
+        if (dispatch.kind === 'outcome') {
+          return { kind: 'outcome', outcome: dispatch.outcome };
+        }
+        return dispatch.value;
       },
       { honoContext: c }
     );
-    html = result.html;
-    streamingLoaders = result.streamingLoaders;
   } catch (e: unknown) {
-    if (e instanceof GuardRedirect) return c.redirect(e.location);
+    if (isOutcome(e)) return translateRootOutcome(c, e);
     throw e;
   } finally {
     env.current = previousEnv;
   }
+
+  if (rootResult.kind === 'outcome') {
+    return translateRootOutcome(c, rootResult.outcome);
+  }
+  html = rootResult.html;
+  streamingLoaders = rootResult.streamingLoaders;
 
   const { title, lang, metas = [], links = [] } = dispatcher.toStatic();
 

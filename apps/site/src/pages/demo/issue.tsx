@@ -3,6 +3,7 @@ import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
+import { serverLoaders as projectIssuesLoaders } from './project-issues.server.js';
 import { requireSession } from '../../demo/guard.js';
 import CommentList from '../../components/demo/CommentList.js';
 import type { ActivityItem, Comment, Issue, User } from '../../demo/data.js';
@@ -18,11 +19,13 @@ type IssueData = WithAuthor<Issue>;
 type CommentData = WithAuthor<Comment>;
 
 // ---- Section: issue header + body + status toggle ----
-// Lives inside issueLoader's View context. Owns the status-toggle action;
-// invalidate: [activityLoader] clears the activity cache but does not force
-// it to re-fetch (it isn't the active loader from here). issueLoader IS the
-// active loader so its auto-reload runs, and the header re-renders with
-// the new status.
+// Lives inside issueLoader's View context. Owns the status-toggle action.
+// Sibling loaders in the invalidate list (activityLoader, project-issues
+// list loader) have their caches cleared but don't refetch from here; their
+// pages refetch on next mount, so the back-nav to the project issues list
+// sees the new status on the IssueRow badge. issueLoader IS the active
+// loader so its auto-reload runs and the header re-renders with the new
+// status.
 
 const IssueHeaderAndActions: FunctionComponent<{
   issue: IssueData;
@@ -43,7 +46,7 @@ const IssueHeaderAndActions: FunctionComponent<{
   } = useOptimisticAction(serverActions.setStatus, {
     base: issue.status,
     apply: (_current, payload) => payload.status,
-    invalidate: [activityLoader],
+    invalidate: [activityLoader, projectIssuesLoaders.default],
     onSuccess: () => {
       setError(null);
       reloadIssue();
@@ -232,4 +235,4 @@ const IssueView = issueLoader.View(
   { fallback: <p>Loading issue…</p> }
 );
 
-export default definePage(IssueView, { guards: requireSession });
+export default definePage(IssueView, { use: requireSession });

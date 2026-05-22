@@ -3,7 +3,13 @@ import { Hono } from 'hono';
 import { useTitle, useLang, useMeta, useLink } from 'hoofd/preact';
 import type { JSX } from 'preact';
 import { LocationProvider, useLocation } from 'preact-iso';
-import { GuardRedirect, env } from '@hono-preact/iso';
+import {
+  defineApp,
+  defineServerMiddleware,
+  env,
+  redirect,
+} from '@hono-preact/iso';
+import { render as renderOutcome } from '@hono-preact/iso/page';
 import { renderPage } from '../render.js';
 
 function TitledPage() {
@@ -30,7 +36,7 @@ function UntitledPage() {
 }
 
 function RedirectingPage(): never {
-  throw new GuardRedirect('/login');
+  throw redirect('/login');
 }
 
 function XssTitle() {
@@ -123,10 +129,40 @@ describe('renderPage', () => {
     expect(html).not.toContain('<title>');
   });
 
-  it('returns a redirect when GuardRedirect is thrown during render', async () => {
+  it('returns an HTTP redirect when a page throws a redirect outcome during render', async () => {
     const res = await makeApp(RedirectingPage).request('http://localhost/');
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/login');
+  });
+
+  // B7 defensive 500: render() outcomes are page-scope only. If an
+  // app-level middleware leaks one through to translateRootOutcome, the
+  // third branch in render.tsx should return 500 rather than crash.
+  it('returns 500 when an app-level middleware throws a render outcome', async () => {
+    const Alt = () => (
+      <html>
+        <head></head>
+        <body>
+          <div>alt</div>
+        </body>
+      </html>
+    );
+    const appConfig = defineApp({
+      use: [
+        defineServerMiddleware<'page'>(async () => {
+          // Intentional misuse: render outcomes belong at page scope.
+          throw renderOutcome(Alt);
+        }),
+      ],
+    });
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <UntitledPage />, { appConfig }));
+
+    const res = await app.request('http://localhost/');
+    expect(res.status).toBe(500);
+    const body = await res.text();
+    expect(body).toContain('render outcome');
   });
 
   it('escapes special characters in <title> content', async () => {

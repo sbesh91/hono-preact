@@ -32,13 +32,16 @@ describe('fetchLoaderData: separate module + loader args', () => {
   });
 });
 
-describe('fetchLoaderData: __redirect envelope', () => {
-  it('calls window.location.assign and returns a never-settling promise when the response carries __redirect', async () => {
+describe('fetchLoaderData: redirect outcome envelope', () => {
+  it('calls window.location.assign and returns a never-settling promise when the response carries a redirect outcome', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ __redirect: '/login' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     const assignSpy = vi.fn();
     // happy-dom's window.location is read-only; replace just assign.
@@ -63,7 +66,7 @@ describe('fetchLoaderData: __redirect envelope', () => {
     expect(assignSpy).toHaveBeenCalledWith('/login');
   });
 
-  it('returns the JSON value when the response is a plain object (not a __redirect)', async () => {
+  it('returns the JSON value when the response is a plain object (not a redirect outcome)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ movies: [1, 2, 3] }), {
         status: 200,
@@ -78,5 +81,68 @@ describe('fetchLoaderData: __redirect envelope', () => {
       noopCbs
     );
     expect(result).toEqual({ movies: [1, 2, 3] });
+  });
+});
+
+describe('fetchLoaderData: deny outcome envelope', () => {
+  it('throws an Error with the deny message when the envelope carries one', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ __outcome: 'deny', message: 'Forbidden' }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow('Forbidden');
+  });
+
+  it('falls back to a deny-aware label when the envelope lacks a message', async () => {
+    // Defense in depth: deny() now defaults the message at construction time,
+    // but a hand-rolled envelope (custom server middleware) could still ship
+    // without one. The client should still surface the deny intent rather
+    // than the generic "Loader failed with status N".
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'deny' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow(/Request denied \(403\)/);
+  });
+
+  it('falls back to the legacy { error } shape for non-deny error responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'boom' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow('boom');
   });
 });

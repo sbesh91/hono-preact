@@ -1,9 +1,9 @@
 import { useCallback, useContext, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
+import type { ActionUse } from './internal/use-types.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -27,11 +27,35 @@ export type ActionFn<TPayload, TResult, TChunk = never> =
       payload: TPayload
     ) => AsyncGenerator<TChunk, TResult, unknown>);
 
+export type DefineActionOpts<TChunk = never, TResult = unknown> = {
+  /**
+   * Per-action middleware and (for streaming actions) stream observers.
+   * Attached to the function as a non-enumerable-feeling property; the
+   * actions-handler reads it via the dispatcher (Task 18).
+   */
+  use?: ActionUse<TChunk, TResult, boolean>;
+};
+
 export function defineAction<TPayload, TResult, TChunk = never>(
-  fn: ActionFn<TPayload, TResult, TChunk>
+  fn: ActionFn<TPayload, TResult, TChunk>,
+  opts?: DefineActionOpts<TChunk, TResult>
 ): ActionStub<TPayload, TResult, TChunk> {
-  // Runtime no-op: returns fn as-is. actionsHandler casts it back to a function.
-  // The ActionStub type is enforced only by TypeScript and the Vite plugin.
+  // Runtime no-op for the call itself: returns fn as-is. The ActionStub type
+  // is enforced only by TypeScript and the Vite plugin. The dispatcher reads
+  // `use` off the function-as-stub when running the chain.
+  //
+  // Use `Object.defineProperty` instead of direct assignment so a frozen
+  // module export (strict ESM, HMR-frozen modules) doesn't throw. The
+  // actions-handler reads via `(fn as { use?: ReadonlyArray<unknown> }).use`,
+  // which works whether the property was set by assignment or defineProperty.
+  if (opts?.use) {
+    Object.defineProperty(fn, 'use', {
+      value: opts.use,
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    });
+  }
   return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 
@@ -166,16 +190,48 @@ export function useAction<
         }
 
         if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          throw new Error(
-            body.error ?? `Action failed with status ${response.status}`
-          );
+          const body = (await response.json().catch(() => ({}))) as {
+            error?: string;
+            __outcome?: string;
+            message?: string;
+          };
+          // Deny outcomes carry `message` instead of the legacy `error`
+          // field; prefer the descriptive message when present. The deny()
+          // constructor defaults the message for first-party callers, but a
+          // hand-rolled envelope from custom server middleware might still
+          // ship without one; fall back to a deny-aware label so the user
+          // sees a hint that the status came from an explicit deny rather
+          // than a generic transport failure.
+          let msg: string;
+          if (body.__outcome === 'deny') {
+            msg =
+              typeof body.message === 'string'
+                ? body.message
+                : `Request denied (${response.status})`;
+          } else {
+            msg = body.error ?? `Action failed with status ${response.status}`;
+          }
+          throw new Error(msg);
         }
 
         const contentType = response.headers.get('Content-Type') ?? '';
-        // Server-side `GuardRedirect` thrown from an action (or its guards) comes
-        // back as `{ __redirect }`. Hand off to the browser; the rest of this
-        // promise will never settle, but the page is navigating away anyway.
+        // Server-side middleware that throws `redirect(...)` comes back as
+        // a redirect outcome envelope. Hand off to the browser; the rest of
+        // this promise will never settle, but the page is navigating away
+        // anyway.
+        //
+        // Trust boundary: `to` is taken straight from the JSON body and
+        // passed to `window.location.assign`. The framework's own handlers
+        // emit safe (typically same-origin) values, but a compromised or
+        // misconfigured server (or a proxy injecting JSON) could push the
+        // client anywhere. We don't validate origin here for v0.1; treat
+        // your own server as part of the trusted boundary. A same-origin
+        // check is a deferred enhancement (see C4 in the middleware review).
+        //
+        // We use `response.clone().json()` to peek at the body without
+        // consuming it: if the response is NOT a redirect outcome the
+        // downstream `await response.json()` still needs to read it. Clone
+        // is cheap on a small JSON payload.
         if (!contentType.includes('text/event-stream')) {
           const peek = (await response
             .clone()
@@ -184,14 +240,12 @@ export function useAction<
           if (
             peek !== null &&
             typeof peek === 'object' &&
-            peek !== undefined &&
-            '__redirect' in peek &&
-            typeof (peek as { __redirect: unknown }).__redirect === 'string'
+            (peek as { __outcome?: unknown }).__outcome === 'redirect' &&
+            typeof (peek as { to?: unknown }).to === 'string'
           ) {
+            const to = (peek as { to: string }).to;
             if (typeof window !== 'undefined') {
-              window.location.assign(
-                (peek as { __redirect: string }).__redirect
-              );
+              window.location.assign(to);
             }
             // Cast through `as` because TS can't see this promise never settles.
             return await new Promise<MutateResult<TResult>>(() => {});
@@ -290,27 +344,3 @@ export function useAction<
 
   return { mutate, pending, error, data };
 }
-
-export type ActionGuardContext = {
-  c: Context;
-  module: string;
-  action: string;
-  payload: unknown;
-};
-
-export type ActionGuardFn = (
-  ctx: ActionGuardContext,
-  next: () => Promise<void>
-) => Promise<void>;
-
-export class ActionGuardError extends Error {
-  constructor(
-    message: string,
-    public readonly status: ContentfulStatusCode = 403
-  ) {
-    super(message);
-    this.name = 'ActionGuardError';
-  }
-}
-
-export const defineActionGuard = (fn: ActionGuardFn): ActionGuardFn => fn;

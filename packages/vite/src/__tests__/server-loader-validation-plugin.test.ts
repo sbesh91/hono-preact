@@ -128,27 +128,144 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('found: serverGuards');
   });
 
-  it('passes a *.server.* file with actionGuards as a named export', () => {
+  it('passes a *.server.* file with pageUse as a named export', () => {
     const code = [
-      'export const actionGuards = [];',
+      'export const pageUse = [];',
       'export const serverActions = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toBeNull();
   });
 
-  it('error message lists all allowed named exports (no longer includes loader or serverGuards)', () => {
+  it('error message lists all allowed named exports', () => {
     const code = [
       'export const unauthorized = () => {};',
       'export const serverLoaders = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain("'serverActions'");
-    expect(error).toContain("'actionGuards'");
     expect(error).toContain("'serverLoaders'");
-    expect(error).not.toContain("'serverGuards'");
+    expect(error).toContain("'pageUse'");
+    expect(error).toContain("'loaderUse'");
+    expect(error).toContain("'actionUse'");
+    expect(error).not.toContain("'actionGuards'");
     expect(error).not.toContain("'loader'");
     expect(error).not.toContain("'cache'");
+  });
+
+  // F8: pin the iteration order of the allowed-names list against the
+  // shared contract. A future reorder of RECOGNIZED_SERVER_EXPORTS that
+  // breaks the readable grouping ("value-bearing first, then use-array
+  // exports") would slip past the unordered toContain assertions.
+  it('error message lists the allowed exports in the contract order', () => {
+    const code = [
+      'export const unauthorized = () => {};',
+      'export const serverLoaders = {};',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toMatch(
+      /'serverActions'.*'serverLoaders'.*'pageUse'.*'loaderUse'.*'actionUse'/
+    );
+  });
+
+  // F3 / F11: a `pageUse` (or loaderUse/actionUse) declared as an
+  // obviously-non-array literal silently disables the gate at runtime.
+  // Reject the literal denylist here; let identifiers/member-expressions
+  // through and rely on the runtime guard in makePageUseResolvers.
+  describe('use-export shape validation', () => {
+    it('accepts pageUse = identifier (e.g. re-exporting a shared array)', () => {
+      // This is the legitimate share-pattern: definePage({ use: requireSession })
+      // on the page-tsx and `export const pageUse = requireSession` on the
+      // .server.ts so both surfaces gate identically. Build-time can't prove
+      // `requireSession` is an array (it's imported from another module), so
+      // we accept and let the runtime guard catch any non-array value at
+      // first request.
+      const code = [
+        "import { requireSession } from '../auth.js';",
+        'export const pageUse = requireSession;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts loaderUse = identifier', () => {
+      const code = [
+        "import { audit } from '../audit.js';",
+        'export const loaderUse = audit;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts actionUse = identifier', () => {
+      const code = [
+        "import { audit } from '../audit.js';",
+        'export const actionUse = audit;',
+        'export const serverActions = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts pageUse = [mw, mw2] (array literal)', () => {
+      const code = [
+        "import { defineServerMiddleware } from '@hono-preact/iso';",
+        'const requireAuth = defineServerMiddleware(async (_c, next) => next());',
+        'const audit = defineServerMiddleware(async (_c, next) => next());',
+        'export const pageUse = [requireAuth, audit];',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts pageUse = [] (empty array literal)', () => {
+      const code = [
+        'export const pageUse = [];',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts pageUse = auth.requireSession (member expression)', () => {
+      const code = [
+        "import * as auth from '../auth.js';",
+        'export const pageUse = auth.requireSession;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('rejects pageUse = someObjectLiteral (object expression is not an array)', () => {
+      const code = [
+        'export const pageUse = { x: 1 };',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`pageUse` must be an array literal');
+    });
+
+    it('rejects pageUse = 42 (numeric literal)', () => {
+      const code = [
+        'export const pageUse = 42;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`pageUse` must be an array literal');
+    });
+
+    it('rejects pageUse = "foo" (string literal)', () => {
+      const code = [
+        'export const pageUse = "foo";',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`pageUse` must be an array literal');
+    });
   });
 
   describe('serverLoaders named export', () => {

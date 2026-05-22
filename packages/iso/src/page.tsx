@@ -6,8 +6,8 @@ import type {
 } from 'preact';
 import { useId } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
-import type { GuardFn } from './guard.js';
-import { Guards } from './internal/guards.js';
+import type { PageUse } from './internal/use-types.js';
+import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import { RouteBoundary } from './internal/route-boundary.js';
 
 export type WrapperProps = {
@@ -22,7 +22,7 @@ const DefaultWrapper: FunctionComponent<WrapperProps> = (props) => (
 
 export type PageProps = {
   location: RouteHook;
-  guards?: GuardFn[];
+  use?: PageUse;
   errorFallback?:
     | JSX.Element
     | ((error: Error, reset: () => void) => JSX.Element);
@@ -32,7 +32,7 @@ export type PageProps = {
 
 export function Page({
   location,
-  guards,
+  use,
   errorFallback,
   Wrapper,
   children,
@@ -41,11 +41,11 @@ export function Page({
   const W = Wrapper ?? DefaultWrapper;
   return (
     <RouteBoundary errorFallback={errorFallback}>
-      <Guards guards={guards} location={location}>
+      <PageMiddlewareHost use={use} location={location}>
         <W id={id} data-loader="null">
           {children}
         </W>
-      </Guards>
+      </PageMiddlewareHost>
     </RouteBoundary>
   );
 }

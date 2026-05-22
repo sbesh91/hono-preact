@@ -99,7 +99,7 @@ Calling `reset()` clears the boundary so the next render attempt re-enters the l
 
 ## Page-level fallbacks
 
-`definePage` accepts a page-level `errorFallback` that catches errors from the rest of the page tree (e.g. a guard rejection or a render-time throw outside any loader boundary):
+`definePage` accepts a page-level `errorFallback` that catches errors from the rest of the page tree (e.g. a render-time throw outside any loader boundary):
 
 ```tsx
 export default definePage(MoviesView, {

@@ -34,6 +34,10 @@
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./dist/internal.js"
+    },
+    "./page": {
+      "types": "./dist/page-only.d.ts",
+      "import": "./dist/page-only.js"
     }
   },
   "scripts": {

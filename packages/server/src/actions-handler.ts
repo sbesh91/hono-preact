@@ -1,11 +1,18 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import {
-  ActionGuardError,
-  GuardRedirect,
-  type ActionGuardFn,
-  type ActionGuardContext,
+  isOutcome,
+  type AppConfig,
+  type Outcome,
+  type ServerMiddleware,
+  type ServerActionCtx,
+  type Middleware,
+  type StreamObserver,
 } from '@hono-preact/iso';
-import { runRequestScope } from '@hono-preact/iso/internal';
+import {
+  runRequestScope,
+  dispatchServer,
+  partitionUse,
+} from '@hono-preact/iso/internal';
 import {
   sseGeneratorResponse,
   sseReadableStreamResponse,
@@ -15,7 +22,6 @@ import {
 type GlobModule = {
   __moduleKey?: unknown;
   serverActions?: Record<string, unknown>;
-  actionGuards?: ActionGuardFn[];
   [key: string]: unknown;
 };
 type LazyGlob = Record<string, () => Promise<unknown>>;
@@ -23,7 +29,6 @@ type EagerGlob = Record<string, GlobModule>;
 
 type ModuleEntry = {
   actions: Record<string, unknown>;
-  guards: ActionGuardFn[];
 };
 
 async function buildActionsMap(
@@ -39,41 +44,47 @@ async function buildActionsMap(
     if (typeof key === 'string' && mod.serverActions) {
       result[key] = {
         actions: mod.serverActions as Record<string, unknown>,
-        guards: (mod.actionGuards as ActionGuardFn[] | undefined) ?? [],
       };
     }
   }
   return result;
 }
 
-async function runActionGuards(
-  guards: ActionGuardFn[],
-  ctx: ActionGuardContext
-): Promise<void> {
-  const run = async (index: number): Promise<void> => {
-    if (index >= guards.length) return;
-    // Track whether the guard explicitly opted to pass control on. Without
-    // this check a guard that forgets `return next()` (or just `next()`)
-    // would silently fall through to the action body — the OPPOSITE of every
-    // other middleware system users have seen (Express, Hono, Koa: blocked
-    // by default; opt in to pass). Make ambiguous returns loud instead of
-    // silently insecure. To block, throw ActionGuardError. To pass, await
-    // (or return) next().
-    let nextCalled = false;
-    await guards[index](ctx, () => {
-      nextCalled = true;
-      return run(index + 1);
-    });
-    if (!nextCalled) {
-      throw new Error(
-        `ActionGuard for '${ctx.module}.${ctx.action}' returned without ` +
-          `calling next() or throwing. Guards must either: (a) await/return ` +
-          `next() to pass control on, or (b) throw ActionGuardError to block. ` +
-          `Returning silently is ambiguous and would let the action run.`
-      );
+function translateOutcomeForAction(c: Context, outcome: Outcome): Response {
+  if (outcome.__outcome === 'redirect') {
+    // Headers from the outcome ride the HTTP response via `c.header()`. They
+    // are deliberately NOT embedded in the JSON envelope: the client only
+    // reads `to` and calls `window.location.assign(to)`; any embedded
+    // headers would be dead bytes the client never inspects.
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
     }
-  };
-  await run(0);
+    return c.json(
+      {
+        __outcome: 'redirect',
+        to: outcome.to,
+        status: outcome.status,
+      },
+      200
+    );
+  }
+  if (outcome.__outcome === 'deny') {
+    if (outcome.headers) {
+      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
+    }
+    return c.json(
+      { __outcome: 'deny', message: outcome.message },
+      outcome.status
+    );
+  }
+  // render outcome should never reach the action RPC.
+  return c.json(
+    {
+      __outcome: 'error',
+      message: 'render outcome is page-scope only',
+    },
+    500
+  );
 }
 
 export interface ActionsHandlerOptions {
@@ -87,19 +98,36 @@ export interface ActionsHandlerOptions {
    */
   dev?: boolean;
   /**
-   * Called for every error an action throws (other than `ActionGuardError`,
-   * which is treated as a structured response). Use it to hook into your
-   * observability stack (Sentry, console, etc.). The handler still
-   * responds with a sanitized 500; the hook is purely a side channel.
+   * Called for every error an action throws (other than an outcome thrown
+   * by middleware, which is translated to its wire shape). Use it to hook
+   * into your observability stack (Sentry, console, etc.). The handler
+   * still responds with a sanitized 500; the hook is purely a side channel.
    */
   onError?: (err: unknown, ctx: { module: string; action: string }) => void;
+  /**
+   * Root layer of the middleware chain. The framework's generated server
+   * entry threads the user's `defineApp({ use })` result here. Each action
+   * request composes the chain as
+   * `[...appConfig.use, ...resolvePageUse(module), ...action.use]`.
+   */
+  appConfig?: AppConfig;
+  /**
+   * Per-page layer lookup keyed by the action's owning module key (since an
+   * action always belongs unambiguously to one page module). Returns the
+   * `use` array declared on the matching page's `.server.*` module (as
+   * `export const pageUse = [...]`). May be sync or async; the handler
+   * awaits the result either way. Default returns an empty array.
+   */
+  resolvePageUse?: (
+    moduleKey: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
 }
 
 export function actionsHandler(
   glob: LazyGlob | EagerGlob,
   opts: ActionsHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError } = opts;
+  const { dev = false, onError, appConfig, resolvePageUse } = opts;
   let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
@@ -183,18 +211,6 @@ export function actionsHandler(
       return c.json({ error: `Module '${module}' not found` }, 404);
     }
 
-    try {
-      await runActionGuards(entry.guards, { c, module, action, payload });
-    } catch (err) {
-      if (err instanceof ActionGuardError) {
-        return c.json({ error: err.message }, err.status);
-      }
-      if (err instanceof GuardRedirect) {
-        return c.json({ __redirect: err.location });
-      }
-      throw err;
-    }
-
     const fn = entry.actions[action];
     if (typeof fn !== 'function') {
       return c.json(
@@ -206,20 +222,60 @@ export function actionsHandler(
     const signal = c.req.raw.signal;
     const actionCtx = { c, signal };
 
+    // Chain ordering is outer -> inner: app-level middleware wraps every
+    // request, page-level wraps actions owned by that page, and per-action
+    // middleware (attached via defineAction(fn, { use })) wraps just this
+    // call. Outer middleware runs first on the way in and last on the way
+    // out, matching every middleware system users have seen (Hono, Express,
+    // Koa). The action's owning page is unambiguous from `module`, so the
+    // page-layer lookup keys by module rather than by location path.
+    const rootUse = appConfig?.use ?? [];
+    const pageUse = (await resolvePageUse?.(module)) ?? [];
+    const actionUse = (fn as { use?: ReadonlyArray<unknown> }).use ?? [];
+    const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
+      [...rootUse, ...pageUse, ...actionUse] as ReadonlyArray<
+        Middleware | StreamObserver<unknown, never>
+      >;
+    const { middleware: allMiddleware, observers } = partitionUse(fullUse);
+    const serverMw = allMiddleware.filter(
+      (m): m is ServerMiddleware<'action'> => m.runs === 'server'
+    );
+    const ctx: ServerActionCtx = {
+      scope: 'action',
+      c,
+      signal,
+      module,
+      action,
+      payload,
+    };
+
     let result: unknown;
     try {
-      result = await runRequestScope(() =>
-        (fn as (ctx: unknown, payload: unknown) => Promise<unknown>)(
-          actionCtx,
-          payload
-        )
-      );
+      result = await runRequestScope(async () => {
+        const dispatch = await dispatchServer<unknown, 'action'>({
+          middleware: serverMw,
+          ctx,
+          inner: async () => {
+            const inner = await (
+              fn as (ctx: unknown, payload: unknown) => Promise<unknown>
+            )(actionCtx, payload);
+            // An action that does `return redirect('/login')` instead of
+            // `throw redirect('/login')` would otherwise ship the outcome
+            // JSON shape as a normal 200 response and bypass envelope
+            // translation. Normalize by re-throwing so the existing
+            // outcome-catching path translates it.
+            if (isOutcome(inner)) throw inner;
+            return inner;
+          },
+        });
+        if (dispatch.kind === 'outcome') {
+          throw dispatch.outcome;
+        }
+        return dispatch.value;
+      });
     } catch (err) {
-      if (err instanceof ActionGuardError) {
-        return c.json({ error: err.message }, err.status);
-      }
-      if (err instanceof GuardRedirect) {
-        return c.json({ __redirect: err.location });
+      if (isOutcome(err)) {
+        return translateOutcomeForAction(c, err);
       }
       onError?.(err, { module, action });
       const message =
@@ -228,10 +284,17 @@ export function actionsHandler(
     }
 
     if (isAsyncGenerator(result)) {
-      return sseGeneratorResponse(c, result, { emitResult: true });
+      return sseGeneratorResponse(c, result, {
+        emitResult: true,
+        observers,
+        observerCtx: ctx,
+      });
     }
     if (result instanceof ReadableStream) {
-      return sseReadableStreamResponse(c, result as ReadableStream<unknown>);
+      return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
+        observers,
+        observerCtx: ctx,
+      });
     }
     return c.json(result);
   };

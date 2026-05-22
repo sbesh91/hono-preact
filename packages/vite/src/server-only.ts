@@ -7,6 +7,12 @@ import type { Plugin } from 'vite';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
+import { RECOGNIZED_SERVER_EXPORTS } from './server-exports-contract.js';
+
+// The unknown-specifier rejection message lists every recognized server
+// export so a user can immediately see the valid set. The list is derived
+// from the shared contract so it cannot drift from the validation plugin.
+const ALLOWED_SPECIFIERS_LIST = RECOGNIZED_SERVER_EXPORTS.join(', ');
 
 // Symbol-keyed accessor used by unit tests to verify `configResolved` fires
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
@@ -236,8 +242,14 @@ export function serverOnlyPlugin(): Plugin {
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'actionGuards'
+            (specifier.imported.name === 'pageUse' ||
+              specifier.imported.name === 'loaderUse' ||
+              specifier.imported.name === 'actionUse')
           ) {
+            // Middleware-carrying named exports never run on the client; the
+            // client only needs the array to exist so user imports don't
+            // crash. The real `use` arrays live on the server side and are
+            // wired into the dispatcher via pageUse resolvers.
             stubs.push(`const ${specifier.local.name} = [];`);
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -245,6 +257,13 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverActions'
           ) {
             needsUseActionImport = true;
+            // F9: each `serverActions.<name>` read constructs a fresh
+            // stub object, so `serverActions.create !== serverActions.create`
+            // across two reads. Not new in the middleware refactor, but
+            // worth flagging: callers that store the stub in a variable
+            // and treat it as a stable identity (e.g. `Map` keys) will
+            // surprise themselves. The contract is "stubs are descriptor
+            // records, not singletons."
             stubs.push(
               `const ${specifier.local.name} = new Proxy({}, {\n` +
                 `  get(_, action) {\n` +
@@ -264,7 +283,7 @@ export function serverOnlyPlugin(): Plugin {
                   : '<unknown>';
             throw new Error(
               `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
-                `Allowed: serverLoaders, serverActions, actionGuards.`
+                `Allowed: ${ALLOWED_SPECIFIERS_LIST}.`
             );
           }
         }

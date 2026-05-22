@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono, type Context } from 'hono';
 import { actionsHandler } from '../actions-handler.js';
-import { ActionGuardError } from '@hono-preact/iso';
+import { defineServerMiddleware, deny, redirect } from '@hono-preact/iso';
 
 function makeApp(glob: Parameters<typeof actionsHandler>[0]) {
   const app = new Hono();
@@ -159,14 +159,13 @@ describe('actionsHandler', () => {
     });
   });
 
-  it('maps GuardRedirect thrown from an action to a __redirect envelope', async () => {
-    const { GuardRedirect } = await import('@hono-preact/iso');
+  it('maps redirect() thrown from an action to a redirect outcome envelope', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
         serverActions: {
           create: async () => {
-            throw new GuardRedirect('/login');
+            throw redirect('/login');
           },
         },
       },
@@ -177,20 +176,20 @@ describe('actionsHandler', () => {
       payload: {},
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ __redirect: '/login' });
+    const body = (await res.json()) as { __outcome: string; to: string };
+    expect(body.__outcome).toBe('redirect');
+    expect(body.to).toBe('/login');
   });
 
-  it('maps GuardRedirect thrown from an action guard to a __redirect envelope', async () => {
-    const { GuardRedirect } = await import('@hono-preact/iso');
+  it('maps redirect() from per-action middleware to a redirect outcome envelope', async () => {
+    const gate = defineServerMiddleware<'action'>(async () => {
+      throw redirect('/login');
+    });
+    const create = Object.assign(vi.fn(), { use: [gate] });
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
-        serverActions: { create: vi.fn() },
-        actionGuards: [
-          async () => {
-            throw new GuardRedirect('/login');
-          },
-        ],
+        serverActions: { create },
       },
     });
     const res = await post(app, {
@@ -199,7 +198,10 @@ describe('actionsHandler', () => {
       payload: {},
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ __redirect: '/login' });
+    expect(create).not.toHaveBeenCalled();
+    const body = (await res.json()) as { __outcome: string; to: string };
+    expect(body.__outcome).toBe('redirect');
+    expect(body.to).toBe('/login');
   });
 
   it('resolves lazy glob modules before handling requests', async () => {
@@ -478,19 +480,24 @@ describe('actionsHandler — multipart/form-data', () => {
   });
 });
 
-describe('actionsHandler — action guards', () => {
-  it('runs guards before the action and allows through when next() is called', async () => {
-    const guardFn = vi
-      .fn()
-      .mockImplementation(async (_ctx: unknown, next: () => Promise<void>) =>
-        next()
-      );
-    const createFn = vi.fn().mockResolvedValue({ id: 1 });
+describe('actionsHandler — middleware gating', () => {
+  it('runs per-action server middleware before the action body', async () => {
+    const calls: string[] = [];
+    const log = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      calls.push('mw:before');
+      await next();
+      calls.push('mw:after');
+    });
+    const createFn = vi.fn().mockImplementation(async () => {
+      calls.push('action');
+      return { id: 1 };
+    });
+    const createWithUse = Object.assign(createFn, { use: [log] });
+
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
-        serverActions: { create: createFn },
-        actionGuards: [guardFn],
+        serverActions: { create: createWithUse },
       },
     });
 
@@ -500,20 +507,20 @@ describe('actionsHandler — action guards', () => {
       payload: {},
     });
     expect(res.status).toBe(200);
-    expect(guardFn).toHaveBeenCalledOnce();
-    expect(createFn).toHaveBeenCalledOnce();
+    expect(calls).toEqual(['mw:before', 'action', 'mw:after']);
   });
 
-  it('returns 403 when a guard throws ActionGuardError', async () => {
+  it('translates deny() from middleware into the action deny envelope', async () => {
+    const blocker = defineServerMiddleware<'action'>(async () => {
+      throw deny(403, 'Not allowed');
+    });
+    const createFn = vi.fn();
+    const createWithUse = Object.assign(createFn, { use: [blocker] });
+
     const app = makeApp({
       './pages/movies.server.ts': {
         __moduleKey: 'movies',
-        serverActions: { create: vi.fn() },
-        actionGuards: [
-          async () => {
-            throw new ActionGuardError('Not allowed');
-          },
-        ],
+        serverActions: { create: createWithUse },
       },
     });
 
@@ -523,37 +530,19 @@ describe('actionsHandler — action guards', () => {
       payload: {},
     });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toBe('Not allowed');
+    expect(createFn).not.toHaveBeenCalled();
+    const body = (await res.json()) as { __outcome: string; message: string };
+    expect(body.__outcome).toBe('deny');
+    expect(body.message).toBe('Not allowed');
   });
 
-  it('uses the status from ActionGuardError', async () => {
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: vi.fn() },
-        actionGuards: [
-          async () => {
-            throw new ActionGuardError('Unauthorized', 401);
-          },
-        ],
-      },
-    });
-
-    const res = await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: {},
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it('maps ActionGuardError thrown from the action body to its custom status', async () => {
+  it('translates deny() thrown from the action body to the deny envelope', async () => {
     const app = makeApp({
       './pages/issues.server.ts': {
         __moduleKey: 'issues',
         serverActions: {
           close: async () => {
-            throw new ActionGuardError('Only the author can close', 403);
+            throw deny(403, 'Only the author can close');
           },
         },
       },
@@ -565,143 +554,9 @@ describe('actionsHandler — action guards', () => {
       payload: { id: 'i-1' },
     });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toBe(
-      'Only the author can close'
-    );
-  });
-
-  it('stops the chain when a guard does not call next()', async () => {
-    const secondGuard = vi.fn();
-    const createFn = vi.fn();
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: createFn },
-        actionGuards: [
-          async () => {
-            throw new ActionGuardError('Blocked');
-          },
-          secondGuard,
-        ],
-      },
-    });
-
-    const res = await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: {},
-    });
-    expect(res.status).toBe(403);
-    expect(secondGuard).not.toHaveBeenCalled();
-    expect(createFn).not.toHaveBeenCalled();
-  });
-
-  it('passes module, action, and payload to the guard context', async () => {
-    const guardFn = vi
-      .fn()
-      .mockImplementation(async (_ctx: unknown, next: () => Promise<void>) =>
-        next()
-      );
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: vi.fn().mockResolvedValue({}) },
-        actionGuards: [guardFn],
-      },
-    });
-
-    await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: { title: 'Dune' },
-    });
-    const [ctx] = guardFn.mock.calls[0];
-    expect(ctx.module).toBe('movies');
-    expect(ctx.action).toBe('create');
-    expect(ctx.payload).toEqual({ title: 'Dune' });
-  });
-
-  it('works for modules without actionGuards', async () => {
-    const createFn = vi.fn().mockResolvedValue({ id: 1 });
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: createFn },
-      },
-    });
-
-    const res = await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: {},
-    });
-    expect(res.status).toBe(200);
-    expect(createFn).toHaveBeenCalledOnce();
-  });
-
-  it('rejects with a 500 and a descriptive error when a guard returns without calling next() or throwing', async () => {
-    // Previously this combination silently passed control to the action body
-    // — the opposite of every other middleware system. Now it's a structured
-    // error so the bug is loud instead of insecure.
-    const createFn = vi.fn().mockResolvedValue({ id: 1 });
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: createFn },
-        actionGuards: [
-          async () => {
-            /* intentionally does not call next() */
-          },
-        ],
-      },
-    });
-    const res = await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: {},
-    });
-    expect(res.status).toBe(500);
-    expect(createFn).not.toHaveBeenCalled();
-  });
-
-  it('passes through when a guard explicitly awaits next()', async () => {
-    const createFn = vi.fn().mockResolvedValue({ id: 1 });
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: createFn },
-        actionGuards: [
-          async (_ctx, next) => {
-            await next();
-          },
-        ],
-      },
-    });
-    const res = await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: {},
-    });
-    expect(res.status).toBe(200);
-    expect(createFn).toHaveBeenCalledOnce();
-  });
-
-  it('passes through when a guard returns next() directly', async () => {
-    const createFn = vi.fn().mockResolvedValue({ id: 1 });
-    const app = makeApp({
-      './pages/movies.server.ts': {
-        __moduleKey: 'movies',
-        serverActions: { create: createFn },
-        actionGuards: [async (_ctx, next) => next()],
-      },
-    });
-    const res = await post(app, {
-      module: 'movies',
-      action: 'create',
-      payload: {},
-    });
-    expect(res.status).toBe(200);
-    expect(createFn).toHaveBeenCalledOnce();
+    const body = (await res.json()) as { __outcome: string; message: string };
+    expect(body.__outcome).toBe('deny');
+    expect(body.message).toBe('Only the author can close');
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { defineServerGuard } from '@hono-preact/iso';
-import { Guards } from '@hono-preact/iso/internal';
+import { Page, defineServerMiddleware, redirect, deny } from '@hono-preact/iso';
+import { PageMiddlewareHost } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
 import { renderPage } from '../render.js';
 
@@ -13,19 +13,19 @@ const loc = {
 } as unknown as RouteHook;
 
 describe('renderPage installs HonoRequestContext.Provider', () => {
-  it('a server guard inside the rendered tree receives the request c', async () => {
+  it('a server middleware inside the rendered tree receives the request c', async () => {
     let observedHeader: string | undefined = undefined;
-    const probe = defineServerGuard(async (ctx, next) => {
+    const probe = defineServerMiddleware<'page'>(async (ctx, next) => {
       observedHeader = ctx.c.req.header('x-test');
-      return next();
+      await next();
     });
 
     const Page = () => (
       <html>
         <body>
-          <Guards guards={[probe]} location={loc}>
+          <PageMiddlewareHost use={[probe]} location={loc}>
             <div>ok</div>
-          </Guards>
+          </PageMiddlewareHost>
         </body>
       </html>
     );
@@ -40,17 +40,17 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
     expect(observedHeader).toBe('hello');
   });
 
-  it('a server guard can short-circuit by returning a redirect, surfaced by renderPage', async () => {
-    const redirectGuard = defineServerGuard(async () => ({
-      redirect: '/login',
-    }));
+  it('a server middleware can short-circuit by throwing a redirect outcome', async () => {
+    const gate = defineServerMiddleware<'page'>(async () => {
+      throw redirect('/login');
+    });
 
     const Page = () => (
       <html>
         <body>
-          <Guards guards={[redirectGuard]} location={loc}>
+          <PageMiddlewareHost use={[gate]} location={loc}>
             <div>protected</div>
-          </Guards>
+          </PageMiddlewareHost>
         </body>
       </html>
     );
@@ -61,5 +61,43 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
     const res = await app.request('http://localhost/admin');
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/login');
+  });
+
+  // B6: deny() thrown by a page-scope server middleware during SSR must
+  // produce an HTTP error response (not an HTML fallback). The path goes:
+  // dispatchServer returns { kind: 'outcome', outcome: deny(...) }, the
+  // HostConsumer rethrows the outcome, RouteBoundary's ErrorBoundary must
+  // detect isOutcome and rethrow (rather than coercing to new Error and
+  // rendering errorFallback), and renderPage's outer catch translates to
+  // a status-coded text response.
+  //
+  // Wrap in <Page> here (not just <PageMiddlewareHost>) so RouteBoundary
+  // is in the tree; that's the exact path that B1 fixes. Without the B1
+  // fix the deny outcome would be coerced to `new Error('[object Object]')`
+  // by getDerivedStateFromError, the boundary would render its null
+  // errorFallback, and the response would arrive as 200 with empty body
+  // instead of 403 with the deny message.
+  it('a server middleware can short-circuit by throwing a deny outcome', async () => {
+    const gate = defineServerMiddleware<'page'>(async () => {
+      throw deny(403, 'Forbidden');
+    });
+
+    const Layout = () => (
+      <html>
+        <body>
+          <Page location={loc} use={[gate]}>
+            <div>secret</div>
+          </Page>
+        </body>
+      </html>
+    );
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+
+    const res = await app.request('http://localhost/admin');
+    expect(res.status).toBe(403);
+    const body = await res.text();
+    expect(body).toBe('Forbidden');
   });
 });

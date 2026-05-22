@@ -37,7 +37,8 @@ Full walkthrough: https://framework.sbesh.com/docs/quick-start
 
 ## Subpaths
 
-- `hono-preact`: iso runtime exports (routes, pages, loaders, actions, forms, guards).
+- `hono-preact`: iso runtime exports (routes, pages, loaders, actions, forms, middleware, outcomes).
+- `hono-preact/page`: page-scope outcome kitchen sink (`redirect`, `deny`, `render`, predicates).
 - `hono-preact/server`: server entry, `renderPage`, SSR streaming helpers.
 - `hono-preact/vite`: `honoPreact()` plugin for Vite.
 - `hono-preact/internal`: advanced exports for tooling authors. No stability guarantee.

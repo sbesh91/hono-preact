@@ -101,27 +101,30 @@ describe('serverOnlyPlugin', () => {
     expect(result).toBeUndefined();
   });
 
-  it('replaces actionGuards named import with an empty array stub', () => {
-    const code = `import { actionGuards } from './movies.server.js';`;
+  it('replaces pageUse named import with an empty array stub', () => {
+    const code = `import { pageUse } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const actionGuards = [];');
+    expect(result?.code).toContain('const pageUse = [];');
   });
 
-  it('handles actionGuards alongside serverActions in the same statement', () => {
-    const code = `import { actionGuards, serverActions } from './movies.server.js';`;
+  it('handles pageUse alongside serverActions in the same statement', () => {
+    const code = `import { pageUse, serverActions } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const actionGuards = [];');
+    expect(result?.code).toContain('const pageUse = [];');
     expect(result?.code).toContain('const serverActions = new Proxy(');
   });
 
-  it('stubs renamed actionGuards imports using the local alias name', () => {
-    // The plugin detects via imported.name ('actionGuards') and stubs using the local alias
-    const code = `import { actionGuards as guards } from './movies.server.js';`;
+  it('stubs loaderUse and actionUse imports too', () => {
+    const code = `import { loaderUse, actionUse } from './movies.server.js';`;
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    // The plugin detects the import via imported.name ('actionGuards') and stubs it
-    // using the local alias name -- so 'guards' becomes the stub variable.
-    // This means renamed imports ARE transformed; the stub uses the alias.
-    expect(result?.code).toContain('const guards = [];');
+    expect(result?.code).toContain('const loaderUse = [];');
+    expect(result?.code).toContain('const actionUse = [];');
+  });
+
+  it('stubs renamed pageUse imports using the local alias name', () => {
+    const code = `import { pageUse as gating } from './movies.server.js';`;
+    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
+    expect(result?.code).toContain('const gating = [];');
   });
 
   it('derives module key for serverLoaders stub from the import source, not the consumer file', () => {
@@ -157,6 +160,25 @@ describe('unknown specifiers from .server.* imports', () => {
     expect(() => transform(code, '/Users/me/repo/src/iso.tsx')).toThrow(
       /unknownExport.*not a recognized.*server/i
     );
+  });
+
+  // F1: the "Allowed: ..." list in the error message is derived from the
+  // shared contract constant. A regression that splits the list back into
+  // a hard-coded string and drifts from the validation plugin would
+  // surface here.
+  it('error message names every recognized export', () => {
+    const code = `import { unknownExport } from './movies.server.js';`;
+    try {
+      transform(code, '/Users/me/repo/src/iso.tsx');
+      throw new Error('expected the plugin to throw');
+    } catch (err) {
+      const msg = (err as Error).message;
+      expect(msg).toContain('serverActions');
+      expect(msg).toContain('serverLoaders');
+      expect(msg).toContain('pageUse');
+      expect(msg).toContain('loaderUse');
+      expect(msg).toContain('actionUse');
+    }
   });
 });
 

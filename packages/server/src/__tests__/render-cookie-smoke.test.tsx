@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { setSignedCookie, getSignedCookie } from 'hono/cookie';
-import { defineServerGuard } from '@hono-preact/iso';
-import { Guards } from '@hono-preact/iso/internal';
+import { defineServerMiddleware, redirect } from '@hono-preact/iso';
+import { PageMiddlewareHost } from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
 import { renderPage } from '../render.js';
 
@@ -16,22 +16,24 @@ const loc = {
 const SECRET = 'test-secret-do-not-use-in-prod';
 
 describe('end-to-end cookie auth pattern', () => {
-  it('a server guard reads a signed cookie via getSignedCookie(ctx.c, …)', async () => {
+  it('a server middleware reads a signed cookie via getSignedCookie(ctx.c, …)', async () => {
     let userObserved: string | null = null;
 
-    const requireSignedSession = defineServerGuard(async (ctx, next) => {
-      const user = await getSignedCookie(ctx.c, SECRET, 'session');
-      if (!user) return { redirect: '/login' };
-      userObserved = user;
-      return next();
-    });
+    const requireSignedSession = defineServerMiddleware<'page'>(
+      async (ctx, next) => {
+        const user = await getSignedCookie(ctx.c, SECRET, 'session');
+        if (!user) throw redirect('/login');
+        userObserved = user;
+        await next();
+      }
+    );
 
     const ProtectedPage = () => (
       <html>
         <body>
-          <Guards guards={[requireSignedSession]} location={loc}>
+          <PageMiddlewareHost use={[requireSignedSession]} location={loc}>
             <div>secret</div>
-          </Guards>
+          </PageMiddlewareHost>
         </body>
       </html>
     );

@@ -1,9 +1,28 @@
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import type { StreamObserver, ServerStreamCtx } from '@hono-preact/iso';
+import {
+  fanStart,
+  fanChunk,
+  fanEnd,
+  fanError,
+  fanAbort,
+} from '@hono-preact/iso/internal';
 
 export type SseGeneratorOptions = {
   /** When true, the generator's return value is emitted as `event: result`. */
   emitResult?: boolean;
+  /**
+   * Stream observers harvested from the loader/action's `use` array (the
+   * non-middleware partition). The SSE pump fires `onStart` before the
+   * first chunk, `onChunk` per yielded value, `onEnd` on clean completion,
+   * `onError` on throw, and `onAbort` when the response stream is aborted
+   * (typically because the client disconnected). Hooks are isolated: a
+   * throwing observer never corrupts the stream.
+   */
+  observers?: ReadonlyArray<StreamObserver<unknown, never>>;
+  /** Server-stream ctx threaded to each observer hook. */
+  observerCtx?: ServerStreamCtx;
 };
 
 function encodeErrorPayload(err: unknown): string {
@@ -21,14 +40,25 @@ function encodeErrorPayload(err: unknown): string {
  * If the generator throws, an `event: error\ndata: {"message","name"}` frame
  * is written and the stream closes cleanly (Hono's default error handler is
  * never invoked because we catch inside the callback).
+ *
+ * When `observers` is provided, the pump fires the corresponding lifecycle
+ * hooks (`onStart` / `onChunk` / `onEnd` / `onError` / `onAbort`) so
+ * users can attach instrumentation via `defineStreamObserver(...)`.
  */
 export function sseGeneratorResponse(
   c: Context,
   gen: AsyncGenerator<unknown, unknown, unknown>,
   options: SseGeneratorOptions = {}
 ): Response {
-  const { emitResult = false } = options;
+  const { emitResult = false, observers, observerCtx } = options;
+  const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
+    let chunks = 0;
+    let started = false;
+    if (obs.length > 0 && observerCtx) {
+      fanStart(obs, observerCtx);
+      started = true;
+    }
     try {
       while (!stream.aborted) {
         const step = await gen.next();
@@ -39,18 +69,32 @@ export function sseGeneratorResponse(
               data: JSON.stringify(step.value),
             });
           }
+          if (started && observerCtx) {
+            fanEnd(obs, observerCtx, { chunks, result: step.value });
+          }
           return;
         }
         await stream.writeSSE({ data: JSON.stringify(step.value) });
+        if (started && observerCtx) {
+          fanChunk(obs, observerCtx, step.value, chunks);
+        }
+        chunks += 1;
       }
-      // Aborted; release the generator cleanly.
+      // Loop exited because the response stream was aborted (typically a
+      // client disconnect). Release the generator and notify observers.
       await gen.return(undefined).catch(() => {
         /* swallow */
       });
+      if (started && observerCtx) {
+        fanAbort(obs, observerCtx, { chunks });
+      }
     } catch (err) {
       await gen.return(undefined).catch(() => {
         /* swallow */
       });
+      if (started && observerCtx) {
+        fanError(obs, observerCtx, err, { chunks });
+      }
       await stream.writeSSE({
         event: 'error',
         data: encodeErrorPayload(err),
@@ -62,20 +106,51 @@ export function sseGeneratorResponse(
 /**
  * Wrap a ReadableStream<T> (with T a JSON-encodable value) as an SSE response.
  * Each enqueued chunk is JSON-encoded and written as a `data:` event.
+ *
+ * Observer fanout mirrors `sseGeneratorResponse`: `onStart` fires before the
+ * first read, `onChunk` per chunk, `onEnd` on normal completion, `onError` on
+ * throw, `onAbort` when the response stream is aborted.
  */
 export function sseReadableStreamResponse(
   c: Context,
-  source: ReadableStream<unknown>
+  source: ReadableStream<unknown>,
+  options: {
+    observers?: ReadonlyArray<StreamObserver<unknown, never>>;
+    observerCtx?: ServerStreamCtx;
+  } = {}
 ): Response {
+  const { observers, observerCtx } = options;
+  const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
     const reader = source.getReader();
+    let chunks = 0;
+    let started = false;
+    if (obs.length > 0 && observerCtx) {
+      fanStart(obs, observerCtx);
+      started = true;
+    }
     try {
       while (!stream.aborted) {
         const { done, value } = await reader.read();
-        if (done) return;
+        if (done) {
+          if (started && observerCtx) {
+            fanEnd(obs, observerCtx, { chunks, result: undefined });
+          }
+          return;
+        }
         await stream.writeSSE({ data: JSON.stringify(value) });
+        if (started && observerCtx) {
+          fanChunk(obs, observerCtx, value, chunks);
+        }
+        chunks += 1;
+      }
+      if (started && observerCtx) {
+        fanAbort(obs, observerCtx, { chunks });
       }
     } catch (err) {
+      if (started && observerCtx) {
+        fanError(obs, observerCtx, err, { chunks });
+      }
       await stream.writeSSE({
         event: 'error',
         data: encodeErrorPayload(err),

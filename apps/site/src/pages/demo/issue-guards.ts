@@ -1,4 +1,4 @@
-import { ActionGuardError } from 'hono-preact';
+import { deny } from 'hono-preact';
 import { getIssue } from '../../demo/data.js';
 
 export async function assertCanClose(
@@ -6,11 +6,8 @@ export async function assertCanClose(
   callerId: string | null | undefined
 ): Promise<void> {
   const issue = getIssue(issueId);
-  if (!issue) throw new ActionGuardError('Issue not found', 404);
+  if (!issue) throw deny(404, 'Issue not found');
   if (!callerId || callerId !== issue.authorId) {
-    throw new ActionGuardError(
-      'Only the issue author can close this issue',
-      403
-    );
+    throw deny(403, 'Only the issue author can close this issue');
   }
 }

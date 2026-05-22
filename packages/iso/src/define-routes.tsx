@@ -26,7 +26,7 @@ export type LayoutProps = { children: ComponentChildren };
 export type ViewProps = RouteHook;
 
 type LazyImport<T> = () => Promise<{ default: T }>;
-type LazyServerImport = () => Promise<unknown>;
+export type LazyServerImport = () => Promise<unknown>;
 
 export type RouteDef = {
   path: string;
@@ -47,10 +47,34 @@ export type FlatRoute = {
   key: string;
 };
 
+export type ServerRoute = {
+  /** Absolute route path the server module belongs to. */
+  path: string;
+  /** Lazy `.server.*` module loader. */
+  server: LazyServerImport;
+  /**
+   * Lazy server-module loaders for every server-bearing ancestor in the
+   * route tree, outermost first, NOT including this route's own server.
+   * Used by the server-side pageUse resolver to compose page-layer
+   * middleware along the actual tree of layouts rather than relying on
+   * URL-prefix matching (which conflates siblings that share a path
+   * prefix, e.g. `/demo/projects` and `/demo/projects/:projectId/...`).
+   */
+  ancestors: ReadonlyArray<LazyServerImport>;
+};
+
 export type RoutesManifest = {
   tree: ReadonlyArray<RouteDef>;
   flat: ReadonlyArray<FlatRoute>;
   serverImports: ReadonlyArray<LazyServerImport>;
+  /**
+   * Path-keyed view of every server module in the tree. Lets server-side
+   * consumers (e.g. the page-layer `use` resolver) load a per-page module
+   * by the route path that matched, without re-walking the tree. The order
+   * mirrors `serverImports`; the two arrays exist side-by-side because most
+   * existing call sites only need the lazy thunks.
+   */
+  serverRoutes: ReadonlyArray<ServerRoute>;
 };
 
 // preact-iso's `Route<P>` and `Router` carry strict generics that reject our
@@ -146,6 +170,47 @@ function collectServerImports(
     }
   };
   walk(routes);
+  return out;
+}
+
+function collectServerRoutes(
+  routes: ReadonlyArray<RouteDef>,
+  parentPath = ''
+): ServerRoute[] {
+  const out: ServerRoute[] = [];
+  // `serverStack` tracks the lazy server-thunks for every server-bearing
+  // route on the path from the tree root down to (but not including) the
+  // node being emitted. Pushing on the way in / popping on the way out
+  // means each emitted ServerRoute captures its TRUE tree-walk ancestry,
+  // not whichever other patterns happen to share a URL prefix.
+  const walk = (
+    rs: ReadonlyArray<RouteDef>,
+    pp: string,
+    serverStack: LazyServerImport[]
+  ) => {
+    for (const r of rs) {
+      const here =
+        pp === '' ? r.path : pp + (r.path === '' ? '' : '/' + r.path);
+      if (r.server) {
+        // Capture the stack BEFORE pushing self -- ancestors exclude self.
+        out.push({
+          path: here,
+          server: r.server,
+          ancestors: serverStack.slice(),
+        });
+      }
+      if (r.children) {
+        if (r.server) {
+          serverStack.push(r.server);
+          walk(r.children, here, serverStack);
+          serverStack.pop();
+        } else {
+          walk(r.children, here, serverStack);
+        }
+      }
+    }
+  };
+  walk(routes, parentPath, []);
   return out;
 }
 
@@ -382,6 +447,7 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
     tree,
     flat: flattenTree(tree, viewCache, keyCache),
     serverImports: collectServerImports(tree),
+    serverRoutes: collectServerRoutes(tree),
   };
 }
 

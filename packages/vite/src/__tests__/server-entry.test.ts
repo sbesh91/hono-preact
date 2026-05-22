@@ -31,6 +31,7 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
     });
     expect(src).toContain('loadersHandler');
     expect(src).toContain('actionsHandler');
@@ -43,9 +44,41 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: '/p/src/api.ts',
+      appConfigAbsPath: undefined,
     });
     expect(src).toContain("import userApp from '/p/src/api.ts'");
     expect(src).toContain(".route('/', userApp)");
+  });
+
+  it('falls back to an empty appConfig when no app-config file exists', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+    });
+    // No import; an inline empty config so the middleware chain still works.
+    expect(src).not.toContain('app-config');
+    expect(src).toContain('const appConfig = { use: [] };');
+    // The handler options still thread it through, plus the page-use resolvers.
+    expect(src).toContain('makePageUseResolvers(routes.serverRoutes, { dev })');
+    expect(src).toContain('resolvePageUse: pageUseResolvers.byPath');
+    expect(src).toContain('resolvePageUse: pageUseResolvers.byModuleKey');
+    // renderPage receives appConfig as a third argument.
+    expect(src).toContain(
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
+    );
+  });
+
+  it('imports the user appConfig when appConfigAbsPath is provided', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: '/p/src/app-config.ts',
+    });
+    expect(src).toContain(`import appConfig from '/p/src/app-config.ts';`);
+    expect(src).not.toContain('const appConfig = { use: [] };');
   });
 
   it('emits the framework imports, mounts loaders/actions/catchall, omits api when not provided', () => {
@@ -53,13 +86,14 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
     });
 
     // Framework imports
     expect(src).toContain(`import { Hono } from 'hono';`);
     expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
     expect(src).toContain(
-      `import {\n  actionsHandler,\n  loadersHandler,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
+      `import {\n  actionsHandler,\n  loadersHandler,\n  makePageUseResolvers,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
     );
 
     // User imports (absolute paths)
@@ -81,10 +115,17 @@ describe('generateCoreAppModule', () => {
 
     // Handler options thread dev mode through so the cache-vs-rebuild
     // branch doesn't rely on a Vite-only build-time constant inside the
-    // library handlers themselves.
-    expect(src).toContain(`const handlerOpts = { dev: import.meta.env.DEV };`);
-    expect(src).toContain(`loadersHandler(serverModules, handlerOpts)`);
-    expect(src).toContain(`actionsHandler(serverModules, handlerOpts)`);
+    // library handlers themselves. They also carry appConfig + per-handler
+    // resolvePageUse closures so the framework's middleware chain composes
+    // correctly.
+    expect(src).toContain(`const dev = import.meta.env.DEV;`);
+    expect(src).toContain(`makePageUseResolvers(routes.serverRoutes, { dev })`);
+    expect(src).toContain(
+      `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath })`
+    );
+    expect(src).toContain(
+      `actionsHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byModuleKey })`
+    );
 
     // Hono pipeline in correct order
     const loadersIdx = src.indexOf(`'/__loaders'`);
@@ -94,7 +135,7 @@ describe('generateCoreAppModule', () => {
     expect(actionsIdx).toBeGreaterThan(loadersIdx);
     expect(catchallIdx).toBeGreaterThan(actionsIdx);
     expect(src).toContain(
-      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))))`
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
     );
     // defaultTitle is no longer threaded through renderPage by the framework.
     expect(src).not.toContain('defaultTitle');
@@ -113,6 +154,7 @@ describe('generateCoreAppModule', () => {
       layoutAbsPath: '/proj/src/Layout.tsx',
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: '/proj/src/api.ts',
+      appConfigAbsPath: undefined,
     });
 
     expect(src).toContain(`import userApp from '/proj/src/api.ts';`);
@@ -358,6 +400,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts', // configured but does not exist on disk
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -411,6 +454,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -453,6 +497,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -502,6 +547,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -521,6 +567,162 @@ describe('serverEntryPlugin', () => {
         ctx
       )
     ).toThrow(/reserved/);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  // F4 / F12: when the user authors an app-config.ts but exports the
+  // config as a named export (`export const appConfig = ...`) instead of
+  // `export default ...`, the generated `import appConfig from '...'`
+  // resolves to undefined and the app-level middleware silently never
+  // runs. The buildStart diagnostic catches the misuse at build time.
+  it('buildStart throws when app-config.ts is present but lacks a default export', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'app-config.ts'),
+      [
+        "import { defineApp } from '@hono-preact/iso';",
+        'export const appConfig = defineApp({ use: [] });',
+        '',
+      ].join('\n')
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts', // intentionally missing on disk
+      appConfig: 'src/app-config.ts',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+    });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).toThrow(/must default-export/);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart accepts an app-config.ts with a default export', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'app-config.ts'),
+      [
+        "import { defineApp } from '@hono-preact/iso';",
+        'export default defineApp({ use: [] });',
+        '',
+      ].join('\n')
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts', // intentionally missing on disk
+      appConfig: 'src/app-config.ts',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+    });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).not.toThrow();
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('buildStart does not error when app-config.ts is absent (fall back to inline empty config)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    // No src/app-config.ts written on disk.
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+    });
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+
+    const ctx = {
+      warn: () => {},
+      error: (m: unknown) => {
+        throw new Error(typeof m === 'string' ? m : String(m));
+      },
+    };
+    expect(() =>
+      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
+        ctx
+      )
+    ).not.toThrow();
 
     fs.rmSync(tmp, { recursive: true, force: true });
   });
@@ -550,6 +752,7 @@ describe('serverEntryPlugin', () => {
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
       api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,

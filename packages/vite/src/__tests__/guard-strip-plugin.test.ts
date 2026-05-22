@@ -18,117 +18,114 @@ function transform(
   return plugin.transform.call({} as any, code, id, ssr ? { ssr } : {});
 }
 
-describe('guardStripPlugin: client pass (non-ssr)', () => {
-  it('replaces defineServerGuard call arg with the noop import', () => {
+describe('guardStripPlugin: middleware/observer rewrites', () => {
+  it('rewrites defineServerMiddleware in the client bundle to a no-op brand object', () => {
     const code = `
-      import { defineServerGuard } from '@hono-preact/iso';
-      const g = defineServerGuard(async (ctx, next) => {
-        const x = await secret();
-        return next();
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      export const mw = defineServerMiddleware(async (_c, next) => {
+        await secretServerCall();
+        await next();
       });
     `;
-    const result = transform(code, '/src/pages/admin.tsx');
-    expect(result?.code).toContain(
-      "import { __$guardNoop_hpiso } from 'hono-preact/internal';"
-    );
-    expect(result?.code).toContain('defineServerGuard(__$guardNoop_hpiso)');
-    expect(result?.code).not.toContain('await secret()');
+    const result = transform(code, '/src/pages/home.tsx');
+    expect(result?.code).toMatch(/__kind:\s*['"]middleware['"]/);
+    expect(result?.code).toMatch(/runs:\s*['"]server['"]/);
+    expect(result?.code).not.toMatch(/defineServerMiddleware\s*\(/);
+    expect(result?.code).not.toContain('secretServerCall');
   });
 
-  it('does not touch defineClientGuard calls in client pass', () => {
+  it('rewrites defineClientMiddleware in the server bundle to a no-op brand object', () => {
     const code = `
-      import { defineClientGuard } from '@hono-preact/iso';
-      const g = defineClientGuard(async (ctx, next) => {
-        await onClient();
-        return next();
+      import { defineClientMiddleware } from '@hono-preact/iso';
+      export const mw = defineClientMiddleware(async (_c, next) => {
+        await onBrowser();
+        await next();
       });
     `;
-    const result = transform(code, '/src/pages/admin.tsx');
-    expect(result).toBeUndefined();
-  });
-});
-
-describe('guardStripPlugin: server pass (ssr=true)', () => {
-  it('replaces defineClientGuard call arg with the noop import', () => {
-    const code = `
-      import { defineClientGuard } from '@hono-preact/iso';
-      const g = defineClientGuard(async (ctx, next) => {
-        await fetchFromBrowser();
-        return next();
-      });
-    `;
-    const result = transform(code, '/src/pages/admin.tsx', { ssr: true });
-    expect(result?.code).toContain(
-      "import { __$guardNoop_hpiso } from 'hono-preact/internal';"
-    );
-    expect(result?.code).toContain('defineClientGuard(__$guardNoop_hpiso)');
-    expect(result?.code).not.toContain('await fetchFromBrowser()');
+    const result = transform(code, '/src/pages/home.tsx', { ssr: true });
+    expect(result?.code).toMatch(/runs:\s*['"]client['"]/);
+    expect(result?.code).not.toMatch(/defineClientMiddleware\s*\(/);
+    expect(result?.code).not.toContain('onBrowser');
   });
 
-  it('does not touch defineServerGuard calls in server pass', () => {
+  it('rewrites defineStreamObserver in the client bundle to a no-op observer record', () => {
     const code = `
-      import { defineServerGuard } from '@hono-preact/iso';
-      const g = defineServerGuard(async (ctx, next) => {
-        await onServer();
-        return next();
+      import { defineStreamObserver } from '@hono-preact/iso';
+      export const obs = defineStreamObserver({
+        onChunk: () => callServerOnlyLogger(),
       });
     `;
-    const result = transform(code, '/src/pages/admin.tsx', { ssr: true });
-    expect(result).toBeUndefined();
+    const result = transform(code, '/src/pages/home.tsx');
+    expect(result?.code).toMatch(/__kind:\s*['"]observer['"]/);
+    expect(result?.code).not.toMatch(/defineStreamObserver\s*\(/);
+    expect(result?.code).not.toContain('callServerOnlyLogger');
   });
-});
 
-describe('guardStripPlugin: aliasing', () => {
-  it('handles import alias for defineServerGuard', () => {
+  it('leaves defineServerMiddleware untouched in the server bundle', () => {
     const code = `
-      import { defineServerGuard as dsg } from '@hono-preact/iso';
-      const g = dsg(async (ctx, next) => {
-        await secret();
-        return next();
-      });
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      export const mw = defineServerMiddleware(async (_c, next) => next());
     `;
-    const result = transform(code, '/src/pages/admin.tsx');
-    expect(result?.code).toContain('dsg(__$guardNoop_hpiso)');
-    expect(result?.code).not.toContain('await secret()');
+    expect(
+      transform(code, '/src/pages/home.tsx', { ssr: true })
+    ).toBeUndefined();
+  });
+
+  it('leaves defineClientMiddleware untouched in the client bundle', () => {
+    const code = `
+      import { defineClientMiddleware } from '@hono-preact/iso';
+      export const mw = defineClientMiddleware(async (_c, next) => next());
+    `;
+    expect(transform(code, '/src/pages/home.tsx')).toBeUndefined();
+  });
+
+  it('leaves defineStreamObserver untouched in the server bundle', () => {
+    const code = `
+      import { defineStreamObserver } from '@hono-preact/iso';
+      export const obs = defineStreamObserver({ onChunk: () => {} });
+    `;
+    expect(
+      transform(code, '/src/pages/home.tsx', { ssr: true })
+    ).toBeUndefined();
+  });
+
+  it('handles import aliases for the new symbols', () => {
+    const code = `
+      import { defineServerMiddleware as dsmw } from '@hono-preact/iso';
+      export const mw = dsmw(async () => undefined);
+    `;
+    const result = transform(code, '/src/pages/home.tsx');
+    expect(result?.code).toMatch(/__kind:\s*['"]middleware['"]/);
+    expect(result?.code).not.toContain('dsmw(');
   });
 
   it('handles import from the umbrella hono-preact source', () => {
     const code = `
-      import { defineServerGuard } from 'hono-preact';
-      const g = defineServerGuard(async () => undefined);
+      import { defineServerMiddleware } from 'hono-preact';
+      export const mw = defineServerMiddleware(async (_c, next) => next());
     `;
-    const result = transform(code, '/src/pages/admin.tsx');
-    expect(result?.code).toContain('defineServerGuard(__$guardNoop_hpiso)');
-  });
-
-  it('rewrites a call whose argument is a named function reference', () => {
-    const code = `
-      import { defineServerGuard } from '@hono-preact/iso';
-      async function checkAdmin(ctx, next) { await db(); return next(); }
-      const g = defineServerGuard(checkAdmin);
-    `;
-    const result = transform(code, '/src/pages/admin.tsx');
-    expect(result?.code).toContain('defineServerGuard(__$guardNoop_hpiso)');
+    const result = transform(code, '/src/pages/home.tsx');
+    expect(result?.code).toMatch(/__kind:\s*['"]middleware['"]/);
   });
 });
 
 describe('guardStripPlugin: leaves unaffected code alone', () => {
-  it('returns undefined when no defineServerGuard or defineClientGuard is imported', () => {
+  it('returns undefined when no recognized symbol is imported', () => {
     const code = `import { Something } from './x.js'; const y = Something();`;
     expect(transform(code, '/src/x.tsx')).toBeUndefined();
     expect(transform(code, '/src/x.tsx', { ssr: true })).toBeUndefined();
   });
 
-  it('returns undefined when defineServerGuard is imported but unused in this file', () => {
-    const code = `import { defineServerGuard } from '@hono-preact/iso';`;
+  it('returns undefined when defineServerMiddleware is imported but unused', () => {
+    const code = `import { defineServerMiddleware } from '@hono-preact/iso';`;
     const result = transform(code, '/src/x.tsx');
     expect(result).toBeUndefined();
   });
 
   it('does not transform .server.* files themselves', () => {
     const code = `
-      import { defineServerGuard } from '@hono-preact/iso';
-      export const x = defineServerGuard(async () => undefined);
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      export const mw = defineServerMiddleware(async () => undefined);
     `;
     expect(transform(code, '/src/pages/admin.server.ts')).toBeUndefined();
   });

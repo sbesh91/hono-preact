@@ -9,15 +9,25 @@ export interface GenerateCoreAppModuleOptions {
   layoutAbsPath: string;
   routesAbsPath: string;
   apiAbsPath: string | undefined;
+  appConfigAbsPath: string | undefined;
 }
 
 export function generateCoreAppModule(
   opts: GenerateCoreAppModuleOptions
 ): string {
-  const { layoutAbsPath, routesAbsPath, apiAbsPath } = opts;
+  const { layoutAbsPath, routesAbsPath, apiAbsPath, appConfigAbsPath } = opts;
 
   const apiImport = apiAbsPath ? `import userApp from '${apiAbsPath}';\n` : '';
   const apiMount = apiAbsPath ? `  .route('/', userApp)\n` : '';
+
+  // appConfig is optional: when no app-config.ts file exists, fall back to
+  // an empty config so the handler chain composition (root -> page -> unit)
+  // still works without the user authoring anything. The default-export
+  // shape mirrors the `import appConfig from './app-config'` convention so
+  // consumers can adopt the file later without other entry changes.
+  const appConfigImport = appConfigAbsPath
+    ? `import appConfig from '${appConfigAbsPath}';\n`
+    : `const appConfig = { use: [] };\n`;
 
   // The generated source is loaded as a virtual module, which Vite/esbuild
   // treats as plain JS by default. Use h() to construct vnodes rather than
@@ -30,22 +40,25 @@ export function generateCoreAppModule(
     `import {\n` +
     `  actionsHandler,\n` +
     `  loadersHandler,\n` +
+    `  makePageUseResolvers,\n` +
     `  renderPage,\n` +
     `  routeServerModules,\n` +
     `} from 'hono-preact/server';\n` +
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +
+    appConfigImport +
     `\n` +
     `env.current = 'server';\n` +
+    `const dev = import.meta.env.DEV;\n` +
     `const serverModules = routeServerModules(routes);\n` +
-    `const handlerOpts = { dev: import.meta.env.DEV };\n` +
+    `const pageUseResolvers = makePageUseResolvers(routes.serverRoutes, { dev });\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
-    `  .post('/__loaders', loadersHandler(serverModules, handlerOpts))\n` +
-    `  .post('/__actions', actionsHandler(serverModules, handlerOpts))\n` +
-    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes })))));\n` +
+    `  .post('/__loaders', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
+    `  .post('/__actions', actionsHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byModuleKey }))\n` +
+    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig }));\n` +
     `\n` +
     `export default app;\n`
   );
@@ -221,13 +234,49 @@ export interface ServerEntryPluginOptions {
   layout: string; // project-relative or absolute
   routes: string;
   api: string; // project-relative or absolute; absence treated as "no api"
+  /**
+   * Project-relative or absolute path to the user's app-config file. The
+   * `hono-preact` umbrella plugin always supplies a default
+   * (`src/app-config.ts`), so this is required here even though it's
+   * optional from the user's perspective: missing the file on disk is
+   * allowed (an inline `{ use: [] }` falls back into the generated core
+   * app), but the option name itself must be supplied.
+   */
+  appConfig: string;
   adapter: HonoPreactAdapter;
   coreAppPath: string; // absolute path to write the core app module
   entryWrapperPath: string; // absolute path to write the adapter wrapper
 }
 
+// Returns true if the parsed program contains a top-level
+// `export default ...`. The app-config diagnostic uses this to detect a
+// common mistake: writing `export const appConfig = defineApp(...)`
+// instead of `export default defineApp(...)`. Without a default the
+// generated `import appConfig from '...'` binds to undefined and the
+// app-level middleware chain silently never runs.
+function hasDefaultExport(source: string): boolean {
+  let ast: ReturnType<typeof parse>;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: BABEL_PARSER_PLUGINS,
+      errorRecovery: true,
+    });
+  } catch {
+    // Fall back to "true" on parse failure so we don't pile a misleading
+    // app-config error on top of an obvious syntax error elsewhere in the
+    // file. The real parse error surfaces from the Vite build itself.
+    return true;
+  }
+  for (const node of ast.program.body) {
+    if (node.type === 'ExportDefaultDeclaration') return true;
+  }
+  return false;
+}
+
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
   let apiAbsPath: string | undefined;
+  let appConfigAbsPath: string | undefined;
 
   return {
     name: 'hono-preact:server-entry',
@@ -249,11 +298,18 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         ? opts.api
         : path.resolve(root, opts.api);
       apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
+      const candidateAppConfig = path.isAbsolute(opts.appConfig)
+        ? opts.appConfig
+        : path.resolve(root, opts.appConfig);
+      appConfigAbsPath = fs.existsSync(candidateAppConfig)
+        ? candidateAppConfig
+        : undefined;
 
       const source = generateCoreAppModule({
         layoutAbsPath,
         routesAbsPath,
         apiAbsPath,
+        appConfigAbsPath,
       });
       fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
       fs.writeFileSync(opts.coreAppPath, source, 'utf8');
@@ -269,6 +325,22 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
     buildStart() {
       // The api.ts shadowing diagnostic stays in buildStart: it needs
       // this.warn / this.error, which the `config` hook context lacks.
+      // The app-config default-export diagnostic lives here for the same
+      // reason.
+      if (appConfigAbsPath) {
+        const appConfigSource = fs.readFileSync(appConfigAbsPath, 'utf8');
+        if (!hasDefaultExport(appConfigSource)) {
+          this.error(
+            `[hono-preact] ${appConfigAbsPath}: app-config.ts must default-export ` +
+              `the result of defineApp(...) (e.g. ` +
+              `\`export default defineApp({ use: [...] })\`). The generated entry ` +
+              `does \`import appConfig from '...'\`; without a default export the ` +
+              `import resolves to undefined and the app-level middleware chain ` +
+              `silently never runs.`
+          );
+        }
+      }
+
       if (!apiAbsPath) return;
       const apiSource = fs.readFileSync(apiAbsPath, 'utf8');
       const shadowing = findApiShadowingRoutes(apiSource);

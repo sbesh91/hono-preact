@@ -6,17 +6,15 @@ describe('@hono-preact/iso/internal', () => {
     expect(typeof internal.Loader).toBe('function');
     expect(typeof internal.Envelope).toBe('function');
     expect(typeof internal.RouteBoundary).toBe('function');
-    expect(typeof internal.Guards).toBe('function');
-    expect(typeof internal.GuardGate).toBe('function');
     expect(typeof internal.OptimisticOverlay).toBe('function');
-    expect(typeof internal.useGuardResult).toBe('function');
+    expect(typeof internal.PageMiddlewareHost).toBe('function');
   });
 
   it('exposes the context objects for advanced consumers', () => {
     expect(internal.LoaderIdContext).toBeDefined();
     expect(internal.LoaderDataContext).toBeDefined();
-    expect(internal.GuardResultContext).toBeDefined();
     expect(internal.ReloadContext).toBeDefined();
+    expect(internal.HonoRequestContext).toBeDefined();
   });
 
   it('exposes the SSR + low-level helpers', () => {
@@ -24,7 +22,8 @@ describe('@hono-preact/iso/internal', () => {
     expect(typeof internal.deletePreloadedData).toBe('function');
     expect(typeof internal.runRequestScope).toBe('function');
     expect(typeof internal.wrapPromise).toBe('function');
-    expect(typeof internal.runServerGuards).toBe('function');
-    expect(typeof internal.runClientGuards).toBe('function');
+    expect(typeof internal.dispatchServer).toBe('function');
+    expect(typeof internal.dispatchClient).toBe('function');
+    expect(typeof internal.partitionUse).toBe('function');
   });
 });

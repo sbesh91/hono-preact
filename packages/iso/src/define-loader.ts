@@ -11,6 +11,9 @@ import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ReloadContext } from './reload-context.js';
+import type { LoaderUse } from './internal/use-types.js';
+import type { Middleware } from './define-middleware.js';
+import type { StreamObserver } from './define-stream-observer.js';
 
 export type LoaderCtx = {
   c: Context;
@@ -30,6 +33,15 @@ export interface LoaderRef<T> {
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
+  /**
+   * Per-loader middleware and (for streaming loaders) stream observers,
+   * exactly as authored on `defineLoader({ use })`. The handler-side
+   * dispatcher calls `partitionUse(ref.use)` to split middleware from
+   * observers; both partitions flow through the SSR/RPC streaming pump.
+   * Typed as the union the partitioner accepts so the contract is
+   * advertised at the consumer rather than hidden behind `unknown`.
+   */
+  readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   useData(): T;
   useError(): Error | null;
   invalidate(): void;
@@ -64,6 +76,13 @@ export type DefineLoaderOpts<T> = {
   __loaderName?: string;
   cache?: LoaderCache<T>;
   params?: string[] | '*';
+  /**
+   * Per-loader middleware and (for streaming loaders) stream observers.
+   * The element type LoaderUse<T, Streaming> structurally gates stream
+   * observers off non-streaming loaders, but a tighter compile-time gate
+   * via defineLoader overloads can be added in a follow-up if needed.
+   */
+  use?: LoaderUse<T, boolean>;
 };
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -159,6 +178,12 @@ export function defineLoader<T>(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
+    // LoaderUse<T, boolean> structurally collapses to the same shape the
+    // partitioner accepts; the cast hides only the generic narrowing on
+    // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
+    use: (opts?.use ?? []) as ReadonlyArray<
+      Middleware | StreamObserver<unknown, never>
+    >,
     useData() {
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {

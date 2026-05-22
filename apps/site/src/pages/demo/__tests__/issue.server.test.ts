@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ActionGuardError } from 'hono-preact';
+import { isDeny } from 'hono-preact';
 import {
   resetDemoData,
   upsertUser,
@@ -22,8 +22,11 @@ describe('issue actions', () => {
     } catch (e) {
       threw = e;
     }
-    expect(threw).toBeInstanceOf(ActionGuardError);
-    expect((threw as ActionGuardError).status).toBe(403);
+    expect(isDeny(threw)).toBe(true);
+    if (isDeny(threw)) {
+      expect(threw.status).toBe(403);
+      expect(threw.message).toMatch(/author/i);
+    }
   });
 
   it('assertCanClose passes when caller is the author', async () => {
