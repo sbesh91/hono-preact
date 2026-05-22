@@ -1,4 +1,5 @@
 import { readdir, mkdir } from 'node:fs/promises';
+import { spawn as realSpawn } from 'node:child_process';
 import { resolve, join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.mjs';
@@ -9,10 +10,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const templatesRoot = resolve(here, '..', 'templates');
 
 /**
- * @param {{ argv: string[], cwd: string, env: Record<string, string | undefined> }} opts
+ * @param {{
+ *   argv: string[],
+ *   cwd: string,
+ *   env: Record<string, string | undefined>,
+ *   spawnFn?: typeof realSpawn,
+ * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
-export async function run({ argv, cwd, env }) {
+export async function run({ argv, cwd, env, spawnFn = realSpawn }) {
   const parsed = parseArgs(argv);
 
   if (parsed.kind === 'help') {
@@ -29,7 +35,7 @@ export async function run({ argv, cwd, env }) {
     return 2;
   }
 
-  let { targetDir, adapter } = parsed;
+  let { targetDir, adapter, install, git } = parsed;
 
   if (!targetDir) {
     console.error('error: target directory is required');
@@ -58,7 +64,28 @@ export async function run({ argv, cwd, env }) {
   await renameDotfiles(targetPath);
   await substituteName(targetPath, basename(targetPath));
 
+  const pm = detectPackageManager(env);
+
+  if (install) {
+    const installExit = await runChild(spawnFn, pm, ['install'], targetPath);
+    if (installExit !== 0) return 1;
+  }
+
   return 0;
+}
+
+/**
+ * @param {typeof realSpawn} spawnFn
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {string} cwd
+ * @returns {Promise<number>}
+ */
+function runChild(spawnFn, cmd, args, cwd) {
+  return new Promise((res) => {
+    const child = spawnFn(cmd, args, { cwd, stdio: 'inherit' });
+    child.on('close', (code) => res(code ?? 0));
+  });
 }
 
 function printHelp() {

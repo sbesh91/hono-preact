@@ -96,3 +96,64 @@ describe('run() — target dir validation', () => {
     expect(existsSync(join(target, 'package.json'))).toBe(true);
   });
 });
+
+describe('run() — install step', () => {
+  it('invokes the detected package manager when install is enabled', async () => {
+    const calls: Array<{ cmd: string; args: string[]; cwd: string }> = [];
+    const fakeSpawn = (cmd: string, args: string[], opts: { cwd: string }) => {
+      calls.push({ cmd, args, cwd: opts.cwd });
+      return {
+        on(event: string, cb: (code: number) => void) {
+          if (event === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    const code = await run({
+      argv: ['installed-app', '--adapter=node', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'pnpm/10.18.3 npm/? node/v20 darwin arm64' },
+      spawnFn: fakeSpawn,
+    });
+
+    expect(code).toBe(0);
+    expect(calls.length).toBe(1);
+    expect(calls[0].cmd).toBe('pnpm');
+    expect(calls[0].args).toEqual(['install']);
+    expect(calls[0].cwd).toBe(join(workDir, 'installed-app'));
+  });
+
+  it('skips install when --no-install is set', async () => {
+    const calls: Array<{ cmd: string }> = [];
+    const fakeSpawn = (cmd: string) => {
+      calls.push({ cmd });
+      return { on: (_e: string, cb: (c: number) => void) => queueMicrotask(() => cb(0)) };
+    };
+
+    await run({
+      argv: ['skipped-app', '--adapter=node', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'npm/10.2.5' },
+      spawnFn: fakeSpawn,
+    });
+
+    expect(calls.length).toBe(0);
+  });
+
+  it('returns 1 when install fails', async () => {
+    const fakeSpawn = () => ({
+      on: (event: string, cb: (code: number) => void) => {
+        if (event === 'close') queueMicrotask(() => cb(1));
+      },
+    });
+
+    const code = await run({
+      argv: ['fail-install', '--adapter=node', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'pnpm/10' },
+      spawnFn: fakeSpawn,
+    });
+
+    expect(code).toBe(1);
+  });
+});
