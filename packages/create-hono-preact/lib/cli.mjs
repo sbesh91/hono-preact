@@ -71,6 +71,13 @@ export async function run({ argv, cwd, env, spawnFn = realSpawn }) {
     if (installExit !== 0) return 1;
   }
 
+  if (git) {
+    const gitExit = await runChild(spawnFn, 'git', ['init'], targetPath);
+    if (gitExit !== 0) {
+      console.warn('warning: git init failed (is git installed?); continuing without git');
+    }
+  }
+
   return 0;
 }
 

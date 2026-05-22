@@ -157,3 +157,75 @@ describe('run() — install step', () => {
     expect(code).toBe(1);
   });
 });
+
+describe('run() — git step', () => {
+  it('invokes git init when git is enabled', async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const fakeSpawn = (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    await run({
+      argv: ['git-app', '--adapter=node', '--no-install'],
+      cwd: workDir,
+      env: {},
+      spawnFn: fakeSpawn,
+    });
+
+    const gitCall = calls.find((c) => c.cmd === 'git');
+    expect(gitCall).toBeTruthy();
+    expect(gitCall?.args).toEqual(['init']);
+  });
+
+  it('skips git init when --no-git is set', async () => {
+    const calls: Array<{ cmd: string }> = [];
+    const fakeSpawn = (cmd: string) => {
+      calls.push({ cmd });
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    await run({
+      argv: ['no-git-app', '--adapter=node', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      spawnFn: fakeSpawn,
+    });
+
+    expect(calls.find((c) => c.cmd === 'git')).toBeUndefined();
+  });
+
+  it('warns but does not abort when git init fails (git may be absent)', async () => {
+    const fakeSpawn = (cmd: string) => {
+      if (cmd === 'git') {
+        return {
+          on: (e: string, cb: (c: number) => void) => {
+            if (e === 'close') queueMicrotask(() => cb(1));
+          },
+        };
+      }
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    const code = await run({
+      argv: ['git-fail-app', '--adapter=node', '--no-install'],
+      cwd: workDir,
+      env: {},
+      spawnFn: fakeSpawn,
+    });
+
+    expect(code).toBe(0);
+  });
+});
