@@ -23,7 +23,25 @@ export type SseGeneratorOptions = {
   observers?: ReadonlyArray<StreamObserver<unknown, never>>;
   /** Server-stream ctx threaded to each observer hook. */
   observerCtx?: ServerStreamCtx;
+  /**
+   * The handler's timeout signal (from `AbortSignal.timeout(timeoutMs)`),
+   * inspected in the catch path to distinguish a deadline-driven abort
+   * from a generic throw. When this signal has aborted with a
+   * `TimeoutError` DOMException, the pump emits `event: timeout` with
+   * `{ timeoutMs }` instead of the generic `event: error` frame.
+   */
+  signal?: AbortSignal;
+  /** Used only with `signal`; the timeout value reported in the frame. */
+  timeoutMs?: number;
 };
+
+function isTimeoutAbort(signal?: AbortSignal): boolean {
+  return Boolean(
+    signal?.aborted &&
+      signal.reason instanceof DOMException &&
+      signal.reason.name === 'TimeoutError'
+  );
+}
 
 function encodeErrorPayload(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
@@ -50,7 +68,7 @@ export function sseGeneratorResponse(
   gen: AsyncGenerator<unknown, unknown, unknown>,
   options: SseGeneratorOptions = {}
 ): Response {
-  const { emitResult = false, observers, observerCtx } = options;
+  const { emitResult = false, observers, observerCtx, signal: optSignal, timeoutMs: optTimeoutMs } = options;
   const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
     let chunks = 0;
@@ -95,10 +113,17 @@ export function sseGeneratorResponse(
       if (started && observerCtx) {
         fanError(obs, observerCtx, err, { chunks });
       }
-      await stream.writeSSE({
-        event: 'error',
-        data: encodeErrorPayload(err),
-      });
+      if (isTimeoutAbort(optSignal) && typeof optTimeoutMs === 'number') {
+        await stream.writeSSE({
+          event: 'timeout',
+          data: JSON.stringify({ timeoutMs: optTimeoutMs }),
+        });
+      } else {
+        await stream.writeSSE({
+          event: 'error',
+          data: encodeErrorPayload(err),
+        });
+      }
     }
   });
 }
@@ -117,9 +142,11 @@ export function sseReadableStreamResponse(
   options: {
     observers?: ReadonlyArray<StreamObserver<unknown, never>>;
     observerCtx?: ServerStreamCtx;
+    signal?: AbortSignal;
+    timeoutMs?: number;
   } = {}
 ): Response {
-  const { observers, observerCtx } = options;
+  const { observers, observerCtx, signal: optSignal, timeoutMs: optTimeoutMs } = options;
   const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
     const reader = source.getReader();
@@ -151,10 +178,17 @@ export function sseReadableStreamResponse(
       if (started && observerCtx) {
         fanError(obs, observerCtx, err, { chunks });
       }
-      await stream.writeSSE({
-        event: 'error',
-        data: encodeErrorPayload(err),
-      });
+      if (isTimeoutAbort(optSignal) && typeof optTimeoutMs === 'number') {
+        await stream.writeSSE({
+          event: 'timeout',
+          data: JSON.stringify({ timeoutMs: optTimeoutMs }),
+        });
+      } else {
+        await stream.writeSSE({
+          event: 'error',
+          data: encodeErrorPayload(err),
+        });
+      }
     } finally {
       reader.cancel().catch(() => {
         /* swallow */

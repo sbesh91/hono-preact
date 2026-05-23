@@ -323,12 +323,18 @@ export function loadersHandler(
           emitResult: false,
           observers,
           observerCtx: ctx,
+          signal: timeoutSignal,
+          timeoutMs:
+            typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
         });
       }
       if (result instanceof ReadableStream) {
         return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
           observers,
           observerCtx: ctx,
+          signal: timeoutSignal,
+          timeoutMs:
+            typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
         });
       }
       return c.json(result);

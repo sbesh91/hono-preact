@@ -86,3 +86,8 @@ export {
 // User code that imports them couples to plugin internals.
 
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
+
+// SSE decoder; useful in tests and advanced consumers that need to read
+// a streaming loader/action response as a sequence of typed SSE events.
+export { readSSE } from './internal/sse-decoder.js';
+export type { SSEEvent } from './internal/sse-decoder.js';
