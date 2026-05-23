@@ -38,3 +38,8 @@ lerna-debug.log*
 .DS_Store
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# serena mcp (per-user runtime state; project.yml is tracked)
+.serena/cache/
+.serena/memories/
+.serena/logs/
