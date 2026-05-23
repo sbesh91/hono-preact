@@ -26,7 +26,7 @@ export type {
   LoaderCtx,
   Loader as LoaderFn,
 } from './define-loader.js';
-export { defineAction, useAction } from './action.js';
+export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
   ActionStub,
   UseActionOptions,

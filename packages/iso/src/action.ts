@@ -42,6 +42,16 @@ export type DefineActionOpts<TChunk = never, TResult = unknown> = {
   timeoutMs?: number | false;
 };
 
+export class TimeoutError extends Error {
+  readonly kind = 'timeout' as const;
+  readonly timeoutMs: number;
+  constructor(timeoutMs: number) {
+    super(`Request timed out after ${timeoutMs}ms`);
+    this.name = 'TimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
   opts?: DefineActionOpts<TChunk, TResult>
@@ -208,7 +218,14 @@ export function useAction<
             error?: string;
             __outcome?: string;
             message?: string;
+            timeoutMs?: number;
           };
+          if (
+            body.__outcome === 'timeout' &&
+            typeof body.timeoutMs === 'number'
+          ) {
+            throw new TimeoutError(body.timeoutMs);
+          }
           // Deny outcomes carry `message` instead of the legacy `error`
           // field; prefer the descriptive message when present. The deny()
           // constructor defaults the message for first-party callers, but a
@@ -283,6 +300,15 @@ export function useAction<
               } catch (e) {
                 streamError = new Error(
                   `Malformed result event in stream: ${e instanceof Error ? e.message : String(e)}`
+                );
+              }
+            } else if (ev.event === 'timeout') {
+              try {
+                const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+                streamError = new TimeoutError(parsed.timeoutMs ?? 0);
+              } catch (e) {
+                streamError = new Error(
+                  `Malformed timeout event in stream: ${e instanceof Error ? e.message : String(e)}`
                 );
               }
             } else if (ev.event === 'error') {
