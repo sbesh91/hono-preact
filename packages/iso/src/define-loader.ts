@@ -34,6 +34,12 @@ export interface LoaderRef<T> {
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
   /**
+   * Raw value as authored on `defineLoader({ timeoutMs })`. `undefined`
+   * means "use the handler's configured default"; `false` means "no
+   * timeout, only the request signal aborts".
+   */
+  readonly timeoutMs?: number | false;
+  /**
    * Per-loader middleware and (for streaming loaders) stream observers,
    * exactly as authored on `defineLoader({ use })`. The handler-side
    * dispatcher calls `partitionUse(ref.use)` to split middleware from
@@ -76,6 +82,12 @@ export type DefineLoaderOpts<T> = {
   __loaderName?: string;
   cache?: LoaderCache<T>;
   params?: string[] | '*';
+  /**
+   * Per-loader timeout in milliseconds. When omitted, the handler applies
+   * its configured default (30s). Pass `false` to disable the timeout for
+   * this loader (rely solely on the request signal).
+   */
+  timeoutMs?: number | false;
   /**
    * Per-loader middleware and (for streaming loaders) stream observers.
    * The element type LoaderUse<T, Streaming> structurally gates stream
@@ -178,6 +190,7 @@ export function defineLoader<T>(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
+    timeoutMs: opts?.timeoutMs,
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
     // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
