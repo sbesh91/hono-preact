@@ -182,3 +182,22 @@ const MoviesPage = ({ pendingAdds }) => (
 | `pending` | `A[]`                       | Pending actions to project. Defaults to `[]`.                                        |
 
 Prefer `useOptimistic` or `useOptimisticAction` when the optimistic state is local to the component that owns the mutation. Reach for `<OptimisticOverlay>` when the optimistic projection needs to flow through `loader.useData()` for descendants you don't want to thread props through.
+
+## View Transitions
+
+`useOptimistic` and `useOptimisticAction` accept `{ transition: true }` to
+wrap settle and revert state changes in
+[`document.startViewTransition`](https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition).
+The initial optimistic update is never wrapped so it paints in the same
+frame. When `startViewTransition` is not available (older browsers or SSR),
+the option is a no-op.
+
+```ts
+const [count, addOptimistic] = useOptimistic(serverCount, reducer, {
+  transition: true,
+});
+```
+
+Style transitions with `::view-transition-old(*)` and `::view-transition-new(*)`
+CSS pseudo-elements, or attach `view-transition-name` to specific elements
+for element-level animations.

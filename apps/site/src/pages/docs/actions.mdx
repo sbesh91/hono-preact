@@ -315,6 +315,41 @@ export const serverActions = {
 
 For module-wide gating (every action plus every loader), export `pageUse` from the `.server.ts` file instead. See [Middleware](/docs/middleware) for the full chain model.
 
+## Timeouts
+
+Actions get a deadline. By default every call has 30 seconds to finish; the
+deadline starts when the handler receives the request. Pass `timeoutMs` on
+`defineAction` to override:
+
+```ts
+export const slowExport = defineAction<{ id: string }, { ok: boolean }>(
+  async (_ctx, { id }) => {
+    /* ... */
+  },
+  { timeoutMs: 60_000 }
+);
+```
+
+Pass `timeoutMs: false` to opt out entirely (useful for streaming actions):
+
+```ts
+export const longRunningStream = defineAction<{ url: string }, never>(
+  async (_ctx, { url }) => {
+    /* returns a ReadableStream that may run for minutes */
+  },
+  { timeoutMs: false }
+);
+```
+
+When a deadline fires, the action's `ctx.signal` aborts with reason
+`DOMException('TimeoutError')`. The server responds with status 504 and a
+`{ __outcome: 'timeout', timeoutMs }` envelope. On the client, the failure
+surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
+`timeoutMs` as class properties).
+
+The framework default is configurable per handler via
+`actionsHandler(glob, { defaultTimeoutMs })`.
+
 ## The server/client boundary
 
 `serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `pageUse` / `loaderUse` / `actionUse` named exports become empty arrays on the client. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or the recognized `use` exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
