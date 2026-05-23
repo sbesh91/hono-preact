@@ -35,11 +35,26 @@ export type SseGeneratorOptions = {
   timeoutMs?: number;
 };
 
+type SSEFrame = { event?: string; id?: string; data: string };
+
+function sseEncodeTransform(): TransformStream<SSEFrame, Uint8Array> {
+  const encoder = new TextEncoder();
+  return new TransformStream<SSEFrame, Uint8Array>({
+    transform(frame, controller) {
+      const lines: string[] = [];
+      if (frame.event) lines.push(`event: ${frame.event}`);
+      if (frame.id) lines.push(`id: ${frame.id}`);
+      lines.push(`data: ${frame.data}`);
+      controller.enqueue(encoder.encode(lines.join('\n') + '\n\n'));
+    },
+  });
+}
+
 function isTimeoutAbort(signal?: AbortSignal): boolean {
   return Boolean(
     signal?.aborted &&
-    signal.reason instanceof DOMException &&
-    signal.reason.name === 'TimeoutError'
+      signal.reason instanceof DOMException &&
+      signal.reason.name === 'TimeoutError'
   );
 }
 
@@ -56,15 +71,19 @@ function encodeErrorPayload(err: unknown): string {
  * If `emitResult` is true and the generator's return value is defined,
  * it is written as `event: result\ndata: <json>` before the stream closes.
  * If the generator throws, an `event: error\ndata: {"message","name"}` frame
- * is written and the stream closes cleanly (Hono's default error handler is
- * never invoked because we catch inside the callback).
+ * is written and the stream closes cleanly.
  *
  * When `observers` is provided, the pump fires the corresponding lifecycle
- * hooks (`onStart` / `onChunk` / `onEnd` / `onError` / `onAbort`) so
- * users can attach instrumentation via `defineStreamObserver(...)`.
+ * hooks (`onStart` / `onChunk` / `onEnd` / `onError`) so users can attach
+ * instrumentation via `defineStreamObserver(...)`.
+ *
+ * Note: `onAbort` is not called from this function. Cancellation propagates
+ * via `ReadableStream.from(gen)` calling the generator's `return()` when the
+ * client closes; observers wanting abort notification should use the readable-
+ * stream variant or a future hook added to `cancel()`.
  */
 export function sseGeneratorResponse(
-  c: Context,
+  _c: Context,
   gen: AsyncGenerator<unknown, unknown, unknown>,
   options: SseGeneratorOptions = {}
 ): Response {
@@ -72,11 +91,15 @@ export function sseGeneratorResponse(
     emitResult = false,
     observers,
     observerCtx,
-    signal: optSignal,
-    timeoutMs: optTimeoutMs,
+    signal,
+    timeoutMs,
   } = options;
   const obs = observers ?? [];
-  return streamSSE(c, async (stream) => {
+
+  // The pump generator owns the lifecycle: it adapts the user's generator
+  // into a stream of SSEFrames, calls observer hooks, and emits a trailing
+  // `result`, `timeout`, or `error` frame as needed.
+  async function* framePump(): AsyncGenerator<SSEFrame, void, unknown> {
     let chunks = 0;
     let started = false;
     if (obs.length > 0 && observerCtx) {
@@ -84,53 +107,61 @@ export function sseGeneratorResponse(
       started = true;
     }
     try {
-      while (!stream.aborted) {
+      while (true) {
         const step = await gen.next();
         if (step.done) {
           if (emitResult && step.value !== undefined) {
-            await stream.writeSSE({
-              event: 'result',
-              data: JSON.stringify(step.value),
-            });
+            yield { event: 'result', data: JSON.stringify(step.value) };
           }
           if (started && observerCtx) {
             fanEnd(obs, observerCtx, { chunks, result: step.value });
           }
           return;
         }
-        await stream.writeSSE({ data: JSON.stringify(step.value) });
+        yield { data: JSON.stringify(step.value) };
         if (started && observerCtx) {
           fanChunk(obs, observerCtx, step.value, chunks);
         }
         chunks += 1;
       }
-      // Loop exited because the response stream was aborted (typically a
-      // client disconnect). Release the generator and notify observers.
-      await gen.return(undefined).catch(() => {
-        /* swallow */
-      });
-      if (started && observerCtx) {
-        fanAbort(obs, observerCtx, { chunks });
-      }
     } catch (err) {
-      await gen.return(undefined).catch(() => {
-        /* swallow */
-      });
+      await gen.return(undefined).catch(() => undefined);
       if (started && observerCtx) {
         fanError(obs, observerCtx, err, { chunks });
       }
-      if (isTimeoutAbort(optSignal) && typeof optTimeoutMs === 'number') {
-        await stream.writeSSE({
+      if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
+        yield {
           event: 'timeout',
-          data: JSON.stringify({ timeoutMs: optTimeoutMs }),
-        });
+          data: JSON.stringify({ timeoutMs }),
+        };
       } else {
-        await stream.writeSSE({
-          event: 'error',
-          data: encodeErrorPayload(err),
-        });
+        yield { event: 'error', data: encodeErrorPayload(err) };
       }
     }
+  }
+
+  // ReadableStream.from is not yet in the TypeScript DOM lib. The constructor
+  // form is equivalent and fully typed.
+  const pump = framePump();
+  const body = new ReadableStream<SSEFrame>({
+    async pull(controller) {
+      const { value, done } = await pump.next();
+      if (done) {
+        controller.close();
+      } else {
+        controller.enqueue(value);
+      }
+    },
+    cancel() {
+      pump.return(undefined).catch(() => undefined);
+    },
+  }).pipeThrough(sseEncodeTransform());
+
+  return new Response(body, {
+    headers: {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+    },
   });
 }
 
@@ -152,12 +183,7 @@ export function sseReadableStreamResponse(
     timeoutMs?: number;
   } = {}
 ): Response {
-  const {
-    observers,
-    observerCtx,
-    signal: optSignal,
-    timeoutMs: optTimeoutMs,
-  } = options;
+  const { observers, observerCtx, signal: optSignal, timeoutMs: optTimeoutMs } = options;
   const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
     const reader = source.getReader();
