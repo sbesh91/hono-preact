@@ -21,9 +21,9 @@ function lineSplitTransform(): TransformStream<string, string> {
 }
 
 export async function* readSSE(
-  stream: ReadableStream<Uint8Array>
+  stream: ReadableStream<BufferSource>
 ): AsyncGenerator<SSEEvent, void, unknown> {
-  const lines = (stream as ReadableStream<BufferSource>)
+  const lines = stream
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(lineSplitTransform());
 
