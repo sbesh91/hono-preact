@@ -70,6 +70,8 @@ export function HeroShader() {
     const vs = compile(gl.VERTEX_SHADER, VS);
     const fs = compile(gl.FRAGMENT_SHADER, FS);
     if (!vs || !fs) {
+      if (vs) gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
       setFallback(true);
       return;
     }
@@ -80,6 +82,9 @@ export function HeroShader() {
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       console.error('HeroShader link error:', gl.getProgramInfoLog(prog));
+      gl.deleteProgram(prog);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
       setFallback(true);
       return;
     }
@@ -152,6 +157,8 @@ export function HeroShader() {
       document.removeEventListener('visibilitychange', onVisibility);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
     };
   }, []);
 
