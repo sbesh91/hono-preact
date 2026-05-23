@@ -83,16 +83,19 @@ export type { AppConfig, AppUseElement } from './define-app.js';
 export {
   redirect,
   deny,
+  timeoutOutcome,
   isOutcome,
   isRedirect,
   isDeny,
   isRender,
+  isTimeout,
 } from './outcomes.js';
 export type {
   Outcome,
   RedirectOutcome,
   DenyOutcome,
   RenderOutcome,
+  TimeoutOutcome,
   RedirectStatusCode,
   ErrorStatusCode,
 } from './outcomes.js';

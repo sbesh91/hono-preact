@@ -27,7 +27,12 @@ export type RenderOutcome = {
   Component: FunctionComponent;
 };
 
-export type Outcome = RedirectOutcome | DenyOutcome | RenderOutcome;
+export type TimeoutOutcome = {
+  __outcome: 'timeout';
+  timeoutMs: number;
+};
+
+export type Outcome = RedirectOutcome | DenyOutcome | RenderOutcome | TimeoutOutcome;
 
 type RedirectInput =
   | string
@@ -90,7 +95,7 @@ export function isOutcome(value: unknown): value is Outcome {
   if (typeof value !== 'object' || value === null) return false;
   if (!('__outcome' in value)) return false;
   const tag = (value as { __outcome: unknown }).__outcome;
-  return tag === 'redirect' || tag === 'deny' || tag === 'render';
+  return tag === 'redirect' || tag === 'deny' || tag === 'render' || tag === 'timeout';
 }
 
 export function isRedirect(value: unknown): value is RedirectOutcome {
@@ -103,4 +108,12 @@ export function isDeny(value: unknown): value is DenyOutcome {
 
 export function isRender(value: unknown): value is RenderOutcome {
   return isOutcome(value) && value.__outcome === 'render';
+}
+
+export function timeoutOutcome(timeoutMs: number): TimeoutOutcome {
+  return { __outcome: 'timeout', timeoutMs };
+}
+
+export function isTimeout(value: unknown): value is TimeoutOutcome {
+  return isOutcome(value) && value.__outcome === 'timeout';
 }
