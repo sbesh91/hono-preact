@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import {
   isOutcome,
+  timeoutOutcome,
   type AppConfig,
   type Outcome,
   type ServerMiddleware,
@@ -42,6 +43,7 @@ type LoaderFn = (props: {
 type LoaderEntry = {
   fn: LoaderFn;
   use: ReadonlyArray<unknown>;
+  timeoutMs?: number | false;
 };
 
 async function buildLoadersMap(
@@ -67,8 +69,16 @@ async function buildLoadersMap(
         if (typeof val === 'function') {
           result[`${moduleKey}::${name}`] = { fn: val as LoaderFn, use: [] };
         } else if (val && typeof (val as { fn?: unknown }).fn === 'function') {
-          const ref = val as { fn: LoaderFn; use?: ReadonlyArray<unknown> };
-          result[`${moduleKey}::${name}`] = { fn: ref.fn, use: ref.use ?? [] };
+          const ref = val as {
+            fn: LoaderFn;
+            use?: ReadonlyArray<unknown>;
+            timeoutMs?: number | false;
+          };
+          result[`${moduleKey}::${name}`] = {
+            fn: ref.fn,
+            use: ref.use ?? [],
+            timeoutMs: ref.timeoutMs,
+          };
         }
       }
     }
@@ -123,6 +133,13 @@ export interface LoadersHandlerOptions {
   resolvePageUse?: (
     path: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  /**
+   * Default loader timeout in milliseconds applied when a loader does not
+   * declare its own `timeoutMs`. Defaults to 30000 (30 seconds). Pass
+   * `false` to disable the default (only loader-level `timeoutMs` enforces
+   * a deadline).
+   */
+  defaultTimeoutMs?: number | false;
 }
 
 function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
@@ -152,6 +169,12 @@ function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
       outcome.status
     );
   }
+  if (outcome.__outcome === 'timeout') {
+    return c.json(
+      { __outcome: 'timeout', timeoutMs: outcome.timeoutMs },
+      504
+    );
+  }
   // render outcome should never reach the loader RPC; this is defense in depth.
   return c.json(
     {
@@ -166,7 +189,13 @@ export function loadersHandler(
   glob: LazyGlob | EagerGlob,
   opts: LoadersHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError, appConfig, resolvePageUse } = opts;
+  const {
+    dev = false,
+    onError,
+    appConfig,
+    resolvePageUse,
+    defaultTimeoutMs = 30_000,
+  } = opts;
   let cachedMapPromise: Promise<Record<string, LoaderEntry>> | null = null;
 
   return async (c) => {
@@ -225,7 +254,15 @@ export function loadersHandler(
       );
     }
 
-    const signal = c.req.raw.signal;
+    const resolvedTimeoutMs =
+      entry.timeoutMs !== undefined ? entry.timeoutMs : defaultTimeoutMs;
+    const timeoutSignal =
+      resolvedTimeoutMs === false || resolvedTimeoutMs === undefined
+        ? undefined
+        : AbortSignal.timeout(resolvedTimeoutMs);
+    const signal = timeoutSignal
+      ? AbortSignal.any([c.req.raw.signal, timeoutSignal])
+      : c.req.raw.signal;
 
     // Chain ordering is outer -> inner: app-level middleware wraps every
     // request, page-level wraps loaders owned by that page, and per-loader
@@ -298,6 +335,20 @@ export function loadersHandler(
     } catch (err) {
       if (isOutcome(err)) {
         return translateOutcomeForLoader(c, err);
+      }
+      // Distinguish a deadline-driven abort from any other thrown error.
+      // AbortSignal.timeout sets signal.reason to a DOMException named
+      // 'TimeoutError'; AbortSignal.any propagates that reason. Re-check the
+      // composed signal because the loader's own throw may be the
+      // *consequence* of the signal aborting (e.g. fetch rejecting with the
+      // abort reason).
+      if (
+        timeoutSignal?.aborted &&
+        timeoutSignal.reason instanceof DOMException &&
+        timeoutSignal.reason.name === 'TimeoutError' &&
+        typeof resolvedTimeoutMs === 'number'
+      ) {
+        return translateOutcomeForLoader(c, timeoutOutcome(resolvedTimeoutMs));
       }
       onError?.(err, { module, loader: loaderName });
       // In production we never leak the loader's error message: it may
