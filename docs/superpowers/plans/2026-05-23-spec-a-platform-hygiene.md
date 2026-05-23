@@ -69,7 +69,7 @@ import { timeoutOutcome, isTimeout, isOutcome } from '../outcomes.js';
 describe('timeoutOutcome', () => {
   it('constructs a timeout outcome with the given timeoutMs', () => {
     const o = timeoutOutcome(30000);
-    expect(o).toEqual({ __outcome: 'timeout', kind: 'timeout', timeoutMs: 30000 });
+    expect(o).toEqual({ __outcome: 'timeout', timeoutMs: 30000 });
   });
 
   it('isTimeout narrows correctly', () => {
@@ -98,7 +98,6 @@ In `packages/iso/src/outcomes.ts`, after the `RenderOutcome` declaration, add:
 ```ts
 export type TimeoutOutcome = {
   __outcome: 'timeout';
-  kind: 'timeout';
   timeoutMs: number;
 };
 ```
@@ -124,7 +123,7 @@ Append at the bottom of the file:
 
 ```ts
 export function timeoutOutcome(timeoutMs: number): TimeoutOutcome {
-  return { __outcome: 'timeout', kind: 'timeout', timeoutMs };
+  return { __outcome: 'timeout', timeoutMs };
 }
 
 export function isTimeout(value: unknown): value is TimeoutOutcome {
@@ -604,7 +603,7 @@ function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
   }
   if (outcome.__outcome === 'timeout') {
     return c.json(
-      { __outcome: 'timeout', kind: 'timeout', timeoutMs: outcome.timeoutMs },
+      { __outcome: 'timeout', timeoutMs: outcome.timeoutMs },
       504
     );
   }
@@ -850,7 +849,7 @@ import {
 ```ts
   if (outcome.__outcome === 'timeout') {
     return c.json(
-      { __outcome: 'timeout', kind: 'timeout', timeoutMs: outcome.timeoutMs },
+      { __outcome: 'timeout', timeoutMs: outcome.timeoutMs },
       504
     );
   }
@@ -1018,7 +1017,6 @@ describe('sse mid-stream timeout', () => {
     const timeoutEvent = events.find((e) => e.event === 'timeout');
     expect(timeoutEvent).toBeDefined();
     expect(JSON.parse(timeoutEvent!.data)).toMatchObject({
-      kind: 'timeout',
       timeoutMs: 75,
     });
   });
@@ -1043,7 +1041,7 @@ export type SseGeneratorOptions = {
    * The composed signal whose `reason` is inspected in the catch path to
    * distinguish a deadline-driven abort from a generic throw. When the
    * signal has aborted with a `TimeoutError` DOMException, the pump emits
-   * `event: timeout` with `{ kind: 'timeout', timeoutMs }` instead of the
+   * `event: timeout` with `{ timeoutMs }` instead of the
    * generic `event: error` frame.
    */
   signal?: AbortSignal;
@@ -1077,10 +1075,7 @@ Update the `catch (err) {` block inside `sseGeneratorResponse` to emit a `timeou
       if (isTimeoutAbort(options.signal) && typeof options.timeoutMs === 'number') {
         await stream.writeSSE({
           event: 'timeout',
-          data: JSON.stringify({
-            kind: 'timeout',
-            timeoutMs: options.timeoutMs,
-          }),
+          data: JSON.stringify({ timeoutMs: options.timeoutMs }),
         });
       } else {
         await stream.writeSSE({
@@ -1171,7 +1166,7 @@ describe('useAction timeout handling', () => {
 
     global.fetch = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ __outcome: 'timeout', kind: 'timeout', timeoutMs: 5000 }),
+        JSON.stringify({ __outcome: 'timeout', timeoutMs: 5000 }),
         { status: 504, headers: { 'Content-Type': 'application/json' } }
       )
     );
@@ -1373,7 +1368,7 @@ describe('fetchLoaderData timeout handling', () => {
   it('throws TimeoutError when the server returns a 504 timeout outcome', async () => {
     global.fetch = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ __outcome: 'timeout', kind: 'timeout', timeoutMs: 7000 }),
+        JSON.stringify({ __outcome: 'timeout', timeoutMs: 7000 }),
         { status: 504, headers: { 'Content-Type': 'application/json' } }
       )
     );
@@ -1983,8 +1978,8 @@ Insert a section into the loader docs (or a new `timeouts.mdx` page, depending o
 - `timeoutMs` option on `defineLoader` / `defineAction`.
 - Default of 30000 ms.
 - `timeoutMs: false` opts out.
-- Server returns 504 with `{ __outcome: 'timeout', kind: 'timeout', timeoutMs }`.
-- Client surfaces `TimeoutError` (with `kind: 'timeout'`, `timeoutMs` properties).
+- Server returns 504 with `{ __outcome: 'timeout', timeoutMs }`.
+- Client surfaces `TimeoutError` (with `kind: 'timeout'` and `timeoutMs` class properties).
 - Streaming loaders: timeout applies to total stream completion, not first chunk; opt out with `timeoutMs: false` for long streams.
 
 Describe current behavior only; no migration breadcrumbs.
@@ -2020,9 +2015,9 @@ export const longLivedStream = defineLoader(
 
 When a deadline fires, the loader's `ctx.signal` aborts with reason
 `DOMException('TimeoutError')`. The server responds with status 504 and a
-`{ __outcome: 'timeout', kind: 'timeout', timeoutMs }` envelope. The client
-hook (`useData()`, `useAction()`) exposes the failure as a `TimeoutError`
-with `kind === 'timeout'` and the original `timeoutMs` attached.
+`{ __outcome: 'timeout', timeoutMs }` envelope. The client hook
+(`useData()`, `useAction()`) exposes the failure as a `TimeoutError`
+instance carrying `kind === 'timeout'` and the original `timeoutMs`.
 
 The framework default is configurable per handler via
 `loadersHandler(glob, { defaultTimeoutMs })` and
@@ -2104,7 +2099,7 @@ gh pr create --title "feat: loader/action timeouts, useOptimistic view transitio
 
 Spec A, PR1 of 2. Adopts three web-standard APIs as user-facing additions:
 
-- Loader/action timeouts via `AbortSignal.any` + `AbortSignal.timeout`, with a new `TimeoutOutcome` variant (`{ __outcome: 'timeout', kind: 'timeout', timeoutMs }`) and a `TimeoutError` class on the client.
+- Loader/action timeouts via `AbortSignal.any` + `AbortSignal.timeout`, with a new `TimeoutOutcome` variant (`{ __outcome: 'timeout', timeoutMs }`) and a `TimeoutError` class on the client.
 - Opt-in View Transitions in `useOptimistic` / `useOptimisticAction` (settle + revert only; initial mutate paints same-frame).
 - `URL.parse()` at recoverable parse sites.
 
@@ -2291,7 +2286,7 @@ export function sseGeneratorResponse(
       if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
         yield {
           event: 'timeout',
-          data: JSON.stringify({ kind: 'timeout', timeoutMs }),
+          data: JSON.stringify({ timeoutMs }),
         };
       } else {
         yield { event: 'error', data: encodeErrorPayload(err) };
@@ -2407,7 +2402,7 @@ export function sseReadableStreamResponse(
       if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
         yield {
           event: 'timeout',
-          data: JSON.stringify({ kind: 'timeout', timeoutMs }),
+          data: JSON.stringify({ timeoutMs }),
         };
       } else {
         yield { event: 'error', data: encodeErrorPayload(err) };

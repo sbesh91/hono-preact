@@ -31,7 +31,7 @@ No new subsystem. Two of the four changes (1, 2) add opt-in API surface; the oth
 
 Two themes:
 
-1. **Cancellation and time pressure** are made explicit and observable. Loaders and actions get composed `AbortSignal`s with a default 30 s deadline, exposed to user code through the existing `ctx.signal`. Timeouts surface as a structured outcome through the same path that already carries `redirect` / `deny`, so consumers branch on `error.kind === 'timeout'` instead of inferring from message strings.
+1. **Cancellation and time pressure** are made explicit and observable. Loaders and actions get composed `AbortSignal`s with a default 30 s deadline, exposed to user code through the existing `ctx.signal`. Timeouts surface as a structured outcome through the same path that already carries `redirect` / `deny`. On the client the failure arrives as a `TimeoutError` class instance, so consumers branch on `error instanceof TimeoutError` (or its `error.kind === 'timeout'` class property) instead of inferring from message strings.
 
 2. **The framework stops paraphrasing the platform.** `URL.parse()` replaces try/catch around `new URL` wherever the framework parses recoverable input. `TransformStream` + `TextDecoderStream` replace the hand-rolled SSE codec; `hono/streaming` stops being a dependency on the loader/action stream path. `document.startViewTransition` becomes an opt-in pass-through wrapper for `useOptimistic` settle/revert.
 
@@ -56,7 +56,7 @@ defineAction(fn, { timeoutMs?: number | false, /* existing options */ })
 **Outcome envelope grows one variant** in `packages/iso/src/outcomes.ts`:
 
 ```ts
-type TimeoutOutcome = { __outcome: 'timeout', kind: 'timeout', timeoutMs: number };
+type TimeoutOutcome = { __outcome: 'timeout', timeoutMs: number };
 export function isTimeout(o: unknown): o is TimeoutOutcome;
 ```
 
