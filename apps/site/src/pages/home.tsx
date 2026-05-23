@@ -20,8 +20,8 @@ const Home: FunctionComponent = () => {
           </p>
           <h1 class="text-5xl font-semibold">A small full-stack framework.</h1>
           <p class="text-lg text-gray-700 max-w-2xl mx-auto">
-            Hono on the edge, Preact in the browser, manifest driven routes, typed
-            RPC, streaming everywhere.
+            Hono on the edge, Preact in the browser, manifest driven routes,
+            typed RPC, streaming everywhere.
           </p>
           <div class="flex gap-3 justify-center pt-2">
             <a
@@ -83,7 +83,8 @@ export default function Layout({ children }) {
             Your routes are a data structure, not a directory tree.
           </Card>
           <Card title="Typed RPC, end to end">
-            Loaders and actions are typed functions; the client gets a typed stub.
+            Loaders and actions are typed functions; the client gets a typed
+            stub.
           </Card>
           <Card title="Streaming everywhere">
             Loaders, forms, SSE. Built on ReadableStream.
@@ -101,7 +102,10 @@ export default function Layout({ children }) {
               GitHub
             </a>{' '}
             ·{' '}
-            <a class="underline" href="https://www.npmjs.com/package/hono-preact">
+            <a
+              class="underline"
+              href="https://www.npmjs.com/package/hono-preact"
+            >
               npm
             </a>
           </span>
