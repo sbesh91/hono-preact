@@ -38,7 +38,7 @@ export type { ContentfulStatusCode } from 'hono/utils/http-status';
 // Hooks.
 export { useReload } from './reload-context.js';
 export { useOptimistic } from './optimistic.js';
-export type { OptimisticHandle } from './optimistic.js';
+export type { OptimisticHandle, UseOptimisticOptions } from './optimistic.js';
 export { useOptimisticAction } from './optimistic-action.js';
 export type {
   UseOptimisticActionOptions,
