@@ -1,12 +1,10 @@
 import type { Context } from 'hono';
-import { streamSSE } from 'hono/streaming';
 import type { StreamObserver, ServerStreamCtx } from '@hono-preact/iso';
 import {
   fanStart,
   fanChunk,
   fanEnd,
   fanError,
-  fanAbort,
 } from '@hono-preact/iso/internal';
 
 export type SseGeneratorOptions = {
@@ -171,10 +169,15 @@ export function sseGeneratorResponse(
  *
  * Observer fanout mirrors `sseGeneratorResponse`: `onStart` fires before the
  * first read, `onChunk` per chunk, `onEnd` on normal completion, `onError` on
- * throw, `onAbort` when the response stream is aborted.
+ * throw.
+ *
+ * Note: `onAbort` is not called from this function. Cancellation propagates
+ * via the `ReadableStream` constructor's `cancel()` callback calling
+ * `pump.return()`; observers wanting abort notification should use a future
+ * hook added to `cancel()`.
  */
 export function sseReadableStreamResponse(
-  c: Context,
+  _c: Context,
   source: ReadableStream<unknown>,
   options: {
     observers?: ReadonlyArray<StreamObserver<unknown, never>>;
@@ -183,9 +186,10 @@ export function sseReadableStreamResponse(
     timeoutMs?: number;
   } = {}
 ): Response {
-  const { observers, observerCtx, signal: optSignal, timeoutMs: optTimeoutMs } = options;
+  const { observers, observerCtx, signal, timeoutMs } = options;
   const obs = observers ?? [];
-  return streamSSE(c, async (stream) => {
+
+  async function* framePump(): AsyncGenerator<SSEFrame, void, unknown> {
     const reader = source.getReader();
     let chunks = 0;
     let started = false;
@@ -194,7 +198,7 @@ export function sseReadableStreamResponse(
       started = true;
     }
     try {
-      while (!stream.aborted) {
+      while (true) {
         const { done, value } = await reader.read();
         if (done) {
           if (started && observerCtx) {
@@ -202,35 +206,49 @@ export function sseReadableStreamResponse(
           }
           return;
         }
-        await stream.writeSSE({ data: JSON.stringify(value) });
+        yield { data: JSON.stringify(value) };
         if (started && observerCtx) {
           fanChunk(obs, observerCtx, value, chunks);
         }
         chunks += 1;
       }
-      if (started && observerCtx) {
-        fanAbort(obs, observerCtx, { chunks });
-      }
     } catch (err) {
       if (started && observerCtx) {
         fanError(obs, observerCtx, err, { chunks });
       }
-      if (isTimeoutAbort(optSignal) && typeof optTimeoutMs === 'number') {
-        await stream.writeSSE({
+      if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
+        yield {
           event: 'timeout',
-          data: JSON.stringify({ timeoutMs: optTimeoutMs }),
-        });
+          data: JSON.stringify({ timeoutMs }),
+        };
       } else {
-        await stream.writeSSE({
-          event: 'error',
-          data: encodeErrorPayload(err),
-        });
+        yield { event: 'error', data: encodeErrorPayload(err) };
       }
     } finally {
-      reader.cancel().catch(() => {
-        /* swallow */
-      });
+      reader.cancel().catch(() => undefined);
     }
+  }
+
+  const pump = framePump();
+  const body = new ReadableStream<SSEFrame>({
+    async pull(controller) {
+      const { value, done } = await pump.next();
+      if (done) {
+        controller.close();
+      } else {
+        controller.enqueue(value);
+      }
+    },
+    cancel() {
+      pump.return(undefined).catch(() => undefined);
+    },
+  }).pipeThrough(sseEncodeTransform());
+
+  return new Response(body, {
+    headers: {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+    },
   });
 }
 
