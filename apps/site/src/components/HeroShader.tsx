@@ -34,12 +34,14 @@ const FADE_GRADIENT =
   ' rgba(255,255,255,0.75) 80%,' +
   ' rgba(255,255,255,1) 100%)';
 
-const FALLBACK_GRADIENT =
+// Always-on base layer matching the shader palette. Visible before the first
+// WebGL frame (so there's no white flash on load) and as the no-WebGL2 fallback.
+const BASE_GRADIENT =
   'linear-gradient(135deg, #FFF1ED 0%, #FF9F6E 50%, #C97DFF 100%)';
 
 export function HeroShader() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [fallback, setFallback] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -49,11 +51,8 @@ export function HeroShader() {
       antialias: false,
       premultipliedAlpha: false,
     });
-
-    if (!gl) {
-      setFallback(true);
-      return;
-    }
+    // No WebGL2: leave the canvas transparent so BASE_GRADIENT shows through.
+    if (!gl) return;
 
     const compile = (type: number, src: string): WebGLShader | null => {
       const s = gl.createShader(type)!;
@@ -72,7 +71,6 @@ export function HeroShader() {
     if (!vs || !fs) {
       if (vs) gl.deleteShader(vs);
       if (fs) gl.deleteShader(fs);
-      setFallback(true);
       return;
     }
 
@@ -85,7 +83,6 @@ export function HeroShader() {
       gl.deleteProgram(prog);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
-      setFallback(true);
       return;
     }
     gl.useProgram(prog);
@@ -122,12 +119,17 @@ export function HeroShader() {
     const t0 = performance.now();
     let rafId = 0;
     let paused = false;
+    let firstFrame = true;
 
     const drawFrame = () => {
       resize();
       gl.uniform2f(uRes, canvas.width, canvas.height);
       gl.uniform1f(uTime, (performance.now() - t0) / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+      if (firstFrame) {
+        firstFrame = false;
+        setReady(true);
+      }
     };
 
     const loop = () => {
@@ -164,13 +166,15 @@ export function HeroShader() {
 
   return (
     <div class="absolute inset-0 -z-10 pointer-events-none" aria-hidden="true">
-      <canvas ref={canvasRef} class="absolute inset-0 block w-full h-full" />
-      {fallback && (
-        <div
-          class="absolute inset-0"
-          style={{ background: FALLBACK_GRADIENT }}
-        />
-      )}
+      <div class="absolute inset-0" style={{ background: BASE_GRADIENT }} />
+      <canvas
+        ref={canvasRef}
+        class="absolute inset-0 block w-full h-full"
+        style={{
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 700ms ease-out',
+        }}
+      />
       <div class="absolute inset-0" style={{ background: FADE_GRADIENT }} />
     </div>
   );
