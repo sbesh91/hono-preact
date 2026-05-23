@@ -34,6 +34,12 @@ export type DefineActionOpts<TChunk = never, TResult = unknown> = {
    * actions-handler reads it via the dispatcher (Task 18).
    */
   use?: ActionUse<TChunk, TResult, boolean>;
+  /**
+   * Per-action timeout in milliseconds. When omitted, the handler applies
+   * its configured default (30s). Pass `false` to disable the timeout for
+   * this action.
+   */
+  timeoutMs?: number | false;
 };
 
 export function defineAction<TPayload, TResult, TChunk = never>(
@@ -51,6 +57,14 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   if (opts?.use) {
     Object.defineProperty(fn, 'use', {
       value: opts.use,
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    });
+  }
+  if (opts?.timeoutMs !== undefined) {
+    Object.defineProperty(fn, 'timeoutMs', {
+      value: opts.timeoutMs,
       configurable: true,
       writable: true,
       enumerable: false,
