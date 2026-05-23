@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import {
   isOutcome,
+  timeoutOutcome,
   type AppConfig,
   type Outcome,
   type ServerMiddleware,
@@ -77,6 +78,12 @@ function translateOutcomeForAction(c: Context, outcome: Outcome): Response {
       outcome.status
     );
   }
+  if (outcome.__outcome === 'timeout') {
+    return c.json(
+      { __outcome: 'timeout', timeoutMs: outcome.timeoutMs },
+      504
+    );
+  }
   // render outcome should never reach the action RPC.
   return c.json(
     {
@@ -121,13 +128,26 @@ export interface ActionsHandlerOptions {
   resolvePageUse?: (
     moduleKey: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  /**
+   * Default action timeout in milliseconds applied when an action does not
+   * declare its own `timeoutMs`. Defaults to 30000 (30 seconds). Pass
+   * `false` to disable the default (only action-level `timeoutMs` enforces
+   * a deadline).
+   */
+  defaultTimeoutMs?: number | false;
 }
 
 export function actionsHandler(
   glob: LazyGlob | EagerGlob,
   opts: ActionsHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError, appConfig, resolvePageUse } = opts;
+  const {
+    dev = false,
+    onError,
+    appConfig,
+    resolvePageUse,
+    defaultTimeoutMs = 30_000,
+  } = opts;
   let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
@@ -219,7 +239,16 @@ export function actionsHandler(
       );
     }
 
-    const signal = c.req.raw.signal;
+    const actionTimeoutMs = (fn as { timeoutMs?: number | false }).timeoutMs;
+    const resolvedTimeoutMs =
+      actionTimeoutMs !== undefined ? actionTimeoutMs : defaultTimeoutMs;
+    const timeoutSignal =
+      resolvedTimeoutMs === false || resolvedTimeoutMs === undefined
+        ? undefined
+        : AbortSignal.timeout(resolvedTimeoutMs);
+    const signal = timeoutSignal
+      ? AbortSignal.any([c.req.raw.signal, timeoutSignal])
+      : c.req.raw.signal;
     const actionCtx = { c, signal };
 
     // Chain ordering is outer -> inner: app-level middleware wraps every
@@ -276,6 +305,14 @@ export function actionsHandler(
     } catch (err) {
       if (isOutcome(err)) {
         return translateOutcomeForAction(c, err);
+      }
+      if (
+        timeoutSignal?.aborted &&
+        timeoutSignal.reason instanceof DOMException &&
+        timeoutSignal.reason.name === 'TimeoutError' &&
+        typeof resolvedTimeoutMs === 'number'
+      ) {
+        return translateOutcomeForAction(c, timeoutOutcome(resolvedTimeoutMs));
       }
       onError?.(err, { module, action });
       const message =
