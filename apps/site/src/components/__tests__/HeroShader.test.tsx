@@ -1,0 +1,42 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, it, expect } from 'vitest';
+import { cleanup, render } from '@testing-library/preact';
+import { HeroShader } from '../HeroShader.js';
+
+afterEach(() => cleanup());
+
+describe('HeroShader', () => {
+  it('renders an aria-hidden background wrapper', () => {
+    const { container } = render(<HeroShader />);
+    const wrapper = container.querySelector('[aria-hidden="true"]');
+    expect(wrapper).not.toBeNull();
+  });
+
+  it('renders a canvas element on initial mount', () => {
+    const { container } = render(<HeroShader />);
+    expect(container.querySelector('canvas')).not.toBeNull();
+  });
+
+  it('layers a base gradient under the canvas for fade-in and fallback', () => {
+    // The wrapper always renders three children: a base-gradient div behind
+    // the canvas (visible pre-first-frame and as a no-WebGL2 backdrop), the
+    // canvas itself, and a fade overlay on top.
+    const { container } = render(<HeroShader />);
+    const wrapper = container.querySelector('[aria-hidden="true"]')!;
+    expect(wrapper.children.length).toBe(3);
+  });
+
+  it('keeps the canvas transparent until the first frame is drawn', () => {
+    // happy-dom returns null from getContext('webgl2'), so the effect bails
+    // before any draw and the canvas opacity stays at 0 so the base gradient
+    // shows through.
+    const { container } = render(<HeroShader />);
+    const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+    expect(canvas.style.opacity).toBe('0');
+  });
+
+  it('unmounts cleanly without throwing', () => {
+    const { unmount } = render(<HeroShader />);
+    expect(() => unmount()).not.toThrow();
+  });
+});
