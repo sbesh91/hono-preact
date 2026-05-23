@@ -152,6 +152,7 @@ export function sseGeneratorResponse(
     },
     cancel() {
       pump.return(undefined).catch(() => undefined);
+      gen.return(undefined).catch(() => undefined);
     },
   }).pipeThrough(sseEncodeTransform());
 
