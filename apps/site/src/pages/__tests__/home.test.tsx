@@ -35,4 +35,13 @@ describe('home (marketing landing)', () => {
     expect(screen.getByText(/loaders, forms, sse/i)).toBeInTheDocument();
     expect(screen.getByText(/nothing else to install/i)).toBeInTheDocument();
   });
+
+  it('mounts the hero shader background', () => {
+    const { container } = render(<Home />);
+    // HeroShader renders an aria-hidden wrapper containing a canvas (or the
+    // CSS fallback) plus a fade overlay.
+    const bg = container.querySelector('[aria-hidden="true"]');
+    expect(bg).not.toBeNull();
+    expect(bg!.querySelector('canvas')).not.toBeNull();
+  });
 });
