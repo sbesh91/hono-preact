@@ -1,4 +1,5 @@
 import { readSSE } from './sse-decoder.js';
+import { TimeoutError } from '../action.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -41,7 +42,14 @@ export async function fetchLoaderData<T>(
       error?: string;
       __outcome?: string;
       message?: string;
+      timeoutMs?: number;
     };
+    if (
+      body.__outcome === 'timeout' &&
+      typeof body.timeoutMs === 'number'
+    ) {
+      throw new TimeoutError(body.timeoutMs);
+    }
     if (body.__outcome === 'deny') {
       // The `deny()` constructor defaults `message` for first-party
       // callers, but a hand-rolled envelope from custom server middleware
@@ -121,6 +129,19 @@ export async function fetchLoaderData<T>(
       }
       break;
     }
+    if (ev.event === 'timeout') {
+      try {
+        const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+        throw new TimeoutError(parsed.timeoutMs ?? 0);
+      } catch (e) {
+        if (e instanceof TimeoutError) throw e;
+        throw new Error(
+          `Malformed timeout event in streaming loader: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
+      }
+    }
     if (ev.event === 'error') {
       try {
         const parsed = JSON.parse(ev.data) as {
@@ -157,6 +178,16 @@ export async function fetchLoaderData<T>(
           } catch {
             // malformed mid-stream chunk: skip
           }
+        } else if (ev.event === 'timeout') {
+          try {
+            const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+            callbacks.onError(new TimeoutError(parsed.timeoutMs ?? 0));
+          } catch {
+            callbacks.onError(
+              new Error('Malformed timeout event in streaming loader')
+            );
+          }
+          return;
         } else if (ev.event === 'error') {
           try {
             const parsed = JSON.parse(ev.data) as {
