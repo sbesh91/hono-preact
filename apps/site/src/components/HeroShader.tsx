@@ -48,27 +48,35 @@ export function HeroShader() {
     const gl = canvas.getContext('webgl2', {
       antialias: false,
       premultipliedAlpha: false,
-    }) as WebGL2RenderingContext | null;
+    });
 
     if (!gl) {
       setFallback(true);
       return;
     }
 
-    const compile = (type: number, src: string) => {
+    const compile = (type: number, src: string): WebGLShader | null => {
       const s = gl.createShader(type)!;
       gl.shaderSource(s, src);
       gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        // Surface to console but do not throw; fall back instead.
         console.error('HeroShader compile error:', gl.getShaderInfoLog(s));
+        gl.deleteShader(s);
+        return null;
       }
       return s;
     };
 
+    const vs = compile(gl.VERTEX_SHADER, VS);
+    const fs = compile(gl.FRAGMENT_SHADER, FS);
+    if (!vs || !fs) {
+      setFallback(true);
+      return;
+    }
+
     const prog = gl.createProgram()!;
-    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
-    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       console.error('HeroShader link error:', gl.getProgramInfoLog(prog));
@@ -142,6 +150,8 @@ export function HeroShader() {
     return () => {
       cancelAnimationFrame(rafId);
       document.removeEventListener('visibilitychange', onVisibility);
+      gl.deleteBuffer(buf);
+      gl.deleteProgram(prog);
     };
   }, []);
 

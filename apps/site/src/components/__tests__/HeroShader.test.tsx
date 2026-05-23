@@ -14,8 +14,7 @@ describe('HeroShader', () => {
 
   it('renders a canvas element on initial mount', () => {
     const { container } = render(<HeroShader />);
-    // Initial SSR/first-render path renders the canvas; the effect may swap to a
-    // fallback div after mount if WebGL2 isn't available.
+    // Canvas is always mounted; fallback gradient is layered on top when needed.
     expect(container.querySelector('canvas')).not.toBeNull();
   });
 
