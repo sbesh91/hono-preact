@@ -264,10 +264,10 @@ export function actionsHandler(
     }
     const { fn, use: actionUse, timeoutMs: actionTimeoutMs } = actionEntry;
 
-    const resolvedTimeoutMs =
+    const resolvedTimeoutMs: number | false =
       actionTimeoutMs !== undefined ? actionTimeoutMs : defaultTimeoutMs;
     const timeoutSignal =
-      resolvedTimeoutMs === false || resolvedTimeoutMs === undefined
+      resolvedTimeoutMs === false
         ? undefined
         : AbortSignal.timeout(resolvedTimeoutMs);
     const signal = timeoutSignal

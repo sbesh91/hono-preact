@@ -45,14 +45,30 @@ export function useOptimistic<TBase, TPayload>(
   // below. Each render rebinds this function and writes the latest option
   // value into the ref; settle/revert created by the stale memoized callback
   // still see the up-to-date `transition` setting through the ref.
+  //
+  // The callback returns a promise that resolves on the next animation frame
+  // so the browser snapshots Preact's POST-render DOM as "new state". Without
+  // the rAF wait, `forceRender()` (an async dispatch through useReducer) has
+  // not yet flushed when `startViewTransition` snapshots, and the transition
+  // captures identical before/after frames with no visible animation.
   const runWithTransition = (mutator: () => void) => {
     if (
       transitionRef.current &&
       typeof document !== 'undefined' &&
       typeof document.startViewTransition === 'function'
     ) {
-      document.startViewTransition(() => {
+      document.startViewTransition(async () => {
         mutator();
+        await new Promise<void>((resolve) => {
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => resolve());
+          } else {
+            // Non-DOM environment (shouldn't reach this branch given the
+            // outer check, but defensive). Resolve on next microtask so
+            // Preact's scheduled render runs.
+            queueMicrotask(resolve);
+          }
+        });
       });
     } else {
       mutator();

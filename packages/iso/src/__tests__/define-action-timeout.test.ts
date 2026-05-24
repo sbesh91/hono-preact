@@ -26,4 +26,29 @@ describe('defineAction timeoutMs', () => {
     const stub = defineAction(async (_ctx, _payload) => 1, { timeoutMs: false });
     expect(readAmbient(stub, 'timeoutMs')).toBe(false);
   });
+
+  it('accepts 0', () => {
+    const stub = defineAction(async (_ctx, _payload) => 1, { timeoutMs: 0 });
+    expect(readAmbient(stub, 'timeoutMs')).toBe(0);
+  });
+
+  it('rejects negative numbers', () => {
+    expect(() =>
+      defineAction(async (_ctx, _payload) => 1, { timeoutMs: -5 })
+    ).toThrow(RangeError);
+  });
+
+  it('rejects NaN', () => {
+    expect(() =>
+      defineAction(async (_ctx, _payload) => 1, { timeoutMs: Number.NaN })
+    ).toThrow(RangeError);
+  });
+
+  it('rejects Infinity', () => {
+    expect(() =>
+      defineAction(async (_ctx, _payload) => 1, {
+        timeoutMs: Number.POSITIVE_INFINITY,
+      })
+    ).toThrow(RangeError);
+  });
 });

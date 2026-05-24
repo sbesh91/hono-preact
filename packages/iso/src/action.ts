@@ -62,10 +62,23 @@ export class TimeoutError extends Error {
   }
 }
 
+function validateTimeoutMs(
+  value: number | false | undefined,
+  context: string
+): void {
+  if (value === undefined || value === false) return;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `${context}: timeoutMs must be a non-negative finite number or false, got ${String(value)}`
+    );
+  }
+}
+
 export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
   opts?: DefineActionOpts<TChunk, TResult>
 ): ActionStub<TPayload, TResult, TChunk> {
+  validateTimeoutMs(opts?.timeoutMs, 'defineAction');
   // SHAPE NOTE: `ActionStub` describes the CLIENT-side shape produced by the
   // Vite plugin (`packages/vite/src/server-only.ts`) — an object with
   // `__module`, `__action`, and a `useAction` method. `defineAction` runs on
@@ -95,12 +108,7 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 
-export type UseActionOptions<
-  TPayload,
-  TResult,
-  TChunk = never,
-  TSnapshot = unknown,
-> = {
+type UseActionOptionsCommon<TChunk = never> = {
   /**
    * How to update loader caches after the action commits. Three modes:
    *
@@ -116,38 +124,59 @@ export type UseActionOptions<
    * See `/docs/reloading` for the full mental model.
    */
   invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
-  onMutate?: (payload: TPayload) => TSnapshot;
   onChunk?: (chunk: TChunk) => void;
-  /**
-   * `snapshot` is the value returned by `onMutate` for this mutation.
-   * It is `undefined` when `onMutate` was not provided.
-   */
-  onError?: (err: Error, snapshot: TSnapshot | undefined) => void;
-  /**
-   * `snapshot` is the value returned by `onMutate` for this mutation.
-   * It is `undefined` when `onMutate` was not provided.
-   */
-  onSuccess?: (data: TResult, snapshot: TSnapshot | undefined) => void;
 };
+
+/**
+ * Options when `onMutate` is provided. `onSuccess` / `onError` receive the
+ * value `onMutate` returned for this specific mutation as the second
+ * parameter, so concurrent calls can be paired with their own snapshot.
+ */
+type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
+  UseActionOptionsCommon<TChunk> & {
+    onMutate: (payload: TPayload) => TSnapshot;
+    onError?: (err: Error, snapshot: TSnapshot) => void;
+    onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+  };
+
+/**
+ * Options when `onMutate` is not provided. `onSuccess` / `onError` take
+ * only the result / error — there is no snapshot to thread through.
+ */
+type UseActionWithoutMutate<TResult, TChunk> =
+  UseActionOptionsCommon<TChunk> & {
+    onMutate?: undefined;
+    onError?: (err: Error) => void;
+    onSuccess?: (data: TResult) => void;
+  };
+
+/**
+ * Discriminated by `onMutate`. Providing `onMutate` requires the
+ * `onSuccess` / `onError` callbacks to accept the snapshot; omitting
+ * `onMutate` types those callbacks as single-argument.
+ */
+export type UseActionOptions<
+  TPayload,
+  TResult,
+  TChunk = never,
+  TSnapshot = unknown,
+> =
+  | UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot>
+  | UseActionWithoutMutate<TResult, TChunk>;
 
 /**
  * The value `mutate` resolves to. A discriminated union so callers can
  * chain on success without awaiting then probing the hook's `data`/`error`
  * state, and without leaking unhandled rejections in fire-and-forget callers.
  *
- * - Success: `{ ok: true, data }`. For streaming actions that emit no
- *   `result` SSE event, `data` is `undefined`; declare `TResult = void` (or
- *   include `undefined` in its union) if your action doesn't emit a result.
+ * - Success: `{ ok: true, data }`. `data` is `undefined` for streaming
+ *   actions that close without emitting a `result` SSE event (the type
+ *   reflects this honestly: callers must narrow before using `data`).
  * - Failure: `{ ok: false, error }`. The same `Error` instance is also
  *   written to the hook's `error` state and passed to `onError`.
- *
- * Returning a union (rather than throwing) keeps `mutate(...)` ergonomic
- * for non-awaiting call sites — the existing `error` state field is the
- * idiomatic way to render an error UI — while still letting awaiting
- * callers do `if (result.ok) navigate(...)`.
  */
 export type MutateResult<TResult> =
-  | { ok: true; data: TResult }
+  | { ok: true; data: TResult | undefined }
   | { ok: false; error: Error };
 
 export type UseActionResult<TPayload, TResult> = {
@@ -192,10 +221,51 @@ export function useAction<
 
       const currentStub = stubRef.current;
       const currentOptions = optionsRef.current;
-      let snapshot: TSnapshot | undefined;
-      if (currentOptions?.onMutate) {
-        snapshot = currentOptions.onMutate(payload);
-      }
+
+      // Resolve the callback discriminant once for this mutation. The runtime
+      // value `callbacks` carries the typed onSuccess/onError handlers plus
+      // the snapshot (when onMutate is set) so subsequent invokeSuccess /
+      // invokeError calls don't need to re-narrow currentOptions.
+      type Callbacks =
+        | {
+            kind: 'with-mutate';
+            snapshot: TSnapshot;
+            onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+            onError?: (err: Error, snapshot: TSnapshot) => void;
+          }
+        | {
+            kind: 'without-mutate';
+            onSuccess?: (data: TResult) => void;
+            onError?: (err: Error) => void;
+          };
+
+      const callbacks: Callbacks = currentOptions?.onMutate
+        ? {
+            kind: 'with-mutate',
+            snapshot: currentOptions.onMutate(payload),
+            onSuccess: currentOptions.onSuccess,
+            onError: currentOptions.onError,
+          }
+        : {
+            kind: 'without-mutate',
+            onSuccess: currentOptions?.onSuccess,
+            onError: currentOptions?.onError,
+          };
+
+      const invokeSuccess = (data: TResult) => {
+        if (callbacks.kind === 'with-mutate') {
+          callbacks.onSuccess?.(data, callbacks.snapshot);
+        } else {
+          callbacks.onSuccess?.(data);
+        }
+      };
+      const invokeError = (err: Error) => {
+        if (callbacks.kind === 'with-mutate') {
+          callbacks.onError?.(err, callbacks.snapshot);
+        } else {
+          callbacks.onError?.(err);
+        }
+      };
 
       let finalResult: TResult | undefined;
       try {
@@ -348,22 +418,20 @@ export function useAction<
           }
           if (resultValue !== undefined) {
             setData(resultValue);
-            currentOptions?.onSuccess?.(resultValue, snapshot);
+            invokeSuccess(resultValue);
             finalResult = resultValue;
           } else {
-            currentOptions?.onSuccess?.(
-              undefined as unknown as TResult,
-              snapshot
-            );
-            // Streaming actions with no `result` event resolve with undefined.
-            // Consumers should type `TResult = void` (or include `undefined`)
-            // when their action doesn't emit a result.
-            finalResult = undefined as unknown as TResult;
+            // Streaming action closed without emitting a `result` event;
+            // resolve with `data: undefined`. `onSuccess` is not called
+            // in this branch since there is no result value to deliver
+            // (matches the static-action path where onSuccess only fires
+            // with a real value).
+            finalResult = undefined;
           }
         } else {
           const result = (await response.json()) as TResult;
           setData(result);
-          currentOptions?.onSuccess?.(result, snapshot);
+          invokeSuccess(result);
           finalResult = result;
         }
 
@@ -388,12 +456,12 @@ export function useAction<
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
         setError(e);
-        currentOptions?.onError?.(e, snapshot);
+        invokeError(e);
         setPending(false);
         return { ok: false, error: e };
       }
       setPending(false);
-      return { ok: true, data: finalResult as TResult };
+      return { ok: true, data: finalResult };
     },
     []
   );

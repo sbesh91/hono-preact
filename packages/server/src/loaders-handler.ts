@@ -255,10 +255,10 @@ export function loadersHandler(
       );
     }
 
-    const resolvedTimeoutMs =
+    const resolvedTimeoutMs: number | false =
       entry.timeoutMs !== undefined ? entry.timeoutMs : defaultTimeoutMs;
     const timeoutSignal =
-      resolvedTimeoutMs === false || resolvedTimeoutMs === undefined
+      resolvedTimeoutMs === false
         ? undefined
         : AbortSignal.timeout(resolvedTimeoutMs);
     const signal = timeoutSignal

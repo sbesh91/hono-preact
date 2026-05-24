@@ -151,7 +151,7 @@ describe('useAction', () => {
 
     await screen.findByText('has-data');
     expect(screen.getByTestId('data')).toHaveTextContent('has-data');
-    expect(onSuccess).toHaveBeenCalledWith({ ok: true }, undefined);
+    expect(onSuccess).toHaveBeenCalledWith({ ok: true });
   });
 
   it('passes snapshot from onMutate to onSuccess', async () => {

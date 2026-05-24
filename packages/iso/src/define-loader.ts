@@ -148,10 +148,23 @@ function ViewRenderer<T>({
   return render({ data, error, reload, ...props });
 }
 
+function validateTimeoutMs(
+  value: number | false | undefined,
+  context: string
+): void {
+  if (value === undefined || value === false) return;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `${context}: timeoutMs must be a non-negative finite number or false, got ${String(value)}`
+    );
+  }
+}
+
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
 ): LoaderRef<T> {
+  validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   const idKey = opts?.__moduleKey
     ? opts.__loaderName
       ? `${opts.__moduleKey}::${opts.__loaderName}`

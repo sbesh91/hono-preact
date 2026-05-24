@@ -45,15 +45,11 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
     ...actionOpts,
     onMutate: (payload) => addOptimistic(payload),
     onSuccess: (data, handle) => {
-      // `onMutate` above always returns an `OptimisticHandle`, so `handle`
-      // is guaranteed defined here. The guard is a one-liner that documents
-      // the invariant for future readers; the type system cannot infer the
-      // pairing between `onMutate`'s return and these callback parameters.
-      if (handle) handle.settle();
+      handle.settle();
       onSuccess?.(data);
     },
     onError: (err, handle) => {
-      if (handle) handle.revert();
+      handle.revert();
       onError?.(err);
     },
   });

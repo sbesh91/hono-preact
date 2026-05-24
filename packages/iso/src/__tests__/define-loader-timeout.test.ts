@@ -16,4 +16,27 @@ describe('defineLoader timeoutMs', () => {
     const ref = defineLoader(async () => 1, { timeoutMs: false });
     expect(ref.timeoutMs).toBe(false);
   });
+
+  it('accepts 0 (fires immediately at request time)', () => {
+    const ref = defineLoader(async () => 1, { timeoutMs: 0 });
+    expect(ref.timeoutMs).toBe(0);
+  });
+
+  it('rejects negative numbers', () => {
+    expect(() => defineLoader(async () => 1, { timeoutMs: -1 })).toThrow(
+      RangeError
+    );
+  });
+
+  it('rejects NaN', () => {
+    expect(() =>
+      defineLoader(async () => 1, { timeoutMs: Number.NaN })
+    ).toThrow(RangeError);
+  });
+
+  it('rejects Infinity', () => {
+    expect(() =>
+      defineLoader(async () => 1, { timeoutMs: Number.POSITIVE_INFINITY })
+    ).toThrow(RangeError);
+  });
 });
