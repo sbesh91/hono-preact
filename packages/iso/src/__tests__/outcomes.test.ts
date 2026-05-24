@@ -74,7 +74,11 @@ describe('deny()', () => {
   });
 
   it('carries opts.data on the (DenyInput) form too', () => {
-    const outcome = deny({ status: 403, message: 'no', data: { reason: 'role' } });
+    const outcome = deny({
+      status: 403,
+      message: 'no',
+      data: { reason: 'role' },
+    });
     expect(outcome.data).toEqual({ reason: 'role' });
   });
 
@@ -84,7 +88,9 @@ describe('deny()', () => {
   });
 
   it('exposes opts.headers on the (status, message, opts) form', () => {
-    const outcome = deny(401, 'unauth', { headers: { 'WWW-Authenticate': 'Bearer' } });
+    const outcome = deny(401, 'unauth', {
+      headers: { 'WWW-Authenticate': 'Bearer' },
+    });
     expect(outcome.headers).toEqual({ 'WWW-Authenticate': 'Bearer' });
   });
 });

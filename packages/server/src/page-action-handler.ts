@@ -99,9 +99,11 @@ export function pickAccept(header: string | undefined): Accept {
         if (!Number.isNaN(parsed)) q = parsed;
       }
     }
-    if (mt === 'text/event-stream') candidates.push({ type: 'event-stream', q });
+    if (mt === 'text/event-stream')
+      candidates.push({ type: 'event-stream', q });
     else if (mt === 'application/json') candidates.push({ type: 'json', q });
-    else if (mt === 'text/html' || mt === '*/*') candidates.push({ type: 'html', q });
+    else if (mt === 'text/html' || mt === '*/*')
+      candidates.push({ type: 'html', q });
   }
 
   if (candidates.length === 0) return 'html';
@@ -367,10 +369,7 @@ export function pageActionHandler(
           resolution.kind === 'outcome' &&
           resolution.outcome.__outcome === 'deny'
         ) {
-          return c.text(
-            resolution.outcome.message,
-            resolution.outcome.status
-          );
+          return c.text(resolution.outcome.message, resolution.outcome.status);
         }
         return c.text('Action failed', 500);
       }

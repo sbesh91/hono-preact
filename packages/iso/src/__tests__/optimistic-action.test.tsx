@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act, cleanup, waitFor, renderHook } from '@testing-library/preact';
+import {
+  render,
+  screen,
+  act,
+  cleanup,
+  waitFor,
+  renderHook,
+} from '@testing-library/preact';
 import { defineAction } from '../action.js';
 import { useOptimisticAction, OPTIMISTIC_BRAND } from '../optimistic-action.js';
 import { ReloadContext } from '../reload-context.js';
@@ -59,7 +66,10 @@ describe('useOptimisticAction', () => {
     await act(async () => {
       resolveFetch(
         new Response(
-          JSON.stringify({ __outcome: 'success', data: { id: 1, title: 'Dune' } }),
+          JSON.stringify({
+            __outcome: 'success',
+            data: { id: 1, title: 'Dune' },
+          }),
           { status: 200 }
         )
       );
@@ -113,7 +123,10 @@ describe('useOptimisticAction', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         new Response(
-          JSON.stringify({ __outcome: 'success', data: { id: 1, title: 'Dune' } }),
+          JSON.stringify({
+            __outcome: 'success',
+            data: { id: 1, title: 'Dune' },
+          }),
           { status: 200 }
         )
       )

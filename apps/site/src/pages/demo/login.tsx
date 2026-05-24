@@ -6,9 +6,7 @@ const LoginPage: FunctionComponent = () => {
   const { pending } = useFormStatus(serverActions.login);
   const result = useActionResult(serverActions.login);
   const error =
-    result?.kind === 'deny' || result?.kind === 'error'
-      ? result.message
-      : null;
+    result?.kind === 'deny' || result?.kind === 'error' ? result.message : null;
 
   return (
     <section class="mx-auto max-w-md p-6 space-y-4">

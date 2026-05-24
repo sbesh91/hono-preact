@@ -113,9 +113,7 @@ describe('useActionResult', () => {
       submittedPayload: { text: 'hi' },
     });
     const { container } = render(
-      <Reader
-        stub={{ __module: 'pages/foo.server', __action: 'submit' }}
-      />
+      <Reader stub={{ __module: 'pages/foo.server', __action: 'submit' }} />
     );
     expect(JSON.parse(container.textContent!)).toMatchObject({
       kind: 'deny',
@@ -140,9 +138,7 @@ describe('useActionResult', () => {
     };
     const { container } = render(
       <ActionResultContext.Provider value={ssrValue}>
-        <Reader
-          stub={{ __module: 'pages/foo.server', __action: 'submit' }}
-        />
+        <Reader stub={{ __module: 'pages/foo.server', __action: 'submit' }} />
       </ActionResultContext.Provider>
     );
     const parsed = JSON.parse(container.textContent!);

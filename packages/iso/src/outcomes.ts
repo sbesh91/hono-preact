@@ -76,7 +76,11 @@ type DenyOpts = {
   data?: unknown;
 };
 
-export function deny(status: ErrorStatusCode, message?: string, opts?: DenyOpts): DenyOutcome;
+export function deny(
+  status: ErrorStatusCode,
+  message?: string,
+  opts?: DenyOpts
+): DenyOutcome;
 export function deny(spec: DenyInput): DenyOutcome;
 export function deny(
   a: ErrorStatusCode | DenyInput,

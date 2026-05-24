@@ -16,8 +16,15 @@ describe('serializeActionOutcome', () => {
   });
 
   it('emits __outcome=redirect with HTTP 200 (client follows)', () => {
-    const env = serializeActionOutcome({ kind: 'outcome', outcome: redirect('/next') });
-    expect(env.body).toEqual({ __outcome: 'redirect', to: '/next', status: 302 });
+    const env = serializeActionOutcome({
+      kind: 'outcome',
+      outcome: redirect('/next'),
+    });
+    expect(env.body).toEqual({
+      __outcome: 'redirect',
+      to: '/next',
+      status: 302,
+    });
     expect(env.status).toBe(200);
   });
 
@@ -36,13 +43,19 @@ describe('serializeActionOutcome', () => {
   });
 
   it('emits __outcome=deny without data field when none provided', () => {
-    const env = serializeActionOutcome({ kind: 'outcome', outcome: deny(403, 'no') });
+    const env = serializeActionOutcome({
+      kind: 'outcome',
+      outcome: deny(403, 'no'),
+    });
     expect(env.body).toEqual({ __outcome: 'deny', status: 403, message: 'no' });
     expect(env.status).toBe(403);
   });
 
   it('emits __outcome=timeout with HTTP 504', () => {
-    const env = serializeActionOutcome({ kind: 'outcome', outcome: timeoutOutcome(30000) });
+    const env = serializeActionOutcome({
+      kind: 'outcome',
+      outcome: timeoutOutcome(30000),
+    });
     expect(env.body).toEqual({ __outcome: 'timeout', timeoutMs: 30000 });
     expect(env.status).toBe(504);
   });
@@ -59,7 +72,9 @@ describe('serializeActionOutcome', () => {
   it('carries deny headers through to the envelope return value', () => {
     const env = serializeActionOutcome({
       kind: 'outcome',
-      outcome: deny(401, 'unauth', { headers: { 'WWW-Authenticate': 'Bearer' } }),
+      outcome: deny(401, 'unauth', {
+        headers: { 'WWW-Authenticate': 'Bearer' },
+      }),
     });
     expect(env.headers).toEqual({ 'WWW-Authenticate': 'Bearer' });
   });

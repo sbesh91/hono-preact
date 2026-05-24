@@ -81,10 +81,7 @@ export {
   subscribe as subscribeFormSubmit,
 } from './internal/form-submit-store.js';
 
-export {
-  assignSafeRedirect,
-  isSameOrigin,
-} from './internal/safe-redirect.js';
+export { assignSafeRedirect, isSameOrigin } from './internal/safe-redirect.js';
 
 export {
   setLastActionResult,

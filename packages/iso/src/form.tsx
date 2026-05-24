@@ -86,15 +86,13 @@ export function Form<TPayload, TResult>({
           body: fd,
           headers: { Accept: 'application/json' },
         });
-        const env = (await res.json().catch(() => null)) as
-          | {
-              __outcome?: string;
-              to?: string;
-              message?: string;
-              data?: unknown;
-              status?: number;
-            }
-          | null;
+        const env = (await res.json().catch(() => null)) as {
+          __outcome?: string;
+          to?: string;
+          message?: string;
+          data?: unknown;
+          status?: number;
+        } | null;
         if (!env) {
           handle?.revert();
           if (typeof window !== 'undefined') window.location.reload();
@@ -150,8 +148,7 @@ export function Form<TPayload, TResult>({
         setLastActionResult(moduleKey, actionName, {
           kind: 'error',
           message:
-            env.message ??
-            `Unexpected outcome: ${env.__outcome ?? 'unknown'}`,
+            env.message ?? `Unexpected outcome: ${env.__outcome ?? 'unknown'}`,
           submittedPayload: payload,
         });
       } catch (err) {

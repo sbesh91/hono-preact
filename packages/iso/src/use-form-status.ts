@@ -11,9 +11,8 @@ export function useFormStatus(
   // preact/compat (10.29) ships only the 2-arg signature of useSyncExternalStore.
   // The SSR "always idle" behavior that React 18's getServerSnapshot would
   // provide is achieved via the isBrowser() guard inside getSnapshot.
-  const pending = useSyncExternalStore(
-    subscribe,
-    () => (isBrowser() ? isPending(stub) : false)
+  const pending = useSyncExternalStore(subscribe, () =>
+    isBrowser() ? isPending(stub) : false
   );
   return { pending };
 }

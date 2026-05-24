@@ -105,10 +105,7 @@ export function makePageActionResolvers(
   const build = async (): Promise<Built> => {
     // Load each distinct server thunk once; a thunk may appear as `server`
     // on one route and as an `ancestor` on its children.
-    const thunkCache = new Map<
-      () => Promise<unknown>,
-      Promise<ServerModule>
-    >();
+    const thunkCache = new Map<() => Promise<unknown>, Promise<ServerModule>>();
     const load = (thunk: () => Promise<unknown>): Promise<ServerModule> => {
       let p = thunkCache.get(thunk);
       if (!p) {
@@ -174,7 +171,9 @@ export function makePageActionResolvers(
           bestDepth = depth;
         }
       }
-      return bestPattern ? (byPathMap.get(bestPattern) ?? new Map()) : new Map();
+      return bestPattern
+        ? (byPathMap.get(bestPattern) ?? new Map())
+        : new Map();
     },
     async byModuleKey(
       moduleKey: string,

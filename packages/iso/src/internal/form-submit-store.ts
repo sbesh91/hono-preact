@@ -22,7 +22,10 @@ export function endSubmit(module: string, action: string): void {
   for (const l of listeners) l();
 }
 
-export function isPending(stub?: { __module: string; __action: string }): boolean {
+export function isPending(stub?: {
+  __module: string;
+  __action: string;
+}): boolean {
   if (stub) return (counts.get(key(stub.__module, stub.__action)) ?? 0) > 0;
   return counts.size > 0;
 }

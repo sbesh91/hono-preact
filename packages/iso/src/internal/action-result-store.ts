@@ -44,9 +44,10 @@ export function clearLastActionResult(module: string, action: string): void {
   }
 }
 
-export function getLastActionResult(
-  stub?: { __module: string; __action: string }
-): Entry | null {
+export function getLastActionResult(stub?: {
+  __module: string;
+  __action: string;
+}): Entry | null {
   if (stub) return results.get(key(stub.__module, stub.__action)) ?? null;
   // No stub: return the most recently written entry.
   let last: Entry | null = null;

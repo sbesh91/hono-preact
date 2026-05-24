@@ -101,9 +101,7 @@ const AddMovieForm = () => {
 
   return (
     <Form action={serverActions.addMovie}>
-      {result?.kind === 'deny' && (
-        <p role="alert">{result.message}</p>
-      )}
+      {result?.kind === 'deny' && <p role="alert">{result.message}</p>}
       {result?.kind === 'deny' && result.data?.fieldErrors?.title && (
         <p>{result.data.fieldErrors.title}</p>
       )}

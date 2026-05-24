@@ -83,13 +83,14 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     });
     const noopRender = async () => new Response('', { status: 200 });
 
-    const honoApp = new Hono()
-      .post('/__loaders', loadersHandler(glob))
-      .post('*', pageActionHandler({
+    const honoApp = new Hono().post('/__loaders', loadersHandler(glob)).post(
+      '*',
+      pageActionHandler({
         resolverByPath: pageActionResolvers.byPath,
         renderPage: noopRender as never,
         resolvePageNode: () => null,
-      }));
+      })
+    );
 
     // Route every fetch to the Hono app. Both the loader RPC stub
     // (`/__loaders`) and the action POST (mounted at `*` by pageActionHandler)

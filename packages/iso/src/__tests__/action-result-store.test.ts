@@ -84,9 +84,7 @@ describe('action-result-store', () => {
       submittedPayload: null,
     });
     clearLastActionResult('m', 'a');
-    expect(
-      getLastActionResult({ __module: 'm', __action: 'a' })
-    ).toBeNull();
+    expect(getLastActionResult({ __module: 'm', __action: 'a' })).toBeNull();
   });
 
   it('subscribers fire on set and clear', () => {

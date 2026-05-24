@@ -4,10 +4,7 @@ import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
 import type { ActionUse } from './internal/use-types.js';
-import {
-  beginSubmit,
-  endSubmit,
-} from './internal/form-submit-store.js';
+import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
 import {
   setLastActionResult,

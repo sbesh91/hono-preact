@@ -14,10 +14,20 @@ function makeStub(): ActionStub<{ text: string }, { id: number }, never> {
     { id: number },
     never
   >;
-  (stub as unknown as { __module: string; __action: string; useAction: unknown }).__module =
-    'pages/test.server';
-  (stub as unknown as { __module: string; __action: string; useAction: unknown }).__action =
-    'submit';
+  (
+    stub as unknown as {
+      __module: string;
+      __action: string;
+      useAction: unknown;
+    }
+  ).__module = 'pages/test.server';
+  (
+    stub as unknown as {
+      __module: string;
+      __action: string;
+      useAction: unknown;
+    }
+  ).__action = 'submit';
   return stub;
 }
 
@@ -36,8 +46,12 @@ describe('<Form>', () => {
 
   it('emits __module and __action as hidden inputs', () => {
     const { container } = render(<Form action={makeStub()} />);
-    const m = container.querySelector('input[name="__module"]') as HTMLInputElement;
-    const a = container.querySelector('input[name="__action"]') as HTMLInputElement;
+    const m = container.querySelector(
+      'input[name="__module"]'
+    ) as HTMLInputElement;
+    const a = container.querySelector(
+      'input[name="__action"]'
+    ) as HTMLInputElement;
     expect(m.value).toBe('pages/test.server');
     expect(a.value).toBe('submit');
     expect(m.type).toBe('hidden');
@@ -57,19 +71,19 @@ describe('<Form>', () => {
       </Form>
     );
     const fieldset = container.querySelector('fieldset.hp-form-fieldset')!;
-    const input = fieldset.querySelector('input[name="text"]') as HTMLInputElement;
+    const input = fieldset.querySelector(
+      'input[name="text"]'
+    ) as HTMLInputElement;
     expect(input.value).toBe('hi');
   });
 
   it('intercepts submit, calls fetch with FormData and Accept: application/json', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      );
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
     const { container } = render(
       <Form action={makeStub()}>
         <input name="text" defaultValue="hi" />
@@ -123,13 +137,10 @@ describe('<Form>', () => {
 
   it('writes success outcome to the client store', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ __outcome: 'success', data: { id: 1 } }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     );
     const stub = makeStub();
     const { container } = render(

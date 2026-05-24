@@ -36,9 +36,8 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionStub<TPayload, TResult, never>
 ): ActionResult<TPayload, TResult> {
   const ssr = useContext(ActionResultContext);
-  const client = useSyncExternalStore(
-    subscribeActionResults,
-    () => (isBrowser() ? getLastActionResult(stub) : null)
+  const client = useSyncExternalStore(subscribeActionResults, () =>
+    isBrowser() ? getLastActionResult(stub) : null
   );
 
   // Client store wins when populated: a JS-on submit has produced a result.

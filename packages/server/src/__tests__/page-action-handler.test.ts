@@ -4,7 +4,9 @@ import { Hono } from 'hono';
 import { pageActionHandler, pickAccept } from '../page-action-handler.js';
 import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
 
-function buildHandler(actions: Record<string, (ctx: unknown, payload: unknown) => Promise<unknown>>) {
+function buildHandler(
+  actions: Record<string, (ctx: unknown, payload: unknown) => Promise<unknown>>
+) {
   const resolverByPath = async () => {
     const map = new Map();
     for (const [name, fn] of Object.entries(actions)) {
@@ -12,7 +14,10 @@ function buildHandler(actions: Record<string, (ctx: unknown, payload: unknown) =
     }
     return map;
   };
-  const renderPage = vi.fn(async (c: { html: (s: string) => unknown }, _node: unknown) => c.html('<!doctype html><body>RENDERED</body>'));
+  const renderPage = vi.fn(
+    async (c: { html: (s: string) => unknown }, _node: unknown) =>
+      c.html('<!doctype html><body>RENDERED</body>')
+  );
   return pageActionHandler({
     resolverByPath,
     renderPage: renderPage as never,
@@ -29,8 +34,15 @@ describe('pageActionHandler', () => {
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: { x: 1 } }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: { x: 1 },
+      }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -42,7 +54,10 @@ describe('pageActionHandler', () => {
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'multipart/form-data; boundary=----b', Accept: 'text/html' },
+      headers: {
+        'Content-Type': 'multipart/form-data; boundary=----b',
+        Accept: 'text/html',
+      },
       body: '------b\r\nContent-Disposition: form-data; name="__module"\r\n\r\npages/test.server\r\n------b\r\nContent-Disposition: form-data; name="__action"\r\n\r\nsubmit\r\n------b--\r\n',
     });
     expect(res.status).toBe(303);
@@ -58,7 +73,10 @@ describe('pageActionHandler', () => {
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'multipart/form-data; boundary=----b', Accept: 'text/html' },
+      headers: {
+        'Content-Type': 'multipart/form-data; boundary=----b',
+        Accept: 'text/html',
+      },
       body: '------b\r\nContent-Disposition: form-data; name="__module"\r\n\r\npages/test.server\r\n------b\r\nContent-Disposition: form-data; name="__action"\r\n\r\nsubmit\r\n------b--\r\n',
     });
     expect(res.status).toBe(302);
@@ -74,7 +92,10 @@ describe('pageActionHandler', () => {
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'multipart/form-data; boundary=----b', Accept: 'text/html' },
+      headers: {
+        'Content-Type': 'multipart/form-data; boundary=----b',
+        Accept: 'text/html',
+      },
       body: '------b\r\nContent-Disposition: form-data; name="__module"\r\n\r\npages/test.server\r\n------b\r\nContent-Disposition: form-data; name="__action"\r\n\r\nsubmit\r\n------b--\r\n',
     });
     expect(res.status).toBe(422);
@@ -92,12 +113,18 @@ describe('pageActionHandler', () => {
     const res = await app.request('/foo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/html' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'stream', payload: {} }),
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'stream',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(405);
     expect(res.headers.get('Content-Type')).toMatch(/text\/plain/);
     const body = await res.text();
-    expect(body).toContain('Streaming actions require Accept: text/event-stream');
+    expect(body).toContain(
+      'Streaming actions require Accept: text/event-stream'
+    );
   });
 
   it('returns 405 JSON envelope when streaming action invoked with Accept: application/json', async () => {
@@ -108,8 +135,15 @@ describe('pageActionHandler', () => {
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'stream', payload: {} }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'stream',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(405);
     const body = await res.json();
@@ -124,8 +158,15 @@ describe('pageActionHandler', () => {
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'missing', payload: {} }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'missing',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(404);
   });
@@ -135,12 +176,23 @@ describe('pageActionHandler', () => {
 // timeout options, exercising per-action and handler-default timeout paths.
 function buildTimedApp(
   actionFn: Parameters<typeof defineAction>[0],
-  opts: { perActionTimeoutMs?: number | false; defaultTimeoutMs?: number | false }
+  opts: {
+    perActionTimeoutMs?: number | false;
+    defaultTimeoutMs?: number | false;
+  }
 ) {
-  const action = defineAction(actionFn, opts.perActionTimeoutMs !== undefined ? { timeoutMs: opts.perActionTimeoutMs } : undefined);
+  const action = defineAction(
+    actionFn,
+    opts.perActionTimeoutMs !== undefined
+      ? { timeoutMs: opts.perActionTimeoutMs }
+      : undefined
+  );
   const resolverByPath = async () => {
     const map = new Map();
-    const metadata = action as unknown as { use?: ReadonlyArray<unknown>; timeoutMs?: number | false };
+    const metadata = action as unknown as {
+      use?: ReadonlyArray<unknown>;
+      timeoutMs?: number | false;
+    };
     map.set('create', {
       fn: action as (ctx: unknown, payload: unknown) => Promise<unknown>,
       use: metadata.use ?? [],
@@ -154,13 +206,18 @@ function buildTimedApp(
     resolverByPath,
     renderPage: noopRender as never,
     resolvePageNode: () => null,
-    ...(opts.defaultTimeoutMs !== undefined ? { defaultTimeoutMs: opts.defaultTimeoutMs } : {}),
+    ...(opts.defaultTimeoutMs !== undefined
+      ? { defaultTimeoutMs: opts.defaultTimeoutMs }
+      : {}),
   });
   const app = new Hono().post('*', handler);
   const post = (body: unknown) =>
     app.request('http://localhost/page', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
       body: JSON.stringify(body),
     });
   return { app, post };
@@ -171,14 +228,20 @@ describe('pageActionHandler timeouts', () => {
     const { post } = buildTimedApp(
       async ({ signal }) => {
         await new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
         });
         return { id: 1 };
       },
       { perActionTimeoutMs: 50 }
     );
 
-    const res = await post({ module: 'pages/timed', action: 'create', payload: {} });
+    const res = await post({
+      module: 'pages/timed',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(504);
     const body = (await res.json()) as unknown;
     expect(isTimeout(body)).toBe(true);
@@ -189,14 +252,20 @@ describe('pageActionHandler timeouts', () => {
     const { post } = buildTimedApp(
       async ({ signal }) => {
         await new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
         });
         return { ok: true };
       },
       { defaultTimeoutMs: 50 }
     );
 
-    const res = await post({ module: 'pages/timed', action: 'create', payload: {} });
+    const res = await post({
+      module: 'pages/timed',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(504);
     const body = (await res.json()) as { timeoutMs: number };
     expect(isTimeout(body)).toBe(true);
@@ -212,7 +281,11 @@ describe('pageActionHandler timeouts', () => {
       { perActionTimeoutMs: false, defaultTimeoutMs: 25 }
     );
 
-    const res = await post({ module: 'pages/timed', action: 'create', payload: {} });
+    const res = await post({
+      module: 'pages/timed',
+      action: 'create',
+      payload: {},
+    });
     expect(res.status).toBe(200);
   });
 
@@ -260,11 +333,15 @@ describe('pickAccept', () => {
   });
   it('prefers higher-q candidate in mixed Accept', () => {
     // The JS-on default header sent by useAction.
-    expect(pickAccept('application/json, text/event-stream;q=0.9')).toBe('json');
+    expect(pickAccept('application/json, text/event-stream;q=0.9')).toBe(
+      'json'
+    );
   });
   it('breaks ties on first occurrence (stable sort)', () => {
     expect(pickAccept('application/json, text/event-stream')).toBe('json');
-    expect(pickAccept('text/event-stream, application/json')).toBe('event-stream');
+    expect(pickAccept('text/event-stream, application/json')).toBe(
+      'event-stream'
+    );
   });
   it('handles malformed q values gracefully (defaults to 1.0)', () => {
     expect(pickAccept('application/json;q=invalid')).toBe('json');

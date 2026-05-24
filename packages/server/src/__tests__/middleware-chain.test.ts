@@ -645,7 +645,14 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
 
     const handler = pageActionHandler({
       resolverByPath: async () => {
-        const map = new Map<string, { fn: (ctx: unknown, payload: unknown) => Promise<unknown>; use: ReadonlyArray<unknown>; moduleKey: string }>();
+        const map = new Map<
+          string,
+          {
+            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+            use: ReadonlyArray<unknown>;
+            moduleKey: string;
+          }
+        >();
         map.set('submit', {
           fn: async () => {
             order.push('action');
@@ -665,8 +672,15 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: {} }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(200);
     expect(order).toEqual(['page-in', 'action', 'page-out']);
@@ -693,7 +707,14 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
 
     const handler = pageActionHandler({
       resolverByPath: async () => {
-        const map = new Map<string, { fn: (ctx: unknown, payload: unknown) => Promise<unknown>; use: ReadonlyArray<unknown>; moduleKey: string }>();
+        const map = new Map<
+          string,
+          {
+            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+            use: ReadonlyArray<unknown>;
+            moduleKey: string;
+          }
+        >();
         map.set('submit', {
           fn: async () => {
             order.push('inner');
@@ -713,8 +734,15 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: {} }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(200);
     expect(order).toEqual([
@@ -733,7 +761,14 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
 
     const handler = pageActionHandler({
       resolverByPath: async () => {
-        const map = new Map<string, { fn: (ctx: unknown, payload: unknown) => Promise<unknown>; use: ReadonlyArray<unknown>; moduleKey: string }>();
+        const map = new Map<
+          string,
+          {
+            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+            use: ReadonlyArray<unknown>;
+            moduleKey: string;
+          }
+        >();
         map.set('submit', {
           fn: async () => {
             order.push('action');
@@ -752,8 +787,15 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: {} }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(200);
     expect(order).toEqual(['action']);

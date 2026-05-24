@@ -7,11 +7,7 @@ import {
   makePageActionResolvers,
   renderPage,
 } from '../index.js';
-import {
-  deny,
-  useActionResult,
-  type ServerRoute,
-} from '@hono-preact/iso';
+import { deny, useActionResult, type ServerRoute } from '@hono-preact/iso';
 
 function Page() {
   const r = useActionResult();
@@ -27,8 +23,8 @@ function Page() {
             'p',
             null,
             (
-              ((r.data as { fieldErrors?: Record<string, string[]> } | undefined)
-                ?.fieldErrors?.text) ?? []
+              (r.data as { fieldErrors?: Record<string, string[]> } | undefined)
+                ?.fieldErrors?.text ?? []
             ).join(', ')
           )
         )
@@ -52,7 +48,11 @@ const serverModule = {
 const serverThunk = async () => serverModule;
 
 const routes: ServerRoute[] = [
-  { path: '/test', server: serverThunk, ancestors: [] } as unknown as ServerRoute,
+  {
+    path: '/test',
+    server: serverThunk,
+    ancestors: [],
+  } as unknown as ServerRoute,
 ];
 
 const multipartBody =

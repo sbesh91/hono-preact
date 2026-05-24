@@ -26,4 +26,5 @@ export type ActionResultContextValue =
     }
   | null;
 
-export const ActionResultContext = createContext<ActionResultContextValue>(null);
+export const ActionResultContext =
+  createContext<ActionResultContextValue>(null);

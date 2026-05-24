@@ -64,7 +64,9 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain('makePageUseResolvers(routes.serverRoutes, { dev })');
     expect(src).toContain('resolvePageUse: pageUseResolvers.byPath');
     // pageActionHandler uses its own resolver, not byModuleKey.
-    expect(src).toContain('makePageActionResolvers(routes.serverRoutes, { dev })');
+    expect(src).toContain(
+      'makePageActionResolvers(routes.serverRoutes, { dev })'
+    );
     expect(src).toContain('resolverByPath: pageActionResolvers.byPath');
     expect(src).toContain('resolvePageUseByPath: pageUseResolvers.byPath');
     // renderPage receives appConfig as a third argument.

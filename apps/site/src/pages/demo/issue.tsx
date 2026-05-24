@@ -1,4 +1,10 @@
-import { definePage, Form, useFormStatus, useOptimisticAction, useActionResult } from 'hono-preact';
+import {
+  definePage,
+  Form,
+  useFormStatus,
+  useOptimisticAction,
+  useActionResult,
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';

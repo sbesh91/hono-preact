@@ -51,7 +51,11 @@ describe('makePageActionResolvers', () => {
       return { __moduleKey: 'p', serverActions: { x: async () => 'ok' } };
     };
     const dynamicRoutes: ServerRoute[] = [
-      { path: '/p', server: dynamicThunk, ancestors: [] } as unknown as ServerRoute,
+      {
+        path: '/p',
+        server: dynamicThunk,
+        ancestors: [],
+      } as unknown as ServerRoute,
     ];
     const { byPath } = makePageActionResolvers(dynamicRoutes, { dev: true });
     await byPath('/p');

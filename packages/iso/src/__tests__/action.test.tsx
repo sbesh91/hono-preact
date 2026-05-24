@@ -95,9 +95,12 @@ describe('useAction', () => {
 
     await act(async () => {
       resolveFetch(
-        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-          status: 200,
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+          }
+        )
       );
     });
     await waitFor(() => expect(capturedPending.at(-1)).toBe(false));
@@ -311,10 +314,13 @@ describe('useAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
     );
 
@@ -354,10 +360,13 @@ describe('useAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
     );
 
@@ -403,10 +412,13 @@ describe('useAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
     );
 
@@ -517,10 +529,13 @@ describe('useAction', () => {
       'fetch',
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
       )
     );
 
@@ -550,12 +565,14 @@ describe('useAction', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
-          { status: 200 }
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            { status: 200 }
+          )
         )
-      )
     );
 
     const { result } = renderHook(() => useAction(stub));
@@ -760,10 +777,13 @@ const mockStub = {
 describe('useAction — FormData (file upload)', () => {
   it('sends FormData when payload contains a File', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ __outcome: 'success', data: { stored: true } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ __outcome: 'success', data: { stored: true } }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -783,10 +803,13 @@ describe('useAction — FormData (file upload)', () => {
 
   it('serializes non-string non-File values as JSON strings', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -806,10 +829,13 @@ describe('useAction — FormData (file upload)', () => {
 
   it('sends JSON when payload has no File values', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -975,7 +1001,11 @@ describe('useAction — client store writes', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         new Response(
-          JSON.stringify({ __outcome: 'deny', message: 'Forbidden', status: 403 }),
+          JSON.stringify({
+            __outcome: 'deny',
+            message: 'Forbidden',
+            status: 403,
+          }),
           {
             status: 403,
             headers: { 'Content-Type': 'application/json' },
@@ -1003,12 +1033,14 @@ describe('useAction — client store writes', () => {
   it('useAction mutate writes success outcome to the client store', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
         )
-      )
     );
 
     const { result } = renderHook(() => useAction(stub));
@@ -1029,12 +1061,14 @@ describe('useAction — client store writes', () => {
   it('useAction mutate writes error outcome to the client store', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ __outcome: 'error', message: 'DB error' }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } }
+          )
         )
-      )
     );
 
     const { result } = renderHook(() => useAction(stub));

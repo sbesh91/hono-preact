@@ -213,7 +213,7 @@ If a streaming action receives a raw POST without `Accept: text/event-stream` (f
 
 ```tsx
 // This is a type error: streaming actions are not accepted by <Form>
-<Form action={serverActions.bulkImport} /> // TS error
+<Form action={serverActions.bulkImport} />; // TS error
 
 // Correct: call streaming actions programmatically
 const { mutate } = useAction(serverActions.bulkImport, {

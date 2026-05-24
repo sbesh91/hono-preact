@@ -32,12 +32,15 @@ export type UseOptimisticActionOptions<
   transition?: boolean;
 };
 
-export type UseOptimisticActionResult<TPayload, TResult, TBase> =
-  ActionStub<TPayload, TResult, never> &
-    UseActionResult<TPayload, TResult> & {
-      value: TBase;
-      readonly [OPTIMISTIC_BRAND]: OptimisticBinding<TPayload, TBase>;
-    };
+export type UseOptimisticActionResult<TPayload, TResult, TBase> = ActionStub<
+  TPayload,
+  TResult,
+  never
+> &
+  UseActionResult<TPayload, TResult> & {
+    value: TBase;
+    readonly [OPTIMISTIC_BRAND]: OptimisticBinding<TPayload, TBase>;
+  };
 
 /**
  * Like `useAction`, but with an optimistic-update wrapper. `TChunk` defaults
