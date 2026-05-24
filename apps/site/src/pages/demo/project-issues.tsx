@@ -1,4 +1,4 @@
-import { definePage, Form, useAction } from 'hono-preact';
+import { definePage, Form, useFormStatus } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { serverLoaders, serverActions } from './project-issues.server.js';
@@ -10,14 +10,7 @@ const issuesLoader = serverLoaders.default;
 const ProjectIssuesPage: FunctionComponent = () => {
   const data = issuesLoader.useData();
   const [showForm, setShowForm] = useState(false);
-
-  const { mutate: createIssue, pending: creating } = useAction(
-    serverActions.createIssue,
-    {
-      invalidate: [issuesLoader],
-      onSuccess: () => setShowForm(false),
-    }
-  );
+  const { pending: creating } = useFormStatus(serverActions.createIssue);
 
   if (!data) return <p>Unknown project.</p>;
   const { project, issues } = data;
@@ -37,8 +30,7 @@ const ProjectIssuesPage: FunctionComponent = () => {
 
       {showForm && (
         <Form
-          mutate={createIssue}
-          pending={creating}
+          action={serverActions.createIssue}
           class="border p-3 space-y-2"
         >
           <input type="hidden" name="projectId" value={project.id} />
