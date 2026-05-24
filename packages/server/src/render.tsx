@@ -23,6 +23,7 @@ import {
   getActionResultSlot,
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
+import { speculationRulesTag } from './speculation-rules.js';
 
 function escapeHtml(str: string): string {
   return str
@@ -227,6 +228,7 @@ export async function renderPage(
     titleSource != null ? `<title>${escapeHtml(titleSource)}</title>` : '',
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
+    speculationRulesTag(options?.appConfig ?? {}),
   ]
     .filter(Boolean)
     .join('\n        ');
