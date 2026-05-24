@@ -60,7 +60,7 @@ describe('hono-preact/server export', () => {
     const m = await import('hono-preact/server');
     expect(typeof m.renderPage).toBe('function');
     expect(typeof m.loadersHandler).toBe('function');
-    expect(typeof m.actionsHandler).toBe('function');
+    expect(typeof m.pageActionHandler).toBe('function');
     expect(typeof m.routeServerModules).toBe('function');
     expect(typeof m.makePageUseResolvers).toBe('function');
   });

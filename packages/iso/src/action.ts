@@ -35,8 +35,8 @@ export type DefineActionOpts<TChunk = never, TResult = unknown> = {
   /**
    * Per-action middleware and (for streaming actions) stream observers.
    * Attached to the function as a non-enumerable property; the
-   * actions-handler reads it through the typed `ActionEntry` map built at
-   * module-load time (`packages/server/src/actions-handler.ts`).
+   * page-action-handler reads it through the typed `ActionEntry` map built at
+   * module-load time (`packages/server/src/page-action-handler.ts`).
    */
   use?: ActionUse<TChunk, TResult, boolean>;
   /**

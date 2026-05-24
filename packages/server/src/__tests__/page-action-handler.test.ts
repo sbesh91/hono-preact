@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
 import { pageActionHandler } from '../page-action-handler.js';
-import { deny, redirect } from '@hono-preact/iso';
+import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
 
 function buildHandler(actions: Record<string, (ctx: unknown, payload: unknown) => Promise<unknown>>) {
   const resolverByPath = async () => {
@@ -106,5 +106,115 @@ describe('pageActionHandler', () => {
       body: JSON.stringify({ module: 'pages/test.server', action: 'missing', payload: {} }),
     });
     expect(res.status).toBe(404);
+  });
+});
+
+// Helper that wires a single defineAction fn through pageActionHandler with
+// timeout options, exercising per-action and handler-default timeout paths.
+function buildTimedApp(
+  actionFn: Parameters<typeof defineAction>[0],
+  opts: { perActionTimeoutMs?: number | false; defaultTimeoutMs?: number | false }
+) {
+  const action = defineAction(actionFn, opts.perActionTimeoutMs !== undefined ? { timeoutMs: opts.perActionTimeoutMs } : undefined);
+  const resolverByPath = async () => {
+    const map = new Map();
+    const metadata = action as unknown as { use?: ReadonlyArray<unknown>; timeoutMs?: number | false };
+    map.set('create', {
+      fn: action as (ctx: unknown, payload: unknown) => Promise<unknown>,
+      use: metadata.use ?? [],
+      timeoutMs: metadata.timeoutMs,
+      moduleKey: 'pages/timed',
+    });
+    return map;
+  };
+  const noopRender = async () => new Response('', { status: 200 });
+  const handler = pageActionHandler({
+    resolverByPath,
+    renderPage: noopRender as never,
+    resolvePageNode: () => null,
+    ...(opts.defaultTimeoutMs !== undefined ? { defaultTimeoutMs: opts.defaultTimeoutMs } : {}),
+  });
+  const app = new Hono().post('*', handler);
+  const post = (body: unknown) =>
+    app.request('http://localhost/page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+  return { app, post };
+}
+
+describe('pageActionHandler timeouts', () => {
+  it('returns a timeout outcome when the action exceeds its timeoutMs', async () => {
+    const { post } = buildTimedApp(
+      async ({ signal }) => {
+        await new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+        return { id: 1 };
+      },
+      { perActionTimeoutMs: 50 }
+    );
+
+    const res = await post({ module: 'pages/timed', action: 'create', payload: {} });
+    expect(res.status).toBe(504);
+    const body = (await res.json()) as unknown;
+    expect(isTimeout(body)).toBe(true);
+    expect((body as { timeoutMs: number }).timeoutMs).toBe(50);
+  });
+
+  it('uses the handler default when the action has no timeoutMs', async () => {
+    const { post } = buildTimedApp(
+      async ({ signal }) => {
+        await new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+        return { ok: true };
+      },
+      { defaultTimeoutMs: 50 }
+    );
+
+    const res = await post({ module: 'pages/timed', action: 'create', payload: {} });
+    expect(res.status).toBe(504);
+    const body = (await res.json()) as { timeoutMs: number };
+    expect(isTimeout(body)).toBe(true);
+    expect(body.timeoutMs).toBe(50);
+  });
+
+  it('disables the timeout when timeoutMs is false (even when defaultTimeoutMs is small)', async () => {
+    const { post } = buildTimedApp(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 75));
+        return { ok: true };
+      },
+      { perActionTimeoutMs: false, defaultTimeoutMs: 25 }
+    );
+
+    const res = await post({ module: 'pages/timed', action: 'create', payload: {} });
+    expect(res.status).toBe(200);
+  });
+
+  it('signal.reason inside the action is a TimeoutError DOMException', async () => {
+    let observedReason: unknown;
+    const { post } = buildTimedApp(
+      async ({ signal }) => {
+        await new Promise<void>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              observedReason = signal.reason;
+              resolve();
+            },
+            { once: true }
+          );
+        });
+        return { id: 0 };
+      },
+      { perActionTimeoutMs: 50 }
+    );
+
+    await post({ module: 'pages/timed', action: 'create', payload: {} });
+    expect(observedReason).toBeInstanceOf(DOMException);
+    expect((observedReason as DOMException).name).toBe('TimeoutError');
   });
 });

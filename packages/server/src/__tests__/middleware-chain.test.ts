@@ -7,7 +7,8 @@ import {
   defineStreamObserver,
 } from '@hono-preact/iso';
 import { loadersHandler } from '../loaders-handler.js';
-import { actionsHandler } from '../actions-handler.js';
+import { pageActionHandler } from '../page-action-handler.js';
+import { makePageActionResolvers } from '../page-action-resolvers.js';
 import { makePageUseResolvers } from '../route-server-modules.js';
 
 describe('loaders-handler dispatches the full chain (root -> page -> unit)', () => {
@@ -525,7 +526,7 @@ describe('stream observer fanout (E20)', () => {
     ]);
   });
 
-  it('fires onStart, onChunk per yield, and onEnd on a streaming action through actionsHandler', async () => {
+  it('fires onStart, onChunk per yield, and onEnd on a streaming action through pageActionHandler', async () => {
     const events: string[] = [];
     const observer = defineStreamObserver<number, { ok: true }>({
       onStart: () => events.push('start'),
@@ -548,20 +549,34 @@ describe('stream observer fanout (E20)', () => {
     };
     wrapped.use = [observer];
 
-    const serverModules: Record<string, unknown> = {
-      mod: {
-        __moduleKey: 'mod',
-        serverActions: { do: wrapped },
-      },
+    const serverModule = {
+      __moduleKey: 'mod',
+      serverActions: { do: wrapped },
     };
+    const serverRoutes = [
+      {
+        path: '/page',
+        server: async () => serverModule,
+        ancestors: [],
+      },
+    ];
+    const resolvers = makePageActionResolvers(serverRoutes, { dev: true });
+    const noopRender = async () => new Response('', { status: 200 });
 
     const app = new Hono().post(
-      '/__actions',
-      actionsHandler(serverModules, { dev: true })
+      '*',
+      pageActionHandler({
+        resolverByPath: resolvers.byPath,
+        renderPage: noopRender as never,
+        resolvePageNode: () => null,
+      })
     );
-    const res = await app.request('/__actions', {
+    const res = await app.request('/page', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
       body: JSON.stringify({ module: 'mod', action: 'do', payload: null }),
     });
     expect(res.status).toBe(200);
