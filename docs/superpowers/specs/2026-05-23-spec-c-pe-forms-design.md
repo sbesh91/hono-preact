@@ -61,7 +61,7 @@ Same as today: `multipart/form-data` and `application/x-www-form-urlencoded` dec
 |---|---|
 | Returns data | 303 to current URL. Loaders re-run. The returned `data` is discarded on the PE path. Devs who want it on screen put it in a loader. |
 | Throws `redirect(to)` | Real 303 (or `status`) to `to` |
-| Throws `deny(status, message, { data? })` | `status` HTTP code. Full HTML re-render of the same page with deny outcome injected into render context (readable via `useActionResult()`) |
+| Throws `deny(status, message, { data? })` | `status` HTTP code. Full HTML re-render of the same page with deny outcome AND the parsed submitted payload injected into render context (readable via `useActionResult()`; the payload powers `defaultValue` re-population so inputs survive validation failures) |
 | Throws other error | 500 HTML page (dev: with message; prod: generic) |
 | Returns a `ReadableStream` or async generator | 405 Method Not Allowed with a body explaining streaming requires `Accept: text/event-stream` |
 
@@ -97,34 +97,111 @@ No `action` attribute → posts to the current URL. Always `enctype="multipart/f
 
 JS-on submit interception: an `onSubmit` calls `e.preventDefault()` and posts via `fetch(window.location.href, { method: 'POST', body: new FormData(formEl), headers: { Accept: 'application/json' } })`. The fetch URL is `window.location.href` (matches what a native browser submit of `<form>` with no `action` attribute would do, so JS-on and JS-off resolve to the same target). On `__outcome: 'redirect'` it does a client-side navigation through the existing route navigation primitive (not `window.location.assign`); on `success` it triggers a loader reload; on `success`/`deny`/`error` it updates the internal store that `useActionResult()` reads from. The `fieldset[disabled]` wiring matches today.
 
-### `useActionResult<TResult>(stub?)`
+### `useActionResult<TPayload, TResult>(stub?)`
 
 Render-context hook returning the most recent result for an action invocation targeting the current page render:
 
 ```ts
-type ActionResult<TResult> =
-  | { kind: 'success'; data: TResult }
-  | { kind: 'deny'; status: number; message: string; data?: unknown }
-  | { kind: 'error'; message: string }
+type ActionResult<TPayload, TResult> =
+  | { kind: 'success'; data: TResult; submittedPayload: TPayload }
+  | { kind: 'deny'; status: number; message: string; data?: unknown; submittedPayload: TPayload }
+  | { kind: 'error'; message: string; submittedPayload: TPayload | null }
   | null;
 ```
 
-- On the PE path, the page re-renders after a deny/error with the outcome injected into an `ActionResultContext` Provider in the SSR tree. The hook reads it (once per render; not a subscription).
+- On the PE path, the page re-renders after a deny/error with the outcome and the parsed payload injected into an `ActionResultContext` Provider in the SSR tree. The hook reads it (once per render; not a subscription).
 - On the JS-on path, the same hook reads from a client-side store updated by `<Form>`'s submit handler.
-- Passing the optional `stub` filters: returns `null` unless the stored result is for that specific action. Useful when multiple `<Form>`s coexist on a page.
+- Passing the optional `stub` filters: returns `null` unless the stored result is for that specific action. Useful when multiple `<Form>`s coexist on a page. When no stub is passed, `TPayload` and `TResult` default to `unknown`.
+- `submittedPayload` is `null` only when an error happened before the request body parsed (e.g. malformed multipart). In every other case it's the parsed payload as the action saw it.
 
 Application code reads action result/error the same way regardless of JS state.
+
+**Preserving form input values on deny re-render.** Because `submittedPayload` is in render context, inputs survive validation failures without controlled-component plumbing:
+
+```tsx
+const result = useActionResult(addTodoStub);
+return (
+  <Form action={addTodoStub}>
+    <input name="text" defaultValue={result?.submittedPayload?.text ?? ''} />
+    {result?.kind === 'deny' && (
+      <p class="error">{result.data?.fieldErrors?.text ?? result.message}</p>
+    )}
+    <button>Add</button>
+  </Form>
+);
+```
+
+### `useFormStatus(stub?)`
+
+Render-context hook returning pending state for an in-flight action submit:
+
+```ts
+type FormStatus = { pending: boolean };
+
+function useFormStatus(stub?: ActionStub<unknown, unknown, never>): FormStatus;
+```
+
+- With a stub: pending is true while a submit of that specific stub is in flight.
+- Without a stub: pending is true while *any* action submit on the page is in flight. Useful for a top-of-page indicator that doesn't know which form is active.
+- On the PE path, always returns `{ pending: false }` (the page only renders after the request completes). The hook is meaningful only on the JS-on path; PE devs use the `fieldset[disabled]` that `<Form>` already provides.
+- Mirrors React 19's `useFormStatus()` shape so the mental model transfers.
+
+Use cases: a "Saving…" indicator outside the form, a separate submit button or cancel link that needs to gray out, a header progress bar that fires on any mutation.
 
 ### `useAction(stub)`
 
 Stays for programmatic mutations (button clicks, non-form UI). Behavior change: it posts to the **current page URL** with `Accept: application/json`, not to `/__actions`. The hook's public return shape (`{ mutate, pending, error, data }`) is unchanged, so existing call sites keep working semantically. Internally it reads the new uniform envelope.
 
-### Why both `useAction` and `useActionResult`
+### `useOptimisticAction` — optimistic updates with `<Form>`
+
+`useOptimisticAction` (added in PR #56) already wraps an action with an optimistic-state apply function. Its return shape is reshaped to *also* satisfy the `ActionStub` shape, so the same return value drives both imperative mutates and `<Form>` submits:
+
+```ts
+// Today's return:
+type UseOptimisticActionResult<TPayload, TResult, TBase> =
+  UseActionResult<TPayload, TResult> & { value: TBase };
+
+// New return — additive: gains stub-compatible identity fields and a brand.
+type UseOptimisticActionResult<TPayload, TResult, TBase> =
+  & ActionStub<TPayload, TResult>     // identity: __module, __action, useAction
+  & UseActionResult<TPayload, TResult> // mutate, pending, error, data
+  & { value: TBase }                   // optimistic-applied state
+  & { readonly [OPTIMISTIC_BRAND]: OptimisticBinding<TPayload, TBase> };
+```
+
+The brand is a private `Symbol` that `<Form>` and `useAction` detect at submit time and use to invoke the optimistic apply with the parsed payload before the network request. The apply, settle, and revert mechanics remain those of PR #56 (the underlying `useOptimistic` machinery is untouched).
+
+Developer usage:
+
+```tsx
+const todos = useLoader(getTodos);
+const addTodo = useOptimisticAction(addTodoStub, {
+  base: todos.data,
+  apply: (current, payload) => [...current, { ...payload, pending: true }],
+});
+
+return (
+  <>
+    <TodoList items={addTodo.value} />        {/* optimistic view */}
+    <Form action={addTodo}>                   {/* one prop, zero wiring */}
+      <input name="text" required />
+      <button>Add</button>
+    </Form>
+  </>
+);
+```
+
+No `onSubmit` prop on `<Form>`, no manual payload re-parsing, no `mutate`-call indirection. The same `addTodo` works imperatively too: `<button onClick={() => addTodo.mutate({ text: 'foo' })}>`. Existing imperative callers of `useOptimisticAction` keep working unchanged — the return shape gains fields; nothing is removed.
+
+The optimistic declaration lives next to the state it modifies (alongside the loader), so `addTodo.value` is usable by any component on the page, not just inside the form.
+
+### Why three hooks: `useAction`, `useActionResult`, `useFormStatus`
 
 Different roles:
 
 - `useAction`: imperative trigger from non-form UI; owns its own pending/error/data state for that call site.
-- `useActionResult`: passive read of "did an action run for this page render and what happened" — covers the PE path (no client state available) and the cross-component case (form in one tree, error display in another).
+- `useActionResult`: passive read of "did an action run for this page render and what happened" — covers the PE path (no client state available) and the cross-component case (form in one tree, error display in another). Also carries `submittedPayload` for `defaultValue` re-population.
+- `useFormStatus`: passive read of "is a submit in flight right now" — JS-on only; covers UI outside the form that needs to reflect pending state.
 
 ## `deny()` signature
 
@@ -189,7 +266,8 @@ No shims, no compat flags, per project norm (memory `feedback_no_schedule_pressu
 Small enough that the plan settles them, not the spec:
 
 - Exact location of `ActionResultContext` Provider in the SSR tree (likely wraps the page render near `LoaderHost`).
-- Whether `useActionResult()` subscribes to a store on the client or snapshots once (PE = snapshot; JS-on = subscribe; the hook abstracts both, but the client-store shape is plan-level).
+- Whether `useActionResult()` subscribes to a store on the client or snapshots once (PE = snapshot; JS-on = subscribe; the hook abstracts both, but the client-store shape is plan-level). Same store backs `useFormStatus()`.
+- Exact `Symbol` and brand-detection mechanism on the `useOptimisticAction` return value, and how `<Form>` discriminates a plain stub from an optimistic-wrapped stub at runtime.
 - Exact shape change to the `routeServerModules` adapter for registering page POST handlers (probably an `actionsByName: Record<string, ActionFn>` alongside the existing loader entries).
 - Final naming for the per-page POST handler factory.
 
