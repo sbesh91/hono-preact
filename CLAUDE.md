@@ -11,3 +11,7 @@
 Grep + Read remain correct for prose, config files, and quick one-offs. Use Serena when you'd otherwise re-read the same TS/TSX file multiple times to locate a symbol.
 
 If Serena is unavailable in a session (run `/mcp` to check), fall back to native tools.
+
+## PR workflow
+
+Any time a PR is opened, immediately run a deep PR review as the first follow-up step (before any other post-open work).
