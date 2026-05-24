@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { h } from 'preact';
 import { Hono } from 'hono';
 import { pageActionHandler } from '../page-action-handler.js';
 import { deny, redirect } from '@hono-preact/iso';
@@ -15,7 +16,7 @@ function buildHandler(actions: Record<string, (ctx: unknown, payload: unknown) =
   return pageActionHandler({
     resolverByPath,
     renderPage: renderPage as never,
-    resolvePageNode: () => null,
+    resolvePageNode: () => h('div', null),
     appConfig: { use: [] },
   });
 }

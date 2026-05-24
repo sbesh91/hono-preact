@@ -321,14 +321,20 @@ export function pageActionHandler(
         resolution,
         submittedPayload: payload,
       });
-      // resolvePageNode returns the VNode tree for the matched route, or
-      // null when the path is not registered. In practice the POST handler
-      // is mounted at the same wildcard as the GET, so null means a
-      // framework wiring bug. We still attempt the render so that
-      // renderPage can produce a useful error page; it receives null as the
-      // node and is responsible for handling that gracefully.
       const node = resolvePageNode(urlPath);
-      const rendered = await renderPage(c, node as VNode, { appConfig });
+      if (!node) {
+        if (
+          resolution.kind === 'outcome' &&
+          resolution.outcome.__outcome === 'deny'
+        ) {
+          return c.text(
+            resolution.outcome.message,
+            resolution.outcome.status
+          );
+        }
+        return c.text('Action failed', 500);
+      }
+      const rendered = await renderPage(c, node, { appConfig });
       if (
         resolution.kind === 'outcome' &&
         resolution.outcome.__outcome === 'deny'
