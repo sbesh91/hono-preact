@@ -82,6 +82,11 @@ export {
 } from './internal/form-submit-store.js';
 
 export {
+  assignSafeRedirect,
+  isSameOrigin,
+} from './internal/safe-redirect.js';
+
+export {
   setLastActionResult,
   clearLastActionResult,
   getLastActionResult,

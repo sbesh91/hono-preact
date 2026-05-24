@@ -8,6 +8,7 @@ import {
   beginSubmit,
   endSubmit,
 } from './internal/form-submit-store.js';
+import { assignSafeRedirect } from './internal/safe-redirect.js';
 import {
   setLastActionResult,
   type StoredActionResult,
@@ -407,11 +408,6 @@ export function useAction<
         } else {
           // Uniform envelope path. All non-streaming responses carry a JSON
           // body shaped as { __outcome, ... } regardless of HTTP status.
-          // Trust boundary note: `to` in redirect outcomes is taken from the
-          // JSON body and passed to `window.location.assign`. The framework
-          // emits safe (typically same-origin) values, but treat your own
-          // server as the trusted boundary. A same-origin check is a
-          // deferred enhancement.
           let env: {
             __outcome?: string;
             data?: unknown;
@@ -440,11 +436,12 @@ export function useAction<
             env.__outcome === 'redirect' &&
             typeof env.to === 'string'
           ) {
-            if (typeof window !== 'undefined') {
-              window.location.assign(env.to);
+            if (assignSafeRedirect(env.to)) {
+              // Navigation issued; this promise never settles.
+              return await new Promise<MutateResult<TResult>>(() => {});
             }
-            // Cast through `as` because TS can't see this promise never settles.
-            return await new Promise<MutateResult<TResult>>(() => {});
+            // Cross-origin: surface as an error so the caller can handle it.
+            throw new Error(`Refused cross-origin redirect to ${env.to}`);
           } else if (env.__outcome === 'deny') {
             const msg =
               env.message ??

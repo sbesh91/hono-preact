@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import {
   isOutcome,
   timeoutOutcome,
@@ -69,8 +70,10 @@ type Accept = 'html' | 'json' | 'event-stream';
  * Follows RFC 9110 quality values (;q=0.9 etc) so that
  * "application/json, text/event-stream;q=0.9" correctly resolves to 'json',
  * not 'event-stream'. Unspecified quality defaults to 1.0.
+ *
+ * Internal: exported for unit testing only; not part of the public API.
  */
-function pickAccept(header: string | undefined): Accept {
+export function pickAccept(header: string | undefined): Accept {
   const h = header ?? '';
   type Candidate = { type: Accept; q: number };
   const candidates: Candidate[] = [];
@@ -248,10 +251,10 @@ export function pageActionHandler(
           | AsyncGenerator<unknown>
           | ReadableStream<unknown>;
         if (accept !== 'event-stream') {
-          return c.text(
-            'Streaming actions require Accept: text/event-stream',
-            405
-          );
+          const message = 'Streaming actions require Accept: text/event-stream';
+          return accept === 'json'
+            ? c.json({ __outcome: 'error', message }, 405)
+            : c.text(message, 405);
         }
         resolution = { kind: 'success', data: undefined };
       } else {
@@ -303,7 +306,7 @@ export function pageActionHandler(
         for (const [k, v] of Object.entries(env.headers)) c.header(k, v);
       }
       // env.status is one of: 200, 422, 403, 401, 504, 500.
-      return c.json(env.body, env.status as 200 | 504 | 500 | 422 | 401 | 403);
+      return c.json(env.body, env.status as ContentfulStatusCode);
     }
 
     // HTML / PE path.

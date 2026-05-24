@@ -21,6 +21,10 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.Routes).toBe('function');
     expect(typeof m.Head).toBe('function');
     expect(typeof m.ClientScript).toBe('function');
+    // Iso runtime exports added by Spec C
+    expect(typeof m.useActionResult).toBe('function');
+    expect(typeof m.useFormStatus).toBe('function');
+    expect(m.ActionResultContext).toBeTruthy();
   });
 
   it('surfaces the outcome predicates at the root', async () => {
@@ -63,6 +67,8 @@ describe('hono-preact/server export', () => {
     expect(typeof m.pageActionHandler).toBe('function');
     expect(typeof m.routeServerModules).toBe('function');
     expect(typeof m.makePageUseResolvers).toBe('function');
+    // Server exports added by Spec C
+    expect(typeof m.makePageActionResolvers).toBe('function');
   });
 });
 

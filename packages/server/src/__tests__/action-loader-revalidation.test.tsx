@@ -92,9 +92,9 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       }));
 
     // Route every fetch to the Hono app. Both the loader RPC stub
-    // (`/__loaders`) and the action mutate (`/__actions`) call through
-    // `fetch(...)`; pointing both at the same Hono app exercises the real
-    // wire format on both sides.
+    // (`/__loaders`) and the action POST (mounted at `*` by pageActionHandler)
+    // call through `fetch(...)`; pointing both at the same Hono app exercises
+    // the real wire format on both sides.
     const fetchSpy = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url =

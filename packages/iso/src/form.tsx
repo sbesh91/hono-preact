@@ -4,6 +4,7 @@ import type { ActionStub } from './action.js';
 import { OPTIMISTIC_BRAND } from './optimistic-action.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { setLastActionResult } from './internal/action-result-store.js';
+import { assignSafeRedirect } from './internal/safe-redirect.js';
 
 export type FormProps<TPayload, TResult> = Omit<
   JSX.HTMLAttributes<HTMLFormElement>,
@@ -88,8 +89,18 @@ export function Form<TPayload, TResult>({
           return;
         }
         if (env.__outcome === 'redirect' && typeof env.to === 'string') {
-          if (typeof window !== 'undefined') window.location.assign(env.to);
-          handle?.settle();
+          const navigated = assignSafeRedirect(env.to);
+          if (navigated) {
+            handle?.settle();
+            return;
+          }
+          // Cross-origin: revert optimistic, surface as error result so useActionResult sees it.
+          handle?.revert();
+          setLastActionResult(moduleKey, actionName, {
+            kind: 'error',
+            message: `Refused cross-origin redirect to ${env.to}`,
+            submittedPayload: payload,
+          });
           return;
         }
         if (env.__outcome === 'success') {

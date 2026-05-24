@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
-import { pageActionHandler } from '../page-action-handler.js';
+import { pageActionHandler, pickAccept } from '../page-action-handler.js';
 import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
 
 function buildHandler(actions: Record<string, (ctx: unknown, payload: unknown) => Promise<unknown>>) {
@@ -83,7 +83,7 @@ describe('pageActionHandler', () => {
     expect(body).toContain('RENDERED');
   });
 
-  it('returns 405 when streaming action invoked without Accept: text/event-stream', async () => {
+  it('returns 405 text when streaming action invoked with Accept: text/html', async () => {
     async function* gen() {
       yield { tick: 1 };
     }
@@ -95,6 +95,28 @@ describe('pageActionHandler', () => {
       body: JSON.stringify({ module: 'pages/test.server', action: 'stream', payload: {} }),
     });
     expect(res.status).toBe(405);
+    expect(res.headers.get('Content-Type')).toMatch(/text\/plain/);
+    const body = await res.text();
+    expect(body).toContain('Streaming actions require Accept: text/event-stream');
+  });
+
+  it('returns 405 JSON envelope when streaming action invoked with Accept: application/json', async () => {
+    async function* gen() {
+      yield { tick: 1 };
+    }
+    const handler = buildHandler({ stream: async () => gen() });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ module: 'pages/test.server', action: 'stream', payload: {} }),
+    });
+    expect(res.status).toBe(405);
+    const body = await res.json();
+    expect(body).toEqual({
+      __outcome: 'error',
+      message: 'Streaming actions require Accept: text/event-stream',
+    });
   });
 
   it('returns 404 when the action is not declared on the page chain', async () => {
@@ -216,5 +238,43 @@ describe('pageActionHandler timeouts', () => {
     await post({ module: 'pages/timed', action: 'create', payload: {} });
     expect(observedReason).toBeInstanceOf(DOMException);
     expect((observedReason as DOMException).name).toBe('TimeoutError');
+  });
+});
+
+describe('pickAccept', () => {
+  it('returns json when only application/json is requested', () => {
+    expect(pickAccept('application/json')).toBe('json');
+  });
+  it('returns event-stream when only text/event-stream is requested', () => {
+    expect(pickAccept('text/event-stream')).toBe('event-stream');
+  });
+  it('returns html when only text/html is requested', () => {
+    expect(pickAccept('text/html')).toBe('html');
+  });
+  it('returns html when */* is requested', () => {
+    expect(pickAccept('*/*')).toBe('html');
+  });
+  it('returns html when no header is given', () => {
+    expect(pickAccept(undefined)).toBe('html');
+    expect(pickAccept('')).toBe('html');
+  });
+  it('prefers higher-q candidate in mixed Accept', () => {
+    // The JS-on default header sent by useAction.
+    expect(pickAccept('application/json, text/event-stream;q=0.9')).toBe('json');
+  });
+  it('breaks ties on first occurrence (stable sort)', () => {
+    expect(pickAccept('application/json, text/event-stream')).toBe('json');
+    expect(pickAccept('text/event-stream, application/json')).toBe('event-stream');
+  });
+  it('handles malformed q values gracefully (defaults to 1.0)', () => {
+    expect(pickAccept('application/json;q=invalid')).toBe('json');
+  });
+  it('ignores unknown media types', () => {
+    expect(pickAccept('text/plain, application/json;q=0.5')).toBe('json');
+  });
+  it('respects q=0 by deprioritizing (still picks if it is the only candidate)', () => {
+    // q=0 technically means "not acceptable" per RFC 9110, but our parser is lenient.
+    // The function returns the highest-q; q=0 wins over no candidates.
+    expect(pickAccept('application/json;q=0')).toBe('json');
   });
 });
