@@ -22,10 +22,15 @@ describe('login action', () => {
       cookieSet: null,
     };
     app.post('/', async (c) => {
-      await (serverActions.login as unknown as Function)(
-        { c, signal: new AbortController().signal },
-        { email: 'newuser@example.com', name: 'New User' }
-      );
+      try {
+        await (serverActions.login as unknown as Function)(
+          { c, signal: new AbortController().signal },
+          { email: 'newuser@example.com', name: 'New User' }
+        );
+      } catch (e) {
+        const o = e as { __outcome?: string };
+        if (o.__outcome !== 'redirect') throw e;
+      }
       captured.user = findUserByEmail('newuser@example.com');
       captured.cookieSet = c.res.headers.get('set-cookie');
       return c.text('ok');
