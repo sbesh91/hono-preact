@@ -1,6 +1,6 @@
-import { definePage, Form, useFormStatus, useOptimisticAction } from 'hono-preact';
+import { definePage, Form, useFormStatus, useOptimisticAction, useActionResult } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { serverLoaders as projectIssuesLoaders } from './project-issues.server.js';
@@ -114,6 +114,15 @@ const CommentsSection: FunctionComponent<{
   issueId: string;
 }> = ({ comments, issueId }) => {
   const { pending } = useFormStatus(serverActions.addComment);
+  const [formKey, setFormKey] = useState(0);
+  const result = useActionResult(serverActions.addComment);
+
+  useEffect(() => {
+    if (result?.kind === 'success') {
+      setFormKey((k) => k + 1);
+      commentsLoader.invalidate();
+    }
+  }, [result]);
 
   const { value: optimisticComments } = useOptimisticAction(
     serverActions.addComment,
@@ -137,7 +146,7 @@ const CommentsSection: FunctionComponent<{
     <section class="space-y-3">
       <h3 class="font-semibold">Comments</h3>
       <CommentList comments={optimisticComments} />
-      <Form action={serverActions.addComment} class="space-y-2">
+      <Form key={formKey} action={serverActions.addComment} class="space-y-2">
         <input type="hidden" name="issueId" value={issueId} />
         <textarea
           name="body"
