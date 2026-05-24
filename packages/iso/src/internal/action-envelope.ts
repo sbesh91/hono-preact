@@ -1,3 +1,4 @@
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Outcome } from '../outcomes.js';
 
 export type ActionEnvelope =
@@ -14,7 +15,7 @@ export type ActionResolution =
 
 export type SerializedEnvelope = {
   body: ActionEnvelope;
-  status: number;
+  status: ContentfulStatusCode;
   headers: Record<string, string> | undefined;
 };
 

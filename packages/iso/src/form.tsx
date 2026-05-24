@@ -1,18 +1,38 @@
 import type { JSX, ComponentChildren } from 'preact';
 import { useState, useCallback, useMemo } from 'preact/hooks';
 import type { ActionStub } from './action.js';
-import { OPTIMISTIC_BRAND } from './optimistic-action.js';
+import {
+  OPTIMISTIC_BRAND,
+  type UseOptimisticActionResult,
+} from './optimistic-action.js';
+import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { setLastActionResult } from './internal/action-result-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
+
+/**
+ * The `action` prop accepts either a plain action stub or the branded value
+ * returned by `useOptimisticAction`. The union lets `<Form>` discover the
+ * optimistic apply via `OPTIMISTIC_BRAND in action` narrowing without
+ * casting away the type.
+ */
+type FormActionInput<TPayload, TResult> =
+  | ActionStub<TPayload, TResult, never>
+  | UseOptimisticActionResult<TPayload, TResult, unknown>;
 
 export type FormProps<TPayload, TResult> = Omit<
   JSX.HTMLAttributes<HTMLFormElement>,
   'action' | 'method' | 'onSubmit' | 'enctype'
 > & {
-  action: ActionStub<TPayload, TResult, never>;
+  action: FormActionInput<TPayload, TResult>;
   children?: ComponentChildren;
 };
+
+function hasOptimisticBrand<TPayload, TResult>(
+  action: FormActionInput<TPayload, TResult>
+): action is UseOptimisticActionResult<TPayload, TResult, unknown> {
+  return OPTIMISTIC_BRAND in action;
+}
 
 function collectFormData(
   fd: FormData
@@ -41,15 +61,7 @@ export function Form<TPayload, TResult>({
   const actionName = action.__action;
 
   const optimistic = useMemo(
-    () =>
-      (action as unknown as Record<symbol, unknown>)[OPTIMISTIC_BRAND] as
-        | {
-            addOptimistic: (payload: TPayload) => {
-              settle(): void;
-              revert(): void;
-            };
-          }
-        | undefined,
+    () => (hasOptimisticBrand(action) ? action[OPTIMISTIC_BRAND] : undefined),
     [action]
   );
 
@@ -63,7 +75,7 @@ export function Form<TPayload, TResult>({
           : '/';
       const fd = new FormData(formEl);
       const payload = collectFormData(fd) as TPayload;
-      let handle: { settle(): void; revert(): void } | undefined;
+      let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);
 
       setPending(true);

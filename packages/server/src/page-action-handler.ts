@@ -1,5 +1,4 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import {
   isOutcome,
   timeoutOutcome,
@@ -241,7 +240,7 @@ export function pageActionHandler(
 
     let resolution: ActionResolution;
     let streamingResult:
-      | AsyncGenerator<unknown>
+      | AsyncGenerator<unknown, unknown, unknown>
       | ReadableStream<unknown>
       | undefined;
 
@@ -263,9 +262,7 @@ export function pageActionHandler(
       });
 
       if (isAsyncGenerator(value) || value instanceof ReadableStream) {
-        streamingResult = value as
-          | AsyncGenerator<unknown>
-          | ReadableStream<unknown>;
+        streamingResult = value;
         if (accept !== 'event-stream') {
           const message = 'Streaming actions require Accept: text/event-stream';
           return accept === 'json'
@@ -321,8 +318,7 @@ export function pageActionHandler(
       if (env.headers) {
         for (const [k, v] of Object.entries(env.headers)) c.header(k, v);
       }
-      // env.status is one of: 200, 422, 403, 401, 504, 500.
-      return c.json(env.body, env.status as ContentfulStatusCode);
+      return c.json(env.body, env.status);
     }
 
     // HTML / PE path.
