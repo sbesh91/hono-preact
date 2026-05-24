@@ -163,7 +163,7 @@ export function runLoader<T>(
     }
 
     const runInner = async (): Promise<unknown> => {
-      const result = await (loaderRef.fn(ctx) as Promise<unknown>);
+      const result = await loaderRef.fn(ctx);
       if (isAsyncGenerator(result)) {
         if (observers.length > 0) {
           fanStart(observers, serverCtx);

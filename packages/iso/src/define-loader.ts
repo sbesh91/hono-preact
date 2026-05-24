@@ -145,7 +145,7 @@ function ViewRenderer<T>({
   const error = loaderRef.useError();
   const reloadCtx = useContext(ReloadContext);
   const reload = reloadCtx?.reload ?? (() => {});
-  return render({ data, error, reload, ...props }) as any;
+  return render({ data, error, reload, ...props });
 }
 
 export function defineLoader<T>(
@@ -212,34 +212,30 @@ export function defineLoader<T>(
     invalidate() {
       cache!.invalidate();
     },
-    Boundary: null as never,
-    View: null as never,
+    // `Boundary` and `View` close over `ref`. The captures are by reference
+    // and only deref at call time (component render), so the cycle is safe;
+    // both are fully initialized before any consumer can invoke them.
+    Boundary: ({ fallback, errorFallback, children }) =>
+      h(LoaderHost<T>, {
+        loader: ref,
+        fallback,
+        errorFallback,
+        children,
+      }),
+    View: (render, viewOpts) => {
+      const Wrapped: FunctionComponent<any> = (props) =>
+        h(ref.Boundary, {
+          fallback: viewOpts?.fallback,
+          errorFallback: viewOpts?.errorFallback,
+          children: h(ViewRenderer<T>, {
+            loaderRef: ref,
+            props,
+            render,
+          }),
+        });
+      return Wrapped;
+    },
   };
-
-  const Boundary: LoaderRef<T>['Boundary'] = ({
-    fallback,
-    errorFallback,
-    children,
-  }) => {
-    return h(LoaderHost as any, {
-      loader: ref,
-      fallback,
-      errorFallback,
-      children,
-    });
-  };
-  ref.Boundary = Boundary;
-
-  const View: LoaderRef<T>['View'] = (render, viewOpts) => {
-    const Wrapped: FunctionComponent<any> = (props) =>
-      h(ref.Boundary, {
-        fallback: viewOpts?.fallback,
-        errorFallback: viewOpts?.errorFallback,
-        children: h(ViewRenderer<T> as any, { loaderRef: ref, props, render }),
-      });
-    return Wrapped;
-  };
-  ref.View = View;
 
   return ref;
 }

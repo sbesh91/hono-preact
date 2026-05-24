@@ -23,6 +23,7 @@ import {
 type GlobModule = {
   default?: unknown;
   __moduleKey?: unknown;
+  serverLoaders?: unknown;
   [key: string]: unknown;
 };
 type LazyGlob = Record<string, () => Promise<unknown>>;
@@ -58,7 +59,7 @@ async function buildLoadersMap(
     const moduleKey = mod.__moduleKey;
     if (typeof moduleKey !== 'string') continue;
 
-    const sl = (mod as any).serverLoaders;
+    const sl = mod.serverLoaders;
     if (sl && typeof sl === 'object') {
       for (const [name, val] of Object.entries(sl)) {
         // Two accepted shapes:
@@ -283,7 +284,7 @@ export function loadersHandler(
       scope: 'loader',
       c,
       signal,
-      location: validatedLocation as never,
+      location: validatedLocation,
       module,
       loader: loaderName,
     };
@@ -329,7 +330,7 @@ export function loadersHandler(
         });
       }
       if (result instanceof ReadableStream) {
-        return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
+        return sseReadableStreamResponse(c, result, {
           observers,
           observerCtx: ctx,
           signal: timeoutSignal,

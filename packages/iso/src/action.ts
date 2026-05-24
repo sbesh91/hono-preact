@@ -66,10 +66,17 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
   opts?: DefineActionOpts<TChunk, TResult>
 ): ActionStub<TPayload, TResult, TChunk> {
-  // Returns `fn` masquerading as `ActionStub`. The `ActionStub` interface
-  // describes the consumer contract; the runtime is the function itself with
-  // optional non-enumerable metadata attached. The dispatcher reads this
-  // metadata through the typed `ActionEntry` map built at module-load time.
+  // SHAPE NOTE: `ActionStub` describes the CLIENT-side shape produced by the
+  // Vite plugin (`packages/vite/src/server-only.ts`) — an object with
+  // `__module`, `__action`, and a `useAction` method. `defineAction` runs on
+  // the SERVER side and returns the raw function with metadata attached via
+  // `Object.defineProperty`. These are two different runtime shapes unified
+  // under one type so consumers can import a server action and use it
+  // identically on both sides; the plugin handles the substitution at the
+  // value level. The `as unknown as` cast at the return is the single
+  // bounded acknowledgement of this dual-shape contract. A future cleanup
+  // could split into `ServerActionImpl` / `ActionStub` types if the lie
+  // starts to bite, but for now it's localized and documented.
   //
   // `Object.defineProperty` is used instead of direct assignment so a frozen
   // module export (strict ESM, HMR-frozen modules) does not throw.
@@ -111,8 +118,16 @@ export type UseActionOptions<
   invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
   onMutate?: (payload: TPayload) => TSnapshot;
   onChunk?: (chunk: TChunk) => void;
-  onError?: (err: Error, snapshot: TSnapshot) => void;
-  onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+  /**
+   * `snapshot` is the value returned by `onMutate` for this mutation.
+   * It is `undefined` when `onMutate` was not provided.
+   */
+  onError?: (err: Error, snapshot: TSnapshot | undefined) => void;
+  /**
+   * `snapshot` is the value returned by `onMutate` for this mutation.
+   * It is `undefined` when `onMutate` was not provided.
+   */
+  onSuccess?: (data: TResult, snapshot: TSnapshot | undefined) => void;
 };
 
 /**
@@ -177,22 +192,18 @@ export function useAction<
 
       const currentStub = stubRef.current;
       const currentOptions = optionsRef.current;
-      let snapshot: unknown;
+      let snapshot: TSnapshot | undefined;
       if (currentOptions?.onMutate) {
         snapshot = currentOptions.onMutate(payload);
       }
 
       let finalResult: TResult | undefined;
       try {
-        const stub = currentStub as unknown as {
-          __module: string;
-          __action: string;
-        };
         let response: Response;
         if (hasFileValues(payload)) {
           const fd = new FormData();
-          fd.append('__module', stub.__module);
-          fd.append('__action', stub.__action);
+          fd.append('__module', currentStub.__module);
+          fd.append('__action', currentStub.__action);
           for (const [key, value] of Object.entries(
             payload as Record<string, unknown>
           )) {
@@ -211,8 +222,8 @@ export function useAction<
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              module: stub.__module,
-              action: stub.__action,
+              module: currentStub.__module,
+              action: currentStub.__action,
               payload,
             }),
           });
@@ -337,12 +348,12 @@ export function useAction<
           }
           if (resultValue !== undefined) {
             setData(resultValue);
-            currentOptions?.onSuccess?.(resultValue, snapshot as TSnapshot);
+            currentOptions?.onSuccess?.(resultValue, snapshot);
             finalResult = resultValue;
           } else {
             currentOptions?.onSuccess?.(
               undefined as unknown as TResult,
-              snapshot as TSnapshot
+              snapshot
             );
             // Streaming actions with no `result` event resolve with undefined.
             // Consumers should type `TResult = void` (or include `undefined`)
@@ -352,7 +363,7 @@ export function useAction<
         } else {
           const result = (await response.json()) as TResult;
           setData(result);
-          currentOptions?.onSuccess?.(result, snapshot as TSnapshot);
+          currentOptions?.onSuccess?.(result, snapshot);
           finalResult = result;
         }
 
@@ -377,7 +388,7 @@ export function useAction<
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
         setError(e);
-        currentOptions?.onError?.(e, snapshot as TSnapshot);
+        currentOptions?.onError?.(e, snapshot);
         setPending(false);
         return { ok: false, error: e };
       }

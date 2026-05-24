@@ -352,7 +352,7 @@ export function actionsHandler(
       });
     }
     if (result instanceof ReadableStream) {
-      return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
+      return sseReadableStreamResponse(c, result, {
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,

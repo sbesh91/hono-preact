@@ -28,14 +28,14 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
   const dataLoader = isBrowser() ? 'null' : JSON.stringify(ctx.data ?? null);
 
   if (typeof as === 'string') {
-    const Tag = as as keyof JSX.IntrinsicElements;
-    const props = { id, 'data-loader': dataLoader } as JSX.HTMLAttributes;
+    const Tag = as;
     return (
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      <Tag {...(props as any)}>{children}</Tag>
+      <Tag id={id} data-loader={dataLoader}>
+        {children}
+      </Tag>
     );
   }
-  const Wrapper = as as ComponentType<WrapperProps>;
+  const Wrapper = as;
   return (
     <Wrapper id={id} data-loader={dataLoader}>
       {children}
