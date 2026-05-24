@@ -33,9 +33,10 @@ describe('useOptimisticAction transition forwarding', () => {
     });
     document.startViewTransition = spy as never;
 
-    const stub = defineAction(async () => ({ ok: true })) as ReturnType<typeof defineAction>;
-    (stub as unknown as { __module: string; __action: string }).__module = 'm';
-    (stub as unknown as { __module: string; __action: string }).__action = 'a';
+    const stub = defineAction(async () => ({ ok: true }), {
+      __module: 'm',
+      __action: 'a',
+    });
 
     const { result } = renderHook(() =>
       useOptimisticAction<{}, { ok: true }, number>(stub, {

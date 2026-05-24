@@ -30,8 +30,9 @@ export type ActionFn<TPayload, TResult, TChunk = never> =
 export type DefineActionOpts<TChunk = never, TResult = unknown> = {
   /**
    * Per-action middleware and (for streaming actions) stream observers.
-   * Attached to the function as a non-enumerable-feeling property; the
-   * actions-handler reads it via the dispatcher (Task 18).
+   * Attached to the function as a non-enumerable property; the
+   * actions-handler reads it through the typed `ActionEntry` map built at
+   * module-load time (`packages/server/src/actions-handler.ts`).
    */
   use?: ActionUse<TChunk, TResult, boolean>;
   /**
@@ -40,6 +41,15 @@ export type DefineActionOpts<TChunk = never, TResult = unknown> = {
    * this action.
    */
   timeoutMs?: number | false;
+  /**
+   * The module key the client-side `useAction` hook will reference in its
+   * RPC envelope. Production wires this through the Vite plugin's
+   * client-stub emission; test code can pass it directly to construct a
+   * properly-shaped stub without bypassing the type system.
+   */
+  __module?: string;
+  /** The action name the client-side `useAction` hook will reference. */
+  __action?: string;
 };
 
 export class TimeoutError extends Error {
@@ -56,30 +66,25 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
   opts?: DefineActionOpts<TChunk, TResult>
 ): ActionStub<TPayload, TResult, TChunk> {
-  // Runtime no-op for the call itself: returns fn as-is. The ActionStub type
-  // is enforced only by TypeScript and the Vite plugin. The dispatcher reads
-  // `use` off the function-as-stub when running the chain.
+  // Returns `fn` masquerading as `ActionStub`. The `ActionStub` interface
+  // describes the consumer contract; the runtime is the function itself with
+  // optional non-enumerable metadata attached. The dispatcher reads this
+  // metadata through the typed `ActionEntry` map built at module-load time.
   //
-  // Use `Object.defineProperty` instead of direct assignment so a frozen
-  // module export (strict ESM, HMR-frozen modules) doesn't throw. The
-  // actions-handler reads via `(fn as { use?: ReadonlyArray<unknown> }).use`,
-  // which works whether the property was set by assignment or defineProperty.
-  if (opts?.use) {
-    Object.defineProperty(fn, 'use', {
-      value: opts.use,
+  // `Object.defineProperty` is used instead of direct assignment so a frozen
+  // module export (strict ESM, HMR-frozen modules) does not throw.
+  const attach = (key: string, value: unknown) => {
+    Object.defineProperty(fn, key, {
+      value,
       configurable: true,
       writable: true,
       enumerable: false,
     });
-  }
-  if (opts?.timeoutMs !== undefined) {
-    Object.defineProperty(fn, 'timeoutMs', {
-      value: opts.timeoutMs,
-      configurable: true,
-      writable: true,
-      enumerable: false,
-    });
-  }
+  };
+  if (opts?.use) attach('use', opts.use);
+  if (opts?.timeoutMs !== undefined) attach('timeoutMs', opts.timeoutMs);
+  if (opts?.__module !== undefined) attach('__module', opts.__module);
+  if (opts?.__action !== undefined) attach('__action', opts.__action);
   return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 

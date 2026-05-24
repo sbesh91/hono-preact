@@ -32,8 +32,10 @@ describe('fetchLoaderData timeout handling', () => {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(TimeoutError);
-    expect((thrown as TimeoutError).timeoutMs).toBe(7000);
-    expect((thrown as TimeoutError).name).toBe('TimeoutError');
+    if (thrown instanceof TimeoutError) {
+      expect(thrown.timeoutMs).toBe(7000);
+      expect(thrown.name).toBe('TimeoutError');
+    }
   });
 
   it('throws TimeoutError when the first SSE event is event: timeout', async () => {
@@ -54,7 +56,9 @@ describe('fetchLoaderData timeout handling', () => {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(TimeoutError);
-    expect((thrown as TimeoutError).timeoutMs).toBe(120);
+    if (thrown instanceof TimeoutError) {
+      expect(thrown.timeoutMs).toBe(120);
+    }
   });
 
   it('reports TimeoutError via onError when timeout fires mid-stream (after first chunk)', async () => {
@@ -78,6 +82,8 @@ describe('fetchLoaderData timeout handling', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     const err = onError.mock.calls[0][0];
     expect(err).toBeInstanceOf(TimeoutError);
-    expect((err as TimeoutError).timeoutMs).toBe(250);
+    if (err instanceof TimeoutError) {
+      expect(err.timeoutMs).toBe(250);
+    }
   });
 });

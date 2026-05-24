@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/preact';
-import { defineAction, useAction } from '../action.js';
+import { defineAction, TimeoutError, useAction } from '../action.js';
 
 const originalFetch = global.fetch;
 
@@ -10,10 +10,8 @@ describe('useAction timeout handling', () => {
     global.fetch = originalFetch;
   });
 
-  it('surfaces a timeout envelope (504 with __outcome: timeout) as an error tagged kind: timeout', async () => {
-    const stub = defineAction(async () => 1) as ReturnType<typeof defineAction>;
-    (stub as unknown as { __module: string; __action: string }).__module = 'm';
-    (stub as unknown as { __module: string; __action: string }).__action = 'a';
+  it('surfaces a timeout envelope (504 with __outcome: timeout) as a TimeoutError', async () => {
+    const stub = defineAction(async () => 1, { __module: 'm', __action: 'a' });
 
     global.fetch = vi.fn().mockResolvedValue(
       new Response(
@@ -29,16 +27,16 @@ describe('useAction timeout handling', () => {
     });
     expect(mutated!.ok).toBe(false);
     if (!mutated!.ok) {
-      expect(mutated!.error.name).toBe('TimeoutError');
-      expect((mutated!.error as Error & { kind?: string; timeoutMs?: number }).kind).toBe('timeout');
-      expect((mutated!.error as Error & { timeoutMs?: number }).timeoutMs).toBe(5000);
+      expect(mutated!.error).toBeInstanceOf(TimeoutError);
+      if (mutated!.error instanceof TimeoutError) {
+        expect(mutated!.error.kind).toBe('timeout');
+        expect(mutated!.error.timeoutMs).toBe(5000);
+      }
     }
   });
 
   it('surfaces an SSE event: timeout frame as a TimeoutError', async () => {
-    const stub = defineAction(async () => 1) as ReturnType<typeof defineAction>;
-    (stub as unknown as { __module: string; __action: string }).__module = 'm';
-    (stub as unknown as { __module: string; __action: string }).__action = 'a';
+    const stub = defineAction(async () => 1, { __module: 'm', __action: 'a' });
 
     const body =
       'event: message\ndata: "tick"\n\n' +
@@ -57,9 +55,11 @@ describe('useAction timeout handling', () => {
     });
     expect(mutated!.ok).toBe(false);
     if (!mutated!.ok) {
-      expect(mutated!.error.name).toBe('TimeoutError');
-      expect((mutated!.error as Error & { kind?: string }).kind).toBe('timeout');
-      expect((mutated!.error as Error & { timeoutMs?: number }).timeoutMs).toBe(75);
+      expect(mutated!.error).toBeInstanceOf(TimeoutError);
+      if (mutated!.error instanceof TimeoutError) {
+        expect(mutated!.error.kind).toBe('timeout');
+        expect(mutated!.error.timeoutMs).toBe(75);
+      }
     }
   });
 });
