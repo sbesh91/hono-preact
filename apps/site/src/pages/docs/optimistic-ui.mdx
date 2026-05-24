@@ -16,10 +16,7 @@ import { useOptimisticAction, Form } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const Movies = ({ loaderData }) => {
-  const {
-    result,
-    value: movies,
-  } = useOptimisticAction(serverActions.create, {
+  const addMovie = useOptimisticAction(serverActions.create, {
     base: loaderData.movies,
     apply: (current, payload) => [...current, payload],
     invalidate: 'auto',
@@ -30,11 +27,11 @@ const Movies = ({ loaderData }) => {
   return (
     <>
       <ul>
-        {movies.map((m) => (
+        {addMovie.value.map((m) => (
           <li key={m.id}>{m.title}</li>
         ))}
       </ul>
-      <Form action={result}>
+      <Form action={addMovie}>
         <input name="title" placeholder="Title" />
         <button type="submit">Add</button>
       </Form>
@@ -43,9 +40,9 @@ const Movies = ({ loaderData }) => {
 };
 ```
 
-`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `value` reflects real server data with no visual gap.
+`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `addMovie.value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `addMovie.value` reflects real server data with no visual gap.
 
-`result` is a stub-compatible value: pass it to `<Form action={result}>` for declarative form submission, or call `result.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue.
+The returned object is stub-compatible: pass it to `<Form action={addMovie}>` for declarative form submission, or call `addMovie.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue. Access `addMovie.pending`, `addMovie.error`, and `addMovie.data` to read the mutation status and result.
 
 ### Options
 
@@ -124,10 +121,7 @@ No special configuration needed.
 
 ```tsx
 const NotesForm = ({ defaultNotes }) => {
-  const {
-    result,
-    value: notes,
-  } = useOptimisticAction(serverActions.setNotes, {
+  const notesAction = useOptimisticAction(serverActions.setNotes, {
     base: defaultNotes,
     apply: (_current, payload) => payload.notes,
     invalidate: 'auto',
@@ -135,9 +129,9 @@ const NotesForm = ({ defaultNotes }) => {
 
   return (
     <>
-      <p>Current: {notes}</p>
-      <Form action={result}>
-        <textarea name="notes" defaultValue={notes} />
+      <p>Current: {notesAction.value}</p>
+      <Form action={notesAction}>
+        <textarea name="notes" defaultValue={notesAction.value} />
         <button>Save</button>
       </Form>
     </>
@@ -145,7 +139,7 @@ const NotesForm = ({ defaultNotes }) => {
 };
 ```
 
-For the imperative path, the same `result` value exposes `result.mutate(payload)` and `result.pending` directly, so you can call it from an `onClick` handler or await it in an async function without holding a separate `useAction` ref.
+The returned object exposes `notesAction.mutate(payload)` and `notesAction.pending` directly, so you can call it from an `onClick` handler or await it in an async function without holding a separate `useAction` ref.
 
 ## `<OptimisticOverlay>`
 
