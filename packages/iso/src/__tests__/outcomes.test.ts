@@ -63,6 +63,30 @@ describe('deny()', () => {
     const o = deny({ status: 403 });
     expect(o.message).toBe('Request denied (403)');
   });
+
+  it('carries opts.data through unchanged on the (status, message, opts) form', () => {
+    const fieldErrors = { email: ['required'], name: ['too short'] };
+    const outcome = deny(422, 'Validation failed', { data: { fieldErrors } });
+    expect(outcome.__outcome).toBe('deny');
+    expect(outcome.status).toBe(422);
+    expect(outcome.message).toBe('Validation failed');
+    expect(outcome.data).toEqual({ fieldErrors });
+  });
+
+  it('carries opts.data on the (DenyInput) form too', () => {
+    const outcome = deny({ status: 403, message: 'no', data: { reason: 'role' } });
+    expect(outcome.data).toEqual({ reason: 'role' });
+  });
+
+  it('omits data when not provided (back-compat)', () => {
+    const outcome = deny(403, 'nope');
+    expect(outcome).not.toHaveProperty('data');
+  });
+
+  it('exposes opts.headers on the (status, message, opts) form', () => {
+    const outcome = deny(401, 'unauth', { headers: { 'WWW-Authenticate': 'Bearer' } });
+    expect(outcome.headers).toEqual({ 'WWW-Authenticate': 'Bearer' });
+  });
 });
 
 describe('predicates', () => {
