@@ -50,6 +50,9 @@ export {
   runRequestScope,
   getRequestStore,
   captureRequestScope,
+  getActionResultSlot,
+  setActionResultSlot,
+  type ActionResultSlot,
 } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
 export { HonoRequestContext } from './internal/contexts.js';

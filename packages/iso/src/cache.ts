@@ -1,4 +1,5 @@
 import type { Loader } from './define-loader.js';
+import type { ActionResolution } from './internal/action-envelope.js';
 import { isBrowser } from './is-browser.js';
 
 export interface LoaderCache<T> {
@@ -38,6 +39,7 @@ if (!looksLikeBrowser) {
 }
 
 const HONO_CONTEXT_KEY = Symbol('@hono-preact/iso/honoContext');
+const ACTION_RESULT_KEY = Symbol('@hono-preact/iso/actionResult');
 
 export function getRequestStore(): RequestStore | undefined {
   return alsInstance?.getStore();
@@ -58,6 +60,30 @@ export function getRequestHonoContext<T = unknown>(): T | undefined {
     );
   }
   return ctx as T;
+}
+
+export type ActionResultSlot = {
+  module: string;
+  action: string;
+  resolution: ActionResolution;
+  submittedPayload: unknown;
+};
+
+export function getActionResultSlot(): ActionResultSlot | null {
+  const store = getRequestStore();
+  if (!store) return null;
+  const slot = store.get(ACTION_RESULT_KEY);
+  return (slot ?? null) as ActionResultSlot | null;
+}
+
+export function setActionResultSlot(slot: ActionResultSlot): void {
+  const store = getRequestStore();
+  if (!store) {
+    throw new Error(
+      'setActionResultSlot must be called inside runRequestScope'
+    );
+  }
+  store.set(ACTION_RESULT_KEY, slot);
 }
 
 export function runRequestScope<R>(
