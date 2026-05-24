@@ -26,7 +26,7 @@ const stubAdapter = {
 };
 
 describe('generateCoreAppModule', () => {
-  it('emits the Hono app with loaders, actions, renderPage and a default export', () => {
+  it('emits the Hono app with loaders, pageActionHandler, renderPage and a default export', () => {
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
@@ -34,7 +34,7 @@ describe('generateCoreAppModule', () => {
       appConfigAbsPath: undefined,
     });
     expect(src).toContain('loadersHandler');
-    expect(src).toContain('actionsHandler');
+    expect(src).toContain('pageActionHandler');
     expect(src).toContain('renderPage');
     expect(src).toContain('export default app;');
   });
@@ -63,7 +63,9 @@ describe('generateCoreAppModule', () => {
     // The handler options still thread it through, plus the page-use resolvers.
     expect(src).toContain('makePageUseResolvers(routes.serverRoutes, { dev })');
     expect(src).toContain('resolvePageUse: pageUseResolvers.byPath');
-    expect(src).toContain('resolvePageUse: pageUseResolvers.byModuleKey');
+    // pageActionHandler uses its own resolver, not byModuleKey.
+    expect(src).toContain('makePageActionResolvers(routes.serverRoutes, { dev })');
+    expect(src).toContain('resolverByPath: pageActionResolvers.byPath');
     // renderPage receives appConfig as a third argument.
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
@@ -93,7 +95,7 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain(`import { Hono } from 'hono';`);
     expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
     expect(src).toContain(
-      `import {\n  actionsHandler,\n  loadersHandler,\n  makePageUseResolvers,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
+      `import {\n  loadersHandler,\n  makePageActionResolvers,\n  makePageUseResolvers,\n  pageActionHandler,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
     );
 
     // User imports (absolute paths)
@@ -116,24 +118,26 @@ describe('generateCoreAppModule', () => {
     // Handler options thread dev mode through so the cache-vs-rebuild
     // branch doesn't rely on a Vite-only build-time constant inside the
     // library handlers themselves. They also carry appConfig + per-handler
-    // resolvePageUse closures so the framework's middleware chain composes
-    // correctly.
+    // resolver closures so the framework's middleware chain composes correctly.
     expect(src).toContain(`const dev = import.meta.env.DEV;`);
     expect(src).toContain(`makePageUseResolvers(routes.serverRoutes, { dev })`);
     expect(src).toContain(
       `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath })`
     );
     expect(src).toContain(
-      `actionsHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byModuleKey })`
+      `makePageActionResolvers(routes.serverRoutes, { dev })`
     );
+    expect(src).toContain(`pageActionHandler({`);
+    expect(src).toContain(`resolverByPath: pageActionResolvers.byPath`);
 
-    // Hono pipeline in correct order
+    // Hono pipeline in correct order: /__loaders POST, then wildcard POST (actions),
+    // then wildcard GET (SSR).
     const loadersIdx = src.indexOf(`'/__loaders'`);
-    const actionsIdx = src.indexOf(`'/__actions'`);
+    const actionPostIdx = src.indexOf(`.post('*'`);
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(loadersIdx).toBeGreaterThan(-1);
-    expect(actionsIdx).toBeGreaterThan(loadersIdx);
-    expect(catchallIdx).toBeGreaterThan(actionsIdx);
+    expect(actionPostIdx).toBeGreaterThan(loadersIdx);
+    expect(catchallIdx).toBeGreaterThan(actionPostIdx);
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
     );
@@ -161,16 +165,16 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain(`.route('/', userApp)`);
 
     // The user's app must be mounted BEFORE the reserved paths so that
-    // middleware registered in api.ts composes ahead of loadersHandler /
-    // actionsHandler. See docs/superpowers/specs/2026-05-17-reserved-path-middleware-design.md
+    // middleware registered in api.ts composes ahead of loadersHandler and
+    // pageActionHandler. See docs/superpowers/specs/2026-05-17-reserved-path-middleware-design.md
     const apiIdx = src.indexOf(`.route('/', userApp)`);
     const loadersIdx = src.indexOf(`'/__loaders'`);
-    const actionsIdx = src.indexOf(`'/__actions'`);
+    const actionPostIdx = src.indexOf(`.post('*'`);
     const catchallIdx = src.indexOf(`.get('*'`);
     expect(apiIdx).toBeGreaterThan(-1);
     expect(loadersIdx).toBeGreaterThan(apiIdx);
-    expect(actionsIdx).toBeGreaterThan(loadersIdx);
-    expect(catchallIdx).toBeGreaterThan(actionsIdx);
+    expect(actionPostIdx).toBeGreaterThan(loadersIdx);
+    expect(catchallIdx).toBeGreaterThan(actionPostIdx);
   });
 });
 
