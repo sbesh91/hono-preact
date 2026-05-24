@@ -8,6 +8,10 @@ import {
   beginSubmit,
   endSubmit,
 } from './internal/form-submit-store.js';
+import {
+  setLastActionResult,
+  type StoredActionResult,
+} from './internal/action-result-store.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -190,6 +194,14 @@ export type UseActionResult<TPayload, TResult> = {
   data: TResult | null;
 };
 
+function recordOutcome(
+  module: string,
+  action: string,
+  result: StoredActionResult
+): void {
+  setLastActionResult(module, action, result);
+}
+
 function hasFileValues(payload: unknown): boolean {
   if (typeof File === 'undefined') return false;
   if (typeof payload !== 'object' || payload === null) return false;
@@ -277,6 +289,10 @@ export function useAction<
           : '/';
 
       let finalResult: TResult | undefined;
+      // Tracks whether a branch has already written to the action-result store.
+      // The outer catch writes for unclassified errors (network failures, parse
+      // errors) only when no branch has already recorded the outcome.
+      let outcomeRecorded = false;
       beginSubmit(currentStub.__module, currentStub.__action);
       try {
         let response: Response;
@@ -362,12 +378,24 @@ export function useAction<
           }
 
           if (streamError) {
+            recordOutcome(currentStub.__module, currentStub.__action, {
+              kind: 'error',
+              message: streamError.message,
+              submittedPayload: payload,
+            });
+            outcomeRecorded = true;
             throw streamError;
           }
           if (resultValue !== undefined) {
             setData(resultValue);
             invokeSuccess(resultValue);
             finalResult = resultValue;
+            recordOutcome(currentStub.__module, currentStub.__action, {
+              kind: 'success',
+              data: resultValue,
+              submittedPayload: payload,
+            });
+            outcomeRecorded = true;
           } else {
             // Streaming action closed without emitting a `result` event;
             // resolve with `data: undefined`. `onSuccess` is not called
@@ -402,6 +430,12 @@ export function useAction<
             setData(data);
             invokeSuccess(data);
             finalResult = data;
+            recordOutcome(currentStub.__module, currentStub.__action, {
+              kind: 'success',
+              data,
+              submittedPayload: payload,
+            });
+            outcomeRecorded = true;
           } else if (
             env.__outcome === 'redirect' &&
             typeof env.to === 'string'
@@ -415,14 +449,35 @@ export function useAction<
             const msg =
               env.message ??
               `Request denied (${env.status ?? response.status})`;
+            recordOutcome(currentStub.__module, currentStub.__action, {
+              kind: 'deny',
+              status: env.status ?? response.status,
+              message: msg,
+              data: env.data,
+              submittedPayload: payload,
+            });
+            outcomeRecorded = true;
             throw new Error(msg);
           } else if (
             env.__outcome === 'timeout' &&
             typeof env.timeoutMs === 'number'
           ) {
+            recordOutcome(currentStub.__module, currentStub.__action, {
+              kind: 'error',
+              message: `Request timed out after ${env.timeoutMs}ms`,
+              submittedPayload: payload,
+            });
+            outcomeRecorded = true;
             throw new TimeoutError(env.timeoutMs);
           } else if (env.__outcome === 'error') {
-            throw new Error(env.message ?? 'Action failed');
+            const msg = env.message ?? 'Action failed';
+            recordOutcome(currentStub.__module, currentStub.__action, {
+              kind: 'error',
+              message: msg,
+              submittedPayload: payload,
+            });
+            outcomeRecorded = true;
+            throw new Error(msg);
           } else {
             throw new Error(`Unknown action outcome: ${env.__outcome}`);
           }
@@ -448,6 +503,15 @@ export function useAction<
         }
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
+        // Write to the store only for unclassified errors (network failures,
+        // parse errors). Per-branch errors set outcomeRecorded before throwing.
+        if (!outcomeRecorded) {
+          recordOutcome(currentStub.__module, currentStub.__action, {
+            kind: 'error',
+            message: e.message,
+            submittedPayload: payload,
+          });
+        }
         setError(e);
         invokeError(e);
         setPending(false);

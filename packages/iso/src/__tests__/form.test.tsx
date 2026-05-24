@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/preact';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { render, fireEvent, cleanup } from '@testing-library/preact';
 import { Form } from '../form.js';
 import type { ActionStub } from '../action.js';
+import {
+  clearLastActionResult,
+  getLastActionResult,
+} from '../internal/action-result-store.js';
 
 function makeStub(): ActionStub<{ text: string }, { id: number }, never> {
   const stub = (async () => ({ id: 1 })) as unknown as ActionStub<
@@ -16,6 +20,11 @@ function makeStub(): ActionStub<{ text: string }, { id: number }, never> {
     'submit';
   return stub;
 }
+
+afterEach(() => {
+  cleanup();
+  clearLastActionResult('pages/test.server', 'submit');
+});
 
 describe('<Form>', () => {
   it('renders no action attribute (posts to current URL)', () => {
@@ -77,5 +86,64 @@ describe('<Form>', () => {
     const headers = new Headers((init as RequestInit).headers);
     expect(headers.get('Accept')).toMatch(/application\/json/);
     fetchMock.mockRestore();
+  });
+
+  it('writes deny outcome to the client store on JS-on path', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          __outcome: 'deny',
+          status: 422,
+          message: 'bad',
+          data: { fieldErrors: { text: ['nope'] } },
+        }),
+        { status: 422, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    const stub = makeStub();
+    const { container } = render(
+      <Form action={stub}>
+        <input name="text" defaultValue="hi" />
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('deny');
+    if (stored?.kind === 'deny') {
+      expect(stored.status).toBe(422);
+      expect(stored.message).toBe('bad');
+    }
+    vi.restoreAllMocks();
+  });
+
+  it('writes success outcome to the client store', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ __outcome: 'success', data: { id: 1 } }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
+    const stub = makeStub();
+    const { container } = render(
+      <Form action={stub}>
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('success');
+    vi.restoreAllMocks();
   });
 });

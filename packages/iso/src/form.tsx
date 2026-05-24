@@ -1,8 +1,9 @@
 import type { JSX, ComponentChildren } from 'preact';
-import { useState, useCallback } from 'preact/hooks';
+import { useState, useCallback, useMemo } from 'preact/hooks';
 import type { ActionStub } from './action.js';
 import { OPTIMISTIC_BRAND } from './optimistic-action.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
+import { setLastActionResult } from './internal/action-result-store.js';
 
 export type FormProps<TPayload, TResult> = Omit<
   JSX.HTMLAttributes<HTMLFormElement>,
@@ -37,16 +38,19 @@ export function Form<TPayload, TResult>({
   const [pending, setPending] = useState(false);
   const moduleKey = action.__module;
   const actionName = action.__action;
-  const optimistic = (action as unknown as Record<symbol, unknown>)[
-    OPTIMISTIC_BRAND
-  ] as
-    | {
-        addOptimistic: (payload: TPayload) => {
-          settle(): void;
-          revert(): void;
-        };
-      }
-    | undefined;
+
+  const optimistic = useMemo(
+    () =>
+      (action as unknown as Record<symbol, unknown>)[OPTIMISTIC_BRAND] as
+        | {
+            addOptimistic: (payload: TPayload) => {
+              settle(): void;
+              revert(): void;
+            };
+          }
+        | undefined,
+    [action]
+  );
 
   const handleSubmit = useCallback(
     async (e: Event) => {
@@ -90,11 +94,50 @@ export function Form<TPayload, TResult>({
         }
         if (env.__outcome === 'success') {
           handle?.settle();
+          setLastActionResult(moduleKey, actionName, {
+            kind: 'success',
+            data: env.data,
+            submittedPayload: payload,
+          });
           return;
         }
+        if (env.__outcome === 'deny') {
+          handle?.revert();
+          setLastActionResult(moduleKey, actionName, {
+            kind: 'deny',
+            status: env.status ?? res.status,
+            message:
+              env.message ?? `Request denied (${env.status ?? res.status})`,
+            data: env.data,
+            submittedPayload: payload,
+          });
+          return;
+        }
+        if (env.__outcome === 'error') {
+          handle?.revert();
+          setLastActionResult(moduleKey, actionName, {
+            kind: 'error',
+            message: env.message ?? 'Action failed',
+            submittedPayload: payload,
+          });
+          return;
+        }
+        // Unknown outcome (e.g. 'timeout'): treat as error.
         handle?.revert();
-      } catch {
+        setLastActionResult(moduleKey, actionName, {
+          kind: 'error',
+          message:
+            env.message ??
+            `Unexpected outcome: ${env.__outcome ?? 'unknown'}`,
+          submittedPayload: payload,
+        });
+      } catch (err) {
         handle?.revert();
+        setLastActionResult(moduleKey, actionName, {
+          kind: 'error',
+          message: err instanceof Error ? err.message : String(err),
+          submittedPayload: payload,
+        });
       } finally {
         setPending(false);
         endSubmit(moduleKey, actionName);

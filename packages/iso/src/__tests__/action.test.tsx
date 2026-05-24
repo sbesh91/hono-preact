@@ -52,6 +52,10 @@ import { ActiveLoaderIdContext } from '../internal/contexts.js';
 import type { ActionStub } from '../action.js';
 import { defineLoader } from '../define-loader.js';
 import { subscribe } from '../internal/form-submit-store.js';
+import {
+  getLastActionResult,
+  clearLastActionResult,
+} from '../internal/action-result-store.js';
 
 const stub = {
   __module: 'movies',
@@ -956,5 +960,95 @@ describe('useAction: streaming via SSE', () => {
     fireEvent.click(await findByTestId('go'));
     await waitFor(() => expect(caught).not.toBeNull());
     expect(caught?.message).toMatch(/Malformed result event/);
+  });
+});
+
+describe('useAction — client store writes', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    clearLastActionResult('movies', 'create');
+  });
+
+  it('useAction mutate writes deny outcome to the client store', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'deny', message: 'Forbidden', status: 403 }),
+          {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('deny');
+    if (stored?.kind === 'deny') {
+      expect(stored.status).toBe(403);
+      expect(stored.message).toBe('Forbidden');
+    }
+  });
+
+  it('useAction mutate writes success outcome to the client store', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('success');
+    if (stored?.kind === 'success') {
+      expect(stored.data).toEqual({ ok: true });
+    }
+  });
+
+  it('useAction mutate writes error outcome to the client store', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('error');
+    if (stored?.kind === 'error') {
+      expect(stored.message).toBe('DB error');
+    }
   });
 });

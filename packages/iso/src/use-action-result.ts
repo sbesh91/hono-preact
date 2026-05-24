@@ -1,5 +1,11 @@
 import { useContext } from 'preact/hooks';
+import { useSyncExternalStore } from 'preact/compat';
 import { ActionResultContext } from './action-result-context.js';
+import {
+  getLastActionResult,
+  subscribeActionResults,
+} from './internal/action-result-store.js';
+import { isBrowser } from './is-browser.js';
 import type { ActionStub } from './action.js';
 
 export type ActionResult<TPayload, TResult> =
@@ -9,6 +15,14 @@ export type ActionResult<TPayload, TResult> =
       status: number;
       message: string;
       data?: unknown;
+      /**
+       * The payload as parsed from the request. For form submissions, this is
+       * a `Record<string, FormDataEntryValue | FormDataEntryValue[]>` where
+       * each value is a string or File (never a parsed primitive like `number`
+       * or `boolean`). The `TPayload` typing reflects the dev-declared shape,
+       * not the runtime structural shape. Read individual fields knowing they
+       * arrive as form-data entries.
+       */
       submittedPayload: TPayload;
     }
   | {
@@ -21,30 +35,41 @@ export type ActionResult<TPayload, TResult> =
 export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionStub<TPayload, TResult, never>
 ): ActionResult<TPayload, TResult> {
-  const ctx = useContext(ActionResultContext);
-  if (!ctx) return null;
-  if (stub && (ctx.module !== stub.__module || ctx.action !== stub.__action)) {
+  const ssr = useContext(ActionResultContext);
+  const client = useSyncExternalStore(
+    subscribeActionResults,
+    () => (isBrowser() ? getLastActionResult(stub) : null)
+  );
+
+  // Client store wins when populated: a JS-on submit has produced a result.
+  // SSR context is the fallback for the PE deny re-render path (no JS state).
+  const source = client ?? ssr;
+  if (!source) return null;
+  if (
+    stub &&
+    (source.module !== stub.__module || source.action !== stub.__action)
+  ) {
     return null;
   }
-  if (ctx.kind === 'success') {
+  if (source.kind === 'success') {
     return {
       kind: 'success',
-      data: ctx.data as TResult,
-      submittedPayload: ctx.submittedPayload as TPayload,
+      data: source.data as TResult,
+      submittedPayload: source.submittedPayload as TPayload,
     };
   }
-  if (ctx.kind === 'deny') {
+  if (source.kind === 'deny') {
     return {
       kind: 'deny',
-      status: ctx.status,
-      message: ctx.message,
-      data: ctx.data,
-      submittedPayload: ctx.submittedPayload as TPayload,
+      status: source.status,
+      message: source.message,
+      data: source.data,
+      submittedPayload: source.submittedPayload as TPayload,
     };
   }
   return {
     kind: 'error',
-    message: ctx.message,
-    submittedPayload: ctx.submittedPayload as TPayload | null,
+    message: source.message,
+    submittedPayload: source.submittedPayload as TPayload | null,
   };
 }

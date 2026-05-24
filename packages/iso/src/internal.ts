@@ -81,6 +81,14 @@ export {
   subscribe as subscribeFormSubmit,
 } from './internal/form-submit-store.js';
 
+export {
+  setLastActionResult,
+  clearLastActionResult,
+  getLastActionResult,
+  subscribeActionResults,
+  type StoredActionResult,
+} from './internal/action-result-store.js';
+
 // Middleware dispatcher + observer fanout. Internal-stability subpath.
 export {
   dispatchServer,
