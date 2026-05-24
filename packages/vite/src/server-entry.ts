@@ -61,6 +61,7 @@ export function generateCoreAppModule(
     `  .post('/__loaders', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
     `  .post('*', pageActionHandler({\n` +
     `    resolverByPath: pageActionResolvers.byPath,\n` +
+    `    resolvePageUseByPath: pageUseResolvers.byPath,\n` +
     `    renderPage,\n` +
     `    resolvePageNode: () => h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),\n` +
     `    appConfig,\n` +

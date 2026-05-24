@@ -629,6 +629,137 @@ describe('stream observer fanout (E20)', () => {
   });
 });
 
+describe('pageActionHandler dispatches the full chain (root -> page -> action)', () => {
+  it('runs page-level middleware before the action body (regression: page-level was previously dropped)', async () => {
+    // Without resolvePageUseByPath the old handler only composed
+    // [appUse, actionUse], silently dropping pageUse. Any user who guards a
+    // page with pageUse (e.g. an auth gate on a layout .server.ts) would have
+    // seen action POSTs bypass the gate. This test locks in the fix.
+    const order: string[] = [];
+
+    const pageMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('page-in');
+      await next();
+      order.push('page-out');
+    });
+
+    const handler = pageActionHandler({
+      resolverByPath: async () => {
+        const map = new Map<string, { fn: (ctx: unknown, payload: unknown) => Promise<unknown>; use: ReadonlyArray<unknown>; moduleKey: string }>();
+        map.set('submit', {
+          fn: async () => {
+            order.push('action');
+            return { ok: true };
+          },
+          use: [],
+          moduleKey: 'pages/test.server',
+        });
+        return map;
+      },
+      resolvePageUseByPath: async () => [pageMw],
+      renderPage: async () => new Response('', { status: 200 }),
+      resolvePageNode: () => null,
+      appConfig: { use: [] },
+    });
+
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: {} }),
+    });
+    expect(res.status).toBe(200);
+    expect(order).toEqual(['page-in', 'action', 'page-out']);
+  });
+
+  it('runs root -> page -> action in correct order with all three layers', async () => {
+    const order: string[] = [];
+
+    const rootMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('root-in');
+      await next();
+      order.push('root-out');
+    });
+    const pageMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('page-in');
+      await next();
+      order.push('page-out');
+    });
+    const actionMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('action-mw-in');
+      await next();
+      order.push('action-mw-out');
+    });
+
+    const handler = pageActionHandler({
+      resolverByPath: async () => {
+        const map = new Map<string, { fn: (ctx: unknown, payload: unknown) => Promise<unknown>; use: ReadonlyArray<unknown>; moduleKey: string }>();
+        map.set('submit', {
+          fn: async () => {
+            order.push('inner');
+            return { ok: true };
+          },
+          use: [actionMw],
+          moduleKey: 'pages/test.server',
+        });
+        return map;
+      },
+      resolvePageUseByPath: async () => [pageMw],
+      renderPage: async () => new Response('', { status: 200 }),
+      resolvePageNode: () => null,
+      appConfig: { use: [rootMw] },
+    });
+
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: {} }),
+    });
+    expect(res.status).toBe(200);
+    expect(order).toEqual([
+      'root-in',
+      'page-in',
+      'action-mw-in',
+      'inner',
+      'action-mw-out',
+      'page-out',
+      'root-out',
+    ]);
+  });
+
+  it('skips page-level middleware when resolvePageUseByPath is not provided (backward compat)', async () => {
+    const order: string[] = [];
+
+    const handler = pageActionHandler({
+      resolverByPath: async () => {
+        const map = new Map<string, { fn: (ctx: unknown, payload: unknown) => Promise<unknown>; use: ReadonlyArray<unknown>; moduleKey: string }>();
+        map.set('submit', {
+          fn: async () => {
+            order.push('action');
+            return { ok: true };
+          },
+          use: [],
+          moduleKey: 'pages/test.server',
+        });
+        return map;
+      },
+      // resolvePageUseByPath deliberately omitted
+      renderPage: async () => new Response('', { status: 200 }),
+      resolvePageNode: () => null,
+    });
+
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ module: 'pages/test.server', action: 'submit', payload: {} }),
+    });
+    expect(res.status).toBe(200);
+    expect(order).toEqual(['action']);
+  });
+});
+
 describe('E13: demo route-tree composition runs each gate once per request', () => {
   it('does not double-fire pageUse when sibling routes share a URL prefix', async () => {
     // Simulates the demo's `/demo/projects` (server) vs

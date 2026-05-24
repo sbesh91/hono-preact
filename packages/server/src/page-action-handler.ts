@@ -33,6 +33,17 @@ export interface PageActionHandlerOptions {
    */
   resolverByPath: (path: string) => Promise<Map<string, ActionEntry>>;
   /**
+   * Optional per-page middleware resolver, keyed by URL path. The handler
+   * composes the chain as [appConfig.use, resolvePageUseByPath(path), action.use].
+   * Pass `pageUseResolvers.byPath` from makePageUseResolvers (same resolver
+   * loadersHandler uses). Defaults to returning empty so the option is
+   * additive: handlers wired without it lose page-level middleware (matches
+   * the previous behavior of this handler, which dropped them entirely).
+   */
+  resolvePageUseByPath?: (
+    path: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  /**
    * Re-renders the page after a deny or error outcome. The handler calls
    * this inside a fresh runRequestScope after injecting the action result
    * slot so the page tree can read it via useActionResult().
@@ -166,6 +177,7 @@ export function pageActionHandler(
 ): MiddlewareHandler {
   const {
     resolverByPath,
+    resolvePageUseByPath,
     renderPage,
     resolvePageNode,
     appConfig,
@@ -203,11 +215,15 @@ export function pageActionHandler(
       : c.req.raw.signal;
     const actionCtx = { c, signal };
 
-    // Chain order: app-level (outermost) -> action-level (innermost).
-    // Page-level middleware is already folded into entry.use by the resolver.
+    // Chain order: app-level (outermost) -> page-level (from the page's
+    // `.server.ts` and ancestor layouts' pageUse arrays) -> action-level (from
+    // defineAction's `use` option). Outer middleware runs first on the way in,
+    // last on the way out, matching the convention every middleware system
+    // users have seen (Hono, Express, Koa).
     const rootUse = appConfig?.use ?? [];
+    const pageUse = (await resolvePageUseByPath?.(urlPath)) ?? [];
     const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
-      [...rootUse, ...actionUse] as ReadonlyArray<
+      [...rootUse, ...pageUse, ...actionUse] as ReadonlyArray<
         Middleware | StreamObserver<unknown, never>
       >;
     const { middleware: allMiddleware, observers } = partitionUse(fullUse);

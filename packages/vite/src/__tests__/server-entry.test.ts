@@ -66,6 +66,7 @@ describe('generateCoreAppModule', () => {
     // pageActionHandler uses its own resolver, not byModuleKey.
     expect(src).toContain('makePageActionResolvers(routes.serverRoutes, { dev })');
     expect(src).toContain('resolverByPath: pageActionResolvers.byPath');
+    expect(src).toContain('resolvePageUseByPath: pageUseResolvers.byPath');
     // renderPage receives appConfig as a third argument.
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
@@ -129,6 +130,7 @@ describe('generateCoreAppModule', () => {
     );
     expect(src).toContain(`pageActionHandler({`);
     expect(src).toContain(`resolverByPath: pageActionResolvers.byPath`);
+    expect(src).toContain(`resolvePageUseByPath: pageUseResolvers.byPath`);
 
     // Hono pipeline in correct order: /__loaders POST, then wildcard POST (actions),
     // then wildcard GET (SSR).
