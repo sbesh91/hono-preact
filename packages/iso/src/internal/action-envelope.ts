@@ -1,9 +1,4 @@
-import type {
-  Outcome,
-  RedirectOutcome,
-  DenyOutcome,
-  TimeoutOutcome,
-} from '../outcomes.js';
+import type { Outcome } from '../outcomes.js';
 
 export type ActionEnvelope =
   | { __outcome: 'success'; data: unknown }
