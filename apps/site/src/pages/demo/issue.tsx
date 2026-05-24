@@ -1,6 +1,12 @@
-import { definePage, Form, useOptimisticAction } from 'hono-preact';
+import {
+  definePage,
+  Form,
+  useFormStatus,
+  useOptimisticAction,
+  useActionResult,
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { serverLoaders as projectIssuesLoaders } from './project-issues.server.js';
@@ -105,57 +111,48 @@ IssueHeaderAndActions.displayName = 'IssueHeaderAndActions';
 // stable.
 
 // Optimistic appends: when the user posts a comment, useOptimisticAction
-// keeps the new entry in the rendered list without reloading commentsLoader.
-// Reloading commentsLoader would re-stream all the previously loaded
-// comments back in one by one and feel like a UI thrash. The optimistic
-// entry stays applied until the loader's base value (next mount / nav)
-// actually contains the new comment.
+// keeps the new entry in the rendered list. The optimistic entry stays
+// applied until the loader's base value (next mount / nav) contains the
+// server-confirmed comment.
 
 const CommentsSection: FunctionComponent<{
   comments: CommentData[];
   issueId: string;
 }> = ({ comments, issueId }) => {
+  const { pending } = useFormStatus(serverActions.addComment);
   const [formKey, setFormKey] = useState(0);
+  const result = useActionResult(serverActions.addComment);
 
-  const {
-    mutate: postComment,
-    pending,
-    value: optimisticComments,
-  } = useOptimisticAction(serverActions.addComment, {
-    base: comments,
-    apply: (current, payload) => [
-      ...current,
-      {
-        id: `pending-${current.length}`,
-        issueId: payload.issueId,
-        authorId: '',
-        body: payload.body,
-        createdAt: Date.now(),
-        author: null,
-      } as CommentData,
-    ],
-    invalidate: [activityLoader],
-    onSuccess: () => {
+  useEffect(() => {
+    if (result?.kind === 'success') {
       setFormKey((k) => k + 1);
-      // Clear the comments cache without triggering a reload of this page
-      // (commentsLoader is the active loader here, so passing it into the
-      // invalidate list above would re-stream the whole thread). The current
-      // view keeps showing the new comment via the optimistic patch; the
-      // next mount sees a fresh fetch and the server-rendered comment.
       commentsLoader.invalidate();
-    },
-  });
+    }
+  }, [result]);
+
+  const { value: optimisticComments } = useOptimisticAction(
+    serverActions.addComment,
+    {
+      base: comments,
+      apply: (current, payload) => [
+        ...current,
+        {
+          id: `pending-${current.length}`,
+          issueId: payload.issueId,
+          authorId: '',
+          body: payload.body,
+          createdAt: Date.now(),
+          author: null,
+        } as CommentData,
+      ],
+    }
+  );
 
   return (
     <section class="space-y-3">
       <h3 class="font-semibold">Comments</h3>
       <CommentList comments={optimisticComments} />
-      <Form
-        key={formKey}
-        mutate={postComment}
-        pending={pending}
-        class="space-y-2"
-      >
+      <Form key={formKey} action={serverActions.addComment} class="space-y-2">
         <input type="hidden" name="issueId" value={issueId} />
         <textarea
           name="body"

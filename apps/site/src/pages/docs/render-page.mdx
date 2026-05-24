@@ -57,7 +57,7 @@ import { h } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { Routes } from 'hono-preact';
 import {
-  actionsHandler,
+  pageActionHandler,
   loadersHandler,
   renderPage,
   routeServerModules,
@@ -71,7 +71,7 @@ const serverModules = routeServerModules(routes);
 
 app
   .post('/__loaders', loadersHandler(serverModules))
-  .post('/__actions', actionsHandler(serverModules))
+  .on(['POST'], '*', pageActionHandler(serverModules))
   .get('/api/movies', async (c) => {
     const movies = await getMovies();
     return c.json(movies);

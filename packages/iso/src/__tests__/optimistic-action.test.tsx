@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
-import { useOptimisticAction } from '../optimistic-action.js';
+import {
+  render,
+  screen,
+  act,
+  cleanup,
+  waitFor,
+  renderHook,
+} from '@testing-library/preact';
+import { defineAction } from '../action.js';
+import { useOptimisticAction, OPTIMISTIC_BRAND } from '../optimistic-action.js';
 import { ReloadContext } from '../reload-context.js';
 import type { ActionStub } from '../action.js';
 
@@ -57,7 +65,13 @@ describe('useOptimisticAction', () => {
     // Cleanup the in-flight fetch so the test can finish
     await act(async () => {
       resolveFetch(
-        new Response(JSON.stringify({ id: 1, title: 'Dune' }), { status: 200 })
+        new Response(
+          JSON.stringify({
+            __outcome: 'success',
+            data: { id: 1, title: 'Dune' },
+          }),
+          { status: 200 }
+        )
       );
     });
   });
@@ -68,7 +82,10 @@ describe('useOptimisticAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+            { status: 500 }
+          )
         )
     );
 
@@ -105,9 +122,13 @@ describe('useOptimisticAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ id: 1, title: 'Dune' }), {
-          status: 200,
-        })
+        new Response(
+          JSON.stringify({
+            __outcome: 'success',
+            data: { id: 1, title: 'Dune' },
+          }),
+          { status: 200 }
+        )
       )
     );
     const onSuccess = vi.fn();
@@ -206,7 +227,10 @@ describe('useOptimisticAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+            { status: 500 }
+          )
         )
     );
     const onError = vi.fn();
@@ -283,7 +307,10 @@ describe('useOptimisticAction', () => {
     // Resolve A
     await act(async () => {
       resolvers[0]!(
-        new Response(JSON.stringify({ id: 1, title: 'A' }), { status: 200 })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 1, title: 'A' } }),
+          { status: 200 }
+        )
       );
     });
 
@@ -298,7 +325,10 @@ describe('useOptimisticAction', () => {
     // Resolve B
     await act(async () => {
       resolvers[1]!(
-        new Response(JSON.stringify({ id: 2, title: 'B' }), { status: 200 })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 2, title: 'B' } }),
+          { status: 200 }
+        )
       );
     });
 
@@ -307,5 +337,56 @@ describe('useOptimisticAction', () => {
     expect(screen.getByTestId('list')).toHaveTextContent('Alien');
     expect(screen.getByTestId('list')).toHaveTextContent('A');
     expect(screen.getByTestId('list')).toHaveTextContent('B');
+  });
+});
+
+describe('useOptimisticAction stub-compatibility', () => {
+  const stubWithMeta = defineAction(
+    async (_ctx, p: { text: string }) => ({ id: 1, ...p }),
+    {
+      __module: 'pages/test.server',
+      __action: 'addTodo',
+    }
+  );
+  const apply = (current: { text: string }[], payload: { text: string }) => [
+    ...current,
+    payload,
+  ];
+
+  it('return value carries __module and __action from the stub', () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const { result } = renderHook(() =>
+      useOptimisticAction(stubWithMeta, { base: [], apply })
+    );
+    expect(result.current.__module).toBe('pages/test.server');
+    expect(result.current.__action).toBe('addTodo');
+  });
+
+  it('return value carries the OPTIMISTIC_BRAND with apply and addOptimistic', () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const { result } = renderHook(() =>
+      useOptimisticAction(stubWithMeta, { base: [], apply })
+    );
+    const brand = (result.current as unknown as Record<symbol, unknown>)[
+      OPTIMISTIC_BRAND
+    ];
+    expect(brand).toBeTruthy();
+    const binding = brand as {
+      apply: typeof apply;
+      addOptimistic: (p: { text: string }) => unknown;
+    };
+    expect(typeof binding.apply).toBe('function');
+    expect(typeof binding.addOptimistic).toBe('function');
+    expect(binding.apply([], { text: 'a' })).toEqual([{ text: 'a' }]);
+  });
+
+  it('return value still satisfies the imperative UseActionResult shape', () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const { result } = renderHook(() =>
+      useOptimisticAction(stubWithMeta, { base: [], apply })
+    );
+    expect(typeof result.current.mutate).toBe('function');
+    expect(result.current.pending).toBe(false);
+    expect(result.current.value).toEqual([]);
   });
 });

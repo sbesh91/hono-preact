@@ -38,9 +38,10 @@ export function generateCoreAppModule(
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes, env } from 'hono-preact';\n` +
     `import {\n` +
-    `  actionsHandler,\n` +
     `  loadersHandler,\n` +
+    `  makePageActionResolvers,\n` +
     `  makePageUseResolvers,\n` +
+    `  pageActionHandler,\n` +
     `  renderPage,\n` +
     `  routeServerModules,\n` +
     `} from 'hono-preact/server';\n` +
@@ -53,11 +54,18 @@ export function generateCoreAppModule(
     `const dev = import.meta.env.DEV;\n` +
     `const serverModules = routeServerModules(routes);\n` +
     `const pageUseResolvers = makePageUseResolvers(routes.serverRoutes, { dev });\n` +
+    `const pageActionResolvers = makePageActionResolvers(routes.serverRoutes, { dev });\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
     `  .post('/__loaders', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
-    `  .post('/__actions', actionsHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byModuleKey }))\n` +
+    `  .post('*', pageActionHandler({\n` +
+    `    resolverByPath: pageActionResolvers.byPath,\n` +
+    `    resolvePageUseByPath: pageUseResolvers.byPath,\n` +
+    `    renderPage,\n` +
+    `    resolvePageNode: () => h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),\n` +
+    `    appConfig,\n` +
+    `  }))\n` +
     `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig }));\n` +
     `\n` +
     `export default app;\n`

@@ -18,7 +18,8 @@ import {
 } from '@hono-preact/iso';
 import { Loader } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
-import { actionsHandler } from '../actions-handler.js';
+import { pageActionHandler } from '../page-action-handler.js';
+import { makePageActionResolvers } from '../page-action-resolvers.js';
 
 const loc = {
   path: '/items',
@@ -42,7 +43,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     // Server state the loader reads and the action mutates. The point of
     // this test: every existing optimistic/invalidation test fakes the
     // server side by manually swapping `base` props. Here we stand up the
-    // real `loadersHandler` + `actionsHandler`, route the browser-side
+    // real `loadersHandler` + `pageActionHandler`, route the browser-side
     // `fetch` to the Hono app, and assert the loader actually re-runs
     // against the same backing state after the action settles.
     let serverCount = 1;
@@ -66,14 +67,35 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     };
     const glob = { './pages/items.server.ts': serverModule };
 
-    const honoApp = new Hono()
-      .post('/__loaders', loadersHandler(glob))
-      .post('/__actions', actionsHandler(glob));
+    // Build the pageActionHandler using the same server route structure the
+    // framework's generated server entry produces. In happy-dom, window.location
+    // defaults to '/', so useAction posts to '/'. Register the route at '/' so
+    // the resolver finds the action when the request arrives.
+    const serverRoutes = [
+      {
+        path: '/',
+        server: async () => serverModule,
+        ancestors: [],
+      },
+    ];
+    const pageActionResolvers = makePageActionResolvers(serverRoutes, {
+      dev: true,
+    });
+    const noopRender = async () => new Response('', { status: 200 });
+
+    const honoApp = new Hono().post('/__loaders', loadersHandler(glob)).post(
+      '*',
+      pageActionHandler({
+        resolverByPath: pageActionResolvers.byPath,
+        renderPage: noopRender as never,
+        resolvePageNode: () => null,
+      })
+    );
 
     // Route every fetch to the Hono app. Both the loader RPC stub
-    // (`/__loaders`) and the action mutate (`/__actions`) call through
-    // `fetch(...)`; pointing both at the same Hono app exercises the real
-    // wire format on both sides.
+    // (`/__loaders`) and the action POST (mounted at `*` by pageActionHandler)
+    // call through `fetch(...)`; pointing both at the same Hono app exercises
+    // the real wire format on both sides.
     const fetchSpy = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url =

@@ -31,6 +31,13 @@ export { Envelope } from './internal/envelope.js';
 export { RouteBoundary } from './internal/route-boundary.js';
 export { OptimisticOverlay } from './internal/optimistic-overlay.js';
 
+export {
+  serializeActionOutcome,
+  type ActionEnvelope,
+  type ActionResolution,
+  type SerializedEnvelope,
+} from './internal/action-envelope.js';
+
 export { LoaderIdContext, LoaderDataContext } from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
 export {
@@ -43,6 +50,9 @@ export {
   runRequestScope,
   getRequestStore,
   captureRequestScope,
+  getActionResultSlot,
+  setActionResultSlot,
+  type ActionResultSlot,
 } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
 export { HonoRequestContext } from './internal/contexts.js';
@@ -63,6 +73,23 @@ export {
   takeServerStreamingLoaders,
 } from './internal/streaming-ssr.js';
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
+
+export {
+  beginSubmit,
+  endSubmit,
+  isPending,
+  subscribe as subscribeFormSubmit,
+} from './internal/form-submit-store.js';
+
+export { assignSafeRedirect, isSameOrigin } from './internal/safe-redirect.js';
+
+export {
+  setLastActionResult,
+  clearLastActionResult,
+  getLastActionResult,
+  subscribeActionResults,
+  type StoredActionResult,
+} from './internal/action-result-store.js';
 
 // Middleware dispatcher + observer fanout. Internal-stability subpath.
 export {

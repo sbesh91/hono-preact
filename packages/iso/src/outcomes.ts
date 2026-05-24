@@ -20,6 +20,7 @@ export type DenyOutcome = {
   status: ErrorStatusCode;
   message: string;
   headers: Record<string, string> | undefined;
+  data?: unknown;
 };
 
 export type RenderOutcome = {
@@ -67,11 +68,25 @@ type DenyInput = {
   status: ErrorStatusCode;
   message?: string;
   headers?: Record<string, string>;
+  data?: unknown;
 };
 
-export function deny(status: ErrorStatusCode, message?: string): DenyOutcome;
+type DenyOpts = {
+  headers?: Record<string, string>;
+  data?: unknown;
+};
+
+export function deny(
+  status: ErrorStatusCode,
+  message?: string,
+  opts?: DenyOpts
+): DenyOutcome;
 export function deny(spec: DenyInput): DenyOutcome;
-export function deny(a: ErrorStatusCode | DenyInput, b?: string): DenyOutcome {
+export function deny(
+  a: ErrorStatusCode | DenyInput,
+  b?: string,
+  c?: DenyOpts
+): DenyOutcome {
   // `JSON.stringify` drops `undefined` properties, so a deny outcome with no
   // message would arrive at the client without a `message` field and the
   // client decoders would fall back to a generic "Loader/Action failed with
@@ -85,13 +100,15 @@ export function deny(a: ErrorStatusCode | DenyInput, b?: string): DenyOutcome {
       status: a.status,
       message: a.message ?? `Request denied (${a.status})`,
       headers: a.headers,
+      ...(a.data !== undefined ? { data: a.data } : {}),
     };
   }
   return {
     __outcome: 'deny',
     status: a,
     message: b ?? `Request denied (${a})`,
-    headers: undefined,
+    headers: c?.headers,
+    ...(c?.data !== undefined ? { data: c.data } : {}),
   };
 }
 

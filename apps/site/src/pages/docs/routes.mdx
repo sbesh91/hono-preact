@@ -71,7 +71,7 @@ That table covers four URL behaviours:
 
 ## Mounting
 
-You do not write `iso.tsx` or `server.tsx`. The framework generates both as virtual modules from your `routes.ts` and `Layout.tsx`. The client entry hydrates `<Routes>` inside `<LocationProvider>`; the server entry mounts `loadersHandler`, `actionsHandler`, an optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. See [Project Structure](/docs/structure) for the file layout the plugin assumes.
+You do not write `iso.tsx` or `server.tsx`. The framework generates both as virtual modules from your `routes.ts` and `Layout.tsx`. The client entry hydrates `<Routes>` inside `<LocationProvider>`; the server entry mounts `loadersHandler`, `pageActionHandler`, an optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. See [Project Structure](/docs/structure) for the file layout the plugin assumes.
 
 If you need to customize the client or server entry (rare), pass a path override via the Vite plugin's `clientEntry` / `entry` options and follow the patterns in the generated virtual modules.
 

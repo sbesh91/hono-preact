@@ -1,185 +1,160 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import {
-  render,
-  screen,
-  act,
-  cleanup,
-  fireEvent,
-  waitFor,
-} from '@testing-library/preact';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { render, fireEvent, cleanup } from '@testing-library/preact';
 import { Form } from '../form.js';
-import { useAction, type ActionStub } from '../action.js';
+import type { ActionStub } from '../action.js';
+import {
+  clearLastActionResult,
+  getLastActionResult,
+} from '../internal/action-result-store.js';
+
+function makeStub(): ActionStub<{ text: string }, { id: number }, never> {
+  const stub = (async () => ({ id: 1 })) as unknown as ActionStub<
+    { text: string },
+    { id: number },
+    never
+  >;
+  (
+    stub as unknown as {
+      __module: string;
+      __action: string;
+      useAction: unknown;
+    }
+  ).__module = 'pages/test.server';
+  (
+    stub as unknown as {
+      __module: string;
+      __action: string;
+      useAction: unknown;
+    }
+  ).__action = 'submit';
+  return stub;
+}
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
+  clearLastActionResult('pages/test.server', 'submit');
 });
 
-describe('Form', () => {
-  it('serializes FormData to a plain object and calls mutate on submit', async () => {
-    const mutate = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <Form mutate={mutate}>
-        <input name="title" defaultValue="Dune" />
-        <input name="year" defaultValue="2021" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
-    });
-
-    expect(mutate).toHaveBeenCalledWith({ title: 'Dune', year: '2021' });
+describe('<Form>', () => {
+  it('renders no action attribute (posts to current URL)', () => {
+    const { container } = render(<Form action={makeStub()} />);
+    const form = container.querySelector('form')!;
+    expect(form.getAttribute('action')).toBeNull();
+    expect(form.getAttribute('method')?.toLowerCase()).toBe('post');
   });
 
-  it('disables the fieldset when pending is true', () => {
-    const mutate = vi.fn();
-    render(
-      <Form mutate={mutate} pending={true}>
-        <input name="title" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-    const fieldset = screen.getByRole('button').closest('fieldset');
-    expect(fieldset).toBeDisabled();
+  it('emits __module and __action as hidden inputs', () => {
+    const { container } = render(<Form action={makeStub()} />);
+    const m = container.querySelector(
+      'input[name="__module"]'
+    ) as HTMLInputElement;
+    const a = container.querySelector(
+      'input[name="__action"]'
+    ) as HTMLInputElement;
+    expect(m.value).toBe('pages/test.server');
+    expect(a.value).toBe('submit');
+    expect(m.type).toBe('hidden');
+    expect(a.type).toBe('hidden');
   });
 
-  it('does not disable the fieldset when pending is false or absent', () => {
-    const mutate = vi.fn();
-    const { rerender } = render(
-      <Form mutate={mutate} pending={false}>
-        <input name="title" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-    expect(screen.getByRole('button').closest('fieldset')).not.toBeDisabled();
-
-    rerender(
-      <Form mutate={mutate}>
-        <input name="title" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-    expect(screen.getByRole('button').closest('fieldset')).not.toBeDisabled();
+  it('renders enctype=multipart/form-data', () => {
+    const { container } = render(<Form action={makeStub()} />);
+    const form = container.querySelector('form')!;
+    expect(form.getAttribute('enctype')).toBe('multipart/form-data');
   });
 
-  it('forwards arbitrary HTML form attributes to the <form> element', () => {
-    const mutate = vi.fn();
-    render(
-      <Form mutate={mutate} class="my-form" data-testid="theform">
-        <button type="submit">Submit</button>
+  it('renders the fieldset wrapper for children', () => {
+    const { container } = render(
+      <Form action={makeStub()}>
+        <input name="text" defaultValue="hi" />
       </Form>
     );
-    const formEl = screen.getByTestId('theform');
-    expect(formEl.tagName).toBe('FORM');
-    expect(formEl).toHaveClass('my-form');
+    const fieldset = container.querySelector('fieldset.hp-form-fieldset')!;
+    const input = fieldset.querySelector(
+      'input[name="text"]'
+    ) as HTMLInputElement;
+    expect(input.value).toBe('hi');
   });
 
-  it('prevents default form submission', () => {
-    const mutate = vi.fn().mockResolvedValue(undefined);
-    render(
-      <Form mutate={mutate}>
-        <button type="submit">Submit</button>
+  it('intercepts submit, calls fetch with FormData and Accept: application/json', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const { container } = render(
+      <Form action={makeStub()}>
+        <input name="text" defaultValue="hi" />
+        <button type="submit">go</button>
       </Form>
     );
-    const formEl = screen.getByRole('button').closest('form')!;
-    const submitEvent = new Event('submit', {
-      cancelable: true,
-      bubbles: true,
-    });
-    formEl.dispatchEvent(submitEvent);
-    expect(submitEvent.defaultPrevented).toBe(true);
+    const form = container.querySelector('form')!;
+    fireEvent.submit(form);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect((init as RequestInit).method).toBe('POST');
+    expect((init as RequestInit).body).toBeInstanceOf(FormData);
+    const headers = new Headers((init as RequestInit).headers);
+    expect(headers.get('Accept')).toMatch(/application\/json/);
+    fetchMock.mockRestore();
   });
 
-  it('collects duplicate field names into arrays instead of dropping all but the last', async () => {
-    // Repeated names — checkboxes, multi-select, multi-file inputs — used to
-    // collapse to the last value silently. Now they arrive as arrays, so the
-    // user's action types are forced to declare the shape and silent data
-    // loss is impossible.
-    const mutate = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <Form mutate={mutate}>
-        <input type="checkbox" name="tags" value="a" defaultChecked />
-        <input type="checkbox" name="tags" value="b" defaultChecked />
-        <input type="checkbox" name="tags" value="c" defaultChecked />
-        <input name="title" defaultValue="Dune" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
-    });
-
-    expect(mutate).toHaveBeenCalledWith({
-      tags: ['a', 'b', 'c'],
-      title: 'Dune',
-    });
-  });
-
-  it('keeps single-value fields as scalars (no spurious arrays)', async () => {
-    const mutate = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <Form mutate={mutate}>
-        <input name="title" defaultValue="Dune" />
-        <button type="submit">Submit</button>
-      </Form>
-    );
-
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
-    });
-
-    expect(mutate).toHaveBeenCalledWith({ title: 'Dune' });
-  });
-
-  it('forwards streaming responses through useAction.mutate', async () => {
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode('data: {"text":"chunk-1"}\n\n'));
-        controller.enqueue(encoder.encode('data: {"text":"chunk-2"}\n\n'));
-        controller.close();
-      },
-    });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(stream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        })
+  it('writes deny outcome to the client store on JS-on path', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          __outcome: 'deny',
+          status: 422,
+          message: 'bad',
+          data: { fieldErrors: { text: ['nope'] } },
+        }),
+        { status: 422, headers: { 'Content-Type': 'application/json' } }
       )
     );
-
-    const stub = {
-      __module: 'movies',
-      __action: 'stream',
-    } as unknown as ActionStub<{ title: string }, void>;
-    const onChunk = vi.fn();
-
-    function TestForm() {
-      const { mutate, pending } = useAction(stub, { onChunk });
-      return (
-        <Form mutate={mutate} pending={pending}>
-          <input name="title" defaultValue="Dune" />
-          <button type="submit">Submit</button>
-        </Form>
-      );
-    }
-
-    render(<TestForm />);
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    const stub = makeStub();
+    const { container } = render(
+      <Form action={stub}>
+        <input name="text" defaultValue="hi" />
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
     });
+    expect(stored?.kind).toBe('deny');
+    if (stored?.kind === 'deny') {
+      expect(stored.status).toBe(422);
+      expect(stored.message).toBe('bad');
+    }
+    vi.restoreAllMocks();
+  });
 
-    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(2));
-    expect(onChunk).toHaveBeenNthCalledWith(1, { text: 'chunk-1' });
-    expect(onChunk).toHaveBeenNthCalledWith(2, { text: 'chunk-2' });
+  it('writes success outcome to the client store', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const stub = makeStub();
+    const { container } = render(
+      <Form action={stub}>
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('success');
+    vi.restoreAllMocks();
   });
 });

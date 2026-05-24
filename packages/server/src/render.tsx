@@ -10,6 +10,8 @@ import {
   type Outcome,
   type ServerMiddleware,
   type ServerPageCtx,
+  ActionResultContext,
+  type ActionResultContextValue,
 } from '@hono-preact/iso';
 import {
   HonoRequestContext,
@@ -18,6 +20,7 @@ import {
   takeServerStreamingLoaders,
   dispatchServer,
   partitionUse,
+  getActionResultSlot,
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 
@@ -66,6 +69,42 @@ function translateRootOutcome(c: Context, outcome: Outcome): Response {
     'render outcome is page-scope only and cannot be issued by root middleware',
     500
   );
+}
+
+function buildActionResultContext(): ActionResultContextValue {
+  const slot = getActionResultSlot();
+  if (!slot) return null;
+  if (slot.resolution.kind === 'success') {
+    return {
+      module: slot.module,
+      action: slot.action,
+      kind: 'success',
+      data: slot.resolution.data,
+      submittedPayload: slot.submittedPayload,
+    };
+  }
+  if (slot.resolution.kind === 'error') {
+    return {
+      module: slot.module,
+      action: slot.action,
+      kind: 'error',
+      message: slot.resolution.message,
+      submittedPayload: slot.submittedPayload,
+    };
+  }
+  const { outcome } = slot.resolution;
+  if (outcome.__outcome === 'deny') {
+    return {
+      module: slot.module,
+      action: slot.action,
+      kind: 'deny',
+      status: outcome.status,
+      message: outcome.message,
+      data: outcome.data,
+      submittedPayload: slot.submittedPayload,
+    };
+  }
+  return null;
 }
 
 export async function renderPage(
@@ -142,9 +181,11 @@ export async function renderPage(
             locationStub(reqUrl.pathname + reqUrl.search);
             bindRequestScope = captureRequestScope();
             const rendered = await prerender(
-              <HonoRequestContext.Provider value={{ context: c }}>
-                <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
-              </HonoRequestContext.Provider>
+              <ActionResultContext.Provider value={buildActionResultContext()}>
+                <HonoRequestContext.Provider value={{ context: c }}>
+                  <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+                </HonoRequestContext.Provider>
+              </ActionResultContext.Provider>
             );
             const loaders = takeServerStreamingLoaders();
             return {

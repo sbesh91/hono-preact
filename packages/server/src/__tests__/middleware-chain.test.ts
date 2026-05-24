@@ -7,7 +7,8 @@ import {
   defineStreamObserver,
 } from '@hono-preact/iso';
 import { loadersHandler } from '../loaders-handler.js';
-import { actionsHandler } from '../actions-handler.js';
+import { pageActionHandler } from '../page-action-handler.js';
+import { makePageActionResolvers } from '../page-action-resolvers.js';
 import { makePageUseResolvers } from '../route-server-modules.js';
 
 describe('loaders-handler dispatches the full chain (root -> page -> unit)', () => {
@@ -525,7 +526,7 @@ describe('stream observer fanout (E20)', () => {
     ]);
   });
 
-  it('fires onStart, onChunk per yield, and onEnd on a streaming action through actionsHandler', async () => {
+  it('fires onStart, onChunk per yield, and onEnd on a streaming action through pageActionHandler', async () => {
     const events: string[] = [];
     const observer = defineStreamObserver<number, { ok: true }>({
       onStart: () => events.push('start'),
@@ -548,20 +549,34 @@ describe('stream observer fanout (E20)', () => {
     };
     wrapped.use = [observer];
 
-    const serverModules: Record<string, unknown> = {
-      mod: {
-        __moduleKey: 'mod',
-        serverActions: { do: wrapped },
-      },
+    const serverModule = {
+      __moduleKey: 'mod',
+      serverActions: { do: wrapped },
     };
+    const serverRoutes = [
+      {
+        path: '/page',
+        server: async () => serverModule,
+        ancestors: [],
+      },
+    ];
+    const resolvers = makePageActionResolvers(serverRoutes, { dev: true });
+    const noopRender = async () => new Response('', { status: 200 });
 
     const app = new Hono().post(
-      '/__actions',
-      actionsHandler(serverModules, { dev: true })
+      '*',
+      pageActionHandler({
+        resolverByPath: resolvers.byPath,
+        renderPage: noopRender as never,
+        resolvePageNode: () => null,
+      })
     );
-    const res = await app.request('/__actions', {
+    const res = await app.request('/page', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
       body: JSON.stringify({ module: 'mod', action: 'do', payload: null }),
     });
     expect(res.status).toBe(200);
@@ -611,6 +626,179 @@ describe('stream observer fanout (E20)', () => {
     await res.text();
 
     expect(events).toEqual(['start', 'chunk:1', 'error:boom:1']);
+  });
+});
+
+describe('pageActionHandler dispatches the full chain (root -> page -> action)', () => {
+  it('runs page-level middleware before the action body (regression: page-level was previously dropped)', async () => {
+    // Without resolvePageUseByPath the old handler only composed
+    // [appUse, actionUse], silently dropping pageUse. Any user who guards a
+    // page with pageUse (e.g. an auth gate on a layout .server.ts) would have
+    // seen action POSTs bypass the gate. This test locks in the fix.
+    const order: string[] = [];
+
+    const pageMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('page-in');
+      await next();
+      order.push('page-out');
+    });
+
+    const handler = pageActionHandler({
+      resolverByPath: async () => {
+        const map = new Map<
+          string,
+          {
+            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+            use: ReadonlyArray<unknown>;
+            moduleKey: string;
+          }
+        >();
+        map.set('submit', {
+          fn: async () => {
+            order.push('action');
+            return { ok: true };
+          },
+          use: [],
+          moduleKey: 'pages/test.server',
+        });
+        return map;
+      },
+      resolvePageUseByPath: async () => [pageMw],
+      renderPage: async () => new Response('', { status: 200 }),
+      resolvePageNode: () => null,
+      appConfig: { use: [] },
+    });
+
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(order).toEqual(['page-in', 'action', 'page-out']);
+  });
+
+  it('runs root -> page -> action in correct order with all three layers', async () => {
+    const order: string[] = [];
+
+    const rootMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('root-in');
+      await next();
+      order.push('root-out');
+    });
+    const pageMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('page-in');
+      await next();
+      order.push('page-out');
+    });
+    const actionMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
+      order.push('action-mw-in');
+      await next();
+      order.push('action-mw-out');
+    });
+
+    const handler = pageActionHandler({
+      resolverByPath: async () => {
+        const map = new Map<
+          string,
+          {
+            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+            use: ReadonlyArray<unknown>;
+            moduleKey: string;
+          }
+        >();
+        map.set('submit', {
+          fn: async () => {
+            order.push('inner');
+            return { ok: true };
+          },
+          use: [actionMw],
+          moduleKey: 'pages/test.server',
+        });
+        return map;
+      },
+      resolvePageUseByPath: async () => [pageMw],
+      renderPage: async () => new Response('', { status: 200 }),
+      resolvePageNode: () => null,
+      appConfig: { use: [rootMw] },
+    });
+
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(order).toEqual([
+      'root-in',
+      'page-in',
+      'action-mw-in',
+      'inner',
+      'action-mw-out',
+      'page-out',
+      'root-out',
+    ]);
+  });
+
+  it('skips page-level middleware when resolvePageUseByPath is not provided (backward compat)', async () => {
+    const order: string[] = [];
+
+    const handler = pageActionHandler({
+      resolverByPath: async () => {
+        const map = new Map<
+          string,
+          {
+            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+            use: ReadonlyArray<unknown>;
+            moduleKey: string;
+          }
+        >();
+        map.set('submit', {
+          fn: async () => {
+            order.push('action');
+            return { ok: true };
+          },
+          use: [],
+          moduleKey: 'pages/test.server',
+        });
+        return map;
+      },
+      // resolvePageUseByPath deliberately omitted
+      renderPage: async () => new Response('', { status: 200 }),
+      resolvePageNode: () => null,
+    });
+
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(order).toEqual(['action']);
   });
 });
 

@@ -12,15 +12,11 @@ Start with `useOptimisticAction`. Drop down to the primitive if you outgrow it.
 ## `useOptimisticAction`
 
 ```tsx
-import { useOptimisticAction } from 'hono-preact';
+import { useOptimisticAction, Form } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const Movies = ({ loaderData }) => {
-  const {
-    mutate,
-    pending,
-    value: movies,
-  } = useOptimisticAction(serverActions.create, {
+  const addMovie = useOptimisticAction(serverActions.create, {
     base: loaderData.movies,
     apply: (current, payload) => [...current, payload],
     invalidate: 'auto',
@@ -29,16 +25,24 @@ const Movies = ({ loaderData }) => {
   });
 
   return (
-    <ul>
-      {movies.map((m) => (
-        <li key={m.id}>{m.title}</li>
-      ))}
-    </ul>
+    <>
+      <ul>
+        {addMovie.value.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+      <Form action={addMovie}>
+        <input name="title" placeholder="Title" />
+        <button type="submit">Add</button>
+      </Form>
+    </>
   );
 };
 ```
 
-`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `value` reflects real server data with no visual gap.
+`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `addMovie.value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `addMovie.value` reflects real server data with no visual gap.
+
+The returned object is stub-compatible: pass it to `<Form action={addMovie}>` for declarative form submission, or call `addMovie.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue. Access `addMovie.pending`, `addMovie.error`, and `addMovie.data` to read the mutation status and result.
 
 ### Options
 
@@ -113,15 +117,11 @@ No special configuration needed.
 
 ## Composing with `<Form>`
 
-`<Form>` accepts the `mutate`/`pending` from `useOptimisticAction` directly:
+`useOptimisticAction` returns a stub-compatible value that you can pass directly to `<Form action={...}>`. The result carries the action's type brand, so the form knows how to invoke it and TypeScript enforces the payload shape.
 
 ```tsx
 const NotesForm = ({ defaultNotes }) => {
-  const {
-    mutate,
-    pending,
-    value: notes,
-  } = useOptimisticAction(serverActions.setNotes, {
+  const notesAction = useOptimisticAction(serverActions.setNotes, {
     base: defaultNotes,
     apply: (_current, payload) => payload.notes,
     invalidate: 'auto',
@@ -129,15 +129,17 @@ const NotesForm = ({ defaultNotes }) => {
 
   return (
     <>
-      <p>Current: {notes}</p>
-      <Form mutate={mutate} pending={pending}>
-        <textarea name="notes" defaultValue={notes} />
+      <p>Current: {notesAction.value}</p>
+      <Form action={notesAction}>
+        <textarea name="notes" defaultValue={notesAction.value} />
         <button>Save</button>
       </Form>
     </>
   );
 };
 ```
+
+The returned object exposes `notesAction.mutate(payload)` and `notesAction.pending` directly, so you can call it from an `onClick` handler or await it in an async function without holding a separate `useAction` ref.
 
 ## `<OptimisticOverlay>`
 
