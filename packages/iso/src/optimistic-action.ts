@@ -7,6 +7,13 @@ import {
 import { useOptimistic, type OptimisticHandle } from './optimistic.js';
 import type { LoaderRef } from './define-loader.js';
 
+export const OPTIMISTIC_BRAND: unique symbol = Symbol('hono-preact.optimistic');
+
+export type OptimisticBinding<TPayload, TBase> = {
+  apply: (current: TBase, payload: TPayload) => TBase;
+  addOptimistic: (payload: TPayload) => OptimisticHandle;
+};
+
 export type UseOptimisticActionOptions<
   TPayload,
   TResult,
@@ -26,7 +33,11 @@ export type UseOptimisticActionOptions<
 };
 
 export type UseOptimisticActionResult<TPayload, TResult, TBase> =
-  UseActionResult<TPayload, TResult> & { value: TBase };
+  ActionStub<TPayload, TResult, never> &
+    UseActionResult<TPayload, TResult> & {
+      value: TBase;
+      readonly [OPTIMISTIC_BRAND]: OptimisticBinding<TPayload, TBase>;
+    };
 
 /**
  * Like `useAction`, but with an optimistic-update wrapper. `TChunk` defaults
@@ -55,5 +66,12 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
     },
   });
 
-  return { ...action, value };
+  return {
+    __module: stub.__module,
+    __action: stub.__action,
+    useAction: stub.useAction,
+    ...action,
+    value,
+    [OPTIMISTIC_BRAND]: { apply, addOptimistic },
+  };
 }
