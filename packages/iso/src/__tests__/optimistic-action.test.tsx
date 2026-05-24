@@ -57,7 +57,10 @@ describe('useOptimisticAction', () => {
     // Cleanup the in-flight fetch so the test can finish
     await act(async () => {
       resolveFetch(
-        new Response(JSON.stringify({ id: 1, title: 'Dune' }), { status: 200 })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 1, title: 'Dune' } }),
+          { status: 200 }
+        )
       );
     });
   });
@@ -68,7 +71,10 @@ describe('useOptimisticAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+            { status: 500 }
+          )
         )
     );
 
@@ -105,9 +111,10 @@ describe('useOptimisticAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ id: 1, title: 'Dune' }), {
-          status: 200,
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 1, title: 'Dune' } }),
+          { status: 200 }
+        )
       )
     );
     const onSuccess = vi.fn();
@@ -206,7 +213,10 @@ describe('useOptimisticAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+            { status: 500 }
+          )
         )
     );
     const onError = vi.fn();
@@ -283,7 +293,10 @@ describe('useOptimisticAction', () => {
     // Resolve A
     await act(async () => {
       resolvers[0]!(
-        new Response(JSON.stringify({ id: 1, title: 'A' }), { status: 200 })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 1, title: 'A' } }),
+          { status: 200 }
+        )
       );
     });
 
@@ -298,7 +311,10 @@ describe('useOptimisticAction', () => {
     // Resolve B
     await act(async () => {
       resolvers[1]!(
-        new Response(JSON.stringify({ id: 2, title: 'B' }), { status: 200 })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 2, title: 'B' } }),
+          { status: 200 }
+        )
       );
     });
 

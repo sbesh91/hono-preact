@@ -4,6 +4,10 @@ import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
 import type { ActionUse } from './internal/use-types.js';
+import {
+  beginSubmit,
+  endSubmit,
+} from './internal/form-submit-store.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -267,7 +271,13 @@ export function useAction<
         }
       };
 
+      const target =
+        typeof window !== 'undefined'
+          ? window.location.pathname + window.location.search
+          : '/';
+
       let finalResult: TResult | undefined;
+      beginSubmit(currentStub.__module, currentStub.__action);
       try {
         let response: Response;
         if (hasFileValues(payload)) {
@@ -286,11 +296,18 @@ export function useAction<
               fd.append(key, JSON.stringify(value));
             }
           }
-          response = await fetch('/__actions', { method: 'POST', body: fd });
-        } else {
-          response = await fetch('/__actions', {
+          response = await fetch(target, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { Accept: 'application/json, text/event-stream;q=0.9' },
+            body: fd,
+          });
+        } else {
+          response = await fetch(target, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json, text/event-stream;q=0.9',
+            },
             body: JSON.stringify({
               module: currentStub.__module,
               action: currentStub.__action,
@@ -299,76 +316,7 @@ export function useAction<
           });
         }
 
-        if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as {
-            error?: string;
-            __outcome?: string;
-            message?: string;
-            timeoutMs?: number;
-          };
-          if (
-            body.__outcome === 'timeout' &&
-            typeof body.timeoutMs === 'number'
-          ) {
-            throw new TimeoutError(body.timeoutMs);
-          }
-          // Deny outcomes carry `message` instead of the legacy `error`
-          // field; prefer the descriptive message when present. The deny()
-          // constructor defaults the message for first-party callers, but a
-          // hand-rolled envelope from custom server middleware might still
-          // ship without one; fall back to a deny-aware label so the user
-          // sees a hint that the status came from an explicit deny rather
-          // than a generic transport failure.
-          let msg: string;
-          if (body.__outcome === 'deny') {
-            msg =
-              typeof body.message === 'string'
-                ? body.message
-                : `Request denied (${response.status})`;
-          } else {
-            msg = body.error ?? `Action failed with status ${response.status}`;
-          }
-          throw new Error(msg);
-        }
-
         const contentType = response.headers.get('Content-Type') ?? '';
-        // Server-side middleware that throws `redirect(...)` comes back as
-        // a redirect outcome envelope. Hand off to the browser; the rest of
-        // this promise will never settle, but the page is navigating away
-        // anyway.
-        //
-        // Trust boundary: `to` is taken straight from the JSON body and
-        // passed to `window.location.assign`. The framework's own handlers
-        // emit safe (typically same-origin) values, but a compromised or
-        // misconfigured server (or a proxy injecting JSON) could push the
-        // client anywhere. We don't validate origin here for v0.1; treat
-        // your own server as part of the trusted boundary. A same-origin
-        // check is a deferred enhancement (see C4 in the middleware review).
-        //
-        // We use `response.clone().json()` to peek at the body without
-        // consuming it: if the response is NOT a redirect outcome the
-        // downstream `await response.json()` still needs to read it. Clone
-        // is cheap on a small JSON payload.
-        if (!contentType.includes('text/event-stream')) {
-          const peek = (await response
-            .clone()
-            .json()
-            .catch(() => undefined)) as unknown;
-          if (
-            peek !== null &&
-            typeof peek === 'object' &&
-            (peek as { __outcome?: unknown }).__outcome === 'redirect' &&
-            typeof (peek as { to?: unknown }).to === 'string'
-          ) {
-            const to = (peek as { to: string }).to;
-            if (typeof window !== 'undefined') {
-              window.location.assign(to);
-            }
-            // Cast through `as` because TS can't see this promise never settles.
-            return await new Promise<MutateResult<TResult>>(() => {});
-          }
-        }
-
         if (contentType.includes('text/event-stream') && response.body) {
           const { readSSE } = await import('./internal/sse-decoder.js');
           let resultValue: TResult | undefined;
@@ -429,10 +377,55 @@ export function useAction<
             finalResult = undefined;
           }
         } else {
-          const result = (await response.json()) as TResult;
-          setData(result);
-          invokeSuccess(result);
-          finalResult = result;
+          // Uniform envelope path. All non-streaming responses carry a JSON
+          // body shaped as { __outcome, ... } regardless of HTTP status.
+          // Trust boundary note: `to` in redirect outcomes is taken from the
+          // JSON body and passed to `window.location.assign`. The framework
+          // emits safe (typically same-origin) values, but treat your own
+          // server as the trusted boundary. A same-origin check is a
+          // deferred enhancement.
+          let env: {
+            __outcome?: string;
+            data?: unknown;
+            to?: string;
+            status?: number;
+            message?: string;
+            timeoutMs?: number;
+          };
+          try {
+            env = (await response.json()) as typeof env;
+          } catch {
+            throw new Error(`Malformed envelope (HTTP ${response.status})`);
+          }
+          if (env.__outcome === 'success') {
+            const data = env.data as TResult;
+            setData(data);
+            invokeSuccess(data);
+            finalResult = data;
+          } else if (
+            env.__outcome === 'redirect' &&
+            typeof env.to === 'string'
+          ) {
+            if (typeof window !== 'undefined') {
+              window.location.assign(env.to);
+            }
+            // Cast through `as` because TS can't see this promise never settles.
+            return await new Promise<MutateResult<TResult>>(() => {});
+          } else if (env.__outcome === 'deny') {
+            const msg =
+              env.message ??
+              `Request denied (${env.status ?? response.status})`;
+            throw new Error(msg);
+          } else if (
+            env.__outcome === 'timeout' &&
+            typeof env.timeoutMs === 'number'
+          ) {
+            throw new TimeoutError(env.timeoutMs);
+          } else if (env.__outcome === 'error') {
+            throw new Error(env.message ?? 'Action failed');
+          } else {
+            throw new Error(`Unknown action outcome: ${env.__outcome}`);
+          }
         }
 
         if (currentOptions?.invalidate === 'auto') {
@@ -459,6 +452,8 @@ export function useAction<
         invokeError(e);
         setPending(false);
         return { ok: false, error: e };
+      } finally {
+        endSubmit(currentStub.__module, currentStub.__action);
       }
       setPending(false);
       return { ok: true, data: finalResult };

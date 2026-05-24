@@ -51,6 +51,7 @@ import { ReloadContext } from '../reload-context.js';
 import { ActiveLoaderIdContext } from '../internal/contexts.js';
 import type { ActionStub } from '../action.js';
 import { defineLoader } from '../define-loader.js';
+import { subscribe } from '../internal/form-submit-store.js';
 
 const stub = {
   __module: 'movies',
@@ -89,16 +90,23 @@ describe('useAction', () => {
     expect(capturedPending).toContain(true);
 
     await act(async () => {
-      resolveFetch(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      resolveFetch(
+        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
+          status: 200,
+        })
+      );
     });
     await waitFor(() => expect(capturedPending.at(-1)).toBe(false));
   });
 
-  it('posts the correct JSON body to /__actions', async () => {
+  it('posts the correct JSON body to the current page URL', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          { status: 200 }
+        )
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -112,9 +120,12 @@ describe('useAction', () => {
       screen.getByRole('button').click();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/__actions', {
+    expect(fetchMock).toHaveBeenCalledWith(window.location.pathname, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream;q=0.9',
+      },
       body: JSON.stringify({
         module: 'movies',
         action: 'create',
@@ -129,7 +140,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ ok: true }), { status: 200 })
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            { status: 200 }
+          )
         )
     );
     const onSuccess = vi.fn();
@@ -160,7 +174,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ ok: true }), { status: 200 })
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            { status: 200 }
+          )
         )
     );
     const onMutate = vi.fn(() => 'snap-success');
@@ -187,7 +204,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ error: 'DB error' }), { status: 500 })
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'DB error' }),
+            { status: 500 }
+          )
         )
     );
     const onMutate = vi.fn(() => 'snapshot-value');
@@ -219,7 +239,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ ok: true }), { status: 200 })
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            { status: 200 }
+          )
         )
     );
     const reload = vi.fn();
@@ -247,7 +270,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ ok: true }), { status: 200 })
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+            { status: 200 }
+          )
         )
     );
     const reload = vi.fn();
@@ -281,7 +307,7 @@ describe('useAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), {
+        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -324,7 +350,7 @@ describe('useAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), {
+        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -373,7 +399,7 @@ describe('useAction', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), {
+        new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -402,7 +428,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ id: 'i-42' }), { status: 200 })
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { id: 'i-42' } }),
+            { status: 200 }
+          )
         )
     );
 
@@ -435,7 +464,10 @@ describe('useAction', () => {
       vi
         .fn()
         .mockResolvedValue(
-          new Response(JSON.stringify({ error: 'nope' }), { status: 400 })
+          new Response(
+            JSON.stringify({ __outcome: 'error', message: 'nope' }),
+            { status: 500 }
+          )
         )
     );
 
@@ -481,7 +513,7 @@ describe('useAction', () => {
       'fetch',
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ ok: true }), {
+          new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           })
@@ -504,6 +536,32 @@ describe('useAction', () => {
         true
       );
     });
+  });
+
+  it('toggles the submit store around the fetch', async () => {
+    const observed: boolean[] = [];
+    const unsub = subscribe(() => {
+      observed.push(true);
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          { status: 200 }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    unsub();
+    // beginSubmit fires one notification, endSubmit fires another.
+    expect(observed.length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -698,7 +756,7 @@ const mockStub = {
 describe('useAction — FormData (file upload)', () => {
   it('sends FormData when payload contains a File', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ stored: true }), {
+      new Response(JSON.stringify({ __outcome: 'success', data: { stored: true } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -721,7 +779,7 @@ describe('useAction — FormData (file upload)', () => {
 
   it('serializes non-string non-File values as JSON strings', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ ok: true }), {
+      new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -744,7 +802,7 @@ describe('useAction — FormData (file upload)', () => {
 
   it('sends JSON when payload has no File values', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ ok: true }), {
+      new Response(JSON.stringify({ __outcome: 'success', data: { ok: true } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
