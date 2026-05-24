@@ -31,6 +31,13 @@ export { Envelope } from './internal/envelope.js';
 export { RouteBoundary } from './internal/route-boundary.js';
 export { OptimisticOverlay } from './internal/optimistic-overlay.js';
 
+export {
+  serializeActionOutcome,
+  type ActionEnvelope,
+  type ActionResolution,
+  type SerializedEnvelope,
+} from './internal/action-envelope.js';
+
 export { LoaderIdContext, LoaderDataContext } from './internal/contexts.js';
 export { ReloadContext } from './reload-context.js';
 export {
