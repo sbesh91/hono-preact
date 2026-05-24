@@ -5,18 +5,32 @@ import {
   fanChunk,
   fanEnd,
   fanError,
+  fanAbort,
 } from '@hono-preact/iso/internal';
 
-export type SseGeneratorOptions = {
-  /** When true, the generator's return value is emitted as `event: result`. */
+/**
+ * Options shared by both SSE response helpers. Encodes the lifecycle the SSE
+ * pump runs through:
+ *
+ * - Observer fanout: `onStart` fires before the first chunk, `onChunk` per
+ *   value yielded by the source, `onEnd` on normal completion, `onError` on
+ *   a thrown error, `onAbort` when the consumer cancels the response stream
+ *   before the source finishes.
+ * - Timeout discrimination: when `signal.aborted` and `signal.reason` is a
+ *   `TimeoutError` `DOMException`, the catch path emits `event: timeout`
+ *   with `{ timeoutMs }` instead of the generic `event: error` frame.
+ */
+export type SseResponseOptions = {
+  /**
+   * When true, the generator's return value (if defined) is emitted as
+   * `event: result` before the stream closes. Only meaningful for
+   * generator-sourced responses; ignored for `ReadableStream` sources.
+   */
   emitResult?: boolean;
   /**
    * Stream observers harvested from the loader/action's `use` array (the
-   * non-middleware partition). The SSE pump fires `onStart` before the
-   * first chunk, `onChunk` per yielded value, `onEnd` on clean completion,
-   * `onError` on throw, and `onAbort` when the response stream is aborted
-   * (typically because the client disconnected). Hooks are isolated: a
-   * throwing observer never corrupts the stream.
+   * non-middleware partition). Hooks are isolated: a throwing observer
+   * never corrupts the stream.
    */
   observers?: ReadonlyArray<StreamObserver<unknown, never>>;
   /** Server-stream ctx threaded to each observer hook. */
@@ -24,14 +38,15 @@ export type SseGeneratorOptions = {
   /**
    * The handler's timeout signal (from `AbortSignal.timeout(timeoutMs)`),
    * inspected in the catch path to distinguish a deadline-driven abort
-   * from a generic throw. When this signal has aborted with a
-   * `TimeoutError` DOMException, the pump emits `event: timeout` with
-   * `{ timeoutMs }` instead of the generic `event: error` frame.
+   * from a generic throw.
    */
   signal?: AbortSignal;
   /** Used only with `signal`; the timeout value reported in the frame. */
   timeoutMs?: number;
 };
+
+/** Alias retained for source compatibility with earlier code. */
+export type SseGeneratorOptions = SseResponseOptions;
 
 type SSEFrame = { event?: string; id?: string; data: string };
 
@@ -51,8 +66,8 @@ function sseEncodeTransform(): TransformStream<SSEFrame, Uint8Array> {
 function isTimeoutAbort(signal?: AbortSignal): boolean {
   return Boolean(
     signal?.aborted &&
-      signal.reason instanceof DOMException &&
-      signal.reason.name === 'TimeoutError'
+    signal.reason instanceof DOMException &&
+    signal.reason.name === 'TimeoutError'
   );
 }
 
@@ -63,27 +78,38 @@ function encodeErrorPayload(err: unknown): string {
 }
 
 /**
- * Wrap an async generator as an SSE response.
- *
- * Each yield is JSON-encoded and written as a `data:` event.
- * If `emitResult` is true and the generator's return value is defined,
- * it is written as `event: result\ndata: <json>` before the stream closes.
- * If the generator throws, an `event: error\ndata: {"message","name"}` frame
- * is written and the stream closes cleanly.
- *
- * When `observers` is provided, the pump fires the corresponding lifecycle
- * hooks (`onStart` / `onChunk` / `onEnd` / `onError`) so users can attach
- * instrumentation via `defineStreamObserver(...)`.
- *
- * Note: `onAbort` is not called from this function. Cancellation propagates
- * via `ReadableStream.from(gen)` calling the generator's `return()` when the
- * client closes; observers wanting abort notification should use the readable-
- * stream variant or a future hook added to `cancel()`.
+ * Adapt a `ReadableStream<T>` as an async generator (with no return value).
+ * The reader is released in `finally`, which fires either when the consumer
+ * stops iterating or when the source is exhausted.
  */
-export function sseGeneratorResponse(
-  _c: Context,
-  gen: AsyncGenerator<unknown, unknown, unknown>,
-  options: SseGeneratorOptions = {}
+async function* iterReadable<T>(
+  stream: ReadableStream<T>
+): AsyncGenerator<T, void, unknown> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    reader.cancel().catch(() => undefined);
+  }
+}
+
+/**
+ * The shared pump implementation. Iterates `source` (a generator that may
+ * return a final value), encodes each yielded value as a JSON `data:` frame,
+ * runs the observer lifecycle, and translates errors into `event: error` or
+ * `event: timeout` frames.
+ *
+ * Observer state (`chunks`, `started`, `finished`) lives in the outer
+ * function scope so the outer ReadableStream's `cancel()` callback can fire
+ * `onAbort` when the consumer cancels mid-stream.
+ */
+function buildSseResponse(
+  source: AsyncGenerator<unknown, unknown, unknown>,
+  options: SseResponseOptions
 ): Response {
   const {
     emitResult = false,
@@ -93,20 +119,18 @@ export function sseGeneratorResponse(
     timeoutMs,
   } = options;
   const obs = observers ?? [];
+  let chunks = 0;
+  let started = false;
+  let finished = false;
 
-  // The pump generator owns the lifecycle: it adapts the user's generator
-  // into a stream of SSEFrames, calls observer hooks, and emits a trailing
-  // `result`, `timeout`, or `error` frame as needed.
   async function* framePump(): AsyncGenerator<SSEFrame, void, unknown> {
-    let chunks = 0;
-    let started = false;
     if (obs.length > 0 && observerCtx) {
       fanStart(obs, observerCtx);
       started = true;
     }
     try {
       while (true) {
-        const step = await gen.next();
+        const step = await source.next();
         if (step.done) {
           if (emitResult && step.value !== undefined) {
             yield { event: 'result', data: JSON.stringify(step.value) };
@@ -114,6 +138,7 @@ export function sseGeneratorResponse(
           if (started && observerCtx) {
             fanEnd(obs, observerCtx, { chunks, result: step.value });
           }
+          finished = true;
           return;
         }
         yield { data: JSON.stringify(step.value) };
@@ -123,23 +148,19 @@ export function sseGeneratorResponse(
         chunks += 1;
       }
     } catch (err) {
-      await gen.return(undefined).catch(() => undefined);
+      await source.return(undefined).catch(() => undefined);
       if (started && observerCtx) {
         fanError(obs, observerCtx, err, { chunks });
       }
       if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
-        yield {
-          event: 'timeout',
-          data: JSON.stringify({ timeoutMs }),
-        };
+        yield { event: 'timeout', data: JSON.stringify({ timeoutMs }) };
       } else {
         yield { event: 'error', data: encodeErrorPayload(err) };
       }
+      finished = true;
     }
   }
 
-  // ReadableStream.from is not yet in the TypeScript DOM lib. The constructor
-  // form is equivalent and fully typed.
   const pump = framePump();
   const body = new ReadableStream<SSEFrame>({
     async pull(controller) {
@@ -151,8 +172,14 @@ export function sseGeneratorResponse(
       }
     },
     cancel() {
+      // Consumer cancelled before the pump completed. Notify observers via
+      // `onAbort` exactly when we've genuinely been aborted mid-stream
+      // (i.e. the source started but didn't finish naturally).
+      if (!finished && started && observerCtx) {
+        fanAbort(obs, observerCtx, { chunks });
+      }
       pump.return(undefined).catch(() => undefined);
-      gen.return(undefined).catch(() => undefined);
+      source.return(undefined).catch(() => undefined);
     },
   }).pipeThrough(sseEncodeTransform());
 
@@ -165,91 +192,38 @@ export function sseGeneratorResponse(
 }
 
 /**
- * Wrap a ReadableStream<T> (with T a JSON-encodable value) as an SSE response.
- * Each enqueued chunk is JSON-encoded and written as a `data:` event.
+ * Wrap an async generator as an SSE response.
  *
- * Observer fanout mirrors `sseGeneratorResponse`: `onStart` fires before the
- * first read, `onChunk` per chunk, `onEnd` on normal completion, `onError` on
- * throw.
- *
- * Note: `onAbort` is not called from this function. Cancellation propagates
- * via the `ReadableStream` constructor's `cancel()` callback calling
- * `pump.return()`; observers wanting abort notification should use a future
- * hook added to `cancel()`.
+ * Each yield is JSON-encoded and written as a `data:` event. If `emitResult`
+ * is true and the generator's return value is defined, it is written as
+ * `event: result\ndata: <json>` before the stream closes. If the generator
+ * throws, an `event: error` or `event: timeout` frame is written and the
+ * stream closes cleanly. Observer lifecycle hooks (`onStart` / `onChunk` /
+ * `onEnd` / `onError` / `onAbort`) fire from inside the pump.
+ */
+export function sseGeneratorResponse(
+  _c: Context,
+  gen: AsyncGenerator<unknown, unknown, unknown>,
+  options: SseResponseOptions = {}
+): Response {
+  return buildSseResponse(gen, options);
+}
+
+/**
+ * Wrap a `ReadableStream<T>` (with `T` a JSON-encodable value) as an SSE
+ * response. Each enqueued chunk is JSON-encoded and written as a `data:`
+ * event. Observer lifecycle hooks fire identically to `sseGeneratorResponse`;
+ * `emitResult` is not meaningful here (streams have no return value) and is
+ * ignored.
  */
 export function sseReadableStreamResponse(
   _c: Context,
   source: ReadableStream<unknown>,
-  options: {
-    observers?: ReadonlyArray<StreamObserver<unknown, never>>;
-    observerCtx?: ServerStreamCtx;
-    signal?: AbortSignal;
-    timeoutMs?: number;
-  } = {}
+  options: SseResponseOptions = {}
 ): Response {
-  const { observers, observerCtx, signal, timeoutMs } = options;
-  const obs = observers ?? [];
-
-  async function* framePump(): AsyncGenerator<SSEFrame, void, unknown> {
-    const reader = source.getReader();
-    let chunks = 0;
-    let started = false;
-    if (obs.length > 0 && observerCtx) {
-      fanStart(obs, observerCtx);
-      started = true;
-    }
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          if (started && observerCtx) {
-            fanEnd(obs, observerCtx, { chunks, result: undefined });
-          }
-          return;
-        }
-        yield { data: JSON.stringify(value) };
-        if (started && observerCtx) {
-          fanChunk(obs, observerCtx, value, chunks);
-        }
-        chunks += 1;
-      }
-    } catch (err) {
-      if (started && observerCtx) {
-        fanError(obs, observerCtx, err, { chunks });
-      }
-      if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
-        yield {
-          event: 'timeout',
-          data: JSON.stringify({ timeoutMs }),
-        };
-      } else {
-        yield { event: 'error', data: encodeErrorPayload(err) };
-      }
-    } finally {
-      reader.cancel().catch(() => undefined);
-    }
-  }
-
-  const pump = framePump();
-  const body = new ReadableStream<SSEFrame>({
-    async pull(controller) {
-      const { value, done } = await pump.next();
-      if (done) {
-        controller.close();
-      } else {
-        controller.enqueue(value);
-      }
-    },
-    cancel() {
-      pump.return(undefined).catch(() => undefined);
-    },
-  }).pipeThrough(sseEncodeTransform());
-
-  return new Response(body, {
-    headers: {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-cache',
-    },
+  return buildSseResponse(iterReadable(source), {
+    ...options,
+    emitResult: false,
   });
 }
 

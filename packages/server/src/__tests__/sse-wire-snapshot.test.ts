@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import {
-  sseGeneratorResponse,
-  sseReadableStreamResponse,
-} from '../sse.js';
+import { sseGeneratorResponse, sseReadableStreamResponse } from '../sse.js';
 
 async function bodyToString(res: Response): Promise<string> {
-  return res.body ? new TextDecoder().decode(await new Response(res.body).arrayBuffer()) : '';
+  return res.body
+    ? new TextDecoder().decode(await new Response(res.body).arrayBuffer())
+    : '';
 }
 
 describe('SSE wire format', () => {

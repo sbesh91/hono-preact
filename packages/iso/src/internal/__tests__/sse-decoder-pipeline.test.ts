@@ -33,8 +33,7 @@ describe('readSSE', () => {
   });
 
   it('ignores keepalive comments and resets event after blank line', async () => {
-    const input =
-      ': keepalive\n' + 'event: tick\ndata: 1\n\n' + 'data: 2\n\n';
+    const input = ': keepalive\n' + 'event: tick\ndata: 1\n\n' + 'data: 2\n\n';
     const events: { event: string; data: string }[] = [];
     for await (const ev of readSSE(asStream(input))) {
       events.push(ev);
