@@ -4,7 +4,7 @@ A multi-spec wave bringing the framework onto web-standard APIs where the platfo
 
 | Spec | Scope | Status |
 |---|---|---|
-| **A** | Platform hygiene: `AbortSignal` timeouts, `useOptimistic` View Transitions, `URL.parse`, TransformStream SSE codec | spec drafted 2026-05-23 |
+| **A** | Platform hygiene: `AbortSignal` timeouts, `useOptimistic` View Transitions, `URL.parse`, TransformStream SSE codec | merged 2026-05-23 (PRs #56, #58) |
 | **B** | Navigation API as primary intercept, with `preact-iso` fallback | not started |
 | **C** | Progressive-enhancement forms + `/__actions` envelope reshape | not started |
 | **D** | Streaming SSR upgrade via `preact-render-to-string` `renderToReadableStream` | not started |
