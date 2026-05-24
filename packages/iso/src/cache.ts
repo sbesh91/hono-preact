@@ -91,6 +91,17 @@ export function runRequestScope<R>(
   initial?: { honoContext?: unknown }
 ): R | Promise<R> {
   if (!alsInstance) return fn();
+  const existing = alsInstance.getStore();
+  if (existing) {
+    // Nested call: inherit the parent store. Seeded values are written
+    // additively so the inner caller's overrides take effect without
+    // wiping the parent's per-request state (e.g. the action-result
+    // slot set by pageActionHandler before it invokes renderPage).
+    if (initial?.honoContext !== undefined) {
+      existing.set(HONO_CONTEXT_KEY, initial.honoContext);
+    }
+    return fn();
+  }
   const store: RequestStore = new Map();
   if (initial?.honoContext !== undefined) {
     store.set(HONO_CONTEXT_KEY, initial.honoContext);
