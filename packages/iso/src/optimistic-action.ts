@@ -21,6 +21,8 @@ export type UseOptimisticActionOptions<
   invalidate?: 'auto' | ReadonlyArray<LoaderRef<unknown>>;
   onSuccess?: (data: TResult) => void;
   onError?: (err: Error) => void;
+  /** Forwarded to the internal `useOptimistic` call. */
+  transition?: boolean;
 };
 
 export type UseOptimisticActionResult<TPayload, TResult, TBase> =
@@ -36,8 +38,9 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
   stub: ActionStub<TPayload, TResult, TChunk>,
   options: UseOptimisticActionOptions<TPayload, TResult, TBase, TChunk>
 ): UseOptimisticActionResult<TPayload, TResult, TBase> {
-  const { base, apply, onSuccess, onError, ...actionOpts } = options;
-  const [value, addOptimistic] = useOptimistic(base, apply);
+  const { base, apply, onSuccess, onError, transition, ...actionOpts } =
+    options;
+  const [value, addOptimistic] = useOptimistic(base, apply, { transition });
 
   const action = useAction<TPayload, TResult, TChunk, OptimisticHandle>(stub, {
     ...actionOpts,

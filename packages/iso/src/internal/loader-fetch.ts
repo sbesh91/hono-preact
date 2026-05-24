@@ -1,4 +1,5 @@
 import { readSSE } from './sse-decoder.js';
+import { TimeoutError } from '../action.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -41,7 +42,11 @@ export async function fetchLoaderData<T>(
       error?: string;
       __outcome?: string;
       message?: string;
+      timeoutMs?: number;
     };
+    if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
+      throw new TimeoutError(body.timeoutMs);
+    }
     if (body.__outcome === 'deny') {
       // The `deny()` constructor defaults `message` for first-party
       // callers, but a hand-rolled envelope from custom server middleware
@@ -104,41 +109,7 @@ export async function fetchLoaderData<T>(
   // SSE: read the first message event synchronously (await first chunk),
   // then kick off an async loop that pushes subsequent chunks to callbacks.
   const iter = readSSE(res.body);
-  let firstChunk: T | undefined;
-
-  while (true) {
-    const step = await iter.next();
-    if (step.done) {
-      // Stream closed before any data event: error
-      throw new Error('Streaming loader closed before emitting any data');
-    }
-    const ev = step.value;
-    if (ev.event === 'message') {
-      try {
-        firstChunk = JSON.parse(ev.data) as T;
-      } catch {
-        throw new Error('Malformed first chunk in streaming loader');
-      }
-      break;
-    }
-    if (ev.event === 'error') {
-      try {
-        const parsed = JSON.parse(ev.data) as {
-          message?: string;
-          name?: string;
-        };
-        const err = new Error(parsed.message ?? 'Streamed error');
-        if (parsed.name) err.name = parsed.name;
-        throw err;
-      } catch (e) {
-        if (e instanceof Error && e.message.startsWith('Malformed')) {
-          throw new Error('Malformed error event in streaming loader');
-        }
-        throw e;
-      }
-    }
-    // Other events (result, etc.): ignore for loaders
-  }
+  const firstChunk = await readFirstChunk<T>(iter);
 
   // Continue consuming chunks in the background. Each subsequent message
   // pushes a value via onChunk. Errors fire onError. End fires onEnd.
@@ -157,6 +128,16 @@ export async function fetchLoaderData<T>(
           } catch {
             // malformed mid-stream chunk: skip
           }
+        } else if (ev.event === 'timeout') {
+          try {
+            const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+            callbacks.onError(new TimeoutError(parsed.timeoutMs ?? 0));
+          } catch {
+            callbacks.onError(
+              new Error('Malformed timeout event in streaming loader')
+            );
+          }
+          return;
         } else if (ev.event === 'error') {
           try {
             const parsed = JSON.parse(ev.data) as {
@@ -179,5 +160,61 @@ export async function fetchLoaderData<T>(
     }
   })();
 
-  return firstChunk as T;
+  return firstChunk;
+}
+
+/**
+ * Drain the SSE stream until the first `message` event and parse it as `T`.
+ * `timeout` / `error` events before the first message reject with the
+ * appropriate error. Other event types are ignored.
+ */
+async function readFirstChunk<T>(
+  iter: AsyncGenerator<{ event: string; data: string }>
+): Promise<T> {
+  while (true) {
+    const step = await iter.next();
+    if (step.done) {
+      throw new Error('Streaming loader closed before emitting any data');
+    }
+    const ev = step.value;
+    if (ev.event === 'message') {
+      try {
+        return JSON.parse(ev.data) as T;
+      } catch {
+        throw new Error('Malformed first chunk in streaming loader');
+      }
+    }
+    if (ev.event === 'timeout') {
+      let timeoutMs = 0;
+      try {
+        const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+        timeoutMs = parsed.timeoutMs ?? 0;
+      } catch (e) {
+        throw new Error(
+          `Malformed timeout event in streaming loader: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
+      }
+      throw new TimeoutError(timeoutMs);
+    }
+    if (ev.event === 'error') {
+      let message = 'Streamed error';
+      let name: string | undefined;
+      try {
+        const parsed = JSON.parse(ev.data) as {
+          message?: string;
+          name?: string;
+        };
+        message = parsed.message ?? message;
+        name = parsed.name;
+      } catch {
+        throw new Error('Malformed error event in streaming loader');
+      }
+      const err = new Error(message);
+      if (name) err.name = name;
+      throw err;
+    }
+    // Other events (result, etc.): ignore for loaders
+  }
 }

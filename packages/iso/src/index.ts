@@ -26,7 +26,7 @@ export type {
   LoaderCtx,
   Loader as LoaderFn,
 } from './define-loader.js';
-export { defineAction, useAction } from './action.js';
+export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
   ActionStub,
   UseActionOptions,
@@ -38,7 +38,7 @@ export type { ContentfulStatusCode } from 'hono/utils/http-status';
 // Hooks.
 export { useReload } from './reload-context.js';
 export { useOptimistic } from './optimistic.js';
-export type { OptimisticHandle } from './optimistic.js';
+export type { OptimisticHandle, UseOptimisticOptions } from './optimistic.js';
 export { useOptimisticAction } from './optimistic-action.js';
 export type {
   UseOptimisticActionOptions,
@@ -83,16 +83,19 @@ export type { AppConfig, AppUseElement } from './define-app.js';
 export {
   redirect,
   deny,
+  timeoutOutcome,
   isOutcome,
   isRedirect,
   isDeny,
   isRender,
+  isTimeout,
 } from './outcomes.js';
 export type {
   Outcome,
   RedirectOutcome,
   DenyOutcome,
   RenderOutcome,
+  TimeoutOutcome,
   RedirectStatusCode,
   ErrorStatusCode,
 } from './outcomes.js';

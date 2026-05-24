@@ -1,4 +1,4 @@
-import type { ComponentChildren, JSX } from 'preact';
+import type { ComponentChildren } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { Suspense } from 'preact/compat';
 import { useContext, useId } from 'preact/hooks';
@@ -19,7 +19,7 @@ export { serializeLocationForCache } from './cache-key.js';
 type LoaderHostProps<T> = {
   loader: LoaderRef<T>;
   location?: RouteHook;
-  fallback?: JSX.Element;
+  fallback?: ComponentChildren;
   errorFallback?:
     | ComponentChildren
     | ((err: Error, reset: () => void) => ComponentChildren);
@@ -66,7 +66,7 @@ export function LoaderHost<T>({
         <ReloadContext.Provider value={{ reload, reloading }}>
           <LoaderErrorContext.Provider value={error}>
             {errorFallback != null ? (
-              <ErrorBoundary fallback={errorFallback as any}>
+              <ErrorBoundary fallback={errorFallback}>
                 {suspenseContent}
               </ErrorBoundary>
             ) : (

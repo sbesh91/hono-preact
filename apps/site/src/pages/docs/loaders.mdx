@@ -483,6 +483,41 @@ const { mutate } = useAction(serverActions.addReview, {
 
 `invalidate` accepts an array of loader refs, so a single action can refresh multiple targets: `invalidate: [moviesLoader, ratingsLoader]`. Use `'auto'` instead of an array to invalidate the current page's loader only.
 
+## Timeouts
+
+Loaders get a deadline. By default every call has 30 seconds to finish; the
+deadline starts when the handler receives the request. Pass `timeoutMs` on
+`defineLoader` to override:
+
+```ts
+export const slowReport = defineLoader(
+  async () => {
+    /* ... */
+  },
+  { timeoutMs: 60_000 }
+);
+```
+
+Pass `timeoutMs: false` to opt out entirely (useful for long-running streams):
+
+```ts
+export const longLivedStream = defineLoader(
+  async function* () {
+    /* yields indefinitely */
+  },
+  { timeoutMs: false }
+);
+```
+
+When a deadline fires, the loader's `ctx.signal` aborts with reason
+`DOMException('TimeoutError')`. The server responds with status 504 and a
+`{ __outcome: 'timeout', timeoutMs }` envelope. On the client, the failure
+surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
+`timeoutMs` as class properties).
+
+The framework default is configurable per handler via
+`loadersHandler(glob, { defaultTimeoutMs })`.
+
 ## The server/client boundary
 
 Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs; imported `pageUse` / `loaderUse` / `actionUse` become empty arrays. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.

@@ -30,41 +30,85 @@ export type ActionFn<TPayload, TResult, TChunk = never> =
 export type DefineActionOpts<TChunk = never, TResult = unknown> = {
   /**
    * Per-action middleware and (for streaming actions) stream observers.
-   * Attached to the function as a non-enumerable-feeling property; the
-   * actions-handler reads it via the dispatcher (Task 18).
+   * Attached to the function as a non-enumerable property; the
+   * actions-handler reads it through the typed `ActionEntry` map built at
+   * module-load time (`packages/server/src/actions-handler.ts`).
    */
   use?: ActionUse<TChunk, TResult, boolean>;
+  /**
+   * Per-action timeout in milliseconds. When omitted, the handler applies
+   * its configured default (30s). Pass `false` to disable the timeout for
+   * this action.
+   */
+  timeoutMs?: number | false;
+  /**
+   * The module key the client-side `useAction` hook will reference in its
+   * RPC envelope. Production wires this through the Vite plugin's
+   * client-stub emission; test code can pass it directly to construct a
+   * properly-shaped stub without bypassing the type system.
+   */
+  __module?: string;
+  /** The action name the client-side `useAction` hook will reference. */
+  __action?: string;
 };
+
+export class TimeoutError extends Error {
+  readonly kind = 'timeout' as const;
+  readonly timeoutMs: number;
+  constructor(timeoutMs: number) {
+    super(`Request timed out after ${timeoutMs}ms`);
+    this.name = 'TimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+function validateTimeoutMs(
+  value: number | false | undefined,
+  context: string
+): void {
+  if (value === undefined || value === false) return;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `${context}: timeoutMs must be a non-negative finite number or false, got ${String(value)}`
+    );
+  }
+}
 
 export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
   opts?: DefineActionOpts<TChunk, TResult>
 ): ActionStub<TPayload, TResult, TChunk> {
-  // Runtime no-op for the call itself: returns fn as-is. The ActionStub type
-  // is enforced only by TypeScript and the Vite plugin. The dispatcher reads
-  // `use` off the function-as-stub when running the chain.
+  validateTimeoutMs(opts?.timeoutMs, 'defineAction');
+  // SHAPE NOTE: `ActionStub` describes the CLIENT-side shape produced by the
+  // Vite plugin (`packages/vite/src/server-only.ts`) — an object with
+  // `__module`, `__action`, and a `useAction` method. `defineAction` runs on
+  // the SERVER side and returns the raw function with metadata attached via
+  // `Object.defineProperty`. These are two different runtime shapes unified
+  // under one type so consumers can import a server action and use it
+  // identically on both sides; the plugin handles the substitution at the
+  // value level. The `as unknown as` cast at the return is the single
+  // bounded acknowledgement of this dual-shape contract. A future cleanup
+  // could split into `ServerActionImpl` / `ActionStub` types if the lie
+  // starts to bite, but for now it's localized and documented.
   //
-  // Use `Object.defineProperty` instead of direct assignment so a frozen
-  // module export (strict ESM, HMR-frozen modules) doesn't throw. The
-  // actions-handler reads via `(fn as { use?: ReadonlyArray<unknown> }).use`,
-  // which works whether the property was set by assignment or defineProperty.
-  if (opts?.use) {
-    Object.defineProperty(fn, 'use', {
-      value: opts.use,
+  // `Object.defineProperty` is used instead of direct assignment so a frozen
+  // module export (strict ESM, HMR-frozen modules) does not throw.
+  const attach = (key: string, value: unknown) => {
+    Object.defineProperty(fn, key, {
+      value,
       configurable: true,
       writable: true,
       enumerable: false,
     });
-  }
+  };
+  if (opts?.use) attach('use', opts.use);
+  if (opts?.timeoutMs !== undefined) attach('timeoutMs', opts.timeoutMs);
+  if (opts?.__module !== undefined) attach('__module', opts.__module);
+  if (opts?.__action !== undefined) attach('__action', opts.__action);
   return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 
-export type UseActionOptions<
-  TPayload,
-  TResult,
-  TChunk = never,
-  TSnapshot = unknown,
-> = {
+type UseActionOptionsCommon<TChunk = never> = {
   /**
    * How to update loader caches after the action commits. Three modes:
    *
@@ -80,30 +124,59 @@ export type UseActionOptions<
    * See `/docs/reloading` for the full mental model.
    */
   invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
-  onMutate?: (payload: TPayload) => TSnapshot;
   onChunk?: (chunk: TChunk) => void;
-  onError?: (err: Error, snapshot: TSnapshot) => void;
-  onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
 };
+
+/**
+ * Options when `onMutate` is provided. `onSuccess` / `onError` receive the
+ * value `onMutate` returned for this specific mutation as the second
+ * parameter, so concurrent calls can be paired with their own snapshot.
+ */
+type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
+  UseActionOptionsCommon<TChunk> & {
+    onMutate: (payload: TPayload) => TSnapshot;
+    onError?: (err: Error, snapshot: TSnapshot) => void;
+    onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+  };
+
+/**
+ * Options when `onMutate` is not provided. `onSuccess` / `onError` take
+ * only the result / error — there is no snapshot to thread through.
+ */
+type UseActionWithoutMutate<TResult, TChunk> =
+  UseActionOptionsCommon<TChunk> & {
+    onMutate?: undefined;
+    onError?: (err: Error) => void;
+    onSuccess?: (data: TResult) => void;
+  };
+
+/**
+ * Discriminated by `onMutate`. Providing `onMutate` requires the
+ * `onSuccess` / `onError` callbacks to accept the snapshot; omitting
+ * `onMutate` types those callbacks as single-argument.
+ */
+export type UseActionOptions<
+  TPayload,
+  TResult,
+  TChunk = never,
+  TSnapshot = unknown,
+> =
+  | UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot>
+  | UseActionWithoutMutate<TResult, TChunk>;
 
 /**
  * The value `mutate` resolves to. A discriminated union so callers can
  * chain on success without awaiting then probing the hook's `data`/`error`
  * state, and without leaking unhandled rejections in fire-and-forget callers.
  *
- * - Success: `{ ok: true, data }`. For streaming actions that emit no
- *   `result` SSE event, `data` is `undefined`; declare `TResult = void` (or
- *   include `undefined` in its union) if your action doesn't emit a result.
+ * - Success: `{ ok: true, data }`. `data` is `undefined` for streaming
+ *   actions that close without emitting a `result` SSE event (the type
+ *   reflects this honestly: callers must narrow before using `data`).
  * - Failure: `{ ok: false, error }`. The same `Error` instance is also
  *   written to the hook's `error` state and passed to `onError`.
- *
- * Returning a union (rather than throwing) keeps `mutate(...)` ergonomic
- * for non-awaiting call sites — the existing `error` state field is the
- * idiomatic way to render an error UI — while still letting awaiting
- * callers do `if (result.ok) navigate(...)`.
  */
 export type MutateResult<TResult> =
-  | { ok: true; data: TResult }
+  | { ok: true; data: TResult | undefined }
   | { ok: false; error: Error };
 
 export type UseActionResult<TPayload, TResult> = {
@@ -148,22 +221,59 @@ export function useAction<
 
       const currentStub = stubRef.current;
       const currentOptions = optionsRef.current;
-      let snapshot: unknown;
-      if (currentOptions?.onMutate) {
-        snapshot = currentOptions.onMutate(payload);
-      }
+
+      // Resolve the callback discriminant once for this mutation. The runtime
+      // value `callbacks` carries the typed onSuccess/onError handlers plus
+      // the snapshot (when onMutate is set) so subsequent invokeSuccess /
+      // invokeError calls don't need to re-narrow currentOptions.
+      type Callbacks =
+        | {
+            kind: 'with-mutate';
+            snapshot: TSnapshot;
+            onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+            onError?: (err: Error, snapshot: TSnapshot) => void;
+          }
+        | {
+            kind: 'without-mutate';
+            onSuccess?: (data: TResult) => void;
+            onError?: (err: Error) => void;
+          };
+
+      const callbacks: Callbacks = currentOptions?.onMutate
+        ? {
+            kind: 'with-mutate',
+            snapshot: currentOptions.onMutate(payload),
+            onSuccess: currentOptions.onSuccess,
+            onError: currentOptions.onError,
+          }
+        : {
+            kind: 'without-mutate',
+            onSuccess: currentOptions?.onSuccess,
+            onError: currentOptions?.onError,
+          };
+
+      const invokeSuccess = (data: TResult) => {
+        if (callbacks.kind === 'with-mutate') {
+          callbacks.onSuccess?.(data, callbacks.snapshot);
+        } else {
+          callbacks.onSuccess?.(data);
+        }
+      };
+      const invokeError = (err: Error) => {
+        if (callbacks.kind === 'with-mutate') {
+          callbacks.onError?.(err, callbacks.snapshot);
+        } else {
+          callbacks.onError?.(err);
+        }
+      };
 
       let finalResult: TResult | undefined;
       try {
-        const stub = currentStub as unknown as {
-          __module: string;
-          __action: string;
-        };
         let response: Response;
         if (hasFileValues(payload)) {
           const fd = new FormData();
-          fd.append('__module', stub.__module);
-          fd.append('__action', stub.__action);
+          fd.append('__module', currentStub.__module);
+          fd.append('__action', currentStub.__action);
           for (const [key, value] of Object.entries(
             payload as Record<string, unknown>
           )) {
@@ -182,8 +292,8 @@ export function useAction<
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              module: stub.__module,
-              action: stub.__action,
+              module: currentStub.__module,
+              action: currentStub.__action,
               payload,
             }),
           });
@@ -194,7 +304,14 @@ export function useAction<
             error?: string;
             __outcome?: string;
             message?: string;
+            timeoutMs?: number;
           };
+          if (
+            body.__outcome === 'timeout' &&
+            typeof body.timeoutMs === 'number'
+          ) {
+            throw new TimeoutError(body.timeoutMs);
+          }
           // Deny outcomes carry `message` instead of the legacy `error`
           // field; prefer the descriptive message when present. The deny()
           // constructor defaults the message for first-party callers, but a
@@ -271,6 +388,15 @@ export function useAction<
                   `Malformed result event in stream: ${e instanceof Error ? e.message : String(e)}`
                 );
               }
+            } else if (ev.event === 'timeout') {
+              try {
+                const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+                streamError = new TimeoutError(parsed.timeoutMs ?? 0);
+              } catch (e) {
+                streamError = new Error(
+                  `Malformed timeout event in stream: ${e instanceof Error ? e.message : String(e)}`
+                );
+              }
             } else if (ev.event === 'error') {
               try {
                 const parsed = JSON.parse(ev.data) as {
@@ -292,22 +418,20 @@ export function useAction<
           }
           if (resultValue !== undefined) {
             setData(resultValue);
-            currentOptions?.onSuccess?.(resultValue, snapshot as TSnapshot);
+            invokeSuccess(resultValue);
             finalResult = resultValue;
           } else {
-            currentOptions?.onSuccess?.(
-              undefined as unknown as TResult,
-              snapshot as TSnapshot
-            );
-            // Streaming actions with no `result` event resolve with undefined.
-            // Consumers should type `TResult = void` (or include `undefined`)
-            // when their action doesn't emit a result.
-            finalResult = undefined as unknown as TResult;
+            // Streaming action closed without emitting a `result` event;
+            // resolve with `data: undefined`. `onSuccess` is not called
+            // in this branch since there is no result value to deliver
+            // (matches the static-action path where onSuccess only fires
+            // with a real value).
+            finalResult = undefined;
           }
         } else {
           const result = (await response.json()) as TResult;
           setData(result);
-          currentOptions?.onSuccess?.(result, snapshot as TSnapshot);
+          invokeSuccess(result);
           finalResult = result;
         }
 
@@ -332,12 +456,12 @@ export function useAction<
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
         setError(e);
-        currentOptions?.onError?.(e, snapshot as TSnapshot);
+        invokeError(e);
         setPending(false);
         return { ok: false, error: e };
       }
       setPending(false);
-      return { ok: true, data: finalResult as TResult };
+      return { ok: true, data: finalResult };
     },
     []
   );

@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import {
   isOutcome,
+  timeoutOutcome,
   type AppConfig,
   type Outcome,
   type ServerMiddleware,
@@ -27,8 +28,16 @@ type GlobModule = {
 type LazyGlob = Record<string, () => Promise<unknown>>;
 type EagerGlob = Record<string, GlobModule>;
 
+type ActionFn = (ctx: unknown, payload: unknown) => Promise<unknown>;
+
+type ActionEntry = {
+  fn: ActionFn;
+  use: ReadonlyArray<unknown>;
+  timeoutMs?: number | false;
+};
+
 type ModuleEntry = {
-  actions: Record<string, unknown>;
+  actions: Record<string, ActionEntry>;
 };
 
 async function buildActionsMap(
@@ -41,11 +50,27 @@ async function buildActionsMap(
         ? await (moduleOrLoader as () => Promise<GlobModule>)()
         : (moduleOrLoader as GlobModule);
     const key = mod.__moduleKey;
-    if (typeof key === 'string' && mod.serverActions) {
-      result[key] = {
-        actions: mod.serverActions as Record<string, unknown>,
+    if (typeof key !== 'string' || !mod.serverActions) continue;
+
+    const actions: Record<string, ActionEntry> = {};
+    for (const [name, val] of Object.entries(mod.serverActions)) {
+      if (typeof val !== 'function') continue;
+      // `defineAction` attaches `use` and `timeoutMs` as non-enumerable
+      // properties on the function (see `packages/iso/src/action.ts`). The
+      // structural read below is the single deserialization boundary; the
+      // handler body reads `entry.fn`, `entry.use`, `entry.timeoutMs`
+      // directly through the typed `ActionEntry` shape from here on.
+      const metadata = val as {
+        use?: ReadonlyArray<unknown>;
+        timeoutMs?: number | false;
+      };
+      actions[name] = {
+        fn: val as ActionFn,
+        use: metadata.use ?? [],
+        timeoutMs: metadata.timeoutMs,
       };
     }
+    result[key] = { actions };
   }
   return result;
 }
@@ -76,6 +101,9 @@ function translateOutcomeForAction(c: Context, outcome: Outcome): Response {
       { __outcome: 'deny', message: outcome.message },
       outcome.status
     );
+  }
+  if (outcome.__outcome === 'timeout') {
+    return c.json({ __outcome: 'timeout', timeoutMs: outcome.timeoutMs }, 504);
   }
   // render outcome should never reach the action RPC.
   return c.json(
@@ -121,13 +149,26 @@ export interface ActionsHandlerOptions {
   resolvePageUse?: (
     moduleKey: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  /**
+   * Default action timeout in milliseconds applied when an action does not
+   * declare its own `timeoutMs`. Defaults to 30000 (30 seconds). Pass
+   * `false` to disable the default (only action-level `timeoutMs` enforces
+   * a deadline).
+   */
+  defaultTimeoutMs?: number | false;
 }
 
 export function actionsHandler(
   glob: LazyGlob | EagerGlob,
   opts: ActionsHandlerOptions = {}
 ): MiddlewareHandler {
-  const { dev = false, onError, appConfig, resolvePageUse } = opts;
+  const {
+    dev = false,
+    onError,
+    appConfig,
+    resolvePageUse,
+    defaultTimeoutMs = 30_000,
+  } = opts;
   let cachedMapPromise: Promise<Record<string, ModuleEntry>> | null = null;
 
   return async (c) => {
@@ -211,15 +252,24 @@ export function actionsHandler(
       return c.json({ error: `Module '${module}' not found` }, 404);
     }
 
-    const fn = entry.actions[action];
-    if (typeof fn !== 'function') {
+    const actionEntry = entry.actions[action];
+    if (!actionEntry) {
       return c.json(
         { error: `Action '${action}' not found in module '${module}'` },
         404
       );
     }
+    const { fn, use: actionUse, timeoutMs: actionTimeoutMs } = actionEntry;
 
-    const signal = c.req.raw.signal;
+    const resolvedTimeoutMs: number | false =
+      actionTimeoutMs !== undefined ? actionTimeoutMs : defaultTimeoutMs;
+    const timeoutSignal =
+      resolvedTimeoutMs === false
+        ? undefined
+        : AbortSignal.timeout(resolvedTimeoutMs);
+    const signal = timeoutSignal
+      ? AbortSignal.any([c.req.raw.signal, timeoutSignal])
+      : c.req.raw.signal;
     const actionCtx = { c, signal };
 
     // Chain ordering is outer -> inner: app-level middleware wraps every
@@ -231,7 +281,6 @@ export function actionsHandler(
     // page-layer lookup keys by module rather than by location path.
     const rootUse = appConfig?.use ?? [];
     const pageUse = (await resolvePageUse?.(module)) ?? [];
-    const actionUse = (fn as { use?: ReadonlyArray<unknown> }).use ?? [];
     const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
       [...rootUse, ...pageUse, ...actionUse] as ReadonlyArray<
         Middleware | StreamObserver<unknown, never>
@@ -256,9 +305,7 @@ export function actionsHandler(
           middleware: serverMw,
           ctx,
           inner: async () => {
-            const inner = await (
-              fn as (ctx: unknown, payload: unknown) => Promise<unknown>
-            )(actionCtx, payload);
+            const inner = await fn(actionCtx, payload);
             // An action that does `return redirect('/login')` instead of
             // `throw redirect('/login')` would otherwise ship the outcome
             // JSON shape as a normal 200 response and bypass envelope
@@ -277,6 +324,14 @@ export function actionsHandler(
       if (isOutcome(err)) {
         return translateOutcomeForAction(c, err);
       }
+      if (
+        timeoutSignal?.aborted &&
+        timeoutSignal.reason instanceof DOMException &&
+        timeoutSignal.reason.name === 'TimeoutError' &&
+        typeof resolvedTimeoutMs === 'number'
+      ) {
+        return translateOutcomeForAction(c, timeoutOutcome(resolvedTimeoutMs));
+      }
       onError?.(err, { module, action });
       const message =
         dev && err instanceof Error ? err.message : 'Action failed';
@@ -288,12 +343,18 @@ export function actionsHandler(
         emitResult: true,
         observers,
         observerCtx: ctx,
+        signal: timeoutSignal,
+        timeoutMs:
+          typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
       });
     }
     if (result instanceof ReadableStream) {
-      return sseReadableStreamResponse(c, result as ReadableStream<unknown>, {
+      return sseReadableStreamResponse(c, result, {
         observers,
         observerCtx: ctx,
+        signal: timeoutSignal,
+        timeoutMs:
+          typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
       });
     }
     return c.json(result);

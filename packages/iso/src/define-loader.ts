@@ -34,6 +34,12 @@ export interface LoaderRef<T> {
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
   /**
+   * Raw value as authored on `defineLoader({ timeoutMs })`. `undefined`
+   * means "use the handler's configured default"; `false` means "no
+   * timeout, only the request signal aborts".
+   */
+  readonly timeoutMs?: number | false;
+  /**
    * Per-loader middleware and (for streaming loaders) stream observers,
    * exactly as authored on `defineLoader({ use })`. The handler-side
    * dispatcher calls `partitionUse(ref.use)` to split middleware from
@@ -76,6 +82,12 @@ export type DefineLoaderOpts<T> = {
   __loaderName?: string;
   cache?: LoaderCache<T>;
   params?: string[] | '*';
+  /**
+   * Per-loader timeout in milliseconds. When omitted, the handler applies
+   * its configured default (30s). Pass `false` to disable the timeout for
+   * this loader (rely solely on the request signal).
+   */
+  timeoutMs?: number | false;
   /**
    * Per-loader middleware and (for streaming loaders) stream observers.
    * The element type LoaderUse<T, Streaming> structurally gates stream
@@ -133,13 +145,26 @@ function ViewRenderer<T>({
   const error = loaderRef.useError();
   const reloadCtx = useContext(ReloadContext);
   const reload = reloadCtx?.reload ?? (() => {});
-  return render({ data, error, reload, ...props }) as any;
+  return render({ data, error, reload, ...props });
+}
+
+function validateTimeoutMs(
+  value: number | false | undefined,
+  context: string
+): void {
+  if (value === undefined || value === false) return;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `${context}: timeoutMs must be a non-negative finite number or false, got ${String(value)}`
+    );
+  }
 }
 
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
 ): LoaderRef<T> {
+  validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   const idKey = opts?.__moduleKey
     ? opts.__loaderName
       ? `${opts.__moduleKey}::${opts.__loaderName}`
@@ -178,6 +203,7 @@ export function defineLoader<T>(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
+    timeoutMs: opts?.timeoutMs,
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
     // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
@@ -199,34 +225,30 @@ export function defineLoader<T>(
     invalidate() {
       cache!.invalidate();
     },
-    Boundary: null as never,
-    View: null as never,
+    // `Boundary` and `View` close over `ref`. The captures are by reference
+    // and only deref at call time (component render), so the cycle is safe;
+    // both are fully initialized before any consumer can invoke them.
+    Boundary: ({ fallback, errorFallback, children }) =>
+      h(LoaderHost<T>, {
+        loader: ref,
+        fallback,
+        errorFallback,
+        children,
+      }),
+    View: (render, viewOpts) => {
+      const Wrapped: FunctionComponent<any> = (props) =>
+        h(ref.Boundary, {
+          fallback: viewOpts?.fallback,
+          errorFallback: viewOpts?.errorFallback,
+          children: h(ViewRenderer<T>, {
+            loaderRef: ref,
+            props,
+            render,
+          }),
+        });
+      return Wrapped;
+    },
   };
-
-  const Boundary: LoaderRef<T>['Boundary'] = ({
-    fallback,
-    errorFallback,
-    children,
-  }) => {
-    return h(LoaderHost as any, {
-      loader: ref,
-      fallback,
-      errorFallback,
-      children,
-    });
-  };
-  ref.Boundary = Boundary;
-
-  const View: LoaderRef<T>['View'] = (render, viewOpts) => {
-    const Wrapped: FunctionComponent<any> = (props) =>
-      h(ref.Boundary, {
-        fallback: viewOpts?.fallback,
-        errorFallback: viewOpts?.errorFallback,
-        children: h(ViewRenderer<T> as any, { loaderRef: ref, props, render }),
-      });
-    return Wrapped;
-  };
-  ref.View = View;
 
   return ref;
 }

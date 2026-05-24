@@ -16,7 +16,7 @@ const LoginPage: FunctionComponent = () => {
       }
       window.location.assign('/demo/projects');
     },
-    onError: (e) => setError(e.message),
+    onError: (e: Error) => setError(e.message),
   });
 
   return (
