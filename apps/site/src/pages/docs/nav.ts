@@ -81,6 +81,7 @@ export const nav: NavSection[] = [
       },
       { title: 'WebSockets', route: '/docs/websockets', icon: Cable },
       { title: 'renderPage', route: '/docs/render-page', icon: Layers },
+      { title: 'Link Prefetch', route: '/docs/link-prefetch', icon: Zap },
       { title: 'Build & Deploy', route: '/docs/deployment', icon: Cloud },
     ],
   },
