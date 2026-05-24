@@ -171,22 +171,17 @@ Update `src/pages/movies.tsx` to add the form. Import `serverActions` alongside 
 
 ```tsx
 import type { FunctionComponent } from 'preact';
-import { definePage, Form, useAction } from 'hono-preact';
+import { definePage, Form } from 'hono-preact';
 import { serverLoaders, serverActions } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const AddMovieForm: FunctionComponent = () => {
-  const { mutate, pending } = useAction(serverActions.addMovie, {
-    invalidate: 'auto',
-  });
-  return (
-    <Form mutate={mutate} pending={pending}>
-      <input name="title" placeholder="Movie title" required />
-      <button type="submit">Add</button>
-    </Form>
-  );
-};
+const AddMovieForm: FunctionComponent = () => (
+  <Form action={serverActions.addMovie}>
+    <input name="title" placeholder="Movie title" required />
+    <button type="submit">Add</button>
+  </Form>
+);
 
 const MoviesView = dataLoader.View(({ data }) => (
   <main>
@@ -205,7 +200,7 @@ MoviesView.displayName = 'Movies';
 export default definePage(MoviesView);
 ```
 
-The route entry in `routes.ts` doesn't change; actions ride along with the same `server` import. Submit a title in the form. The action runs on the server, `invalidate: 'auto'` re-fetches the loader, and the list updates with no manual state management.
+The route entry in `routes.ts` doesn't change; actions ride along with the same `server` import. Submit a title in the form. The action runs on the server and the list updates. To automatically re-fetch the loader after the action, pass `invalidate: 'auto'` via `useAction` (see [Server Actions](/docs/actions) for the programmatic form).
 
 ## What's next
 

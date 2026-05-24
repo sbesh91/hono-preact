@@ -21,22 +21,23 @@ The framework mounts your app at the root, ahead of its reserved paths and the S
 
 ```
 api.ts (your Hono app)   <- composes first
-  POST /__loaders        <- framework RPC
-  POST /__actions        <- framework RPC
+  POST /__loaders        <- framework loader RPC
+  POST <page-url>        <- framework action handler (per page)
   GET *                  <- framework SSR
 ```
 
-That ordering is the whole story. A `.use('*', ...)` in `api.ts` runs on every request the framework will see, including the SSR page render and both RPC endpoints. A `.use('/__actions', ...)` runs on RPC actions. A `.get('/healthz', ...)` works the same way it does in any Hono app.
+That ordering is the whole story. A `.use('*', ...)` in `api.ts` runs on every request the framework will see, including the SSR page render and the loader RPC endpoint. A `.get('/healthz', ...)` works the same way it does in any Hono app.
 
 ## Reserved paths
 
-The framework owns three URL surfaces:
+The framework owns two URL surfaces you must not override:
 
 | Path              | Purpose           |
 | ----------------- | ----------------- |
 | `POST /__loaders` | Server loader RPC |
-| `POST /__actions` | Server action RPC |
 | `GET *`           | SSR page renderer |
+
+Page URLs also accept `POST` for action submission; do not register a conflicting `POST` route for any page path in `api.ts`.
 
 `.use(...)` on those paths in `api.ts` is fine and is exactly how you compose middleware around them. What you cannot do is register a _route_ on those paths or a wildcard that swallows them. The build rejects these cases:
 
@@ -45,7 +46,6 @@ The framework owns three URL surfaces:
 app.get('*', handler);
 app.all('/*', handler);
 app.on(['GET'], '/*', handler);
-app.post('/__actions', handler);
 app.post('/__loaders', handler);
 ```
 
@@ -72,11 +72,11 @@ app.use(
 export default app;
 ```
 
-Scope to `/__actions` if you only want CORS on the RPC surface, or to your custom API routes if your SSR pages are same-origin only.
+Scope to your custom API routes if your SSR pages are same-origin only.
 
 ### CSRF protection
 
-For cookie-authenticated `multipart/form-data` actions, see the dedicated [CSRF Protection](/docs/csrf) page. It explains when you need it, why the JSON path through `/__actions` is already protected by browser CORS preflight, and how to write an Origin check that covers the multipart gap.
+For cookie-authenticated `multipart/form-data` actions, see the dedicated [CSRF Protection](/docs/csrf) page. It explains when you need it, why the JSON path is already protected by browser CORS preflight, and how to write an Origin check that covers the multipart gap.
 
 ### Security headers
 

@@ -67,7 +67,7 @@ export const serverActions = {
 `definePage({ use })` and `pageUse` cover two different dispatch paths for the same page:
 
 - **`definePage({ use })`** is consumed by `PageMiddlewareHost` inside the page's React tree. It runs during SSR prerender and during intra-app navigation. This is the path a `redirect` outcome takes when a logged-out user clicks a link to the page.
-- **`pageUse` on `.server.*`** is consumed by `loadersHandler` and `actionsHandler` directly, around every `POST /__loaders` and `POST /__actions` request that belongs to this page. The page React tree never renders for those calls, so the page-tsx `use` binding wouldn't fire.
+- **`pageUse` on `.server.*`** is consumed by `loadersHandler` and the page POST handler directly, around every loader RPC and action POST that belongs to this page. The page React tree never renders for those calls, so the page-tsx `use` binding wouldn't fire.
 
 Export the same array from both surfaces so a user can't hit a loader behind a back-door RPC call when the page-tsx binding would have blocked them.
 

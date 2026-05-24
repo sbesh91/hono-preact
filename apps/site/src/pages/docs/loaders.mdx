@@ -379,7 +379,7 @@ Navigating `/movies` to `/movies/123` does not unmount the layout, does not chan
 
 ## Registering the loader endpoint
 
-You do not wire `loadersHandler` directly. The framework's Vite plugin generates the server entry, which mounts `loadersHandler` on `POST /__loaders`, `actionsHandler` on `POST /__actions`, your optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. `loadersHandler` routes by `moduleKey::loaderName` (the path-derived key injected by `moduleKeyPlugin` combined with the loader's name in the container); modules without `__moduleKey` are silently skipped at map-build time.
+You do not wire `loadersHandler` directly. The framework's Vite plugin generates the server entry, which mounts `loadersHandler` on `POST /__loaders`, a page POST handler for actions, your optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. `loadersHandler` routes by `moduleKey::loaderName` (the path-derived key injected by `moduleKeyPlugin` combined with the loader's name in the container); modules without `__moduleKey` are silently skipped at map-build time.
 
 If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
 

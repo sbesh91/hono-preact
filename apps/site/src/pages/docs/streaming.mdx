@@ -205,6 +205,22 @@ const { mutate } = useAction(serverActions.bulkImport, {
 
 Chunks and the final result are delivered in order. If the generator throws, the stream closes and `onError` is called; `onSuccess` does not fire.
 
+## Form limitations for streaming actions
+
+Streaming actions cannot be used with `<Form action={stub}>`. The type signature of `FormProps['action']` constrains the stub to non-streaming actions (`TChunk = never`), so passing a streaming action stub is a TypeScript error at compile time.
+
+If a streaming action receives a raw POST without `Accept: text/event-stream` (for example, a no-JS form submission), the server responds with HTTP 405. Streaming actions are only invocable via `useAction(stub)` with the `onChunk` callback.
+
+```tsx
+// This is a type error: streaming actions are not accepted by <Form>
+<Form action={serverActions.bulkImport} /> // TS error
+
+// Correct: call streaming actions programmatically
+const { mutate } = useAction(serverActions.bulkImport, {
+  onChunk: (p) => setProgress(p.count),
+});
+```
+
 ## Debugging
 
 Streaming loaders and actions use a server-sent event (SSE) wire format. You can inspect the framing directly with curl:
@@ -213,10 +229,11 @@ Streaming loaders and actions use a server-sent event (SSE) wire format. You can
 # Streaming loader endpoint
 curl -N 'http://localhost:5173/demo/projects/inf/issues/i-1'
 
-# Streaming action endpoint (replace the module key and action name)
-curl -N -X POST http://localhost:5173/__actions \
+# Streaming action: must include Accept: text/event-stream (replace module key and action name)
+curl -N -X POST http://localhost:5173/movies \
   -H 'Content-Type: application/json' \
-  -d '{"module":"src/pages/demo/project","action":"bulkImport","payload":{"count":5}}'
+  -H 'Accept: text/event-stream' \
+  -d '{"__action":"bulkImport","payload":{"count":5}}'
 ```
 
 Each chunk arrives as a `data:` line followed by a blank line (standard SSE framing). The final result for actions arrives as a `result:` line. Parsing is handled automatically by the framework on the client.

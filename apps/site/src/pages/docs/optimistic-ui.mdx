@@ -12,13 +12,12 @@ Start with `useOptimisticAction`. Drop down to the primitive if you outgrow it.
 ## `useOptimisticAction`
 
 ```tsx
-import { useOptimisticAction } from 'hono-preact';
+import { useOptimisticAction, Form } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const Movies = ({ loaderData }) => {
   const {
-    mutate,
-    pending,
+    result,
     value: movies,
   } = useOptimisticAction(serverActions.create, {
     base: loaderData.movies,
@@ -29,16 +28,24 @@ const Movies = ({ loaderData }) => {
   });
 
   return (
-    <ul>
-      {movies.map((m) => (
-        <li key={m.id}>{m.title}</li>
-      ))}
-    </ul>
+    <>
+      <ul>
+        {movies.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+      <Form action={result}>
+        <input name="title" placeholder="Title" />
+        <button type="submit">Add</button>
+      </Form>
+    </>
   );
 };
 ```
 
 `value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `value` reflects real server data with no visual gap.
+
+`result` is a stub-compatible value: pass it to `<Form action={result}>` for declarative form submission, or call `result.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue.
 
 ### Options
 
@@ -113,13 +120,12 @@ No special configuration needed.
 
 ## Composing with `<Form>`
 
-`<Form>` accepts the `mutate`/`pending` from `useOptimisticAction` directly:
+`useOptimisticAction` returns a stub-compatible value that you can pass directly to `<Form action={...}>`. The result carries the action's type brand, so the form knows how to invoke it and TypeScript enforces the payload shape.
 
 ```tsx
 const NotesForm = ({ defaultNotes }) => {
   const {
-    mutate,
-    pending,
+    result,
     value: notes,
   } = useOptimisticAction(serverActions.setNotes, {
     base: defaultNotes,
@@ -130,7 +136,7 @@ const NotesForm = ({ defaultNotes }) => {
   return (
     <>
       <p>Current: {notes}</p>
-      <Form mutate={mutate} pending={pending}>
+      <Form action={result}>
         <textarea name="notes" defaultValue={notes} />
         <button>Save</button>
       </Form>
@@ -138,6 +144,8 @@ const NotesForm = ({ defaultNotes }) => {
   );
 };
 ```
+
+For the imperative path, the same `result` value exposes `result.mutate(payload)` and `result.pending` directly, so you can call it from an `onClick` handler or await it in an async function without holding a separate `useAction` ref.
 
 ## `<OptimisticOverlay>`
 

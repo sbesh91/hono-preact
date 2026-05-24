@@ -1,6 +1,6 @@
 # CSRF Protection
 
-The framework does NOT enforce CSRF protection out of the box. Whether you need it depends on how your `/__actions` endpoint accepts requests and how your session cookie is configured. This page is a recipe; opt in when you're shipping cookie-authenticated mutations to a real audience.
+The framework does NOT enforce CSRF protection out of the box. Whether you need it depends on how your action POSTs are authenticated and how your session cookie is configured. This page is a recipe; opt in when you're shipping cookie-authenticated mutations to a real audience.
 
 ## When you need it
 
@@ -10,22 +10,22 @@ If your app:
 - uses `SameSite=Lax` or `SameSite=None` on that cookie, and
 - accepts file uploads or any other `multipart/form-data` action
 
-then a malicious page on another origin can submit a top-level `<form action="https://yoursite/__actions" enctype="multipart/form-data">` to your endpoint with the victim's cookie attached, and your action runs as the victim. That's CSRF.
+then a malicious page on another origin can submit a top-level `<form action="https://yoursite/your-page" enctype="multipart/form-data">` to your page URL with the victim's cookie attached, and your action runs as the victim. That's CSRF.
 
-The JSON path through `/__actions` (which `useAction` uses for any payload that does not contain a `File`) is already protected by browsers: `Content-Type: application/json` is not a "safelisted" request header, so browsers force a CORS preflight that a cross-origin attacker page cannot satisfy without your server's explicit allow. (This is a browser-enforced property, not a server-enforced one, but every current browser enforces it.) The multipart path is the gap, because `multipart/form-data` is safelisted and can be sent cross-origin from a plain `<form>` without preflight.
+The JSON path (which `useAction` uses for any payload that does not contain a `File`) is already protected by browsers: `Content-Type: application/json` is not a "safelisted" request header, so browsers force a CORS preflight that a cross-origin attacker page cannot satisfy without your server's explicit allow. (This is a browser-enforced property, not a server-enforced one, but every current browser enforces it.) The multipart path is the gap, because `multipart/form-data` is safelisted and can be sent cross-origin from a plain `<form>` without preflight.
 
 You do not need this recipe if any of:
 
 - Your auth cookie is `SameSite=Strict`
 - Your app does not use cookie auth at all (bearer tokens in `Authorization`)
-- Your `/__actions` endpoint is not exposed publicly
+- Your page URLs are not publicly accessible
 - You never accept multipart payloads (convert files to base64 in JSON, or upload via a separate direct route)
 
 ## The recipe: server-side Origin check
 
-Add a Hono middleware that rejects cross-origin POSTs to `/__actions`. Modern browsers always send `Origin` on cross-origin POSTs, and an attacker page on another origin cannot forge it.
+Add a Hono middleware that rejects cross-origin POSTs. Modern browsers always send `Origin` on cross-origin POSTs, and an attacker page on another origin cannot forge it.
 
-This runs entirely on the server. No client changes, no `fetch` wrapper, and it covers both `useAction` requests and raw `<form>` posts.
+This runs entirely on the server. No client changes, no `fetch` wrapper, and it covers both `useAction` requests and native form posts.
 
 ```ts
 // src/api.ts
@@ -35,7 +35,7 @@ const ALLOWED_ORIGIN = 'https://yoursite.example';
 
 const app = new Hono();
 
-app.use('/__actions', async (c, next) => {
+app.use('*', async (c, next) => {
   if (c.req.method !== 'POST') return next();
   const origin = c.req.header('Origin');
   if (origin !== ALLOWED_ORIGIN) {
@@ -47,7 +47,7 @@ app.use('/__actions', async (c, next) => {
 export default app;
 ```
 
-This works because the framework mounts your `api.ts` app **ahead of** its own reserved paths (`/__loaders`, `/__actions`) and the page renderer. Middleware you register in `api.ts` therefore runs before the framework's RPC and SSR handlers: `app.use('/__actions', …)` reaches the actions endpoint, and `app.use('*', …)` is effectively app-wide. Middleware via `app.use(…)` is always safe: it calls `next()` and composes ahead of the framework handlers rather than replacing them. What you must not do is register a catch-all _route_ (`app.get('*', …)`, `app.all('/*', …)`, or `app.on(…)` with `'*'` as the path) or the literal paths `/__loaders` / `/__actions` in `api.ts`: those shadow the framework's handlers, so the build rejects them.
+This works because the framework mounts your `api.ts` app **ahead of** its own handlers and the page renderer. Middleware you register in `api.ts` therefore runs before the framework's loader RPC and page action handlers: `app.use('*', …)` is effectively app-wide. Middleware via `app.use(…)` is always safe: it calls `next()` and composes ahead of the framework handlers rather than replacing them. What you must not do is register a catch-all _route_ (`app.get('*', …)`, `app.all('/*', …)`, or `app.on(…)` with `'*'` as the path) in `api.ts`: those shadow the framework's handlers, so the build rejects them.
 
 ### Configure the allowed origin
 
@@ -60,7 +60,7 @@ If you need to allow multiple origins (e.g. a staging and production host), chec
 ### Verifying it
 
 1. From your own site, submit an action; it should succeed.
-2. From a browser tab on a different origin (e.g. `http://localhost:8080` running `python3 -m http.server`), POST a `<form enctype="multipart/form-data" action="https://yoursite.example/__actions">` with the victim's cookies attached. You should get a 403.
+2. From a browser tab on a different origin (e.g. `http://localhost:8080` running `python3 -m http.server`), POST a `<form enctype="multipart/form-data" action="https://yoursite.example/your-page">` with the victim's cookies attached. You should get a 403.
 
 ## What this does NOT protect against
 

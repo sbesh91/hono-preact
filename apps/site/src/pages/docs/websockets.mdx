@@ -74,7 +74,7 @@ A working end-to-end example lives at `apps/example-node/` in the repo.
 
 ## Avoiding reserved paths
 
-The framework reserves `POST /__loaders`, `POST /__actions`, and the catch-all SSR `GET`. Register WebSocket routes on any non-colliding path. The build rejects catch-all and reserved-path route registrations in `api.ts`. See [Composing Hono Middleware](/docs/hono-middleware) for the full rules.
+The framework reserves `POST /__loaders` and the catch-all SSR `GET`. Page URLs also accept `POST` for action submission. Register WebSocket routes on any non-colliding path. The build rejects catch-all and reserved-path route registrations in `api.ts`. See [Composing Hono Middleware](/docs/hono-middleware) for the full rules.
 
 ## Other long-lived patterns
 
