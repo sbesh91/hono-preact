@@ -24,7 +24,9 @@ describe('loadersHandler timeouts', () => {
     const ref = defineLoader(
       async ({ signal }) => {
         await new Promise((resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
         });
         return 'never';
       },

@@ -38,7 +38,8 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
   stub: ActionStub<TPayload, TResult, TChunk>,
   options: UseOptimisticActionOptions<TPayload, TResult, TBase, TChunk>
 ): UseOptimisticActionResult<TPayload, TResult, TBase> {
-  const { base, apply, onSuccess, onError, transition, ...actionOpts } = options;
+  const { base, apply, onSuccess, onError, transition, ...actionOpts } =
+    options;
   const [value, addOptimistic] = useOptimistic(base, apply, { transition });
 
   const action = useAction<TPayload, TResult, TChunk, OptimisticHandle>(stub, {

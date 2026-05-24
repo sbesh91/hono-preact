@@ -23,7 +23,9 @@ describe('defineAction timeoutMs', () => {
   });
 
   it('accepts false to disable', () => {
-    const stub = defineAction(async (_ctx, _payload) => 1, { timeoutMs: false });
+    const stub = defineAction(async (_ctx, _payload) => 1, {
+      timeoutMs: false,
+    });
     expect(readAmbient(stub, 'timeoutMs')).toBe(false);
   });
 

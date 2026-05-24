@@ -171,10 +171,7 @@ function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
     );
   }
   if (outcome.__outcome === 'timeout') {
-    return c.json(
-      { __outcome: 'timeout', timeoutMs: outcome.timeoutMs },
-      504
-    );
+    return c.json({ __outcome: 'timeout', timeoutMs: outcome.timeoutMs }, 504);
   }
   // render outcome should never reach the loader RPC; this is defense in depth.
   return c.json(
@@ -326,7 +323,9 @@ export function loadersHandler(
           observerCtx: ctx,
           signal: timeoutSignal,
           timeoutMs:
-            typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+            typeof resolvedTimeoutMs === 'number'
+              ? resolvedTimeoutMs
+              : undefined,
         });
       }
       if (result instanceof ReadableStream) {
@@ -335,7 +334,9 @@ export function loadersHandler(
           observerCtx: ctx,
           signal: timeoutSignal,
           timeoutMs:
-            typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+            typeof resolvedTimeoutMs === 'number'
+              ? resolvedTimeoutMs
+              : undefined,
         });
       }
       return c.json(result);

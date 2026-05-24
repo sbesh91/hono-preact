@@ -103,10 +103,7 @@ function translateOutcomeForAction(c: Context, outcome: Outcome): Response {
     );
   }
   if (outcome.__outcome === 'timeout') {
-    return c.json(
-      { __outcome: 'timeout', timeoutMs: outcome.timeoutMs },
-      504
-    );
+    return c.json({ __outcome: 'timeout', timeoutMs: outcome.timeoutMs }, 504);
   }
   // render outcome should never reach the action RPC.
   return c.json(

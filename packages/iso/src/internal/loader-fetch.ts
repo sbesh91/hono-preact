@@ -44,10 +44,7 @@ export async function fetchLoaderData<T>(
       message?: string;
       timeoutMs?: number;
     };
-    if (
-      body.__outcome === 'timeout' &&
-      typeof body.timeoutMs === 'number'
-    ) {
+    if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
       throw new TimeoutError(body.timeoutMs);
     }
     if (body.__outcome === 'deny') {

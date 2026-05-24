@@ -13,9 +13,13 @@ describe('useOptimistic SSR with transition: true', () => {
 
     // Component that uses useOptimistic with transition: true.
     function Component() {
-      const [value] = useOptimistic([1, 2, 3], (current: number[], p: number) => [...current, p], {
-        transition: true,
-      });
+      const [value] = useOptimistic(
+        [1, 2, 3],
+        (current: number[], p: number) => [...current, p],
+        {
+          transition: true,
+        }
+      );
       return h('span', null, String(value.length));
     }
 
@@ -37,9 +41,13 @@ describe('useOptimistic SSR with transition: true', () => {
     expect(typeof document).toBe('undefined');
 
     function Component() {
-      const [value] = useOptimistic([0], (current: number[], p: number) => [...current, p], {
-        transition: true,
-      });
+      const [value] = useOptimistic(
+        [0],
+        (current: number[], p: number) => [...current, p],
+        {
+          transition: true,
+        }
+      );
       return h('div', null, h('span', null, String(value[0])));
     }
 

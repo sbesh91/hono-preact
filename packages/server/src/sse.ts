@@ -38,8 +38,8 @@ export type SseGeneratorOptions = {
 function isTimeoutAbort(signal?: AbortSignal): boolean {
   return Boolean(
     signal?.aborted &&
-      signal.reason instanceof DOMException &&
-      signal.reason.name === 'TimeoutError'
+    signal.reason instanceof DOMException &&
+    signal.reason.name === 'TimeoutError'
   );
 }
 
@@ -68,7 +68,13 @@ export function sseGeneratorResponse(
   gen: AsyncGenerator<unknown, unknown, unknown>,
   options: SseGeneratorOptions = {}
 ): Response {
-  const { emitResult = false, observers, observerCtx, signal: optSignal, timeoutMs: optTimeoutMs } = options;
+  const {
+    emitResult = false,
+    observers,
+    observerCtx,
+    signal: optSignal,
+    timeoutMs: optTimeoutMs,
+  } = options;
   const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
     let chunks = 0;
@@ -146,7 +152,12 @@ export function sseReadableStreamResponse(
     timeoutMs?: number;
   } = {}
 ): Response {
-  const { observers, observerCtx, signal: optSignal, timeoutMs: optTimeoutMs } = options;
+  const {
+    observers,
+    observerCtx,
+    signal: optSignal,
+    timeoutMs: optTimeoutMs,
+  } = options;
   const obs = observers ?? [];
   return streamSSE(c, async (stream) => {
     const reader = source.getReader();

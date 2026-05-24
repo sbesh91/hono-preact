@@ -13,12 +13,14 @@ describe('useAction timeout handling', () => {
   it('surfaces a timeout envelope (504 with __outcome: timeout) as a TimeoutError', async () => {
     const stub = defineAction(async () => 1, { __module: 'm', __action: 'a' });
 
-    global.fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ __outcome: 'timeout', timeoutMs: 5000 }),
-        { status: 504, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'timeout', timeoutMs: 5000 }),
+          { status: 504, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
 
     const { result } = renderHook(() => useAction(stub));
     let mutated: Awaited<ReturnType<typeof result.current.mutate>>;

@@ -19,7 +19,8 @@ describe('useOptimisticAction transition forwarding', () => {
   });
   afterEach(() => {
     if (originalSVT === undefined) {
-      delete (document as { startViewTransition?: unknown }).startViewTransition;
+      delete (document as { startViewTransition?: unknown })
+        .startViewTransition;
     } else {
       document.startViewTransition = originalSVT;
     }

@@ -17,17 +17,25 @@ describe('fetchLoaderData timeout handling', () => {
   });
 
   it('throws TimeoutError when the server returns a 504 timeout envelope', async () => {
-    global.fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ __outcome: 'timeout', timeoutMs: 7000 }),
-        { status: 504, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'timeout', timeoutMs: 7000 }),
+          { status: 504, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
 
     const controller = new AbortController();
     let thrown: unknown;
     try {
-      await fetchLoaderData('m', 'l', location, controller.signal, noopCallbacks);
+      await fetchLoaderData(
+        'm',
+        'l',
+        location,
+        controller.signal,
+        noopCallbacks
+      );
     } catch (e) {
       thrown = e;
     }
@@ -39,8 +47,7 @@ describe('fetchLoaderData timeout handling', () => {
   });
 
   it('throws TimeoutError when the first SSE event is event: timeout', async () => {
-    const body =
-      'event: timeout\ndata: {"timeoutMs":120}\n\n';
+    const body = 'event: timeout\ndata: {"timeoutMs":120}\n\n';
     global.fetch = vi.fn().mockResolvedValue(
       new Response(body, {
         status: 200,
@@ -51,7 +58,13 @@ describe('fetchLoaderData timeout handling', () => {
     const controller = new AbortController();
     let thrown: unknown;
     try {
-      await fetchLoaderData('m', 'l', location, controller.signal, noopCallbacks);
+      await fetchLoaderData(
+        'm',
+        'l',
+        location,
+        controller.signal,
+        noopCallbacks
+      );
     } catch (e) {
       thrown = e;
     }
@@ -75,7 +88,13 @@ describe('fetchLoaderData timeout handling', () => {
     const controller = new AbortController();
     const onError = vi.fn();
     const callbacks = { onChunk: () => {}, onError, onEnd: () => {} };
-    const first = await fetchLoaderData('m', 'l', location, controller.signal, callbacks);
+    const first = await fetchLoaderData(
+      'm',
+      'l',
+      location,
+      controller.signal,
+      callbacks
+    );
     expect(first).toBe('first');
     // Wait a tick for the background consumer to drain.
     await new Promise((r) => setTimeout(r, 10));

@@ -17,7 +17,8 @@ describe('useOptimistic transition option', () => {
   });
   afterEach(() => {
     if (originalSVT === undefined) {
-      delete (document as { startViewTransition?: unknown }).startViewTransition;
+      delete (document as { startViewTransition?: unknown })
+        .startViewTransition;
     } else {
       document.startViewTransition = originalSVT;
     }
@@ -33,7 +34,7 @@ describe('useOptimistic transition option', () => {
     const { result } = renderHook(() =>
       useOptimistic<number, number>(0, (acc, p) => acc + p)
     );
-    let handle!: ReturnType<typeof result.current[1]>;
+    let handle!: ReturnType<(typeof result.current)[1]>;
     act(() => {
       handle = result.current[1](5);
     });
@@ -52,9 +53,11 @@ describe('useOptimistic transition option', () => {
     document.startViewTransition = spy as never;
 
     const { result } = renderHook(() =>
-      useOptimistic<number, number>(0, (acc, p) => acc + p, { transition: true })
+      useOptimistic<number, number>(0, (acc, p) => acc + p, {
+        transition: true,
+      })
     );
-    let handle!: ReturnType<typeof result.current[1]>;
+    let handle!: ReturnType<(typeof result.current)[1]>;
     act(() => {
       handle = result.current[1](5);
     });
@@ -73,9 +76,11 @@ describe('useOptimistic transition option', () => {
   it('no-ops gracefully when startViewTransition is unavailable', () => {
     delete (document as { startViewTransition?: unknown }).startViewTransition;
     const { result } = renderHook(() =>
-      useOptimistic<number, number>(0, (acc, p) => acc + p, { transition: true })
+      useOptimistic<number, number>(0, (acc, p) => acc + p, {
+        transition: true,
+      })
     );
-    let handle!: ReturnType<typeof result.current[1]>;
+    let handle!: ReturnType<(typeof result.current)[1]>;
     act(() => {
       handle = result.current[1](5);
     });

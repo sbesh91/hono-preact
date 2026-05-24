@@ -52,7 +52,9 @@ describe('actionsHandler timeouts', () => {
   it('uses the handler default when the action has no timeoutMs', async () => {
     const create = defineAction(async ({ signal }) => {
       await new Promise((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
       });
       return { ok: true };
     });
@@ -110,7 +112,11 @@ describe('actionsHandler timeouts', () => {
     const res = await app.request('http://localhost/__actions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module: 'untimed', action: 'create', payload: {} }),
+      body: JSON.stringify({
+        module: 'untimed',
+        action: 'create',
+        payload: {},
+      }),
     });
     expect(res.status).toBe(200);
   });

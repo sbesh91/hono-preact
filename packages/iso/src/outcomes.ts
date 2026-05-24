@@ -32,7 +32,11 @@ export type TimeoutOutcome = {
   timeoutMs: number;
 };
 
-export type Outcome = RedirectOutcome | DenyOutcome | RenderOutcome | TimeoutOutcome;
+export type Outcome =
+  | RedirectOutcome
+  | DenyOutcome
+  | RenderOutcome
+  | TimeoutOutcome;
 
 type RedirectInput =
   | string
@@ -95,7 +99,12 @@ export function isOutcome(value: unknown): value is Outcome {
   if (typeof value !== 'object' || value === null) return false;
   if (!('__outcome' in value)) return false;
   const tag = (value as { __outcome: unknown }).__outcome;
-  return tag === 'redirect' || tag === 'deny' || tag === 'render' || tag === 'timeout';
+  return (
+    tag === 'redirect' ||
+    tag === 'deny' ||
+    tag === 'render' ||
+    tag === 'timeout'
+  );
 }
 
 export function isRedirect(value: unknown): value is RedirectOutcome {

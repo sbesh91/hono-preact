@@ -46,7 +46,9 @@ describe('sse mid-stream timeout', () => {
       for await (const ev of readSSE(res.body)) events.push(ev);
     }
 
-    expect(events.some((e) => e.event === 'message' && e.data === '"first"')).toBe(true);
+    expect(
+      events.some((e) => e.event === 'message' && e.data === '"first"')
+    ).toBe(true);
     const timeoutEvent = events.find((e) => e.event === 'timeout');
     expect(timeoutEvent).toBeDefined();
     expect(JSON.parse(timeoutEvent!.data)).toMatchObject({ timeoutMs: 75 });
