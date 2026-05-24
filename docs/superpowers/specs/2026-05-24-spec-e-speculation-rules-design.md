@@ -4,18 +4,18 @@ Part of the [web standards adoption roadmap](./2026-05-23-web-standards-adoption
 
 ## Summary
 
-The server emits one `<script type="speculationrules">` tag in `<head>` that instructs supporting browsers to prefetch same-origin `<a href>` links on moderate eagerness. App authors get two interactions:
+When opted in via `defineApp({ speculation: true })`, the server emits one `<script type="speculationrules">` tag in `<head>` that instructs supporting browsers to prefetch same-origin `<a href>` links on moderate eagerness. App authors then have one further interaction: the per-link off switch `data-no-prefetch` on individual `<a>` elements.
 
-1. App-level off switch via `defineApp({ speculation: false })`.
-2. Per-link off switch via the HTML attribute `data-no-prefetch`.
+The feature is off by default. This follows the precedent set by Spec A's `useOptimistic({ transition: true })`: Chromium-leaning progressive enhancements are opt-in so apps make an explicit choice before the framework affects outbound request behavior.
 
-No mode/eagerness knobs in v1. Defaults are baked: `prefetch`, `eagerness: "moderate"`, same-origin scope, `data-no-prefetch` exclusion. The type can widen from `boolean` to `boolean | SpeculationConfig` later without breaking existing code if a real configuration request appears.
+No mode/eagerness knobs in v1. Built-in defaults when enabled: `prefetch`, `eagerness: "moderate"`, same-origin scope, `data-no-prefetch` exclusion. The type can widen from `boolean` to `boolean | SpeculationConfig` later without breaking existing code if a real configuration request appears.
 
 ## Goals
 
-- Faster perceived navigation on Chromium browsers, zero config required.
+- Faster perceived navigation on Chromium browsers for apps that opt in.
 - Surface area limited to one boolean and one HTML attribute. Anyone reading an app's source can understand the whole feature in 30 seconds.
 - Cheap to ship and cheap to roll back: one server-side string emission, one head injection seam already in use.
+- Off by default: the framework affects no outbound request behavior until the app author chooses to enable the feature.
 
 ## Non-goals
 
@@ -29,7 +29,7 @@ No mode/eagerness knobs in v1. Defaults are baked: `prefetch`, `eagerness: "mode
 
 One pure function builds the JSON; one call site in `render.tsx` includes the resulting `<script>` in `headTags`. Behavior is server-side only. Nothing changes on the client.
 
-When `speculation: false` is passed to `defineApp`, the function returns the empty string and the head injection is a no-op. When omitted or `true`, the static script is included.
+When `speculation: true` is passed to `defineApp`, the static script is included in `headTags`. When omitted or `false`, the function returns the empty string and the head injection contributes nothing.
 
 ## Detailed design
 
@@ -44,7 +44,7 @@ export type AppConfig = {
 };
 ```
 
-`speculation` defaults to `true` when omitted.
+`speculation` defaults to `false` when omitted. The app author opts in explicitly with `defineApp({ speculation: true })`.
 
 ### Per-link opt-out
 
@@ -80,13 +80,13 @@ Static JSON (no per-response variation):
 
 ### Implementation site
 
-A new module `packages/server/src/speculation-rules.ts` exports the constant tag string (and the empty string for `speculation: false`):
+A new module `packages/server/src/speculation-rules.ts` exports the constant tag string (returning the empty string unless the app has opted in):
 
 ```ts
 const SPECULATION_RULES_TAG = `<script type="speculationrules">${SPECULATION_RULES_JSON}</script>`;
 
 export function speculationRulesTag(config: AppConfig): string {
-  return config.speculation === false ? '' : SPECULATION_RULES_TAG;
+  return config.speculation === true ? SPECULATION_RULES_TAG : '';
 }
 ```
 
@@ -100,8 +100,8 @@ One line of JSON-in-`<script>`. The JSON is pre-built at module load time (it ha
 
 ## Testing strategy
 
-- **Unit:** `speculationRulesTag({ speculation: false })` returns `''`; `speculationRulesTag({})` and `speculationRulesTag({ speculation: true })` return the same non-empty tag. Snapshot the non-empty output exactly once.
-- **Integration:** SSR a page with two `<a>` links (one with `data-no-prefetch`); assert the `<script type="speculationrules">` is present once in `<head>` and the JSON parses as expected. Repeat with `defineApp({ speculation: false })`; assert the tag is absent.
+- **Unit:** `speculationRulesTag({ speculation: true })` returns the expected non-empty tag (snapshot exactly once). `speculationRulesTag({})` and `speculationRulesTag({ speculation: false })` both return `''`.
+- **Integration:** SSR a page with two `<a>` links (one with `data-no-prefetch`) under `defineApp({ speculation: true })`; assert the `<script type="speculationrules">` is present once in `<head>` and the JSON parses as expected. Repeat with `defineApp({})`; assert the tag is absent (off-by-default check).
 - **No browser-side prefetch behavior test.** That is the browser's contract; we test only the framework's emission.
 - **Verification before completion.** Full test suite passes on Node and workerd via the existing matrix.
 
@@ -112,13 +112,13 @@ Single PR (no version bump). Touches:
 - `packages/iso/src/define-app.ts`: add `speculation?: boolean` to `AppConfig`.
 - `packages/server/src/speculation-rules.ts`: new module exporting `speculationRulesTag(config)`.
 - `packages/server/src/render.tsx`: call `speculationRulesTag(appConfig)` inside the `headTags` build and let it join the existing list.
-- `apps/site`: one docs page under SSR describing the default behavior, the `data-no-prefetch` opt-out, and the `defineApp({ speculation: false })` off switch. Per the project convention, no migration breadcrumbs; describe what is.
+- `apps/site`: one docs page under SSR describing how to enable the feature with `defineApp({ speculation: true })`, what it does once enabled, and the `data-no-prefetch` per-link opt-out. Per the project convention, no migration breadcrumbs; describe what is.
 
 Sits on `main` with A and C. `v0.3.0` cuts once D also lands (Spec B is deferred pending upstream Navigation API support in `preact-iso`).
 
 ## Risk register
 
-- **Per-response cost.** A constant ~220 bytes added to every SSR response. Acceptable. Apps that find it material disable the feature.
-- **Accidental prefetch of side-effecting GETs.** Logout, download links, ephemeral-token URLs. Mitigation: `data-no-prefetch` is documented with these as the canonical examples.
-- **CSP without `script-src 'self'` or nonce.** Strict-CSP apps will see the speculation script blocked. Mitigation: documented as a known limitation. If demand appears, a follow-up adds nonce plumbing across the framework's head emission.
+- **Per-response cost.** A constant ~220 bytes added to every SSR response when opted in. Acceptable, and apps see this cost only after deliberately enabling the feature.
+- **Accidental prefetch of side-effecting GETs.** Logout, download links, ephemeral-token URLs. Mitigation: `data-no-prefetch` is documented with these as the canonical examples; the docs page for the feature foregrounds the audit responsibility the opt-in implies.
+- **CSP without `script-src 'self'` or nonce.** Strict-CSP apps will see the speculation script blocked when enabled. Mitigation: documented as a known limitation. If demand appears, a follow-up adds nonce plumbing across the framework's head emission.
 - **Browser feature regression.** Speculation Rules is a Chromium feature; Safari and Firefox ignore unknown `<script type>` values. Risk surface is whatever future browsers might do with the tag; today's behavior is "ignore." No mitigation needed.
