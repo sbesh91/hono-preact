@@ -6,3 +6,11 @@ export {
   routeServerModules,
   makePageUseResolvers,
 } from './route-server-modules.js';
+export {
+  makePageActionResolvers,
+  type ActionEntry,
+} from './page-action-resolvers.js';
+export {
+  pageActionHandler,
+  type PageActionHandlerOptions,
+} from './page-action-handler.js';
