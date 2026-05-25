@@ -11,12 +11,14 @@ Set `speculation: true` on your `defineApp` config:
 ```ts
 import { defineApp } from 'hono-preact';
 
-export const appConfig = defineApp({
+export default defineApp({
   speculation: true,
 });
 ```
 
 Once enabled, every server-rendered page emits the speculation rules tag. No per-route configuration.
+
+The tag lands inside the existing `<head>` element. If your `Layout` renders an HTML document with no `<head>`, the framework has nowhere to inject the tag and no tag is emitted; the same constraint applies to hoofd's `<title>`, `<meta>`, and `<link>` injection.
 
 ## What gets prefetched
 

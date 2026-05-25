@@ -18,15 +18,16 @@ That single line replaces the boilerplate for dispatcher setup, prerendering, he
 renderPage(
   c: Context,
   node: VNode,
-  options?: { defaultTitle?: string }
+  options?: { defaultTitle?: string; appConfig?: AppConfig }
 ): Promise<Response>
 ```
 
-| Param                  | Description                                                                                                                                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `c`                    | The Hono `Context` from your route handler                                                                                                                                                                                                 |
-| `node`                 | The root Preact element to render, typically your `<Layout>`                                                                                                                                                                               |
-| `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''`. Express defaults via `<Head defaultTitle="...">` in your `Layout` for the common case; the option is here for custom server entries that call `renderPage` directly. |
+| Param                  | Description                                                                                                                                                                                                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c`                    | The Hono `Context` from your route handler                                                                                                                                                                                                                                                                                    |
+| `node`                 | The root Preact element to render, typically your `<Layout>`                                                                                                                                                                                                                                                                  |
+| `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''`. Express defaults via `<Head defaultTitle="...">` in your `Layout` for the common case; the option is here for custom server entries that call `renderPage` directly.                                                                                    |
+| `options.appConfig`    | The default-exported result of `defineApp()`. Surfaces app-level config to the render: middleware composition via `use`, plus opt-in features like [`speculation`](/docs/link-prefetch). The framework's generated server entry threads this for you; custom server entries must pass it explicitly to enable those features. |
 
 ## Head tags
 
@@ -64,6 +65,7 @@ import {
 } from 'hono-preact/server';
 import Layout from './Layout.js';
 import routes from './routes.js';
+import appConfig from './app-config.js';
 
 export const app = new Hono();
 
@@ -80,9 +82,11 @@ app
     renderPage(
       c,
       h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),
-      { defaultTitle: 'My App' }
+      { defaultTitle: 'My App', appConfig }
     )
   );
 ```
+
+If your project has no `src/app-config.ts`, omit the import and the `appConfig` field; `renderPage` treats a missing config as empty (no middleware, no speculation). Add the file when you adopt features that read it.
 
 `routeServerModules(routes)` is built once at module scope so every request reuses the same record. `renderPage` synchronously primes `globalThis.location` immediately before prerender, so no `location` middleware is needed: concurrent SSR renders cannot trample each other's URL.
