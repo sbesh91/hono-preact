@@ -18,6 +18,13 @@ export type AppUseElement =
 
 export type AppConfig = {
   use?: ReadonlyArray<AppUseElement>;
+  /**
+   * When `true`, the server emits a `<script type="speculationrules">` tag
+   * into `<head>` that instructs supporting browsers to prefetch same-origin
+   * `<a href>` links on moderate eagerness. Defaults to `false`. Individual
+   * links opt out with `data-no-prefetch`.
+   */
+  speculation?: boolean;
 };
 
 export function defineApp(config: AppConfig): AppConfig {

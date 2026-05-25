@@ -1,14 +1,14 @@
-# Web standards adoption — roadmap
+# Web standards adoption: roadmap
 
-A multi-spec wave bringing the framework onto web-standard APIs where the platform now offers what we were building ourselves. Each spec is independently shippable on `main`; no version bumps until A through E all land, then a single coordinated `v0.3.0` release (with `create-hono-preact@0.3.0` lockstep).
+A multi-spec wave bringing the framework onto web-standard APIs where the platform now offers what we were building ourselves. Each spec is independently shippable on `main`. `v0.3.0` cuts once A, C, and E have landed (with `create-hono-preact@0.3.0` lockstep). B is deferred to a later release; D was shelved during brainstorming.
 
 | Spec | Scope | Status |
 |---|---|---|
 | **A** | Platform hygiene: `AbortSignal` timeouts, `useOptimistic` View Transitions, `URL.parse`, TransformStream SSE codec | merged 2026-05-23 (PRs #56, #58) |
-| **B** | Navigation API as primary intercept, with `preact-iso` fallback | not started |
-| **C** | Progressive-enhancement forms + `/__actions` envelope reshape | not started |
-| **D** | Streaming SSR upgrade via `preact-render-to-string` `renderToReadableStream` | not started |
-| **E** | Speculation Rules `<script>` emitter for first-load prefetch | not started |
+| **B** | Navigation API as primary intercept, with `preact-iso` fallback | deferred — waiting on first-class Navigation API support in `preact-iso` upstream; framework will adopt via opt-in when it lands |
+| **C** | Progressive-enhancement forms + `/__actions` envelope reshape | merged 2026-05-24 (PR #59) |
+| **D** | Streaming SSR upgrade via `preact-render-to-string` `renderToReadableStream` | shelved 2026-05-24 — Suspense-streamed body offered the same capability the existing async-generator loader streaming already covers (multi-yield generators with a sentinel first yield). The DX gap (boilerplate to wrap a one-shot async loader as a generator) is narrower than the trade-offs streaming SSR introduces: late-outcome handling (redirect/deny from a suspended boundary cannot become an HTTP redirect once headers are flushed), JS-dependent SEO for content that streams in via `<div hidden>` swap scripts, and two render paths to maintain. Document the generator-with-sentinel pattern in `apps/site` docs instead. |
+| **E** | Speculation Rules `<script>` emitter for first-load prefetch | spec drafted 2026-05-24 (opt-in via `defineApp({ speculation: true })`); implementation pending |
 
 ## Out of scope for the whole wave
 

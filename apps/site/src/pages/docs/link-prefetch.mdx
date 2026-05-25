@@ -1,0 +1,53 @@
+# Link Prefetch
+
+Tell the browser to prefetch destinations the user is likely to navigate to next. When enabled, the server emits a single `<script type="speculationrules">` tag in `<head>` that instructs supporting browsers (Chrome, Edge) to prefetch same-origin `<a href>` links on moderate eagerness: roughly, the browser fetches the destination's HTML and dependent resources when the user hovers or touches a link, well before they click. Navigation feels instant when the prefetch lands.
+
+The feature is off by default. Browsers without Speculation Rules support (Safari, Firefox) silently ignore the tag.
+
+## Enabling
+
+Set `speculation: true` on your `defineApp` config:
+
+```ts
+import { defineApp } from 'hono-preact';
+
+export default defineApp({
+  speculation: true,
+});
+```
+
+Once enabled, every server-rendered page emits the speculation rules tag. No per-route configuration.
+
+The tag lands inside the existing `<head>` element. If your `Layout` renders an HTML document with no `<head>`, the framework has nowhere to inject the tag and no tag is emitted; the same constraint applies to hoofd's `<title>`, `<meta>`, and `<link>` injection.
+
+## What gets prefetched
+
+The emitted rule applies to every same-origin `<a href>` link rendered in the page. Cross-origin links are skipped automatically.
+
+The browser decides when to prefetch based on the `moderate` eagerness setting: pointer hover or touchstart usually triggers it, click-time is too late. The prefetched response counts as a normal `GET` against your server.
+
+## Opting individual links out
+
+Some links should never be prefetched: ones that mutate server state via a `GET` (logout, sign-out, unsubscribe), generate signed URLs that count against a quota, or otherwise have side effects on fetch. Mark them with the `data-no-prefetch` attribute:
+
+```tsx
+<a href="/logout" data-no-prefetch>
+  Sign out
+</a>
+```
+
+The browser excludes any link matching `[data-no-prefetch]` from the rule. Plain HTML attribute; works on any `<a>` element.
+
+## Auditing before enabling
+
+The framework cannot tell which of your `GET` routes are safe to prefetch. Before flipping `speculation: true` on, review your app for routes where a `GET` does any of:
+
+- Records a write (analytics ping, view-counter increment, audit log).
+- Burns a one-shot token (signed-URL with single-use semantics).
+- Triggers a side effect (sends an email, decrements a quota, expires a session).
+
+Add `data-no-prefetch` to the links that lead to those routes, or refactor them to `POST` so prefetch never fires. The framework's mutation pattern is `POST`-only by design; route-level GETs are expected to be idempotent.
+
+## Strict-CSP apps
+
+The emitted script is a normal `<script>` element and is subject to your `Content-Security-Policy`. Apps with strict CSPs that don't allow inline scripts will see the speculation script blocked by the browser. The framework does not currently plumb a CSP nonce. If your app needs Speculation Rules under strict CSP, file an issue describing the use case.

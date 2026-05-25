@@ -12,6 +12,21 @@ Grep + Read remain correct for prose, config files, and quick one-offs. Use Sere
 
 If Serena is unavailable in a session (run `/mcp` to check), fall back to native tools.
 
+## Pre-push verification
+
+Before `git push` (especially before opening a PR), run the same checks CI runs, in the same order CI runs them. Skipping any of these means CI catches a failure you should have caught locally, which wastes a round-trip.
+
+The CI pipeline lives in `.github/workflows/ci.yml`. Mirror it locally:
+
+1. `pnpm --filter '@hono-preact/*' --filter hono-preact build` (framework dist must be current; `pnpm typecheck` and `apps/site` resolve cross-package types through the published `dist/`, so stale dist surfaces as fake "missing export" errors).
+2. `pnpm format:check`
+3. `pnpm typecheck`
+4. `pnpm test:coverage` (or `pnpm test` if coverage isn't needed locally).
+5. `pnpm test:integration`
+6. `pnpm --filter site build`
+
+If `format:check` fails, run `pnpm format` to fix and commit the result. Do not push commits that you have not personally seen pass these six steps. The single biggest miss is `format:check`, which is fast to run and trivially fixable, but reliably forgotten.
+
 ## PR workflow
 
 Any time a PR is opened, immediately run a deep PR review as the first follow-up step (before any other post-open work).
