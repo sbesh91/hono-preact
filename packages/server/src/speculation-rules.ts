@@ -6,8 +6,7 @@ const SPECULATION_RULES_JSON =
   '{"not":{"selector_matches":"[data-no-prefetch]"}}' +
   ']},"eagerness":"moderate"}]}';
 
-export const SPECULATION_RULES_TAG =
-  `<script type="speculationrules">${SPECULATION_RULES_JSON}</script>`;
+export const SPECULATION_RULES_TAG = `<script type="speculationrules">${SPECULATION_RULES_JSON}</script>`;
 
 export function speculationRulesTag(config: AppConfig): string {
   return config.speculation === true ? SPECULATION_RULES_TAG : '';

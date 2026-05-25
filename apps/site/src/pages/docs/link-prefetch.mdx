@@ -29,7 +29,9 @@ The browser decides when to prefetch based on the `moderate` eagerness setting: 
 Some links should never be prefetched: ones that mutate server state via a `GET` (logout, sign-out, unsubscribe), generate signed URLs that count against a quota, or otherwise have side effects on fetch. Mark them with the `data-no-prefetch` attribute:
 
 ```tsx
-<a href="/logout" data-no-prefetch>Sign out</a>
+<a href="/logout" data-no-prefetch>
+  Sign out
+</a>
 ```
 
 The browser excludes any link matching `[data-no-prefetch]` from the rule. Plain HTML attribute; works on any `<a>` element.

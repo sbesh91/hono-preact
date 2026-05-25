@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { speculationRulesTag, SPECULATION_RULES_TAG } from '../speculation-rules.js';
+import {
+  speculationRulesTag,
+  SPECULATION_RULES_TAG,
+} from '../speculation-rules.js';
 
 describe('speculationRulesTag', () => {
   it('returns the empty string when speculation is omitted', () => {
@@ -11,7 +14,9 @@ describe('speculationRulesTag', () => {
   });
 
   it('returns the tag when speculation is true', () => {
-    expect(speculationRulesTag({ speculation: true })).toBe(SPECULATION_RULES_TAG);
+    expect(speculationRulesTag({ speculation: true })).toBe(
+      SPECULATION_RULES_TAG
+    );
   });
 
   it('emitted tag is byte-stable', () => {

@@ -11,7 +11,9 @@ function LinkyPage(): JSX.Element {
       <head></head>
       <body>
         <a href="/about">About</a>
-        <a href="/logout" data-no-prefetch>Sign out</a>
+        <a href="/logout" data-no-prefetch>
+          Sign out
+        </a>
       </body>
     </html>
   );
