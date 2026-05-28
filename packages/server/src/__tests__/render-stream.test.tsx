@@ -297,6 +297,57 @@ describe('renderPage: streaming SSR', () => {
     expect(accumulated).toMatch(/"n":2/);
   });
 
+  it('pauses production when the HTML consumer is slow (backpressure)', async () => {
+    // Mirror of sse-backpressure.test.ts:117 but for the HTML streaming
+    // path in `render.tsx`. A loader yields in a tight loop while the
+    // consumer reads exactly one chunk and stalls. With backpressure the
+    // pump should be ahead by at most a small constant (the chunks buffered
+    // in the response stream's internal queue). Without backpressure the
+    // Promise.all-driven loader loop in `render.tsx` races unboundedly,
+    // buffering every yield into the ReadableStream queue.
+    // Capped so a broken backpressure path fails the assertion instead of
+    // OOM-ing the worker. 5000 is far above the with-backpressure ceiling
+    // (≈1–2) and far below a heap-exhausting count.
+    const CAP = 5000;
+    let produced = 0;
+    const loader = defineLoader<{ n: number }>(async function* () {
+      while (produced < CAP) {
+        produced += 1;
+        yield { n: produced };
+      }
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>
+      )
+    );
+
+    const res = await app.request('/');
+    expect(res.body).not.toBeNull();
+    const reader = res.body!.getReader();
+
+    // Read one chunk so the stream is actively running.
+    await reader.read();
+    // Yield the event loop for a stretch. With backpressure honored the
+    // loader stays parked at its yield point until the consumer reads;
+    // without it, the loop runs as fast as the microtask queue allows.
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Backpressure cap: bounded by the ReadableStream queue. Without
+    // backpressure, `produced` reaches thousands within 50ms.
+    // With backpressure honored, `produced` should be ~2 (one yield consumed
+    // by prerender, one chunk buffered in the TransformStream). A small
+    // upper bound keeps the test sensitive to regressions while leaving
+    // headroom for microtask scheduling differences across runtimes.
+    expect(produced).toBeLessThan(5);
+
+    await reader.cancel();
+  });
+
   it('aborts cleanly on client cancel: no synthetic error chunks, no enqueue-after-close throws', async () => {
     // Loader that yields one chunk then awaits forever; cancel mid-stream.
     let releaseSecondYield: (() => void) | null = null;
