@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   __dispatchRouteChange,
   __subscribePhase,
+  resetDefaultTypesForTesting,
 } from '../internal/route-change.js';
 import {
   resetHistoryShimForTesting,
@@ -54,6 +55,7 @@ describe('__dispatchRouteChange phase dispatcher', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     resetHistoryShimForTesting();
+    resetDefaultTypesForTesting();
   });
 
   afterEach(() => {

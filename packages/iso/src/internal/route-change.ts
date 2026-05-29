@@ -55,6 +55,7 @@ export function __dispatchRouteChange(
   to: string,
   from: string | undefined
 ): void {
+  ensureDefaultTypes();
   const direction: NavDirection = getNavDirection();
   const event = new ViewTransitionEvent({ to, from, direction });
 
@@ -117,4 +118,32 @@ export function __dispatchRouteChange(
     () => fireAfterTransition(),
     () => fireAfterTransition('aborted')
   );
+}
+
+let defaultTypesInstalled = false;
+let firstDispatchSeen = false;
+let defaultTypeUnsubscriber: (() => void) | null = null;
+
+function ensureDefaultTypes(): void {
+  if (defaultTypesInstalled) return;
+  defaultTypesInstalled = true;
+  defaultTypeUnsubscriber = __subscribePhase('beforeTransition', (event) => {
+    if (!firstDispatchSeen) {
+      event.types.push('nav-initial');
+      firstDispatchSeen = true;
+    } else {
+      event.types.push(`nav-${event.direction}`);
+    }
+    event.types.push('nav-same-origin');
+  });
+}
+
+/** @internal Test-only reset for default-types installer. */
+export function resetDefaultTypesForTesting(): void {
+  if (defaultTypeUnsubscriber) {
+    defaultTypeUnsubscriber();
+  }
+  defaultTypesInstalled = false;
+  firstDispatchSeen = false;
+  defaultTypeUnsubscriber = null;
 }
