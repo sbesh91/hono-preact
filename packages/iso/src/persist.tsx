@@ -35,12 +35,9 @@ export function Persist(props: PersistProps): VNode {
     // across route changes where Persist temporarily disappears.
   });
 
-  // Render children inline unconditionally. On SSR this is the only output
-  // (no PersistHost exists yet). On the client, PersistHost renders via the
-  // registry in addition; callers are expected to either hide the inline copy
-  // via CSS or ensure Persist is used in layouts where only one of the two
-  // render sites is visible at a time.
-  return h(Fragment, null, props.children);
+  // SSR renders children inline so first paint matches steady state;
+  // the client renders nothing inline because PersistHost owns the DOM.
+  return browser ? h(Fragment, null) : h(Fragment, null, props.children);
 }
 
 Persist.displayName = 'Persist';

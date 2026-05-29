@@ -10,7 +10,7 @@ describe('Persist + PersistHost', () => {
     __persistRegistryResetForTesting();
   });
 
-  it('Persist renders inline on SSR (no portal): children appear in place', () => {
+  it('Persist alone renders nothing inline on the client (registry-only)', () => {
     const { container } = render(
       <div data-page>
         <Persist id="player">
@@ -18,9 +18,9 @@ describe('Persist + PersistHost', () => {
         </Persist>
       </div>
     );
-    expect(
-      container.querySelector('[data-page] [data-id="audio"]')
-    ).not.toBeNull();
+    // On the client, Persist contributes no inline DOM. The audio span
+    // only appears when a PersistHost is mounted to render the registry entry.
+    expect(container.querySelector('[data-page] [data-id="audio"]')).toBeNull();
   });
 
   it('PersistHost renders entries from the registry', () => {
