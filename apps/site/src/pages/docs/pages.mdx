@@ -109,7 +109,7 @@ Hoisting `docsView` to a const lets the framework share one component reference 
 
 ## View transitions
 
-Route changes trigger a view transition automatically in browsers that support `document.startViewTransition`. The framework's generated client entry wraps the `onRouteChange` callback fired by preact-iso's `<Router>` and dispatches `startViewTransition` for every successful navigation; you do not opt in. Style the transition via `::view-transition-old(root)` / `::view-transition-new(root)` CSS, and respect `prefers-reduced-motion` to disable it.
+Route changes trigger a view transition automatically in browsers that support `document.startViewTransition`. See [View Transitions](/docs/view-transitions) for the full toolkit (named elements, lifecycle hooks, direction-driven types, and persistent elements).
 
 ## See also
 

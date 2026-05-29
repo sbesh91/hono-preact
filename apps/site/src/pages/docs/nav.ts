@@ -20,6 +20,7 @@ import {
   Shield,
   Sparkles,
   type LucideIcon,
+  Wand2,
   Zap,
 } from 'lucide-preact';
 
@@ -57,6 +58,16 @@ export const nav: NavSection[] = [
     entries: [
       { title: 'Server Actions', route: '/docs/actions', icon: Send },
       { title: 'Optimistic UI', route: '/docs/optimistic-ui', icon: Sparkles },
+    ],
+  },
+  {
+    heading: 'View Transitions',
+    entries: [
+      {
+        title: 'View Transitions',
+        route: '/docs/view-transitions',
+        icon: Wand2,
+      },
     ],
   },
   {
