@@ -55,15 +55,15 @@ import { useViewTransitionLifecycle } from 'hono-preact';
 
 useViewTransitionLifecycle({
   onBeforeTransition: (event) => {
-    // Before startViewTransition is called.
+    // Before the View Transition starts.
     // event.types.push('my-type') to add a type, event.skip() to bypass.
   },
   onBeforeSwap: (event) => {
-    // Inside the transition callback. Last chance to mutate the DOM before
-    // the new frame is snapshotted.
+    // After the framework has begun the transition. Last chance to mutate
+    // the DOM before the new-frame snapshot is captured.
   },
   onAfterSwap: (event) => {
-    // Inside the callback, after the render flush. New DOM is committed.
+    // The new DOM is settled and the browser is ready to animate.
   },
   onAfterTransition: (event) => {
     // After transition.finished resolves (or rejects).
