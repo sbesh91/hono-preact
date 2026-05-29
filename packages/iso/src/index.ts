@@ -116,3 +116,15 @@ export type { RouteChangeHandler } from './route-change.js';
 export { Head } from './head.js';
 export type { HeadProps } from './head.js';
 export { ClientScript } from './client-script.js';
+
+// View transition lifecycle hook.
+export {
+  useViewTransitionLifecycle,
+  type ViewTransitionLifecycle,
+  type ViewTransitionPhaseCallback,
+} from './view-transition-lifecycle.js';
+export type {
+  ViewTransitionEvent,
+  NavDirection,
+  ViewTransitionReason,
+} from './internal/view-transition-event.js';
