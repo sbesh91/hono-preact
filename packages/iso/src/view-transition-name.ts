@@ -2,6 +2,12 @@ import { useCallback, useLayoutEffect, useRef } from 'preact/hooks';
 
 type NodeRef = HTMLElement | SVGElement;
 
+function isStyledElement(node: Element | null): node is NodeRef {
+  return (
+    node !== null && (node instanceof HTMLElement || node instanceof SVGElement)
+  );
+}
+
 function applyCssProp(
   node: NodeRef | null,
   property: string,
@@ -32,12 +38,12 @@ export function useViewTransitionName(
     if (nodeRef.current && nodeRef.current !== node) {
       nodeRef.current.style.removeProperty('view-transition-name');
     }
-    nodeRef.current = node as NodeRef | null;
-    applyCssProp(
-      node as NodeRef | null,
-      'view-transition-name',
-      nameRef.current
-    );
+    if (isStyledElement(node)) {
+      nodeRef.current = node;
+      applyCssProp(node, 'view-transition-name', nameRef.current);
+    } else {
+      nodeRef.current = null;
+    }
   }, []);
 }
 
@@ -58,11 +64,11 @@ export function useViewTransitionClass(
     if (nodeRef.current && nodeRef.current !== node) {
       nodeRef.current.style.removeProperty('view-transition-class');
     }
-    nodeRef.current = node as NodeRef | null;
-    applyCssProp(
-      node as NodeRef | null,
-      'view-transition-class',
-      valueRef.current
-    );
+    if (isStyledElement(node)) {
+      nodeRef.current = node;
+      applyCssProp(node, 'view-transition-class', valueRef.current);
+    } else {
+      nodeRef.current = null;
+    }
   }, []);
 }
