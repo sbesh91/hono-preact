@@ -12,14 +12,22 @@ export function generateClientEntrySource(
   opts: GenerateClientEntrySourceOptions
 ): string {
   return (
-    `import { h, hydrate } from 'preact';\n` +
+    `import { h, hydrate, render as renderPreact } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes } from 'hono-preact';\n` +
+    `import { Routes, PersistHost } from 'hono-preact';\n` +
     `import { __dispatchRouteChange, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
     `installHistoryShim();\n` +
     `installStreamRegistry();\n` +
+    `\n` +
+    `let persistHost = document.getElementById('__hp_persist_root');\n` +
+    `if (!persistHost) {\n` +
+    `  persistHost = document.createElement('div');\n` +
+    `  persistHost.id = '__hp_persist_root';\n` +
+    `  document.body.appendChild(persistHost);\n` +
+    `}\n` +
+    `renderPreact(h(PersistHost, null), persistHost);\n` +
     `\n` +
     `let lastPath;\n` +
     `function onRouteChange(path) {\n` +
