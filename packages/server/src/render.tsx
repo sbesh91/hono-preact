@@ -293,78 +293,116 @@ export async function renderPage(
   // chunk that nobody can read anyway).
   let aborted = false;
 
-  const responseStream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      // Re-enter the captured request scope so generator continuations and
-      // anything they touch (e.g. `getRequestHonoContext`, per-request loader
-      // caches) see the same per-request store the initial prerender saw.
-      return bindRequestScope(async () => {
-        try {
-          if (aborted) return;
-          controller.enqueue(
-            encoder.encode(`<!doctype html>${beforeBody}\n${bootstrap}\n`)
-          );
+  // Multi-producer backpressure via TransformStream. Each loader pump writes
+  // to a shared `writer`, awaiting `writer.ready` before each write so that
+  // the per-loader iteration is paced by the consumer's read rate (not by
+  // however fast the generator yields). Without this, a tight-loop streaming
+  // loader would buffer chunks into the ReadableStream queue unbounded; see
+  // render-stream.test.tsx "pauses production when the HTML consumer is
+  // slow (backpressure)".
+  const { writable, readable: responseStream } = new TransformStream<
+    Uint8Array,
+    Uint8Array
+  >();
+  const writer = writable.getWriter();
 
-          // Yield one microtask before advancing any loader generator past
-          // its first yield. `renderPage` is still on the synchronous frame
-          // that constructs this response (`new ReadableStream(...)` returns,
-          // then `c.body(...)` runs and commits the headers). Resuming a
-          // generator can call `setCookie(ctx.c, ...)`, which mutates Hono's
-          // prepared headers; deferring the pump guarantees the response is
-          // built first, so post-first-yield header writes are consistently
-          // excluded rather than racing construction. Cookies must be set
-          // before the loader's first yield to reach the streamed response.
-          await Promise.resolve();
+  // When the consumer cancels the readable side (e.g. Hono drops the response,
+  // or the runtime tears down the request), the writable side transitions to
+  // an errored state and `writer.closed` rejects. Propagate to the loader
+  // generators symmetrically with the request-signal abort path below. The
+  // `aborted` guard makes the self-triggered case (`writer.abort()` in our
+  // own finally) a no-op.
+  writer.closed.catch(() => {
+    if (aborted) return;
+    aborted = true;
+    for (const { gen } of streamingLoaders) {
+      gen.return(undefined).catch(() => {
+        /* swallow */
+      });
+    }
+  });
 
-          // Drive each pending generator in parallel; emit script tags per chunk.
-          await Promise.all(
-            streamingLoaders.map(async ({ loaderId, gen }) => {
-              try {
-                while (!aborted) {
-                  const step = await gen.next();
-                  if (aborted) return;
-                  if (step.done) {
-                    controller.enqueue(
-                      encoder.encode(
-                        `<script>window.__HP_STREAM__.end(${jsonForScript(loaderId)});document.currentScript.remove()</script>\n`
-                      )
-                    );
-                    return;
-                  }
-                  controller.enqueue(
-                    encoder.encode(
-                      `<script>window.__HP_STREAM__.push(${jsonForScript(loaderId)},${jsonForScript(step.value)});document.currentScript.remove()</script>\n`
-                    )
-                  );
-                }
-              } catch (err) {
-                if (aborted) return;
-                const message =
-                  err instanceof Error ? err.message : String(err);
-                const name = err instanceof Error ? err.name : 'Error';
-                controller.enqueue(
+  // Re-enter the captured request scope so generator continuations and
+  // anything they touch (e.g. `getRequestHonoContext`, per-request loader
+  // caches) see the same per-request store the initial prerender saw.
+  void bindRequestScope(async () => {
+    // Yield one microtask before doing anything else. `renderPage` is still
+    // on the synchronous frame that constructs this response (TransformStream
+    // is created, then `c.body(...)` runs and commits the headers). Resuming
+    // a generator can call `setCookie(ctx.c, ...)`, which mutates Hono's
+    // prepared headers; deferring the pump guarantees the response is built
+    // first, so post-first-yield header writes are consistently excluded
+    // rather than racing construction. Cookies must be set before the
+    // loader's first yield to reach the streamed response.
+    await Promise.resolve();
+
+    try {
+      if (aborted) return;
+      await writer.ready;
+      if (aborted) return;
+      await writer.write(
+        encoder.encode(`<!doctype html>${beforeBody}\n${bootstrap}\n`)
+      );
+
+      // Drive each pending generator in parallel; emit script tags per chunk.
+      await Promise.all(
+        streamingLoaders.map(async ({ loaderId, gen }) => {
+          try {
+            while (!aborted) {
+              const step = await gen.next();
+              if (aborted) return;
+              await writer.ready;
+              if (aborted) return;
+              if (step.done) {
+                await writer.write(
                   encoder.encode(
-                    `<script>window.__HP_STREAM__.error(${jsonForScript(loaderId)},${jsonForScript({ message, name })});document.currentScript.remove()</script>\n`
+                    `<script>window.__HP_STREAM__.end(${jsonForScript(loaderId)});document.currentScript.remove()</script>\n`
                   )
                 );
+                return;
               }
-            })
-          );
+              await writer.write(
+                encoder.encode(
+                  `<script>window.__HP_STREAM__.push(${jsonForScript(loaderId)},${jsonForScript(step.value)});document.currentScript.remove()</script>\n`
+                )
+              );
+            }
+          } catch (err) {
+            if (aborted) return;
+            const message = err instanceof Error ? err.message : String(err);
+            const name = err instanceof Error ? err.name : 'Error';
+            try {
+              await writer.ready;
+              if (aborted) return;
+              await writer.write(
+                encoder.encode(
+                  `<script>window.__HP_STREAM__.error(${jsonForScript(loaderId)},${jsonForScript({ message, name })});document.currentScript.remove()</script>\n`
+                )
+              );
+            } catch {
+              /* swallow: writable side closed/errored */
+            }
+          }
+        })
+      );
 
-          if (!aborted) controller.enqueue(encoder.encode(afterBody));
-        } finally {
-          if (!aborted) controller.close();
-        }
-      });
-    },
-    cancel() {
-      aborted = true;
-      for (const { gen } of streamingLoaders) {
-        gen.return(undefined).catch(() => {
+      if (!aborted) {
+        await writer.ready;
+        if (!aborted) await writer.write(encoder.encode(afterBody));
+      }
+    } catch {
+      /* swallow: writable side closed/errored mid-pump */
+    } finally {
+      if (aborted) {
+        writer.abort().catch(() => {
+          /* swallow */
+        });
+      } else {
+        writer.close().catch(() => {
           /* swallow */
         });
       }
-    },
+    }
   });
 
   requestSignal.addEventListener('abort', () => {
@@ -374,6 +412,9 @@ export async function renderPage(
         /* swallow */
       });
     }
+    writer.abort().catch(() => {
+      /* swallow */
+    });
   });
 
   // Route through `c.body()` rather than `new Response(...)` so Hono merges
