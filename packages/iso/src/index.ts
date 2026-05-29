@@ -116,3 +116,36 @@ export type { RouteChangeHandler } from './route-change.js';
 export { Head } from './head.js';
 export type { HeadProps } from './head.js';
 export { ClientScript } from './client-script.js';
+
+// View transition lifecycle hook.
+export {
+  useViewTransitionLifecycle,
+  type ViewTransitionLifecycle,
+  type ViewTransitionPhaseCallback,
+} from './view-transition-lifecycle.js';
+export type {
+  ViewTransitionEvent,
+  NavDirection,
+  ViewTransitionReason,
+} from './internal/view-transition-event.js';
+
+// View transitions types.
+export {
+  useViewTransitionTypes,
+  type ViewTransitionTypesInput,
+  type ViewTransitionTypesNav,
+} from './view-transition-types.js';
+export { getNavDirection as getViewTransitionDirection } from './internal/history-shim.js';
+
+// View transition name + group hooks and components.
+export {
+  useViewTransitionName,
+  useViewTransitionClass,
+  ViewTransitionName,
+  ViewTransitionGroup,
+  type ViewTransitionNameProps,
+  type ViewTransitionGroupProps,
+} from './view-transition-name.js';
+
+// Persist components.
+export { Persist, PersistHost, type PersistProps } from './persist.js';

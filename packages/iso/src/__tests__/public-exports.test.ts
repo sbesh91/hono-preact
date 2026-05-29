@@ -14,3 +14,26 @@ describe('public exports for item 4', () => {
     expect(typeof iso.ClientScript).toBe('function');
   });
 });
+
+describe('view transitions toolkit exports', () => {
+  it('exports module A: named elements (hooks + components)', () => {
+    expect(typeof iso.useViewTransitionName).toBe('function');
+    expect(typeof iso.useViewTransitionClass).toBe('function');
+    expect(typeof iso.ViewTransitionName).toBe('function');
+    expect(typeof iso.ViewTransitionGroup).toBe('function');
+  });
+
+  it('exports module B: lifecycle hook', () => {
+    expect(typeof iso.useViewTransitionLifecycle).toBe('function');
+  });
+
+  it('exports module C: types and direction', () => {
+    expect(typeof iso.useViewTransitionTypes).toBe('function');
+    expect(typeof iso.getViewTransitionDirection).toBe('function');
+  });
+
+  it('exports module D: persist', () => {
+    expect(typeof iso.Persist).toBe('function');
+    expect(typeof iso.PersistHost).toBe('function');
+  });
+});

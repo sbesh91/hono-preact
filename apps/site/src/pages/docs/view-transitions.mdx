@@ -1,0 +1,120 @@
+# View Transitions
+
+The framework wraps every same-document route change in `document.startViewTransition` automatically. You don't opt in. Style the default root transition with `::view-transition-old(root)` and `::view-transition-new(root)`, and respect `prefers-reduced-motion`.
+
+On top of that, four primitives let you scale view transitions across many elements, hook into the navigation lifecycle, target CSS by direction, and persist live DOM across navigations.
+
+## Named elements
+
+Use `<ViewTransitionName>` to give an element a stable identity that participates in the transition. The component is polymorphic (Base UI `useRender` style): pass a `render` prop to control which element actually mounts.
+
+```tsx
+import { ViewTransitionName } from 'hono-preact';
+
+// list page
+{
+  posts.map((post) => (
+    <ViewTransitionName
+      key={post.id}
+      name={`post-${post.id}`}
+      groupClass="post-card"
+      render={<article class="card" />}
+    >
+      <h2>{post.title}</h2>
+    </ViewTransitionName>
+  ));
+}
+
+// detail page
+<ViewTransitionName name={`post-${post.id}`} render={<header />}>
+  <h1>{post.title}</h1>
+</ViewTransitionName>;
+```
+
+The matching `name` between list and detail tells the browser to animate the elements as a continuous group.
+
+For hand-written components, the `useViewTransitionName` hook returns a ref callback:
+
+```tsx
+import { useViewTransitionName } from 'hono-preact';
+
+function PostCard({ post }: { post: Post }) {
+  const vt = useViewTransitionName(`post-${post.id}`);
+  return <article ref={vt}>{post.title}</article>;
+}
+```
+
+`<ViewTransitionGroup class="post-card">` (or `useViewTransitionClass`) sets `view-transition-class` so you can target many elements via `::view-transition-group(.post-card)` in CSS.
+
+## Lifecycle hooks
+
+`useViewTransitionLifecycle` exposes four phases the framework controls:
+
+```tsx
+import { useViewTransitionLifecycle } from 'hono-preact';
+
+useViewTransitionLifecycle({
+  onBeforeTransition: (event) => {
+    // Before the View Transition starts.
+    // event.types.push('my-type') to add a type, event.skip() to bypass.
+  },
+  onBeforeSwap: (event) => {
+    // After the framework has begun the transition. Last chance to mutate
+    // the DOM before the new-frame snapshot is captured.
+  },
+  onAfterSwap: (event) => {
+    // The new DOM is settled and the browser is ready to animate.
+  },
+  onAfterTransition: (event) => {
+    // After transition.finished resolves (or rejects).
+    // event.reason is 'skipped' | 'unsupported' | 'aborted' if the transition
+    // didn't run.
+  },
+});
+```
+
+The event carries `to`, `from`, `direction` (`'initial' | 'push' | 'replace' | 'back' | 'forward'`), `types` (mutable), and a `set(key, value)` / `get(key)` stash to carry data from one phase to the next.
+
+## Direction-driven CSS via types
+
+The framework adds three types to every transition:
+
+- `nav-initial` on the first navigation after hydrate, otherwise one of `nav-push`, `nav-replace`, `nav-back`, `nav-forward`.
+- `nav-same-origin`.
+
+Target them with `:active-view-transition-type(...)`:
+
+```css
+:active-view-transition-type(nav-back) ::view-transition-old(root) {
+  animation: slide-right-out 0.3s ease;
+}
+:active-view-transition-type(nav-back) ::view-transition-new(root) {
+  animation: slide-right-in 0.3s ease;
+}
+```
+
+Add your own types with `useViewTransitionTypes`:
+
+```tsx
+import { useViewTransitionTypes } from 'hono-preact';
+
+useViewTransitionTypes((nav) =>
+  nav.from?.startsWith('/posts/') && nav.to === '/posts' ? ['back-to-list'] : []
+);
+```
+
+## Persistent elements
+
+`<Persist>` keeps an element's DOM and JS state alive across route changes. The framework auto-mounts a single `<PersistHost />` outside the SPA root; `<Persist id="...">` writes its children into a registry that the host renders. Same VNode reference plus stable host DOM means Preact's diff preserves the underlying nodes (audio playback continues, video position is retained, chat widgets stay initialized).
+
+```tsx
+import { Persist } from 'hono-preact';
+
+<Persist id="player" viewTransitionName="player-shell">
+  <AudioPlayer src={song.url} />
+</Persist>;
+```
+
+The optional `viewTransitionName` makes the persisted shell animate as a single unit across page transitions.
+
+SSR renders persisted children inline at their declared position; persistence kicks in after the first client-side navigation.
