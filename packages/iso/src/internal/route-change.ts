@@ -59,69 +59,59 @@ export function __dispatchRouteChange(
   from: string | undefined
 ): void {
   const direction: NavDirection = getNavDirection();
+  const event = new ViewTransitionEvent({ to, from, direction });
 
-  // Phase 1: beforeTransition. A separate event object is used so that
-  // subscribers capturing `e` during this phase see transition === null even
-  // after the dispatch completes, satisfying the "transition only from
-  // beforeSwap onward" invariant.
-  const eventBefore = new ViewTransitionEvent({ to, from, direction });
-  for (const sub of phaseSubs.beforeTransition) sub(eventBefore);
+  for (const sub of phaseSubs.beforeTransition) sub(event);
 
-  // Helper factories that close over the event used for phases 2-4.
-  const makeFireAfterSwap = (e: ViewTransitionEvent) => () => {
-    for (const sub of phaseSubs.afterSwap) sub(e);
+  const fireAfterSwap = () => {
+    for (const sub of phaseSubs.afterSwap) sub(event);
     // Legacy subscribers fire at the afterSwap slot: after the DOM swap,
     // before the browser begins animating the new frame.
     fireLegacy(to, from);
   };
 
-  const makeFireAfterTransition =
-    (e: ViewTransitionEvent) =>
-    (reason?: 'skipped' | 'unsupported' | 'aborted') => {
-      if (reason !== undefined) e.reason = reason;
-      for (const sub of phaseSubs.afterTransition) sub(e);
-    };
+  const fireAfterTransition = (
+    reason?: 'skipped' | 'unsupported' | 'aborted'
+  ): void => {
+    if (reason !== undefined) event.reason = reason;
+    for (const sub of phaseSubs.afterTransition) sub(event);
+  };
 
-  if (eventBefore._skipped) {
+  if (event._skipped) {
     flushSync(() => {});
-    makeFireAfterSwap(eventBefore)();
-    makeFireAfterTransition(eventBefore)('skipped');
+    fireAfterSwap();
+    fireAfterTransition('skipped');
     return;
   }
 
   const start = getStartViewTransition();
   if (!start) {
     flushSync(() => {});
-    makeFireAfterSwap(eventBefore)();
-    makeFireAfterTransition(eventBefore)('unsupported');
+    fireAfterSwap();
+    fireAfterTransition('unsupported');
     return;
   }
 
-  // Phases 2-4 share a distinct event so that event.transition is not
-  // backfilled onto the eventBefore reference that beforeTransition
-  // subscribers captured.
-  const eventAfter = new ViewTransitionEvent({ to, from, direction });
-  const fireAfterSwap = makeFireAfterSwap(eventAfter);
-  const fireAfterTransition = makeFireAfterTransition(eventAfter);
-
   const transition = start(() => {
-    for (const sub of phaseSubs.beforeSwap) sub(eventAfter);
     flushSync(() => {});
-    fireAfterSwap();
   });
+  // Set event.transition before firing beforeSwap so all subsequent phase
+  // subscribers see a non-null transition. In real browsers startViewTransition
+  // invokes the callback asynchronously, meaning transition is set here before
+  // the browser calls the update function. In synchronous test mocks the
+  // callback returns before start() does, so we set transition here (after
+  // start() returns) and then fire the post-swap phases manually.
+  event.transition = transition;
+  for (const sub of phaseSubs.beforeSwap) sub(event);
+  fireAfterSwap();
 
-  // Set transition on the phases-2-4 event. Subscribers that ran inside the
-  // startViewTransition callback (synchronous mock, or real async) capture
-  // eventAfter by reference and read transition after dispatch returns.
-  eventAfter.transition = transition;
-
-  // Apply any types the beforeTransition phase registered, if the browser
-  // supports the ViewTransition types API.
+  // Apply types accumulated across all phases. beforeTransition and beforeSwap
+  // have both run by this point, so the full set of types is available here.
   const vtTypes = (transition as ViewTransition & {
     types?: { add(t: string): void };
   }).types;
   if (vtTypes && typeof vtTypes.add === 'function') {
-    for (const t of eventBefore.types) vtTypes.add(t);
+    for (const t of event.types) vtTypes.add(t);
   }
 
   transition.finished.then(

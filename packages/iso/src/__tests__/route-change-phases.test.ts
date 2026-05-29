@@ -166,17 +166,17 @@ describe('__dispatchRouteChange phase dispatcher', () => {
 
   it('sets event.transition only from beforeSwap onward', async () => {
     const { resolveFinished } = installFakeVt();
-    let beforeTransitionEvent: ViewTransitionEvent | undefined;
-    let beforeSwapEvent: ViewTransitionEvent | undefined;
-    let afterTransitionEvent: ViewTransitionEvent | undefined;
+    let transitionAtBeforeTransition: ViewTransition | null | undefined;
+    let transitionAtBeforeSwap: ViewTransition | null | undefined;
+    let transitionAtAfterTransition: ViewTransition | null | undefined;
     const u1 = __subscribePhase('beforeTransition', (e) => {
-      beforeTransitionEvent = e;
+      transitionAtBeforeTransition = e.transition;
     });
     const u2 = __subscribePhase('beforeSwap', (e) => {
-      beforeSwapEvent = e;
+      transitionAtBeforeSwap = e.transition;
     });
     const u3 = __subscribePhase('afterTransition', (e) => {
-      afterTransitionEvent = e;
+      transitionAtAfterTransition = e.transition;
     });
 
     __dispatchRouteChange('/a', undefined);
@@ -184,12 +184,33 @@ describe('__dispatchRouteChange phase dispatcher', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(beforeTransitionEvent!.transition).toBeNull();
-    expect(beforeSwapEvent!.transition).not.toBeNull();
-    expect(afterTransitionEvent!.transition).not.toBeNull();
+    expect(transitionAtBeforeTransition).toBeNull();
+    expect(transitionAtBeforeSwap).not.toBeNull();
+    expect(transitionAtAfterTransition).not.toBeNull();
     u1();
     u2();
     u3();
+  });
+
+  it('shares the event instance across all phases (stash continuity)', async () => {
+    const { resolveFinished } = installFakeVt();
+    const KEY = Symbol('cross-phase');
+    let observed: number | undefined;
+    const u1 = __subscribePhase('beforeTransition', (e) => {
+      e.set(KEY, 42);
+    });
+    const u2 = __subscribePhase('afterTransition', (e) => {
+      observed = e.get<number>(KEY);
+    });
+
+    __dispatchRouteChange('/a', undefined);
+    resolveFinished();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(observed).toBe(42);
+    u1();
+    u2();
   });
 
   it('fires afterTransition with reason "aborted" when transition.finished rejects', async () => {
