@@ -74,6 +74,9 @@ export {
   type ViewTransitionReason,
 } from './internal/view-transition-event.js';
 
+export { useRender, type UseRenderRender } from './internal/use-render.js';
+export { mergeRefs } from './internal/merge-refs.js';
+
 export {
   installStreamRegistry,
   subscribeToLoaderStream,

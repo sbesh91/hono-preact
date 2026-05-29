@@ -135,3 +135,13 @@ export {
   type ViewTransitionTypesInput,
   type ViewTransitionTypesNav,
 } from './view-transition-types.js';
+
+// View transition name + group hooks and components.
+export {
+  useViewTransitionName,
+  useViewTransitionClass,
+  ViewTransitionName,
+  ViewTransitionGroup,
+  type ViewTransitionNameProps,
+  type ViewTransitionGroupProps,
+} from './view-transition-name.js';
