@@ -17,10 +17,12 @@ interface FakeViewTransition {
   types?: { add(t: string): void };
 }
 
-function installFakeVt(opts: {
-  withTypes?: boolean;
-  failedFinish?: boolean;
-} = {}): {
+function installFakeVt(
+  opts: {
+    withTypes?: boolean;
+    failedFinish?: boolean;
+  } = {}
+): {
   startViewTransition: ReturnType<typeof vi.fn>;
   typeAdds: string[];
   resolveFinished: () => void;

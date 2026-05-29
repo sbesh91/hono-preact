@@ -1,9 +1,4 @@
-export type NavDirection =
-  | 'initial'
-  | 'push'
-  | 'replace'
-  | 'back'
-  | 'forward';
+export type NavDirection = 'initial' | 'push' | 'replace' | 'back' | 'forward';
 
 export type ViewTransitionReason = 'skipped' | 'unsupported' | 'aborted';
 

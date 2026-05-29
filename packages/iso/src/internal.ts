@@ -67,10 +67,7 @@ export {
   installHistoryShim,
   getNavDirection,
 } from './internal/history-shim.js';
-export {
-  __subscribePhase,
-  type PhaseName,
-} from './internal/route-change.js';
+export { __subscribePhase, type PhaseName } from './internal/route-change.js';
 export {
   ViewTransitionEvent,
   type NavDirection,

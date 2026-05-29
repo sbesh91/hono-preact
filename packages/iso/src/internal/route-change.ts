@@ -23,10 +23,7 @@ const phaseSubs: Record<PhaseName, Set<PhaseSub>> = {
 
 const legacySubs = new Set<LegacySub>();
 
-export function __subscribePhase(
-  phase: PhaseName,
-  sub: PhaseSub
-): () => void {
+export function __subscribePhase(phase: PhaseName, sub: PhaseSub): () => void {
   phaseSubs[phase].add(sub);
   return () => {
     phaseSubs[phase].delete(sub);
@@ -107,9 +104,11 @@ export function __dispatchRouteChange(
 
   // Apply types accumulated across all phases. beforeTransition and beforeSwap
   // have both run by this point, so the full set of types is available here.
-  const vtTypes = (transition as ViewTransition & {
-    types?: { add(t: string): void };
-  }).types;
+  const vtTypes = (
+    transition as ViewTransition & {
+      types?: { add(t: string): void };
+    }
+  ).types;
   if (vtTypes && typeof vtTypes.add === 'function') {
     for (const t of event.types) vtTypes.add(t);
   }

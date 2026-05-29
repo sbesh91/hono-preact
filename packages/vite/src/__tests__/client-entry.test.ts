@@ -39,7 +39,9 @@ describe('generateClientEntrySource', () => {
   });
 
   it('imports installHistoryShim and calls it before installStreamRegistry', () => {
-    const src = generateClientEntrySource({ routesAbsPath: '/proj/src/routes.ts' });
+    const src = generateClientEntrySource({
+      routesAbsPath: '/proj/src/routes.ts',
+    });
     expect(src).toContain('installHistoryShim');
     expect(src).toContain('installStreamRegistry');
     const shimIdx = src.indexOf('installHistoryShim()');
