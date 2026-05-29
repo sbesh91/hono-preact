@@ -1,4 +1,10 @@
-import { cloneElement, h, type ComponentChildren, type VNode } from 'preact';
+import {
+  cloneElement,
+  h,
+  type ComponentChildren,
+  type JSX,
+  type VNode,
+} from 'preact';
 import { mergeRefs } from './merge-refs.js';
 
 type Props = Record<string, unknown>;
@@ -33,7 +39,10 @@ function mergeProps(user: Props, framework: Props): Props {
       if (merged !== undefined) out.class = merged;
       delete out.className;
     } else if (key === 'ref') {
-      out.ref = mergeRefs(user.ref as never, framework.ref as never);
+      out.ref = mergeRefs(
+        user.ref as Parameters<typeof mergeRefs>[0],
+        framework.ref as Parameters<typeof mergeRefs>[0]
+      );
     } else {
       out[key] = framework[key];
     }
@@ -57,5 +66,5 @@ export function useRender(opts: UseRenderOptions): VNode {
     return cloneElement(render, merged, mergedChildren);
   }
   const tag = typeof render === 'string' ? render : defaultTag;
-  return h(tag as 'div', props, children) as VNode;
+  return h(tag, props as JSX.HTMLAttributes, children) as VNode;
 }
