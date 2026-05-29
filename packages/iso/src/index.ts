@@ -128,3 +128,10 @@ export type {
   NavDirection,
   ViewTransitionReason,
 } from './internal/view-transition-event.js';
+
+// View transitions types.
+export {
+  useViewTransitionTypes,
+  type ViewTransitionTypesInput,
+  type ViewTransitionTypesNav,
+} from './view-transition-types.js';
