@@ -22,8 +22,9 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
     expect(src).toContain(`import { Routes } from 'hono-preact';`);
     expect(src).toContain(
-      `import { __dispatchRouteChange, installStreamRegistry } from 'hono-preact/internal';`
+      `import { __dispatchRouteChange, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';`
     );
+    expect(src).toContain(`installHistoryShim();`);
     expect(src).toContain(`installStreamRegistry();`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
   });
@@ -35,6 +36,17 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`document.getElementById('app')`);
     expect(src).toContain(`onRouteChange`);
     expect(src).toContain(`__dispatchRouteChange`);
+  });
+
+  it('imports installHistoryShim and calls it before installStreamRegistry', () => {
+    const src = generateClientEntrySource({ routesAbsPath: '/proj/src/routes.ts' });
+    expect(src).toContain('installHistoryShim');
+    expect(src).toContain('installStreamRegistry');
+    const shimIdx = src.indexOf('installHistoryShim()');
+    const streamIdx = src.indexOf('installStreamRegistry()');
+    expect(shimIdx).toBeGreaterThan(-1);
+    expect(streamIdx).toBeGreaterThan(-1);
+    expect(shimIdx).toBeLessThan(streamIdx);
   });
 });
 

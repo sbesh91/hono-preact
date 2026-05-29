@@ -64,6 +64,20 @@ export {
 } from './internal/route-change.js';
 
 export {
+  installHistoryShim,
+  getNavDirection,
+} from './internal/history-shim.js';
+export {
+  __subscribePhase,
+  type PhaseName,
+} from './internal/route-change.js';
+export {
+  ViewTransitionEvent,
+  type NavDirection,
+  type ViewTransitionReason,
+} from './internal/view-transition-event.js';
+
+export {
   installStreamRegistry,
   subscribeToLoaderStream,
 } from './internal/stream-registry.js';
