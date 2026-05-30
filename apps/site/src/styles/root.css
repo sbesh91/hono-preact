@@ -202,6 +202,17 @@ html:active-view-transition-type(nav-back)::view-transition-new(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
 }
 
+/* `nav-up` is emitted by the demo's project layout for in-app up-navigation
+   (e.g. the "← all projects" link), which the history shim otherwise
+   classifies as a forward `nav-push`. These rules come AFTER the nav-push
+   rules so that when both types are active the reverse (back) slide wins. */
+html:active-view-transition-type(nav-up)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-out-right;
+}
+html:active-view-transition-type(nav-up)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -239,7 +250,9 @@ html:active-view-transition-type(nav-back)::view-transition-new(root) {
   html:active-view-transition-type(nav-push)::view-transition-new(root),
   html:active-view-transition-type(nav-forward)::view-transition-new(root),
   html:active-view-transition-type(nav-back)::view-transition-old(root),
-  html:active-view-transition-type(nav-back)::view-transition-new(root) {
+  html:active-view-transition-type(nav-back)::view-transition-new(root),
+  html:active-view-transition-type(nav-up)::view-transition-old(root),
+  html:active-view-transition-type(nav-up)::view-transition-new(root) {
     animation: none;
   }
   ::view-transition-group(.issue-card) {
