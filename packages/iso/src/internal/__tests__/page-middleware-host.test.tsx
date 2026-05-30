@@ -173,12 +173,24 @@ describe('PageMiddlewareHost', () => {
     await waitFor(() => expect(runs).toBe(afterA + 1));
   });
 
-  // B9: client-side `route()` redirect from middleware. The effect-driven
-  // navigation must call useLocation().route with the redirect target.
-  // Without the effect path, the route() call would happen during render
-  // (forbidden by Suspense semantics) or never (if swallowed by the
-  // RouteBoundary fallback).
-  it('client redirect outcome navigates via useLocation().route in an effect', async () => {
+  // B9: client-side redirect from middleware. The effect-driven navigation
+  // must move the browser to the redirect target. Without the effect path,
+  // navigation would happen during render (forbidden by Suspense semantics)
+  // or never (if swallowed by the RouteBoundary fallback).
+  //
+  // On the INITIAL load the redirect must be a hard navigation
+  // (window.location.assign), not an SPA route(): an effect-driven route()
+  // during hydration leaves preact-iso's Router holding the server-committed
+  // DOM alongside the redirect target, double-mounting both routes in
+  // <main>. A full document replacement guarantees no stale route DOM. See
+  // docs/superpowers/research/2026-05-30-client-redirect-double-mount.md.
+  it('client redirect on initial load hard-navigates instead of route() (double-mount fix)', async () => {
+    const assignSpy = vi.fn();
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: assignSpy,
+    });
+
     const mw = defineClientMiddleware(async () => {
       throw redirect('/login');
     });
@@ -193,17 +205,71 @@ describe('PageMiddlewareHost', () => {
 
     // After the chain resolves with a redirect outcome the consumer must
     // NOT render the children (it returns null pending the effect-scheduled
-    // nav). The route fn lives on useLocation()'s LocationProvider; the
-    // happy-dom env updates window.location synchronously inside route().
+    // nav).
     await waitFor(() => {
       expect(screen.queryByText('protected-content')).toBeNull();
     });
 
-    // The effect should have run by now. Verify the navigation target made
-    // it to the URL bar (LocationProvider.route uses history.pushState +
-    // updates window.location.pathname under happy-dom).
+    // The effect should have run by now: a hard navigation to the target.
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/login');
+      expect(assignSpy).toHaveBeenCalledWith('/login');
     });
+    // It must NOT have used SPA route(): the provider URL is unchanged.
+    expect(window.location.pathname).not.toBe('/login');
+  });
+
+  // B9b: a redirect that fires AFTER a client navigation keeps the SPA
+  // route() path. There is no server-committed-then-retained tree to leak
+  // post-navigation, and a hard nav would needlessly drop SPA state. This
+  // pins the parity half of the double-mount fix.
+  it('client redirect after a navigation uses SPA route(), not a hard navigation', async () => {
+    const assignSpy = vi.fn();
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: assignSpy,
+    });
+
+    const locA = {
+      path: '/a',
+      url: 'http://localhost/a',
+      searchParams: {},
+      pathParams: {},
+      route: () => {},
+    } as unknown as RouteHook;
+    const locB = {
+      path: '/b',
+      url: 'http://localhost/b',
+      searchParams: {},
+      pathParams: {},
+      route: () => {},
+    } as unknown as RouteHook;
+
+    const pass = defineClientMiddleware(async (_c, next) => {
+      await next();
+    });
+    const redirecting = defineClientMiddleware(async () => {
+      throw redirect('/login');
+    });
+
+    const { rerender } = rtlRender(
+      <LocationProvider>
+        <PageMiddlewareHost use={[pass]} location={locA}>
+          <div>page-a</div>
+        </PageMiddlewareHost>
+      </LocationProvider>
+    );
+    await waitFor(() => expect(screen.queryByText('page-a')).not.toBeNull());
+
+    rerender(
+      <LocationProvider>
+        <PageMiddlewareHost use={[redirecting]} location={locB}>
+          <div>page-b</div>
+        </PageMiddlewareHost>
+      </LocationProvider>
+    );
+
+    // SPA route() moves the provider URL to the target.
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    expect(assignSpy).not.toHaveBeenCalled();
   });
 });
