@@ -187,18 +187,18 @@
    title/badge and project name, below) are lifted out of the root snapshot and
    morph independently while the rest of the page slides. */
 
-:active-view-transition-type(nav-push) ::view-transition-old(root),
-:active-view-transition-type(nav-forward) ::view-transition-old(root) {
+html:active-view-transition-type(nav-push)::view-transition-old(root),
+html:active-view-transition-type(nav-forward)::view-transition-old(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-out-left;
 }
-:active-view-transition-type(nav-push) ::view-transition-new(root),
-:active-view-transition-type(nav-forward) ::view-transition-new(root) {
+html:active-view-transition-type(nav-push)::view-transition-new(root),
+html:active-view-transition-type(nav-forward)::view-transition-new(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-in-right;
 }
-:active-view-transition-type(nav-back) ::view-transition-old(root) {
+html:active-view-transition-type(nav-back)::view-transition-old(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-out-right;
 }
-:active-view-transition-type(nav-back) ::view-transition-new(root) {
+html:active-view-transition-type(nav-back)::view-transition-new(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
 }
 
@@ -234,12 +234,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :active-view-transition-type(nav-push) ::view-transition-old(root),
-  :active-view-transition-type(nav-forward) ::view-transition-old(root),
-  :active-view-transition-type(nav-push) ::view-transition-new(root),
-  :active-view-transition-type(nav-forward) ::view-transition-new(root),
-  :active-view-transition-type(nav-back) ::view-transition-old(root),
-  :active-view-transition-type(nav-back) ::view-transition-new(root) {
+  html:active-view-transition-type(nav-push)::view-transition-old(root),
+  html:active-view-transition-type(nav-forward)::view-transition-old(root),
+  html:active-view-transition-type(nav-push)::view-transition-new(root),
+  html:active-view-transition-type(nav-forward)::view-transition-new(root),
+  html:active-view-transition-type(nav-back)::view-transition-old(root),
+  html:active-view-transition-type(nav-back)::view-transition-new(root) {
     animation: none;
   }
   ::view-transition-group(.issue-card) {
