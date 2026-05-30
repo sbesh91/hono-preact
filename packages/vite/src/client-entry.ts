@@ -29,7 +29,12 @@ export function generateClientEntrySource(
     `}\n` +
     `renderPreact(h(PersistHost, null), persistHost);\n` +
     `\n` +
-    `let lastPath;\n` +
+    // Seed lastPath with the initial pathname so the FIRST client navigation
+    // reports a defined `from`. preact-iso doesn't fire onRouteChange on the
+    // initial hydration mount, so without this the first nav's `from` would be
+    // undefined and any direction logic keyed on it (e.g. up-navigation slides)
+    // would be skipped for that one navigation.
+    `let lastPath = typeof location !== 'undefined' ? location.pathname : undefined;\n` +
     `function onRouteChange(path) {\n` +
     `  const from = lastPath;\n` +
     `  lastPath = path;\n` +

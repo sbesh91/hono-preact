@@ -40,6 +40,15 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`__dispatchRouteChange`);
   });
 
+  it('seeds lastPath from the initial pathname so the first nav has a defined `from`', () => {
+    const src = generateClientEntrySource({
+      routesAbsPath: '/proj/src/routes.ts',
+    });
+    expect(src).toContain(
+      `let lastPath = typeof location !== 'undefined' ? location.pathname : undefined;`
+    );
+  });
+
   it('imports installHistoryShim and calls it before installStreamRegistry', () => {
     const src = generateClientEntrySource({
       routesAbsPath: '/proj/src/routes.ts',
