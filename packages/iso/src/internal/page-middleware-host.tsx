@@ -19,6 +19,7 @@ import { dispatchServer, dispatchClient } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
 import wrapPromise from './wrap-promise.js';
 import { assignSafeRedirect } from './safe-redirect.js';
+import { hasClientNavigated } from './history-shim.js';
 import { HonoRequestContext } from './contexts.js';
 
 // Widest accepted observer shape: TResult defaults to `void` in
@@ -88,11 +89,9 @@ type RefValue = { current: WrappedResult | null };
 
 function HostConsumer({
   resultRef,
-  initialLoad,
   children,
 }: {
   resultRef: RefValue;
-  initialLoad: boolean;
   children: ComponentChildren;
 }) {
   // resultRef.current is populated by the parent before this consumer
@@ -111,25 +110,29 @@ function HostConsumer({
   const redirectTo = isRedirect(outcome) && isBrowser() ? outcome.to : null;
   useEffect(() => {
     if (redirectTo === null) return;
-    // Initial-load redirect: hard navigation, not SPA route(). An
-    // effect-driven route() during hydration leaves preact-iso's Router
-    // holding the server-committed DOM as its retained `prev` while the
-    // redirect target loads, double-mounting both routes in <main> (the
-    // previous tree is never dropped). A full document replacement
-    // guarantees no stale route DOM. Post-navigation redirects keep route():
-    // there is no server-committed-then-retained tree to leak, and a hard
-    // nav would needlessly drop SPA state. See
+    // Redirect before any client navigation = a redirect fired while the
+    // document is still showing its server-rendered, freshly hydrated route.
+    // An effect-driven SPA route() there leaves preact-iso's Router holding
+    // the server-committed DOM as its retained `prev` while the redirect
+    // target loads, double-mounting both routes in <main> (the previous tree
+    // is never dropped). A full document replacement guarantees no stale
+    // route DOM. Once any navigation has happened, route() is correct: there
+    // is no server-committed-then-retained tree to leak, and a hard nav would
+    // needlessly drop SPA state. The signal is global (per document load),
+    // not per host: cross-route navigation remounts this host, so a per-host
+    // "first render" flag would misfire on every navigation into a guarded
+    // route. See
     // docs/superpowers/research/2026-05-30-client-redirect-double-mount.md.
-    if (initialLoad) {
-      assignSafeRedirect(redirectTo);
-    } else {
+    if (hasClientNavigated()) {
       route(redirectTo);
+    } else {
+      assignSafeRedirect(redirectTo);
     }
     // `route` is intentionally omitted from deps: it comes from
     // useLocation() which is stable per LocationProvider mount, and
     // referencing it here would re-fire the effect on every render the
     // provider produces.
-  }, [redirectTo, initialLoad]);
+  }, [redirectTo]);
 
   if (outcome === undefined) {
     return <>{children}</>;
@@ -179,24 +182,15 @@ export const PageMiddlewareHost: FunctionComponent<{
   // O(navigations); auth checks, analytics, redirects would all repeat.
   const resultRef = useRef<WrappedResult | null>(null);
   const prevPath = useRef(location.path);
-  // Tracks whether any client-side navigation has changed the path since
-  // this host mounted. The first chain (the `resultRef.current === null`
-  // branch below) is the hydration/initial-load chain; once the path
-  // changes, every later chain is post-navigation. HostConsumer uses this
-  // to pick a hard navigation vs SPA route() for redirect outcomes.
-  const navigated = useRef(false);
   if (resultRef.current === null) {
     resultRef.current = wrapPromise(startChain(use, location, honoCtx));
   } else if (prevPath.current !== location.path) {
     prevPath.current = location.path;
-    navigated.current = true;
     resultRef.current = wrapPromise(startChain(use, location, honoCtx));
   }
   return (
     <Suspense fallback={fallback}>
-      <HostConsumer resultRef={resultRef} initialLoad={!navigated.current}>
-        {children}
-      </HostConsumer>
+      <HostConsumer resultRef={resultRef}>{children}</HostConsumer>
     </Suspense>
   );
 };

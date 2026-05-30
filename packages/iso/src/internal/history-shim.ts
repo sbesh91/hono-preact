@@ -80,6 +80,20 @@ export function getNavDirection(): NavDirection {
   return lastDirection;
 }
 
+/**
+ * True once any client-side navigation (push, replace, or popstate) has
+ * occurred since the page loaded. Before the first navigation the document is
+ * still showing its server-rendered, freshly hydrated route. That is the only
+ * situation where a client-middleware redirect must hard-navigate: an
+ * effect-driven SPA route() during hydration leaves preact-iso's Router
+ * holding the server-committed DOM alongside the redirect target, mounting
+ * both. `lastDirection` only ever moves away from 'initial' (never back),
+ * so this is a monotonic "have we navigated yet" flag.
+ */
+export function hasClientNavigated(): boolean {
+  return lastDirection !== 'initial';
+}
+
 /** Test-only reset. Do not call from production code. */
 export function resetHistoryShimForTesting(): void {
   if (

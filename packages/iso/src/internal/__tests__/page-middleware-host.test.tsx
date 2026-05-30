@@ -11,10 +11,17 @@ import { defineClientMiddleware } from '../../define-middleware.js';
 import { PageMiddlewareHost } from '../page-middleware-host.js';
 import { render as renderOutcome } from '../../page-only.js';
 import { redirect } from '../../outcomes.js';
+import {
+  resetHistoryShimForTesting,
+  setNavDirectionForTesting,
+} from '../history-shim.js';
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // Redirect dispatch reads the global "have we navigated yet" signal from
+  // the history shim; reset it so tests do not leak nav state into each other.
+  resetHistoryShimForTesting();
 });
 
 const loc = {
@@ -178,13 +185,16 @@ describe('PageMiddlewareHost', () => {
   // navigation would happen during render (forbidden by Suspense semantics)
   // or never (if swallowed by the RouteBoundary fallback).
   //
-  // On the INITIAL load the redirect must be a hard navigation
+  // Before any client navigation (the document is still on its hydrated,
+  // server-rendered route) the redirect must be a hard navigation
   // (window.location.assign), not an SPA route(): an effect-driven route()
   // during hydration leaves preact-iso's Router holding the server-committed
   // DOM alongside the redirect target, double-mounting both routes in
   // <main>. A full document replacement guarantees no stale route DOM. See
   // docs/superpowers/research/2026-05-30-client-redirect-double-mount.md.
-  it('client redirect on initial load hard-navigates instead of route() (double-mount fix)', async () => {
+  it('client redirect before any navigation hard-navigates instead of route() (double-mount fix)', async () => {
+    // No navigation yet: hasClientNavigated() is false (nav direction is the
+    // default 'initial'), reset between tests by the afterEach above.
     const assignSpy = vi.fn();
     Object.defineProperty(window.location, 'assign', {
       configurable: true,
@@ -219,57 +229,42 @@ describe('PageMiddlewareHost', () => {
   });
 
   // B9b: a redirect that fires AFTER a client navigation keeps the SPA
-  // route() path. There is no server-committed-then-retained tree to leak
-  // post-navigation, and a hard nav would needlessly drop SPA state. This
-  // pins the parity half of the double-mount fix.
+  // route() path. The double-mount leak is specific to the hydration commit;
+  // post-navigation there is no server-committed-then-retained tree to leak,
+  // and a hard nav would needlessly drop SPA state. The signal is global per
+  // document load (the history shim's nav direction), not per host, so a
+  // freshly mounted host reached by navigating into a guarded route still
+  // takes the route() path. This pins the parity half of the fix.
   it('client redirect after a navigation uses SPA route(), not a hard navigation', async () => {
+    // Simulate a prior client navigation so hasClientNavigated() is true.
+    setNavDirectionForTesting('push');
+
     const assignSpy = vi.fn();
     Object.defineProperty(window.location, 'assign', {
       configurable: true,
       value: assignSpy,
     });
 
-    const locA = {
-      path: '/a',
-      url: 'http://localhost/a',
-      searchParams: {},
-      pathParams: {},
-      route: () => {},
-    } as unknown as RouteHook;
-    const locB = {
-      path: '/b',
-      url: 'http://localhost/b',
-      searchParams: {},
-      pathParams: {},
-      route: () => {},
-    } as unknown as RouteHook;
-
-    const pass = defineClientMiddleware(async (_c, next) => {
-      await next();
-    });
-    const redirecting = defineClientMiddleware(async () => {
+    const mw = defineClientMiddleware(async () => {
       throw redirect('/login');
     });
 
-    const { rerender } = rtlRender(
+    rtlRender(
       <LocationProvider>
-        <PageMiddlewareHost use={[pass]} location={locA}>
-          <div>page-a</div>
-        </PageMiddlewareHost>
-      </LocationProvider>
-    );
-    await waitFor(() => expect(screen.queryByText('page-a')).not.toBeNull());
-
-    rerender(
-      <LocationProvider>
-        <PageMiddlewareHost use={[redirecting]} location={locB}>
-          <div>page-b</div>
+        <PageMiddlewareHost use={[mw]} location={loc}>
+          <div>protected-content</div>
         </PageMiddlewareHost>
       </LocationProvider>
     );
 
-    // SPA route() moves the provider URL to the target.
+    await waitFor(() => {
+      expect(screen.queryByText('protected-content')).toBeNull();
+    });
+
+    // SPA route() moves the provider URL to the target (happy-dom updates
+    // window.location.pathname inside route()).
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    // It must NOT have hard-navigated.
     expect(assignSpy).not.toHaveBeenCalled();
   });
 });
