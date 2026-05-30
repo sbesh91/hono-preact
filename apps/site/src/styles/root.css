@@ -180,3 +180,69 @@
     animation: none;
   }
 }
+
+/* --- Demo: directional page slides + shared-element card morph --- */
+/* The route-change dispatcher emits nav-push / nav-back / nav-forward types on
+   every navigation; key the root animation off them. Named elements (the issue
+   title/badge and project name, below) are lifted out of the root snapshot and
+   morph independently while the rest of the page slides. */
+
+:active-view-transition-type(nav-push) ::view-transition-old(root),
+:active-view-transition-type(nav-forward) ::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-out-left;
+}
+:active-view-transition-type(nav-push) ::view-transition-new(root),
+:active-view-transition-type(nav-forward) ::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-in-right;
+}
+:active-view-transition-type(nav-back) ::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-out-right;
+}
+:active-view-transition-type(nav-back) ::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+}
+@keyframes slide-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-2rem);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-2rem);
+  }
+}
+@keyframes slide-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+}
+
+/* Shared-element morph timing for elements tagged groupClass="issue-card". */
+::view-transition-group(.issue-card) {
+  animation-duration: var(--spring-duration);
+  animation-timing-function: var(--spring-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :active-view-transition-type(nav-push) ::view-transition-old(root),
+  :active-view-transition-type(nav-forward) ::view-transition-old(root),
+  :active-view-transition-type(nav-push) ::view-transition-new(root),
+  :active-view-transition-type(nav-forward) ::view-transition-new(root),
+  :active-view-transition-type(nav-back) ::view-transition-old(root),
+  :active-view-transition-type(nav-back) ::view-transition-new(root) {
+    animation: none;
+  }
+  ::view-transition-group(.issue-card) {
+    animation-duration: 0s;
+  }
+}
