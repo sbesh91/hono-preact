@@ -8,6 +8,7 @@ export default defineRoutes([
   { path: '/docs/*', view: docsView },
   {
     path: '/demo',
+    layout: () => import('./pages/demo/demo-layout.js'),
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
       {
