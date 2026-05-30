@@ -74,6 +74,12 @@ export function Form<TPayload, TResult>({
           ? window.location.pathname + window.location.search
           : '/';
       const fd = new FormData(formEl);
+      // Source the action identity from props, not the DOM hidden inputs. On an
+      // initial SSR page those inputs render empty (server-side defineAction
+      // carries no name metadata) and Preact's hydrate() does not patch their
+      // values, so reading them back would post __module/__action='' and 404.
+      fd.set('__module', moduleKey);
+      fd.set('__action', actionName);
       const payload = collectFormData(fd) as TPayload;
       let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);

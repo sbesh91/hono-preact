@@ -102,6 +102,44 @@ describe('<Form>', () => {
     fetchMock.mockRestore();
   });
 
+  it('sends action identity from props even when hydrated hidden inputs are stale', async () => {
+    // Repro of the hydrated-form bug: on an initial SSR page the server renders
+    // __module/__action empty (server-side defineAction carries no name
+    // metadata) and Preact's hydrate() does not patch existing DOM `value`s, so
+    // the hidden inputs stay empty. The submit handler must source the action
+    // identity from props, not from `new FormData(formEl)`, or the POST 404s
+    // with "Action '' not found".
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const { container } = render(
+      <Form action={makeStub()}>
+        <input name="text" defaultValue="hi" />
+        <button type="submit">go</button>
+      </Form>
+    );
+    // Simulate the stale, server-rendered empty hidden inputs hydrate() leaves
+    // in place.
+    const m = container.querySelector(
+      'input[name="__module"]'
+    ) as HTMLInputElement;
+    const a = container.querySelector(
+      'input[name="__action"]'
+    ) as HTMLInputElement;
+    m.value = '';
+    a.value = '';
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = (init as RequestInit).body as FormData;
+    expect(body.get('__module')).toBe('pages/test.server');
+    expect(body.get('__action')).toBe('submit');
+    fetchMock.mockRestore();
+  });
+
   it('writes deny outcome to the client store on JS-on path', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
