@@ -132,9 +132,31 @@ const CommentsSection: FunctionComponent<{
   comments: CommentData[];
   issueId: string;
 }> = ({ comments, issueId }) => {
-  const { pending } = useFormStatus(serverActions.addComment);
   const [formKey, setFormKey] = useState(0);
   const result = useActionResult(serverActions.addComment);
+
+  // Drive the optimistic list AND the form submit from the SAME action object.
+  // Passing it to <Form> is what makes <Form> call addOptimistic on submit, so
+  // the new comment paints immediately; a bare `serverActions.addComment` stub
+  // never triggers the optimistic append (that was the bug: the comment only
+  // appeared after a full reload). The optimistic entry stays applied until the
+  // loader's base value contains the server-confirmed comment on the next mount
+  // or nav; invalidate() below busts the cache so that refetch is fresh.
+  const addComment = useOptimisticAction(serverActions.addComment, {
+    base: comments,
+    apply: (current, payload) => [
+      ...current,
+      {
+        id: `pending-${current.length}`,
+        issueId: payload.issueId,
+        authorId: '',
+        body: payload.body,
+        createdAt: Date.now(),
+        author: null,
+      } as CommentData,
+    ],
+  });
+  const { pending } = useFormStatus(serverActions.addComment);
 
   useEffect(() => {
     if (result?.kind === 'success') {
@@ -143,29 +165,11 @@ const CommentsSection: FunctionComponent<{
     }
   }, [result]);
 
-  const { value: optimisticComments } = useOptimisticAction(
-    serverActions.addComment,
-    {
-      base: comments,
-      apply: (current, payload) => [
-        ...current,
-        {
-          id: `pending-${current.length}`,
-          issueId: payload.issueId,
-          authorId: '',
-          body: payload.body,
-          createdAt: Date.now(),
-          author: null,
-        } as CommentData,
-      ],
-    }
-  );
-
   return (
     <section class="space-y-3">
       <h3 class="font-semibold">Comments</h3>
-      <CommentList comments={optimisticComments} />
-      <Form key={formKey} action={serverActions.addComment} class="space-y-2">
+      <CommentList comments={addComment.value} />
+      <Form key={formKey} action={addComment} class="space-y-2">
         <input type="hidden" name="issueId" value={issueId} />
         <textarea
           name="body"
