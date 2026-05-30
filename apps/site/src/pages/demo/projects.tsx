@@ -1,4 +1,4 @@
-import { definePage, useAction } from 'hono-preact';
+import { definePage, useAction, ViewTransitionName } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
@@ -61,9 +61,17 @@ const ProjectsPage: FunctionComponent = () => {
       <ul class="space-y-2">
         {projects.map((p) => (
           <li key={p.id} class="border p-3 flex items-baseline justify-between">
-            <a href={`/demo/projects/${p.slug}`} class="font-medium underline">
+            <ViewTransitionName
+              name={`project-${p.slug}`}
+              render={
+                <a
+                  href={`/demo/projects/${p.slug}`}
+                  class="font-medium underline"
+                />
+              }
+            >
               {p.name}
-            </a>
+            </ViewTransitionName>
             <span class="text-sm text-gray-700">
               {p.openCount} open / {p.totalCount} total
             </span>
