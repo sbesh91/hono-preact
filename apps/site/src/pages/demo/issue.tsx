@@ -4,6 +4,7 @@ import {
   useFormStatus,
   useOptimisticAction,
   useActionResult,
+  ViewTransitionName,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
@@ -66,14 +67,26 @@ const IssueHeaderAndActions: FunctionComponent<{
     <>
       <header class="space-y-2">
         <div class="flex items-center gap-2">
-          <h2 class="text-xl font-semibold">{issue.title}</h2>
-          <span
-            class={`text-xs px-2 py-0.5 ${
-              status === 'open' ? 'bg-green-200' : 'bg-gray-200'
-            }`}
+          <ViewTransitionName
+            name={`issue-title-${issue.id}`}
+            groupClass="issue-card"
+            render={<h2 class="text-xl font-semibold" />}
+          >
+            {issue.title}
+          </ViewTransitionName>
+          <ViewTransitionName
+            name={`issue-status-${issue.id}`}
+            groupClass="issue-card"
+            render={
+              <span
+                class={`text-xs px-2 py-0.5 ${
+                  status === 'open' ? 'bg-green-200' : 'bg-gray-200'
+                }`}
+              />
+            }
           >
             {status}
-          </span>
+          </ViewTransitionName>
         </div>
         <p class="text-sm text-gray-700">
           Opened by <strong>{issue.author?.name ?? 'someone'}</strong> on{' '}
