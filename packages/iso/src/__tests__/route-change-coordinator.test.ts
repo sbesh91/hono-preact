@@ -34,6 +34,40 @@ function installFakeVt() {
   return { startViewTransition, typeAdds, resolveFinished };
 }
 
+type DocWithVt = Document & {
+  startViewTransition?: (cb: () => void | Promise<void>) => unknown;
+};
+
+// Like installFakeVt but augments the REAL happy-dom document instead of
+// replacing it, so the scheduler's `view-transition-name` DOM scans (collectVt
+// Names / hasMorphPartner) see actual elements. Required to exercise the
+// morph-partner grace path. Cleaned up in afterEach.
+function installFakeVtOnDoc() {
+  const typeAdds: string[] = [];
+  let resolveFinished!: () => void;
+  const finished = new Promise<void>((r) => (resolveFinished = r));
+  const startViewTransition = vi.fn((cb: () => void | Promise<void>) => {
+    void Promise.resolve().then(() => cb());
+    return {
+      ready: Promise.resolve(),
+      updateCallbackDone: Promise.resolve(),
+      finished,
+      types: { add: (t: string) => typeAdds.push(t) },
+      skipTransition: () => {},
+    };
+  });
+  (document as DocWithVt).startViewTransition = startViewTransition;
+  return { startViewTransition, typeAdds, resolveFinished };
+}
+
+// Paint an element carrying an inline `view-transition-name` (a morph endpoint).
+function appendNamed(name: string): HTMLElement {
+  const el = document.createElement('div');
+  el.style.setProperty('view-transition-name', name);
+  document.body.appendChild(el);
+  return el;
+}
+
 // Simulate Preact scheduling a render flush (Preact calls options.debounceRendering).
 function flushRender(process: () => void): void {
   options.debounceRendering!(process);
@@ -54,6 +88,11 @@ describe('debounceRendering view-transition scheduler', () => {
   afterEach(() => {
     __resetTransitionStateForTesting();
     vi.unstubAllGlobals();
+    // Undo installFakeVtOnDoc's direct augmentation of the real document and
+    // clear any morph endpoints it painted (vi.unstubAllGlobals doesn't, since
+    // these aren't stubs).
+    delete (document as DocWithVt).startViewTransition;
+    document.body.innerHTML = '';
   });
 
   it('navigation: wraps the render flush in a view transition; the render runs inside it', async () => {
@@ -162,5 +201,90 @@ describe('debounceRendering view-transition scheduler', () => {
     await tick();
     expect(phases).toEqual(['afterSwap']);
     u();
+  });
+
+  it('morph grace: holds the swap until a partner that loads with the route data appears', async () => {
+    // The outgoing route paints an element named `hero`.
+    const oldHero = appendNamed('hero');
+    const { startViewTransition } = installFakeVtOnDoc();
+    installNavTransitionScheduler();
+    const phases: string[] = [];
+    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+    // Navigate. The destination shell renders without the `hero` partner — its
+    // data is still loading behind inner Suspense, which doesn't move
+    // loadingDepth — so the morph has no partner in the new snapshot yet.
+    navigateTo('/b');
+    flushRender(() => oldHero.remove());
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    // Held in the morph-partner grace window: no swap yet.
+    expect(phases).toEqual([]);
+
+    // The route data arrives and a new element claims the `hero` name. The
+    // partner is now present, so the grace is satisfied and the swap commits.
+    flushRender(() => appendNamed('hero'));
+    await tick();
+    expect(phases).toEqual(['afterSwap']);
+    u();
+  });
+
+  it('morph grace: commits the swap when the grace expires with no partner', async () => {
+    // Fake timers so the 150ms grace cap advances instantly — a real wall-clock
+    // wait here would hold a worker and starve the parallel pool (see the
+    // pool-starvation note in vitest.config.ts).
+    vi.useFakeTimers();
+    try {
+      const oldHero = appendNamed('hero');
+      installFakeVtOnDoc();
+      installNavTransitionScheduler();
+      const phases: string[] = [];
+      const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+      navigateTo('/b');
+      flushRender(() => oldHero.remove());
+      // Flush the VT callback microtask so it parks on the grace timeout (the
+      // fake-VT schedules the callback as a microtask, not a timer).
+      await Promise.resolve();
+      await Promise.resolve();
+      // Held, waiting for a partner that never appears.
+      expect(phases).toEqual([]);
+
+      // Past the 150ms MORPH_PARTNER_GRACE_MS cap the transition stops waiting
+      // and commits as-is rather than freezing the page.
+      await vi.advanceTimersByTimeAsync(160);
+      expect(phases).toEqual(['afterSwap']);
+      u();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cold navigation: gives up after the cold-commit timeout if the content never loads', async () => {
+    // Fake timers so the 500ms cap advances instantly (see the grace-expiry test).
+    vi.useFakeTimers();
+    try {
+      installFakeVt();
+      installNavTransitionScheduler();
+      const phases: string[] = [];
+      const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+      // The route suspends during the nav render — so loadingDepth is raised
+      // inside the transition, after the navigation's reset — and never resolves.
+      navigateTo('/b');
+      flushRender(() => __noteLoadStart());
+      await Promise.resolve();
+      await Promise.resolve();
+      // Held cold, waiting for content that never arrives.
+      expect(phases).toEqual([]);
+
+      // Past the 500ms COLD_COMMIT_TIMEOUT_MS cap the transition stops waiting
+      // and commits rather than freezing the page on a stalled load.
+      await vi.advanceTimersByTimeAsync(520);
+      expect(phases).toEqual(['afterSwap']);
+      u();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

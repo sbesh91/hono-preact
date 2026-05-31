@@ -38,9 +38,10 @@ afterEach(() => {
 });
 
 // Real-DOM test that exercises the FULL wiring chain end-to-end:
-//   LocationProvider (wrapNavigation = __wrapNavigation) → a navigation runs
-//   the route change inside document.startViewTransition → the Router (mounted
-//   by `Routes`) swaps in the new route.
+//   a navigation triggers a Preact render flush → the render scheduler
+//   (installed by installNavTransitionScheduler, which overrides
+//   options.debounceRendering) wraps that flush in document.startViewTransition
+//   → the Router (mounted by `Routes`) swaps in the new route inside it.
 //
 // This is the guard that a real navigation reaches the coordinator: the
 // transition must start before the route re-renders so the browser can capture

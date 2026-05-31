@@ -217,7 +217,18 @@ function onNavObserved(): void {
   }
 }
 
-/** @internal Install the view-transition render scheduler (client only). */
+/**
+ * @internal Install the view-transition render scheduler (client only).
+ *
+ * Takes ownership of `options.debounceRendering`: it captures the previous value
+ * as `prevDebounce` (delegated to for every non-navigation flush) and installs
+ * `scheduleRender` in its place. This assumes nothing else permanently overrides
+ * `options.debounceRendering` afterward. `preact/compat`'s `flushSync` swaps it
+ * temporarily and restores it, so that composes fine; a second permanent
+ * override would shadow this scheduler (the install is idempotent, so calling it
+ * twice is a no-op, not a double-install). Reversed by
+ * `__resetTransitionStateForTesting`.
+ */
 export function installNavTransitionScheduler(): void {
   if (schedulerInstalled) return;
   if (typeof document === 'undefined' || typeof location === 'undefined')
@@ -296,30 +307,34 @@ function waitForColdFlush(
   });
 }
 
+// Elements carrying an inline `view-transition-name`. The attribute selector
+// lets the browser filter natively instead of walking every node in JS — this
+// runs on the frozen hot path (inside the transition callback, possibly once per
+// grace tick), so the candidate set should be as small as possible. The selector
+// is a substring match on the serialized `style` attribute, so we still confirm
+// each match by reading the resolved property below.
+function queryVtNamedElements(): HTMLElement[] {
+  if (typeof document === 'undefined' || !document.querySelectorAll) return [];
+  return Array.from(
+    document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]')
+  );
+}
+
 // The view-transition-names currently applied in the document (inline styles).
 function collectVtNames(): Set<string> {
   const names = new Set<string>();
-  if (typeof document === 'undefined' || !document.querySelectorAll)
-    return names;
-  document.querySelectorAll<HTMLElement>('*').forEach((el) => {
+  for (const el of queryVtNamedElements()) {
     const n = el.style?.getPropertyValue?.('view-transition-name');
     if (n) names.add(n);
-  });
+  }
   return names;
 }
 
 // Whether any currently-applied view-transition-name was also in `oldNames` —
 // i.e. a morph pair (same name old + new) is present.
 function hasMorphPartner(oldNames: Set<string>): boolean {
-  if (
-    oldNames.size === 0 ||
-    typeof document === 'undefined' ||
-    !document.querySelectorAll
-  ) {
-    return false;
-  }
-  const els = document.querySelectorAll<HTMLElement>('*');
-  for (const el of els) {
+  if (oldNames.size === 0) return false;
+  for (const el of queryVtNamedElements()) {
     const n = el.style?.getPropertyValue?.('view-transition-name');
     if (n && oldNames.has(n)) return true;
   }
