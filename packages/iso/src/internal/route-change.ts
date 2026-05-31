@@ -51,6 +51,18 @@ function getStartViewTransition():
   return typeof fn === 'function' ? fn.bind(document) : undefined;
 }
 
+// Types computed for the most recent navigation. A suspending route's content
+// commits after this dispatch's transition (see define-routes' wrapRouteUpdate),
+// so that deferred commit re-applies these types to its own transition to keep
+// the same direction-driven styling as a synchronous navigation. `null` until
+// the first navigation is dispatched, which lets the deferred-commit wrapper
+// distinguish a real navigation from the initial route load (whose lazy view
+// resolving must NOT trigger a transition).
+let __lastNavTypes: string[] | null = null;
+export function __getLastNavTypes(): string[] | null {
+  return __lastNavTypes;
+}
+
 export function __dispatchRouteChange(
   to: string,
   from: string | undefined
@@ -60,6 +72,10 @@ export function __dispatchRouteChange(
   const event = new ViewTransitionEvent({ to, from, direction });
 
   for (const sub of phaseSubs.beforeTransition) sub(event);
+
+  // Remember the types for this navigation so a deferred suspending-route
+  // commit can re-apply them to its own transition.
+  __lastNavTypes = [...event.types];
 
   const fireAfterSwap = () => {
     for (const sub of phaseSubs.afterSwap) sub(event);

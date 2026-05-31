@@ -187,12 +187,17 @@
    title/badge and project name, below) are lifted out of the root snapshot and
    morph independently while the rest of the page slides. */
 
+/* `nav-initial` is emitted on the first navigation after a load (instead of a
+   direction type). Treat it as a forward slide so the first drill-in animates;
+   `nav-up` below still overrides it to a reverse slide for first-nav up-links. */
 html:active-view-transition-type(nav-push)::view-transition-old(root),
-html:active-view-transition-type(nav-forward)::view-transition-old(root) {
+html:active-view-transition-type(nav-forward)::view-transition-old(root),
+html:active-view-transition-type(nav-initial)::view-transition-old(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-out-left;
 }
 html:active-view-transition-type(nav-push)::view-transition-new(root),
-html:active-view-transition-type(nav-forward)::view-transition-new(root) {
+html:active-view-transition-type(nav-forward)::view-transition-new(root),
+html:active-view-transition-type(nav-initial)::view-transition-new(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-in-right;
 }
 html:active-view-transition-type(nav-back)::view-transition-old(root) {
@@ -252,7 +257,9 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   html:active-view-transition-type(nav-back)::view-transition-old(root),
   html:active-view-transition-type(nav-back)::view-transition-new(root),
   html:active-view-transition-type(nav-up)::view-transition-old(root),
-  html:active-view-transition-type(nav-up)::view-transition-new(root) {
+  html:active-view-transition-type(nav-up)::view-transition-new(root),
+  html:active-view-transition-type(nav-initial)::view-transition-old(root),
+  html:active-view-transition-type(nav-initial)::view-transition-new(root) {
     animation: none;
   }
   ::view-transition-group(.issue-card) {
