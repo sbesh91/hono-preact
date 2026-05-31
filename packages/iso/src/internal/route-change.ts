@@ -85,11 +85,12 @@ let coldGen = 0;
 // freeze the page.
 let directCommitDuringLoad = false;
 
-// Safety net: the longest a cold navigation will hold the page frozen waiting
-// for its content commit. A commit normally arrives within a frame or two (the
-// lazy route module resolving); this only fires if the load stalls or errors,
-// so the page can't stay frozen indefinitely.
-const COLD_COMMIT_TIMEOUT_MS = 2000;
+// Safety net: the longest a cold navigation will hold the page frozen on the old
+// snapshot waiting for its content commit. A commit normally arrives within a
+// frame or two (the lazy route module resolving). On a slow connection or a
+// stalled/errored load this caps the freeze — past it the navigation just
+// completes without the transition rather than holding the page.
+const COLD_COMMIT_TIMEOUT_MS = 500;
 
 export function __isColdTransitionActive(): boolean {
   return coldActive;
