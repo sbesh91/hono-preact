@@ -11,7 +11,7 @@
     "hono-preact": "workspace:*",
     "hono": "^4.12.14",
     "preact": "^10.29.1",
-    "preact-iso": "github:sbesh91/preact-iso#feat/v3-wrap-update"
+    "preact-iso": "github:preactjs/preact-iso#v3"
   },
   "devDependencies": {
     "@hono/node-server": "^1.19.14",

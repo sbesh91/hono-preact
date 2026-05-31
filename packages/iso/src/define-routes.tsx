@@ -5,49 +5,10 @@ import type {
   ComponentType,
   VNode,
 } from 'preact';
-import { flushSync } from 'preact/compat';
 import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
-import { __getLastNavTypes } from './internal/route-change.js';
-
-type ViewTransitionLike = {
-  types?: { add(type: string): void };
-  finished?: Promise<unknown>;
-};
-
-// preact-iso commits a suspending route's content via an internal post-suspense
-// update that, unlike a synchronous route swap, isn't captured by the view
-// transition the onRouteChange path starts (it lands after that transition's
-// no-op callback). Its `wrapUpdate` prop hands us that commit so we can wrap it:
-// flush it synchronously inside a fresh transition (capturing old route ->
-// new content) and re-apply this navigation's types so a cold/suspending nav
-// animates with the same directional slide as a warm one. startViewTransition
-// called while one is active supersedes it, so this wins over the onRouteChange
-// no-op transition; that superseded transition rejects with AbortError, which
-// we swallow. Server-side (or without the API) it just commits.
-function wrapRouteUpdate(commit: () => void): void {
-  const types = __getLastNavTypes();
-  const start =
-    typeof document !== 'undefined'
-      ? (
-          document as Document & {
-            startViewTransition?: (cb: () => void) => ViewTransitionLike;
-          }
-        ).startViewTransition
-      : undefined;
-  // `types === null` means no navigation has been dispatched yet, i.e. this is
-  // the initial route load resolving its lazy view, which must not animate.
-  if (typeof start !== 'function' || types === null) {
-    commit();
-    return;
-  }
-  const transition = start.call(document, () => flushSync(() => commit()));
-  if (transition.types && typeof transition.types.add === 'function') {
-    for (const type of types) transition.types.add(type);
-  }
-  if (transition.finished) transition.finished.catch(() => {});
-}
+import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -335,7 +296,14 @@ function makeLayoutGroupComponent(
         const layoutNode = h(
           Layout,
           null,
-          h(asRouteComponent(Router), { wrapUpdate: wrapRouteUpdate }, ...inner)
+          h(
+            asRouteComponent(Router),
+            {
+              onLoadStart: __noteLoadStart,
+              onLoadEnd: __noteLoadEnd,
+            },
+            ...inner
+          )
         );
         return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
       };
@@ -497,18 +465,14 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
 
 export type RoutesProps = {
   routes: RoutesManifest;
-  onRouteChange?: (url: string) => void;
 };
 
-export const Routes: ComponentType<RoutesProps> = ({
-  routes,
-  onRouteChange,
-}) => {
+export const Routes: ComponentType<RoutesProps> = ({ routes }) => {
   return h(
     asRouteComponent(Router),
     {
-      wrapUpdate: wrapRouteUpdate,
-      ...(onRouteChange ? { onRouteChange } : {}),
+      onLoadStart: __noteLoadStart,
+      onLoadEnd: __noteLoadEnd,
     },
     ...routes.flat.map((r) =>
       h(Route, {

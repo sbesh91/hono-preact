@@ -7,6 +7,19 @@ interface ShimState {
 let installed = false;
 let counter = 0;
 let lastDirection: NavDirection = 'initial';
+
+// Fires synchronously whenever a navigation occurs (pushState / replaceState /
+// popstate), BEFORE the resulting re-render. Lets the view-transition scheduler
+// observe a navigation at navigation time rather than only at render time (which
+// Preact's render batching can coalesce away). See route-change.ts.
+const navListeners = new Set<() => void>();
+export function onNavigation(listener: () => void): () => void {
+  navListeners.add(listener);
+  return () => navListeners.delete(listener);
+}
+function notifyNavigation(): void {
+  for (const listener of navListeners) listener();
+}
 let originalPush:
   | ((state: unknown, title: string, url?: string | URL | null) => void)
   | null = null;
@@ -44,6 +57,7 @@ export function installHistoryShim(): void {
     };
     originalPush!(merged, title, url);
     lastDirection = 'push';
+    notifyNavigation();
   };
 
   history.replaceState = function patchedReplace(
@@ -57,6 +71,7 @@ export function installHistoryShim(): void {
     };
     originalReplace!(merged, title, url);
     lastDirection = 'replace';
+    notifyNavigation();
   };
 
   popstateListener = (e: PopStateEvent) => {
@@ -64,6 +79,7 @@ export function installHistoryShim(): void {
     lastDirection =
       incoming < counter ? 'back' : incoming > counter ? 'forward' : 'replace';
     counter = incoming;
+    notifyNavigation();
   };
   window.addEventListener('popstate', popstateListener, { capture: true });
 
@@ -102,6 +118,7 @@ export function resetHistoryShimForTesting(): void {
   originalPush = null;
   originalReplace = null;
   popstateListener = null;
+  navListeners.clear();
 }
 
 /** Test-only direction setter. Do not call from production code. */
