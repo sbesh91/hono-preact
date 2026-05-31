@@ -57,7 +57,9 @@ describe('defer-aware transition coordinator', () => {
   it('cold nav: post-swap phases fire against the deferred transition with the nav types', () => {
     const { typeAdds } = installFakeVt();
     const phases: string[] = [];
-    const u1 = __subscribePhase('beforeTransition', () => phases.push('beforeTransition'));
+    const u1 = __subscribePhase('beforeTransition', () =>
+      phases.push('beforeTransition')
+    );
     const u2 = __subscribePhase('beforeSwap', () => phases.push('beforeSwap'));
     const u3 = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
     __noteLoadStart();
@@ -66,13 +68,16 @@ describe('defer-aware transition coordinator', () => {
     __wrapRouteCommit(() => {});
     expect(phases).toEqual(['beforeTransition', 'beforeSwap', 'afterSwap']);
     expect(typeAdds).toContain('nav-same-origin');
-    u1(); u2(); u3();
+    u1();
+    u2();
+    u3();
   });
 
   it('nested cold nav: one transition, the second commit runs directly', () => {
     const { startViewTransition } = installFakeVt();
     const order: string[] = [];
-    __noteLoadStart(); __noteLoadStart();
+    __noteLoadStart();
+    __noteLoadStart();
     __dispatchRouteChange('/b', '/a');
     __wrapRouteCommit(() => order.push('outer'));
     __wrapRouteCommit(() => order.push('inner'));
