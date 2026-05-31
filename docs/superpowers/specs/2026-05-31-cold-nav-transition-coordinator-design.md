@@ -1,8 +1,23 @@
 # Defer-aware view-transition coordinator design
 
 **Date:** 2026-05-31
-**Status:** Implemented, with a cold-path revision (see update below)
+**Status:** Superseded by the `options.debounceRendering` implementation — see the FINAL note below. The design body and the first update are kept for history.
 **Branch:** `vt-cold-nav-coordinator` (off `demo-view-transitions`)
+
+> **FINAL (2026-05-31): driven by `options.debounceRendering`; no preact-iso
+> fork.** The two designs below both anchored the transition to a preact-iso
+> hook (the `wrapUpdate`/`wrapNavigation` fork, PR #150). Per maintainer feedback
+> (Jovi De Croock) the whole thing moved to the consumer side on **stock
+> `preactjs/preact-iso#v3`**: `installNavTransitionScheduler()` overrides
+> `options.debounceRendering` (the seam `flushSync` uses) and wraps a render
+> flush in `startViewTransition` when it is a navigation (the URL changed since
+> the last flush — covers clicks, `route()`, popstate), so the old route is
+> captured before the new one renders. Cold routes keep routing content flushes
+> into the transition until `loadingDepth` hits 0 (the shell), with a short
+> bounded grace for a morph partner that loads with the route's data (behind
+> inner Suspense that doesn't move `loadingDepth`). No `view-transition-name`
+> tricks; supersede + timeout guards remain. PR #150 was closed (unneeded). See
+> commit `feat(iso): drive view transitions via options.debounceRendering`.
 
 > **Update (2026-05-31): cold path revised for element morphs.** Browser
 > verification found that deferring the whole transition to the post-suspense
