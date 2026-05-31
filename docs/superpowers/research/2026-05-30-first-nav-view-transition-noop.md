@@ -52,7 +52,41 @@ In short: the framework assumes the route swap is a pending synchronous update
 at dispatch time. That holds on later navs but not on the first nav, because
 preact-iso's first-navigation (post-hydration) scheduling defers the commit.
 
+## Attempted fix and why the obvious approach fails (2026-05-31)
+
+Tried making the `startViewTransition` update callback async and pumping the
+deferred swap into the transition window. In-browser results (Firefox via MCP,
+instrumenting `route-change.ts` to log `#app` content before/after each flush
+inside the callback):
+
+- Baseline first nav: `pre-flush` and `post-flush` are identical (old route);
+  `flushSync` is a complete no-op, the swap is not pending.
+- `await Promise.resolve()` / `await setTimeout(0)` then `flushSync`: still the
+  old route after ~1ms. The swap is NOT microtask- or macrotask-scheduled.
+- `await requestAnimationFrame` then `flushSync`: the swap DOES land (new route
+  present), but the rAF took **7–15 seconds** to fire. `requestAnimationFrame`
+  is blocked during the view-transition update phase (the browser won't render
+  the next frame until the callback resolves, and rAF won't fire until it
+  renders), so it only fired when some unrelated render was forced.
+
+Conclusion: the deferred first-nav swap requires a real **render frame**, and
+the `startViewTransition` callback cannot wait for one without deadlocking. So
+the swap must be *synchronously pending* for the framework's
+`startViewTransition(() => flushSync())` pattern to work. On the first
+post-hydration nav it isn't, and no in-callback wait can fix that.
+
 ## Fix direction (not yet implemented)
+
+Given the above, an in-callback wait is a dead end. Remaining options:
+
+- **preact-iso level:** stop deferring the first post-hydration route swap to a
+  render frame (make it a synchronous pending update like later navs). preact-iso
+  is a pinned GitHub-tarball dep, so this is an upstream change.
+- **Priming on load:** consume preact-iso's first-nav deferral during hydration
+  with a throwaway commit cycle so the user's first real nav is already "warm."
+  Unverified and risky (potential hydration flash / double-render); not shipped.
+
+Earlier, superseded idea (kept for context):
 
 Make the route swap actually happen *inside* the transition callback on the
 first nav. Options to evaluate in a real browser:
