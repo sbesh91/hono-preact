@@ -436,18 +436,16 @@ describe('<Routes>', () => {
     expect(container.innerHTML).toBeDefined();
   });
 
-  it('wires the coordinator load hooks (wrapUpdate / onLoadStart / onLoadEnd) onto the Router', () => {
+  it('wires the coordinator load hooks (onLoadStart / onLoadEnd) onto the Router', () => {
     const m = defineRoutes([{ path: '/', view: noopView }]);
     const result = (
       Routes as unknown as (props: { routes: typeof m }) => VNode
     )({ routes: m });
     expect(result.type).toBe(Router);
     const props = result.props as {
-      wrapUpdate?: unknown;
       onLoadStart?: unknown;
       onLoadEnd?: unknown;
     };
-    expect(typeof props.wrapUpdate).toBe('function');
     expect(typeof props.onLoadStart).toBe('function');
     expect(typeof props.onLoadEnd).toBe('function');
   });

@@ -1,75 +1,87 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { options } from 'preact';
 import {
-  __wrapNavigation,
-  __wrapRouteCommit,
+  installNavTransitionScheduler,
   __noteLoadStart,
+  __noteLoadEnd,
   __subscribePhase,
   resetDefaultTypesForTesting,
   __resetTransitionStateForTesting,
 } from '../internal/route-change.js';
 import { resetHistoryShimForTesting } from '../internal/history-shim.js';
 
-// __wrapNavigation runs an async view-transition callback; `tick` lets it run
-// after startViewTransition returns (the browser invokes the callback async, so
-// the fake below does too).
+// The scheduler runs an async view-transition callback; `tick` lets it run after
+// startViewTransition returns (the browser invokes the callback async, so the
+// fake below does too).
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
 function installFakeVt() {
   const typeAdds: string[] = [];
   let resolveFinished!: () => void;
-  let rejectFinished!: (reason?: unknown) => void;
-  const finished = new Promise<void>((res, rej) => {
-    resolveFinished = res;
-    rejectFinished = rej;
-  });
-  let skipped = false;
+  const finished = new Promise<void>((r) => (resolveFinished = r));
   const startViewTransition = vi.fn((cb: () => void | Promise<void>) => {
-    // Real browsers run the update callback asynchronously, after capturing the
-    // old snapshot; mirror that so the coordinator's `transition` ref is set.
     void Promise.resolve().then(() => cb());
     return {
       ready: Promise.resolve(),
       updateCallbackDone: Promise.resolve(),
       finished,
       types: { add: (t: string) => typeAdds.push(t) },
-      skipTransition: () => {
-        skipped = true;
-      },
+      skipTransition: () => {},
     };
   });
   vi.stubGlobal('document', { startViewTransition });
-  return {
-    startViewTransition,
-    typeAdds,
-    resolveFinished,
-    rejectFinished,
-    isSkipped: () => skipped,
-  };
+  return { startViewTransition, typeAdds, resolveFinished };
 }
 
-describe('navigation-wrapping view-transition coordinator', () => {
+// Simulate Preact scheduling a render flush (Preact calls options.debounceRendering).
+function flushRender(process: () => void): void {
+  options.debounceRendering!(process);
+}
+// Simulate a navigation: the router pushes state before re-rendering.
+function navigateTo(url: string): void {
+  history.pushState(null, '', url);
+}
+
+describe('debounceRendering view-transition scheduler', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     resetHistoryShimForTesting();
     resetDefaultTypesForTesting();
     __resetTransitionStateForTesting();
+    history.replaceState(null, '', '/');
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    __resetTransitionStateForTesting();
+    vi.unstubAllGlobals();
+  });
 
-  it('warm navigation: starts a transition and runs the commit inside it', async () => {
+  it('navigation: wraps the render flush in a view transition; the render runs inside it', async () => {
     const { startViewTransition } = installFakeVt();
-    const swapped: string[] = [];
-    __wrapNavigation(() => swapped.push('commit'));
+    installNavTransitionScheduler();
+    const ran: string[] = [];
+    navigateTo('/b');
+    flushRender(() => ran.push('render'));
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
-    // The navigation commit runs inside the transition callback (so the browser
-    // captures the old route first, then the commit swaps in the new one).
-    expect(swapped).toEqual(['commit']);
+    // The render runs inside the transition (so the browser captures the old
+    // route first, then this flush swaps in the new one).
+    expect(ran).toEqual(['render']);
   });
 
-  it('warm navigation: phases fire in order with the nav types', async () => {
+  it('non-navigation render schedules normally, with no transition', async () => {
+    const { startViewTransition } = installFakeVt();
+    installNavTransitionScheduler();
+    const ran: string[] = [];
+    flushRender(() => ran.push('render')); // no location change
+    await tick();
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(ran).toEqual(['render']);
+  });
+
+  it('navigation: phases fire in order with the nav types', async () => {
     const { typeAdds, resolveFinished } = installFakeVt();
+    installNavTransitionScheduler();
     const phases: string[] = [];
     const subs = (
       [
@@ -80,10 +92,10 @@ describe('navigation-wrapping view-transition coordinator', () => {
       ] as const
     ).map((p) => __subscribePhase(p, () => phases.push(p)));
 
-    __wrapNavigation(() => {});
+    navigateTo('/b');
+    flushRender(() => {});
     await tick();
     expect(phases).toEqual(['beforeTransition', 'beforeSwap', 'afterSwap']);
-    // afterTransition waits for transition.finished.
     resolveFinished();
     await tick();
     expect(phases).toEqual([
@@ -96,74 +108,37 @@ describe('navigation-wrapping view-transition coordinator', () => {
     subs.forEach((u) => u());
   });
 
-  it('cold navigation: holds the transition until the content commits', async () => {
+  it('cold navigation: holds the transition until the route modules finish loading', async () => {
     const { startViewTransition } = installFakeVt();
-    const order: string[] = [];
-    // Simulate the destination route suspending during the commit.
-    __noteLoadStart();
-    __wrapNavigation(() => order.push('nav-commit'));
+    installNavTransitionScheduler();
+    const ran: string[] = [];
+    navigateTo('/b');
+    __noteLoadStart(); // the route suspended on a module load
+    flushRender(() => ran.push('nav'));
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
-    // The nav commit ran, but the transition is now awaiting the content.
-    expect(order).toEqual(['nav-commit']);
-    // The route's content commits via wrapUpdate, resuming the transition.
-    __wrapRouteCommit(() => order.push('content'));
+    // The nav render ran, but the transition is awaiting the content.
+    expect(ran).toEqual(['nav']);
+    // The module loads: its content flushes (same URL) and is routed into the
+    // transition.
+    __noteLoadEnd();
+    flushRender(() => ran.push('content'));
     await tick();
-    expect(order).toEqual(['nav-commit', 'content']);
+    expect(ran).toEqual(['nav', 'content']);
   });
 
-  it('cold navigation: a later (nested) commit applies directly, no extra transition', async () => {
+  it('a second navigation supersedes an in-flight cold one', async () => {
     const { startViewTransition } = installFakeVt();
-    const order: string[] = [];
+    installNavTransitionScheduler();
+    navigateTo('/b');
     __noteLoadStart();
-    __wrapNavigation(() => order.push('nav'));
-    await tick();
-    __wrapRouteCommit(() => order.push('shell'));
-    await tick();
-    __wrapRouteCommit(() => order.push('fill-in'));
-    expect(startViewTransition).toHaveBeenCalledTimes(1);
-    expect(order).toEqual(['nav', 'shell', 'fill-in']);
-  });
-
-  it('initial route load (no navigation): commit applies directly with no transition', () => {
-    const { startViewTransition } = installFakeVt();
-    const swapped: string[] = [];
-    __wrapRouteCommit(() => swapped.push('home'));
-    expect(startViewTransition).not.toHaveBeenCalled();
-    expect(swapped).toEqual(['home']);
-  });
-
-  it('skip(): no transition animation, no beforeSwap, afterTransition reason "skipped"', async () => {
-    const { isSkipped, resolveFinished } = installFakeVt();
-    const phases: string[] = [];
-    const u1 = __subscribePhase('beforeTransition', (e) => e.skip());
-    const u2 = __subscribePhase('beforeSwap', () => phases.push('beforeSwap'));
-    const u3 = __subscribePhase('afterTransition', (e) =>
-      phases.push(`afterTransition:${e.reason}`)
-    );
-
-    __wrapNavigation(() => {});
-    await tick();
-    expect(isSkipped()).toBe(true);
-    expect(phases).not.toContain('beforeSwap');
-    resolveFinished();
-    await tick();
-    expect(phases).toContain('afterTransition:skipped');
-    u1();
-    u2();
-    u3();
-  });
-
-  it('cold navigation abandoned by a new navigation: the stale transition resumes (no freeze)', async () => {
-    const { startViewTransition } = installFakeVt();
-    __noteLoadStart();
-    __wrapNavigation(() => {});
+    flushRender(() => {});
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
-    // A second navigation arrives before the first committed its content. It
-    // must resume the first (so its transition can't stay frozen) and start its
-    // own.
-    __wrapNavigation(() => {});
+    // A new navigation arrives before /b's content loaded; it abandons /b and
+    // starts its own transition.
+    navigateTo('/c');
+    flushRender(() => {});
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(2);
   });

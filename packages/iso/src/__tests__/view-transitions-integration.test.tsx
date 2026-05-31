@@ -6,7 +6,7 @@ import { LocationProvider, useLocation } from 'preact-iso';
 import { defineRoutes, Routes } from '../define-routes.js';
 import {
   __dispatchRouteChange,
-  __wrapNavigation,
+  installNavTransitionScheduler,
   resetDefaultTypesForTesting,
   __resetTransitionStateForTesting,
 } from '../internal/route-change.js';
@@ -72,9 +72,10 @@ describe('view transitions: end-to-end wiring', () => {
       };
     });
 
-  it('routes a navigation through wrapNavigation into document.startViewTransition', async () => {
+  it('wraps a navigation in document.startViewTransition via the render scheduler', async () => {
     const startViewTransition = makeFakeVt();
     Object.assign(document, { startViewTransition });
+    installNavTransitionScheduler();
 
     const routes = defineRoutes([
       { path: '/', view: () => Promise.resolve({ default: Home }) },
@@ -82,11 +83,7 @@ describe('view transitions: end-to-end wiring', () => {
     ]);
 
     const { container } = render(
-      h(
-        LocationProvider,
-        { wrapNavigation: __wrapNavigation },
-        h(Routes, { routes })
-      )
+      h(LocationProvider, null, h(Routes, { routes }))
     );
 
     // Wait for the lazy Home view to mount.
@@ -96,8 +93,8 @@ describe('view transitions: end-to-end wiring', () => {
     // The initial mount is not a navigation.
     expect(startViewTransition).not.toHaveBeenCalled();
 
-    // A user navigation goes LocationProvider's wrapNavigation →
-    // __wrapNavigation → document.startViewTransition, and lands on /about.
+    // A user navigation's render flush is wrapped in a view transition by the
+    // scheduler, and lands on /about.
     fireEvent.click(container.querySelector('button')!);
     await waitFor(() => expect(startViewTransition).toHaveBeenCalledTimes(1));
     expect(typeof startViewTransition.mock.calls[0][0]).toBe('function');
@@ -111,6 +108,7 @@ describe('view transitions: end-to-end wiring', () => {
   it('navigates without throwing when the view-transition API is unavailable', async () => {
     // Browsers without view-transitions: the navigation still runs, no throw.
     Object.assign(document, { startViewTransition: undefined });
+    installNavTransitionScheduler();
 
     const routes = defineRoutes([
       { path: '/', view: () => Promise.resolve({ default: Home }) },
@@ -118,11 +116,7 @@ describe('view transitions: end-to-end wiring', () => {
     ]);
 
     const { container } = render(
-      h(
-        LocationProvider,
-        { wrapNavigation: __wrapNavigation },
-        h(Routes, { routes })
-      )
+      h(LocationProvider, null, h(Routes, { routes }))
     );
     await waitFor(() =>
       expect(container.querySelector('button')?.textContent).toBe('go to about')

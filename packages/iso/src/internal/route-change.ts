@@ -1,4 +1,4 @@
-import { flushSync } from 'preact/compat';
+import { options } from 'preact';
 import {
   ViewTransitionEvent,
   type NavDirection,
@@ -77,10 +77,8 @@ let lastPath: string | undefined =
     ? location.pathname + location.search
     : undefined;
 
-// Cold-navigation bridge. A suspending route's content commits later via
-// __wrapRouteCommit; the in-flight transition awaits it so the new snapshot is
-// the loaded content (or shell), not the suspense fallback.
-let coldResolve: (() => void) | null = null;
+// Cold-navigation state: a navigation's transition holds until the suspending
+// route's content flushes have all run (see the scheduler below).
 let coldTimeout: ReturnType<typeof setTimeout> | null = null;
 // Bumped per navigation so a superseded transition's (async) callback bows out.
 let navGen = 0;
@@ -88,6 +86,10 @@ let navGen = 0;
 // route's content. Past it the navigation completes without finishing the
 // transition rather than freezing the page on a slow/stalled load.
 const COLD_COMMIT_TIMEOUT_MS = 500;
+// Extra grace, after the shell is ready, to let a morph partner that loads with
+// the route's DATA (behind inner Suspense, which doesn't move loadingDepth)
+// appear in the new snapshot before the transition captures it.
+const MORPH_PARTNER_GRACE_MS = 150;
 
 /** @internal Test-only reset for coordinator state. */
 export function __resetTransitionStateForTesting(): void {
@@ -97,11 +99,18 @@ export function __resetTransitionStateForTesting(): void {
     typeof location !== 'undefined'
       ? location.pathname + location.search
       : undefined;
+  coldRouteSignal = null;
   if (coldTimeout !== null) {
     clearTimeout(coldTimeout);
     coldTimeout = null;
   }
-  coldResolve = null;
+  // Uninstall the render scheduler (restoring Preact's debounceRendering) so
+  // each test can install it fresh.
+  if (schedulerInstalled) {
+    options.debounceRendering = prevDebounce;
+    schedulerInstalled = false;
+    prevDebounce = undefined;
+  }
 }
 
 function fireAfterSwap(event: ViewTransitionEvent): void {
@@ -149,52 +158,150 @@ function buildEvent(from: string | undefined): ViewTransitionEvent {
   return event;
 }
 
-// Resolve the pending cold bridge — the content commit arrived, the timeout
-// fired, or a newer navigation superseded it.
-function resolveCold(): void {
-  if (coldTimeout !== null) {
-    clearTimeout(coldTimeout);
-    coldTimeout = null;
-  }
-  const resolve = coldResolve;
-  coldResolve = null;
-  if (resolve) resolve();
+// ---------------------------------------------------------------------------
+// debounceRendering-based scheduler (no preact-iso navigation hooks required).
+//
+// Preact calls `options.debounceRendering(process)` to schedule a render flush
+// (this is the seam `flushSync` uses). We override it: when a flush is the
+// result of a navigation (the URL changed since the last flush, because the
+// router pushes state before re-rendering), wrap that flush in a view
+// transition so the browser captures the current route as the old snapshot
+// before `process()` swaps in the new one. Everything else schedules normally.
+//
+// Cold (suspending) routes commit their content in a later, same-URL flush; the
+// in-flight transition routes that flush into itself so the new snapshot is the
+// loaded route. Uses only stock preact-iso props (onLoadStart/onLoadEnd via
+// `loadingDepth`).
+// ---------------------------------------------------------------------------
+
+type ProcessFn = () => void;
+
+let schedulerInstalled = false;
+let lastHref = '';
+let prevDebounce: ((process: ProcessFn) => void) | undefined;
+// Set while a cold navigation's transition awaits a content flush; the next
+// same-URL flush hands its `process` here (or `null` on supersede/timeout) so
+// the transition can run it inside itself.
+let coldRouteSignal: ((process: ProcessFn | null) => void) | null = null;
+
+function defaultSchedule(process: ProcessFn): void {
+  if (prevDebounce) prevDebounce(process);
+  else Promise.resolve().then(process);
 }
 
-// Called from `LocationProvider`'s `wrapNavigation` (preact-iso fork). Starts
-// the view transition, THEN performs the navigation inside it (flushSync) so the
-// browser captures the current route as the old snapshot before the new route
-// swaps in. For a navigation to a suspending route, the transition waits for the
-// content to commit (via __wrapRouteCommit) before finishing.
-export function __wrapNavigation(commit: () => void): void {
-  const from = lastPath;
+/** @internal Install the view-transition render scheduler (client only). */
+export function installNavTransitionScheduler(): void {
+  if (schedulerInstalled) return;
+  if (typeof document === 'undefined' || typeof location === 'undefined')
+    return;
+  schedulerInstalled = true;
+  lastHref = location.href;
+  prevDebounce = options.debounceRendering;
+  options.debounceRendering = scheduleRender;
+}
 
-  // A previous cold navigation never finished committing; abandon it so its
-  // transition can't stay frozen and its callback won't touch live state.
-  if (coldResolve) {
-    navGen++;
-    resolveCold();
-  }
+function scheduleRender(process: ProcessFn): void {
+  const href = location.href;
+  const navigated = href !== lastHref;
 
-  const start = getStartViewTransition();
-  if (!start) {
-    // No view transitions: navigate, then fire the post-swap phases (no
-    // transition runs, so `beforeSwap` is skipped).
-    flushSync(commit);
-    const event = buildEvent(from);
-    fireAfterSwap(event);
-    fireAfterTransition(event, event._skipped ? 'skipped' : 'unsupported');
+  // The content flush for an in-flight cold navigation (same URL): hand it back
+  // to that transition so it lands in the new snapshot.
+  if (coldRouteSignal && !navigated) {
+    const resolve = coldRouteSignal;
+    coldRouteSignal = null;
+    if (coldTimeout !== null) {
+      clearTimeout(coldTimeout);
+      coldTimeout = null;
+    }
+    resolve(process); // the transition's callback runs `process()` itself
     return;
   }
 
+  // A new navigation arrived while a cold one was still loading: abandon it.
+  if (coldRouteSignal && navigated) {
+    navGen++;
+    const resolve = coldRouteSignal;
+    coldRouteSignal = null;
+    if (coldTimeout !== null) {
+      clearTimeout(coldTimeout);
+      coldTimeout = null;
+    }
+    resolve(null);
+  }
+
+  lastHref = href;
+  const start = navigated ? getStartViewTransition() : undefined;
+  if (!start) {
+    defaultSchedule(process);
+    return;
+  }
+  runNavTransition(process, start);
+}
+
+// Wait for the next content flush of an in-flight cold navigation (routed here
+// by scheduleRender), or null on timeout/supersede.
+function waitForColdFlush(
+  myGen: number,
+  timeoutMs: number
+): Promise<ProcessFn | null> {
+  return new Promise((resolve) => {
+    coldRouteSignal = resolve;
+    coldTimeout = setTimeout(() => {
+      if (navGen === myGen && coldRouteSignal) {
+        coldRouteSignal = null;
+        coldTimeout = null;
+        resolve(null);
+      }
+    }, timeoutMs);
+  });
+}
+
+// The view-transition-names currently applied in the document (inline styles).
+function collectVtNames(): Set<string> {
+  const names = new Set<string>();
+  if (typeof document === 'undefined' || !document.querySelectorAll)
+    return names;
+  document.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    const n = el.style?.getPropertyValue?.('view-transition-name');
+    if (n) names.add(n);
+  });
+  return names;
+}
+
+// Whether any currently-applied view-transition-name was also in `oldNames` —
+// i.e. a morph pair (same name old + new) is present.
+function hasMorphPartner(oldNames: Set<string>): boolean {
+  if (
+    oldNames.size === 0 ||
+    typeof document === 'undefined' ||
+    !document.querySelectorAll
+  ) {
+    return false;
+  }
+  const els = document.querySelectorAll<HTMLElement>('*');
+  for (const el of els) {
+    const n = el.style?.getPropertyValue?.('view-transition-name');
+    if (n && oldNames.has(n)) return true;
+  }
+  return false;
+}
+
+function runNavTransition(
+  process: ProcessFn,
+  start: (cb: () => void | Promise<void>) => ViewTransition
+): void {
+  const from = lastPath;
+  // The names present in the outgoing route — used to know when a morph partner
+  // has appeared in the new route (see the grace wait below).
+  const oldNames = collectVtNames();
   const myGen = ++navGen;
   let transition: ViewTransition;
   let event: ViewTransitionEvent | undefined;
   try {
     transition = start(async () => {
-      // The old snapshot has been captured. Perform the navigation.
-      flushSync(commit);
-      if (navGen !== myGen) return; // superseded while capturing
+      // The old snapshot has been captured. Flush the navigation render.
+      process();
+      if (navGen !== myGen) return;
       event = buildEvent(from);
       event.transition = transition;
       applyTypes(transition, event.types);
@@ -203,16 +310,32 @@ export function __wrapNavigation(commit: () => void): void {
         skipTransition(transition);
       } else {
         for (const sub of phaseSubs.beforeSwap) sub(event);
-        if (loadingDepth > 0) {
-          // Cold navigation: the new route suspended. Wait for its content (the
-          // shell) to commit via __wrapRouteCommit, so the new snapshot is the
-          // loaded route rather than the suspense fallback.
-          await new Promise<void>((resolve) => {
-            coldResolve = resolve;
-            coldTimeout = setTimeout(() => {
-              if (navGen === myGen) resolveCold();
-            }, COLD_COMMIT_TIMEOUT_MS);
-          });
+        // Cold: the route suspended. Keep routing its content flushes into the
+        // transition until every route module has loaded (loadingDepth back to
+        // 0) — the page-level shell.
+        while (loadingDepth > 0) {
+          const contentProcess = await waitForColdFlush(
+            myGen,
+            COLD_COMMIT_TIMEOUT_MS
+          );
+          if (navGen !== myGen) return;
+          if (!contentProcess) break; // timed out waiting
+          contentProcess();
+        }
+        // If the outgoing route had named elements but none has a partner in the
+        // new shell yet, the partner may load with the route's DATA (behind
+        // inner Suspense, which doesn't move loadingDepth — e.g. a list whose
+        // items come from a loader). Wait briefly for it so the morph can pair.
+        if (oldNames.size > 0 && !hasMorphPartner(oldNames)) {
+          while (!hasMorphPartner(oldNames)) {
+            const contentProcess = await waitForColdFlush(
+              myGen,
+              MORPH_PARTNER_GRACE_MS
+            );
+            if (navGen !== myGen) return;
+            if (!contentProcess) break; // grace expired — capture as-is
+            contentProcess();
+          }
         }
       }
 
@@ -220,15 +343,13 @@ export function __wrapNavigation(commit: () => void): void {
       fireAfterSwap(event);
     });
   } catch {
-    // Non-conformant / polyfilled startViewTransition that throws synchronously:
-    // still perform the navigation and fire the post-swap phases.
-    flushSync(commit);
+    // Non-conformant startViewTransition: just flush and fire the post phases.
+    process();
     const ev = buildEvent(from);
     fireAfterSwap(ev);
     fireAfterTransition(ev, 'unsupported');
     return;
   }
-
   transition.finished.then(
     () => {
       if (event)
@@ -243,9 +364,10 @@ export function __wrapNavigation(commit: () => void): void {
 // Synchronous route-change dispatch for an explicit `to`/`from`: fires
 // `beforeTransition` and runs a transition that wraps a no-op swap (the route is
 // assumed already on screen), firing the post-swap phases and applying types.
-// Production navigations go through `__wrapNavigation`; this drives the same
-// phase/type/lifecycle machinery directly for callers that change the route
-// outside the normal navigation flow (and in unit tests).
+// Production navigations are driven by the scheduler (installNavTransition
+// scheduler); this drives the same phase/type/lifecycle machinery directly for
+// callers that change the route outside the normal navigation flow (and in unit
+// tests).
 export function __dispatchRouteChange(
   to: string,
   from: string | undefined
@@ -282,19 +404,6 @@ export function __dispatchRouteChange(
     () => fireAfterTransition(event),
     () => fireAfterTransition(event, 'aborted')
   );
-}
-
-// Called from each Router's `wrapUpdate` (preact-iso fork). When a cold
-// navigation is awaiting its content, apply the commit and resume the
-// transition; otherwise commit directly (the initial route load, a nested
-// fill-in commit after the shell, or a post-load re-suspense).
-export function __wrapRouteCommit(commit: () => void): void {
-  if (coldResolve) {
-    flushSync(commit);
-    resolveCold();
-  } else {
-    commit();
-  }
 }
 
 let defaultTypesInstalled = false;

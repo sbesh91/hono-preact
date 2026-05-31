@@ -15,10 +15,11 @@ export function generateClientEntrySource(
     `import { h, hydrate, render as renderPreact } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes, PersistHost } from 'hono-preact';\n` +
-    `import { __wrapNavigation, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
+    `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
     `installHistoryShim();\n` +
+    `installNavTransitionScheduler();\n` +
     `installStreamRegistry();\n` +
     `\n` +
     `let persistHost = document.getElementById('__hp_persist_root');\n` +
@@ -29,14 +30,12 @@ export function generateClientEntrySource(
     `}\n` +
     `renderPreact(h(PersistHost, null), persistHost);\n` +
     `\n` +
-    // Wrap every navigation in a view transition that starts BEFORE the route
-    // re-renders, so the browser captures the outgoing route as the old snapshot
-    // before the new one swaps in (this is what lets shared-element morphs and
-    // directional slides animate old->new). The coordinator runs the commit
-    // inside the transition and, for navigations to suspending routes, waits for
-    // the content via the Router's wrapUpdate.
+    // View transitions are driven by installNavTransitionScheduler() above: it
+    // overrides Preact's render scheduler so a navigation's re-render runs inside
+    // document.startViewTransition (capturing the outgoing route as the old
+    // snapshot before the new one swaps in). No per-navigation wiring needed.
     `hydrate(\n` +
-    `  h(LocationProvider, { wrapNavigation: __wrapNavigation },\n` +
+    `  h(LocationProvider, null,\n` +
     `    h(Routes, { routes })\n` +
     `  ),\n` +
     `  document.getElementById('app')\n` +
