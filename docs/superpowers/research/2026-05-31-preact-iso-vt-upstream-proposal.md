@@ -106,6 +106,56 @@ guard).
 where the Router itself calls `document.startViewTransition` around swaps. Less
 flexible (policy lives in the router); listed for completeness.
 
+## PoC validation (2026-05-31, in-browser)
+
+Confirmed the core mechanism works. Minimal patch to preact-iso `router.js`
+(module-level wrapper for the PoC; the real API should be a prop or context —
+see below):
+
+```diff
++let __wrapUpdate = null;
++export function __setWrapUpdate(fn) { __wrapUpdate = fn; }
+ ...
+ // in this.__c's e.then(), the post-suspense un-suspend:
+-      RESOLVED.then(update);
++      RESOLVED.then(() => {
++        if (__wrapUpdate) __wrapUpdate(update);
++        else update();
++      });
+```
+
+Consumer wiring (PoC): `__setWrapUpdate(update =>
+document.startViewTransition(() => flushSync(() => update())))`.
+
+**Result (cold nav projects → /demo/projects/api), logging `#app` inside the
+transition callback before/after the flush:**
+
+- `pre : "← all projects api Loading projects…"` (old/loading)
+- `post: "← all projects api"` (content committed)
+
+`pre !== post` **inside** the callback — the post-suspense content swap now
+happens inside the transition window, exactly what was previously deferred past
+it. A visible browser animates old → content. (The PoC ran in a backgrounded
+MCP Firefox tab, so the actual paint was skipped — `InvalidStateError: Skipped
+ViewTransition due to document being hidden` — but the DOM-timing proof is
+visibility-independent. Login/hydration stayed intact: non-breaking.)
+
+**Integration caveats discovered (important for the real consumer wiring):**
+
+1. **Multiple Router instances.** Nested Routers (layout groups) each fire the
+   wrapper, so one navigation triggered two `wrapUpdate` calls. Plus the
+   framework's existing `onRouteChange` VT. A naive wiring starts multiple
+   `startViewTransition`s that conflict (all but one skipped). The consumer
+   must coordinate so a single transition wraps the content commit.
+2. **API shape.** A module-level setter matches preact-iso's existing
+   `push`/`scope` module-level style, but a `wrapUpdate` prop on
+   `LocationProvider` (singleton root) or a context (so nested Routers inherit)
+   is cleaner. Maintainers' call.
+3. **Tooling.** When testing a `node_modules` edit, exclude `preact-iso` from
+   Vite `optimizeDeps` (or it serves a stale pre-bundle), and keep
+   `preact/compat` out of `router.js` (importing `flushSync` there triggered a
+   Preact hooks `__H` error — let the consumer do the flush).
+
 ## Validation plan for the PR
 
 1. Patch `wrapUpdate` into `Router` (both sync and post-suspense commit paths).
