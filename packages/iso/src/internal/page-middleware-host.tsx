@@ -174,6 +174,20 @@ function HostConsumer({
  * resolving to non-SSR content mid-hydration, which orphans the server route
  * DOM (expected Preact behavior, preactjs/preact#4442) and stacks the redirect
  * target on top (the "client redirect double-mount").
+ *
+ * Timing contract: on the initial load the client middleware runs AFTER
+ * hydration (in the effect), not before first paint. The server already
+ * authorized and rendered this content, so a client guard is advisory here and
+ * applies once hydrated; anything it would redirect away from is already on
+ * screen from SSR, so deferring exposes nothing new. Post-navigation renders
+ * take SuspenseHost, where the chain blocks the render as before.
+ *
+ * Known limitation: this matches the COMMON case where the server passed and
+ * rendered `children`. If a SERVER middleware instead rendered an alternative
+ * (so SSR markup != children) and the client produces no matching outcome, the
+ * client still renders `children` and the SSR/client mismatch is on the user -
+ * the framework does not transmit the server outcome to the client. This is
+ * pre-existing (it predates the deferred strategy) and out of scope here.
  */
 function DeferredHost({
   use,
@@ -194,6 +208,11 @@ function DeferredHost({
 
   useEffect(() => {
     let cancelled = false;
+    // Reset to the server children before re-dispatching, so a stale render()
+    // outcome from a previous path cannot linger if this host is ever reused
+    // across a path change (in practice it only handles the initial load, but
+    // a persisted layout host could in principle see location.path change).
+    setApplied(null);
     startChain(use, location, honoCtx).then((result) => {
       if (cancelled) return;
       if (isRedirect(result.outcome)) {
