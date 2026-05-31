@@ -11,10 +11,17 @@ import { defineClientMiddleware } from '../../define-middleware.js';
 import { PageMiddlewareHost } from '../page-middleware-host.js';
 import { render as renderOutcome } from '../../page-only.js';
 import { redirect } from '../../outcomes.js';
+import {
+  resetHistoryShimForTesting,
+  setNavDirectionForTesting,
+} from '../history-shim.js';
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // Redirect dispatch reads the global "have we navigated yet" signal from
+  // the history shim; reset it so tests do not leak nav state into each other.
+  resetHistoryShimForTesting();
 });
 
 const loc = {
@@ -60,7 +67,11 @@ describe('PageMiddlewareHost', () => {
     expect(screen.queryByText('page-content')).toBeNull();
   });
 
-  it('renders nothing while the chain is pending then renders children once resolved', async () => {
+  it('renders nothing while the chain is pending then renders children once resolved (post-navigation suspense path)', async () => {
+    // Post-navigation (a prior client nav happened), the host takes the
+    // Suspense path: nothing renders until the chain resolves. The
+    // deferred/initial-load path is covered separately below.
+    setNavDirectionForTesting('push');
     let resolve!: () => void;
     const mw = defineClientMiddleware(async (_c, next) => {
       await new Promise<void>((r) => {
@@ -76,6 +87,32 @@ describe('PageMiddlewareHost', () => {
       </LocationProvider>
     );
     expect(screen.queryByText('page-content')).toBeNull();
+    resolve();
+    await waitFor(() =>
+      expect(screen.queryByText('page-content')).not.toBeNull()
+    );
+  });
+
+  it('on initial load renders the server children immediately while the client chain runs (deferred path)', async () => {
+    // No navigation yet: the host renders the server-rendered children right
+    // away (matching SSR so hydration cannot orphan them) and runs the client
+    // chain post-hydration. Here the chain passes, so children stay.
+    let resolve!: () => void;
+    const mw = defineClientMiddleware(async (_c, next) => {
+      await new Promise<void>((r) => {
+        resolve = r;
+      });
+      await next();
+    });
+    rtlRender(
+      <LocationProvider>
+        <PageMiddlewareHost use={[mw]} location={loc}>
+          <div>page-content</div>
+        </PageMiddlewareHost>
+      </LocationProvider>
+    );
+    // Visible immediately, BEFORE the chain resolves (unlike the suspense path).
+    expect(screen.queryByText('page-content')).not.toBeNull();
     resolve();
     await waitFor(() =>
       expect(screen.queryByText('page-content')).not.toBeNull()
@@ -173,12 +210,25 @@ describe('PageMiddlewareHost', () => {
     await waitFor(() => expect(runs).toBe(afterA + 1));
   });
 
-  // B9: client-side `route()` redirect from middleware. The effect-driven
-  // navigation must call useLocation().route with the redirect target.
-  // Without the effect path, the route() call would happen during render
-  // (forbidden by Suspense semantics) or never (if swallowed by the
-  // RouteBoundary fallback).
-  it('client redirect outcome navigates via useLocation().route in an effect', async () => {
+  // B9: client-side redirect from middleware on the INITIAL document load.
+  // The host renders the server-rendered children during hydration (so the
+  // hydrated DOM matches SSR and is never orphaned), then runs the client
+  // chain post-hydration and navigates via SPA route() - NOT a hard
+  // navigation. This is the deferred fix for the double-mount: the orphan only
+  // happened because a Suspense boundary resolved to non-SSR content (null)
+  // mid-hydration; rendering the children instead removes that mismatch, so a
+  // plain route() from the fully hydrated tree is safe. The orphaned-DOM-on-
+  // mismatch is expected Preact behavior (preactjs/preact#4442), so the fix
+  // lives here on the consumer side.
+  it('client redirect on initial load renders SSR children then navigates via SPA route() (no hard nav)', async () => {
+    // No navigation yet: hasClientNavigated() is false, so the host takes the
+    // deferred path. Reset between tests by the afterEach above.
+    const assignSpy = vi.fn();
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: assignSpy,
+    });
+
     const mw = defineClientMiddleware(async () => {
       throw redirect('/login');
     });
@@ -191,19 +241,54 @@ describe('PageMiddlewareHost', () => {
       </LocationProvider>
     );
 
-    // After the chain resolves with a redirect outcome the consumer must
-    // NOT render the children (it returns null pending the effect-scheduled
-    // nav). The route fn lives on useLocation()'s LocationProvider; the
-    // happy-dom env updates window.location synchronously inside route().
+    // The server children are rendered immediately (matching SSR) while the
+    // client chain runs - they are NOT withheld.
+    expect(screen.queryByText('protected-content')).not.toBeNull();
+
+    // Once the chain resolves the redirect, an SPA route() moves the provider
+    // URL to the target (happy-dom updates window.location.pathname).
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    // It must NOT have hard-navigated.
+    expect(assignSpy).not.toHaveBeenCalled();
+  });
+
+  // B9b: a redirect that fires AFTER a client navigation takes the Suspense
+  // path (HostConsumer) and navigates via SPA route(). Post-navigation there is
+  // no hydration to mismatch, so the host suspends on the chain and renders the
+  // redirect outcome (null) while an effect routes to the target. The signal is
+  // global per document load (the history shim's nav direction), not per host,
+  // so a freshly mounted host reached by navigating into a guarded route still
+  // takes this path. This pins the post-navigation half of the behavior.
+  it('client redirect after a navigation uses SPA route(), not a hard navigation', async () => {
+    // Simulate a prior client navigation so hasClientNavigated() is true.
+    setNavDirectionForTesting('push');
+
+    const assignSpy = vi.fn();
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: assignSpy,
+    });
+
+    const mw = defineClientMiddleware(async () => {
+      throw redirect('/login');
+    });
+
+    rtlRender(
+      <LocationProvider>
+        <PageMiddlewareHost use={[mw]} location={loc}>
+          <div>protected-content</div>
+        </PageMiddlewareHost>
+      </LocationProvider>
+    );
+
     await waitFor(() => {
       expect(screen.queryByText('protected-content')).toBeNull();
     });
 
-    // The effect should have run by now. Verify the navigation target made
-    // it to the URL bar (LocationProvider.route uses history.pushState +
-    // updates window.location.pathname under happy-dom).
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/login');
-    });
+    // SPA route() moves the provider URL to the target (happy-dom updates
+    // window.location.pathname inside route()).
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    // It must NOT have hard-navigated.
+    expect(assignSpy).not.toHaveBeenCalled();
   });
 });
