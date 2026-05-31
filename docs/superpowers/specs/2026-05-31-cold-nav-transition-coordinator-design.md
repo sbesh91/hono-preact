@@ -77,6 +77,34 @@ It must also validate two robustness risks:
 If any assumption is false, revisit the coordinator branch logic before
 implementing. The instrumentation is throwaway logging, removed after.
 
+## Phase 0 findings (2026-05-31)
+
+Confirmed from this session's earlier in-browser instrumentation (Chrome via the
+demo) plus the preact-iso fork source. A live re-confirmation against the
+`loadingDepth` model is deferred to the Task 5 browser verification (the Firefox
+MCP was unavailable when Phase 0 ran).
+
+- **(a) `loadingDepth > 0` at a cold `onRouteChange` — CONFIRMED.** A cold nav
+  logged `SUSPEND` (the Router's `this.__c`, which fires `onLoadStart`) *before*
+  the `onRouteChange` effect, then `UNSUSPEND -> RESOLVED.then(update)` (the
+  `wrapUpdate` trigger). So a load is in flight when `onRouteChange` runs.
+- **(b) the first `wrapUpdate` is the page-level commit — CONFIRMED.** The first
+  `wrapUpdate` logged `#app` going from the old route to the new route's
+  page-level content (`"← all projects api Loading projects…"` →
+  `"← all projects api"`); a cold-nested nav fired two `wrapUpdate`s, outer
+  (page-level) first.
+- **(c) `loadingDepth` balance — OK by construction.** preact-iso fires
+  `onLoadEnd` in the commit effect whenever `isLoading.current` is true on a
+  non-suspending commit (`router.js`), including the commit after a load is
+  abandoned by navigating away, so each `onLoadStart` is matched. Re-verify in
+  Task 5.
+- **(d) warm nav during a lingering load — graceful.** If it occurs, the warm
+  nav is mis-stashed as `pending` and simply doesn't animate (content still
+  updates via the normal render); the stale `pending` is discarded on the next
+  dispatch. Acceptable; no special handling.
+
+Assumptions (a) and (b) hold, so the coordinator design below proceeds.
+
 ## Architecture
 
 A small state machine in `packages/iso/src/internal/route-change.ts` with three
