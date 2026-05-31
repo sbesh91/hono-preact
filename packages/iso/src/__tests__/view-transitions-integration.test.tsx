@@ -6,6 +6,7 @@ import { LocationProvider, useLocation } from 'preact-iso';
 import { defineRoutes, Routes } from '../define-routes.js';
 import {
   __dispatchRouteChange,
+  __wrapNavigation,
   resetDefaultTypesForTesting,
   __resetTransitionStateForTesting,
 } from '../internal/route-change.js';
@@ -37,16 +38,13 @@ afterEach(() => {
 });
 
 // Real-DOM test that exercises the FULL wiring chain end-to-end:
-//   LocationProvider → preact-iso <Router> (mounted by `Routes`) →
-//   onRouteChange callback fires in useLayoutEffect → __dispatchRouteChange
-//   → document.startViewTransition(cb).
+//   LocationProvider (wrapNavigation = __wrapNavigation) → a navigation runs
+//   the route change inside document.startViewTransition → the Router (mounted
+//   by `Routes`) swaps in the new route.
 //
-// The previous coverage in route-change.test.ts called __dispatchRouteChange
-// directly with a stubbed document. That tests "the dispatcher invokes the
-// API when enabled"; it does NOT test that a real Router-driven navigation
-// actually reaches the dispatcher. Given how recently the view-transitions
-// opt-in plumbing thrashed (74f952c → e837831), this is the regression we
-// most want a guard against.
+// This is the guard that a real navigation reaches the coordinator: the
+// transition must start before the route re-renders so the browser can capture
+// the outgoing route as the old snapshot.
 describe('view transitions: end-to-end wiring', () => {
   // A view component that uses useLocation so we can trigger a programmatic
   // navigation from inside the rendered tree (mirrors how real apps call
@@ -60,15 +58,22 @@ describe('view transitions: end-to-end wiring', () => {
     return h('button', { onClick: () => route('/') }, 'back to home');
   };
 
-  it('fires document.startViewTransition once for a warm (already-loaded) navigation', async () => {
-    const startViewTransition = vi.fn((cb: () => void) => {
-      cb();
+  const makeFakeVt = () =>
+    vi.fn((cb: () => void | Promise<void>) => {
+      // Real browsers run the update callback asynchronously, after capturing
+      // the old snapshot; mirror that here.
+      void Promise.resolve().then(() => cb());
       return {
         ready: Promise.resolve(),
         finished: Promise.resolve(),
         updateCallbackDone: Promise.resolve(),
+        types: { add: () => {} },
+        skipTransition: () => {},
       };
     });
+
+  it('routes a navigation through wrapNavigation into document.startViewTransition', async () => {
+    const startViewTransition = makeFakeVt();
     Object.assign(document, { startViewTransition });
 
     const routes = defineRoutes([
@@ -76,58 +81,35 @@ describe('view transitions: end-to-end wiring', () => {
       { path: '/about', view: () => Promise.resolve({ default: About }) },
     ]);
 
-    // Wire onRouteChange the same way the framework's generated client
-    // entry does: forward every top-Router commit into __dispatchRouteChange.
-    let lastPath: string | undefined;
-    function onRouteChange(path: string): void {
-      const from = lastPath;
-      lastPath = path;
-      __dispatchRouteChange(path, from);
-    }
-
     const { container } = render(
-      h(LocationProvider, null, h(Routes, { routes, onRouteChange }))
+      h(
+        LocationProvider,
+        { wrapNavigation: __wrapNavigation },
+        h(Routes, { routes })
+      )
     );
 
     // Wait for the lazy Home view to mount.
     await waitFor(() =>
       expect(container.querySelector('button')?.textContent).toBe('go to about')
     );
-
-    // Initial mount does not fire onRouteChange (preact-iso's Router only
-    // fires onRouteChange when prevRoute.current !== path). startViewTransition
-    // should still be at zero calls before any user-driven nav.
+    // The initial mount is not a navigation.
     expect(startViewTransition).not.toHaveBeenCalled();
 
-    // First nav to /about loads its view (a cold/suspending navigation). The
-    // coordinator defers a cold navigation's transition to its post-suspense
-    // commit; that path's exact event ordering is environment-specific (it is
-    // covered by route-change-coordinator.test.ts and the browser
-    // verification). Here we drive it only to land on a now-loaded route.
+    // A user navigation goes LocationProvider's wrapNavigation →
+    // __wrapNavigation → document.startViewTransition, and lands on /about.
     fireEvent.click(container.querySelector('button')!);
+    await waitFor(() => expect(startViewTransition).toHaveBeenCalledTimes(1));
+    expect(typeof startViewTransition.mock.calls[0][0]).toBe('function');
     await waitFor(() =>
       expect(container.querySelector('button')?.textContent).toBe(
         'back to home'
       )
     );
-
-    // Now navigate back to '/'. Home is already loaded, so this is a warm
-    // (synchronous) navigation, which the coordinator transitions at dispatch
-    // time. This is the end-to-end guard that a real Router-driven navigation
-    // reaches document.startViewTransition.
-    startViewTransition.mockClear();
-    fireEvent.click(container.querySelector('button')!);
-
-    await waitFor(() => expect(startViewTransition).toHaveBeenCalledTimes(1));
-    // The callback passed to startViewTransition must be a function. Real
-    // browsers call it inside the snapshot window; the framework hands them
-    // `() => flushSync(() => {})`.
-    expect(typeof startViewTransition.mock.calls[0][0]).toBe('function');
   });
 
-  it('does not call startViewTransition when the API is unavailable on document', async () => {
-    // Browsers without view-transitions: dispatching should still notify
-    // subscribers (other __dispatchRouteChange consumers) without throwing.
+  it('navigates without throwing when the view-transition API is unavailable', async () => {
+    // Browsers without view-transitions: the navigation still runs, no throw.
     Object.assign(document, { startViewTransition: undefined });
 
     const routes = defineRoutes([
@@ -135,24 +117,25 @@ describe('view transitions: end-to-end wiring', () => {
       { path: '/about', view: () => Promise.resolve({ default: About }) },
     ]);
 
-    let lastPath: string | undefined;
-    const onRouteChange = (path: string): void => {
-      const from = lastPath;
-      lastPath = path;
-      __dispatchRouteChange(path, from);
-    };
-
     const { container } = render(
-      h(LocationProvider, null, h(Routes, { routes, onRouteChange }))
+      h(
+        LocationProvider,
+        { wrapNavigation: __wrapNavigation },
+        h(Routes, { routes })
+      )
     );
     await waitFor(() =>
-      expect(container.querySelector('button')).not.toBeNull()
+      expect(container.querySelector('button')?.textContent).toBe('go to about')
     );
 
-    // Should NOT throw and should NOT call any view-transition API.
     expect(() =>
       fireEvent.click(container.querySelector('button')!)
     ).not.toThrow();
+    await waitFor(() =>
+      expect(container.querySelector('button')?.textContent).toBe(
+        'back to home'
+      )
+    );
   });
 });
 

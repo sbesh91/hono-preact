@@ -59,7 +59,7 @@ export { HonoRequestContext } from './internal/contexts.js';
 export { PageMiddlewareHost } from './internal/page-middleware-host.js';
 
 export {
-  __dispatchRouteChange,
+  __wrapNavigation,
   __subscribeRouteChange,
 } from './internal/route-change.js';
 

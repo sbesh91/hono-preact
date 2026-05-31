@@ -24,29 +24,21 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
     expect(src).toContain(`import { Routes, PersistHost } from 'hono-preact';`);
     expect(src).toContain(
-      `import { __dispatchRouteChange, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';`
+      `import { __wrapNavigation, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';`
     );
     expect(src).toContain(`installHistoryShim();`);
     expect(src).toContain(`installStreamRegistry();`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
   });
 
-  it('hydrates into #app and wires onRouteChange to the dispatcher', () => {
+  it('hydrates into #app and wraps navigations in the view-transition coordinator', () => {
     const src = generateClientEntrySource({
       routesAbsPath: '/proj/src/routes.ts',
     });
     expect(src).toContain(`document.getElementById('app')`);
-    expect(src).toContain(`onRouteChange`);
-    expect(src).toContain(`__dispatchRouteChange`);
-  });
-
-  it('seeds lastPath from the initial pathname so the first nav has a defined `from`', () => {
-    const src = generateClientEntrySource({
-      routesAbsPath: '/proj/src/routes.ts',
-    });
-    expect(src).toContain(
-      `let lastPath = typeof location !== 'undefined' ? location.pathname : undefined;`
-    );
+    // wrapNavigation is wired onto LocationProvider so navigations start a
+    // transition before the route re-renders.
+    expect(src).toContain(`wrapNavigation: __wrapNavigation`);
   });
 
   it('imports installHistoryShim and calls it before installStreamRegistry', () => {

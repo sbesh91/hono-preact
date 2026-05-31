@@ -42,107 +42,66 @@ function fireLegacy(to: string, from: string | undefined): void {
 }
 
 function getStartViewTransition():
-  | ((cb: () => void) => ViewTransition)
+  | ((cb: () => void | Promise<void>) => ViewTransition)
   | undefined {
   if (typeof document === 'undefined') return undefined;
   const fn = (
-    document as { startViewTransition?: (cb: () => void) => ViewTransition }
+    document as {
+      startViewTransition?: (cb: () => void | Promise<void>) => ViewTransition;
+    }
   ).startViewTransition;
   return typeof fn === 'function' ? fn.bind(document) : undefined;
 }
 
-// Coordinator state. `loadingDepth` is how many Routers are mid-suspense (via
-// their onLoadStart/onLoadEnd). `pending` holds a cold navigation only on the
-// no-view-transitions fallback path; the normal cold path starts the transition
-// at dispatch and bridges its swap to the route's content commit.
+function currentPath(): string {
+  return typeof location !== 'undefined'
+    ? location.pathname + location.search
+    : '';
+}
+
+// `loadingDepth`: how many Routers are mid-suspense (via onLoadStart/onLoadEnd).
+// Read right after a navigation commits to tell whether the route suspended (a
+// cold navigation), so the transition can wait for the suspended content.
 let loadingDepth = 0;
-let pending: ViewTransitionEvent | null = null;
-
-// Cold-morph bridge state (Approach: capture the old snapshot at dispatch, while
-// the source route is still mounted, then swap when the content commits).
-//
-// `coldActive` is true between starting a cold transition and its swap; while it
-// is true, newly-mounted ViewTransitionName elements defer naming themselves so
-// the destination isn't named in the old snapshot. `deferredNames` collects
-// those name-applications; they run in the swap so they land in the new
-// snapshot. `coldBridgeResolve` resumes the (async) transition callback once the
-// route's content is ready; `coldCommit` is that content commit.
-let coldActive = false;
-let deferredNames: Array<() => void> = [];
-let coldBridgeResolve: (() => void) | null = null;
-let coldCommit: (() => void) | null = null;
-let coldTimeout: ReturnType<typeof setTimeout> | null = null;
-// Bumped per cold transition so a superseded one's (async) callback, once
-// resumed, can detect it is no longer current and bow out without clobbering
-// the live transition's state.
-let coldGen = 0;
-// True when a page-level content commit already ran via __wrapRouteCommit during
-// the current load WITHOUT a transition wrapping it. This is the "cold-flat"
-// ordering: the route's own (top) Router suspended, so its `wrapUpdate` fired
-// BEFORE `onRouteChange`. The dispatch reads this to run a synchronous
-// transition (the content is already on screen) instead of the bridged cold
-// path, which would otherwise wait for a commit that already happened and
-// freeze the page.
-let directCommitDuringLoad = false;
-
-// Safety net: the longest a cold navigation will hold the page frozen on the old
-// snapshot waiting for its content commit. A commit normally arrives within a
-// frame or two (the lazy route module resolving). On a slow connection or a
-// stalled/errored load this caps the freeze — past it the navigation just
-// completes without the transition rather than holding the page.
-const COLD_COMMIT_TIMEOUT_MS = 500;
-
-export function __isColdTransitionActive(): boolean {
-  return coldActive;
-}
-export function __deferTransitionName(apply: () => void): void {
-  deferredNames.push(apply);
-}
-function flushDeferredNames(): void {
-  const queued = deferredNames;
-  deferredNames = [];
-  for (const apply of queued) apply();
-}
-
-// Resume a cold transition that is awaiting its content commit (or its timeout).
-// Used by __wrapRouteCommit (the commit arrived), by a subsequent navigation
-// (the previous cold nav was abandoned mid-flight), and by the timeout. If no
-// commit is set the transition swaps nothing; the deferred names are flushed
-// either way so incoming elements end up named.
-function resumeColdTransition(): void {
-  if (coldTimeout !== null) {
-    clearTimeout(coldTimeout);
-    coldTimeout = null;
-  }
-  const resolve = coldBridgeResolve;
-  coldBridgeResolve = null;
-  if (resolve) resolve();
-}
-
 export function __noteLoadStart(): void {
   loadingDepth++;
 }
 export function __noteLoadEnd(): void {
   loadingDepth = Math.max(0, loadingDepth - 1);
-  // Once the load settles, drop an unconsumed direct-commit flag (e.g. the
-  // initial hydration load, which commits but never dispatches) so it can't
-  // mislabel the next navigation.
-  if (loadingDepth === 0) directCommitDuringLoad = false;
 }
+
+// The path the app is currently on (the previous navigation's `to`); seeds
+// `from` for the first navigation. A server render leaves it undefined.
+let lastPath: string | undefined =
+  typeof location !== 'undefined'
+    ? location.pathname + location.search
+    : undefined;
+
+// Cold-navigation bridge. A suspending route's content commits later via
+// __wrapRouteCommit; the in-flight transition awaits it so the new snapshot is
+// the loaded content (or shell), not the suspense fallback.
+let coldResolve: (() => void) | null = null;
+let coldTimeout: ReturnType<typeof setTimeout> | null = null;
+// Bumped per navigation so a superseded transition's (async) callback bows out.
+let navGen = 0;
+// Cap on how long a navigation holds the old snapshot waiting for a suspending
+// route's content. Past it the navigation completes without finishing the
+// transition rather than freezing the page on a slow/stalled load.
+const COLD_COMMIT_TIMEOUT_MS = 500;
 
 /** @internal Test-only reset for coordinator state. */
 export function __resetTransitionStateForTesting(): void {
   loadingDepth = 0;
-  pending = null;
-  coldActive = false;
-  deferredNames = [];
-  coldBridgeResolve = null;
-  coldCommit = null;
-  directCommitDuringLoad = false;
+  navGen = 0;
+  lastPath =
+    typeof location !== 'undefined'
+      ? location.pathname + location.search
+      : undefined;
   if (coldTimeout !== null) {
     clearTimeout(coldTimeout);
     coldTimeout = null;
   }
+  coldResolve = null;
 }
 
 function fireAfterSwap(event: ViewTransitionEvent): void {
@@ -160,185 +119,195 @@ function fireAfterTransition(
   for (const sub of phaseSubs.afterTransition) sub(event);
 }
 
-// Runs `swap` wrapped in a view transition (when available), firing the
-// post-swap phases and applying the event's accumulated types. Used by both the
-// warm path (swap = no-op; flushSync flushes the already-pending route render)
-// and the cold path (swap = the deferred content commit).
-function runTransition(event: ViewTransitionEvent, swap: () => void): void {
-  if (event._skipped) {
-    flushSync(swap);
-    fireAfterSwap(event);
-    fireAfterTransition(event, 'skipped');
-    return;
-  }
-  const start = getStartViewTransition();
-  if (!start) {
-    flushSync(swap);
-    fireAfterSwap(event);
-    fireAfterTransition(event, 'unsupported');
-    return;
-  }
-  let transition: ViewTransition;
-  try {
-    transition = start(() => {
-      flushSync(swap);
-    });
-  } catch {
-    // Non-conformant / polyfilled startViewTransition that throws synchronously:
-    // still perform the swap so the navigation completes.
-    flushSync(swap);
-    fireAfterSwap(event);
-    fireAfterTransition(event, 'unsupported');
-    return;
-  }
-  event.transition = transition;
-  for (const sub of phaseSubs.beforeSwap) sub(event);
-  fireAfterSwap(event);
+function applyTypes(
+  transition: ViewTransition,
+  types: readonly string[]
+): void {
   const vtTypes = (
     transition as ViewTransition & { types?: { add(t: string): void } }
   ).types;
   if (vtTypes && typeof vtTypes.add === 'function') {
-    for (const t of event.types) vtTypes.add(t);
+    for (const t of types) vtTypes.add(t);
   }
+}
+
+function skipTransition(transition: ViewTransition): void {
+  const t = transition as ViewTransition & { skipTransition?: () => void };
+  if (typeof t.skipTransition === 'function') t.skipTransition();
+}
+
+// Build the event for a navigation that has just committed: `to`/`direction`
+// are only correct after the commit (pushState updates the history shim), so
+// this is always called post-commit. Advances `lastPath`.
+function buildEvent(from: string | undefined): ViewTransitionEvent {
+  ensureDefaultTypes();
+  const to = currentPath();
+  lastPath = to;
+  const direction: NavDirection = getNavDirection();
+  const event = new ViewTransitionEvent({ to, from, direction });
+  for (const sub of phaseSubs.beforeTransition) sub(event);
+  return event;
+}
+
+// Resolve the pending cold bridge — the content commit arrived, the timeout
+// fired, or a newer navigation superseded it.
+function resolveCold(): void {
+  if (coldTimeout !== null) {
+    clearTimeout(coldTimeout);
+    coldTimeout = null;
+  }
+  const resolve = coldResolve;
+  coldResolve = null;
+  if (resolve) resolve();
+}
+
+// Called from `LocationProvider`'s `wrapNavigation` (preact-iso fork). Starts
+// the view transition, THEN performs the navigation inside it (flushSync) so the
+// browser captures the current route as the old snapshot before the new route
+// swaps in. For a navigation to a suspending route, the transition waits for the
+// content to commit (via __wrapRouteCommit) before finishing.
+export function __wrapNavigation(commit: () => void): void {
+  const from = lastPath;
+
+  // A previous cold navigation never finished committing; abandon it so its
+  // transition can't stay frozen and its callback won't touch live state.
+  if (coldResolve) {
+    navGen++;
+    resolveCold();
+  }
+
+  const start = getStartViewTransition();
+  if (!start) {
+    // No view transitions: navigate, then fire the post-swap phases (no
+    // transition runs, so `beforeSwap` is skipped).
+    flushSync(commit);
+    const event = buildEvent(from);
+    fireAfterSwap(event);
+    fireAfterTransition(event, event._skipped ? 'skipped' : 'unsupported');
+    return;
+  }
+
+  const myGen = ++navGen;
+  let transition: ViewTransition;
+  let event: ViewTransitionEvent | undefined;
+  try {
+    transition = start(async () => {
+      // The old snapshot has been captured. Perform the navigation.
+      flushSync(commit);
+      if (navGen !== myGen) return; // superseded while capturing
+      event = buildEvent(from);
+      event.transition = transition;
+      applyTypes(transition, event.types);
+
+      if (event._skipped) {
+        skipTransition(transition);
+      } else {
+        for (const sub of phaseSubs.beforeSwap) sub(event);
+        if (loadingDepth > 0) {
+          // Cold navigation: the new route suspended. Wait for its content (the
+          // shell) to commit via __wrapRouteCommit, so the new snapshot is the
+          // loaded route rather than the suspense fallback.
+          await new Promise<void>((resolve) => {
+            coldResolve = resolve;
+            coldTimeout = setTimeout(() => {
+              if (navGen === myGen) resolveCold();
+            }, COLD_COMMIT_TIMEOUT_MS);
+          });
+        }
+      }
+
+      if (navGen !== myGen) return;
+      fireAfterSwap(event);
+    });
+  } catch {
+    // Non-conformant / polyfilled startViewTransition that throws synchronously:
+    // still perform the navigation and fire the post-swap phases.
+    flushSync(commit);
+    const ev = buildEvent(from);
+    fireAfterSwap(ev);
+    fireAfterTransition(ev, 'unsupported');
+    return;
+  }
+
   transition.finished.then(
-    () => fireAfterTransition(event),
-    () => fireAfterTransition(event, 'aborted')
+    () => {
+      if (event)
+        fireAfterTransition(event, event._skipped ? 'skipped' : undefined);
+    },
+    () => {
+      if (event) fireAfterTransition(event, 'aborted');
+    }
   );
 }
 
+// Synchronous route-change dispatch for an explicit `to`/`from`: fires
+// `beforeTransition` and runs a transition that wraps a no-op swap (the route is
+// assumed already on screen), firing the post-swap phases and applying types.
+// Production navigations go through `__wrapNavigation`; this drives the same
+// phase/type/lifecycle machinery directly for callers that change the route
+// outside the normal navigation flow (and in unit tests).
 export function __dispatchRouteChange(
   to: string,
   from: string | undefined
 ): void {
   ensureDefaultTypes();
-  const direction: NavDirection = getNavDirection();
-  const event = new ViewTransitionEvent({ to, from, direction });
-
-  // If a previous cold navigation is still awaiting its content commit, this new
-  // navigation abandoned it — invalidate its (async) callback and resume it now
-  // (swapping nothing) so its transition can't stay frozen or re-fire phases.
-  if (coldBridgeResolve) {
-    coldGen++;
-    resumeColdTransition();
-  }
-
+  const event = new ViewTransitionEvent({
+    to,
+    from,
+    direction: getNavDirection(),
+  });
   for (const sub of phaseSubs.beforeTransition) sub(event);
 
-  if (loadingDepth > 0) {
-    if (directCommitDuringLoad) {
-      // Cold-flat ordering: the route's own Router suspended, so its content
-      // already committed (wrapUpdate fired before this dispatch). There is no
-      // earlier source snapshot left to capture, so run the transition
-      // synchronously — the directional root slide still plays — rather than
-      // bridging to a commit that already happened (which would freeze the page).
-      directCommitDuringLoad = false;
-      runTransition(event, () => {});
-      return;
-    }
-    // Cold-nested ordering: this dispatch precedes the content commit. Start the
-    // transition NOW so the browser captures the still-mounted source route as
-    // the old snapshot, and bridge the swap to the content commit (see
-    // __wrapRouteCommit).
-    runColdTransition(event);
-    return;
-  }
-
-  // Warm navigation: the route render is already pending; flushSync inside the
-  // transition commits it.
-  runTransition(event, () => {});
-}
-
-// Cold path: start the transition at dispatch (old snapshot = the source route,
-// still mounted), then resume and swap when the content commits.
-function runColdTransition(event: ViewTransitionEvent): void {
   const start = getStartViewTransition();
   if (!start || event._skipped) {
-    // No view transitions (or skipped): fall back to the deferred,
-    // non-morphing path — the swap still happens at the content commit.
-    pending = event;
+    // No transition runs, so `beforeSwap` (which precedes a real swap) is
+    // skipped; the post-swap phases still fire.
+    fireAfterSwap(event);
+    fireAfterTransition(event, event._skipped ? 'skipped' : 'unsupported');
     return;
   }
-  const myGen = ++coldGen;
-  coldActive = true;
   let transition: ViewTransition;
   try {
-    transition = start(async () => {
-      // The old snapshot has been captured. Wait for the route content to
-      // commit, then swap and reveal the deferred incoming names so they land
-      // in the new snapshot.
-      await new Promise<void>((resolve) => {
-        coldBridgeResolve = resolve;
-      });
-      // A newer navigation superseded this one while it was waiting: let this
-      // (now-stale) transition complete as a no-op rather than touch live state.
-      if (coldGen !== myGen) return;
-      for (const sub of phaseSubs.beforeSwap) sub(event);
-      const commit = coldCommit;
-      coldCommit = null;
-      if (commit) flushSync(commit);
-      flushDeferredNames();
-      coldActive = false;
-      fireAfterSwap(event);
-    });
+    transition = start(() => {});
   } catch {
-    coldActive = false;
-    coldBridgeResolve = null;
-    coldCommit = null;
-    flushDeferredNames();
-    pending = event;
+    fireAfterSwap(event);
+    fireAfterTransition(event, 'unsupported');
     return;
   }
-  // Safety net so a stalled or errored load can't freeze the page forever. The
-  // generation check keeps a stale timer from resuming a newer transition.
-  coldTimeout = setTimeout(() => {
-    if (coldGen === myGen) resumeColdTransition();
-  }, COLD_COMMIT_TIMEOUT_MS);
   event.transition = transition;
-  const vtTypes = (
-    transition as ViewTransition & { types?: { add(t: string): void } }
-  ).types;
-  if (vtTypes && typeof vtTypes.add === 'function') {
-    for (const t of event.types) vtTypes.add(t);
-  }
+  applyTypes(transition, event.types);
+  for (const sub of phaseSubs.beforeSwap) sub(event);
+  fireAfterSwap(event);
   transition.finished.then(
     () => fireAfterTransition(event),
     () => fireAfterTransition(event, 'aborted')
   );
 }
 
-// Called from each Router's `wrapUpdate` (preact-iso fork). Resumes the active
-// cold transition with the page-level content commit, runs the no-VT fallback
-// transition, or commits directly (a later nested/fill-in commit, the initial
-// route load, or a post-load re-suspense).
+// Called from each Router's `wrapUpdate` (preact-iso fork). When a cold
+// navigation is awaiting its content, apply the commit and resume the
+// transition; otherwise commit directly (the initial route load, a nested
+// fill-in commit after the shell, or a post-load re-suspense).
 export function __wrapRouteCommit(commit: () => void): void {
-  if (coldBridgeResolve) {
-    coldCommit = commit;
-    resumeColdTransition();
-  } else if (pending) {
-    const event = pending;
-    pending = null;
-    runTransition(event, commit);
+  if (coldResolve) {
+    flushSync(commit);
+    resolveCold();
   } else {
-    // No transition is wrapping this commit. If it lands during a load, it is a
-    // page-level commit that beat its dispatch (cold-flat ordering) — flag it so
-    // the imminent dispatch runs a synchronous transition rather than waiting
-    // for a commit that already happened.
-    if (loadingDepth > 0) directCommitDuringLoad = true;
     commit();
   }
 }
 
 let defaultTypesInstalled = false;
-let firstDispatchSeen = false;
+let firstNavSeen = false;
 let defaultTypeUnsubscriber: (() => void) | null = null;
 
 function ensureDefaultTypes(): void {
   if (defaultTypesInstalled) return;
   defaultTypesInstalled = true;
   defaultTypeUnsubscriber = __subscribePhase('beforeTransition', (event) => {
-    if (!firstDispatchSeen) {
+    if (!firstNavSeen) {
       event.types.push('nav-initial');
-      firstDispatchSeen = true;
+      firstNavSeen = true;
     } else {
       event.types.push(`nav-${event.direction}`);
     }
@@ -352,6 +321,6 @@ export function resetDefaultTypesForTesting(): void {
     defaultTypeUnsubscriber();
   }
   defaultTypesInstalled = false;
-  firstDispatchSeen = false;
+  firstNavSeen = false;
   defaultTypeUnsubscriber = null;
 }

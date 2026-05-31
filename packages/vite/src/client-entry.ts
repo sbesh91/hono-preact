@@ -15,7 +15,7 @@ export function generateClientEntrySource(
     `import { h, hydrate, render as renderPreact } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes, PersistHost } from 'hono-preact';\n` +
-    `import { __dispatchRouteChange, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
+    `import { __wrapNavigation, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
     `installHistoryShim();\n` +
@@ -29,22 +29,15 @@ export function generateClientEntrySource(
     `}\n` +
     `renderPreact(h(PersistHost, null), persistHost);\n` +
     `\n` +
-    // Seed lastPath with the initial pathname so the FIRST client navigation
-    // reports a defined `from` to user callbacks (useViewTransitionTypes /
-    // useViewTransitionLifecycle). preact-iso doesn't fire onRouteChange on the
-    // initial hydration mount, so without this the first nav's `from` would be
-    // undefined. (Built-in direction is computed from the history shim, not
-    // `from`, so only `from`-reading user callbacks are affected.)
-    `let lastPath = typeof location !== 'undefined' ? location.pathname : undefined;\n` +
-    `function onRouteChange(path) {\n` +
-    `  const from = lastPath;\n` +
-    `  lastPath = path;\n` +
-    `  __dispatchRouteChange(path, from);\n` +
-    `}\n` +
-    `\n` +
+    // Wrap every navigation in a view transition that starts BEFORE the route
+    // re-renders, so the browser captures the outgoing route as the old snapshot
+    // before the new one swaps in (this is what lets shared-element morphs and
+    // directional slides animate old->new). The coordinator runs the commit
+    // inside the transition and, for navigations to suspending routes, waits for
+    // the content via the Router's wrapUpdate.
     `hydrate(\n` +
-    `  h(LocationProvider, null,\n` +
-    `    h(Routes, { routes, onRouteChange })\n` +
+    `  h(LocationProvider, { wrapNavigation: __wrapNavigation },\n` +
+    `    h(Routes, { routes })\n` +
     `  ),\n` +
     `  document.getElementById('app')\n` +
     `);\n`
