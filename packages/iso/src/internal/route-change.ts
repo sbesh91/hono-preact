@@ -51,16 +51,85 @@ function getStartViewTransition():
   return typeof fn === 'function' ? fn.bind(document) : undefined;
 }
 
-// Types computed for the most recent navigation. A suspending route's content
-// commits after this dispatch's transition (see define-routes' wrapRouteUpdate),
-// so that deferred commit re-applies these types to its own transition to keep
-// the same direction-driven styling as a synchronous navigation. `null` until
-// the first navigation is dispatched, which lets the deferred-commit wrapper
-// distinguish a real navigation from the initial route load (whose lazy view
-// resolving must NOT trigger a transition).
-let __lastNavTypes: string[] | null = null;
-export function __getLastNavTypes(): string[] | null {
-  return __lastNavTypes;
+// Coordinator state. `loadingDepth` is how many Routers are mid-suspense (via
+// their onLoadStart/onLoadEnd). `pending` is a cold navigation whose
+// beforeTransition has fired but whose transition is deferred until the route's
+// content commits (see __wrapRouteCommit).
+let loadingDepth = 0;
+let pending: ViewTransitionEvent | null = null;
+
+export function __noteLoadStart(): void {
+  loadingDepth++;
+}
+export function __noteLoadEnd(): void {
+  loadingDepth = Math.max(0, loadingDepth - 1);
+}
+
+/** @internal Test-only reset for coordinator state. */
+export function __resetTransitionStateForTesting(): void {
+  loadingDepth = 0;
+  pending = null;
+}
+
+function fireAfterSwap(event: ViewTransitionEvent): void {
+  for (const sub of phaseSubs.afterSwap) sub(event);
+  // Legacy subscribers fire at the afterSwap slot: after the DOM swap, before
+  // the browser begins animating the new frame.
+  fireLegacy(event.to, event.from);
+}
+
+function fireAfterTransition(
+  event: ViewTransitionEvent,
+  reason?: 'skipped' | 'unsupported' | 'aborted'
+): void {
+  if (reason !== undefined) event.reason = reason;
+  for (const sub of phaseSubs.afterTransition) sub(event);
+}
+
+// Runs `swap` wrapped in a view transition (when available), firing the
+// post-swap phases and applying the event's accumulated types. Used by both the
+// warm path (swap = no-op; flushSync flushes the already-pending route render)
+// and the cold path (swap = the deferred content commit).
+function runTransition(event: ViewTransitionEvent, swap: () => void): void {
+  if (event._skipped) {
+    flushSync(swap);
+    fireAfterSwap(event);
+    fireAfterTransition(event, 'skipped');
+    return;
+  }
+  const start = getStartViewTransition();
+  if (!start) {
+    flushSync(swap);
+    fireAfterSwap(event);
+    fireAfterTransition(event, 'unsupported');
+    return;
+  }
+  let transition: ViewTransition;
+  try {
+    transition = start(() => {
+      flushSync(swap);
+    });
+  } catch {
+    // Non-conformant / polyfilled startViewTransition that throws synchronously:
+    // still perform the swap so the navigation completes.
+    flushSync(swap);
+    fireAfterSwap(event);
+    fireAfterTransition(event, 'unsupported');
+    return;
+  }
+  event.transition = transition;
+  for (const sub of phaseSubs.beforeSwap) sub(event);
+  fireAfterSwap(event);
+  const vtTypes = (
+    transition as ViewTransition & { types?: { add(t: string): void } }
+  ).types;
+  if (vtTypes && typeof vtTypes.add === 'function') {
+    for (const t of event.types) vtTypes.add(t);
+  }
+  transition.finished.then(
+    () => fireAfterTransition(event),
+    () => fireAfterTransition(event, 'aborted')
+  );
 }
 
 export function __dispatchRouteChange(
@@ -73,67 +142,31 @@ export function __dispatchRouteChange(
 
   for (const sub of phaseSubs.beforeTransition) sub(event);
 
-  // Remember the types for this navigation so a deferred suspending-route
-  // commit can re-apply them to its own transition.
-  __lastNavTypes = [...event.types];
-
-  const fireAfterSwap = () => {
-    for (const sub of phaseSubs.afterSwap) sub(event);
-    // Legacy subscribers fire at the afterSwap slot: after the DOM swap,
-    // before the browser begins animating the new frame.
-    fireLegacy(to, from);
-  };
-
-  const fireAfterTransition = (
-    reason?: 'skipped' | 'unsupported' | 'aborted'
-  ): void => {
-    if (reason !== undefined) event.reason = reason;
-    for (const sub of phaseSubs.afterTransition) sub(event);
-  };
-
-  if (event._skipped) {
-    flushSync(() => {});
-    fireAfterSwap();
-    fireAfterTransition('skipped');
+  if (loadingDepth > 0) {
+    // Cold navigation: the route is still loading, so its real content swap
+    // happens later via __wrapRouteCommit. Defer the transition to that commit.
+    // (A still-unconsumed pending from a prior nav is discarded here.)
+    pending = event;
     return;
   }
 
-  const start = getStartViewTransition();
-  if (!start) {
-    flushSync(() => {});
-    fireAfterSwap();
-    fireAfterTransition('unsupported');
-    return;
+  // Warm navigation: the route render is already pending; flushSync inside the
+  // transition commits it.
+  runTransition(event, () => {});
+}
+
+// Called from each Router's `wrapUpdate` (preact-iso fork). Runs the deferred
+// transition for the current cold navigation, or commits directly when there is
+// none (a later nested commit, the initial route load, or a post-load
+// re-suspense).
+export function __wrapRouteCommit(commit: () => void): void {
+  if (pending) {
+    const event = pending;
+    pending = null;
+    runTransition(event, commit);
+  } else {
+    commit();
   }
-
-  const transition = start(() => {
-    flushSync(() => {});
-  });
-  // Set event.transition before firing beforeSwap so all subsequent phase
-  // subscribers see a non-null transition. In real browsers startViewTransition
-  // invokes the callback asynchronously, meaning transition is set here before
-  // the browser calls the update function. In synchronous test mocks the
-  // callback returns before start() does, so we set transition here (after
-  // start() returns) and then fire the post-swap phases manually.
-  event.transition = transition;
-  for (const sub of phaseSubs.beforeSwap) sub(event);
-  fireAfterSwap();
-
-  // Apply types accumulated across all phases. beforeTransition and beforeSwap
-  // have both run by this point, so the full set of types is available here.
-  const vtTypes = (
-    transition as ViewTransition & {
-      types?: { add(t: string): void };
-    }
-  ).types;
-  if (vtTypes && typeof vtTypes.add === 'function') {
-    for (const t of event.types) vtTypes.add(t);
-  }
-
-  transition.finished.then(
-    () => fireAfterTransition(),
-    () => fireAfterTransition('aborted')
-  );
 }
 
 let defaultTypesInstalled = false;
