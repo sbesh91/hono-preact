@@ -7,6 +7,7 @@ import { defineRoutes, Routes } from '../define-routes.js';
 import {
   __dispatchRouteChange,
   resetDefaultTypesForTesting,
+  __resetTransitionStateForTesting,
 } from '../internal/route-change.js';
 import {
   resetHistoryShimForTesting,
@@ -24,6 +25,9 @@ import {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Reset the coordinator's loadingDepth/pending so a navigation left mid-load
+  // by one test cannot misclassify the next test's navigation.
+  __resetTransitionStateForTesting();
   // The first test navigates to /about via history.pushState; subsequent
   // tests need to start fresh at '/' or their LocationProvider initialises
   // off the leftover URL and renders About instead of Home.
@@ -51,9 +55,12 @@ describe('view transitions: end-to-end wiring', () => {
     const { route } = useLocation();
     return h('button', { onClick: () => route('/about') }, 'go to about');
   };
-  const About = () => h('h1', null, 'About');
+  const About = () => {
+    const { route } = useLocation();
+    return h('button', { onClick: () => route('/') }, 'back to home');
+  };
 
-  it('fires document.startViewTransition once per navigation triggered through the Router', async () => {
+  it('fires document.startViewTransition once for a warm (already-loaded) navigation', async () => {
     const startViewTransition = vi.fn((cb: () => void) => {
       cb();
       return {
@@ -70,7 +77,7 @@ describe('view transitions: end-to-end wiring', () => {
     ]);
 
     // Wire onRouteChange the same way the framework's generated client
-    // entry does: forward every Router commit into __dispatchRouteChange.
+    // entry does: forward every top-Router commit into __dispatchRouteChange.
     let lastPath: string | undefined;
     function onRouteChange(path: string): void {
       const from = lastPath;
@@ -84,7 +91,7 @@ describe('view transitions: end-to-end wiring', () => {
 
     // Wait for the lazy Home view to mount.
     await waitFor(() =>
-      expect(container.querySelector('button')).not.toBeNull()
+      expect(container.querySelector('button')?.textContent).toBe('go to about')
     );
 
     // Initial mount does not fire onRouteChange (preact-iso's Router only
@@ -92,9 +99,23 @@ describe('view transitions: end-to-end wiring', () => {
     // should still be at zero calls before any user-driven nav.
     expect(startViewTransition).not.toHaveBeenCalled();
 
-    // Click triggers route('/about') → reducer updates url → Router renders
-    // About → useLayoutEffect fires onRouteChange → __dispatchRouteChange →
-    // startViewTransition.
+    // First nav to /about loads its view (a cold/suspending navigation). The
+    // coordinator defers a cold navigation's transition to its post-suspense
+    // commit; that path's exact event ordering is environment-specific (it is
+    // covered by route-change-coordinator.test.ts and the browser
+    // verification). Here we drive it only to land on a now-loaded route.
+    fireEvent.click(container.querySelector('button')!);
+    await waitFor(() =>
+      expect(container.querySelector('button')?.textContent).toBe(
+        'back to home'
+      )
+    );
+
+    // Now navigate back to '/'. Home is already loaded, so this is a warm
+    // (synchronous) navigation, which the coordinator transitions at dispatch
+    // time. This is the end-to-end guard that a real Router-driven navigation
+    // reaches document.startViewTransition.
+    startViewTransition.mockClear();
     fireEvent.click(container.querySelector('button')!);
 
     await waitFor(() => expect(startViewTransition).toHaveBeenCalledTimes(1));
