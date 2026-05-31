@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  preact-iso: github:preactjs/preact-iso#v3
+  preact-iso: github:sbesh91/preact-iso#feat/v3-wrap-update
   typescript: ^6.0.3
   vite: ^8.0.8
 
@@ -44,8 +44,8 @@ importers:
         specifier: ^10.29.1
         version: 10.29.1
       preact-iso:
-        specifier: github:preactjs/preact-iso#v3
-        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:sbesh91/preact-iso#feat/v3-wrap-update
+        version: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
     devDependencies:
       '@hono/node-server':
         specifier: ^1.19.14
@@ -87,8 +87,8 @@ importers:
         specifier: ^10.29.1
         version: 10.29.1
       preact-iso:
-        specifier: github:preactjs/preact-iso#v3
-        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:sbesh91/preact-iso#feat/v3-wrap-update
+        version: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
       react:
         specifier: npm:@preact/compat
         version: '@preact/compat@18.3.2(preact@10.29.1)'
@@ -209,8 +209,8 @@ importers:
         specifier: '>=10.0.0'
         version: 10.29.1
       preact-iso:
-        specifier: github:preactjs/preact-iso#v3
-        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:sbesh91/preact-iso#feat/v3-wrap-update
+        version: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
       preact-render-to-string:
         specifier: '>=6.0.0'
         version: 6.6.7(preact@10.29.1)
@@ -243,8 +243,8 @@ importers:
         specifier: '>=10.0.0'
         version: 10.29.1
       preact-iso:
-        specifier: github:preactjs/preact-iso#v3
-        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:sbesh91/preact-iso#feat/v3-wrap-update
+        version: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -268,8 +268,8 @@ importers:
         specifier: '>=10.0.0'
         version: 10.29.1
       preact-iso:
-        specifier: github:preactjs/preact-iso#v3
-        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:sbesh91/preact-iso#feat/v3-wrap-update
+        version: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
       preact-render-to-string:
         specifier: '>=6.0.0'
         version: 6.6.7(preact@10.29.1)
@@ -315,8 +315,8 @@ importers:
         specifier: ^10.29.1
         version: 10.29.1
       preact-iso:
-        specifier: github:preactjs/preact-iso#v3
-        version: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        specifier: github:sbesh91/preact-iso#feat/v3-wrap-update
+        version: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2537,8 +2537,8 @@ packages:
     resolution: {integrity: sha512-dM0jVuXJPsDN6DvRpea484tCUaMiXWjuCn++HGTqUWzGDjv5tZkEZldAJ/UMlqRYGFrD/etByo4/xOuC/snX2A==}
     engines: {node: '>=20'}
 
-  preact-iso@https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777:
-    resolution: {tarball: https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777}
+  preact-iso@https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251:
+    resolution: {tarball: https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251}
     version: 2.11.1
     peerDependencies:
       preact: '>=10 || >= 11.0.0-0'
@@ -5498,7 +5498,7 @@ snapshots:
 
   powershell-utils@0.1.0: {}
 
-  preact-iso@https://codeload.github.com/preactjs/preact-iso/tar.gz/22460942e6e0ff9b9d4a8a9cf16222ad59797777(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
+  preact-iso@https://codeload.github.com/sbesh91/preact-iso/tar.gz/ed777d7457d492c01300c92c4f5ebb9b4912e251(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
     dependencies:
       preact: 10.29.1
     optionalDependencies:

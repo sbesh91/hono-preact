@@ -17,7 +17,7 @@
     "hoofd": "^1.7.3",
     "lucide-preact": "^1.14.0",
     "preact": "^10.29.1",
-    "preact-iso": "github:preactjs/preact-iso#v3",
+    "preact-iso": "github:sbesh91/preact-iso#feat/v3-wrap-update",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
     "react-is": "npm:@preact/compat"

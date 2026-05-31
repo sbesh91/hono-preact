@@ -79,7 +79,7 @@
     "@types/ws": "^8.5.0",
     "hono": "^4.12.14",
     "preact": "^10.29.1",
-    "preact-iso": "github:preactjs/preact-iso#v3",
+    "preact-iso": "github:sbesh91/preact-iso#feat/v3-wrap-update",
     "typescript": "*",
     "vite": "*",
     "ws": "^8.18.0"
