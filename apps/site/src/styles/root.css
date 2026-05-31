@@ -1,7 +1,9 @@
 @import 'tailwindcss';
 
 @utility shadow-card {
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 16px rgba(16, 24, 40, 0.08);
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 6px 16px rgba(16, 24, 40, 0.08);
 }
 
 :root {
@@ -218,6 +220,48 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
 }
 
+/* --- Docs: calm fade + subtle zoom instead of the directional page slide --- */
+/* DocsLayout emits the `docs` type on docs->docs navigation. These rules come
+   AFTER the directional rules so that when both `docs` and a nav-direction type
+   are active for the same root pseudo, the docs treatment wins the specificity
+   tie. The sidebar is lifted out of the root snapshot (see `.docs-sidebar`
+   below), so only the page content fades and zooms here. */
+html:active-view-transition-type(docs)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both docs-zoom-out;
+}
+html:active-view-transition-type(docs)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both docs-zoom-in;
+}
+
+@keyframes docs-zoom-out {
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes docs-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* The docs sidebar is a persistent UI element: give it its own transition name
+   so it is lifted out of the root snapshot. */
+.docs-sidebar {
+  view-transition-name: docs-sidebar;
+}
+/* Within docs (sidebar present in both snapshots) freeze it — no fade, no zoom,
+   no morph — so only the page content transitions. Entering or leaving docs the
+   sidebar is captured on only one side, so it keeps the default fade; pinning it
+   to `animation: none` there would leave the old sidebar frozen on screen for
+   the duration of the transition. */
+html:active-view-transition-type(docs-within)::view-transition-group(docs-sidebar),
+html:active-view-transition-type(docs-within)::view-transition-old(docs-sidebar),
+html:active-view-transition-type(docs-within)::view-transition-new(docs-sidebar) {
+  animation: none;
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -259,7 +303,9 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   html:active-view-transition-type(nav-up)::view-transition-old(root),
   html:active-view-transition-type(nav-up)::view-transition-new(root),
   html:active-view-transition-type(nav-initial)::view-transition-old(root),
-  html:active-view-transition-type(nav-initial)::view-transition-new(root) {
+  html:active-view-transition-type(nav-initial)::view-transition-new(root),
+  html:active-view-transition-type(docs)::view-transition-old(root),
+  html:active-view-transition-type(docs)::view-transition-new(root) {
     animation: none;
   }
   ::view-transition-group(.issue-card) {
