@@ -76,6 +76,14 @@ let coldTimeout: ReturnType<typeof setTimeout> | null = null;
 // resumed, can detect it is no longer current and bow out without clobbering
 // the live transition's state.
 let coldGen = 0;
+// True when a page-level content commit already ran via __wrapRouteCommit during
+// the current load WITHOUT a transition wrapping it. This is the "cold-flat"
+// ordering: the route's own (top) Router suspended, so its `wrapUpdate` fired
+// BEFORE `onRouteChange`. The dispatch reads this to run a synchronous
+// transition (the content is already on screen) instead of the bridged cold
+// path, which would otherwise wait for a commit that already happened and
+// freeze the page.
+let directCommitDuringLoad = false;
 
 // Safety net: the longest a cold navigation will hold the page frozen waiting
 // for its content commit. A commit normally arrives within a frame or two (the
@@ -115,6 +123,10 @@ export function __noteLoadStart(): void {
 }
 export function __noteLoadEnd(): void {
   loadingDepth = Math.max(0, loadingDepth - 1);
+  // Once the load settles, drop an unconsumed direct-commit flag (e.g. the
+  // initial hydration load, which commits but never dispatches) so it can't
+  // mislabel the next navigation.
+  if (loadingDepth === 0) directCommitDuringLoad = false;
 }
 
 /** @internal Test-only reset for coordinator state. */
@@ -125,6 +137,7 @@ export function __resetTransitionStateForTesting(): void {
   deferredNames = [];
   coldBridgeResolve = null;
   coldCommit = null;
+  directCommitDuringLoad = false;
   if (coldTimeout !== null) {
     clearTimeout(coldTimeout);
     coldTimeout = null;
@@ -201,16 +214,30 @@ export function __dispatchRouteChange(
   const event = new ViewTransitionEvent({ to, from, direction });
 
   // If a previous cold navigation is still awaiting its content commit, this new
-  // navigation abandoned it — resume it now (swapping nothing) so its transition
-  // can't stay frozen.
-  if (coldBridgeResolve) resumeColdTransition();
+  // navigation abandoned it — invalidate its (async) callback and resume it now
+  // (swapping nothing) so its transition can't stay frozen or re-fire phases.
+  if (coldBridgeResolve) {
+    coldGen++;
+    resumeColdTransition();
+  }
 
   for (const sub of phaseSubs.beforeTransition) sub(event);
 
   if (loadingDepth > 0) {
-    // Cold navigation: start the transition NOW so the browser captures the
-    // still-mounted source route as the old snapshot, and bridge the swap to
-    // the route's content commit (see __wrapRouteCommit).
+    if (directCommitDuringLoad) {
+      // Cold-flat ordering: the route's own Router suspended, so its content
+      // already committed (wrapUpdate fired before this dispatch). There is no
+      // earlier source snapshot left to capture, so run the transition
+      // synchronously — the directional root slide still plays — rather than
+      // bridging to a commit that already happened (which would freeze the page).
+      directCommitDuringLoad = false;
+      runTransition(event, () => {});
+      return;
+    }
+    // Cold-nested ordering: this dispatch precedes the content commit. Start the
+    // transition NOW so the browser captures the still-mounted source route as
+    // the old snapshot, and bridge the swap to the content commit (see
+    // __wrapRouteCommit).
     runColdTransition(event);
     return;
   }
@@ -260,8 +287,11 @@ function runColdTransition(event: ViewTransitionEvent): void {
     pending = event;
     return;
   }
-  // Safety net so a stalled or errored load can't freeze the page forever.
-  coldTimeout = setTimeout(resumeColdTransition, COLD_COMMIT_TIMEOUT_MS);
+  // Safety net so a stalled or errored load can't freeze the page forever. The
+  // generation check keeps a stale timer from resuming a newer transition.
+  coldTimeout = setTimeout(() => {
+    if (coldGen === myGen) resumeColdTransition();
+  }, COLD_COMMIT_TIMEOUT_MS);
   event.transition = transition;
   const vtTypes = (
     transition as ViewTransition & { types?: { add(t: string): void } }
@@ -288,6 +318,11 @@ export function __wrapRouteCommit(commit: () => void): void {
     pending = null;
     runTransition(event, commit);
   } else {
+    // No transition is wrapping this commit. If it lands during a load, it is a
+    // page-level commit that beat its dispatch (cold-flat ordering) — flag it so
+    // the imminent dispatch runs a synchronous transition rather than waiting
+    // for a commit that already happened.
+    if (loadingDepth > 0) directCommitDuringLoad = true;
     commit();
   }
 }

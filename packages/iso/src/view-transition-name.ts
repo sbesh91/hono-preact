@@ -42,12 +42,17 @@ export function useViewTransitionName(
 
   // Stable ref callback: applies on attach, clears the previous node on swap.
   return useCallback((node: Element | null) => {
-    if (nodeRef.current && nodeRef.current !== node && node !== null) {
-      // Real element swap: clear the name from the node we no longer hold. On a
-      // detach (node === null) we intentionally KEEP the name, so the outgoing
-      // element can serve as a morph source while preact-iso retains it as
-      // `prev`; preact removes the node (and its inline name) when it drops prev.
-      nodeRef.current.style.removeProperty('view-transition-name');
+    if (nodeRef.current && nodeRef.current !== node) {
+      // On a real element swap (node !== null) always clear the name from the
+      // node we no longer hold. On a detach (node === null) keep the name ONLY
+      // while a cold transition is in flight, so the outgoing element can serve
+      // as a morph source while preact-iso retains it as `prev` (preact removes
+      // the node, and its inline name, when it drops prev). Outside a cold
+      // transition, clear on detach as usual so a name can't linger on a
+      // retained node.
+      if (node !== null || !__isColdTransitionActive()) {
+        nodeRef.current.style.removeProperty('view-transition-name');
+      }
     }
     if (isStyledElement(node)) {
       nodeRef.current = node;

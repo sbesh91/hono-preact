@@ -112,6 +112,42 @@ describe('defer-aware transition coordinator', () => {
     expect(startViewTransition).toHaveBeenCalledTimes(2);
   });
 
+  it('cold-flat nav (top Router suspends): commit precedes dispatch; the transition runs synchronously, not bridged', () => {
+    const { startViewTransition } = installFakeVt();
+    const swapped: string[] = [];
+    // The route's own (top) Router suspends, so its content commit (wrapUpdate)
+    // arrives BEFORE onRouteChange. The content must commit directly...
+    __noteLoadStart();
+    __wrapRouteCommit(() => swapped.push('content'));
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(swapped).toEqual(['content']);
+    // ...and the dispatch that follows must run a synchronous transition (the
+    // content is already on screen), NOT a bridged one that would await a commit
+    // that already happened and freeze the page.
+    __dispatchRouteChange('/b', '/a');
+    __noteLoadEnd();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+  });
+
+  it('initial-load direct commit does not mislabel the next cold-nested nav', async () => {
+    const { startViewTransition } = installFakeVt();
+    // Initial hydration load: a commit during a load with no dispatch.
+    __noteLoadStart();
+    __wrapRouteCommit(() => {});
+    __noteLoadEnd();
+    startViewTransition.mockClear();
+    // A following cold-nested nav: dispatch precedes the commit, so it must take
+    // the bridged (async) path, not the synchronous cold-flat path.
+    const swapped: string[] = [];
+    __noteLoadStart();
+    __dispatchRouteChange('/b', '/a');
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(swapped).toEqual([]); // bridged: nothing swapped until the commit
+    __wrapRouteCommit(() => swapped.push('content'));
+    await tick();
+    expect(swapped).toEqual(['content']);
+  });
+
   it('initial load (no dispatch): commit runs directly with no transition', () => {
     const { startViewTransition } = installFakeVt();
     const swapped: string[] = [];
