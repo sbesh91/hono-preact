@@ -83,12 +83,13 @@ export function getNavDirection(): NavDirection {
 /**
  * True once any client-side navigation (push, replace, or popstate) has
  * occurred since the page loaded. Before the first navigation the document is
- * still showing its server-rendered, freshly hydrated route. That is the only
- * situation where a client-middleware redirect must hard-navigate: an
- * effect-driven SPA route() during hydration leaves preact-iso's Router
- * holding the server-committed DOM alongside the redirect target, mounting
- * both. `lastDirection` only ever moves away from 'initial' (never back),
- * so this is a monotonic "have we navigated yet" flag.
+ * still showing its server-rendered, freshly hydrated route. PageMiddlewareHost
+ * uses this to pick its render strategy: on the initial load it renders the
+ * server children during hydration and applies the client middleware outcome
+ * afterwards (so a Suspense boundary never resolves to non-SSR content
+ * mid-hydration, which would orphan the server route DOM); after a navigation
+ * it suspends on the chain normally. `lastDirection` only ever moves away from
+ * 'initial' (never back), so this is a monotonic "have we navigated yet" flag.
  */
 export function hasClientNavigated(): boolean {
   return lastDirection !== 'initial';
