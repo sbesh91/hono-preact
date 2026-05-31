@@ -229,6 +229,17 @@ function scheduleRender(process: ProcessFn): void {
     resolve(null);
   }
 
+  if (navigated) {
+    // Reset the load counter at the start of a navigation. A previous route's
+    // loads are abandoned by a new navigation, and preact-iso fires onLoadStart
+    // without a matching onLoadEnd when a still-suspended Router unmounts (it
+    // emits onLoadEnd only on a committed render, not on unmount). Left alone,
+    // that leaked depth would make this nav (and later ones) look perpetually
+    // cold and burn the cold-load timeout. This nav re-increments it as its own
+    // route suspends.
+    loadingDepth = 0;
+  }
+
   lastHref = href;
   const start = navigated ? getStartViewTransition() : undefined;
   if (!start) {

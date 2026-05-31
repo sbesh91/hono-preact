@@ -142,4 +142,25 @@ describe('debounceRendering view-transition scheduler', () => {
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(2);
   });
+
+  it('a navigation resets a leaked loadingDepth so the next nav is not stuck cold', async () => {
+    installFakeVt();
+    installNavTransitionScheduler();
+    const phases: string[] = [];
+    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+    // Simulate a leaked load: a prior route suspended (onLoadStart) but
+    // unmounted before committing, so its onLoadEnd never fired.
+    __noteLoadStart();
+
+    // A new warm navigation must reset that leaked depth and complete its
+    // transition immediately — not hang on the cold loop waiting for content
+    // that will never come (which would only resolve at the 500ms timeout, well
+    // past this `tick`).
+    navigateTo('/b');
+    flushRender(() => {});
+    await tick();
+    expect(phases).toEqual(['afterSwap']);
+    u();
+  });
 });
