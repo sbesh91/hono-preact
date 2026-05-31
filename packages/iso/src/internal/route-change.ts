@@ -3,7 +3,7 @@ import {
   ViewTransitionEvent,
   type NavDirection,
 } from './view-transition-event.js';
-import { getNavDirection } from './history-shim.js';
+import { getNavDirection, onNavigation } from './history-shim.js';
 
 export type PhaseName =
   | 'beforeTransition'
@@ -104,12 +104,17 @@ export function __resetTransitionStateForTesting(): void {
     clearTimeout(coldTimeout);
     coldTimeout = null;
   }
+  transitionActive = false;
   // Uninstall the render scheduler (restoring Preact's debounceRendering) so
   // each test can install it fresh.
   if (schedulerInstalled) {
     options.debounceRendering = prevDebounce;
     schedulerInstalled = false;
     prevDebounce = undefined;
+    if (unsubscribeNav) {
+      unsubscribeNav();
+      unsubscribeNav = null;
+    }
   }
 }
 
@@ -179,6 +184,10 @@ type ProcessFn = () => void;
 let schedulerInstalled = false;
 let lastHref = '';
 let prevDebounce: ((process: ProcessFn) => void) | undefined;
+let unsubscribeNav: (() => void) | null = null;
+// True while a navigation's transition is in flight (its callback is pending or
+// awaiting cold content). Lets the navigation observer abandon it.
+let transitionActive = false;
 // Set while a cold navigation's transition awaits a content flush; the next
 // same-URL flush hands its `process` here (or `null` on supersede/timeout) so
 // the transition can run it inside itself.
@@ -187,6 +196,25 @@ let coldRouteSignal: ((process: ProcessFn | null) => void) | null = null;
 function defaultSchedule(process: ProcessFn): void {
   if (prevDebounce) prevDebounce(process);
   else Promise.resolve().then(process);
+}
+
+// Fired (via the history shim) at navigation time, before the re-render. If a
+// transition from a previous navigation is still in flight, abandon it here:
+// Preact may coalesce the new navigation's render into the in-flight one, so
+// scheduleRender never sees it and its own supersede branch can't fire.
+function onNavObserved(): void {
+  if (!transitionActive && !coldRouteSignal) return;
+  navGen++; // the in-flight callback bows out at its next navGen check
+  transitionActive = false;
+  if (coldRouteSignal) {
+    const resolve = coldRouteSignal;
+    coldRouteSignal = null;
+    if (coldTimeout !== null) {
+      clearTimeout(coldTimeout);
+      coldTimeout = null;
+    }
+    resolve(null);
+  }
 }
 
 /** @internal Install the view-transition render scheduler (client only). */
@@ -198,6 +226,7 @@ export function installNavTransitionScheduler(): void {
   lastHref = location.href;
   prevDebounce = options.debounceRendering;
   options.debounceRendering = scheduleRender;
+  unsubscribeNav = onNavigation(onNavObserved);
 }
 
 function scheduleRender(process: ProcessFn): void {
@@ -306,6 +335,7 @@ function runNavTransition(
   // has appeared in the new route (see the grace wait below).
   const oldNames = collectVtNames();
   const myGen = ++navGen;
+  transitionActive = true;
   let transition: ViewTransition;
   let event: ViewTransitionEvent | undefined;
   try {
@@ -352,9 +382,11 @@ function runNavTransition(
 
       if (navGen !== myGen) return;
       fireAfterSwap(event);
+      transitionActive = false; // reached only when still current
     });
   } catch {
     // Non-conformant startViewTransition: just flush and fire the post phases.
+    transitionActive = false;
     process();
     const ev = buildEvent(from);
     fireAfterSwap(ev);
