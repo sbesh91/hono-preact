@@ -15,10 +15,11 @@ export function generateClientEntrySource(
     `import { h, hydrate, render as renderPreact } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes, PersistHost } from 'hono-preact';\n` +
-    `import { __dispatchRouteChange, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
+    `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
     `installHistoryShim();\n` +
+    `installNavTransitionScheduler();\n` +
     `installStreamRegistry();\n` +
     `\n` +
     `let persistHost = document.getElementById('__hp_persist_root');\n` +
@@ -29,16 +30,13 @@ export function generateClientEntrySource(
     `}\n` +
     `renderPreact(h(PersistHost, null), persistHost);\n` +
     `\n` +
-    `let lastPath;\n` +
-    `function onRouteChange(path) {\n` +
-    `  const from = lastPath;\n` +
-    `  lastPath = path;\n` +
-    `  __dispatchRouteChange(path, from);\n` +
-    `}\n` +
-    `\n` +
+    // View transitions are driven by installNavTransitionScheduler() above: it
+    // overrides Preact's render scheduler so a navigation's re-render runs inside
+    // document.startViewTransition (capturing the outgoing route as the old
+    // snapshot before the new one swaps in). No per-navigation wiring needed.
     `hydrate(\n` +
     `  h(LocationProvider, null,\n` +
-    `    h(Routes, { routes, onRouteChange })\n` +
+    `    h(Routes, { routes })\n` +
     `  ),\n` +
     `  document.getElementById('app')\n` +
     `);\n`

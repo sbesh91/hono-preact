@@ -1,7 +1,9 @@
 @import 'tailwindcss';
 
 @utility shadow-card {
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 16px rgba(16, 24, 40, 0.08);
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 6px 16px rgba(16, 24, 40, 0.08);
 }
 
 :root {
@@ -178,5 +180,135 @@
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none;
+  }
+}
+
+/* --- Demo: directional page slides + shared-element card morph --- */
+/* The route-change dispatcher emits nav-push / nav-back / nav-forward types on
+   every navigation; key the root animation off them. Named elements (the issue
+   title/badge and project name, below) are lifted out of the root snapshot and
+   morph independently while the rest of the page slides. */
+
+/* `nav-initial` is emitted on the first navigation after a load (instead of a
+   direction type). Treat it as a forward slide so the first drill-in animates;
+   `nav-up` below still overrides it to a reverse slide for first-nav up-links. */
+html:active-view-transition-type(nav-push)::view-transition-old(root),
+html:active-view-transition-type(nav-forward)::view-transition-old(root),
+html:active-view-transition-type(nav-initial)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-out-left;
+}
+html:active-view-transition-type(nav-push)::view-transition-new(root),
+html:active-view-transition-type(nav-forward)::view-transition-new(root),
+html:active-view-transition-type(nav-initial)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-in-right;
+}
+html:active-view-transition-type(nav-back)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-out-right;
+}
+html:active-view-transition-type(nav-back)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
+}
+
+/* `nav-up` is emitted by the demo's project layout for in-app up-navigation
+   (e.g. the "← all projects" link), which the history shim otherwise
+   classifies as a forward `nav-push`. These rules come AFTER the nav-push
+   rules so that when both types are active the reverse (back) slide wins. */
+html:active-view-transition-type(nav-up)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-out-right;
+}
+html:active-view-transition-type(nav-up)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both slide-in-left;
+}
+
+/* --- Docs: calm fade + subtle zoom instead of the directional page slide --- */
+/* DocsLayout emits the `docs` type on docs->docs navigation. These rules come
+   AFTER the directional rules so that when both `docs` and a nav-direction type
+   are active for the same root pseudo, the docs treatment wins the specificity
+   tie. The sidebar is lifted out of the root snapshot (see `.docs-sidebar`
+   below), so only the page content fades and zooms here. */
+html:active-view-transition-type(docs)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both docs-zoom-out;
+}
+html:active-view-transition-type(docs)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both docs-zoom-in;
+}
+
+@keyframes docs-zoom-out {
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes docs-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* The docs sidebar is a persistent UI element: give it its own transition name
+   so it is lifted out of the root snapshot. */
+.docs-sidebar {
+  view-transition-name: docs-sidebar;
+}
+/* Within docs (sidebar present in both snapshots) freeze it — no fade, no zoom,
+   no morph — so only the page content transitions. Entering or leaving docs the
+   sidebar is captured on only one side, so it keeps the default fade; pinning it
+   to `animation: none` there would leave the old sidebar frozen on screen for
+   the duration of the transition. */
+html:active-view-transition-type(docs-within)::view-transition-group(docs-sidebar),
+html:active-view-transition-type(docs-within)::view-transition-old(docs-sidebar),
+html:active-view-transition-type(docs-within)::view-transition-new(docs-sidebar) {
+  animation: none;
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+}
+@keyframes slide-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-2rem);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-2rem);
+  }
+}
+@keyframes slide-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+}
+
+/* Shared-element morph timing for elements tagged groupClass="issue-card". */
+::view-transition-group(.issue-card) {
+  animation-duration: var(--spring-duration);
+  animation-timing-function: var(--spring-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:active-view-transition-type(nav-push)::view-transition-old(root),
+  html:active-view-transition-type(nav-forward)::view-transition-old(root),
+  html:active-view-transition-type(nav-push)::view-transition-new(root),
+  html:active-view-transition-type(nav-forward)::view-transition-new(root),
+  html:active-view-transition-type(nav-back)::view-transition-old(root),
+  html:active-view-transition-type(nav-back)::view-transition-new(root),
+  html:active-view-transition-type(nav-up)::view-transition-old(root),
+  html:active-view-transition-type(nav-up)::view-transition-new(root),
+  html:active-view-transition-type(nav-initial)::view-transition-old(root),
+  html:active-view-transition-type(nav-initial)::view-transition-new(root),
+  html:active-view-transition-type(docs)::view-transition-old(root),
+  html:active-view-transition-type(docs)::view-transition-new(root) {
+    animation: none;
+  }
+  ::view-transition-group(.issue-card) {
+    animation-duration: 0s;
   }
 }

@@ -436,31 +436,18 @@ describe('<Routes>', () => {
     expect(container.innerHTML).toBeDefined();
   });
 
-  it('forwards onRouteChange to the underlying Router', () => {
-    const cb = () => {};
-    const m = defineRoutes([{ path: '/', view: noopView }]);
-    // Call the function component directly to inspect what it returns.
-    const result = (
-      Routes as unknown as (props: {
-        routes: typeof m;
-        onRouteChange?: () => void;
-      }) => VNode
-    )({ routes: m, onRouteChange: cb });
-    expect(result.type).toBe(Router);
-    expect((result.props as { onRouteChange?: unknown }).onRouteChange).toBe(
-      cb
-    );
-  });
-
-  it('omits onRouteChange from Router when not provided', () => {
+  it('wires the coordinator load hooks (onLoadStart / onLoadEnd) onto the Router', () => {
     const m = defineRoutes([{ path: '/', view: noopView }]);
     const result = (
       Routes as unknown as (props: { routes: typeof m }) => VNode
     )({ routes: m });
     expect(result.type).toBe(Router);
-    expect(
-      (result.props as { onRouteChange?: unknown }).onRouteChange
-    ).toBeUndefined();
+    const props = result.props as {
+      onLoadStart?: unknown;
+      onLoadEnd?: unknown;
+    };
+    expect(typeof props.onLoadStart).toBe('function');
+    expect(typeof props.onLoadEnd).toBe('function');
   });
 });
 

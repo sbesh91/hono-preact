@@ -8,6 +8,7 @@ import type {
 import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
+import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -292,7 +293,18 @@ function makeLayoutGroupComponent(
           location,
           layoutPathPattern
         );
-        const layoutNode = h(Layout, null, h(Router, null, ...inner));
+        const layoutNode = h(
+          Layout,
+          null,
+          h(
+            asRouteComponent(Router),
+            {
+              onLoadStart: __noteLoadStart,
+              onLoadEnd: __noteLoadEnd,
+            },
+            ...inner
+          )
+        );
         return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
       };
       return { default: Wrapper };
@@ -453,16 +465,15 @@ export function defineRoutes(tree: RouteDef[]): RoutesManifest {
 
 export type RoutesProps = {
   routes: RoutesManifest;
-  onRouteChange?: (url: string) => void;
 };
 
-export const Routes: ComponentType<RoutesProps> = ({
-  routes,
-  onRouteChange,
-}) => {
+export const Routes: ComponentType<RoutesProps> = ({ routes }) => {
   return h(
     asRouteComponent(Router),
-    onRouteChange ? { onRouteChange } : null,
+    {
+      onLoadStart: __noteLoadStart,
+      onLoadEnd: __noteLoadEnd,
+    },
     ...routes.flat.map((r) =>
       h(Route, {
         key: r.key,

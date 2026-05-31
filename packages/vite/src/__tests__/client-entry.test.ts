@@ -24,20 +24,21 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
     expect(src).toContain(`import { Routes, PersistHost } from 'hono-preact';`);
     expect(src).toContain(
-      `import { __dispatchRouteChange, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';`
+      `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';`
     );
     expect(src).toContain(`installHistoryShim();`);
     expect(src).toContain(`installStreamRegistry();`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
   });
 
-  it('hydrates into #app and wires onRouteChange to the dispatcher', () => {
+  it('hydrates into #app and wraps navigations in the view-transition coordinator', () => {
     const src = generateClientEntrySource({
       routesAbsPath: '/proj/src/routes.ts',
     });
     expect(src).toContain(`document.getElementById('app')`);
-    expect(src).toContain(`onRouteChange`);
-    expect(src).toContain(`__dispatchRouteChange`);
+    // The render scheduler is installed so navigations start a transition
+    // before the route re-renders.
+    expect(src).toContain(`installNavTransitionScheduler();`);
   });
 
   it('imports installHistoryShim and calls it before installStreamRegistry', () => {

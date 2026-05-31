@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Every test here does `await import('hono-preact'…)`, which the vitest alias
+// resolves to the package's *source* entry. The first import of each entry
+// triggers a cold Vite transform of a large graph (iso + server + the Vite
+// plugin), and under a saturated parallel pool that can exceed the default
+// 5000ms per-test timeout — surfacing as flaky timeouts on the heaviest graphs
+// (the root runtime and the Vite plugin). These are import-surface assertions,
+// not timing tests, so give them generous headroom.
+vi.setConfig({ testTimeout: 30000 });
 
 describe('hono-preact root export (iso runtime)', () => {
   it('surfaces the page + route + loader + action public API', async () => {

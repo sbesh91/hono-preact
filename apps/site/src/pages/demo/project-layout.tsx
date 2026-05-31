@@ -1,5 +1,5 @@
 import type { LayoutProps } from 'hono-preact';
-import { useRoute, useRouteChange } from 'hono-preact';
+import { useRoute, useRouteChange, ViewTransitionName } from 'hono-preact';
 import { useTitle } from 'hoofd/preact';
 
 export default function ProjectLayout({ children }: LayoutProps) {
@@ -17,7 +17,12 @@ export default function ProjectLayout({ children }: LayoutProps) {
         <a href="/demo/projects" class="text-sm text-blue-700 underline">
           ← all projects
         </a>
-        <h1 class="text-xl font-semibold uppercase">{slug}</h1>
+        <ViewTransitionName
+          name={`project-${slug}`}
+          render={<h1 class="text-xl font-semibold uppercase" />}
+        >
+          {slug}
+        </ViewTransitionName>
       </header>
       <div>{children}</div>
     </section>

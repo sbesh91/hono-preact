@@ -115,7 +115,7 @@ export function DocsLayout({ children }: Props) {
       >
         {/* Inner panel: absolute so hover-peek floats over content */}
         <div
-          class="absolute top-0 left-0 h-full bg-slate-50 border-r border-slate-200 overflow-hidden flex flex-col z-20 shadow-sm"
+          class="docs-sidebar absolute top-0 left-0 h-full bg-slate-50 border-r border-slate-200 overflow-hidden flex flex-col z-20 shadow-sm"
           style={{
             width: expanded ? `${EXPANDED_W}px` : `${COLLAPSED_W}px`,
             transition: `width var(--spring-duration) var(--spring-soft)`,

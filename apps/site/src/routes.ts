@@ -1,4 +1,8 @@
 import { defineRoutes } from 'hono-preact';
+// Registers the global `docs` view-transition type rule (enter/leave/within
+// /docs). Side-effect import: the generated client entry imports this module,
+// so the subscriber is installed once at startup.
+import './docs-transition.js';
 
 const docsView = () => import('./components/DocsRoute.js');
 
@@ -8,6 +12,7 @@ export default defineRoutes([
   { path: '/docs/*', view: docsView },
   {
     path: '/demo',
+    layout: () => import('./pages/demo/demo-layout.js'),
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
       {
