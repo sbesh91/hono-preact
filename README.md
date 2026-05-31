@@ -60,9 +60,7 @@ Full walkthrough: [Docs · Quick start](https://framework.sbesh.com/docs/quick-s
 
 ## Status
 
-`v0.1.0`. Pre-1.0; expect changes between minor versions.
-
-`<Form>` posts to `/__actions` rely on `SameSite=Lax` cookies for CSRF protection. See [Security in docs/actions](https://framework.sbesh.com/docs/actions#security-samesite-cookies-on-form-posts) for the full posture; [issue #43](https://github.com/sbesh91/hono-preact/issues/43) tracks the post-v0.1 explicit-origin design.
+`v0.4.0`. Pre-1.0; expect changes between minor versions.
 
 ## Contributing
 
