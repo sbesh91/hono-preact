@@ -2,6 +2,10 @@ import type { ComponentChildren, VNode } from 'preact';
 import { useCallback, useLayoutEffect, useRef } from 'preact/hooks';
 import { mergeRefs } from './internal/merge-refs.js';
 import { useRender, type UseRenderRender } from './internal/use-render.js';
+import {
+  __isColdTransitionActive,
+  __deferTransitionName,
+} from './internal/route-change.js';
 
 type NodeRef = HTMLElement | SVGElement;
 
@@ -38,12 +42,27 @@ export function useViewTransitionName(
 
   // Stable ref callback: applies on attach, clears the previous node on swap.
   return useCallback((node: Element | null) => {
-    if (nodeRef.current && nodeRef.current !== node) {
+    if (nodeRef.current && nodeRef.current !== node && node !== null) {
+      // Real element swap: clear the name from the node we no longer hold. On a
+      // detach (node === null) we intentionally KEEP the name, so the outgoing
+      // element can serve as a morph source while preact-iso retains it as
+      // `prev`; preact removes the node (and its inline name) when it drops prev.
       nodeRef.current.style.removeProperty('view-transition-name');
     }
     if (isStyledElement(node)) {
       nodeRef.current = node;
-      applyCssProp(node, 'view-transition-name', nameRef.current);
+      const name = nameRef.current;
+      if (name != null && name !== '' && __isColdTransitionActive()) {
+        // A cold navigation's view transition has already captured the old
+        // snapshot. Defer naming this incoming element until the transition
+        // swaps, so it appears only in the new snapshot (and can't collide with
+        // a retained source name in the old snapshot).
+        __deferTransitionName(() =>
+          applyCssProp(node, 'view-transition-name', name)
+        );
+      } else {
+        applyCssProp(node, 'view-transition-name', name);
+      }
     } else {
       nodeRef.current = null;
     }

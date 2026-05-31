@@ -11,6 +11,10 @@ import {
 } from '../internal/route-change.js';
 import { resetHistoryShimForTesting } from '../internal/history-shim.js';
 
+// The cold path starts an async view-transition callback; `tick` lets its
+// post-await body run after the bridging commit resolves it.
+const tick = () => new Promise<void>((r) => setTimeout(r, 0));
+
 function installFakeVt() {
   const typeAdds: string[] = [];
   let resolveFinished!: () => void;
@@ -43,18 +47,22 @@ describe('defer-aware transition coordinator', () => {
     expect(startViewTransition).toHaveBeenCalledTimes(1);
   });
 
-  it('cold nav: dispatch starts nothing; first commit runs the single transition', () => {
+  it('cold nav: dispatch starts the transition; the content commit drives the swap', async () => {
     const { startViewTransition } = installFakeVt();
     const swapped: string[] = [];
     __noteLoadStart();
     __dispatchRouteChange('/b', '/a');
-    expect(startViewTransition).not.toHaveBeenCalled();
-    __wrapRouteCommit(() => swapped.push('content'));
+    // The transition starts at dispatch so the browser captures the still-mounted
+    // source route as the old snapshot; the swap is bridged to the content commit.
     expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(swapped).toEqual([]);
+    __wrapRouteCommit(() => swapped.push('content'));
+    await tick();
     expect(swapped).toEqual(['content']);
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
   });
 
-  it('cold nav: post-swap phases fire against the deferred transition with the nav types', () => {
+  it('cold nav: post-swap phases fire against the transition with the nav types', async () => {
     const { typeAdds } = installFakeVt();
     const phases: string[] = [];
     const u1 = __subscribePhase('beforeTransition', () =>
@@ -64,25 +72,44 @@ describe('defer-aware transition coordinator', () => {
     const u3 = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
     __noteLoadStart();
     __dispatchRouteChange('/b', '/a');
+    // beforeTransition and the nav types are applied at dispatch; the swap phases
+    // wait for the content commit.
     expect(phases).toEqual(['beforeTransition']);
-    __wrapRouteCommit(() => {});
-    expect(phases).toEqual(['beforeTransition', 'beforeSwap', 'afterSwap']);
     expect(typeAdds).toContain('nav-same-origin');
+    __wrapRouteCommit(() => {});
+    await tick();
+    expect(phases).toEqual(['beforeTransition', 'beforeSwap', 'afterSwap']);
     u1();
     u2();
     u3();
   });
 
-  it('nested cold nav: one transition, the second commit runs directly', () => {
+  it('nested cold nav: one transition, the second commit runs directly', async () => {
     const { startViewTransition } = installFakeVt();
     const order: string[] = [];
     __noteLoadStart();
     __noteLoadStart();
     __dispatchRouteChange('/b', '/a');
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    // First commit drives the single transition's swap; later (nested) commits
+    // apply directly.
     __wrapRouteCommit(() => order.push('outer'));
+    await tick();
     __wrapRouteCommit(() => order.push('inner'));
     expect(startViewTransition).toHaveBeenCalledTimes(1);
     expect(order).toEqual(['outer', 'inner']);
+  });
+
+  it('cold nav abandoned by a new navigation: the stale transition resumes (no freeze)', async () => {
+    const { startViewTransition } = installFakeVt();
+    __noteLoadStart();
+    __dispatchRouteChange('/b', '/a');
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    // A second navigation arrives before the first committed. It must resume the
+    // first (so its transition can't stay frozen) and start its own.
+    __dispatchRouteChange('/c', '/b');
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(2);
   });
 
   it('initial load (no dispatch): commit runs directly with no transition', () => {
