@@ -1,8 +1,23 @@
 # Defer-aware view-transition coordinator design
 
 **Date:** 2026-05-31
-**Status:** Approved, pending implementation plan
+**Status:** Implemented, with a cold-path revision (see update below)
 **Branch:** `vt-cold-nav-coordinator` (off `demo-view-transitions`)
+
+> **Update (2026-05-31): cold path revised for element morphs.** Browser
+> verification found that deferring the whole transition to the post-suspense
+> commit (the design below) cannot animate a navigation into a route that shares
+> a `view-transition-name` with the originating page (a list -> detail-header
+> morph): by the commit, preact-iso has already painted the destination and
+> dropped the source, so the morph has no source and the two names transiently
+> collide. The cold path now instead starts the transition at **dispatch** (old
+> snapshot = the still-mounted source route) and bridges its async swap to the
+> content commit, with `useViewTransitionName` keeping the source name through
+> `prev`-keeping and deferring the destination name until the swap. A generation
+> guard, resume-on-next-navigation, and a timeout keep an abandoned or stalled
+> cold navigation from freezing the page. Warm and cold-flat behavior is as
+> described below. See commit `feat(iso): animate element morphs across cold
+> navigations`.
 
 ## Goal
 
