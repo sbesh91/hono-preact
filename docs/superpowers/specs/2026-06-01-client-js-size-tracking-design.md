@@ -100,6 +100,13 @@ logged so drift is visible.
 - `client-size-report.json` — committed baseline snapshot at repo root. Schema:
   `{ version, sectionA: { [bucket]: { total: {gzip,brotli}, marginalOverCore:
   {gzip,brotli} } }, sectionB: { buckets: { [bucket]: gzip }, total: gzip } }`.
+- `client-size-history.jsonl` — committed append-only time-series at repo root
+  (Tier 1; see "Historical data" below). One JSON object per line, appended on
+  each `main` push: `{ sha, date, sectionA: { [bucket]: gzip }, sectionB: {
+  buckets: { [bucket]: gzip }, total: gzip } }`. Gzip-only (the per-point detail
+  the snapshot keeps brotli for is not needed for trend lines). The append is a
+  helper in `measure-client-size.mjs` (e.g. `--append-history` flag) so the
+  history schema lives next to the measurement code.
 - `scripts/render-size-comment.mjs` — pure function: takes
   `(freshReport, baselineReport, config)` and returns the two-section markdown
   string with deltas and `⚠️` budget flags. Prints to stdout when run as a CLI.
@@ -121,10 +128,14 @@ A new `client-size` job, `needs: test`, runs only on `pull_request`:
 5. The job always exits 0; budget overages render `⚠️` only.
 
 On `push` to `main`, a step (in a `main`-only job, mirroring the existing
-`build-and-tag` pattern) regenerates `client-size-report.json` and commits it if
-changed, so the baseline tracks `main`. PR authors may also run the script
-locally and commit the updated snapshot; the snapshot diff is reviewable in the
-PR.
+`build-and-tag` pattern) regenerates `client-size-report.json`, appends one row
+to `client-size-history.jsonl` (`measure-client-size.mjs --append-history`,
+stamping the row with the commit `sha` and `date` passed in from the workflow,
+not read from a clock in the script), and commits both if changed, so the
+baseline tracks `main` and the history grows one point per main commit. PR
+authors may also run the script locally and commit the updated snapshot; the
+snapshot diff is reviewable in the PR. (The history file is appended only on the
+`main` push, never in the PR job, so PRs never churn it.)
 
 ## Soft-budget & delta semantics
 
@@ -145,11 +156,35 @@ PR.
   assignment, including an unmatched chunk landing in `app`.
 - `measure-client-size.mjs` smoke test: bundle one tiny entry and assert a
   positive gzip size, keeping the test fast (does not build the whole site).
+- `--append-history` unit/smoke test: appending a row to a fixture history file
+  produces a valid extra JSONL line with the passed-in `sha`/`date` and is a pure
+  append (existing lines untouched).
+
+## Historical data (Tier 1, in scope)
+
+The committed baseline already gives a git-native time-series for free (the git
+history of `client-size-report.json` is one data point per main commit). Tier 1
+makes that series cheap to read without walking git log, by appending a flat row
+to `client-size-history.jsonl` on each main push (see "Components" and the
+main-push step above). That is the entire Tier 1 commitment: capture the data in
+a read-ready form.
+
+Visualization is deliberately deferred but unblocked by this:
+
+- **Tier 2 (deferred):** a CI step renders a checked-in SVG line chart from the
+  history file (no chart library; hand-rolled SVG paths).
+- **Tier 3 (deferred):** a live `/internal/bundle-size` route on `apps/site`
+  reading the history file.
+
+Capturing the data now is what makes Tier 2/3 a pure read later; the history
+file can also be backfilled once from `git log` of the snapshot, so deferring the
+chart loses no data.
 
 ## Out of scope (YAGNI)
 
 - No hard CI gate / merge block.
-- No historical time-series or dashboard.
+- No size **dashboard or chart** (Tier 2/3 above) in this iteration; the Tier 1
+  history data is captured so a chart is a later, additive read.
 - No per-PR flamegraph (the existing `stats.html` from `rollup-plugin-visualizer`
   covers deep dives).
 - No gzip/brotli toggle in the comment (compute both, show gzip, keep brotli in
