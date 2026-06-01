@@ -132,6 +132,7 @@ export type {
 // View transitions types.
 export {
   useViewTransitionTypes,
+  subscribeViewTransitionTypes,
   type ViewTransitionTypesInput,
   type ViewTransitionTypesNav,
 } from './view-transition-types.js';
