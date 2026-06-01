@@ -2,13 +2,15 @@
 
 ## Tooling notes for AI agents
 
-**Serena MCP is configured** (see `.mcp.json`). For code navigation and symbol-level edits, prefer Serena's tools over grep + Read + Edit:
+**Serena MCP is configured** (see `.mcp.json`). For code navigation and symbol-level edits, prefer Serena's tools over `rg`/`grep` + Read + Edit:
 
 - `find_symbol`, `get_symbols_overview` instead of grepping for definitions
-- `find_references` instead of grepping for call sites
+- `find_referencing_symbols` instead of grepping for call sites
 - `replace_symbol_body`, `insert_before_symbol`, `insert_after_symbol` for structural edits
 
-Grep + Read remain correct for prose, config files, and quick one-offs. Use Serena when you'd otherwise re-read the same TS/TSX file multiple times to locate a symbol.
+**MANDATORY trigger:** before running any `rg`/`grep` (via Bash) whose target is a TypeScript *definition* or *call site*, you MUST first try Serena. There is no Grep tool in this harness; symbol searches go through Bash, and a `PreToolUse` hook (`.claude/hooks/prefer-serena.py`) will nudge you when it spots one. Serena's tools are deferred, so load them once per session with `ToolSearch` (`select:mcp__serena__find_symbol,mcp__serena__find_referencing_symbols`), then call them. Only fall back to `rg`/`grep` if Serena returns nothing.
+
+`rg`/`grep` + Read remain correct for prose, config files, and quick one-offs.
 
 If Serena is unavailable in a session (run `/mcp` to check), fall back to native tools.
 
