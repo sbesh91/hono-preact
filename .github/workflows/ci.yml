@@ -63,6 +63,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -143,5 +144,7 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git tag -f next
+          # Anchor to the triggering commit, not local HEAD: the size step above
+          # may have advanced HEAD with a bookkeeping commit.
+          git tag -f next "$GITHUB_SHA"
           git push origin next --force
