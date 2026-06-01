@@ -221,12 +221,12 @@ The styling primitive, in other words, is mostly a *contract* (data-attributes) 
 - **Plain CSS** (vanilla stylesheet, data-attribute selectors), and
 - **Tailwind** (utility classes plus `data-[state=open]:`-style variant selectors).
 
-The consumer copies whichever flavor fits their app and adapts it. There is **no CLI and no registry** (rejected: shadcn-style tooling and a separate examples package both add infrastructure the docs-site model does not need). The docs site is the single canonical source of the styled examples.
+The consumer copies whichever flavor fits their app and adapts it. There is **no CLI and no registry for now** (out of scope: shadcn-style tooling and a separate examples package add infrastructure the docs-site model does not need yet). Revisit if the example set grows, especially since the framework already ships a `create-hono-preact` CLI that a future `add <component>`-style command could extend. The docs site is the single canonical source of the styled examples.
 
 **Why this completes the styling story:** the data-attribute state contract (6.1) is what makes the examples expressive with **minimal JavaScript**. State is exposed as `data-state="open"`, `data-side="bottom"`, `data-disabled`, etc., so the examples drive appearance and motion almost entirely in CSS:
 
-- **Baseline (depend on it):** data-attribute selectors + CSS `transition` for state changes on elements that stay mounted (e.g. a tooltip fading on `data-state`). This works on every current browser and carries no JS animation code.
-- **Progressive enhancement only:** enter/exit animation of elements that mount/unmount (`@starting-style`, `transition-behavior: allow-discrete`) is Baseline *Newly Available*, so per Section 1 condition 1 it is layered on top behind feature detection, never the base mechanism. Examples must look correct (just without the enter/exit animation) when these are absent.
+- **Baseline (depend on it):** data-attribute selectors + CSS `transition` for state changes on elements that stay mounted (e.g. a tooltip fading on `data-state`), plus **`@starting-style` for entry animations**. `@starting-style` is safe to use even though it is recent: where it is unsupported it simply yields no entry animation (the element still appears correctly), so it degrades to the baseline without breakage and needs no JS animation code.
+- **Not yet dependable:** animating elements *out* as they unmount, which relies on transitioning `display`/`overlay` via `transition-behavior: allow-discrete`. Animating from `display: none` does not yet work across all current browsers, so exit animations of mount/unmount elements are not something to depend on. Examples must look correct without them (the element disappears with no exit animation), and per Section 1 condition 1 this stays a feature-detected enhancement, never the base mechanism.
 
 This keeps the examples honest with the browser-support rule while still showcasing the data-attribute contract's payoff: rich, CSS-driven state and motion with almost no JavaScript.
 
