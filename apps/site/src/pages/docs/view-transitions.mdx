@@ -103,6 +103,25 @@ useViewTransitionTypes((nav) =>
 );
 ```
 
+For a rule that should apply regardless of what is mounted, for example a calm
+transition whenever a navigation enters or leaves a whole section, use the
+always-on `subscribeViewTransitionTypes`. A hook in a section layout only sees
+navigations within the section: it is not subscribed yet when you navigate in, and
+is torn down before you navigate out. A single subscriber registered at client
+startup sees every navigation's `from` and `to`.
+
+```ts
+import { subscribeViewTransitionTypes } from 'hono-preact';
+
+subscribeViewTransitionTypes((nav) => {
+  const inDocs = (p?: string) => p === '/docs' || p?.startsWith('/docs/');
+  return inDocs(nav.to) || inDocs(nav.from) ? ['docs'] : [];
+});
+```
+
+It returns an unsubscribe and is a no-op on the server, so it is safe to register
+as a module side effect.
+
 ## Persistent elements
 
 `<Persist>` keeps an element's DOM and JS state alive across route changes. The framework auto-mounts a single `<PersistHost />` outside the SPA root; `<Persist id="...">` writes its children into a registry that the host renders. Same VNode reference plus stable host DOM means Preact's diff preserves the underlying nodes (audio playback continues, video position is retained, chat widgets stay initialized).
