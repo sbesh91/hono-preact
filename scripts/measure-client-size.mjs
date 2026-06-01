@@ -78,3 +78,74 @@ export async function measureSectionA() {
   }
   return sectionA;
 }
+
+// Section B: gzip-size every emitted client chunk and group into buckets.
+// `distDir` is the site's build output root (contains client/static/*.js).
+export function measureSectionB(distDir) {
+  const staticDir = join(distDir, 'client', 'static');
+  const files = readdirSync(staticDir).filter((f) => f.endsWith('.js'));
+  const buckets = {};
+  let total = 0;
+  let unmatched = 0;
+  for (const file of files) {
+    const bucket = bucketForChunk(file);
+    if (bucket === 'app' && file !== 'app.js') unmatched++;
+    const gz = gzipSync(readFileSync(join(staticDir, file))).length;
+    buckets[bucket] = (buckets[bucket] ?? 0) + gz;
+    total += gz;
+  }
+  return { buckets, total, unmatched, fileCount: files.length };
+}
+
+// Assemble the full committed report from both sections.
+export async function buildReport(distDir) {
+  return {
+    version: REPORT_VERSION,
+    sectionA: await measureSectionA(),
+    sectionB: measureSectionB(distDir),
+  };
+}
+
+// Flatten a report into a gzip-only history row stamped with sha/date.
+export function historyRow(report, sha, date) {
+  const sectionA = {};
+  for (const [bucket, entry] of Object.entries(report.sectionA)) {
+    sectionA[bucket] = tableGzip(bucket, entry);
+  }
+  return {
+    sha,
+    date,
+    sectionA,
+    sectionB: { buckets: report.sectionB.buckets, total: report.sectionB.total },
+  };
+}
+
+function arg(name) {
+  const i = process.argv.indexOf(`--${name}`);
+  return i === -1 ? undefined : process.argv[i + 1];
+}
+
+// CLI
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const distDir = arg('dist') ?? join(ROOT, 'apps/site/dist');
+  const outPath = arg('out') ?? join(ROOT, 'client-size-report.json');
+  const report = await buildReport(distDir);
+  writeFileSync(outPath, JSON.stringify(report, null, 2) + '\n');
+  console.log(`Wrote ${outPath} (site total ${report.sectionB.total} B gzip)`);
+  if (report.sectionB.unmatched > 0) {
+    console.log(
+      `Note: ${report.sectionB.unmatched} chunk(s) fell through to the 'app' bucket.`
+    );
+  }
+  if (process.argv.includes('--append-history')) {
+    const sha = arg('sha');
+    const date = arg('date');
+    if (!sha || !date) {
+      console.error('--append-history requires --sha and --date');
+      process.exit(1);
+    }
+    const historyPath = join(ROOT, 'client-size-history.jsonl');
+    appendFileSync(historyPath, JSON.stringify(historyRow(report, sha, date)) + '\n');
+    console.log(`Appended history row for ${sha} to ${historyPath}`);
+  }
+}
