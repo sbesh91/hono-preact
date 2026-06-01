@@ -122,7 +122,11 @@ export function historyRow(report, sha, date) {
 
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
-  return i === -1 ? undefined : process.argv[i + 1];
+  if (i === -1) return undefined;
+  const v = process.argv[i + 1];
+  // Guard against a missing value swallowing the next flag (e.g. `--sha
+  // --date ...`), which would otherwise write a malformed history row.
+  return v === undefined || v.startsWith('--') ? undefined : v;
 }
 
 // CLI
