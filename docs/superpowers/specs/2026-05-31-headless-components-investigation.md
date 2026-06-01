@@ -206,13 +206,29 @@ If we offer an *optional* primitive beyond the data-attribute contract, the fiel
 
 ### 6.4 Recommendation for the styling layer
 
-A **layered, un-mandated** approach:
+A **layered, un-mandated** approach. **Decided (2026-06-01):** option 1 is the styling layer the library ships; option 2 is explicitly deferred as future-optional; option 3 stands as a non-goal.
 
-1. **Baseline (ship it): the data-attribute contract + the `render` prop + class/style passthrough.** This is the whole requirement. Works with everything, mandates nothing, matches the framework ethos.
-2. **Optional convenience: a tiny runtime variant helper** (a `cx`/variants function plus the `render`-prop primitive), shipped as a separate optional entry point. Runtime, no compiler, consistent with the inferred Remix v3 direction and the user's "normal styles" preference.
+1. **DECIDED, ship it: the data-attribute contract + the `render` prop + class/style passthrough.** This is the whole requirement. Works with everything, mandates nothing, matches the framework ethos. This is the locked styling layer for the initial library.
+2. **Deferred (future-optional): a tiny runtime variant helper** (a `cx`/variants function plus the `render`-prop primitive), shipped as a separate optional entry point. Runtime, no compiler, consistent with the inferred Remix v3 direction and the user's "normal styles" preference. *Not in the initial scope.* Revisit only if real consumer friction with hand-written `class` strings shows up; the data-attribute contract (option 1) must remain fully usable without it.
 3. **Do not** mandate or build a CSS-in-JS runtime. **Do not** mandate build-time extraction; if a team wants vanilla-extract-style extraction, the existing hono-preact `vite` package is the natural place to offer it as an *opt-in* transform later, but it should never be required to use a component.
 
 The styling primitive, in other words, is mostly a *contract* (data-attributes) plus a *very small* runtime helper, not a styling system. That is the most defensible reading of "told through a primitive of our own, similar to how Remix v3 is approaching styling."
+
+### 6.5 Copyable styled examples (the Base UI distribution model)
+
+**Decided (2026-06-01).** Because the library ships unstyled (6.1), the styling story is completed not by a styling system but by **copyable styled examples**, exactly as Base UI does it. Each component's documentation page carries a live, styled demo with a **copy button**, and the styles are offered in two flavors via tabs:
+
+- **Plain CSS** (vanilla stylesheet, data-attribute selectors), and
+- **Tailwind** (utility classes plus `data-[state=open]:`-style variant selectors).
+
+The consumer copies whichever flavor fits their app and adapts it. There is **no CLI and no registry** (rejected: shadcn-style tooling and a separate examples package both add infrastructure the docs-site model does not need). The docs site is the single canonical source of the styled examples.
+
+**Why this completes the styling story:** the data-attribute state contract (6.1) is what makes the examples expressive with **minimal JavaScript**. State is exposed as `data-state="open"`, `data-side="bottom"`, `data-disabled`, etc., so the examples drive appearance and motion almost entirely in CSS:
+
+- **Baseline (depend on it):** data-attribute selectors + CSS `transition` for state changes on elements that stay mounted (e.g. a tooltip fading on `data-state`). This works on every current browser and carries no JS animation code.
+- **Progressive enhancement only:** enter/exit animation of elements that mount/unmount (`@starting-style`, `transition-behavior: allow-discrete`) is Baseline *Newly Available*, so per Section 1 condition 1 it is layered on top behind feature detection, never the base mechanism. Examples must look correct (just without the enter/exit animation) when these are absent.
+
+This keeps the examples honest with the browser-support rule while still showcasing the data-attribute contract's payoff: rich, CSS-driven state and motion with almost no JavaScript.
 
 ---
 
@@ -244,7 +260,7 @@ Build the machinery first, then components in increasing difficulty, each leanin
 
 **Phase 5, Combobox.** The hardest: `aria-autocomplete` semantics, manual vs list/inline autocomplete, IME, and the markup-vs-screen-reader gap [S28][S6]. Do this last, with the most test budget.
 
-Ship per-phase; do not gate the whole library on the combobox.
+Ship per-phase; do not gate the whole library on the combobox. **Each phase's definition of done includes its copyable docs examples (6.5) in both CSS and Tailwind flavors** (not a later documentation pass): a component is not "shipped" until a consumer can copy a working styled example for it. The Phase 0 docs harness should therefore stand up the example-page scaffolding (live demo + copy button + CSS/Tailwind tabs) so each component phase only fills in its own example.
 
 ### Alternatives considered (and why not)
 
