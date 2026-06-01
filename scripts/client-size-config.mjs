@@ -34,7 +34,11 @@ export const FEATURE_MODULES = {
   ],
   prefetch: ['prefetch.js'],
   streaming: ['define-stream-observer.js'],
-  guards: ['guard.js'],
+  // No `guards` bucket: legacy guards were demolished and folded into the
+  // unified middleware primitive (see git history, "demolish legacy guards"),
+  // so there is no guard source module in iso to measure in Section A. The
+  // Section B `guard` chunk prefix below is kept only in case the site still
+  // emits a guard-named chunk.
   head: ['head.js'],
   persist: ['persist.js'],
   middleware: ['define-middleware.js', 'reload-context.js'],

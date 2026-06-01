@@ -73,18 +73,6 @@
         "brotli": 37
       }
     },
-    "guards": {
-      "total": {
-        "raw": 601,
-        "gzip": 330,
-        "brotli": 276
-      },
-      "marginalOverCore": {
-        "raw": 516,
-        "gzip": 179,
-        "brotli": 167
-      }
-    },
     "head": {
       "total": {
         "raw": 388,
