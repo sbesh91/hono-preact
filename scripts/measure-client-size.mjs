@@ -70,6 +70,7 @@ export async function measureSectionA() {
     sectionA[bucket] = {
       total,
       marginalOverCore: {
+        raw: Math.max(0, combined.raw - core.raw),
         gzip: Math.max(0, combined.gzip - core.gzip),
         brotli: Math.max(0, combined.brotli - core.brotli),
       },

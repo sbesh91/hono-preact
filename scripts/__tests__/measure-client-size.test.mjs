@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bundleSize } from '../measure-client-size.mjs';
+import { bundleSize, measureSectionA } from '../measure-client-size.mjs';
 
 describe('bundleSize', () => {
   it('returns positive gzip/brotli sizes for a real iso module', async () => {
@@ -17,5 +17,17 @@ describe('bundleSize', () => {
     const size = await bundleSize(withPreact, process.cwd());
     // preact is external, so the bundle is just a re-export shim: tiny.
     expect(size.raw).toBeLessThan(200);
+  });
+});
+
+describe('measureSectionA', () => {
+  it('returns core plus every feature bucket with non-negative marginals', async () => {
+    const a = await measureSectionA();
+    expect(Object.keys(a)).toContain('core');
+    expect(a.core.total.gzip).toBeGreaterThan(0);
+    for (const bucket of ['loaders', 'actions', 'transitions', 'prefetch', 'streaming', 'guards', 'head', 'persist', 'middleware']) {
+      expect(a[bucket].total.gzip).toBeGreaterThan(0);
+      expect(a[bucket].marginalOverCore.gzip).toBeGreaterThanOrEqual(0);
+    }
   });
 });
