@@ -32,7 +32,7 @@ describe('renderComment', () => {
     });
     const md = renderComment(fresh, baseline, cfg);
     expect(md).toContain('+1.5 KB'); // actions marginal 3000 -> 4500
-    expect(md).toContain('-1.0 KB'); // site total 32000 -> 31000
+    expect(md).toMatch(/\*\*total\*\*.*-1\.0 KB/s); // site total 32000 -> 31000
   });
 
   it('flags a bucket over budget with a warning', () => {
@@ -44,6 +44,7 @@ describe('renderComment', () => {
     const md = renderComment(fresh, report(), cfg);
     expect(md).toContain('⚠️');
     expect(md).toContain('18.0 KB / 16.0 KB');
+    expect(md).not.toContain('20.0 KB / ');
   });
 
   it('marks new and removed buckets', () => {

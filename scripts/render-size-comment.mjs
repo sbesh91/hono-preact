@@ -4,6 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import * as defaultConfig from './client-size-config.mjs';
+import { tableGzip } from './client-size-config.mjs';
 
 const COMMENT_HEADER = '<!-- client-size -->';
 
@@ -34,8 +35,7 @@ function row(name, freshGzip, baseGzip, budget) {
 
 function sectionAGzip(report, bucket) {
   const e = report.sectionA[bucket];
-  if (!e) return undefined;
-  return bucket === 'core' ? e.total.gzip : e.marginalOverCore.gzip;
+  return e ? tableGzip(bucket, e) : undefined;
 }
 
 export function renderComment(fresh, baseline, config = defaultConfig) {
@@ -66,8 +66,11 @@ export function renderComment(fresh, baseline, config = defaultConfig) {
     ...Object.keys(baseline.sectionB.buckets),
   ]);
   for (const bucket of bBuckets) {
+    // Section B per-bucket rows are unbudgeted; only the total row has a budget
+    // (`site:total`). Passing budgets[bucket] here would collide with Section
+    // A's `core` budget and flag the site `core` chunk bucket on every PR.
     lines.push(
-      row(bucket, fresh.sectionB.buckets[bucket], baseline.sectionB.buckets[bucket], budgets[bucket])
+      row(bucket, fresh.sectionB.buckets[bucket], baseline.sectionB.buckets[bucket], undefined)
     );
   }
   lines.push(
@@ -81,7 +84,13 @@ export function renderComment(fresh, baseline, config = defaultConfig) {
 // CLI: render-size-comment.mjs <freshReport.json> <baselineReport.json>
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [freshPath, basePath] = process.argv.slice(2);
+  if (!freshPath || !basePath) {
+    console.error(
+      'Usage: render-size-comment.mjs <freshReport.json> <baselineReport.json>'
+    );
+    process.exit(1);
+  }
   const fresh = JSON.parse(readFileSync(freshPath, 'utf8'));
   const baseline = JSON.parse(readFileSync(basePath, 'utf8'));
-  process.stdout.write(renderComment(fresh, baseline));
+  process.stdout.write(renderComment(fresh, baseline) + '\n');
 }
