@@ -109,21 +109,46 @@ The wall is SSR.
   remote exposes `remote/Page` and the host does `lazy(() => import('remote/Page'))`. A remote could
   ship a manifest fragment fetched at runtime and `register()` it into the Flavor-A registry.
   Cross-MFE SPA navigation works because it is all one client runtime.
-- **Server side: this is where it breaks.** SSR of a federated route needs *both* the remote's view
-  *and* its `.server.js` (loaders/actions) executing inside the **host's** Node/Workers runtime.
-  Three ways out, all with teeth:
-  1. Host fetches + evaluates remote server bundles at runtime. Fragile on Node; effectively a
-     non-starter on Cloudflare Workers (dynamic eval of arbitrary remote code).
-  2. Render federated routes **client-only** (no SSR for those routes). Keeps MFE but discards the
-     framework's headline SSR + streaming loaders for exactly the federated routes guts the value
-     proposition.
-  3. **Gateway / composition model (recommended).** Each MFE is its own full hono-preact
-     deployment; a thin Hono reverse-proxy gateway routes by path prefix
-     (`/team-a/* -> deployment A`, `/team-b/* -> deployment B`). Every team gets independent build +
-     deploy + SSR + loaders, with **zero framework changes**, because each app is already a
-     standalone Hono app. Cost: navigation *across* MFE boundaries is a hard navigation (full
-     document load) unless an app-shell owns the chrome and treats each MFE as a region. Within an
-     MFE you keep full SPA + SSR.
+- **Server side: this is the hard part, and the runtime determines whether it is possible at all.**
+  SSR of a federated route needs *both* the remote's view *and* its `.server.js` (loaders/actions)
+  executing inside the **host's** runtime, sharing one `preact` / `hono-preact` instance (the
+  dual-instance `__H` hazard, same footgun as the preact-override gotcha in the redirect
+  double-mount work). The dividing line is **shared-isolate SSR composition**, and it splits by
+  runtime:
+  - **Node: achievable via dynamic `import()` + a Module Federation server runtime.**
+    `@module-federation/node` (`NodeFederationPlugin` / `UniversalFederationPlugin`,
+    `remoteType: 'script'`, `target: 'async-node'`) fetches a remote's `mf-manifest.json` and loads
+    its modules at request time, with a share scope that keeps `preact` / `hono-preact` singletons.
+    This is shipped/production-used in Next.js, Nx, and Modern.js SSR-MFE setups. So it is not
+    impossible, it is engineering: adopt an MF-capable bundler
+    (`@module-federation/vite` / `@originjs/vite-plugin-federation`), configure shared scope, and
+    splice the remote's `serverRoutes` into the resolver maps (the Flavor A live-registry work).
+    Naive `import('https://remote/...')` + manual eval would NOT solve the singleton problem; the
+    federation runtime is what does.
+  - **Cloudflare Workers: shared-isolate composition is structurally not available.** Plain dynamic
+    `import()` resolves its module graph at *deploy* time (variable specifiers only work for modules
+    globbed in via `find_additional_modules`), and `eval` / `new Function` on arbitrary strings is
+    disabled in the isolate, so a remote bundle cannot be pulled into the host isolate at runtime.
+    The new **Dynamic Workers / Worker Loader** primitive (open beta, 2026-03-24) DOES run arbitrary
+    runtime code via `env.LOADER.load(code)` / `get(id, cb)`, but it executes in an isolated
+    sub-worker reached over `fetch()` / RPC, not in the host's module graph. That is a *programmable
+    gateway* (dynamic dispatch + HTML/RPC stitching), not shared-runtime federation.
+  - **Client-only fallback (either runtime).** Render federated routes client-only, no SSR. Keeps
+    MFE but discards the framework's headline SSR + streaming loaders for exactly the federated
+    routes guts the value proposition.
+  - **Gateway / composition model (recommended for team-autonomous deploys).** Each MFE is its own
+    full hono-preact deployment; a thin Hono reverse-proxy gateway routes by path prefix
+    (`/team-a/* -> deployment A`, `/team-b/* -> deployment B`). Every team gets independent build +
+    deploy + SSR + loaders, with **zero framework changes**, because each app is already a standalone
+    Hono app. On Workers this is also what the Dynamic Workers path collapses to, just made
+    programmable. Cost: navigation *across* MFE boundaries is a hard navigation (full document load)
+    unless an app-shell owns the chrome and treats each MFE as a region. Within an MFE you keep full
+    SPA + SSR.
+
+  **The asymmetry is the point:** server-side runtime federation is achievable on Node and not on
+  Workers (you get sandbox + RPC instead). Because this stack ships Workers as a first-class target,
+  a "write once, federate on the server" design would work on Node but silently degrade to a gateway
+  on Workers.
 
 ## Verdict
 
@@ -132,9 +157,13 @@ The wall is SSR.
   if the goal is one app assembling its route set dynamically/conditionally. Live registry +
   resolvers reading live state + subscribing `<Routes>`. The Rollup-graph constraint is inherent and
   acceptable for the plugin/feature-pack use case.
-- **Flavor B (federated, independent deploys):** if "MFE" means team-autonomous independent deploys,
-  reach for the gateway model (no framework work). Server-side runtime federation is not achievable
-  without either dropping SSR for federated routes or evaluating untrusted remote code in the host.
+- **Flavor B (federated, independent deploys):** server-side runtime federation IS achievable on
+  Node (dynamic `import()` via a Module Federation server runtime with shared singletons; real but
+  non-trivial, and still needs the Flavor A registry to splice in remote `serverRoutes`). It is NOT
+  achievable as shared-isolate SSR on Cloudflare Workers; the runtime-code path there is Dynamic
+  Workers, which is sandbox + RPC, i.e. a programmable gateway. If "MFE" means team-autonomous
+  independent deploys and you want one answer that works on both targets, the path-prefix gateway
+  model is the pragmatic choice (no framework work).
 
 ## Key file references
 
@@ -144,3 +173,13 @@ The wall is SSR.
 - `packages/vite/src/server-entry.ts:35-72` generated core-app module (single `routes` import,
   boot-time resolver closures)
 - `packages/vite/src/server-entry.ts:122-220` AST analysis (targets `api.ts` only, not `routes.ts`)
+
+## External references (Flavor B runtime federation)
+
+- Module Federation on Node.js: https://module-federation.io/blog/node and
+  https://www.npmjs.com/package/@module-federation/node
+- Module Federation + SSR (Nx guide): https://nx.dev/docs/technologies/react/guides/module-federation-with-ssr
+- Cloudflare Workers bundling / `find_additional_modules` (deploy-time module graph):
+  https://developers.cloudflare.com/workers/wrangler/bundling/
+- Cloudflare Dynamic Workers / Worker Loader (runtime sandboxed execution + RPC):
+  https://developers.cloudflare.com/dynamic-workers/getting-started/
