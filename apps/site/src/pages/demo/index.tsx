@@ -7,8 +7,8 @@ const DemoIndex: FunctionComponent = () => (
       <h1 class="text-2xl font-semibold">Demo: a mini issue tracker</h1>
       <p class="text-sm text-gray-700 mt-1">
         Everything below is built with <code>hono-preact</code>. This is the
-        same framework, the same primitives, exercising every feature v0.1
-        ships.
+        same framework, the same primitives, exercising every feature the
+        framework ships.
       </p>
     </header>
     <p>

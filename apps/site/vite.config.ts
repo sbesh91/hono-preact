@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 
@@ -27,7 +28,21 @@ const mdxOptions = {
 
 const visualize = process.env.VISUALIZE === '1';
 
+// Single source of truth for the version badge on the homepage: read it from
+// the framework's own package.json at build time so a release bump propagates
+// to the site automatically and the badge can't drift (it sat at v0.2 from
+// 0.2 through 0.5 when hardcoded).
+const frameworkVersion = JSON.parse(
+  readFileSync(
+    resolve(__dirname, '../../packages/hono-preact/package.json'),
+    'utf8'
+  )
+).version as string;
+
 export default defineConfig((env) => ({
+  define: {
+    __HONO_PREACT_VERSION__: JSON.stringify(frameworkVersion),
+  },
   resolve: {
     alias: [
       // Umbrella subpaths (longest-prefix first).

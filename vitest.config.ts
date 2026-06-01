@@ -1,7 +1,21 @@
 import { defineConfig, configDefaults } from 'vitest/config';
+import { readFileSync } from 'fs';
 import path from 'path';
 
+// Mirror the Vite build's `define` (apps/site/vite.config.ts) so components
+// that read the injected framework version render under vitest instead of
+// throwing on an undefined global.
+const frameworkVersion = JSON.parse(
+  readFileSync(
+    path.resolve(__dirname, 'packages/hono-preact/package.json'),
+    'utf8'
+  )
+).version as string;
+
 export default defineConfig({
+  define: {
+    __HONO_PREACT_VERSION__: JSON.stringify(frameworkVersion),
+  },
   resolve: {
     alias: {
       '@hono-preact/iso/internal': path.resolve(

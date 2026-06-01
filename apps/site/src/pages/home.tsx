@@ -16,7 +16,7 @@ const Home: FunctionComponent = () => {
         {/* Hero */}
         <section class="space-y-4 text-center">
           <p class="inline-block bg-white/70 backdrop-blur text-xs px-2 py-0.5 rounded-full border border-black/5">
-            hono-preact v0.2
+            hono-preact v{__HONO_PREACT_VERSION__}
           </p>
           <h1 class="text-5xl font-semibold">A small full-stack framework.</h1>
           <p class="text-lg text-gray-700 max-w-2xl mx-auto">
