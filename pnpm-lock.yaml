@@ -22,6 +22,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.4
         version: 4.1.4(vitest@4.1.4)
+      esbuild:
+        specifier: ^0.27.0
+        version: 0.27.7
       happy-dom:
         specifier: ^20.9.0
         version: 20.9.0
@@ -4550,7 +4553,6 @@ snapshots:
       '@esbuild/win32-arm64': 0.27.7
       '@esbuild/win32-ia32': 0.27.7
       '@esbuild/win32-x64': 0.27.7
-    optional: true
 
   escalade@3.2.0: {}
 
