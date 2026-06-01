@@ -150,6 +150,45 @@ The wall is SSR.
   a "write once, federate on the server" design would work on Node but silently degrade to a gateway
   on Workers.
 
+### Scoping Flavor B to the Node adapter (design assumption)
+
+A way past the cross-target asymmetry: do not require every deploy adapter to support server
+federation. Make it a **Node-adapter capability** with a documented support matrix. The adapter
+interface (`packages/vite/src/adapter.ts`) is the right gate: `vitePlugins()` is where the Module
+Federation Vite plugin + shared-scope config attaches, and `wrapEntry()` is where a server-side
+remote-loader runtime initializes. A `capabilities` field (e.g. `serverFederation: boolean`) on the
+adapter lets the framework switch the feature on only for Node.
+
+**Where the code actually lands.** The adapter-specific parts are small: contributing the MF Vite
+plugin + shared scope, and initializing the server federation runtime in the entry tail. The
+load-bearing pieces are runtime-agnostic and live in shared core (`packages/iso` +
+`hono-preact/server`): the live route registry that splices a remote's `serverRoutes` into
+`makePageUseResolvers` / `makePageActionResolvers` (the Flavor A work), and the client `<Routes>`
+subscription. Every adapter ships that code; it stays dormant for non-Node targets. So this is a
+core capability with Node-only activation, not a self-contained adapter plugin.
+
+**Constraints the scoping introduces (must be documented):**
+
+1. **Dev/deploy parity footgun.** The dev server runs on Node regardless of deploy target, so a
+   Workers-targeted project would have federated SSR work in dev and fail at deploy. The feature
+   must be gated at build time by the configured adapter and **hard-error when federated routes are
+   authored against a non-Node adapter**, never silently degrade.
+2. **Share-scope version coupling.** MF's shared singleton scope requires host and every remote to
+   agree on semver-compatible `preact` and `hono-preact`. Teams keep independent deploy cadence but
+   within a compatible framework/preact range; drift outside it breaks SSR federation at runtime.
+   This is the real tax on the "independent deploys" promise.
+3. **In-process trust boundary.** Node MF runs the remote's `.server.js` in the host process with
+   the host's env and bindings (unlike the Workers Dynamic Worker sandbox). First-party/trusted
+   remotes only; a malicious remote is RCE on the host.
+
+**Why it is worth it.** Because the remote loads in-process, the Node path preserves exactly what
+the gateway model loses: in-tree SSR (one preact render across host + remote), shared streaming
+loaders + backpressure across the boundary (async-generator streaming runs in-process, no
+sub-response proxying), unified client SPA navigation across MFE boundaries, and loader-ancestry
+composition (`collectServerRoutes` ancestors) extending across the seam. The assumption does not
+just make Flavor B possible; it unlocks the architecture that keeps the framework's signature
+features, which the gateway cannot.
+
 ## Verdict
 
 - **Distributed route files:** already supported; pure file-org refactor.
@@ -161,9 +200,12 @@ The wall is SSR.
   Node (dynamic `import()` via a Module Federation server runtime with shared singletons; real but
   non-trivial, and still needs the Flavor A registry to splice in remote `serverRoutes`). It is NOT
   achievable as shared-isolate SSR on Cloudflare Workers; the runtime-code path there is Dynamic
-  Workers, which is sandbox + RPC, i.e. a programmable gateway. If "MFE" means team-autonomous
-  independent deploys and you want one answer that works on both targets, the path-prefix gateway
-  model is the pragmatic choice (no framework work).
+  Workers, which is sandbox + RPC, i.e. a programmable gateway. **Scoping it as a Node-adapter-only
+  capability** (documented support matrix, build-time hard-error on other adapters) is a viable
+  design: it sidesteps the cross-target asymmetry and unlocks in-process SSR that preserves
+  streaming loaders + cross-MFE SPA nav, at the cost of share-scope version coupling and a
+  first-party-only trust boundary. If you instead want one answer that works on every target with no
+  framework work, the path-prefix gateway model is the pragmatic choice.
 
 ## Key file references
 
