@@ -60,7 +60,7 @@ Full walkthrough: [Docs · Quick start](https://framework.sbesh.com/docs/quick-s
 
 ## Status
 
-`v0.4.0`. Pre-1.0; expect changes between minor versions.
+`v0.5.0`. Pre-1.0; expect changes between minor versions.
 
 ## Contributing
 
