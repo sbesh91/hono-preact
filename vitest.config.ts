@@ -70,6 +70,7 @@ export default defineConfig({
       'packages/hono-preact/__tests__/**/*.test.{ts,tsx}',
       'packages/create-hono-preact/__tests__/**/*.test.{ts,tsx}',
       'apps/site/src/**/__tests__/**/*.test.{ts,tsx}',
+      'scripts/__tests__/**/*.test.mjs',
     ],
     // websocket-dev.test.ts boots real Vite dev servers (and workerd); it is
     // CPU-heavy and starves the parallel pool. It runs separately via
