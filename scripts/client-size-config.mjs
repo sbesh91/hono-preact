@@ -66,6 +66,10 @@ export const CHUNK_PREFIXES = [
   ['actions', 'actions'],
   ['view-transition-name', 'transitions'],
   ['view-transition-types', 'transitions'],
+  // The iso *source* module view-transitions.tsx was split into the three
+  // view-transition-* modules above, but the site still emits a
+  // `view-transitions-*` client chunk, so this Section B prefix stays.
+  ['view-transitions', 'transitions'],
   ['link-prefetch', 'prefetch'],
   ['prefetch', 'prefetch'],
   ['sse-decoder', 'streaming'],
