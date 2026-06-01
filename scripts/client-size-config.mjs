@@ -89,7 +89,7 @@ export const CHUNK_PREFIXES = [
   ['history-shim', 'core'],
   ['csrf', 'core'],
   ['websockets', 'core'],
-  ['client', 'core'],
+  ['client', 'core'], // matches any client-*.js chunk, not only the framework entry; keep in mind if a non-framework chunk with a "client" stem is added
   ['hoofd.module', 'vendor'],
   ['hooks.module', 'vendor'],
   ['jsxRuntime.module', 'vendor'],
@@ -98,6 +98,7 @@ export const CHUNK_PREFIXES = [
 
 // Soft budgets in gzip bytes per bucket. A bucket over budget renders a warning
 // in the comment but never fails CI. Buckets without an entry have no budget.
+// placeholder; tuned against real measurements in Task 5
 export const BUDGETS = {
   // Section A (marginal-over-core gzip, except `core` which is its own total):
   core: 16000,

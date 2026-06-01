@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketForChunk } from '../client-size-config.mjs';
+import { bucketForChunk, tableGzip } from '../client-size-config.mjs';
 
 describe('bucketForChunk', () => {
   it('maps framework chunks to their feature buckets', () => {
@@ -30,5 +30,19 @@ describe('bucketForChunk', () => {
     // "loaders" must not be captured by a hypothetical "loader-stub" rule, and
     // "loading-states" must not be captured by "loader".
     expect(bucketForChunk('loading-states-xNzUIjIC.js')).toBe('core');
+  });
+});
+
+describe('tableGzip', () => {
+  it('returns total.gzip for the core bucket', () => {
+    expect(
+      tableGzip('core', { total: { gzip: 100 }, marginalOverCore: { gzip: 100 } })
+    ).toBe(100);
+  });
+
+  it('returns marginalOverCore.gzip for non-core buckets', () => {
+    expect(
+      tableGzip('actions', { total: { gzip: 80 }, marginalOverCore: { gzip: 30 } })
+    ).toBe(30);
   });
 });
