@@ -103,5 +103,6 @@
     "@hono-preact/server": "workspace:*",
     "@hono-preact/vite": "workspace:*",
     "typescript": "*"
-  }
+  },
+  "sideEffects": false
 }
