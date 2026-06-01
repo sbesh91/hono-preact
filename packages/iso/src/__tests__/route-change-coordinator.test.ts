@@ -40,7 +40,7 @@ type DocWithVt = Document & {
 
 // Like installFakeVt but augments the REAL happy-dom document instead of
 // replacing it, so the scheduler's `view-transition-name` DOM scans (collectVt
-// Names / hasMorphPartner) see actual elements. Required to exercise the
+// NameElements / hasFreshMorphPartner) see actual elements. Required to exercise the
 // morph-partner grace path. Cleaned up in afterEach.
 function installFakeVtOnDoc() {
   const typeAdds: string[] = [];
@@ -226,6 +226,38 @@ describe('debounceRendering view-transition scheduler', () => {
     flushRender(() => appendNamed('hero'));
     await tick();
     expect(phases).toEqual(['afterSwap']);
+    u();
+  });
+
+  it('morph grace: waits for a data-loaded partner even when an unrelated name persists across the nav', async () => {
+    // A parent layout paints a name that SURVIVES the navigation (the layout
+    // instance does not remount — e.g. ProjectLayout's `project-web` title when
+    // navigating between two children of `projects/:projectId`). It is present
+    // in the outgoing route AND still in the DOM after the swap.
+    const persistent = appendNamed('layout-title');
+    // The outgoing route also paints a real morph endpoint that DOES leave on
+    // nav; its partner loads late with the route data.
+    const oldHero = appendNamed('hero');
+    const { startViewTransition } = installFakeVtOnDoc();
+    installNavTransitionScheduler();
+    const phases: string[] = [];
+    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+    navigateTo('/b');
+    // Shell commits: `hero` leaves, the persistent `layout-title` stays. The
+    // `hero` partner is still loading behind inner Suspense.
+    flushRender(() => oldHero.remove());
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    // Must still be held: the persistent name already pairs trivially, but the
+    // real morph partner (`hero`) has not appeared yet, so the swap must wait.
+    expect(phases).toEqual([]);
+
+    // The route data arrives and a fresh element claims `hero`.
+    flushRender(() => appendNamed('hero'));
+    await tick();
+    expect(phases).toEqual(['afterSwap']);
+    expect(persistent.isConnected).toBe(true);
     u();
   });
 

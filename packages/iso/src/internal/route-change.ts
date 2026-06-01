@@ -320,23 +320,32 @@ function queryVtNamedElements(): HTMLElement[] {
   );
 }
 
-// The view-transition-names currently applied in the document (inline styles).
-function collectVtNames(): Set<string> {
-  const names = new Set<string>();
+// The view-transition-names currently applied in the document, mapped to the
+// element carrying each (first wins on the off-chance a name is duplicated).
+// Element identity is what lets the grace tell a persistent name (still on its
+// original node) from a freshly-materialised morph endpoint (see below).
+function collectVtNameElements(): Map<string, Element> {
+  const map = new Map<string, Element>();
   for (const el of queryVtNamedElements()) {
     const n = el.style?.getPropertyValue?.('view-transition-name');
-    if (n) names.add(n);
+    if (n && !map.has(n)) map.set(n, el);
   }
-  return names;
+  return map;
 }
 
-// Whether any currently-applied view-transition-name was also in `oldNames` —
-// i.e. a morph pair (same name old + new) is present.
-function hasMorphPartner(oldNames: Set<string>): boolean {
-  if (oldNames.size === 0) return false;
+// Whether a name from the outgoing route now appears on a DIFFERENT (or new)
+// element than it did before the swap — i.e. a genuine destination morph
+// endpoint has materialised. A name still carried by its ORIGINAL element is
+// persistent chrome (e.g. a parent layout's title that doesn't unmount across
+// the nav). Such a name pairs trivially on its own and must NOT satisfy the
+// grace: if it did, the grace would be skipped while the real data-loaded
+// partner (which loads behind inner Suspense, so it doesn't move loadingDepth)
+// is still pending, and the new snapshot would be captured without it.
+function hasFreshMorphPartner(oldNamed: Map<string, Element>): boolean {
+  if (oldNamed.size === 0) return false;
   for (const el of queryVtNamedElements()) {
     const n = el.style?.getPropertyValue?.('view-transition-name');
-    if (n && oldNames.has(n)) return true;
+    if (n && oldNamed.has(n) && oldNamed.get(n) !== el) return true;
   }
   return false;
 }
@@ -346,9 +355,11 @@ function runNavTransition(
   start: (cb: () => void | Promise<void>) => ViewTransition
 ): void {
   const from = lastPath;
-  // The names present in the outgoing route — used to know when a morph partner
-  // has appeared in the new route (see the grace wait below).
-  const oldNames = collectVtNames();
+  // The named elements present in the outgoing route, keyed by name. Used to
+  // know when a morph partner has freshly appeared in the new route (see the
+  // grace wait below) — element identity distinguishes a persistent name (same
+  // node) from a destination endpoint that re-claims the name on a new node.
+  const oldNamed = collectVtNameElements();
   const myGen = ++navGen;
   transitionActive = true;
   let transition: ViewTransition;
@@ -378,12 +389,15 @@ function runNavTransition(
           if (!contentProcess) break; // timed out waiting
           contentProcess();
         }
-        // If the outgoing route had named elements but none has a partner in the
-        // new shell yet, the partner may load with the route's DATA (behind
-        // inner Suspense, which doesn't move loadingDepth — e.g. a list whose
-        // items come from a loader). Wait briefly for it so the morph can pair.
-        if (oldNames.size > 0 && !hasMorphPartner(oldNames)) {
-          while (!hasMorphPartner(oldNames)) {
+        // If the outgoing route had named elements but none has a FRESH partner
+        // in the new shell yet, the partner may load with the route's DATA
+        // (behind inner Suspense, which doesn't move loadingDepth — e.g. a list
+        // whose items come from a loader). Wait briefly for it so the morph can
+        // pair. "Fresh" ignores names that merely persisted on their original
+        // element (parent-layout chrome); otherwise such a name would satisfy
+        // the check immediately and the real partner would never be awaited.
+        if (oldNamed.size > 0 && !hasFreshMorphPartner(oldNamed)) {
+          while (!hasFreshMorphPartner(oldNamed)) {
             const contentProcess = await waitForColdFlush(
               myGen,
               MORPH_PARTNER_GRACE_MS
