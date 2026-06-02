@@ -419,8 +419,9 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 /* DocsLayout emits the `docs` type on docs->docs navigation. These rules come
    AFTER the directional rules so that when both `docs` and a nav-direction type
    are active for the same root pseudo, the docs treatment wins the specificity
-   tie. The sidebar is lifted out of the root snapshot (see `.docs-sidebar`
-   below), so only the page content fades and zooms here. */
+   tie. The sidebar and top bar are lifted out of the root snapshot (see
+   `.docs-sidebar` and `.docs-topbar` below), so only the page content fades
+   and zooms here. */
 html:active-view-transition-type(docs)::view-transition-old(root) {
   animation: var(--spring-duration) var(--spring-soft) both docs-zoom-out;
 }
@@ -441,19 +442,25 @@ html:active-view-transition-type(docs)::view-transition-new(root) {
   }
 }
 
-/* The docs sidebar is a persistent UI element: give it its own transition name
-   so it is lifted out of the root snapshot. */
+/* The docs sidebar and top bar are persistent UI: give each its own transition
+   name so it is lifted out of the root snapshot. */
 .docs-sidebar {
   view-transition-name: docs-sidebar;
 }
-/* Within docs (sidebar present in both snapshots) freeze it — no fade, no zoom,
-   no morph — so only the page content transitions. Entering or leaving docs the
-   sidebar is captured on only one side, so it keeps the default fade; pinning it
-   to `animation: none` there would leave the old sidebar frozen on screen for
+.docs-topbar {
+  view-transition-name: docs-topbar;
+}
+/* Within docs (chrome present in both snapshots) freeze it: no fade, no zoom,
+   no morph, so only the page content transitions. Entering or leaving docs the
+   chrome is captured on only one side, so it keeps the default fade; pinning it
+   to `animation: none` there would leave the old chrome frozen on screen for
    the duration of the transition. */
 html:active-view-transition-type(docs-within)::view-transition-group(docs-sidebar),
 html:active-view-transition-type(docs-within)::view-transition-old(docs-sidebar),
-html:active-view-transition-type(docs-within)::view-transition-new(docs-sidebar) {
+html:active-view-transition-type(docs-within)::view-transition-new(docs-sidebar),
+html:active-view-transition-type(docs-within)::view-transition-group(docs-topbar),
+html:active-view-transition-type(docs-within)::view-transition-old(docs-topbar),
+html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) {
   animation: none;
 }
 

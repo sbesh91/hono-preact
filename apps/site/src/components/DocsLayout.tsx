@@ -128,7 +128,7 @@ export function DocsLayout({ children }: Props) {
   return (
     <div class="min-h-screen flex flex-col">
       {/* Docs top bar */}
-      <header class="sticky top-0 z-40 flex items-center gap-3 h-12 px-3 md:px-4 bg-surface-subtle border-b border-border">
+      <header class="docs-topbar sticky top-0 z-40 flex items-center gap-3 h-12 px-3 md:px-4 bg-surface-subtle border-b border-border">
         <button
           type="button"
           class="md:hidden flex items-center justify-center h-8 w-8 rounded text-muted hover:text-foreground hover:bg-foreground/10"
