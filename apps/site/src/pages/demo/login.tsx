@@ -25,7 +25,7 @@ const LoginPage: FunctionComponent = () => {
   return (
     <section class="mx-auto max-w-md p-6 space-y-4">
       <h1 class="text-2xl font-semibold">Sign in to the demo</h1>
-      <p class="text-sm text-gray-700">
+      <p class="text-sm text-muted">
         This is a feature showcase. Enter any email; the demo will create that
         user and sign you in. There is no real magic link.
       </p>
@@ -50,12 +50,12 @@ const LoginPage: FunctionComponent = () => {
         </label>
         <button
           type="submit"
-          class="bg-blue-600 text-white px-3 py-1"
+          class="bg-accent text-accent-foreground px-3 py-1 hover:bg-accent-hover"
           onClick={markAuthed}
         >
           {pending ? 'Signing in...' : 'Sign in'}
         </button>
-        {error && <p class="text-sm text-red-700">{error}</p>}
+        {error && <p class="text-sm text-danger">{error}</p>}
       </Form>
     </section>
   );

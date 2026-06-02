@@ -14,7 +14,10 @@ export default function ProjectLayout({ children }: LayoutProps) {
   return (
     <section class="mx-auto max-w-4xl p-6 space-y-4">
       <header class="flex items-center gap-3">
-        <a href="/demo/projects" class="text-sm text-blue-700 underline">
+        <a
+          href="/demo/projects"
+          class="text-sm text-accent underline hover:text-accent-hover"
+        >
           ← all projects
         </a>
         <ViewTransitionName
