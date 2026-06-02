@@ -65,7 +65,7 @@ export function DocsLayout({ children }: Props) {
             }}
           >
             <div class="overflow-hidden">
-              <div class="text-[0.7rem] font-bold uppercase tracking-[0.08em] text-slate-400 mb-1.5 px-3 whitespace-nowrap">
+              <div class="text-[0.7rem] font-bold uppercase tracking-[0.08em] text-muted mb-1.5 px-3 whitespace-nowrap">
                 {section.heading}
               </div>
             </div>
@@ -82,8 +82,8 @@ export function DocsLayout({ children }: Props) {
                   showText ? 'px-3' : 'justify-center px-0'
                 } ${
                   active
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                    ? 'bg-accent/10 text-accent font-semibold'
+                    : 'text-muted hover:text-foreground hover:bg-foreground/10'
                 }`}
               >
                 <Icon size={18} class="shrink-0" />
@@ -115,7 +115,7 @@ export function DocsLayout({ children }: Props) {
       >
         {/* Inner panel: absolute so hover-peek floats over content */}
         <div
-          class="docs-sidebar absolute top-0 left-0 h-full bg-slate-50 border-r border-slate-200 overflow-hidden flex flex-col z-20 shadow-sm"
+          class="docs-sidebar absolute top-0 left-0 h-full bg-surface-subtle border-r border-border overflow-hidden flex flex-col z-20 shadow-sm"
           style={{
             width: expanded ? `${EXPANDED_W}px` : `${COLLAPSED_W}px`,
             transition: `width var(--spring-duration) var(--spring-soft)`,
@@ -124,7 +124,7 @@ export function DocsLayout({ children }: Props) {
           <a
             href="/docs"
             aria-label="hono-preact docs"
-            class={`flex whitespace-nowrap overflow-hidden text-ellipsis items-center h-12 shrink-0 font-bold text-[0.95rem] text-slate-900 no-underline hover:text-blue-700 ${
+            class={`flex whitespace-nowrap overflow-hidden text-ellipsis items-center h-12 shrink-0 font-bold text-[0.95rem] text-foreground no-underline hover:text-accent ${
               expanded ? 'px-3' : 'justify-center px-0'
             }`}
           >
@@ -136,14 +136,14 @@ export function DocsLayout({ children }: Props) {
             {renderNav(expanded)}
           </div>
           <div
-            class={`shrink-0 border-t border-slate-200 py-2 ${expanded ? 'px-2' : 'px-1.5'}`}
+            class={`shrink-0 border-t border-border py-2 ${expanded ? 'px-2' : 'px-1.5'}`}
           >
             <button
               type="button"
               aria-pressed={pinned}
               aria-label={pinned ? 'Unpin sidebar' : 'Pin sidebar'}
               onClick={() => setPinned((p) => !p)}
-              class={`flex items-center gap-3 h-9 w-full rounded text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-200 ${
+              class={`flex items-center gap-3 h-9 w-full rounded text-sm text-muted hover:text-foreground hover:bg-foreground/10 ${
                 expanded ? 'px-3' : 'justify-center px-0'
               }`}
             >
@@ -161,16 +161,16 @@ export function DocsLayout({ children }: Props) {
       </aside>
 
       {/* Mobile top bar */}
-      <div class="flex items-center gap-3 bg-slate-50 border-b border-slate-200 py-2.5 px-3 sticky top-0 z-30 md:hidden col-span-full">
+      <div class="flex items-center gap-3 bg-surface-subtle border-b border-border py-2.5 px-3 sticky top-0 z-30 md:hidden col-span-full">
         <button
           type="button"
-          class="flex items-center gap-1 bg-white border border-slate-200 rounded-md py-1 px-2.5 text-[0.8rem] font-semibold text-slate-600 cursor-pointer shadow-sm shrink-0 hover:bg-slate-100"
+          class="flex items-center gap-1 bg-surface border border-border rounded-md py-1 px-2.5 text-[0.8rem] font-semibold text-muted cursor-pointer shadow-sm shrink-0 hover:bg-foreground/10"
           onClick={() => setMobileOpen(true)}
         >
           ☰ Menu
         </button>
         {currentTitle && (
-          <span class="text-[0.85rem] font-semibold text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis">
+          <span class="text-[0.85rem] font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
             {currentTitle}
           </span>
         )}
@@ -185,17 +185,17 @@ export function DocsLayout({ children }: Props) {
       {/* Mobile drawer */}
       <aside
         aria-label="Docs navigation menu"
-        class="fixed top-0 bottom-0 left-0 w-65 bg-slate-50 border-r border-slate-200 z-50 flex flex-col md:hidden"
+        class="fixed top-0 bottom-0 left-0 w-65 bg-surface-subtle border-r border-border z-50 flex flex-col md:hidden"
         style={{
           transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: `transform var(--spring-duration) var(--spring-soft)`,
         }}
       >
-        <div class="flex justify-between items-center px-4 py-3 border-b border-slate-200 font-bold text-[0.9rem] text-slate-900">
+        <div class="flex justify-between items-center px-4 py-3 border-b border-border font-bold text-[0.9rem] text-foreground">
           Docs
           <button
             type="button"
-            class="bg-transparent border-none text-[1.1rem] text-slate-500 cursor-pointer leading-none p-1 hover:text-slate-900"
+            class="bg-transparent border-none text-[1.1rem] text-muted cursor-pointer leading-none p-1 hover:text-foreground"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
           >
@@ -208,12 +208,12 @@ export function DocsLayout({ children }: Props) {
       {/* Main content */}
       <main class="col-span-full md:col-auto max-w-[65ch] py-8 px-6">
         {children}
-        <nav class="flex justify-between mt-12 pt-6 border-t border-slate-200 text-sm">
+        <nav class="flex justify-between mt-12 pt-6 border-t border-border text-sm">
           <span>
             {prev && (
               <a
                 href={prev.route}
-                class="text-blue-600 no-underline hover:underline"
+                class="text-accent no-underline hover:underline"
               >
                 ← {prev.title}
               </a>
@@ -223,7 +223,7 @@ export function DocsLayout({ children }: Props) {
             {next && (
               <a
                 href={next.route}
-                class="text-blue-600 no-underline hover:underline"
+                class="text-accent no-underline hover:underline"
               >
                 {next.title} →
               </a>

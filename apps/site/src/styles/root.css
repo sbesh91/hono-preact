@@ -1,9 +1,100 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('./fonts/selawik-light.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/selawik-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/selawik-semibold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/selawik-bold.woff2') format('woff2');
+}
+
+@theme {
+  --font-sans: 'Selawik', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Zune brand colors (sRGB equivalents of the guideline Pantone specs) */
+  --color-zune-magenta: #ec008c; /* Pantone Process Magenta C */
+  --color-zune-orange: #fe5000; /* Pantone Orange 021 C - gradient use only */
+  --color-zune-grey: #888b8d; /* Cool Gray 8C - the wordmark grey */
+  --color-zune-ink: #25282a; /* Pantone 426C */
+
+  /* Magenta ramp + zune grey/ink: published brand palette for reuse;
+     not every step is consumed by the current pages. */
+  --color-magenta-50: #fdeaf4;
+  --color-magenta-100: #fbcfe6;
+  --color-magenta-200: #f7a3cf;
+  --color-magenta-300: #f06fb3;
+  --color-magenta-400: #f23a9b;
+  --color-magenta-500: #ec008c;
+  --color-magenta-600: #c40076;
+  --color-magenta-700: #9b005d;
+  --color-magenta-800: #7a0049;
+  --color-magenta-900: #5c0037;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-border: var(--border-color);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-ring: var(--ring);
+}
+
 @utility shadow-card {
-  box-shadow:
-    0 1px 2px rgba(16, 24, 40, 0.04),
-    0 6px 16px rgba(16, 24, 40, 0.08);
+  box-shadow: var(--shadow-card);
+}
+
+/* Signature "orangenta" utilities: published design-system surface. text-orangenta
+   and energy-bar are used on the home hero; bg-orangenta and bg-zune-cloud are
+   reserved for reuse. */
+@utility bg-orangenta {
+  background-image: var(--gradient-orangenta);
+}
+
+@utility text-orangenta {
+  background-image: var(--gradient-orangenta);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility energy-bar {
+  display: block;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background-image: var(--gradient-orangenta);
+}
+
+@utility bg-zune-cloud {
+  background-image:
+    radial-gradient(60% 60% at 30% 20%, rgba(254, 80, 0, 0.18), transparent 70%),
+    radial-gradient(60% 60% at 75% 60%, rgba(236, 0, 140, 0.18), transparent 70%),
+    radial-gradient(50% 50% at 60% 90%, rgba(201, 125, 255, 0.16), transparent 70%);
 }
 
 :root {
@@ -20,12 +111,58 @@
     1
   );
   --spring-duration: 380ms;
+
+  /* Semantic theme tokens (light) - flipped in the dark media query below */
+  --background: #ffffff;
+  --foreground: #25282a;
+  --muted: #63666a; /* Cool Gray 10C */
+  --surface: #ffffff;
+  --surface-subtle: #f4f4f2;
+  --border-color: rgba(37, 40, 42, 0.1);
+  --accent: #c40076; /* magenta-600: AA as link text and as white-on-accent button */
+  --accent-foreground: #ffffff;
+  --accent-hover: #9b005d; /* magenta-700 */
+  --ring: #ec008c;
+
+  /* Signature orange-to-magenta "orangenta" gradient (left to right) */
+  --gradient-orangenta: linear-gradient(90deg, #fe5000 0%, #ec008c 100%);
+
+  /* Card elevation (flipped in the dark media query below) */
+  --shadow-card:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 6px 16px rgba(16, 24, 40, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1b1d1e;
+    --foreground: #e9eae8;
+    --muted: #bbbcbc; /* Cool Gray 4C */
+    --surface: #25282a; /* Pantone 426C */
+    --surface-subtle: #2f3234;
+    --border-color: rgba(255, 255, 255, 0.12);
+    --accent: #ff5fbf; /* brighter magenta: AA as link text on dark surfaces */
+    --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
+    --accent-hover: #ff8ad2;
+    --ring: #ec008c;
+
+    /* Deeper, darker elevation so cards keep depth on the dark surface */
+    --shadow-card:
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 6px 16px rgba(0, 0, 0, 0.45);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --spring-duration: 0ms;
   }
+}
+
+/* Keyboard focus indicator (uses the brand ring token) */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* MDX prose defaults */
@@ -64,17 +201,17 @@
 }
 
 .mdx-content a {
-  color: #2563eb;
+  color: var(--accent);
   text-decoration: underline;
 }
 .mdx-content a:hover {
-  color: #1d4ed8;
+  color: var(--accent-hover);
 }
 
 .mdx-content code {
   font-family: ui-monospace, monospace;
   font-size: 0.875em;
-  background: #f1f5f9;
+  background: var(--surface-subtle);
   padding: 0.125em 0.375em;
   border-radius: 0.25rem;
 }
@@ -119,30 +256,30 @@
   font-size: 0.9rem;
 }
 .mdx-content th {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   padding: 0.5rem 0.75rem;
-  background: #f8fafc;
+  background: var(--surface-subtle);
   font-weight: 600;
   text-align: left;
 }
 .mdx-content td {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   padding: 0.5rem 0.75rem;
 }
 .mdx-content tr:nth-child(even) td {
-  background: #f8fafc;
+  background: var(--surface-subtle);
 }
 
 .mdx-content blockquote {
-  border-left: 3px solid #94a3b8;
+  border-left: 3px solid var(--muted);
   margin: 1rem 0;
   padding: 0.25rem 1rem;
-  color: #475569;
+  color: var(--muted);
 }
 
 .mdx-content hr {
   border: none;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
   margin: 2rem 0;
 }
 .mdx-content strong {

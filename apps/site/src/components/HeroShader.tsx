@@ -26,13 +26,15 @@ void main() {
   outColor = vec4(col, 1.0);
 }`;
 
+// Fade the shader into the themed page background so it dissolves into the page
+// in both light and dark mode (a hardcoded white fade left a seam in dark mode).
 const FADE_GRADIENT =
   'linear-gradient(to bottom,' +
-  ' rgba(255,255,255,0) 0%,' +
-  ' rgba(255,255,255,0) 30%,' +
-  ' rgba(255,255,255,0.35) 55%,' +
-  ' rgba(255,255,255,0.75) 80%,' +
-  ' rgba(255,255,255,1) 100%)';
+  ' transparent 0%,' +
+  ' transparent 30%,' +
+  ' color-mix(in srgb, var(--background) 35%, transparent) 55%,' +
+  ' color-mix(in srgb, var(--background) 75%, transparent) 80%,' +
+  ' var(--background) 100%)';
 
 // Always-on base layer matching the shader palette. Visible before the first
 // WebGL frame (so there's no white flash on load) and as the no-WebGL2 fallback.

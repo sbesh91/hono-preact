@@ -15,24 +15,27 @@ const Home: FunctionComponent = () => {
       <main class="relative mx-auto max-w-4xl px-6 py-16 space-y-16">
         {/* Hero */}
         <section class="space-y-4 text-center">
-          <p class="inline-block bg-white/70 backdrop-blur text-xs px-2 py-0.5 rounded-full border border-black/5">
+          <span class="energy-bar w-16 mx-auto" aria-hidden="true" />
+          <p class="inline-block bg-surface/70 backdrop-blur text-xs px-2 py-0.5 rounded-full border border-border">
             hono-preact v{__HONO_PREACT_VERSION__}
           </p>
-          <h1 class="text-5xl font-semibold">A small full-stack framework.</h1>
-          <p class="text-lg text-gray-700 max-w-2xl mx-auto">
+          <h1 class="text-5xl font-semibold text-orangenta">
+            A small full-stack framework.
+          </h1>
+          <p class="text-lg text-muted max-w-2xl mx-auto">
             Hono on the edge, Preact in the browser, manifest driven routes,
             typed RPC, streaming everywhere.
           </p>
           <div class="flex gap-3 justify-center pt-2">
             <a
               href="/docs/quick-start"
-              class="bg-blue-600 text-white px-4 py-2 font-medium rounded-md"
+              class="bg-accent text-accent-foreground px-4 py-2 font-medium rounded-md hover:bg-accent-hover"
             >
               Get started
             </a>
             <a
               href="/demo"
-              class="border border-gray-700 text-gray-900 px-4 py-2 font-medium rounded-md bg-white/80 backdrop-blur"
+              class="border border-border text-foreground px-4 py-2 font-medium rounded-md bg-surface/80 backdrop-blur"
             >
               See the demo
             </a>
@@ -41,7 +44,7 @@ const Home: FunctionComponent = () => {
 
         {/* Code block */}
         <section class="space-y-4">
-          <h2 class="text-sm uppercase tracking-wide text-gray-600">
+          <h2 class="text-sm uppercase tracking-wide text-muted">
             Keep it simple
           </h2>
           <div class="grid gap-3 md:grid-cols-2">
@@ -96,14 +99,17 @@ export default function Layout({ children }) {
         </section>
 
         {/* Footer */}
-        <footer class="pt-8 border-t text-sm text-gray-700 flex flex-wrap gap-4 justify-between">
+        <footer class="pt-8 border-t border-border text-sm text-muted flex flex-wrap gap-4 justify-between">
           <span>
-            <a class="underline" href="https://github.com/sbesh91/hono-preact">
+            <a
+              class="underline text-accent hover:text-accent-hover"
+              href="https://github.com/sbesh91/hono-preact"
+            >
               GitHub
             </a>{' '}
             ·{' '}
             <a
-              class="underline"
+              class="underline text-accent hover:text-accent-hover"
               href="https://www.npmjs.com/package/hono-preact"
             >
               npm
@@ -121,8 +127,8 @@ const CodeBlock: FunctionComponent<{
   filename: string;
   children: string;
 }> = ({ filename, children }) => (
-  <figure class="rounded-md border border-black/5 bg-white shadow-card overflow-hidden">
-    <figcaption class="text-xs text-gray-600 px-3 py-1 border-b border-black/5 bg-gray-50">
+  <figure class="rounded-md border border-border bg-surface shadow-card overflow-hidden">
+    <figcaption class="text-xs text-muted px-3 py-1 border-b border-border bg-surface-subtle">
       {filename}
     </figcaption>
     <pre class="text-xs p-3 overflow-x-auto">
@@ -135,9 +141,9 @@ const Card: FunctionComponent<{ title: string; children: any }> = ({
   title,
   children,
 }) => (
-  <article class="rounded-md border border-black/5 bg-white shadow-card p-4">
+  <article class="rounded-md border border-border bg-surface shadow-card p-4">
     <h3 class="font-semibold mb-1">{title}</h3>
-    <p class="text-sm text-gray-700">{children}</p>
+    <p class="text-sm text-muted">{children}</p>
   </article>
 );
 
