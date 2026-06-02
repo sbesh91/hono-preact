@@ -2,19 +2,53 @@ import { describe, expect, it } from 'vitest';
 import { nav } from '../nav.js';
 
 describe('docs nav', () => {
-  it('every entry has a title, route, and icon component', () => {
-    for (const section of nav) {
-      expect(section.heading).toBeTruthy();
-      for (const entry of section.entries) {
-        expect(entry.title).toBeTruthy();
-        expect(entry.route).toMatch(/^\/docs/);
-        expect(typeof entry.icon).toBe('function');
+  it('every area has an id, label, icon component, and /docs basePath', () => {
+    for (const area of nav) {
+      expect(area.id).toBeTruthy();
+      expect(area.label).toBeTruthy();
+      expect(typeof area.icon).toBe('function');
+      expect(area.basePath).toMatch(/^\/docs/);
+    }
+  });
+
+  it('every section has a heading and an icon component', () => {
+    for (const area of nav) {
+      for (const section of area.sections) {
+        expect(section.heading).toBeTruthy();
+        expect(typeof section.icon).toBe('function');
+        expect(section.entries.length).toBeGreaterThan(0);
       }
     }
   });
 
-  it('routes are unique', () => {
-    const routes = nav.flatMap((s) => s.entries.map((e) => e.route));
+  it('every entry has a title and a /docs route', () => {
+    for (const area of nav) {
+      for (const section of area.sections) {
+        for (const entry of section.entries) {
+          expect(entry.title).toBeTruthy();
+          expect(entry.route).toMatch(/^\/docs/);
+        }
+      }
+    }
+  });
+
+  it('component-area routes live under /docs/components', () => {
+    const components = nav.find((a) => a.id === 'components');
+    expect(components).toBeTruthy();
+    for (const section of components!.sections) {
+      for (const entry of section.entries) {
+        expect(
+          entry.route === '/docs/components' ||
+            entry.route.startsWith('/docs/components/')
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('routes are unique across all areas', () => {
+    const routes = nav.flatMap((a) =>
+      a.sections.flatMap((s) => s.entries.map((e) => e.route))
+    );
     expect(new Set(routes).size).toBe(routes.length);
   });
 });

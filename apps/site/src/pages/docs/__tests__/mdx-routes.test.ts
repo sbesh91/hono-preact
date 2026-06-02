@@ -7,8 +7,8 @@ import { nav } from '../nav.js';
 // Contract test for the docs routing pipeline.
 //
 // `apps/site/src/components/DocsRoute.tsx` auto-discovers MDX pages via
-// `import.meta.glob('../pages/docs/*.mdx')` and registers one Route per
-// file under the outer `/docs` route. `apps/site/src/pages/docs/nav.ts`
+// `import.meta.glob('../pages/docs/**/*.mdx')` and registers one Route per
+// file (recursively) under the outer `/docs` route. `apps/site/src/pages/docs/nav.ts`
 // declares the user-facing sidebar manually. If those two lists drift,
 // users see a "Docs page not found" fallback for an entry in the sidebar
 // (or worse, navigate to a docs page that the sidebar doesn't show).
@@ -23,22 +23,31 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const docsDir = resolve(__dirname, '..');
 
 function discoverMdxSlugs(): string[] {
-  return readdirSync(docsDir)
-    .filter((f) => f.endsWith('.mdx'))
-    .map((f) =>
-      f
-        .replace(/\.mdx$/, '')
-        // The inner Router in DocsRoute maps index.mdx to the empty path so
-        // it serves at `/docs` (not `/docs/index`). nav.ts encodes that as
-        // the `/docs` route.
-        .replace(/^index$/, '')
-    )
-    .sort();
+  const out: string[] = [];
+  const walk = (dir: string, prefix: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (entry.name === '__tests__') continue;
+        walk(
+          resolve(dir, entry.name),
+          prefix ? `${prefix}/${entry.name}` : entry.name
+        );
+      } else if (entry.name.endsWith('.mdx')) {
+        const base = entry.name.replace(/\.mdx$/, '');
+        const rel = prefix ? `${prefix}/${base}` : base;
+        out.push(rel.replace(/(^|\/)index$/, ''));
+      }
+    }
+  };
+  walk(docsDir, '');
+  return out.sort();
 }
 
 function navSlugs(): string[] {
   return nav
-    .flatMap((section) => section.entries.map((entry) => entry.route))
+    .flatMap((area) =>
+      area.sections.flatMap((s) => s.entries.map((e) => e.route))
+    )
     .filter((route) => route === '/docs' || route.startsWith('/docs/'))
     .map((route) => (route === '/docs' ? '' : route.replace('/docs/', '')))
     .sort();

@@ -39,7 +39,7 @@ All user-facing docs live in:
 apps/site/src/pages/docs/
 ```
 
-Nav structure (6 sections) is in:
+Nav structure (two areas, Guide and Components, each with sections) is in:
 ```
 apps/site/src/pages/docs/nav.ts
 ```

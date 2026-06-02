@@ -10,7 +10,10 @@ Two files must be updated when adding a new docs page. The route is auto-registe
 
 ## 1. Create the MDX file
 
-Create `apps/site/src/pages/docs/<slug>.mdx`. The route will be `/docs/<slug>` automatically via the glob in `apps/site/src/iso.tsx`.
+- **Guide page:** `apps/site/src/pages/docs/<slug>.mdx` → route `/docs/<slug>`.
+- **Component / Components-area page:** `apps/site/src/pages/docs/components/<slug>.mdx` → route `/docs/components/<slug>`.
+
+The glob in `apps/site/src/components/DocsRoute.tsx` is recursive (`../pages/docs/**/*.mdx`), and `docsSlug` derives the route from the path (a nested `index.mdx` serves the directory root, e.g. `components/index.mdx` → `/docs/components`).
 
 Follow the style of existing docs pages:
 - Use `#` for the page title, `##` for sections
@@ -21,26 +24,26 @@ Follow the style of existing docs pages:
 
 ## 2. Add to nav.ts
 
-Add an entry to `apps/site/src/pages/docs/nav.ts` in the correct `NavSection`:
+`apps/site/src/pages/docs/nav.ts` exports `nav: NavArea[]`. Each area has `sections`, each section has a `heading`, an `icon` (a `lucide-preact` component — **icons live on sections, not entries**), and `entries: { title, route }[]`.
 
-```ts
-{ title: 'Page Title', route: '/docs/<slug>' },
-```
+Add an entry `{ title: 'Page Title', route: '/docs/<slug>' }` to the right section, in reading order (foundational before advanced).
 
-The nav has 6 sections — place the entry in the right one:
+**Guide area sections:**
 
 | Section | Content |
 |---|---|
-| Introduction | Overview, Quick Start only |
+| Introduction | Overview, Quick Start |
 | Pages & Routing | Page creation, routing conventions |
-| Data | Loaders, loading states, reloading |
-| Mutations | Actions, action guards |
-| Access Control | Route guards |
-| Infrastructure | Vite config, project structure, renderPage, deployment |
+| Data | Loaders, loading states, reloading, prefetching, streaming |
+| Mutations | Actions, optimistic UI |
+| View Transitions | View Transitions |
+| Access Control | Middleware, CSRF |
+| Infrastructure | Vite config, structure, Hono middleware, WebSockets, renderPage, link prefetch, deployment |
 
-Place the entry in reading order within the section (foundational before advanced).
+**Components area sections** (under `basePath` `/docs/components`): `Getting started`, then add `Overlays` (Dialog, Popover, Tooltip), `Collections` (Menu, Select, Combobox), and `Foundations` (LayerHost, FocusScope, collection/nav machinery) as those pages are created. When adding the first page of a not-yet-present section, create the section with an appropriate `lucide-preact` icon.
 
 ## Checklist
 
-- [ ] `apps/site/src/pages/docs/<slug>.mdx` created
-- [ ] Entry added to `apps/site/src/pages/docs/nav.ts` in the correct section
+- [ ] MDX file created in the correct directory (`docs/` for guide, `docs/components/` for components)
+- [ ] Entry added to the correct area/section in `apps/site/src/pages/docs/nav.ts`
+- [ ] `pnpm test docs/__tests__` passes (route ↔ nav parity)
