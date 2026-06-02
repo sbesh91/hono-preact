@@ -60,4 +60,26 @@ describe('renderComment', () => {
     expect(md).toContain('(new)');
     expect(md).toContain('(removed)');
   });
+
+  it('omits the freshness footer when no meta is given', () => {
+    const md = renderComment(report(), report(), cfg);
+    expect(md).not.toContain('Measured');
+  });
+
+  it('renders a freshness footer with short sha, timestamp, and run link', () => {
+    const md = renderComment(report(), report(), cfg, {
+      sha: '2af64e6d9abc123',
+      generatedAt: '2026-06-02T01:36:33Z',
+      runUrl: 'https://github.com/o/r/actions/runs/123',
+    });
+    expect(md).toContain('Measured `2af64e6d9`');
+    expect(md).toContain('2026-06-02T01:36:33Z');
+    expect(md).toContain('[run](https://github.com/o/r/actions/runs/123)');
+  });
+
+  it('drops missing footer fields without emitting empty separators', () => {
+    const md = renderComment(report(), report(), cfg, { sha: 'deadbeefcafe' });
+    expect(md).toContain('Measured `deadbeefc`');
+    expect(md).not.toContain('· ');
+  });
 });

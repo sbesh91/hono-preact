@@ -38,7 +38,21 @@ function sectionAGzip(report, bucket) {
   return e ? tableGzip(bucket, e) : undefined;
 }
 
-export function renderComment(fresh, baseline, config = defaultConfig) {
+// Footer that pins the comment to the commit it measured. The sticky comment
+// updates in place on every push, so without this a re-measured comment is
+// indistinguishable from the original at-open one (GitHub freezes the
+// created-at timestamp and only quietly marks it "edited").
+function freshnessFooter(meta) {
+  if (!meta) return undefined;
+  const parts = [];
+  if (meta.sha) parts.push(`\`${meta.sha.slice(0, 9)}\``);
+  if (meta.generatedAt) parts.push(meta.generatedAt);
+  if (meta.runUrl) parts.push(`[run](${meta.runUrl})`);
+  if (parts.length === 0) return undefined;
+  return `<sub>Measured ${parts.join(' · ')}</sub>`;
+}
+
+export function renderComment(fresh, baseline, config = defaultConfig, meta) {
   const budgets = config.BUDGETS ?? {};
   const lines = [COMMENT_HEADER, '## Client JS size', ''];
 
@@ -78,6 +92,8 @@ export function renderComment(fresh, baseline, config = defaultConfig) {
   );
   lines.push('');
   lines.push('<sub>Budgets are advisory; overages flag ⚠️ but never fail CI.</sub>');
+  const footer = freshnessFooter(meta);
+  if (footer) lines.push(footer);
   return lines.join('\n');
 }
 
@@ -92,5 +108,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const fresh = JSON.parse(readFileSync(freshPath, 'utf8'));
   const baseline = JSON.parse(readFileSync(basePath, 'utf8'));
-  process.stdout.write(renderComment(fresh, baseline) + '\n');
+  const meta = {
+    sha: process.env.SIZE_COMMENT_SHA,
+    runUrl: process.env.SIZE_COMMENT_RUN_URL,
+    // Second precision; milliseconds add noise without telling the reader anything.
+    generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+  };
+  process.stdout.write(renderComment(fresh, baseline, undefined, meta) + '\n');
 }
