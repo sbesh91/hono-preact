@@ -14,6 +14,17 @@
 
 If Serena is unavailable in a session (run `/mcp` to check), fall back to native tools.
 
+## Worktree setup
+
+When feature work runs in a fresh `git worktree`, the worktree shares tracked files but starts without the gitignored local state and build artifacts this monorepo needs. Run `pnpm wt:setup` (i.e. `bash scripts/worktree-setup.sh`) from inside the new worktree to bring it up: it copies `.env` and `.claude/settings.local.json` from the primary checkout, runs `pnpm install`, builds the framework `dist/`, and runs `pnpm typecheck`. Add `-- --test` to also run the unit suite (`pnpm wt:setup -- --test`).
+
+Two caveats the script cannot fix for you:
+
+- **Serena stays on the main checkout.** `.mcp.json` launches Serena with `--project .`, which binds to the primary checkout, so Serena keeps indexing main even while you work in the worktree. There is no in-session re-point tool. In a worktree, use `rg`/Read/Edit and do **not** use Serena's symbol/edit tools (they resolve paths against main, so an edit would land in the wrong tree). Re-pointing Serena needs an MCP restart against the worktree path, only worth it for large structural refactors.
+- **It is not auto-run.** Creating a worktree (e.g. via `EnterWorktree`) does not trigger setup; run `pnpm wt:setup` as the explicit next step.
+
+`.wrangler/` is intentionally not copied: it is local Cloudflare emulation state that regenerates on `wrangler dev`, and a stale copy is worse than a cold start.
+
 ## Pre-push verification
 
 Before `git push` (especially before opening a PR), run the same checks CI runs, in the same order CI runs them. Skipping any of these means CI catches a failure you should have caught locally, which wastes a round-trip.
