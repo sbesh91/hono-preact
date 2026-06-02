@@ -1,104 +1,117 @@
 import {
   BookOpen,
-  Cable,
-  Cloud,
+  Boxes,
+  Compass,
   Database,
-  FileText,
-  FolderTree,
-  Layers,
-  LayoutGrid,
-  Loader,
   Map as MapIcon,
-  MousePointerClick,
-  Plug,
-  Radio,
-  RefreshCw,
-  Rocket,
   Send,
-  Settings,
-  Lock,
+  Server,
   Shield,
-  Sparkles,
-  type LucideIcon,
   Wand2,
-  Zap,
+  type LucideIcon,
 } from 'lucide-preact';
 
-export type NavEntry = { title: string; route: string; icon: LucideIcon };
-export type NavSection = { heading: string; entries: NavEntry[] };
+export type NavEntry = { title: string; route: string };
+export type NavSection = {
+  heading: string;
+  icon: LucideIcon;
+  entries: NavEntry[];
+};
+export type NavArea = {
+  id: 'guide' | 'components';
+  label: string;
+  icon: LucideIcon;
+  basePath: string;
+  sections: NavSection[];
+};
 
-export const nav: NavSection[] = [
+export const nav: NavArea[] = [
   {
-    heading: 'Introduction',
-    entries: [
-      { title: 'Overview', route: '/docs', icon: BookOpen },
-      { title: 'Quick Start', route: '/docs/quick-start', icon: Rocket },
-    ],
-  },
-  {
-    heading: 'Pages & Routing',
-    entries: [
-      { title: 'The Route Table', route: '/docs/routes', icon: MapIcon },
-      { title: 'Layouts & Nesting', route: '/docs/layouts', icon: LayoutGrid },
-      { title: 'Adding Pages', route: '/docs/pages', icon: FileText },
-    ],
-  },
-  {
-    heading: 'Data',
-    entries: [
-      { title: 'Server Loaders', route: '/docs/loaders', icon: Database },
-      { title: 'Loading States', route: '/docs/loading-states', icon: Loader },
-      { title: 'Reloading Data', route: '/docs/reloading', icon: RefreshCw },
-      { title: 'Prefetching', route: '/docs/prefetch', icon: Zap },
-      { title: 'Streaming', route: '/docs/streaming', icon: Radio },
-    ],
-  },
-  {
-    heading: 'Mutations',
-    entries: [
-      { title: 'Server Actions', route: '/docs/actions', icon: Send },
-      { title: 'Optimistic UI', route: '/docs/optimistic-ui', icon: Sparkles },
-    ],
-  },
-  {
-    heading: 'View Transitions',
-    entries: [
+    id: 'guide',
+    label: 'Guide',
+    icon: BookOpen,
+    basePath: '/docs',
+    sections: [
       {
-        title: 'View Transitions',
-        route: '/docs/view-transitions',
+        heading: 'Introduction',
+        icon: BookOpen,
+        entries: [
+          { title: 'Overview', route: '/docs' },
+          { title: 'Quick Start', route: '/docs/quick-start' },
+        ],
+      },
+      {
+        heading: 'Pages & Routing',
+        icon: MapIcon,
+        entries: [
+          { title: 'The Route Table', route: '/docs/routes' },
+          { title: 'Layouts & Nesting', route: '/docs/layouts' },
+          { title: 'Adding Pages', route: '/docs/pages' },
+        ],
+      },
+      {
+        heading: 'Data',
+        icon: Database,
+        entries: [
+          { title: 'Server Loaders', route: '/docs/loaders' },
+          { title: 'Loading States', route: '/docs/loading-states' },
+          { title: 'Reloading Data', route: '/docs/reloading' },
+          { title: 'Prefetching', route: '/docs/prefetch' },
+          { title: 'Streaming', route: '/docs/streaming' },
+        ],
+      },
+      {
+        heading: 'Mutations',
+        icon: Send,
+        entries: [
+          { title: 'Server Actions', route: '/docs/actions' },
+          { title: 'Optimistic UI', route: '/docs/optimistic-ui' },
+        ],
+      },
+      {
+        heading: 'View Transitions',
         icon: Wand2,
+        entries: [
+          { title: 'View Transitions', route: '/docs/view-transitions' },
+        ],
+      },
+      {
+        heading: 'Access Control',
+        icon: Shield,
+        entries: [
+          { title: 'Middleware', route: '/docs/middleware' },
+          { title: 'CSRF Protection', route: '/docs/csrf' },
+        ],
+      },
+      {
+        heading: 'Infrastructure',
+        icon: Server,
+        entries: [
+          { title: 'Vite Config', route: '/docs/vite-config' },
+          { title: 'Project Structure', route: '/docs/structure' },
+          {
+            title: 'Composing Hono Middleware',
+            route: '/docs/hono-middleware',
+          },
+          { title: 'WebSockets', route: '/docs/websockets' },
+          { title: 'renderPage', route: '/docs/render-page' },
+          { title: 'Link Prefetch', route: '/docs/link-prefetch' },
+          { title: 'Build & Deploy', route: '/docs/deployment' },
+        ],
       },
     ],
   },
   {
-    heading: 'Access Control',
-    entries: [
-      { title: 'Middleware', route: '/docs/middleware', icon: Shield },
-      { title: 'CSRF Protection', route: '/docs/csrf', icon: Lock },
-    ],
-  },
-  {
-    heading: 'Infrastructure',
-    entries: [
-      { title: 'Vite Config', route: '/docs/vite-config', icon: Settings },
+    id: 'components',
+    label: 'Components',
+    icon: Boxes,
+    basePath: '/docs/components',
+    sections: [
       {
-        title: 'Project Structure',
-        route: '/docs/structure',
-        icon: FolderTree,
+        heading: 'Getting started',
+        icon: Compass,
+        entries: [{ title: 'Overview', route: '/docs/components' }],
       },
-      {
-        title: 'Composing Hono Middleware',
-        route: '/docs/hono-middleware',
-        icon: Plug,
-      },
-      { title: 'WebSockets', route: '/docs/websockets', icon: Cable },
-      { title: 'renderPage', route: '/docs/render-page', icon: Layers },
-      {
-        title: 'Link Prefetch',
-        route: '/docs/link-prefetch',
-        icon: MousePointerClick,
-      },
-      { title: 'Build & Deploy', route: '/docs/deployment', icon: Cloud },
     ],
   },
 ];

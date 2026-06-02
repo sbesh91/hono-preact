@@ -28,7 +28,10 @@ function discoverMdxSlugs(): string[] {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
         if (entry.name === '__tests__') continue;
-        walk(resolve(dir, entry.name), prefix ? `${prefix}/${entry.name}` : entry.name);
+        walk(
+          resolve(dir, entry.name),
+          prefix ? `${prefix}/${entry.name}` : entry.name
+        );
       } else if (entry.name.endsWith('.mdx')) {
         const base = entry.name.replace(/\.mdx$/, '');
         const rel = prefix ? `${prefix}/${base}` : base;
@@ -42,7 +45,9 @@ function discoverMdxSlugs(): string[] {
 
 function navSlugs(): string[] {
   return nav
-    .flatMap((section) => section.entries.map((entry) => entry.route))
+    .flatMap((area) =>
+      area.sections.flatMap((s) => s.entries.map((e) => e.route))
+    )
     .filter((route) => route === '/docs' || route.startsWith('/docs/'))
     .map((route) => (route === '/docs' ? '' : route.replace('/docs/', '')))
     .sort();
