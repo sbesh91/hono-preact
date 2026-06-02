@@ -156,7 +156,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --background: #1b1d1e;
     --foreground: #e9eae8;
     --muted: #bbbcbc; /* Cool Gray 4C */
@@ -180,6 +180,35 @@
       0 1px 2px rgba(0, 0, 0, 0.3),
       0 6px 16px rgba(0, 0, 0, 0.45);
   }
+}
+
+/* Explicit dark override (theme toggle). Keep these token values in sync with
+   the prefers-color-scheme: dark block above. Explicit light needs no block:
+   setting any data-theme disables the media default, so the base :root (light)
+   applies. */
+:root[data-theme='dark'] {
+  --background: #1b1d1e;
+  --foreground: #e9eae8;
+  --muted: #bbbcbc; /* Cool Gray 4C */
+  --surface: #25282a; /* Pantone 426C */
+  --surface-subtle: #2f3234;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --accent: #ff5fbf; /* brighter magenta: AA as link text on dark surfaces */
+  --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
+  --accent-hover: #ff8ad2;
+  --ring: #ec008c;
+
+  /* Status / feedback colors on the dark surface */
+  --danger: #f87171; /* red-400: 6.3:1 on the dark background */
+  --badge-success-surface: #14532d; /* green-900 */
+  --badge-success-foreground: #bbf7d0; /* green-200: 8.6:1 on the surface */
+  --badge-neutral-surface: #374151; /* gray-700 */
+  --badge-neutral-foreground: #e5e7eb; /* gray-200: 8.4:1 on the surface */
+
+  /* Deeper, darker elevation so cards keep depth on the dark surface */
+  --shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 6px 16px rgba(0, 0, 0, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

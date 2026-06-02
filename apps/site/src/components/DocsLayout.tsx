@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { Pin, PinOff } from 'lucide-preact';
+import { ThemeToggle } from './ThemeToggle.js';
 import { nav, type NavArea } from '../pages/docs/nav.js';
 
 interface Props {
@@ -176,7 +177,7 @@ export function DocsLayout({ children }: Props) {
         >
           <GithubMark />
         </a>
-        {/* ThemeToggle is inserted here in Task 3. */}
+        <ThemeToggle />
       </header>
 
       <div
