@@ -269,7 +269,10 @@ export function DocsLayout({ children }: Props) {
         {/* Main content */}
         <main class="col-span-full md:col-auto max-w-[65ch] py-8 px-6">
           {children}
-          <nav aria-label="Page navigation" class="flex justify-between mt-12 pt-6 border-t border-border text-sm">
+          <nav
+            aria-label="Page navigation"
+            class="flex justify-between mt-12 pt-6 border-t border-border text-sm"
+          >
             <span>
               {prev && (
                 <a
