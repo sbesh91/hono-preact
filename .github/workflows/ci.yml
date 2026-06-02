@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Collapse superseded runs per ref. Cancel-in-progress only for PRs: a fast
+# series of pushes to a PR branch should drop stale runs (and the stale size
+# comment they'd post). On main, build-and-tag commits the size baseline and
+# force-pushes the `next` tag, so never interrupt it mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -90,6 +98,11 @@ jobs:
         run: node scripts/measure-client-size.mjs --out /tmp/fresh-size.json
 
       - name: Render comment
+        env:
+          # Pins the comment to the commit it measured, so a re-measured sticky
+          # comment is distinguishable from the original at-open one.
+          SIZE_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
+          SIZE_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node scripts/render-size-comment.mjs /tmp/fresh-size.json client-size-report.json > /tmp/size-comment.md
 
       - name: Post sticky comment
