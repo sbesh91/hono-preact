@@ -69,6 +69,31 @@
     0 6px 16px rgba(16, 24, 40, 0.08);
 }
 
+@utility bg-orangenta {
+  background-image: var(--gradient-orangenta);
+}
+
+@utility text-orangenta {
+  background-image: var(--gradient-orangenta);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility energy-bar {
+  display: block;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background-image: var(--gradient-orangenta);
+}
+
+@utility bg-zune-cloud {
+  background-image:
+    radial-gradient(60% 60% at 30% 20%, rgba(254, 80, 0, 0.18), transparent 70%),
+    radial-gradient(60% 60% at 75% 60%, rgba(236, 0, 140, 0.18), transparent 70%),
+    radial-gradient(50% 50% at 60% 90%, rgba(201, 125, 255, 0.16), transparent 70%);
+}
+
 :root {
   --spring-soft: linear(
     0,
@@ -157,17 +182,17 @@
 }
 
 .mdx-content a {
-  color: #2563eb;
+  color: var(--accent);
   text-decoration: underline;
 }
 .mdx-content a:hover {
-  color: #1d4ed8;
+  color: var(--accent-hover);
 }
 
 .mdx-content code {
   font-family: ui-monospace, monospace;
   font-size: 0.875em;
-  background: #f1f5f9;
+  background: var(--surface-subtle);
   padding: 0.125em 0.375em;
   border-radius: 0.25rem;
 }
@@ -212,30 +237,30 @@
   font-size: 0.9rem;
 }
 .mdx-content th {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   padding: 0.5rem 0.75rem;
-  background: #f8fafc;
+  background: var(--surface-subtle);
   font-weight: 600;
   text-align: left;
 }
 .mdx-content td {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   padding: 0.5rem 0.75rem;
 }
 .mdx-content tr:nth-child(even) td {
-  background: #f8fafc;
+  background: var(--surface-subtle);
 }
 
 .mdx-content blockquote {
-  border-left: 3px solid #94a3b8;
+  border-left: 3px solid var(--border-color);
   margin: 1rem 0;
   padding: 0.25rem 1rem;
-  color: #475569;
+  color: var(--muted);
 }
 
 .mdx-content hr {
   border: none;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
   margin: 2rem 0;
 }
 .mdx-content strong {
