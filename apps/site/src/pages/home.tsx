@@ -22,7 +22,7 @@ const Home: FunctionComponent = () => {
           <h1 class="text-5xl font-semibold text-orangenta">
             A small full-stack framework.
           </h1>
-          <p class="text-lg text-muted max-w-2xl mx-auto">
+          <p class="text-lg text-brand-ink/80 max-w-2xl mx-auto">
             Hono on the edge, Preact in the browser, manifest driven routes,
             typed RPC, streaming everywhere.
           </p>
@@ -44,7 +44,7 @@ const Home: FunctionComponent = () => {
 
         {/* Code block */}
         <section class="space-y-4">
-          <h2 class="text-sm uppercase tracking-wide text-muted">
+          <h2 class="text-sm uppercase tracking-wide text-brand-ink/70">
             Keep it simple
           </h2>
           <div class="grid gap-3 md:grid-cols-2">

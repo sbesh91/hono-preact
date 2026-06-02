@@ -80,7 +80,7 @@ const IssueHeaderAndActions: FunctionComponent<{
             render={
               <span
                 class={`text-xs px-2 py-0.5 ${
-                  status === 'open' ? 'bg-green-200' : 'bg-gray-200'
+                  status === 'open' ? 'badge-success' : 'badge-neutral'
                 }`}
               />
             }
@@ -88,7 +88,7 @@ const IssueHeaderAndActions: FunctionComponent<{
             {status}
           </ViewTransitionName>
         </div>
-        <p class="text-sm text-gray-700">
+        <p class="text-sm text-muted">
           Opened by <strong>{issue.author?.name ?? 'someone'}</strong> on{' '}
           {new Date(issue.createdAt).toLocaleDateString()}
         </p>
@@ -111,7 +111,7 @@ const IssueHeaderAndActions: FunctionComponent<{
               ? 'Close issue'
               : 'Reopen issue'}
         </button>
-        {error && <p class="text-sm text-red-700">{error}</p>}
+        {error && <p class="text-sm text-danger">{error}</p>}
       </div>
     </>
   );
@@ -178,7 +178,10 @@ const CommentsSection: FunctionComponent<{
           placeholder="Add a comment"
           class="block w-full border px-2 py-1"
         />
-        <button type="submit" class="bg-blue-600 text-white px-3 py-1 text-sm">
+        <button
+          type="submit"
+          class="bg-accent text-accent-foreground px-3 py-1 text-sm hover:bg-accent-hover"
+        >
           {pending ? 'Posting…' : 'Comment'}
         </button>
       </Form>
@@ -191,7 +194,7 @@ const CommentsView = commentsLoader.View<{ issueId: string }>(
   ({ data: comments, issueId }) => (
     <CommentsSection comments={comments ?? []} issueId={issueId} />
   ),
-  { fallback: <p class="text-sm text-gray-600">Loading comments…</p> }
+  { fallback: <p class="text-sm text-muted">Loading comments…</p> }
 );
 
 // ---- Section: project activity feed ----
@@ -199,14 +202,12 @@ const CommentsView = commentsLoader.View<{ issueId: string }>(
 const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
   activity,
 }) => (
-  <aside class="border-t pt-3 text-xs text-gray-700">
+  <aside class="border-t border-border pt-3 text-xs text-muted">
     <h4 class="font-semibold mb-1">Project activity</h4>
     <ul class="space-y-1">
       {activity.map((a, i) => (
         <li key={`${a.kind}-${a.at}-${i}`}>
-          <time class="text-gray-500">
-            {new Date(a.at).toLocaleTimeString()}
-          </time>{' '}
+          <time class="text-muted">{new Date(a.at).toLocaleTimeString()}</time>{' '}
           {a.kind === 'issue-created' && (
             <>
               created <strong>{a.issue.title}</strong>
@@ -230,7 +231,7 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
 
 const ActivityView = activityLoader.View(
   ({ data: activity }) => <ActivitySection activity={activity ?? []} />,
-  { fallback: <p class="text-xs text-gray-600">Loading activity…</p> }
+  { fallback: <p class="text-xs text-muted">Loading activity…</p> }
 );
 
 // ---- Page: issue loads first, then comments + activity in parallel ----

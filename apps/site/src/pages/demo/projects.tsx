@@ -22,7 +22,7 @@ const LogoutInline: FunctionComponent<{ user: { name: string } | null }> = ({
     },
   });
   return (
-    <span class="text-sm text-gray-700">
+    <span class="text-sm text-muted">
       {user?.name} ·{' '}
       <button
         type="button"
@@ -72,7 +72,7 @@ const ProjectsPage: FunctionComponent = () => {
             >
               {p.name}
             </ViewTransitionName>
-            <span class="text-sm text-gray-700">
+            <span class="text-sm text-muted">
               {p.openCount} open / {p.totalCount} total
             </span>
           </li>

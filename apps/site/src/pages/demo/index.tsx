@@ -5,7 +5,7 @@ const DemoIndex: FunctionComponent = () => (
   <section class="mx-auto max-w-2xl p-6 space-y-4">
     <header>
       <h1 class="text-2xl font-semibold">Demo: a mini issue tracker</h1>
-      <p class="text-sm text-gray-700 mt-1">
+      <p class="text-sm text-muted mt-1">
         Everything below is built with <code>hono-preact</code>. This is the
         same framework, the same primitives, exercising every feature the
         framework ships.
@@ -16,11 +16,14 @@ const DemoIndex: FunctionComponent = () => (
       create here is temporary.
     </p>
     <p>
-      <a href="/demo/projects" class="text-blue-700 underline">
+      <a
+        href="/demo/projects"
+        class="text-accent underline hover:text-accent-hover"
+      >
         Go to projects →
       </a>
     </p>
-    <footer class="text-xs text-gray-600 pt-6">
+    <footer class="text-xs text-muted pt-6">
       Behind the scenes: see{' '}
       <a href="/docs/loaders" class="underline">
         loaders

@@ -30,7 +30,7 @@ const ProjectIssuesPage: FunctionComponent = () => {
         <h2 class="text-lg font-semibold">{project.name} · Issues</h2>
         <button
           type="button"
-          class="bg-blue-600 text-white px-3 py-1 text-sm"
+          class="bg-accent text-accent-foreground px-3 py-1 text-sm hover:bg-accent-hover"
           onClick={() => setShowForm((v) => !v)}
         >
           {showForm ? 'Cancel' : 'New issue'}
@@ -54,7 +54,7 @@ const ProjectIssuesPage: FunctionComponent = () => {
           />
           <button
             type="submit"
-            class="bg-blue-600 text-white px-3 py-1 text-sm"
+            class="bg-accent text-accent-foreground px-3 py-1 text-sm hover:bg-accent-hover"
           >
             {creating ? 'Creating…' : 'Create'}
           </button>

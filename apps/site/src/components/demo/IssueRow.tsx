@@ -39,7 +39,7 @@ const IssueRow: FunctionComponent<Props> = ({ issue, projectSlug }) => {
         render={
           <span
             class={`text-xs px-2 py-0.5 ${
-              issue.status === 'open' ? 'bg-green-200' : 'bg-gray-200'
+              issue.status === 'open' ? 'badge-success' : 'badge-neutral'
             }`}
           />
         }

@@ -194,6 +194,20 @@ Exported both as named (`DialogRoot`, ...) and as a namespace object `Dialog = {
 
 Entry only, CSS-driven through the `data-state` contract plus `@starting-style`. Because `showModal()`/`close()` toggle the element between displayed and `display: none`, the copyable examples animate entry with `@starting-style` on the open state and degrade to no-animation where `@starting-style` is unsupported (it is Baseline Newly Available but degrades cleanly). **Exit animation is deferred**: closing removes the dialog from the top layer immediately. No `transition-behavior: allow-discrete` dependency (not yet reliable for `display: none` across current browsers).
 
+**Planned exit-animation approach (deferred to a separate `usePresence` increment; design vetted 2026-06-01, not in this slice).** When exit animations are added, use a `usePresence` primitive built on `Element.getAnimations()` (Baseline Widely Available since ~2020), not CSS `allow-discrete`/`overlay` (the `overlay` property is Chromium-only, so a CSS-only exit shows no animation on any Firefox or Safari and fails the all-current-browsers bar). Mechanism: on close, keep the native `<dialog>` genuinely open (the browser keeps the real top layer, focus trap, `inert`, Esc, and `::backdrop` for the whole exit), flip `data-state="closed"`, run a plain CSS transition, await `getAnimations({ subtree: true })`, then call `close()` and only then unmount. The same primitive serves the future custom overlays (finalize is unmount instead of `close()`); `data-state` stays `open`/`closed` (the closing phase also renders `closed`, so authors write one `[data-state=closed]` rule). Load-bearing details that must not be skipped:
+
+1. Read `getAnimations()` only **after a forced style flush** (`el.offsetHeight` / `getComputedStyle`), never synchronously in the same task and never via `requestAnimationFrame` (throttled or paused in background tabs); otherwise the set is empty and the dialog closes instantly on every browser.
+2. Always race the `.finished` promises against a **timeout derived from the declared timings** (with a hard cap around 3s) so an infinite child animation, an under-reported pseudo, or a backgrounded tab can never leave the modal stuck open blocking the page.
+3. An **empty animation set finalizes synchronously** (no exit). Never gate finalize on a `transitionend`/`animationend` event, which never fires in the empty case and hangs the dialog open.
+4. `::backdrop` requires `{ subtree: true }` and pseudo coverage still varies, so key finalize timing off the dialog element and treat the backdrop fade as best-effort/cosmetic.
+5. Tag each exit with a **generation token** and use `Promise.allSettled` so reopen-mid-exit reverses cleanly (the element was never closed) and a cancelled `.finished` (`AbortError`) is handled, not thrown.
+6. Filter out infinite-iteration animations (`getComputedTiming().iterations === Infinity`) before awaiting.
+7. Call `close()` **before** unmount so the native focus-return lands on the trigger, not `<body>`.
+8. Intercept native Esc: listen for `cancel`, `preventDefault()`, and route through the same animated close path; detect a desynced external `close()` / `method="dialog"` and finalize instantly.
+9. No exit on **first mount / SSR** (first-run guard, phase derived synchronously from `open`), and short-circuit to instant finalize under `prefers-reduced-motion` (examples also zero the transition under the media query).
+
+happy-dom cannot emulate `getAnimations()`/real transitions, so unit-test the state machine with `getAnimations()` mocked and flag the real exit animation, top-layer retention during the deferred close, Esc interception, and `::backdrop` as manual-verification items.
+
 ---
 
 ## 8. Docs example scaffolding

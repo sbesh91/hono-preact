@@ -32,13 +32,13 @@
 @theme {
   --font-sans: 'Selawik', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
-  /* Zune brand colors (sRGB equivalents of the guideline Pantone specs) */
-  --color-zune-magenta: #ec008c; /* Pantone Process Magenta C */
-  --color-zune-orange: #fe5000; /* Pantone Orange 021 C - gradient use only */
-  --color-zune-grey: #888b8d; /* Cool Gray 8C - the wordmark grey */
-  --color-zune-ink: #25282a; /* Pantone 426C */
+  /* Brand colors (sRGB equivalents of the guideline Pantone specs) */
+  --color-brand-magenta: #ec008c; /* Pantone Process Magenta C */
+  --color-brand-orange: #fe5000; /* Pantone Orange 021 C - gradient use only */
+  --color-brand-grey: #888b8d; /* Cool Gray 8C */
+  --color-brand-ink: #25282a; /* Pantone 426C */
 
-  /* Magenta ramp + zune grey/ink: published brand palette for reuse;
+  /* Magenta ramp + brand grey/ink: published brand palette for reuse;
      not every step is consumed by the current pages. */
   --color-magenta-50: #fdeaf4;
   --color-magenta-100: #fbcfe6;
@@ -62,6 +62,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-hover: var(--accent-hover);
+  --color-danger: var(--danger);
   --color-ring: var(--ring);
 }
 
@@ -70,7 +71,7 @@
 }
 
 /* Signature "orangenta" utilities: published design-system surface. text-orangenta
-   and energy-bar are used on the home hero; bg-orangenta and bg-zune-cloud are
+   and energy-bar are used on the home hero; bg-orangenta and bg-brand-cloud are
    reserved for reuse. */
 @utility bg-orangenta {
   background-image: var(--gradient-orangenta);
@@ -90,11 +91,25 @@
   background-image: var(--gradient-orangenta);
 }
 
-@utility bg-zune-cloud {
+@utility bg-brand-cloud {
   background-image:
     radial-gradient(60% 60% at 30% 20%, rgba(254, 80, 0, 0.18), transparent 70%),
     radial-gradient(60% 60% at 75% 60%, rgba(236, 0, 140, 0.18), transparent 70%),
     radial-gradient(50% 50% at 60% 90%, rgba(201, 125, 255, 0.16), transparent 70%);
+}
+
+/* Status badges. Each utility sets BOTH the surface and a paired foreground so
+   the label can never inherit the page foreground (the bug that left light text
+   on a light badge in dark mode). Tokens flip per color scheme below and clear
+   WCAG AA (>= 4.5:1) on both sides in both modes. */
+@utility badge-success {
+  background-color: var(--badge-success-surface);
+  color: var(--badge-success-foreground);
+}
+
+@utility badge-neutral {
+  background-color: var(--badge-neutral-surface);
+  color: var(--badge-neutral-foreground);
 }
 
 :root {
@@ -124,6 +139,13 @@
   --accent-hover: #9b005d; /* magenta-700 */
   --ring: #ec008c;
 
+  /* Status / feedback colors (flipped in the dark media query below) */
+  --danger: #b91c1c; /* red-700: AA as text on the white background */
+  --badge-success-surface: #dcfce7; /* green-100 */
+  --badge-success-foreground: #166534; /* green-800: 5.7:1 on the surface */
+  --badge-neutral-surface: #e5e7eb; /* gray-200 */
+  --badge-neutral-foreground: #374151; /* gray-700: 8.4:1 on the surface */
+
   /* Signature orange-to-magenta "orangenta" gradient (left to right) */
   --gradient-orangenta: linear-gradient(90deg, #fe5000 0%, #ec008c 100%);
 
@@ -145,6 +167,13 @@
     --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
     --accent-hover: #ff8ad2;
     --ring: #ec008c;
+
+    /* Status / feedback colors on the dark surface */
+    --danger: #f87171; /* red-400: 6.3:1 on the dark background */
+    --badge-success-surface: #14532d; /* green-900 */
+    --badge-success-foreground: #bbf7d0; /* green-200: 8.6:1 on the surface */
+    --badge-neutral-surface: #374151; /* gray-700 */
+    --badge-neutral-foreground: #e5e7eb; /* gray-200: 8.4:1 on the surface */
 
     /* Deeper, darker elevation so cards keep depth on the dark surface */
     --shadow-card:
