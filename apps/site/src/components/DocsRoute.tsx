@@ -10,16 +10,23 @@ import { DocsLayout } from './DocsLayout.js';
 // Preact cannot reconcile correctly during hydration when the component is
 // inside a Suspense boundary; appending instead of replacing causes the
 // content to appear twice.
-const mdxModules = import.meta.glob('../pages/docs/*.mdx');
-const mdxRoutes = Object.entries(mdxModules).map(([file, load]) => {
-  // Path relative to /docs: '' for index.mdx, 'quick-start' for
-  // quick-start.mdx, etc. The inner Router below matches against the rest
-  // path that preact-iso passes via RouteContext after the outer route
-  // strips '/docs/'.
-  const relative = file
+//
+// Derive a docs route slug from an `import.meta.glob` key:
+//   '../pages/docs/index.mdx'            -> ''                (serves /docs)
+//   '../pages/docs/quick-start.mdx'      -> 'quick-start'     (serves /docs/quick-start)
+//   '../pages/docs/components/index.mdx' -> 'components'      (serves /docs/components)
+//   '../pages/docs/components/dialog.mdx'-> 'components/dialog'(serves /docs/components/dialog)
+export function docsSlug(globKey: string): string {
+  return globKey
     .replace('../pages/docs/', '')
-    .replace('.mdx', '')
-    .replace(/^index$/, '');
+    .replace(/\.mdx$/, '')
+    .replace(/(^|\/)index$/, '');
+}
+
+// Recursive glob so component pages can live under pages/docs/components/.
+const mdxModules = import.meta.glob('../pages/docs/**/*.mdx');
+const mdxRoutes = Object.entries(mdxModules).map(([file, load]) => {
+  const relative = docsSlug(file);
   const Component = lazy(async () => {
     const mod = await (load as () => Promise<{ default: ComponentType }>)();
     const MDX = mod.default;
