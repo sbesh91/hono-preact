@@ -8,7 +8,7 @@ export default function Layout({ children }: { children: ComponentChildren }) {
       <Head defaultTitle="hono-preact">
         <link rel="stylesheet" href={root} />
       </Head>
-      <body class="bg-gray-300 isolate">
+      <body class="bg-background text-foreground font-sans antialiased isolate">
         <main id="app">{children}</main>
         <ClientScript />
       </body>
