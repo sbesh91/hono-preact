@@ -1,5 +1,68 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('./fonts/selawik-light.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/selawik-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/selawik-semibold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Selawik';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/selawik-bold.woff2') format('woff2');
+}
+
+@theme {
+  --font-sans: 'Selawik', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Zune brand colors (sRGB equivalents of the guideline Pantone specs) */
+  --color-zune-magenta: #ec008c; /* Pantone Process Magenta C */
+  --color-zune-orange: #fe5000; /* Pantone Orange 021 C - gradient use only */
+  --color-zune-grey: #888b8d; /* Cool Gray 8C - the wordmark grey */
+  --color-zune-ink: #25282a; /* Pantone 426C */
+
+  --color-magenta-50: #fdeaf4;
+  --color-magenta-100: #fbcfe6;
+  --color-magenta-200: #f7a3cf;
+  --color-magenta-300: #f06fb3;
+  --color-magenta-400: #f23a9b;
+  --color-magenta-500: #ec008c;
+  --color-magenta-600: #c40076;
+  --color-magenta-700: #9b005d;
+  --color-magenta-800: #7a0049;
+  --color-magenta-900: #5c0037;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-border: var(--border-color);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-ring: var(--ring);
+}
+
 @utility shadow-card {
   box-shadow:
     0 1px 2px rgba(16, 24, 40, 0.04),
@@ -20,6 +83,36 @@
     1
   );
   --spring-duration: 380ms;
+
+  /* Semantic theme tokens (light) - flipped in the dark media query below */
+  --background: #ffffff;
+  --foreground: #25282a;
+  --muted: #63666a; /* Cool Gray 10C */
+  --surface: #ffffff;
+  --surface-subtle: #f4f4f2;
+  --border-color: rgba(37, 40, 42, 0.1);
+  --accent: #ec008c;
+  --accent-foreground: #ffffff;
+  --accent-hover: #c40076;
+  --ring: #ec008c;
+
+  /* Signature orange-to-magenta "orangenta" gradient (left to right) */
+  --gradient-orangenta: linear-gradient(90deg, #fe5000 0%, #ec008c 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1b1d1e;
+    --foreground: #e9eae8;
+    --muted: #bbbcbc; /* Cool Gray 4C */
+    --surface: #25282a; /* Pantone 426C */
+    --surface-subtle: #2f3234;
+    --border-color: rgba(255, 255, 255, 0.12);
+    --accent: #ec008c;
+    --accent-foreground: #ffffff;
+    --accent-hover: #ff4db0;
+    --ring: #ec008c;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
