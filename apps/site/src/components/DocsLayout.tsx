@@ -1,7 +1,6 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { Pin, PinOff } from 'lucide-preact';
 import { ThemeToggle } from './ThemeToggle.js';
 import { nav, type NavArea } from '../pages/docs/nav.js';
 
@@ -9,9 +8,7 @@ interface Props {
   children: ComponentChildren;
 }
 
-const COLLAPSED_W = 56;
-const EXPANDED_W = 240;
-const HOVER_CLOSE_DELAY_MS = 500;
+const SIDEBAR_W = 240;
 
 // lucide-preact removed brand marks, so the GitHub glyph is inline SVG.
 function GithubMark({ size = 18 }: { size?: number }) {
@@ -29,40 +26,13 @@ function GithubMark({ size = 18 }: { size?: number }) {
 }
 
 export function DocsLayout({ children }: Props) {
-  const [pinned, setPinned] = useState(false);
-  const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { path } = useLocation();
-
-  useEffect(() => {
-    return () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current);
-    };
-  }, []);
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
     setMobileOpen(false);
   }, [path]);
-
-  const handleMouseEnter = () => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-    setHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(
-      () => setHovered(false),
-      HOVER_CLOSE_DELAY_MS
-    );
-  };
-
-  const expanded = pinned || hovered;
 
   const activeAreaId = path.startsWith('/docs/components')
     ? 'components'
@@ -75,28 +45,10 @@ export function DocsLayout({ children }: Props) {
   const next =
     idx !== -1 && idx < allEntries.length - 1 ? allEntries[idx + 1] : null;
 
-  const renderNav = (area: NavArea, showText: boolean) => (
+  const renderNav = (area: NavArea) => (
     <div class="flex flex-col gap-4">
       {area.sections.map((section) => {
         const Icon = section.icon;
-        const sectionActive = section.entries.some((e) => e.route === path);
-        if (!showText) {
-          const first = section.entries[0];
-          return (
-            <a
-              key={section.heading}
-              href={first.route}
-              aria-label={section.heading}
-              class={`flex items-center justify-center h-9 rounded ${
-                sectionActive
-                  ? 'bg-accent/10 text-accent'
-                  : 'text-muted hover:text-foreground hover:bg-foreground/10'
-              }`}
-            >
-              <Icon size={18} class="shrink-0" />
-            </a>
-          );
-        }
         return (
           <div key={section.heading} class="flex flex-col gap-0.5">
             <div class="flex items-center gap-2 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-muted mb-1.5 px-3">
@@ -138,7 +90,7 @@ export function DocsLayout({ children }: Props) {
           ☰
         </button>
         <a
-          href="/docs"
+          href="/"
           class="font-bold text-[0.95rem] text-foreground no-underline hover:text-accent whitespace-nowrap"
         >
           hono-preact
@@ -182,53 +134,16 @@ export function DocsLayout({ children }: Props) {
 
       <div
         class="flex-1 grid"
-        style={{
-          gridTemplateColumns: pinned
-            ? `${EXPANDED_W}px 1fr`
-            : `${COLLAPSED_W}px 1fr`,
-          transition: `grid-template-columns var(--spring-duration) var(--spring-soft)`,
-        }}
+        style={{ gridTemplateColumns: `${SIDEBAR_W}px 1fr` }}
       >
-        {/* Desktop rail */}
+        {/* Desktop rail (pinned open) */}
         <aside
           aria-label="Docs navigation"
           class="hidden md:block md:sticky md:top-12 md:h-[calc(100vh-3rem)] relative"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
         >
-          <div
-            class="docs-sidebar absolute top-0 left-0 h-full bg-surface-subtle border-r border-border overflow-hidden flex flex-col z-20 shadow-sm"
-            style={{
-              width: expanded ? `${EXPANDED_W}px` : `${COLLAPSED_W}px`,
-              transition: `width var(--spring-duration) var(--spring-soft)`,
-            }}
-          >
-            <div
-              class={`flex-1 overflow-y-auto overflow-x-hidden py-3 ${expanded ? 'px-2' : 'px-1.5'}`}
-            >
-              {renderNav(activeArea, expanded)}
-            </div>
-            <div
-              class={`shrink-0 border-t border-border py-2 ${expanded ? 'px-2' : 'px-1.5'}`}
-            >
-              <button
-                type="button"
-                aria-pressed={pinned}
-                aria-label={pinned ? 'Unpin sidebar' : 'Pin sidebar'}
-                onClick={() => setPinned((p) => !p)}
-                class={`flex items-center gap-3 h-9 w-full rounded text-sm text-muted hover:text-foreground hover:bg-foreground/10 ${
-                  expanded ? 'px-3' : 'justify-center px-0'
-                }`}
-              >
-                {pinned ? (
-                  <PinOff size={18} class="shrink-0" />
-                ) : (
-                  <Pin size={18} class="shrink-0" />
-                )}
-                {expanded && (
-                  <span>{pinned ? 'Unpin sidebar' : 'Pin sidebar'}</span>
-                )}
-              </button>
+          <div class="docs-sidebar absolute inset-0 bg-surface-subtle border-r border-border overflow-hidden flex flex-col">
+            <div class="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2">
+              {renderNav(activeArea)}
             </div>
           </div>
         </aside>
@@ -261,9 +176,7 @@ export function DocsLayout({ children }: Props) {
               ✕
             </button>
           </div>
-          <div class="p-3 overflow-y-auto flex-1">
-            {renderNav(activeArea, true)}
-          </div>
+          <div class="p-3 overflow-y-auto flex-1">{renderNav(activeArea)}</div>
         </aside>
 
         {/* Main content */}
