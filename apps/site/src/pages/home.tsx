@@ -19,7 +19,7 @@ const Home: FunctionComponent = () => {
           <p class="inline-block bg-surface/70 backdrop-blur text-xs px-2 py-0.5 rounded-full border border-border">
             hono-preact v{__HONO_PREACT_VERSION__}
           </p>
-          <h1 class="text-5xl font-semibold text-orangenta">
+          <h1 class="text-5xl font-semibold text-orangenta drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]">
             A small full-stack framework.
           </h1>
           <p class="text-lg text-muted max-w-2xl mx-auto">

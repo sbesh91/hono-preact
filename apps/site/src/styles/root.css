@@ -38,6 +38,8 @@
   --color-zune-grey: #888b8d; /* Cool Gray 8C - the wordmark grey */
   --color-zune-ink: #25282a; /* Pantone 426C */
 
+  /* Magenta ramp + zune grey/ink: published brand palette for reuse;
+     not every step is consumed by the current pages. */
   --color-magenta-50: #fdeaf4;
   --color-magenta-100: #fbcfe6;
   --color-magenta-200: #f7a3cf;
@@ -64,11 +66,12 @@
 }
 
 @utility shadow-card {
-  box-shadow:
-    0 1px 2px rgba(16, 24, 40, 0.04),
-    0 6px 16px rgba(16, 24, 40, 0.08);
+  box-shadow: var(--shadow-card);
 }
 
+/* Signature "orangenta" utilities: published design-system surface. text-orangenta
+   and energy-bar are used on the home hero; bg-orangenta and bg-zune-cloud are
+   reserved for reuse. */
 @utility bg-orangenta {
   background-image: var(--gradient-orangenta);
 }
@@ -116,13 +119,18 @@
   --surface: #ffffff;
   --surface-subtle: #f4f4f2;
   --border-color: rgba(37, 40, 42, 0.1);
-  --accent: #ec008c;
+  --accent: #c40076; /* magenta-600: AA as link text and as white-on-accent button */
   --accent-foreground: #ffffff;
-  --accent-hover: #c40076;
+  --accent-hover: #9b005d; /* magenta-700 */
   --ring: #ec008c;
 
   /* Signature orange-to-magenta "orangenta" gradient (left to right) */
   --gradient-orangenta: linear-gradient(90deg, #fe5000 0%, #ec008c 100%);
+
+  /* Card elevation (flipped in the dark media query below) */
+  --shadow-card:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 6px 16px rgba(16, 24, 40, 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -133,10 +141,15 @@
     --surface: #25282a; /* Pantone 426C */
     --surface-subtle: #2f3234;
     --border-color: rgba(255, 255, 255, 0.12);
-    --accent: #ec008c;
-    --accent-foreground: #ffffff;
-    --accent-hover: #ff4db0;
+    --accent: #ff5fbf; /* brighter magenta: AA as link text on dark surfaces */
+    --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
+    --accent-hover: #ff8ad2;
     --ring: #ec008c;
+
+    /* Deeper, darker elevation so cards keep depth on the dark surface */
+    --shadow-card:
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 6px 16px rgba(0, 0, 0, 0.45);
   }
 }
 
@@ -144,6 +157,12 @@
   :root {
     --spring-duration: 0ms;
   }
+}
+
+/* Keyboard focus indicator (uses the brand ring token) */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* MDX prose defaults */
@@ -252,7 +271,7 @@
 }
 
 .mdx-content blockquote {
-  border-left: 3px solid var(--border-color);
+  border-left: 3px solid var(--muted);
   margin: 1rem 0;
   padding: 0.25rem 1rem;
   color: var(--muted);
