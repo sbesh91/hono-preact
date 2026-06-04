@@ -3,10 +3,14 @@ import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
 import {
   useCallback,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'preact/hooks';
+import { usePosition } from '../use-position.js';
+import { useDismiss } from '../use-dismiss.js';
+import { useFocusReturn } from '../use-focus-return.js';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align, PositionState } from '../use-position.js';
@@ -150,6 +154,108 @@ export function PopoverAnchor(props: PopoverAnchorProps): VNode {
     render,
     defaultTag: 'span',
     props: { ...rest, ref: ctx.anchorRef },
+    children,
+  });
+}
+
+function supportsPopover(el: HTMLElement): boolean {
+  return typeof el.showPopover === 'function';
+}
+
+export type PopoverPositionerProps = {
+  render?: RenderProp<{ side: Side; align: Align }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function PopoverPositioner(
+  props: PopoverPositionerProps
+): VNode | null {
+  const { render, children, ...rest } = props;
+  const ctx = usePopoverContext('Positioner');
+
+  const position = usePosition({
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    arrowRef: ctx.arrowRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+  });
+
+  // Publish the resolved position so Arrow (and any consumer) can read it.
+  useLayoutEffect(() => {
+    ctx.setPosition(position);
+  }, [position.side, position.align, position.arrowX, position.arrowY]);
+
+  // Promote to the native top layer where supported (progressive enhancement).
+  // Applied imperatively so there is no SSR/hydration attribute mismatch.
+  useLayoutEffect(() => {
+    const el = ctx.floatingRef.current;
+    // Runs when open flips true and the element has mounted (refs are assigned
+    // before layout effects). Empty deps would never re-run, so showPopover
+    // would never fire on a mount-on-open element.
+    if (!ctx.open || !el || !supportsPopover(el)) return;
+    el.setAttribute('popover', 'manual');
+    el.showPopover();
+    return () => {
+      el.hidePopover();
+      el.removeAttribute('popover');
+    };
+  }, [ctx.open]);
+
+  if (!ctx.open) return null;
+
+  return useRender<{ side: Side; align: Align }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.floatingRef,
+      'data-side': position.side,
+      'data-align': position.align,
+      // The Positioner is a framework-owned layout wrapper: style it via class
+      // (z-index etc.), not the style prop, which is reserved for positioning.
+      style: { position: 'fixed' },
+    },
+    state: { side: position.side, align: position.align },
+    children,
+  });
+}
+
+export type PopoverPopupProps = {
+  render?: RenderProp<{ open: boolean }>;
+  'aria-label'?: string; // alternative to a Title
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function PopoverPopup(props: PopoverPopupProps): VNode {
+  const { render, children, 'aria-label': ariaLabel, ...rest } = props;
+  const ctx = usePopoverContext('Popup');
+
+  useDismiss({
+    enabled: ctx.open,
+    refs: [ctx.floatingRef, ctx.anchorRef],
+    onDismiss: () => ctx.setOpen(false),
+  });
+
+  useFocusReturn({ open: ctx.open, popupRef: ctx.popupRef });
+
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.popupRef,
+      role: 'dialog',
+      id: ctx.popupId,
+      tabIndex: -1,
+      'data-state': ctx.open ? 'open' : 'closed',
+      'aria-label': ariaLabel,
+      'aria-labelledby': ariaLabel ? undefined : ctx.titleId,
+      'aria-describedby': ctx.hasDescription ? ctx.descriptionId : undefined,
+    },
+    state: { open: ctx.open },
     children,
   });
 }
