@@ -1,0 +1,51 @@
+{
+  "name": "@hono-preact/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone, unstyled, accessible Preact UI primitives for hono-preact.",
+  "keywords": [
+    "preact",
+    "headless",
+    "ui",
+    "accessible",
+    "dialog"
+  ],
+  "homepage": "https://framework.sbesh.com",
+  "bugs": {
+    "url": "https://github.com/sbesh91/hono-preact/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sbesh91/hono-preact.git",
+    "directory": "packages/ui"
+  },
+  "license": "MIT",
+  "author": "Steven Beshensky",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "tsc"
+  },
+  "peerDependencies": {
+    "preact": ">=10.11.0"
+  },
+  "devDependencies": {
+    "typescript": "*",
+    "preact-render-to-string": "^6.6.7"
+  },
+  "sideEffects": false
+}

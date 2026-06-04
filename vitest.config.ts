@@ -59,12 +59,14 @@ export default defineConfig({
         __dirname,
         'packages/hono-preact/src/index.ts'
       ),
+      '@hono-preact/ui': path.resolve(__dirname, 'packages/ui/src/index.ts'),
       '@': path.resolve(__dirname, 'apps/site/src'),
     },
   },
   test: {
     include: [
       'packages/iso/src/**/__tests__/**/*.test.{ts,tsx}',
+      'packages/ui/src/**/__tests__/**/*.test.{ts,tsx}',
       'packages/server/src/**/__tests__/**/*.test.{ts,tsx}',
       'packages/vite/src/**/__tests__/**/*.test.ts',
       'packages/hono-preact/__tests__/**/*.test.{ts,tsx}',
@@ -124,6 +126,7 @@ export default defineConfig({
         'packages/iso/src/**/*.{ts,tsx}',
         'packages/server/src/**/*.{ts,tsx}',
         'packages/vite/src/**/*.ts',
+        'packages/ui/src/**/*.{ts,tsx}',
       ],
       exclude: [
         'packages/*/src/**/__tests__/**',
@@ -131,6 +134,8 @@ export default defineConfig({
         'packages/server/src/index.ts',
         'packages/server/src/context.ts',
         'packages/hono-preact/**',
+        'packages/ui/src/index.ts',
+        'packages/ui/src/dialog/index.ts',
       ],
     },
   },
