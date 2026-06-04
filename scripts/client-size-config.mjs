@@ -76,6 +76,16 @@ export const COMPONENT_MODULES = {
 // match wins; unmatched chunks fall through to 'app'. Keep prefixes explicit
 // (no ambiguous short stems) so ordering rarely matters.
 export const CHUNK_PREFIXES = [
+  // Component-area docs pages (`/docs/components/*`). The guide pages already
+  // land in topical feature buckets below; group the component pages too so
+  // they read as their own line instead of inflating `app`. Add a prefix here
+  // as each new component page ships. `use-form-status` is bucketed to
+  // `actions` below, so list these specific names before it.
+  ['dialog', 'components'],
+  ['use-render', 'components'],
+  ['use-controllable-state', 'components'],
+  ['merge-refs', 'components'],
+  ['components', 'components'], // the Components-area landing page chunk
   ['guard', 'guards'],
   ['loader-stub', 'loaders'],
   ['loaders', 'loaders'],

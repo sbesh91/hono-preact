@@ -36,6 +36,16 @@ describe('bucketForChunk', () => {
     // "loading-states" must not be captured by "loader".
     expect(bucketForChunk('loading-states-xNzUIjIC.js')).toBe('core');
   });
+
+  it('groups component-area docs pages into the components bucket', () => {
+    expect(bucketForChunk('dialog-BSsm66RQ.js')).toBe('components');
+    expect(bucketForChunk('use-render-DMU4Us_-.js')).toBe('components');
+    expect(bucketForChunk('use-controllable-state-BZJc3EUw.js')).toBe(
+      'components'
+    );
+    expect(bucketForChunk('merge-refs-Dnaozq_v.js')).toBe('components');
+    expect(bucketForChunk('components-C-lNE8AZ.js')).toBe('components');
+  });
 });
 
 describe('tableGzip', () => {
