@@ -54,3 +54,16 @@ export {
   type PopoverDescriptionProps,
   type PopoverCloseProps,
 } from './popover/index.js';
+export {
+  Tooltip,
+  TooltipRoot,
+  TooltipTrigger,
+  TooltipPositioner,
+  TooltipPopup,
+  TooltipArrow,
+  type TooltipRootProps,
+  type TooltipTriggerProps,
+  type TooltipPositionerProps,
+  type TooltipPopupProps,
+  type TooltipArrowProps,
+} from './tooltip/index.js';

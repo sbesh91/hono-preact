@@ -284,3 +284,30 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
     children,
   });
 }
+
+export type TooltipArrowProps = {
+  render?: RenderProp<{ side: Side }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function TooltipArrow(props: TooltipArrowProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useTooltipContext('Arrow');
+  const { side, arrowX, arrowY } = ctx.position;
+  return useRender<{ side: Side }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.arrowRef,
+      'data-side': side,
+      style: {
+        position: 'absolute',
+        left: arrowX != null ? `${arrowX}px` : undefined,
+        top: arrowY != null ? `${arrowY}px` : undefined,
+      },
+    },
+    state: { side },
+    children,
+  });
+}
