@@ -21,7 +21,11 @@ describe('Example', () => {
 describe('CodeTabs', () => {
   const tabs = [
     { label: 'CSS', code: '.a { color: red; }', language: 'css' },
-    { label: 'Tailwind', code: '<div class="text-red-500" />', language: 'html' },
+    {
+      label: 'Tailwind',
+      code: '<div class="text-red-500" />',
+      language: 'html',
+    },
   ];
 
   it('shows the first tab by default and switches on click', () => {

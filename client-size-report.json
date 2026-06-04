@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "sectionA": {
     "core": {
       "total": {
@@ -112,9 +112,9 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 26297,
+      "app": 29975,
       "actions": 15480,
-      "core": 36195,
+      "core": 36194,
       "guards": 2196,
       "middleware": 11914,
       "vendor": 8302,
@@ -123,8 +123,34 @@
       "streaming": 6319,
       "transitions": 4250
     },
-    "total": 128367,
-    "unmatched": 15,
-    "fileCount": 51
+    "total": 132044,
+    "unmatched": 17,
+    "fileCount": 53
+  },
+  "sectionC": {
+    "ui-core": {
+      "total": {
+        "raw": 1290,
+        "gzip": 712,
+        "brotli": 634
+      },
+      "marginalOverUiCore": {
+        "raw": 1290,
+        "gzip": 712,
+        "brotli": 634
+      }
+    },
+    "dialog": {
+      "total": {
+        "raw": 3783,
+        "gzip": 1557,
+        "brotli": 1390
+      },
+      "marginalOverUiCore": {
+        "raw": 2624,
+        "gzip": 910,
+        "brotli": 817
+      }
+    }
   }
 }

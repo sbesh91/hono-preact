@@ -59,33 +59,34 @@ unsupported). Copy a starting point:
 }
 
 @starting-style {
-  dialog[data-state='open'] {
-    opacity: 0;
-    transform: translateY(8px);
-  }
+dialog[data-state='open'] {
+opacity: 0;
+transform: translateY(8px);
+}
 }
 
 dialog::backdrop {
-  background: rgb(0 0 0 / 0.5);
+background: rgb(0 0 0 / 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  dialog[data-state='open'] {
-    transition: none;
-  }
+dialog[data-state='open'] {
+transition: none;
+}
 }`,
     },
     {
       label: 'Tailwind',
       language: 'html',
       code: `<Dialog.Popup
-  class="max-w-md rounded-xl border-none p-6
-         transition duration-150
-         data-[state=open]:opacity-100
-         starting:data-[state=open]:opacity-0
-         backdrop:bg-black/50"
->
-  ...
+class="max-w-md rounded-xl border-none p-6
+transition duration-150
+data-[state=open]:opacity-100
+starting:data-[state=open]:opacity-0
+backdrop:bg-black/50"
+
+> ...
+
 </Dialog.Popup>`,
     },
   ]}
