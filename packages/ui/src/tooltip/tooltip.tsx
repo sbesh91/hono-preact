@@ -10,7 +10,12 @@ import {
 } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import { usePosition, type Side, type Align, type PositionState } from '../use-position.js';
+import {
+  usePosition,
+  type Side,
+  type Align,
+  type PositionState,
+} from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
@@ -183,9 +188,7 @@ export type TooltipPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function TooltipPositioner(
-  props: TooltipPositionerProps
-): VNode | null {
+export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = useTooltipContext('Positioner');
 

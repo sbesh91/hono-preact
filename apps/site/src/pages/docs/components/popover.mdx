@@ -44,17 +44,17 @@ Escape and an outside press both close it.
 
 ## Parts
 
-| Part | Element | Notes |
-| --- | --- | --- |
-| `Popover.Root` | none | Owns open state. Props: `open`, `defaultOpen`, `onOpenChange`, `side`, `align`, `offset`. |
-| `Popover.Trigger` | `button` | Toggles the popover and anchors it. `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`. |
-| `Popover.Anchor` | `span` | Optional. Anchors positioning to a different element than the trigger. |
-| `Popover.Positioner` | `div` | The fixed-positioned wrapper. Carries `data-side` / `data-align`. |
-| `Popover.Popup` | `div` | `role="dialog"`. The focus target. Pass `aria-label` if there is no `Title`. |
-| `Popover.Arrow` | `div` | Optional. Positioned from the Floating UI arrow data. |
-| `Popover.Title` | `h2` | Sets the accessible name (`aria-labelledby`). |
-| `Popover.Description` | `p` | Sets the accessible description (`aria-describedby`). |
-| `Popover.Close` | `button` | Closes the popover. |
+| Part                  | Element  | Notes                                                                                           |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `Popover.Root`        | none     | Owns open state. Props: `open`, `defaultOpen`, `onOpenChange`, `side`, `align`, `offset`.       |
+| `Popover.Trigger`     | `button` | Toggles the popover and anchors it. `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`. |
+| `Popover.Anchor`      | `span`   | Optional. Anchors positioning to a different element than the trigger.                          |
+| `Popover.Positioner`  | `div`    | The fixed-positioned wrapper. Carries `data-side` / `data-align`.                               |
+| `Popover.Popup`       | `div`    | `role="dialog"`. The focus target. Pass `aria-label` if there is no `Title`.                    |
+| `Popover.Arrow`       | `div`    | Optional. Positioned from the Floating UI arrow data.                                           |
+| `Popover.Title`       | `h2`     | Sets the accessible name (`aria-labelledby`).                                                   |
+| `Popover.Description` | `p`      | Sets the accessible description (`aria-describedby`).                                           |
+| `Popover.Close`       | `button` | Closes the popover.                                                                             |
 
 Every part accepts a `render` prop to compose with your own element, and
 forwards `class`, `style`, and `ref`.

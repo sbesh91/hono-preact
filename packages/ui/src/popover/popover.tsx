@@ -167,9 +167,7 @@ export type PopoverPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function PopoverPositioner(
-  props: PopoverPositionerProps
-): VNode | null {
+export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Positioner');
 

@@ -34,15 +34,15 @@ function Anchored({ open }: { open: boolean }) {
 
 ## Options
 
-| Option | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `open` | `boolean` | none | Positioning runs only while open. |
-| `anchorRef` | `RefObject` | none | The reference element. |
-| `floatingRef` | `RefObject` | none | The element being positioned. |
-| `arrowRef` | `RefObject` | optional | Enables arrow positioning. |
-| `side` | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side. |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment along the side. |
-| `offset` | `number` | `8` | Gap in pixels. |
+| Option        | Type                                     | Default    | Notes                             |
+| ------------- | ---------------------------------------- | ---------- | --------------------------------- |
+| `open`        | `boolean`                                | none       | Positioning runs only while open. |
+| `anchorRef`   | `RefObject`                              | none       | The reference element.            |
+| `floatingRef` | `RefObject`                              | none       | The element being positioned.     |
+| `arrowRef`    | `RefObject`                              | optional   | Enables arrow positioning.        |
+| `side`        | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side.                   |
+| `align`       | `'start' \| 'center' \| 'end'`           | `'center'` | Alignment along the side.         |
+| `offset`      | `number`                                 | `8`        | Gap in pixels.                    |
 
 It returns the resolved `side`, `align`, and arrow `arrowX` / `arrowY` (after
 any flip or shift), so the floating element can render `data-side` /

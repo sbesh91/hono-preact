@@ -1,10 +1,7 @@
 // packages/ui/src/use-dismiss.ts
 import type { RefObject } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
-import {
-  registerDismissLayer,
-  type DismissReason,
-} from './dismiss-stack.js';
+import { registerDismissLayer, type DismissReason } from './dismiss-stack.js';
 
 export interface UseDismissOptions {
   enabled: boolean; // typically the open state

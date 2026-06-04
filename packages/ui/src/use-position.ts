@@ -93,7 +93,11 @@ export function usePosition(opts: UsePositionOptions): PositionState {
     if (!open || !anchor || !floating) return;
 
     const update = () => {
-      const middleware = [offsetMiddleware(offset), flip(), shift({ padding: 8 })];
+      const middleware = [
+        offsetMiddleware(offset),
+        flip(),
+        shift({ padding: 8 }),
+      ];
       if (arrowRef?.current) {
         middleware.push(arrowMiddleware({ element: arrowRef.current }));
       }
