@@ -201,3 +201,40 @@ export function DialogDescription(props: DialogDescriptionProps): VNode {
     children,
   });
 }
+
+export type DialogCloseProps = {
+  render?: RenderProp<{ open: boolean }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+
+export function DialogClose(props: DialogCloseProps): VNode {
+  const { render, children, onClick, ...rest } = props;
+  const ctx = useDialogContext('Close');
+
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+    onClick?.(event);
+    ctx.setOpen(false);
+  };
+
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'button',
+    props: {
+      ...rest,
+      type: 'button',
+      'data-state': ctx.open ? 'open' : 'closed',
+      onClick: handleClick,
+    },
+    state: { open: ctx.open },
+    children,
+  });
+}
+
+export const Dialog = {
+  Root: DialogRoot,
+  Trigger: DialogTrigger,
+  Popup: DialogPopup,
+  Title: DialogTitle,
+  Description: DialogDescription,
+  Close: DialogClose,
+};
