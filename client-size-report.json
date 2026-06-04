@@ -112,20 +112,20 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 29969,
-      "actions": 15480,
-      "core": 36194,
+      "app": 39519,
+      "actions": 16159,
+      "core": 37333,
       "guards": 2196,
-      "middleware": 11914,
+      "middleware": 12572,
       "vendor": 8302,
-      "prefetch": 4077,
-      "loaders": 13337,
-      "streaming": 6319,
-      "transitions": 4250
+      "prefetch": 4263,
+      "loaders": 13820,
+      "streaming": 6634,
+      "transitions": 4430
     },
-    "total": 132038,
-    "unmatched": 17,
-    "fileCount": 53
+    "total": 145228,
+    "unmatched": 20,
+    "fileCount": 56
   },
   "sectionC": {
     "ui-core": {
