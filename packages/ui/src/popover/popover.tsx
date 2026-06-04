@@ -259,3 +259,89 @@ export function PopoverPopup(props: PopoverPopupProps): VNode {
     children,
   });
 }
+
+export type PopoverArrowProps = {
+  render?: RenderProp<{ side: Side }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function PopoverArrow(props: PopoverArrowProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = usePopoverContext('Arrow');
+  const { side, arrowX, arrowY } = ctx.position;
+  return useRender<{ side: Side }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.arrowRef,
+      'data-side': side,
+      style: {
+        position: 'absolute',
+        left: arrowX != null ? `${arrowX}px` : undefined,
+        top: arrowY != null ? `${arrowY}px` : undefined,
+      },
+    },
+    state: { side },
+    children,
+  });
+}
+
+export type PopoverTitleProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLHeadingElement>, 'children'>;
+
+export function PopoverTitle(props: PopoverTitleProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = usePopoverContext('Title');
+  return useRender({
+    render,
+    defaultTag: 'h2',
+    props: { ...rest, id: ctx.titleId },
+    children,
+  });
+}
+
+export type PopoverDescriptionProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLParagraphElement>, 'children'>;
+
+export function PopoverDescription(props: PopoverDescriptionProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = usePopoverContext('Description');
+  useLayoutEffect(() => ctx.registerDescription(), [ctx.registerDescription]);
+  return useRender({
+    render,
+    defaultTag: 'p',
+    props: { ...rest, id: ctx.descriptionId },
+    children,
+  });
+}
+
+export type PopoverCloseProps = {
+  render?: RenderProp<{ open: boolean }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+
+export function PopoverClose(props: PopoverCloseProps): VNode {
+  const { render, children, onClick, ...rest } = props;
+  const ctx = usePopoverContext('Close');
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+    onClick?.(event);
+    ctx.setOpen(false);
+  };
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'button',
+    props: {
+      ...rest,
+      type: 'button',
+      'data-state': ctx.open ? 'open' : 'closed',
+      onClick: handleClick,
+    },
+    state: { open: ctx.open },
+    children,
+  });
+}
