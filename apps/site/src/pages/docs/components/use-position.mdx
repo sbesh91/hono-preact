@@ -1,0 +1,49 @@
+# usePosition
+
+`usePosition` is the positioning binding both Popover and Tooltip use. It wraps
+[Floating UI](https://floating-ui.com) and keeps a floating element anchored to
+a reference element, updating on scroll and resize.
+
+```tsx
+import { usePosition } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
+
+function Anchored({ open }: { open: boolean }) {
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const floatingRef = useRef<HTMLDivElement>(null);
+  const { side, align } = usePosition({
+    open,
+    anchorRef,
+    floatingRef,
+    side: 'bottom',
+    align: 'center',
+    offset: 8,
+  });
+  return (
+    <>
+      <button ref={anchorRef}>Anchor</button>
+      {open ? (
+        <div ref={floatingRef} data-side={side} data-align={align}>
+          floating
+        </div>
+      ) : null}
+    </>
+  );
+}
+```
+
+## Options
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `open` | `boolean` | none | Positioning runs only while open. |
+| `anchorRef` | `RefObject` | none | The reference element. |
+| `floatingRef` | `RefObject` | none | The element being positioned. |
+| `arrowRef` | `RefObject` | optional | Enables arrow positioning. |
+| `side` | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment along the side. |
+| `offset` | `number` | `8` | Gap in pixels. |
+
+It returns the resolved `side`, `align`, and arrow `arrowX` / `arrowY` (after
+any flip or shift), so the floating element can render `data-side` /
+`data-align` and position an arrow.

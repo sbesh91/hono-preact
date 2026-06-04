@@ -843,3 +843,59 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     animation: none;
   }
 }
+
+/* Tooltip docs demo. The copyable CSS on /docs/components/tooltip uses a fixed
+   dark chip; the live demo inverts the theme tokens so it reads in both modes. */
+.docs-tooltip-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-tooltip-trigger:hover {
+  background: var(--surface-subtle);
+}
+.docs-tooltip-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-tooltip-positioner {
+  z-index: 50;
+}
+.docs-tooltip {
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.8125rem;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+.docs-tooltip[data-state='open'] {
+  animation: docs-tooltip-in 100ms ease-out;
+}
+@keyframes docs-tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+.docs-tooltip__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: var(--foreground);
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-tooltip {
+    animation: none;
+  }
+}

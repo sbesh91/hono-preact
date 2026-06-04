@@ -1,0 +1,89 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { TooltipDemo } from '../../../components/docs/TooltipDemo.js';
+
+# Tooltip
+
+A small label that appears on hover or keyboard focus. It follows WCAG 1.4.13:
+the tooltip is hoverable (you can move the pointer onto it), dismissible with
+Escape, and persistent (it stays until you leave or press Escape). Tooltips are
+not shown for touch input, which cannot hover; do not put essential information
+only in a tooltip.
+
+## Demo
+
+<Example>
+  <TooltipDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Tooltip } from '@hono-preact/ui';
+
+export function SaveHint() {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger>Hover me</Tooltip.Trigger>
+      <Tooltip.Positioner>
+        <Tooltip.Popup>
+          <Tooltip.Arrow />
+          Saved to your library
+        </Tooltip.Popup>
+      </Tooltip.Positioner>
+    </Tooltip.Root>
+  );
+}
+```
+
+The trigger opens after a short delay on hover and immediately on focus. Set
+`delay` and `closeDelay` on `Tooltip.Root` to tune the timing.
+
+## Parts
+
+| Part | Element | Notes |
+| --- | --- | --- |
+| `Tooltip.Root` | none | Props: `open`, `defaultOpen`, `onOpenChange`, `delay`, `closeDelay`, `side`, `align`, `offset`. |
+| `Tooltip.Trigger` | `button` | Binds hover + focus and wires `aria-describedby`. Use the `render` prop to attach it to your own control. |
+| `Tooltip.Positioner` | `div` | Fixed-positioned wrapper. `data-side` / `data-align`. |
+| `Tooltip.Popup` | `div` | `role="tooltip"`. Hoverable. |
+| `Tooltip.Arrow` | `div` | Optional. |
+
+## Styling
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-tooltip {
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: #18181b;
+  color: #fafafa;
+  font-size: 0.8125rem;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+.docs-tooltip[data-state='open'] {
+  animation: docs-tooltip-in 100ms ease-out;
+}
+@keyframes docs-tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+.docs-tooltip__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: #18181b;
+}
+```
+
+```tsx
+<Tooltip.Positioner className="z-50">
+  <Tooltip.Popup className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-[13px] text-zinc-50 shadow-lg">
+    Saved to your library
+  </Tooltip.Popup>
+</Tooltip.Positioner>
+```
+
+</CodeTabs>
