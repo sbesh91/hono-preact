@@ -129,7 +129,9 @@ export function PopoverTrigger(props: PopoverTriggerProps): VNode {
       type: 'button',
       'aria-haspopup': 'dialog',
       'aria-expanded': ctx.open,
-      'aria-controls': ctx.popupId,
+      // The popup is mount-on-open, so only reference it while it exists;
+      // a dangling aria-controls points at no element when closed.
+      'aria-controls': ctx.open ? ctx.popupId : undefined,
       id: ctx.triggerId,
       'data-state': ctx.open ? 'open' : 'closed',
       onClick: handleClick,

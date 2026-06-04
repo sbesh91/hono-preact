@@ -92,6 +92,11 @@ export function usePosition(opts: UsePositionOptions): PositionState {
     const floating = floatingRef.current;
     if (!open || !anchor || !floating) return;
 
+    // computePosition is async; guard its resolution so a promise still in
+    // flight when the effect tears down (the floating element unmounted) does
+    // not write to a detached node or setState on an unmounted component.
+    let cancelled = false;
+
     const update = () => {
       const middleware = [
         offsetMiddleware(offset),
@@ -106,6 +111,7 @@ export function usePosition(opts: UsePositionOptions): PositionState {
         placement: placementFor(side, align),
         middleware,
       }).then(({ x, y, placement, middlewareData }) => {
+        if (cancelled) return;
         floating.style.position = 'fixed';
         floating.style.left = `${x}px`;
         floating.style.top = `${y}px`;
@@ -130,7 +136,11 @@ export function usePosition(opts: UsePositionOptions): PositionState {
       });
     };
 
-    return autoUpdate(anchor, floating, update);
+    const stopAutoUpdate = autoUpdate(anchor, floating, update);
+    return () => {
+      cancelled = true;
+      stopAutoUpdate();
+    };
     // anchorRef/floatingRef/arrowRef are stable RefObjects; depend on the
     // values that change the computation.
   }, [open, side, align, offset]);

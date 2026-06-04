@@ -21,13 +21,16 @@ describe('Popover SSR', () => {
     expect(html).not.toContain('role="dialog"');
   });
 
-  it('produces a trigger id that matches aria-controls', () => {
+  it('omits aria-controls while closed (popup is mount-on-open) but keeps a trigger id', () => {
     const html = renderToString(
       <Popover.Root>
         <Popover.Trigger>Open</Popover.Trigger>
       </Popover.Root>
     );
-    const controls = html.match(/aria-controls="([^"]+)"/)?.[1];
-    expect(controls).toBeTruthy();
+    // No dangling reference to a popup that is not in the server markup.
+    expect(html).not.toContain('aria-controls');
+    expect(html).toContain('aria-expanded="false"');
+    // The trigger still carries a stable id for label wiring.
+    expect(html).toMatch(/<button[^>]*\sid="[^"]+"/);
   });
 });

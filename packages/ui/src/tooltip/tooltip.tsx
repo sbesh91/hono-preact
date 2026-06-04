@@ -2,6 +2,7 @@
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
 import {
   useCallback,
+  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
@@ -77,6 +78,10 @@ export function TooltipRoot(props: TooltipRootProps) {
     cancelPending();
     timer.current = setTimeout(() => setOpen(false), closeDelay);
   }, [cancelPending, setOpen, closeDelay]);
+
+  // Clear any pending open/close timer if the Root unmounts mid-delay, so the
+  // timer cannot fire setOpen after unmount.
+  useEffect(() => cancelPending, [cancelPending]);
 
   const [position, setPosition] = useState<PositionState>({
     side,

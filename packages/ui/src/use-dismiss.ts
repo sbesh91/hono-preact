@@ -1,6 +1,6 @@
 // packages/ui/src/use-dismiss.ts
 import type { RefObject } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { registerDismissLayer, type DismissReason } from './dismiss-stack.js';
 
 export interface UseDismissOptions {
@@ -23,7 +23,10 @@ export function useDismiss(opts: UseDismissOptions): void {
   const refsRef = useRef(refs);
   refsRef.current = refs;
 
-  useEffect(() => {
+  // Layout effect (not passive) so the layer is registered in the same commit
+  // that mounts/opens the overlay, matching useFocusReturn's timing. Otherwise
+  // an Escape pressed in the frame before the passive effect runs is missed.
+  useLayoutEffect(() => {
     if (!enabled) return;
     return registerDismissLayer({
       refs: refsRef.current,
