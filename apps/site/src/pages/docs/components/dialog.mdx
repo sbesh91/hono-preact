@@ -1,0 +1,110 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { DialogDemo } from '../../../components/docs/DialogDemo.js';
+
+# Dialog
+
+An accessible modal dialog built on the native `<dialog>` element. The browser
+supplies the focus trap, background `inert`, top layer, and Escape-to-close;
+`@hono-preact/ui` adds the ARIA wiring, open-state, and `render`-prop
+composition. It ships unstyled: style it through the `data-state` contract.
+
+## Demo
+
+<Example>
+  <DialogDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Dialog } from '@hono-preact/ui';
+
+export function Subscribe() {
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger>Open dialog</Dialog.Trigger>
+      <Dialog.Popup>
+        <Dialog.Title>Subscribe</Dialog.Title>
+        <Dialog.Description>Get notified when we ship.</Dialog.Description>
+        <Dialog.Close>Close</Dialog.Close>
+      </Dialog.Popup>
+    </Dialog.Root>
+  );
+}
+```
+
+## Styling
+
+Every part exposes `data-state="open" | "closed"`. The popup is a native
+`<dialog>`, so its backdrop is the `::backdrop` pseudo-element and entry
+animation uses `@starting-style` (it degrades to no animation where
+unsupported). Copy a starting point:
+
+<CodeTabs
+  tabs={[
+    {
+      label: 'CSS',
+      language: 'css',
+      code: `dialog[data-state='open'] {
+  border: none;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 28rem;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+@starting-style {
+  dialog[data-state='open'] {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[data-state='open'] {
+    transition: none;
+  }
+}`,
+    },
+    {
+      label: 'Tailwind',
+      language: 'html',
+      code: `<Dialog.Popup
+  class="max-w-md rounded-xl border-none p-6
+         transition duration-150
+         data-[state=open]:opacity-100
+         starting:data-[state=open]:opacity-0
+         backdrop:bg-black/50"
+>
+  ...
+</Dialog.Popup>`,
+    },
+  ]}
+/>
+
+## Accessibility
+
+A dialog must have an accessible name: render a `Dialog.Title` (wired through
+`aria-labelledby`) or pass `aria-label` to `Dialog.Popup`. A `Dialog.Description`
+is wired through `aria-describedby` when present. `role="dialog"` and
+`aria-modal="true"` come implicitly from `<dialog>.showModal()`.
+
+### Manual verification checklist
+
+happy-dom cannot emulate the platform behaviors below; verify them by hand in a
+real browser:
+
+- Focus moves into the dialog on open and is trapped while it is open.
+- Background content is `inert` (not focusable, hidden from the accessibility tree).
+- Escape closes the dialog and focus returns to the trigger.
+- The `::backdrop` covers the page and stacks above other content (top layer).
+- A screen reader announces the dialog's name (and description, if present).
