@@ -1,10 +1,10 @@
-import { createContext, type Ref } from 'preact';
+import { createContext, type RefObject } from 'preact';
 import { useContext } from 'preact/hooks';
 
 export interface DialogContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  dialogRef: Ref<HTMLDialogElement>;
+  dialogRef: RefObject<HTMLDialogElement>;
   triggerId: string;
   popupId: string;
   titleId: string;
