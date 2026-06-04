@@ -1,0 +1,72 @@
+# Active Links
+
+Highlighting the current page in navigation needs one question answered: does the current URL match a given route? `useRouteActive`, `useRouteMatch`, and `<NavLink>` answer it against the same route grammar your route table uses, so `/posts/:id` matches any post and hands you the `id`.
+
+## `useRouteActive`
+
+Returns `true` when the current path matches the route.
+
+```tsx
+import { useRouteActive } from 'hono-preact';
+
+function Tab() {
+  const active = useRouteActive('/docs');
+  return (
+    <a href="/docs" aria-current={active ? 'page' : undefined}>
+      Docs
+    </a>
+  );
+}
+```
+
+By default the match is **exact**. Pass `{ exact: false }` to also match descendant paths, e.g. highlight a section for every page beneath it:
+
+```tsx
+// active on /docs/components AND /docs/components/dialog
+const inSection = useRouteActive('/docs/components', { exact: false });
+```
+
+One caveat: because every path is a descendant of `/`, a non-exact match on the root (`useRouteActive('/', { exact: false })`) is active everywhere. Keep a "Home" link `exact` (the default).
+
+## `useRouteMatch`
+
+Same matching, but returns the captured params (or `null`). Use it when you want to both test _and_ read the dynamic segments.
+
+```tsx
+import { useRouteMatch } from 'hono-preact';
+
+function Crumb() {
+  const params = useRouteMatch('/posts/:id');
+  // on /posts/42 -> { id: '42' }, elsewhere -> null
+  return params ? <span>Post {params.id}</span> : null;
+}
+```
+
+The route accepts the full pattern grammar: `:param`, `*`, `+`, `:param?`.
+
+## `<NavLink>`
+
+A `<a>` that applies an active or inactive class for you (and sets `aria-current="page"` when active).
+
+```tsx
+import { NavLink } from 'hono-preact';
+
+<NavLink
+  href="/docs"
+  activeClass="text-accent font-semibold"
+  inactiveClass="text-muted"
+>
+  Docs
+</NavLink>;
+```
+
+Any `class` you pass is always applied; `activeClass` / `inactiveClass` are merged on top per state. Other anchor props (`target`, `rel`, `data-*`) pass straight through.
+
+Use `exact={false}` for section links, and `match` when the link target differs from the pattern you want to highlight on:
+
+```tsx
+// links to /posts, but stays active on /posts/123
+<NavLink href="/posts" match="/posts/:id" activeClass="text-accent">
+  Posts
+</NavLink>
+```

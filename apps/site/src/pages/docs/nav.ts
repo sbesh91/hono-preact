@@ -49,6 +49,7 @@ export const nav: NavArea[] = [
           { title: 'The Route Table', route: '/docs/routes' },
           { title: 'Layouts & Nesting', route: '/docs/layouts' },
           { title: 'Adding Pages', route: '/docs/pages' },
+          { title: 'Active Links', route: '/docs/active-links' },
         ],
       },
       {
