@@ -1,0 +1,98 @@
+# useRender
+
+`useRender` is the composition engine behind every component's `render` prop. It
+takes the framework-controlled props (ARIA attributes, refs, event handlers) and
+applies them to whatever element you want to render: the default tag, a tag you
+name, an element you pass, or a function you supply. It is how a part can lend
+its behavior and accessibility wiring to a different element without losing
+either.
+
+## Signature
+
+```tsx
+import { useRender, type RenderProp } from '@hono-preact/ui';
+
+function useRender<State>(opts: {
+  render?: RenderProp<State>; // the consumer's override (optional)
+  defaultTag: string; // element to use when no render is given
+  props: Record<string, unknown>; // framework-controlled props (ref, aria-*, handlers)
+  state?: State; // passed to the function form of render
+  children?: ComponentChildren;
+}): VNode;
+
+type RenderProp<State> =
+  | VNode // an element to clone
+  | string // a tag name
+  | ((props, state: State) => VNode) // full control
+  | undefined; // use defaultTag
+```
+
+When merging, `class`/`className` are joined and `ref` is merged (so the
+consumer's ref and the framework's ref both fire); every other framework prop
+overrides.
+
+### Options
+
+| Option       | Type                      | Description                                         |
+| ------------ | ------------------------- | --------------------------------------------------- |
+| `render`     | `RenderProp<State>`       | The consumer's override. Omit to use `defaultTag`.  |
+| `defaultTag` | `string`                  | The element to render when no `render` is given.    |
+| `props`      | `Record<string, unknown>` | Framework-controlled props merged onto the element. |
+| `state`      | `State`                   | Passed as the second argument to the function form. |
+| `children`   | `ComponentChildren`       | Children for the rendered element.                  |
+
+Returns a `VNode`.
+
+## Example
+
+Build a component that owns its behavior but lets the caller swap the element:
+
+```tsx
+import { useRender, type RenderProp } from '@hono-preact/ui';
+import type { ComponentChildren, JSX, VNode } from 'preact';
+
+type ButtonProps = {
+  render?: RenderProp<{ pressed: boolean }>;
+  pressed?: boolean;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+
+export function Button({
+  render,
+  pressed = false,
+  children,
+  ...rest
+}: ButtonProps): VNode {
+  return useRender<{ pressed: boolean }>({
+    render,
+    defaultTag: 'button',
+    props: {
+      ...rest,
+      type: 'button',
+      'data-pressed': pressed ? '' : undefined,
+    },
+    state: { pressed },
+    children,
+  });
+}
+```
+
+## The three forms
+
+A consumer can drive `render` three ways:
+
+```tsx
+// 1. Default element: a <button> with the framework props.
+<Button>Save</Button>
+
+// 2. An element to clone: render as a link, props are merged onto it.
+<Button render={<a href="/save" />}>Save</Button>
+
+// 3. A function: full control, with the component's state.
+<Button render={(props, state) => (
+  <a {...props}>{state.pressed ? 'Saved' : 'Save'}</a>
+)} />
+```
+
+`useRender` ships in `@hono-preact/ui` and powers every Dialog part, so anything
+you build with it composes the same way the built-in components do.

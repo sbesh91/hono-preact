@@ -40,7 +40,7 @@ Add an entry `{ title: 'Page Title', route: '/docs/<slug>' }` to the right secti
 | Access Control | Middleware, CSRF |
 | Infrastructure | Vite config, structure, Hono middleware, WebSockets, renderPage, link prefetch, deployment |
 
-**Components area sections** (under `basePath` `/docs/components`): `Getting started`, then add `Overlays` (Dialog, Popover, Tooltip), `Collections` (Menu, Select, Combobox), and `Foundations` (LayerHost, FocusScope, collection/nav machinery) as those pages are created. When adding the first page of a not-yet-present section, create the section with an appropriate `lucide-preact` icon.
+**Components area sections** (under `basePath` `/docs/components`): `Getting started`, `Overlays` (Dialog; Popover and Tooltip as they ship), `Foundations` (the shared primitives: useRender, useControllableState, mergeRefs; LayerHost and FocusScope as they ship), then add `Collections` (Menu, Select, Combobox) as those pages are created. When adding the first page of a not-yet-present section, create the section with an appropriate `lucide-preact` icon.
 
 ## Checklist
 

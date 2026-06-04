@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// Pure renderer: turns (freshReport, baselineReport, config) into the sticky PR
-// comment markdown. CLI form reads two JSON files and prints the markdown.
+// Pure renderer: turns (freshReport, baselineReport) into the sticky PR comment
+// markdown. CLI form reads two JSON files and prints the markdown.
 
 import { readFileSync } from 'node:fs';
-import * as defaultConfig from './client-size-config.mjs';
-import { tableGzip } from './client-size-config.mjs';
+import { tableGzip, componentTableGzip } from './client-size-config.mjs';
 
 const COMMENT_HEADER = '<!-- client-size -->';
 
@@ -23,19 +22,20 @@ function fmtDelta(fresh, base) {
   return (d > 0 ? '+' : '-') + fmtBytes(Math.abs(d));
 }
 
-// One table row: "| name | size | delta |".
-function row(name, freshGzip, baseGzip, budget) {
+// One table row: "| name | size | delta vs base |".
+function row(name, freshGzip, baseGzip) {
   if (freshGzip === undefined) return `| ${name} | (removed) | |`;
-  const sizeCell =
-    budget !== undefined && freshGzip > budget
-      ? `⚠️ ${fmtBytes(freshGzip)} / ${fmtBytes(budget)}`
-      : fmtBytes(freshGzip);
-  return `| ${name} | ${sizeCell} | ${fmtDelta(freshGzip, baseGzip)} |`;
+  return `| ${name} | ${fmtBytes(freshGzip)} | ${fmtDelta(freshGzip, baseGzip)} |`;
 }
 
 function sectionAGzip(report, bucket) {
   const e = report.sectionA[bucket];
   return e ? tableGzip(bucket, e) : undefined;
+}
+
+function sectionCGzip(report, name) {
+  const e = report.sectionC?.[name];
+  return e ? componentTableGzip(name, e) : undefined;
 }
 
 // Footer that pins the comment to the commit it measured. The sticky comment
@@ -52,12 +52,15 @@ function freshnessFooter(meta) {
   return `<sub>Measured ${parts.join(' · ')}</sub>`;
 }
 
-export function renderComment(fresh, baseline, config = defaultConfig, meta) {
-  const budgets = config.BUDGETS ?? {};
+export function renderComment(fresh, baseline, meta) {
   const lines = [COMMENT_HEADER, '## Client JS size', ''];
 
-  // Section A
-  lines.push('### Framework runtime (gzip; `core` is total, features marginal over core)');
+  // Section A. The `core` row is the full size of the base framework bundle;
+  // each feature row is the extra it adds on top of core, not its size alone.
+  lines.push('### Framework runtime (gzip)');
+  lines.push(
+    '<sub>`core` is the base bundle; each feature is the extra it adds on top of core.</sub>'
+  );
   lines.push('| Feature | Size | Δ vs base |');
   lines.push('|---|---|---|');
   const aBuckets = new Set([
@@ -66,7 +69,7 @@ export function renderComment(fresh, baseline, config = defaultConfig, meta) {
   ]);
   for (const bucket of aBuckets) {
     lines.push(
-      row(bucket, sectionAGzip(fresh, bucket), sectionAGzip(baseline, bucket), budgets[bucket])
+      row(bucket, sectionAGzip(fresh, bucket), sectionAGzip(baseline, bucket))
     );
   }
   lines.push('');
@@ -80,18 +83,33 @@ export function renderComment(fresh, baseline, config = defaultConfig, meta) {
     ...Object.keys(baseline.sectionB.buckets),
   ]);
   for (const bucket of bBuckets) {
-    // Section B per-bucket rows are unbudgeted; only the total row has a budget
-    // (`site:total`). Passing budgets[bucket] here would collide with Section
-    // A's `core` budget and flag the site `core` chunk bucket on every PR.
     lines.push(
-      row(bucket, fresh.sectionB.buckets[bucket], baseline.sectionB.buckets[bucket], undefined)
+      row(bucket, fresh.sectionB.buckets[bucket], baseline.sectionB.buckets[bucket])
     );
   }
-  lines.push(
-    row('**total**', fresh.sectionB.total, baseline.sectionB.total, budgets['site:total'])
-  );
+  lines.push(row('**total**', fresh.sectionB.total, baseline.sectionB.total));
   lines.push('');
-  lines.push('<sub>Budgets are advisory; overages flag ⚠️ but never fail CI.</sub>');
+
+  // Section C (per-component; only when the fresh report carries one). Same
+  // shape as Section A: `ui-core` is the full size of the shared primitives,
+  // each component is the extra it adds on top.
+  if (fresh.sectionC && Object.keys(fresh.sectionC).length > 0) {
+    lines.push('### Components (gzip)');
+    lines.push(
+      '<sub>`ui-core` is the shared primitives; each component is the extra it adds on top.</sub>'
+    );
+    lines.push('| Component | Size | Δ vs base |');
+    lines.push('|---|---|---|');
+    const cNames = new Set([
+      ...Object.keys(fresh.sectionC),
+      ...Object.keys(baseline.sectionC ?? {}),
+    ]);
+    for (const name of cNames) {
+      lines.push(row(name, sectionCGzip(fresh, name), sectionCGzip(baseline, name)));
+    }
+    lines.push('');
+  }
+
   const footer = freshnessFooter(meta);
   if (footer) lines.push(footer);
   return lines.join('\n');
@@ -114,5 +132,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // Second precision; milliseconds add noise without telling the reader anything.
     generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   };
-  process.stdout.write(renderComment(fresh, baseline, undefined, meta) + '\n');
+  process.stdout.write(renderComment(fresh, baseline, meta) + '\n');
 }

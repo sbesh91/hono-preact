@@ -21,7 +21,13 @@ const mdxOptions = {
   rehypePlugins: [
     [
       rehypeShiki,
-      { theme: 'github-dark', langs: ['ts', 'tsx', 'bash', 'jsonc', 'mdx'] },
+      {
+        // Dual theme: the light theme is the inline default; CSS in root.css
+        // switches to the dark theme's colors when the docs are in dark mode.
+        themes: { light: 'github-light', dark: 'github-dark' },
+        defaultColor: 'light',
+        langs: ['ts', 'tsx', 'bash', 'jsonc', 'mdx', 'css'],
+      },
     ],
   ],
 } satisfies MdxOptions;

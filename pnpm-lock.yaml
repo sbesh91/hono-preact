@@ -71,6 +71,9 @@ importers:
 
   apps/site:
     dependencies:
+      '@hono-preact/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@shikijs/rehype':
         specifier: ^4.0.2
         version: 4.0.2
@@ -277,6 +280,19 @@ importers:
         specifier: '>=6.0.0'
         version: 6.6.7(preact@10.29.1)
     devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/ui:
+    dependencies:
+      preact:
+        specifier: '>=10.11.0'
+        version: 10.29.1
+    devDependencies:
+      preact-render-to-string:
+        specifier: ^6.6.7
+        version: 6.6.7(preact@10.29.1)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

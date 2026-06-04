@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hono-preact/ui": "workspace:*",
     "hono-preact": "workspace:*",
     "@shikijs/rehype": "^4.0.2",
     "hono": "^4.12.14",

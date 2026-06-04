@@ -57,11 +57,35 @@ export const EXTERNAL = [
   'hono/*',
 ];
 
+// Section C: per-component cost from packages/ui/dist. The shared primitives
+// form the `ui-core` floor; each component lists the dist module(s) its public
+// entry pulls in. Measured like Section A: total (isolated) plus marginal over
+// ui-core (= (ui-core + component) bundle - ui-core bundle).
+export const UI_CORE_MODULES = [
+  'use-render.js',
+  'merge-refs.js',
+  'use-controllable-state.js',
+];
+
+export const COMPONENT_MODULES = {
+  dialog: ['dialog/index.js'],
+};
+
 // Section B: ordered prefix -> bucket for the site's emitted chunks. A prefix
 // matches a filename `${name}.js` exactly or any `${name}-<hash>.js`. First
 // match wins; unmatched chunks fall through to 'app'. Keep prefixes explicit
 // (no ambiguous short stems) so ordering rarely matters.
 export const CHUNK_PREFIXES = [
+  // Component-area docs pages (`/docs/components/*`). The guide pages already
+  // land in topical feature buckets below; group the component pages too so
+  // they read as their own line instead of inflating `app`. Add a prefix here
+  // as each new component page ships. `use-form-status` is bucketed to
+  // `actions` below, so list these specific names before it.
+  ['dialog', 'components'],
+  ['use-render', 'components'],
+  ['use-controllable-state', 'components'],
+  ['merge-refs', 'components'],
+  ['components', 'components'], // the Components-area landing page chunk
   ['guard', 'guards'],
   ['loader-stub', 'loaders'],
   ['loaders', 'loaders'],
@@ -102,17 +126,6 @@ export const CHUNK_PREFIXES = [
   ['preload-helper', 'vendor'],
 ];
 
-// Soft budgets in gzip bytes per bucket. A bucket over budget renders a warning
-// in the comment but never fails CI. Buckets without an entry have no budget.
-// Tuned to measured baseline 2026-06-01: core=3832 B gzip, site:total=128252 B gzip.
-// Both values are the measured number rounded up to a round figure with ~10% headroom.
-export const BUDGETS = {
-  // Section A (marginal-over-core gzip, except `core` which is its own total):
-  core: 4300,
-  // Section B grand total:
-  'site:total': 142000,
-};
-
 // True if a site chunk filename belongs to `bucket` under `prefix`.
 function prefixMatches(filename, prefix) {
   return filename === `${prefix}.js` || filename.startsWith(`${prefix}-`);
@@ -130,4 +143,10 @@ export function bucketForChunk(filename) {
 // own total; every other feature shows its marginal cost over core.
 export function tableGzip(bucket, entry) {
   return bucket === 'core' ? entry.total.gzip : entry.marginalOverCore.gzip;
+}
+
+// The gzip number shown in the Section C table for a component: `ui-core`
+// shows its own total; every component shows its marginal cost over ui-core.
+export function componentTableGzip(name, entry) {
+  return name === 'ui-core' ? entry.total.gzip : entry.marginalOverUiCore.gzip;
 }

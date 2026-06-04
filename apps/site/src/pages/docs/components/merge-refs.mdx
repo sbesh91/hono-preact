@@ -1,0 +1,60 @@
+# mergeRefs
+
+`mergeRefs` combines several refs into one callback ref. It is the small piece
+that lets a component keep its own internal ref to a node while still handing
+that node to a ref the caller passed in. Function refs are invoked with the
+node, object refs have their `.current` assigned, and `null`/`undefined` are
+skipped.
+
+## Signature
+
+```tsx
+import { mergeRefs } from '@hono-preact/ui';
+
+function mergeRefs<T>(
+  ...refs: (Ref<T> | null | undefined)[]
+): (node: T | null) => void;
+```
+
+It returns a single callback ref. Pass that to an element's `ref`, and every ref
+you merged receives the node.
+
+### Parameters
+
+| Parameter | Type                              | Description                                                                                        |
+| --------- | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `...refs` | `(Ref<T> \| null \| undefined)[]` | The refs to combine. Function refs are called, object refs are assigned, nullish refs are skipped. |
+
+Returns a callback ref, `(node: T \| null) => void`, that forwards the node to
+every ref passed in.
+
+## Example
+
+A field that needs its own ref to the input (to measure or focus it) while also
+forwarding a ref to the caller:
+
+```tsx
+import { mergeRefs } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
+import type { Ref } from 'preact';
+
+export function Field({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
+  const internalRef = useRef<HTMLInputElement>(null);
+
+  const focus = () => internalRef.current?.focus();
+
+  // Both refs receive the same node.
+  return (
+    <div>
+      <input ref={mergeRefs(internalRef, inputRef)} />
+      <button type="button" onClick={focus}>
+        Focus
+      </button>
+    </div>
+  );
+}
+```
+
+This is the same helper `useRender` uses internally to merge a consumer's `ref`
+with the framework's own, so passing a `ref` through the `render` prop always
+keeps both wired up.
