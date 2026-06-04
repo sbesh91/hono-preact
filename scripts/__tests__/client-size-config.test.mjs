@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { bucketForChunk, tableGzip } from '../client-size-config.mjs';
+import {
+  UI_CORE_MODULES,
+  COMPONENT_MODULES,
+  componentTableGzip,
+} from '../client-size-config.mjs';
 
 describe('bucketForChunk', () => {
   it('maps framework chunks to their feature buckets', () => {
@@ -44,5 +49,32 @@ describe('tableGzip', () => {
     expect(
       tableGzip('actions', { total: { gzip: 80 }, marginalOverCore: { gzip: 30 } })
     ).toBe(30);
+  });
+});
+
+describe('Section C config', () => {
+  it('declares non-empty shared ui-core modules', () => {
+    expect(Array.isArray(UI_CORE_MODULES)).toBe(true);
+    expect(UI_CORE_MODULES.length).toBeGreaterThan(0);
+  });
+
+  it('declares a dialog component entry', () => {
+    expect(COMPONENT_MODULES.dialog).toBeDefined();
+    expect(COMPONENT_MODULES.dialog.length).toBeGreaterThan(0);
+  });
+
+  it('componentTableGzip shows total for ui-core and marginal for components', () => {
+    expect(
+      componentTableGzip('ui-core', {
+        total: { gzip: 500 },
+        marginalOverUiCore: { gzip: 500 },
+      })
+    ).toBe(500);
+    expect(
+      componentTableGzip('dialog', {
+        total: { gzip: 900 },
+        marginalOverUiCore: { gzip: 400 },
+      })
+    ).toBe(400);
   });
 });

@@ -57,6 +57,20 @@ export const EXTERNAL = [
   'hono/*',
 ];
 
+// Section C: per-component cost from packages/ui/dist. The shared primitives
+// form the `ui-core` floor; each component lists the dist module(s) its public
+// entry pulls in. Measured like Section A: total (isolated) plus marginal over
+// ui-core (= (ui-core + component) bundle - ui-core bundle).
+export const UI_CORE_MODULES = [
+  'use-render.js',
+  'merge-refs.js',
+  'use-controllable-state.js',
+];
+
+export const COMPONENT_MODULES = {
+  dialog: ['dialog/index.js'],
+};
+
 // Section B: ordered prefix -> bucket for the site's emitted chunks. A prefix
 // matches a filename `${name}.js` exactly or any `${name}-<hash>.js`. First
 // match wins; unmatched chunks fall through to 'app'. Keep prefixes explicit
@@ -130,4 +144,10 @@ export function bucketForChunk(filename) {
 // own total; every other feature shows its marginal cost over core.
 export function tableGzip(bucket, entry) {
   return bucket === 'core' ? entry.total.gzip : entry.marginalOverCore.gzip;
+}
+
+// The gzip number shown in the Section C table for a component: `ui-core`
+// shows its own total; every component shows its marginal cost over ui-core.
+export function componentTableGzip(name, entry) {
+  return name === 'ui-core' ? entry.total.gzip : entry.marginalOverUiCore.gzip;
 }
