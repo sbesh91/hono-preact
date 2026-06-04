@@ -134,3 +134,22 @@ export function PopoverTrigger(props: PopoverTriggerProps): VNode {
     children,
   });
 }
+
+export type PopoverAnchorProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLSpanElement>, 'children'>;
+
+// Optional: positions the popover relative to this element instead of the
+// Trigger. Sets the shared anchorRef, overriding the Trigger's ref (last write
+// wins; render Anchor when you want a non-trigger anchor).
+export function PopoverAnchor(props: PopoverAnchorProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = usePopoverContext('Anchor');
+  return useRender({
+    render,
+    defaultTag: 'span',
+    props: { ...rest, ref: ctx.anchorRef },
+    children,
+  });
+}
