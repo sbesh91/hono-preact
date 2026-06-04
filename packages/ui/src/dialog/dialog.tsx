@@ -182,3 +182,22 @@ export function DialogPopup(props: DialogPopupProps): VNode {
     children,
   });
 }
+
+export type DialogDescriptionProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLParagraphElement>, 'children'>;
+
+export function DialogDescription(props: DialogDescriptionProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useDialogContext('Description');
+  // Register presence so the Popup wires aria-describedby; deregister on
+  // unmount (registerDescription returns its own cleanup).
+  useLayoutEffect(() => ctx.registerDescription(), [ctx.registerDescription]);
+  return useRender({
+    render,
+    defaultTag: 'p',
+    props: { ...rest, id: ctx.descriptionId },
+    children,
+  });
+}
