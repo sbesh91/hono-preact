@@ -1,9 +1,17 @@
 // packages/ui/src/tooltip/tooltip.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import { useCallback, useId, useMemo, useRef, useState } from 'preact/hooks';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import { usePosition, type Side, type Align, type PositionState } from '../use-position.js';
+import { useDismiss } from '../use-dismiss.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
 export interface TooltipRootProps {
@@ -160,6 +168,117 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
       onPointerLeave: handlePointerLeave,
       onFocus: handleFocus,
       onBlur: handleBlur,
+    },
+    state: { open: ctx.open },
+    children,
+  });
+}
+
+function supportsPopover(el: HTMLElement): boolean {
+  return typeof el.showPopover === 'function';
+}
+
+export type TooltipPositionerProps = {
+  render?: RenderProp<{ side: Side; align: Align }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function TooltipPositioner(
+  props: TooltipPositionerProps
+): VNode | null {
+  const { render, children, ...rest } = props;
+  const ctx = useTooltipContext('Positioner');
+
+  const position = usePosition({
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    arrowRef: ctx.arrowRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+  });
+
+  useLayoutEffect(() => {
+    ctx.setPosition(position);
+  }, [position.side, position.align, position.arrowX, position.arrowY]);
+
+  useLayoutEffect(() => {
+    const el = ctx.floatingRef.current;
+    // Runs when open flips true and the element has mounted (refs are assigned
+    // before layout effects). Empty deps would never re-run, so showPopover
+    // would never fire on a mount-on-open element.
+    if (!ctx.open || !el || !supportsPopover(el)) return;
+    el.setAttribute('popover', 'manual');
+    el.showPopover();
+    return () => {
+      el.hidePopover();
+      el.removeAttribute('popover');
+    };
+  }, [ctx.open]);
+
+  if (!ctx.open) return null;
+
+  return useRender<{ side: Side; align: Align }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.floatingRef,
+      'data-side': position.side,
+      'data-align': position.align,
+      style: { position: 'fixed' },
+    },
+    state: { side: position.side, align: position.align },
+    children,
+  });
+}
+
+export type TooltipPopupProps = {
+  render?: RenderProp<{ open: boolean }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function TooltipPopup(props: TooltipPopupProps): VNode {
+  const { render, children, onPointerEnter, onPointerLeave, ...rest } = props;
+  const ctx = useTooltipContext('Popup');
+
+  // Escape closes; no outside-press for a tooltip.
+  useDismiss({
+    enabled: ctx.open,
+    refs: [ctx.floatingRef, ctx.anchorRef],
+    escape: true,
+    outsidePress: false,
+    onDismiss: () => ctx.setOpenImmediate(false),
+  });
+
+  // Hoverable (WCAG 1.4.13): moving onto the popup keeps it open; leaving it
+  // re-schedules the close.
+  const handlePointerEnter = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
+    onPointerEnter?.(event);
+    ctx.cancelPending();
+  };
+  const handlePointerLeave = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
+    onPointerLeave?.(event);
+    ctx.scheduleClose();
+  };
+
+  // No ref here: the Positioner holds floatingRef, and the dismiss layer's
+  // "inside" check already covers this child Popup.
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      role: 'tooltip',
+      id: ctx.popupId,
+      'data-state': ctx.open ? 'open' : 'closed',
+      onPointerEnter: handlePointerEnter,
+      onPointerLeave: handlePointerLeave,
     },
     state: { open: ctx.open },
     children,
