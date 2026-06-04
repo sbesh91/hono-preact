@@ -47,6 +47,22 @@ describe('Dialog.Close and the namespace', () => {
     );
   });
 
+  it('fires onOpenChange once when closing (no double-fire from the close event)', () => {
+    const onOpenChange = vi.fn();
+    const { getByText } = render(
+      <Dialog.Root defaultOpen onOpenChange={onOpenChange}>
+        <Dialog.Popup aria-label="x">
+          <Dialog.Close>Done</Dialog.Close>
+        </Dialog.Popup>
+      </Dialog.Root>
+    );
+    // Closing flips state, the layout effect calls el.close(), and the native
+    // close event must not re-fire onOpenChange a second time.
+    fireEvent.click(getByText('Done'));
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it('render prop swaps the element and merges props on a part', () => {
     const { getByTestId } = render(
       <Dialog.Root>

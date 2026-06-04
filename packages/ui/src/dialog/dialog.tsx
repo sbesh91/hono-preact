@@ -138,6 +138,13 @@ export function DialogPopup(props: DialogPopupProps): VNode {
   } = props;
   const ctx = useDialogContext('Popup');
 
+  // Track the live open-state for the close listener. Updated during render so
+  // it is already false by the time our own el.close() (in the layout effect
+  // below) fires the close event, letting that listener skip the redundant
+  // state sync that would otherwise fire onOpenChange(false) twice.
+  const openRef = useRef(ctx.open);
+  openRef.current = ctx.open;
+
   // Drive the native element from open-state. showModal/close live in a
   // layout effect (client only), so the server never touches the DOM.
   useLayoutEffect(() => {
@@ -148,11 +155,15 @@ export function DialogPopup(props: DialogPopupProps): VNode {
   }, [ctx.open]);
 
   // Native dismissal (Escape, programmatic close()) fires `close`; mirror it
-  // back into open-state so the two never desync.
+  // back into open-state so the two never desync. Guard on openRef so a close
+  // we initiated ourselves (state -> layout effect -> el.close()) does not
+  // re-enter and double-fire onOpenChange.
   useEffect(() => {
     const el = ctx.dialogRef.current;
     if (!el) return;
-    const onClose = () => ctx.setOpen(false);
+    const onClose = () => {
+      if (openRef.current) ctx.setOpen(false);
+    };
     el.addEventListener('close', onClose);
     return () => el.removeEventListener('close', onClose);
   }, [ctx.setOpen]);

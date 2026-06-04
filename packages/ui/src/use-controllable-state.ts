@@ -10,7 +10,9 @@ interface UseControllableStateOptions<T> {
 // controlled (reads `value`, never self-updates; `onChange` is the only way
 // out). When absent it is uncontrolled (internal state, seeded from
 // `defaultValue`). The setter is stable across renders so effects can depend
-// on it without re-subscribing.
+// on it without re-subscribing. The mode is assumed fixed for the component's
+// lifetime: switching controlled <-> uncontrolled does not re-seed internal
+// state (matches typical usage and React's own controllable-state hooks).
 export function useControllableState<T>(
   opts: UseControllableStateOptions<T>
 ): [T, (next: T) => void] {
@@ -28,7 +30,8 @@ export function useControllableState<T>(
     isControlledRef.current = isControlled;
   });
 
-  const current = isControlled ? (value as T) : internal;
+  // `value !== undefined` narrows `T | undefined` to `T`, so no cast is needed.
+  const current = value !== undefined ? value : internal;
 
   const setValue = useCallback((next: T) => {
     if (!isControlledRef.current) setInternal(next);
