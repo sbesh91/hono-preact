@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bundleSize, measureSectionA, measureSectionB, historyRow } from '../measure-client-size.mjs';
+import { bundleSize, measureSectionA, measureSectionB, measureSectionC, historyRow } from '../measure-client-size.mjs';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -69,6 +69,33 @@ describe('historyRow', () => {
       date: '2026-06-01T00:00:00Z',
       sectionA: { core: 100, actions: 30 },
       sectionB: { buckets: { core: 200, app: 50 }, total: 250 },
+      sectionC: {},
     });
+  });
+});
+
+describe('measureSectionC', () => {
+  it('returns ui-core plus each component with a non-negative marginal', async () => {
+    const c = await measureSectionC();
+    // packages/ui/dist must be built (CI builds @hono-preact/* before tests).
+    expect(c['ui-core']).toBeDefined();
+    expect(c['ui-core'].total.gzip).toBeGreaterThan(0);
+    expect(c.dialog.total.gzip).toBeGreaterThan(0);
+    expect(c.dialog.marginalOverUiCore.gzip).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('historyRow includes Section C', () => {
+  it('flattens sectionC to gzip-only per component', () => {
+    const report = {
+      sectionA: { core: { total: { gzip: 1 }, marginalOverCore: { gzip: 1 } } },
+      sectionB: { buckets: { app: 2 }, total: 2 },
+      sectionC: {
+        'ui-core': { total: { gzip: 5 }, marginalOverUiCore: { gzip: 5 } },
+        dialog: { total: { gzip: 9 }, marginalOverUiCore: { gzip: 4 } },
+      },
+    };
+    const row = historyRow(report, 'abc1234', '2026-06-03');
+    expect(row.sectionC).toEqual({ 'ui-core': 5, dialog: 4 });
   });
 });

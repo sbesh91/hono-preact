@@ -11,7 +11,13 @@
 
 import { build } from 'esbuild';
 import { gzipSync, brotliCompressSync } from 'node:zlib';
-import { readdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+import {
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  appendFileSync,
+  existsSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -20,10 +26,13 @@ import {
   EXTERNAL,
   bucketForChunk,
   tableGzip,
+  UI_CORE_MODULES,
+  COMPONENT_MODULES,
+  componentTableGzip,
 } from './client-size-config.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const REPORT_VERSION = 1;
+const REPORT_VERSION = 2;
 
 // Bundle an entry source string in isolation and return its sizes in bytes.
 export async function bundleSize(entryContents, resolveDir) {
@@ -46,11 +55,12 @@ export async function bundleSize(entryContents, resolveDir) {
   };
 }
 
-// Build an entry that namespace-re-exports each iso dist module so nothing is
-// tree-shaken (sideEffects:false would otherwise drop side-effect-free imports).
-function entryFor(modules) {
+// Build an entry that namespace-re-exports each dist module so nothing is
+// tree-shaken (sideEffects:false would otherwise drop side-effect-free
+// imports). `distBase` selects the package's dist directory.
+function entryFor(modules, distBase = 'packages/iso/dist') {
   return modules
-    .map((m, i) => `export * as m${i} from './packages/iso/dist/${m}';`)
+    .map((m, i) => `export * as m${i} from './${distBase}/${m}';`)
     .join('\n');
 }
 
@@ -97,12 +107,41 @@ export function measureSectionB(distDir) {
   return { buckets, total, unmatched, fileCount: files.length };
 }
 
+// Section C: per-component cost from packages/ui/dist. ui-core total, then each
+// component's total (isolated) and marginal over ui-core. Returns {} when the
+// ui package is not built so the measure never crashes on a partial tree.
+export async function measureSectionC() {
+  const base = 'packages/ui/dist';
+  if (!existsSync(join(ROOT, base))) return {};
+  const uiCore = await bundleSize(entryFor(UI_CORE_MODULES, base), ROOT);
+  const sectionC = {
+    'ui-core': { total: uiCore, marginalOverUiCore: uiCore },
+  };
+  for (const [name, modules] of Object.entries(COMPONENT_MODULES)) {
+    const total = await bundleSize(entryFor(modules, base), ROOT);
+    const combined = await bundleSize(
+      entryFor([...UI_CORE_MODULES, ...modules], base),
+      ROOT
+    );
+    sectionC[name] = {
+      total,
+      marginalOverUiCore: {
+        raw: Math.max(0, combined.raw - uiCore.raw),
+        gzip: Math.max(0, combined.gzip - uiCore.gzip),
+        brotli: Math.max(0, combined.brotli - uiCore.brotli),
+      },
+    };
+  }
+  return sectionC;
+}
+
 // Assemble the full committed report from both sections.
 export async function buildReport(distDir) {
   return {
     version: REPORT_VERSION,
     sectionA: await measureSectionA(),
     sectionB: measureSectionB(distDir),
+    sectionC: await measureSectionC(),
   };
 }
 
@@ -112,11 +151,16 @@ export function historyRow(report, sha, date) {
   for (const [bucket, entry] of Object.entries(report.sectionA)) {
     sectionA[bucket] = tableGzip(bucket, entry);
   }
+  const sectionC = {};
+  for (const [name, entry] of Object.entries(report.sectionC ?? {})) {
+    sectionC[name] = componentTableGzip(name, entry);
+  }
   return {
     sha,
     date,
     sectionA,
     sectionB: { buckets: report.sectionB.buckets, total: report.sectionB.total },
+    sectionC,
   };
 }
 
