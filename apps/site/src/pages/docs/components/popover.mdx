@@ -1,0 +1,109 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { PopoverDemo } from '../../../components/docs/PopoverDemo.js';
+
+# Popover
+
+A non-modal, anchored overlay for interactive content: menus of actions, small
+forms, or detail panels. Positioning runs on Floating UI; the overlay renders
+in place and promotes to the browser top layer where the Popover API is
+available. It ships unstyled, told through the `data-state`, `data-side`, and
+`data-align` contract.
+
+## Demo
+
+<Example>
+  <PopoverDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Popover } from '@hono-preact/ui';
+
+export function Settings() {
+  return (
+    <Popover.Root>
+      <Popover.Trigger>Open popover</Popover.Trigger>
+      <Popover.Positioner>
+        <Popover.Popup>
+          <Popover.Arrow />
+          <Popover.Title>Settings</Popover.Title>
+          <Popover.Description>Adjust your preferences.</Popover.Description>
+          <Popover.Close>Done</Popover.Close>
+        </Popover.Popup>
+      </Popover.Positioner>
+    </Popover.Root>
+  );
+}
+```
+
+Focus moves into the popup on open and returns to the trigger on close. Tab is
+not trapped: tabbing past the last control moves into the rest of the page.
+Escape and an outside press both close it.
+
+## Parts
+
+| Part | Element | Notes |
+| --- | --- | --- |
+| `Popover.Root` | none | Owns open state. Props: `open`, `defaultOpen`, `onOpenChange`, `side`, `align`, `offset`. |
+| `Popover.Trigger` | `button` | Toggles the popover and anchors it. `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`. |
+| `Popover.Anchor` | `span` | Optional. Anchors positioning to a different element than the trigger. |
+| `Popover.Positioner` | `div` | The fixed-positioned wrapper. Carries `data-side` / `data-align`. |
+| `Popover.Popup` | `div` | `role="dialog"`. The focus target. Pass `aria-label` if there is no `Title`. |
+| `Popover.Arrow` | `div` | Optional. Positioned from the Floating UI arrow data. |
+| `Popover.Title` | `h2` | Sets the accessible name (`aria-labelledby`). |
+| `Popover.Description` | `p` | Sets the accessible description (`aria-describedby`). |
+| `Popover.Close` | `button` | Closes the popover. |
+
+Every part accepts a `render` prop to compose with your own element, and
+forwards `class`, `style`, and `ref`.
+
+## Styling
+
+Parts expose `data-state="open" | "closed"`; the Positioner and Arrow also
+expose `data-side` and `data-align`. The demo above uses the styles below; copy
+a starting point in either flavor:
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-popover {
+  width: max(16rem, 12rem);
+  padding: 1rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  background: #fff;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.12);
+}
+.docs-popover[data-state='open'] {
+  animation: docs-popover-in 120ms ease-out;
+}
+@keyframes docs-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-popover__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: #fff;
+  border-left: 1px solid #e4e4e7;
+  border-top: 1px solid #e4e4e7;
+}
+```
+
+```tsx
+<Popover.Positioner className="z-50">
+  <Popover.Popup className="w-64 rounded-lg border border-zinc-200 bg-white p-4 shadow-xl data-[state=open]:animate-in">
+    <Popover.Title className="text-sm font-semibold">Settings</Popover.Title>
+    <Popover.Description className="mt-1 text-sm text-zinc-500">
+      Adjust your preferences.
+    </Popover.Description>
+  </Popover.Popup>
+</Popover.Positioner>
+```
+
+</CodeTabs>

@@ -757,3 +757,89 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   border: none;
   border-radius: 0;
 }
+
+/* Popover docs demo. Mirrors the copyable CSS on /docs/components/popover, but
+   uses the site theme tokens so it tracks light/dark. */
+.docs-popover-trigger,
+.docs-popover-close {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-popover-trigger {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-popover-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-popover-close {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border-color);
+}
+.docs-popover-close:hover {
+  background: var(--surface-subtle);
+}
+.docs-popover-trigger:focus-visible,
+.docs-popover-close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-popover-positioner {
+  z-index: 50;
+}
+.docs-popover {
+  box-sizing: border-box;
+  width: max(16rem, 12rem);
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+}
+.docs-popover[data-state='open'] {
+  animation: docs-popover-in 120ms ease-out;
+}
+@keyframes docs-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-popover__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: var(--surface);
+  border-left: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+}
+.docs-popover__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+.docs-popover__desc {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-popover {
+    animation: none;
+  }
+}
