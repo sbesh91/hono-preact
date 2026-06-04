@@ -69,6 +69,8 @@ export const UI_CORE_MODULES = [
 
 export const COMPONENT_MODULES = {
   dialog: ['dialog/index.js'],
+  popover: ['popover/index.js'],
+  tooltip: ['tooltip/index.js'],
 };
 
 // Section B: ordered prefix -> bucket for the site's emitted chunks. A prefix
@@ -82,6 +84,10 @@ export const CHUNK_PREFIXES = [
   // as each new component page ships. `use-form-status` is bucketed to
   // `actions` below, so list these specific names before it.
   ['dialog', 'components'],
+  ['popover', 'components'],
+  ['tooltip', 'components'],
+  ['use-position', 'components'],
+  ['use-dismiss', 'components'],
   ['use-render', 'components'],
   ['use-controllable-state', 'components'],
   ['merge-refs', 'components'],

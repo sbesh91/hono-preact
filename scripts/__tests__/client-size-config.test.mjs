@@ -88,3 +88,17 @@ describe('Section C config', () => {
     ).toBe(400);
   });
 });
+
+describe('client size config: Popover + Tooltip', () => {
+  it('measures popover and tooltip as components', () => {
+    expect(COMPONENT_MODULES.popover).toEqual(['popover/index.js']);
+    expect(COMPONENT_MODULES.tooltip).toEqual(['tooltip/index.js']);
+  });
+
+  it('buckets the new component doc chunks under components', () => {
+    expect(bucketForChunk('popover-AbC123.js')).toBe('components');
+    expect(bucketForChunk('tooltip-AbC123.js')).toBe('components');
+    expect(bucketForChunk('use-position-AbC123.js')).toBe('components');
+    expect(bucketForChunk('use-dismiss-AbC123.js')).toBe('components');
+  });
+});

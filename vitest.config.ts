@@ -136,6 +136,8 @@ export default defineConfig({
         'packages/hono-preact/**',
         'packages/ui/src/index.ts',
         'packages/ui/src/dialog/index.ts',
+        'packages/ui/src/popover/index.ts',
+        'packages/ui/src/tooltip/index.ts',
       ],
     },
   },
