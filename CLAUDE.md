@@ -2,17 +2,13 @@
 
 ## Tooling notes for AI agents
 
-**Serena MCP is configured** (see `.mcp.json`). For code navigation and symbol-level edits, prefer Serena's tools over `rg`/`grep` + Read + Edit:
+**Serena MCP is configured** (see `.mcp.json`). It is an optional aid, not a mandate. `rg`/`grep` + Read + Edit is the default for code navigation and edits, and is fine for definitions, call-site spot checks, prose, config, and one-offs on a codebase this size.
 
-- `find_symbol`, `get_symbols_overview` instead of grepping for definitions
-- `find_referencing_symbols` instead of grepping for call sites
-- `replace_symbol_body`, `insert_before_symbol`, `insert_after_symbol` for structural edits
+Reach for Serena in the one place it clearly beats grep: **renaming or changing the signature of an exported symbol**, where missing a call site is a real bug. `find_referencing_symbols` enumerates the actual call sites and skips the textual noise (re-exports, doc strings, same-named locals) a grep would make you hand-filter; `rename_symbol` rewrites them on the symbol graph. `find_symbol` / `get_symbols_overview`, and the `replace_symbol_body` / `insert_before_symbol` / `insert_after_symbol` edits, are there when you want them. Serena's tools are deferred: load them once per session with `ToolSearch` (`select:mcp__serena__find_referencing_symbols,mcp__serena__rename_symbol`), then call them.
 
-**MANDATORY trigger:** before running any `rg`/`grep` (via Bash) whose target is a TypeScript *definition* or *call site*, you MUST first try Serena. There is no Grep tool in this harness; symbol searches go through Bash, and a `PreToolUse` hook (`.claude/hooks/prefer-serena.py`) will nudge you when it spots one. Serena's tools are deferred, so load them once per session with `ToolSearch` (`select:mcp__serena__find_symbol,mcp__serena__find_referencing_symbols`), then call them. Only fall back to `rg`/`grep` if Serena returns nothing.
+A `PreToolUse` hook (`.claude/hooks/prefer-serena.py`) nudges toward Serena only when a search looks like the front half of a textual refactor (an `rg`/`grep` feeding a shell mutator like `sed -i`); ordinary read/measure searches pass silently.
 
-`rg`/`grep` + Read remain correct for prose, config files, and quick one-offs.
-
-If Serena is unavailable in a session (run `/mcp` to check), fall back to native tools.
+Serena binds to the primary checkout (`--project .`), so it is unavailable in worktrees (see Worktree setup below) and when the MCP server is down (run `/mcp` to check). Fall back to native tools in both cases.
 
 ## Worktree setup
 

@@ -127,7 +127,7 @@ Each component's definition of done includes its copyable styled examples in bot
 
 ### 7.4 Size tracking
 
-Add `popover` and `tooltip` to `COMPONENT_MODULES` in `scripts/client-size-config.mjs` (Section C of the client-JS tracker). `@floating-ui/dom` is shared machinery, so it is accounted for in the `ui-core` floor (not double-counted in each component's marginal-over-ui-core number). The exact bucketing is confirmed in the plan so the marginal numbers stay honest. CI already builds `@hono-preact/*` before measuring, so no workflow change is needed. Do not regenerate the committed `client-size-report.json` baseline in the PR (that zeroes deltas); it refreshes on main-push.
+Add `popover` and `tooltip` to `COMPONENT_MODULES` in `scripts/client-size-config.mjs` (Section C of the client-JS tracker). `@floating-ui/dom` is **not** added to the `ui-core` floor: `ui-core` stays the three universal primitives (`useRender` / `mergeRefs` / `useControllableState`) that every component truly shares, so the floor keeps representing what a component like Dialog actually pays. Because Popover and Tooltip both import the positioning machinery, the bundler's import tracing pulls `@floating-ui/dom` into each component's measured bundle, so it shows up in the Popover and Tooltip marginal-over-ui-core numbers (it is counted once per component row, which is the honest per-component cost a consumer pays for that component). CI already builds `@hono-preact/*` before measuring, so no workflow change is needed. Do not regenerate the committed `client-size-report.json` baseline in the PR (that zeroes deltas); it refreshes on main-push.
 
 ### 7.5 Testing
 
@@ -152,7 +152,7 @@ Exit animations (`usePresence`), the Tooltip delay-group Provider, a Popover foc
 ## 9. Open items for the implementation plan
 
 - Confirm the exact `@floating-ui/dom` middleware set and `autoUpdate` options, and the `usePosition` return shape consumed by Positioner / Arrow.
-- Confirm `@floating-ui/dom` bucketing in `scripts/client-size-config.mjs` (ui-core floor vs first-importing component).
+- (resolved in §7.4) `@floating-ui/dom` bucketing: rides in each component's marginal via import tracing; `ui-core` stays the three universal primitives.
 - Decide the `useDismiss` configuration surface (`escape` / `outsidePress` toggles, the `refs` array the stack treats as "inside").
 - Decide whether `Popover.Anchor` and `*.Arrow` ship in v1 or are a fast follow (both are cheap; default is to ship them).
 - TDD task breakdown, following the Dialog slice's subagent-buildable style. Implementation runs on a feature branch + PR (only spec / plan docs go to main).
