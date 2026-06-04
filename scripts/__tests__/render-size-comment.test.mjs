@@ -83,3 +83,52 @@ describe('renderComment', () => {
     expect(md).not.toContain('· ');
   });
 });
+
+describe('Section C rendering', () => {
+  function reportWithC(c) {
+    return {
+      sectionA: {
+        core: { total: { gzip: 15000 }, marginalOverCore: { gzip: 15000 } },
+      },
+      sectionB: { buckets: { app: 1000 }, total: 1000 },
+      sectionC: c,
+    };
+  }
+
+  const base = reportWithC({
+    'ui-core': { total: { gzip: 500 }, marginalOverUiCore: { gzip: 500 } },
+    dialog: { total: { gzip: 900 }, marginalOverUiCore: { gzip: 400 } },
+  });
+
+  it('renders a Components table with ui-core total and component marginal', () => {
+    const md = renderComment(base, base, cfg);
+    expect(md).toContain('Components');
+    expect(md).toMatch(/ui-core.*500 B/s);
+    expect(md).toMatch(/dialog.*400 B/s);
+  });
+
+  it('shows a delta when a component grows', () => {
+    const fresh = reportWithC({
+      'ui-core': { total: { gzip: 500 }, marginalOverUiCore: { gzip: 500 } },
+      dialog: { total: { gzip: 1100 }, marginalOverUiCore: { gzip: 600 } },
+    });
+    const md = renderComment(fresh, base, cfg);
+    expect(md).toContain('+200 B'); // dialog marginal 400 -> 600
+  });
+
+  it('marks components as (new) when the baseline lacks Section C', () => {
+    const baselineNoC = {
+      sectionA: base.sectionA,
+      sectionB: base.sectionB,
+    };
+    const md = renderComment(base, baselineNoC, cfg);
+    expect(md).toContain('Components');
+    expect(md).toContain('(new)');
+  });
+
+  it('omits the Components table entirely when fresh has no Section C', () => {
+    const noC = { sectionA: base.sectionA, sectionB: base.sectionB };
+    const md = renderComment(noC, noC, cfg);
+    expect(md).not.toContain('### Components');
+  });
+});

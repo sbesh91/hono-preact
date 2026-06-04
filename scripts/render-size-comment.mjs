@@ -4,7 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import * as defaultConfig from './client-size-config.mjs';
-import { tableGzip } from './client-size-config.mjs';
+import { tableGzip, componentTableGzip } from './client-size-config.mjs';
 
 const COMMENT_HEADER = '<!-- client-size -->';
 
@@ -36,6 +36,11 @@ function row(name, freshGzip, baseGzip, budget) {
 function sectionAGzip(report, bucket) {
   const e = report.sectionA[bucket];
   return e ? tableGzip(bucket, e) : undefined;
+}
+
+function sectionCGzip(report, name) {
+  const e = report.sectionC?.[name];
+  return e ? componentTableGzip(name, e) : undefined;
 }
 
 // Footer that pins the comment to the commit it measured. The sticky comment
@@ -91,6 +96,26 @@ export function renderComment(fresh, baseline, config = defaultConfig, meta) {
     row('**total**', fresh.sectionB.total, baseline.sectionB.total, budgets['site:total'])
   );
   lines.push('');
+
+  // Section C (per-component; only when the fresh report carries one)
+  if (fresh.sectionC && Object.keys(fresh.sectionC).length > 0) {
+    lines.push(
+      '### Components (gzip; `ui-core` is total, components marginal over it)'
+    );
+    lines.push('| Component | Size | Δ vs base |');
+    lines.push('|---|---|---|');
+    const cNames = new Set([
+      ...Object.keys(fresh.sectionC),
+      ...Object.keys(baseline.sectionC ?? {}),
+    ]);
+    for (const name of cNames) {
+      lines.push(
+        row(name, sectionCGzip(fresh, name), sectionCGzip(baseline, name), undefined)
+      );
+    }
+    lines.push('');
+  }
+
   lines.push('<sub>Budgets are advisory; overages flag ⚠️ but never fail CI.</sub>');
   const footer = freshnessFooter(meta);
   if (footer) lines.push(footer);
