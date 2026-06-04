@@ -1,42 +1,48 @@
-import { useState } from 'preact/hooks';
+import { toChildArray, type ComponentChildren, type VNode } from 'preact';
+import { useRef, useState } from 'preact/hooks';
 import { CopyButton } from './CopyButton.js';
 
-export interface CodeTab {
-  label: string;
-  code: string;
-  language?: string;
-}
-
 interface CodeTabsProps {
-  tabs: CodeTab[];
+  // One label per child code block, in order. The children are fenced code
+  // blocks (```css, ```tsx, ...) so they are syntax-highlighted at build time
+  // by the same Shiki pipeline as every other code sample on the docs site.
+  labels: string[];
+  children: ComponentChildren;
 }
 
-// Labeled code tabs with a per-tab Copy button. Used on docs pages to offer
-// copyable styling in more than one flavor (e.g. CSS and Tailwind).
-export function CodeTabs({ tabs }: CodeTabsProps) {
+// Tabbed, copyable code examples. Shows one highlighted block at a time and
+// copies the active block's text (read from the DOM, so it copies the raw
+// source rather than the highlighting markup).
+export function CodeTabs({ labels, children }: CodeTabsProps) {
+  const panels = toChildArray(children).filter(
+    (c): c is VNode => typeof c === 'object'
+  );
   const [active, setActive] = useState(0);
-  const current = tabs[active];
+  const panelRef = useRef<HTMLDivElement>(null);
 
   return (
     <div class="docs-codetabs">
       <div class="docs-codetabs__tablist" role="tablist">
-        {tabs.map((tab, i) => (
+        {labels.map((label, i) => (
           <button
-            key={tab.label}
+            key={label}
             type="button"
             role="tab"
             aria-selected={i === active}
             class="docs-codetabs__tab"
             onClick={() => setActive(i)}
           >
-            {tab.label}
+            {label}
           </button>
         ))}
-        <CopyButton text={current.code} class="docs-codetabs__copy" />
+        <CopyButton
+          class="docs-codetabs__copy"
+          getText={() => panelRef.current?.textContent ?? ''}
+        />
       </div>
-      <pre class={`docs-codetabs__pre language-${current.language ?? 'text'}`}>
-        <code>{current.code}</code>
-      </pre>
+      <div class="docs-codetabs__panel" ref={panelRef}>
+        {panels[active]}
+      </div>
     </div>
   );
 }

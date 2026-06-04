@@ -19,37 +19,38 @@ describe('Example', () => {
 });
 
 describe('CodeTabs', () => {
-  const tabs = [
-    { label: 'CSS', code: '.a { color: red; }', language: 'css' },
-    {
-      label: 'Tailwind',
-      code: '<div class="text-red-500" />',
-      language: 'html',
-    },
-  ];
+  // In the docs these children are fenced code blocks (highlighted by Shiki at
+  // build time); in tests we stand in plain <pre> blocks.
+  function tabs() {
+    return (
+      <CodeTabs labels={['CSS', 'Tailwind']}>
+        <pre>css-code</pre>
+        <pre>tailwind-code</pre>
+      </CodeTabs>
+    );
+  }
 
-  it('shows the first tab by default and switches on click', () => {
+  it('shows the first block by default and switches on click', () => {
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn() },
       configurable: true,
     });
-    const { getByRole, getByText, queryByText } = render(
-      <CodeTabs tabs={tabs} />
-    );
-    expect(getByText('.a { color: red; }')).toBeTruthy();
-    expect(queryByText('<div class="text-red-500" />')).toBeNull();
+    const { getByRole, getByText, queryByText } = render(tabs());
+    expect(getByText('css-code')).toBeTruthy();
+    expect(queryByText('tailwind-code')).toBeNull();
 
     fireEvent.click(getByRole('tab', { name: 'Tailwind' }));
-    expect(getByText('<div class="text-red-500" />')).toBeTruthy();
+    expect(getByText('tailwind-code')).toBeTruthy();
   });
 
-  it('renders a Copy button for the active tab', () => {
+  it('copies the active block text via the Copy button', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText: vi.fn() },
+      value: { writeText },
       configurable: true,
     });
-    const { getAllByRole } = render(<CodeTabs tabs={tabs} />);
-    const copy = getAllByRole('button').find((b) => b.textContent === 'Copy');
-    expect(copy).toBeTruthy();
+    const { getByText } = render(tabs());
+    fireEvent.click(getByText('Copy'));
+    expect(writeText).toHaveBeenCalledWith('css-code');
   });
 });

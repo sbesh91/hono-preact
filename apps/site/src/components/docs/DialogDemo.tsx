@@ -1,7 +1,8 @@
 import { Dialog } from '@hono-preact/ui';
 
-// A minimal, unstyled-by-default Dialog used as the live demo on the docs
-// page. The page's copyable CSS/Tailwind examples supply the visual styling.
+// A styled Dialog used as the live demo on the docs page. The styling lives in
+// apps/site/src/styles/root.css (.docs-dialog*) and mirrors the copyable CSS
+// example below it, so what you see is what you copy.
 export function DialogDemo() {
   return (
     <Dialog.Root>
@@ -12,7 +13,7 @@ export function DialogDemo() {
           Get notified when we ship something new.
         </Dialog.Description>
         <div class="docs-dialog__actions">
-          <Dialog.Close class="docs-dialog-trigger">Close</Dialog.Close>
+          <Dialog.Close class="docs-dialog-close">Close</Dialog.Close>
         </div>
       </Dialog.Popup>
     </Dialog.Root>

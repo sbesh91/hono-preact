@@ -133,6 +133,7 @@
   --muted: #63666a; /* Cool Gray 10C */
   --surface: #ffffff;
   --surface-subtle: #f4f4f2;
+  --code-surface: #fcfcfb; /* faint code-block surface on the white page */
   --border-color: rgba(37, 40, 42, 0.1);
   --accent: #c40076; /* magenta-600: AA as link text and as white-on-accent button */
   --accent-foreground: #ffffff;
@@ -162,6 +163,7 @@
     --muted: #bbbcbc; /* Cool Gray 4C */
     --surface: #25282a; /* Pantone 426C */
     --surface-subtle: #2f3234;
+    --code-surface: #24292e; /* github-dark code background */
     --border-color: rgba(255, 255, 255, 0.12);
     --accent: #ff5fbf; /* brighter magenta: AA as link text on dark surfaces */
     --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
@@ -192,6 +194,7 @@
   --muted: #bbbcbc; /* Cool Gray 4C */
   --surface: #25282a; /* Pantone 426C */
   --surface-subtle: #2f3234;
+  --code-surface: #24292e; /* github-dark code background */
   --border-color: rgba(255, 255, 255, 0.12);
   --accent: #ff5fbf; /* brighter magenta: AA as link text on dark surfaces */
   --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
@@ -276,6 +279,7 @@
 
 .mdx-content pre {
   padding: 1rem 1.25rem;
+  border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   overflow-x: auto;
   margin: 1rem 0;
@@ -287,6 +291,28 @@
   background: none;
   padding: 0;
   font-size: inherit;
+}
+
+/* Shiki dual theme: the light theme (github-light) is the inline default; swap
+   to the dark theme's syntax colors when the docs are in dark mode (mirrors the
+   token rules: prefers-dark without an explicit theme, or data-theme=dark). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .shiki,
+  :root:not([data-theme]) .shiki span {
+    color: var(--shiki-dark) !important;
+  }
+}
+:root[data-theme='dark'] .shiki,
+:root[data-theme='dark'] .shiki span {
+  color: var(--shiki-dark) !important;
+}
+
+/* Code background comes from a theme token: a faint surface in light mode (so
+   it reads against the white page, with the 1px border), and the github-dark
+   background in dark mode (matching the dark syntax colors). */
+.mdx-content pre,
+.docs-codetabs__panel pre {
+  background-color: var(--code-surface) !important;
 }
 
 .mdx-content ul {
@@ -309,23 +335,49 @@
 
 .mdx-content table {
   width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-  font-size: 0.9rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.25rem 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow: hidden;
 }
 .mdx-content th {
-  border: 1px solid var(--border-color);
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.875rem;
   background: var(--surface-subtle);
   font-weight: 600;
   text-align: left;
+  border-bottom: 1px solid var(--border-color);
 }
 .mdx-content td {
-  border: 1px solid var(--border-color);
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
 }
-.mdx-content tr:nth-child(even) td {
-  background: var(--surface-subtle);
+.mdx-content tr:last-child td {
+  border-bottom: none;
+}
+/* Keep the first column (prop/name) on one line; let later columns wrap and
+   give long type signatures and descriptions room to breathe. */
+.mdx-content td:first-child {
+  white-space: nowrap;
+}
+.mdx-content td code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Code samples and API tables read better wider than the prose measure. On
+   desktop there is room to the right of the content column, so let them grow
+   past it (capped so they never exceed the viewport). */
+@media (min-width: 768px) {
+  .docs-codetabs,
+  .mdx-content > pre,
+  .mdx-content > table {
+    width: min(calc(100% + 9rem), calc(100vw - 240px - 6rem));
+  }
 }
 
 .mdx-content blockquote {
@@ -513,4 +565,193 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   ::view-transition-group(.issue-card) {
     animation-duration: 0s;
   }
+}
+
+/* --- Docs: component demos, code tabs --- */
+
+/* Framed area that hosts a live component demo. The dotted grid makes the
+   demo read as an interactive surface rather than page content. */
+.docs-example {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-height: 9rem;
+  padding: 2rem;
+  margin: 1.25rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0) 0
+      0 / 16px 16px,
+    var(--surface);
+}
+
+/* Demo buttons: a primary (trigger) and a secondary (close). */
+.docs-dialog-trigger,
+.docs-dialog-close {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-dialog-trigger {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-dialog-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-dialog-close {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border-color);
+}
+.docs-dialog-close:hover {
+  background: var(--surface-subtle);
+}
+.docs-dialog-trigger:focus-visible,
+.docs-dialog-close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* The demo's native <dialog>. Tailwind's preflight resets `dialog { margin: 0 }`,
+   which defeats the UA centering of a modal dialog. Center it explicitly with
+   the `translate` property (not `transform`, which the entry animation uses) so
+   it works cross-browser regardless of the reset. */
+.docs-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  margin: 0;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.875rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+@starting-style {
+  .docs-dialog[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.docs-dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(2px);
+}
+/* Compact dialog-local typography (overrides the .mdx-content h2/p defaults). */
+.docs-dialog h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 0.375rem;
+}
+.docs-dialog p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.docs-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-dialog {
+    transition: none;
+  }
+}
+
+/* Tabbed, copyable code examples. The tab bar uses the docs theme; the code
+   panel is a Shiki-highlighted fenced block (github-dark), so it matches every
+   other code sample on the site. */
+.docs-codetabs {
+  margin: 1.25rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  overflow: hidden;
+}
+.docs-codetabs__tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-color);
+}
+.docs-codetabs__tab {
+  appearance: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.625rem 0.5rem;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-codetabs__tab:hover {
+  color: var(--foreground);
+}
+.docs-codetabs__tab[aria-selected='true'] {
+  color: var(--foreground);
+  border-bottom-color: var(--accent);
+}
+.docs-codetabs__copy {
+  appearance: none;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: auto;
+  align-self: center;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-codetabs__copy:hover {
+  color: var(--foreground);
+  background: var(--surface);
+}
+/* The panel holds a Shiki <pre>; sit it flush in the rounded card (the card's
+   own border delineates it, so the pre needs none of its own). */
+.docs-codetabs__panel pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
 }

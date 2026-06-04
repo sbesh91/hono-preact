@@ -1,4 +1,5 @@
 import {
+  Blocks,
   BookOpen,
   Boxes,
   Compass,
@@ -117,6 +118,18 @@ export const nav: NavArea[] = [
         heading: 'Overlays',
         icon: PanelsTopLeft,
         entries: [{ title: 'Dialog', route: '/docs/components/dialog' }],
+      },
+      {
+        heading: 'Foundations',
+        icon: Blocks,
+        entries: [
+          { title: 'useRender', route: '/docs/components/use-render' },
+          {
+            title: 'useControllableState',
+            route: '/docs/components/use-controllable-state',
+          },
+          { title: 'mergeRefs', route: '/docs/components/merge-refs' },
+        ],
       },
     ],
   },
