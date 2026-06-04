@@ -627,14 +627,16 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 
 /* The demo's native <dialog>. Tailwind's preflight resets `dialog { margin: 0 }`,
-   which defeats the UA centering of a modal dialog. Center it explicitly with
-   the `translate` property (not `transform`, which the entry animation uses) so
-   it works cross-browser regardless of the reset. */
+   which defeats the UA centering of a modal dialog, so center it explicitly.
+   Centering lives in `transform`, NOT the standalone `translate` property: when a
+   rule sets both `translate` and `transform`, the production minifier (Lightning
+   CSS) drops the `translate`, silently un-centering the dialog in the built site
+   while dev (unminified) looks fine. A single `transform` sidesteps that; the
+   entry animation folds the offset into its own transform. */
 .docs-dialog {
   position: fixed;
   top: 50%;
   left: 50%;
-  translate: -50% -50%;
   margin: 0;
   width: min(28rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
@@ -649,7 +651,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     0 10px 15px -3px rgb(0 0 0 / 0.25),
     0 4px 6px -4px rgb(0 0 0 / 0.25);
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translate(-50%, -50%);
   transition:
     opacity 160ms ease,
     transform 160ms ease;
@@ -657,7 +659,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 @starting-style {
   .docs-dialog[open] {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
   }
 }
 .docs-dialog::backdrop {

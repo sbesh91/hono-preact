@@ -44,15 +44,16 @@ The demo above uses the styles below; copy a starting point in either flavor:
 <CodeTabs labels={['CSS', 'Tailwind']}>
 
 ```css
-/* Center the modal and give it a card surface. position/translate restore
+/* Center the modal and give it a card surface. position + transform restore
    centering even when a reset (e.g. Tailwind preflight) clears the UA margin
-   that normally centers a modal <dialog>. `translate` is used for centering so
-   `transform` stays free for the entry animation. */
+   that normally centers a modal <dialog>. Keep centering in `transform`, not the
+   standalone `translate` property: a rule that sets both can have its `translate`
+   dropped by a CSS minifier, silently un-centering the dialog in a production
+   build. The entry animation folds the offset into its own transform. */
 dialog[data-state='open'] {
   position: fixed;
   top: 50%;
   left: 50%;
-  translate: -50% -50%;
   width: min(28rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
   overflow: auto;
@@ -61,6 +62,7 @@ dialog[data-state='open'] {
   border-radius: 14px;
   background: #fff;
   color: #18181b;
+  transform: translate(-50%, -50%);
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.2),
     0 4px 6px -4px rgb(0 0 0 / 0.2);
@@ -72,7 +74,7 @@ dialog[data-state='open'] {
 @starting-style {
   dialog[data-state='open'] {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
   }
 }
 
