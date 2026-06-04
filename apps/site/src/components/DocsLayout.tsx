@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
+import { NavLink, useRouteActive } from 'hono-preact';
 import { ThemeToggle } from './ThemeToggle.js';
 import { nav, type NavArea } from '../pages/docs/nav.js';
 
@@ -34,7 +35,7 @@ export function DocsLayout({ children }: Props) {
     setMobileOpen(false);
   }, [path]);
 
-  const activeAreaId = path.startsWith('/docs/components')
+  const activeAreaId = useRouteActive('/docs/components', { exact: false })
     ? 'components'
     : 'guide';
   const activeArea = nav.find((a) => a.id === activeAreaId) ?? nav[0];
@@ -55,22 +56,18 @@ export function DocsLayout({ children }: Props) {
               <Icon size={14} class="shrink-0 opacity-80" />
               <span class="whitespace-nowrap">{section.heading}</span>
             </div>
-            {section.entries.map((entry) => {
-              const active = entry.route === path;
-              return (
-                <a
-                  key={entry.route}
-                  href={entry.route}
-                  class={`flex items-center h-9 rounded text-sm no-underline whitespace-nowrap pl-9 pr-3 ${
-                    active
-                      ? 'bg-accent/10 text-accent font-semibold'
-                      : 'text-muted hover:text-foreground hover:bg-foreground/10'
-                  }`}
-                >
-                  <span>{entry.title}</span>
-                </a>
-              );
-            })}
+            {section.entries.map((entry) => (
+              <NavLink
+                key={entry.route}
+                href={entry.route}
+                exact
+                class="flex items-center h-9 rounded text-sm no-underline whitespace-nowrap pl-9 pr-3"
+                activeClass="bg-accent/10 text-accent font-semibold"
+                inactiveClass="text-muted hover:text-foreground hover:bg-foreground/10"
+              >
+                <span>{entry.title}</span>
+              </NavLink>
+            ))}
           </div>
         );
       })}
@@ -95,6 +92,10 @@ export function DocsLayout({ children }: Props) {
         >
           hono-preact
         </a>
+        {/* Area tabs key off `activeAreaId` (mutually exclusive: components
+            wins over guide), not per-href route matching, so they stay plain
+            <a>. A NavLink on the Guide tab (`/docs`) would also light up on
+            every `/docs/components/*` page since that is a descendant path. */}
         <nav class="flex items-center gap-1" aria-label="Docs areas">
           {nav.map((area) => {
             const TabIcon = area.icon;
