@@ -118,7 +118,11 @@ export const nav: NavArea[] = [
       {
         heading: 'Overlays',
         icon: PanelsTopLeft,
-        entries: [{ title: 'Dialog', route: '/docs/components/dialog' }],
+        entries: [
+          { title: 'Dialog', route: '/docs/components/dialog' },
+          { title: 'Popover', route: '/docs/components/popover' },
+          { title: 'Tooltip', route: '/docs/components/tooltip' },
+        ],
       },
       {
         heading: 'Foundations',
@@ -130,6 +134,8 @@ export const nav: NavArea[] = [
             route: '/docs/components/use-controllable-state',
           },
           { title: 'mergeRefs', route: '/docs/components/merge-refs' },
+          { title: 'usePosition', route: '/docs/components/use-position' },
+          { title: 'useDismiss', route: '/docs/components/use-dismiss' },
         ],
       },
     ],
