@@ -116,17 +116,6 @@ export const CHUNK_PREFIXES = [
   ['preload-helper', 'vendor'],
 ];
 
-// Soft budgets in gzip bytes per bucket. A bucket over budget renders a warning
-// in the comment but never fails CI. Buckets without an entry have no budget.
-// Tuned to measured baseline 2026-06-01: core=3832 B gzip, site:total=128252 B gzip.
-// Both values are the measured number rounded up to a round figure with ~10% headroom.
-export const BUDGETS = {
-  // Section A (marginal-over-core gzip, except `core` which is its own total):
-  core: 4300,
-  // Section B grand total:
-  'site:total': 142000,
-};
-
 // True if a site chunk filename belongs to `bucket` under `prefix`.
 function prefixMatches(filename, prefix) {
   return filename === `${prefix}.js` || filename.startsWith(`${prefix}-`);
