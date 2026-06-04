@@ -4,6 +4,21 @@ export { mergeRefs } from './merge-refs.js';
 export { useRender, type RenderProp } from './use-render.js';
 export { useControllableState } from './use-controllable-state.js';
 export {
+  usePosition,
+  placementFor,
+  sideAlignFromPlacement,
+  type UsePositionOptions,
+  type PositionState,
+  type Side,
+  type Align,
+} from './use-position.js';
+export { useDismiss, type UseDismissOptions } from './use-dismiss.js';
+export { type DismissReason } from './dismiss-stack.js';
+export {
+  useFocusReturn,
+  type UseFocusReturnOptions,
+} from './use-focus-return.js';
+export {
   Dialog,
   DialogRoot,
   DialogTrigger,
