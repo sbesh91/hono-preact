@@ -38,3 +38,17 @@ describe('view transitions toolkit exports', () => {
     expect(typeof iso.PersistHost).toBe('function');
   });
 });
+
+describe('active-route detection exports', () => {
+  it('exports useRouteMatch', () => {
+    expect(typeof iso.useRouteMatch).toBe('function');
+  });
+
+  it('exports useRouteActive', () => {
+    expect(typeof iso.useRouteActive).toBe('function');
+  });
+
+  it('exports NavLink', () => {
+    expect(typeof iso.NavLink).toBe('function');
+  });
+});

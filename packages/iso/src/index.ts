@@ -45,6 +45,14 @@ export type {
   UseOptimisticActionResult,
 } from './optimistic-action.js';
 
+// Active-route detection.
+export {
+  useRouteMatch,
+  useRouteActive,
+  type RouteMatchOptions,
+} from './route-active.js';
+export { NavLink, type NavLinkProps } from './nav-link.js';
+
 // Forms.
 export { Form } from './form.js';
 export { useActionResult, type ActionResult } from './use-action-result.js';
