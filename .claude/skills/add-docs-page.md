@@ -103,6 +103,7 @@ This area holds two shapes; the hook's required set is their common core (Prose 
 
 - **Required (both variants):** Prose, Examples, API reference (any of `## API reference`, `## Signature`, `## Options`, `## Parameters`, plus a table).
 - **Recommended (component variant):** `## Demo` with `<Example>`, `## Styling`, `## Accessibility`.
+- **Link shared primitives; don't replicate them.** A component page documents its own parts (one prop table per part) and the data-attr/ARIA contract. The shared building blocks it composes (the `render`-prop forms, `useRender`, `useControllableState`, `mergeRefs`, `usePosition`, `useDismiss`, `useFocusReturn`) each have their own page, so reference them with a link (the `### Primitives` block of prose links, and an inline link from the API-reference lead) rather than copying their tables onto every component page. Replicated reference tables drift and read as filler.
 
 ### Shared UI
 
@@ -110,6 +111,8 @@ Use the existing docs components rather than rolling new markup:
 
 - `<Example>` (from `components/docs/Example.js`) frames a live demo.
 - `<CodeTabs labels={[...]}>` (from `components/docs/CodeTabs.js`) for multi-flavor code (e.g. CSS + Tailwind).
+  - **CSS and Tailwind tabs must have feature parity.** Both flavors are copy-paste starting points, so they must produce the same result: if the CSS animates, transitions, sets dark-mode, etc., the Tailwind tab must do the same, and vice versa. Walk the CSS rule by rule and confirm each effect has a Tailwind counterpart.
+  - **Tailwind tabs use base Tailwind v4 only** (the site has no `tailwindcss-animate` / `tw-animate-css` plugin). So no `animate-in` / `animate-out`. Reproduce CSS `@keyframes` entry animations with `transition-*` + the `starting:` variant (`@starting-style`), e.g. `opacity-100 transition-opacity duration-100 ease-out starting:opacity-0`. When unsure a class generates real CSS, compile it through `@tailwindcss/postcss` and inspect, rather than guessing.
 - API reference tables are plain GFM markdown tables (styled by `.mdx-content`).
 
 ## Checklist

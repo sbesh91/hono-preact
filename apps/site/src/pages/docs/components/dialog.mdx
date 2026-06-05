@@ -100,10 +100,11 @@ dialog::backdrop {
 
 ```tsx
 <Dialog.Popup
-  class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+  class="fixed top-1/2 left-1/2 [transform:translate(-50%,-50%)]
          w-[min(28rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-auto
          rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl
-         opacity-100 transition-opacity duration-150 starting:opacity-0
+         opacity-100 transition-[opacity,transform] duration-[160ms] ease-out
+         starting:opacity-0 starting:[transform:translate(-50%,calc(-50%_+_8px))_scale(0.98)]
          backdrop:bg-black/50 backdrop:backdrop-blur-sm
          dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
 >
@@ -115,10 +116,10 @@ dialog::backdrop {
 
 ## API reference
 
-Every part accepts a `render` prop for composition (see the **render prop**
-section below) and forwards unknown props to the element it renders.
-`Dialog.Trigger`, `Dialog.Popup`, and `Dialog.Close` also expose
-`data-state="open" | "closed"` and pass `{ open }` to a render function.
+Every part accepts a `render` prop for composition (see
+[useRender](/docs/components/use-render)) and forwards unknown props to the
+element it renders. `Dialog.Trigger`, `Dialog.Popup`, and `Dialog.Close` also
+expose `data-state="open" | "closed"` and pass `{ open }` to a render function.
 
 ### Dialog.Root
 
@@ -192,17 +193,6 @@ Closes the dialog on click. Default element `<button type="button">`.
 | `children` | `ComponentChildren`                     | -       | Button label.                                                               |
 | `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded to the element; a passed `onClick` runs before the dialog closes. |
 
-### The render prop
-
-`render` lets a part borrow the behavior and ARIA wiring while rendering a
-different element. It accepts three forms:
-
-| Form       | Example                                                                        | Result                                                                            |
-| ---------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Element    | `render={<a href="/x" />}`                                                     | Clones the element, merging framework props (`class` is joined, `ref` is merged). |
-| Tag string | `render="a"`                                                                   | Renders that tag with the framework props.                                        |
-| Function   | `render={(props, state) => <a {...props}>{state.open ? 'Close' : 'Open'}</a>}` | Full control; `state` is `{ open }` for Trigger, Popup, and Close.                |
-
 ### Primitives
 
 `@hono-preact/ui` also exports the building blocks the parts use, for composing
@@ -211,19 +201,11 @@ your own components. Each has its own page with examples:
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).
 
-| Export                 | Signature                                                                        | Description                                                                                                     |
-| ---------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `useRender`            | `useRender(opts) => VNode`                                                       | Resolves a `render` prop (element, string, or function) to a VNode, merging framework-controlled props onto it. |
-| `RenderProp`           | `RenderProp<State>`                                                              | The `render` prop type: `VNode \| string \| ((props, state) => VNode)`.                                         |
-| `useControllableState` | `useControllableState({ value?, defaultValue, onChange? }) => [value, setValue]` | Controlled/uncontrolled state with a stable setter.                                                             |
-| `mergeRefs`            | `mergeRefs(...refs) => (node) => void`                                           | Combines several refs into one callback ref.                                                                    |
-
 ## Accessibility
 
 A dialog must have an accessible name: render a `Dialog.Title` (wired through
 `aria-labelledby`) or pass `aria-label` to `Dialog.Popup`. A `Dialog.Description`
-is wired through `aria-describedby` when present. `role="dialog"` and
-`aria-modal="true"` come implicitly from `<dialog>.showModal()`.
+is wired through `aria-describedby` when present.
 
 Because the popup is a native modal `<dialog>`, the platform handles the rest:
 

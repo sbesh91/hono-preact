@@ -133,7 +133,7 @@ demo above uses the styles below; copy a starting point in either flavor:
 
 ```tsx
 <Popover.Positioner className="z-50">
-  <Popover.Popup className="w-64 rounded-[0.625rem] border border-zinc-200 bg-white p-4 text-zinc-900 shadow-xl data-[state=open]:animate-in dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+  <Popover.Popup className="w-64 rounded-[0.625rem] border border-zinc-200 bg-white p-4 text-zinc-900 shadow-xl opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
     <Popover.Title className="text-sm font-semibold">Settings</Popover.Title>
     <Popover.Description className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
       Adjust your preferences.
@@ -146,10 +146,10 @@ demo above uses the styles below; copy a starting point in either flavor:
 
 ## API reference
 
-Every part accepts a `render` prop for composition (see the **render prop**
-section below) and forwards unknown props to the element it renders. The
-Trigger, Positioner, Popup, Arrow, and Close also expose
-`data-state="open" | "closed"` and pass state to a render function.
+Every part accepts a `render` prop for composition (see
+[useRender](/docs/components/use-render)) and forwards unknown props to the
+element it renders. The Trigger, Positioner, Popup, Arrow, and Close also
+expose `data-state="open" | "closed"` and pass state to a render function.
 
 ### Popover.Root
 
@@ -268,17 +268,6 @@ Closes the popover on click. Default element `<button type="button">`.
 | `children` | `ComponentChildren`                     | -       | Button label.                                                                |
 | `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded to the element; a passed `onClick` runs before the popover closes. |
 
-### The render prop
-
-`render` lets a part borrow the behavior and ARIA wiring while rendering a
-different element. It accepts three forms:
-
-| Form       | Example                                              | Result                                                                                                               |
-| ---------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Element    | `render={<a href="/x" />}`                           | Clones the element, merging framework props (`class` is joined, `ref` is merged).                                    |
-| Tag string | `render="a"`                                         | Renders that tag with the framework props.                                                                           |
-| Function   | `render={(props, state) => <a {...props}>{...}</a>}` | Full control; `state` is `{ open }` for Trigger/Popup/Close, `{ side, align }` for Positioner, `{ side }` for Arrow. |
-
 ### Primitives
 
 `@hono-preact/ui` exports the building blocks the parts use, for composing your
@@ -289,15 +278,6 @@ own components. Several have their own page with examples:
 [useRender](/docs/components/use-render),
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).
-
-| Export                 | Signature                                                                        | Description                                                                           |
-| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `usePosition`          | `usePosition(opts) => { side, align, arrowX, arrowY }`                           | Anchors a floating element with Floating UI and keeps it positioned on scroll/resize. |
-| `useDismiss`           | `useDismiss(opts) => void`                                                       | Registers an open layer for Escape / outside-press dismissal via a shared stack.      |
-| `useFocusReturn`       | `useFocusReturn(opts) => void`                                                   | Moves focus into a popup on open and returns it to the opener on close (no trap).     |
-| `useRender`            | `useRender(opts) => VNode`                                                       | Resolves a `render` prop to a VNode, merging framework-controlled props onto it.      |
-| `useControllableState` | `useControllableState({ value?, defaultValue, onChange? }) => [value, setValue]` | Controlled/uncontrolled state with a stable setter.                                   |
-| `mergeRefs`            | `mergeRefs(...refs) => (node) => void`                                           | Combines several refs into one callback ref.                                          |
 
 ## Accessibility
 
@@ -317,7 +297,3 @@ name with a `Popover.Title` (wired through `aria-labelledby`) or by passing
   is not, it renders inline with `position: fixed`. An ancestor with a
   `transform`, `filter`, `contain`, or `will-change` can still clip the inline
   fallback, so prefer not to anchor a popover inside one.
-
-Focus moves into the popup on open and returns to the trigger on close. Tab is
-not trapped: tabbing past the last control moves into the rest of the page.
-Escape and an outside press both close it.
