@@ -1,0 +1,35 @@
+# useFocusReturn
+
+`useFocusReturn` is the focus management Popover uses. When an overlay opens it
+moves focus into the popup; when it closes it returns focus to wherever it was
+before. It is not a focus trap: tab order flows out of the popup into the rest
+of the page, which is what a non-modal overlay wants.
+
+```tsx
+import { useFocusReturn } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
+
+function Panel({ open }: { open: boolean }) {
+  const popupRef = useRef<HTMLDivElement>(null);
+  useFocusReturn({ open, popupRef });
+  return open ? (
+    <div ref={popupRef}>
+      <button>First</button>
+      <button>Second</button>
+    </div>
+  ) : null;
+}
+```
+
+## Options
+
+| Option            | Type        | Default  | Notes                                                            |
+| ----------------- | ----------- | -------- | ---------------------------------------------------------------- |
+| `open`            | `boolean`   | none     | Focus moves in when this becomes true and returns when it falls. |
+| `popupRef`        | `RefObject` | none     | The popup; focus moves into it on open.                          |
+| `initialFocusRef` | `RefObject` | optional | Element to focus first, instead of the first focusable.          |
+
+On open it focuses `initialFocusRef`, else the first focusable element in the
+popup, else the popup itself. On close it returns focus to the element that was
+focused when the overlay opened (usually the trigger). It does not trap focus,
+so pair it with a dismissal mechanism such as [useDismiss](/docs/components/use-dismiss).

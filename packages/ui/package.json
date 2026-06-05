@@ -44,8 +44,11 @@
     "preact": ">=10.11.0"
   },
   "devDependencies": {
-    "typescript": "*",
-    "preact-render-to-string": "^6.6.7"
+    "preact-render-to-string": "^6.6.7",
+    "typescript": "*"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.6"
+  }
 }

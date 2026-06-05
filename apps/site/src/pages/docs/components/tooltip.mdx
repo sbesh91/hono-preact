@@ -1,0 +1,229 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { TooltipDemo } from '../../../components/docs/TooltipDemo.js';
+
+# Tooltip
+
+A small label that appears on hover or keyboard focus. It follows WCAG 1.4.13:
+the tooltip is hoverable (you can move the pointer onto it), dismissible with
+Escape, and persistent (it stays until you leave or press Escape). Tooltips are
+not shown for touch input, which cannot hover; do not put essential information
+only in a tooltip. It ships unstyled: style it through the `data-state`,
+`data-side`, and `data-align` contract.
+
+## Demo
+
+<Example>
+  <TooltipDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Tooltip } from '@hono-preact/ui';
+
+export function SaveHint() {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger>Hover me</Tooltip.Trigger>
+      <Tooltip.Positioner>
+        <Tooltip.Popup>
+          <Tooltip.Arrow />
+          Saved to your library
+        </Tooltip.Popup>
+      </Tooltip.Positioner>
+    </Tooltip.Root>
+  );
+}
+```
+
+The trigger opens after a short delay on hover and immediately on focus. Set
+`delay` and `closeDelay` on `Tooltip.Root` to tune the timing.
+
+## Styling
+
+Parts expose `data-state="open" | "closed"`; the Positioner and Arrow also
+expose `data-side` and `data-align`. Size, z-index, and entry animation go on the
+Popup inside the Positioner. The demo above uses the styles below; copy a
+starting point in either flavor:
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-tooltip-positioner {
+  z-index: 50;
+}
+.docs-tooltip {
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: #18181b;
+  color: #fafafa;
+  font-size: 0.8125rem;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+.docs-tooltip[data-state='open'] {
+  animation: docs-tooltip-in 100ms ease-out;
+}
+@keyframes docs-tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+/* A solid rotated square, same color as the chip, straddling the edge facing
+   the anchor. */
+.docs-tooltip__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: #18181b;
+}
+.docs-tooltip__arrow[data-side='bottom'] {
+  top: -4px;
+}
+.docs-tooltip__arrow[data-side='top'] {
+  bottom: -4px;
+}
+.docs-tooltip__arrow[data-side='right'] {
+  left: -4px;
+}
+.docs-tooltip__arrow[data-side='left'] {
+  right: -4px;
+}
+```
+
+```tsx
+<Tooltip.Positioner className="z-50">
+  <Tooltip.Popup className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-[13px] text-zinc-50 shadow-lg">
+    Saved to your library
+  </Tooltip.Popup>
+</Tooltip.Positioner>
+```
+
+</CodeTabs>
+
+## API reference
+
+Every part accepts a `render` prop for composition (see the **render prop**
+section below) and forwards unknown props to the element it renders. The
+Trigger, Positioner, Popup, and Arrow also expose
+`data-state="open" | "closed"` and pass state to a render function.
+
+### Tooltip.Root
+
+Provides open state, ids, refs, timing, and placement config to the parts.
+Renders only its children.
+
+| Prop           | Type                               | Default    | Description                                            |
+| -------------- | ---------------------------------- | ---------- | ------------------------------------------------------ |
+| `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.       |
+| `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.                  |
+| `onOpenChange` | `(open: boolean) => void`          | -          | Called when the tooltip requests an open or close.     |
+| `delay`        | `number`                           | `600`      | Open delay in ms after the pointer enters the trigger. |
+| `closeDelay`   | `number`                           | `300`      | Close delay in ms after the pointer leaves.            |
+| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'top'`    | Preferred side of the anchor to place the popup.       |
+| `align`        | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                             |
+| `offset`       | `number`                           | `8`        | Gap in pixels between the anchor and the popup.        |
+| `children`     | `ComponentChildren`                | -          | The trigger and positioner.                            |
+
+### Tooltip.Trigger
+
+The element the tooltip describes. Binds hover and focus, wires
+`aria-describedby`, and anchors positioning. Default element
+`<button type="button">`; use `render` to attach it to your own control.
+
+| Prop       | Type                                    | Default | Description                                           |
+| ---------- | --------------------------------------- | ------- | ----------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`         | -       | Compose or replace the element.                       |
+| `children` | `ComponentChildren`                     | -       | Trigger content.                                      |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded; passed pointer / focus handlers run first. |
+
+Sets `data-state` and `aria-describedby` (the popup id, only while open). Opens
+after `delay` on a mouse `pointerenter`, immediately on `focus`; closes after
+`closeDelay` on `pointerleave`, immediately on `blur` or Escape. A touch pointer
+does not open it.
+
+### Tooltip.Positioner
+
+The fixed-positioned wrapper that Floating UI drives. Renders nothing until the
+tooltip is open (mount on open). Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
+browser supports the Popover API, the element is promoted to the top layer so it
+escapes ancestor clipping.
+
+### Tooltip.Popup
+
+The tooltip surface. Default element `<div>` with `role="tooltip"`.
+
+| Prop       | Type                                 | Default | Description                           |
+| ---------- | ------------------------------------ | ------- | ------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.       |
+| `children` | `ComponentChildren`                  | -       | Tooltip content (and optional arrow). |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.             |
+
+Sets `role="tooltip"`, `id`, and `data-state`. Hoverable: moving the pointer
+onto the popup cancels the close so the content stays readable.
+
+### Tooltip.Arrow
+
+Optional pointer positioned from the Floating UI arrow data. Default element
+`<div>`. Place it on the correct edge with CSS keyed on `data-side`.
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp<{ side: Side }>`         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | Optional arrow content.         |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.       |
+
+Sets `data-side` and `position: absolute` with the computed offset.
+
+### The render prop
+
+`render` lets a part borrow the behavior and ARIA wiring while rendering a
+different element. It accepts three forms:
+
+| Form       | Example                                          | Result                                                                                                         |
+| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Element    | `render={<span />}`                              | Clones the element, merging framework props (`class` is joined, `ref` is merged).                              |
+| Tag string | `render="span"`                                  | Renders that tag with the framework props.                                                                     |
+| Function   | `render={(props, state) => <span {...props} />}` | Full control; `state` is `{ open }` for Trigger/Popup, `{ side, align }` for Positioner, `{ side }` for Arrow. |
+
+### Primitives
+
+`@hono-preact/ui` exports the building blocks the parts use, for composing your
+own components. Several have their own page with examples:
+[usePosition](/docs/components/use-position),
+[useDismiss](/docs/components/use-dismiss),
+[useRender](/docs/components/use-render),
+[useControllableState](/docs/components/use-controllable-state), and
+[mergeRefs](/docs/components/merge-refs).
+
+| Export                 | Signature                                                                        | Description                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `usePosition`          | `usePosition(opts) => { side, align, arrowX, arrowY }`                           | Anchors a floating element with Floating UI and keeps it positioned on scroll/resize. |
+| `useDismiss`           | `useDismiss(opts) => void`                                                       | Registers an open layer for Escape / outside-press dismissal via a shared stack.      |
+| `useRender`            | `useRender(opts) => VNode`                                                       | Resolves a `render` prop to a VNode, merging framework-controlled props onto it.      |
+| `useControllableState` | `useControllableState({ value?, defaultValue, onChange? }) => [value, setValue]` | Controlled/uncontrolled state with a stable setter.                                   |
+| `mergeRefs`            | `mergeRefs(...refs) => (node) => void`                                           | Combines several refs into one callback ref.                                          |
+
+## Accessibility
+
+The tooltip is wired to its trigger through `aria-describedby` while open, so a
+screen reader announces the content when the trigger receives focus. The popup
+has `role="tooltip"`.
+
+- Both hover and keyboard focus open the tooltip, so it is reachable without a
+  pointer.
+- It is **hoverable**: moving the pointer from the trigger onto the popup keeps
+  it open (WCAG 1.4.13), so content that needs to be read or selected does not
+  vanish.
+- It is **dismissible** with Escape and **persistent**: it stays until focus or
+  the pointer leaves, never on a timeout.
+- Touch input cannot hover, so the tooltip is suppressed there. Do not place
+  information that is only available through a tooltip; keep it supplementary.

@@ -1,0 +1,33 @@
+# useDismiss
+
+`useDismiss` registers an open overlay with a shared dismissal stack. Pressing
+Escape or pressing outside the overlay dismisses the topmost registered layer,
+so nested overlays close one at a time, innermost first.
+
+```tsx
+import { useDismiss } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
+
+function Panel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss({
+    enabled: open,
+    refs: [ref],
+    onDismiss: onClose,
+  });
+  return open ? <div ref={ref}>panel</div> : null;
+}
+```
+
+## Options
+
+| Option         | Type               | Default | Notes                                          |
+| -------------- | ------------------ | ------- | ---------------------------------------------- |
+| `enabled`      | `boolean`          | none    | Register only while open.                      |
+| `refs`         | `RefObject[]`      | none    | Elements treated as inside (no outside-press). |
+| `escape`       | `boolean`          | `true`  | Dismiss on Escape.                             |
+| `outsidePress` | `boolean`          | `true`  | Dismiss on an outside pointer press.           |
+| `onDismiss`    | `(reason) => void` | none    | Called with `'escape'` or `'outside-press'`.   |
+
+The listeners are document-level and capture-phase, attached once and shared
+across every registered layer, so adding overlays does not multiply listeners.

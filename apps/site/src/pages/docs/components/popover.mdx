@@ -1,0 +1,323 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { PopoverDemo } from '../../../components/docs/PopoverDemo.js';
+
+# Popover
+
+A non-modal, anchored overlay for interactive content: menus of actions, small
+forms, or detail panels. Positioning runs on Floating UI; the overlay renders
+in place and promotes to the browser top layer where the Popover API is
+available. It ships unstyled: style it through the `data-state`, `data-side`,
+and `data-align` contract.
+
+## Demo
+
+<Example>
+  <PopoverDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Popover } from '@hono-preact/ui';
+
+export function Settings() {
+  return (
+    <Popover.Root>
+      <Popover.Trigger>Open popover</Popover.Trigger>
+      <Popover.Positioner>
+        <Popover.Popup>
+          <Popover.Arrow />
+          <Popover.Title>Settings</Popover.Title>
+          <Popover.Description>Adjust your preferences.</Popover.Description>
+          <Popover.Close>Done</Popover.Close>
+        </Popover.Popup>
+      </Popover.Positioner>
+    </Popover.Root>
+  );
+}
+```
+
+Focus moves into the popup on open and returns to the trigger on close. Tab is
+not trapped: tabbing past the last control moves into the rest of the page.
+Escape and an outside press both close it.
+
+## Styling
+
+Parts expose `data-state="open" | "closed"`; the Positioner and Arrow also
+expose `data-side` and `data-align`. The Positioner is the fixed-positioned
+wrapper, so size, z-index, and entry animation go on the Popup inside it. The
+demo above uses the styles below; copy a starting point in either flavor:
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-popover-positioner {
+  z-index: 50;
+}
+.docs-popover {
+  box-sizing: border-box;
+  width: max(16rem, 12rem);
+  padding: 1rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.625rem;
+  background: #fff;
+  color: #18181b;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+}
+/* Compact popup typography so the title/description do not inherit page heading
+   and paragraph margins. */
+.docs-popover h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+.docs-popover p {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #71717a;
+}
+.docs-popover[data-state='open'] {
+  animation: docs-popover-in 120ms ease-out;
+}
+@keyframes docs-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* The arrow is a rotated square; the component sets position:absolute and the
+   cross-axis offset, the per-side rules place it on the edge facing the anchor.
+   The Positioner already clears the UA top-layer styles, so nothing else is
+   needed for the shadow to show. */
+.docs-popover__arrow {
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+}
+.docs-popover__arrow[data-side='bottom'] {
+  top: -5px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.docs-popover__arrow[data-side='top'] {
+  bottom: -5px;
+  border-left: 0;
+  border-top: 0;
+}
+.docs-popover__arrow[data-side='right'] {
+  left: -5px;
+  border-top: 0;
+  border-right: 0;
+}
+.docs-popover__arrow[data-side='left'] {
+  right: -5px;
+  border-bottom: 0;
+  border-left: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .docs-popover {
+    border-color: #27272a;
+    background: #18181b;
+    color: #fafafa;
+  }
+  .docs-popover p {
+    color: #a1a1aa;
+  }
+  .docs-popover__arrow {
+    background: #18181b;
+    border-color: #27272a;
+  }
+}
+```
+
+```tsx
+<Popover.Positioner className="z-50">
+  <Popover.Popup className="w-64 rounded-[0.625rem] border border-zinc-200 bg-white p-4 text-zinc-900 shadow-xl data-[state=open]:animate-in dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+    <Popover.Title className="text-sm font-semibold">Settings</Popover.Title>
+    <Popover.Description className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      Adjust your preferences.
+    </Popover.Description>
+  </Popover.Popup>
+</Popover.Positioner>
+```
+
+</CodeTabs>
+
+## API reference
+
+Every part accepts a `render` prop for composition (see the **render prop**
+section below) and forwards unknown props to the element it renders. The
+Trigger, Positioner, Popup, Arrow, and Close also expose
+`data-state="open" | "closed"` and pass state to a render function.
+
+### Popover.Root
+
+Provides open state, ids, refs, and placement config to the parts. Renders only
+its children.
+
+| Prop           | Type                               | Default    | Description                                        |
+| -------------- | ---------------------------------- | ---------- | -------------------------------------------------- |
+| `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.   |
+| `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.              |
+| `onOpenChange` | `(open: boolean) => void`          | -          | Called when the popover requests an open or close. |
+| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'bottom'` | Preferred side of the anchor to place the popup.   |
+| `align`        | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                         |
+| `offset`       | `number`                           | `8`        | Gap in pixels between the anchor and the popup.    |
+| `children`     | `ComponentChildren`                | -          | The trigger, optional anchor, and positioner.      |
+
+### Popover.Trigger
+
+Toggles the popover on click and anchors it (unless a `Popover.Anchor` is
+present). Default element `<button type="button">`.
+
+| Prop       | Type                                    | Default | Description                                                                   |
+| ---------- | --------------------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`         | -       | Compose or replace the element.                                               |
+| `children` | `ComponentChildren`                     | -       | Trigger label.                                                                |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded to the element; a passed `onClick` runs before the popover toggles. |
+
+Sets `aria-haspopup="dialog"`, `aria-expanded`, `id`, `data-state`, and
+`aria-controls` (only while open, since the popup is mounted on open).
+
+### Popover.Anchor
+
+Optional. Positions the popover relative to this element instead of the trigger,
+for example to anchor a popover to a region while a separate button opens it.
+Default element `<span>`.
+
+| Prop       | Type                                  | Default | Description                     |
+| ---------- | ------------------------------------- | ------- | ------------------------------- |
+| `render`   | `RenderProp`                          | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                   | -       | The anchored content.           |
+| `...props` | `JSX.HTMLAttributes<HTMLSpanElement>` | -       | Forwarded to the element.       |
+
+### Popover.Positioner
+
+The fixed-positioned wrapper that Floating UI drives. Renders nothing until the
+popover is open (mount on open). Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
+browser supports the Popover API, the element is promoted to the top layer so it
+escapes ancestor clipping.
+
+### Popover.Popup
+
+The surface and focus target. Default element `<div>` with `role="dialog"`.
+
+| Prop         | Type                                 | Default | Description                                       |
+| ------------ | ------------------------------------ | ------- | ------------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                   |
+| `aria-label` | `string`                             | -       | Accessible name when there is no `Popover.Title`. |
+| `children`   | `ComponentChildren`                  | -       | Arrow, title, description, body, and controls.    |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                         |
+
+Sets `role="dialog"`, `id`, `tabindex="-1"`, `data-state`, `aria-labelledby`
+(the Title) or `aria-label`, and `aria-describedby` (only when a
+`Popover.Description` is present). Registers the Escape / outside-press dismissal
+and the focus move-in / return.
+
+### Popover.Arrow
+
+Optional pointer positioned from the Floating UI arrow data. Default element
+`<div>`. Place it on the correct edge with CSS keyed on `data-side`.
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp<{ side: Side }>`         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | Optional arrow content.         |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.       |
+
+Sets `data-side` and `position: absolute` with the computed offset.
+
+### Popover.Title
+
+The popover's accessible name, wired to the popup's `aria-labelledby`. Default
+element `<h2>`.
+
+| Prop       | Type                                     | Default | Description                     |
+| ---------- | ---------------------------------------- | ------- | ------------------------------- |
+| `render`   | `RenderProp`                             | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                      | -       | Title text.                     |
+| `...props` | `JSX.HTMLAttributes<HTMLHeadingElement>` | -       | Forwarded to the element.       |
+
+### Popover.Description
+
+Optional supporting text, wired to the popup's `aria-describedby` while it is
+rendered. Default element `<p>`.
+
+| Prop       | Type                                       | Default | Description                     |
+| ---------- | ------------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp`                               | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                        | -       | Description text.               |
+| `...props` | `JSX.HTMLAttributes<HTMLParagraphElement>` | -       | Forwarded to the element.       |
+
+### Popover.Close
+
+Closes the popover on click. Default element `<button type="button">`.
+
+| Prop       | Type                                    | Default | Description                                                                  |
+| ---------- | --------------------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`         | -       | Compose or replace the element.                                              |
+| `children` | `ComponentChildren`                     | -       | Button label.                                                                |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded to the element; a passed `onClick` runs before the popover closes. |
+
+### The render prop
+
+`render` lets a part borrow the behavior and ARIA wiring while rendering a
+different element. It accepts three forms:
+
+| Form       | Example                                              | Result                                                                                                               |
+| ---------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Element    | `render={<a href="/x" />}`                           | Clones the element, merging framework props (`class` is joined, `ref` is merged).                                    |
+| Tag string | `render="a"`                                         | Renders that tag with the framework props.                                                                           |
+| Function   | `render={(props, state) => <a {...props}>{...}</a>}` | Full control; `state` is `{ open }` for Trigger/Popup/Close, `{ side, align }` for Positioner, `{ side }` for Arrow. |
+
+### Primitives
+
+`@hono-preact/ui` exports the building blocks the parts use, for composing your
+own components. Several have their own page with examples:
+[usePosition](/docs/components/use-position),
+[useDismiss](/docs/components/use-dismiss),
+[useFocusReturn](/docs/components/use-focus-return),
+[useRender](/docs/components/use-render),
+[useControllableState](/docs/components/use-controllable-state), and
+[mergeRefs](/docs/components/merge-refs).
+
+| Export                 | Signature                                                                        | Description                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `usePosition`          | `usePosition(opts) => { side, align, arrowX, arrowY }`                           | Anchors a floating element with Floating UI and keeps it positioned on scroll/resize. |
+| `useDismiss`           | `useDismiss(opts) => void`                                                       | Registers an open layer for Escape / outside-press dismissal via a shared stack.      |
+| `useFocusReturn`       | `useFocusReturn(opts) => void`                                                   | Moves focus into a popup on open and returns it to the opener on close (no trap).     |
+| `useRender`            | `useRender(opts) => VNode`                                                       | Resolves a `render` prop to a VNode, merging framework-controlled props onto it.      |
+| `useControllableState` | `useControllableState({ value?, defaultValue, onChange? }) => [value, setValue]` | Controlled/uncontrolled state with a stable setter.                                   |
+| `mergeRefs`            | `mergeRefs(...refs) => (node) => void`                                           | Combines several refs into one callback ref.                                          |
+
+## Accessibility
+
+The popover is a non-modal disclosure: the trigger carries `aria-haspopup`,
+`aria-expanded`, and (while open) `aria-controls`. Give the popup an accessible
+name with a `Popover.Title` (wired through `aria-labelledby`) or by passing
+`aria-label` to `Popover.Popup`; a `Popover.Description` is wired through
+`aria-describedby` when present.
+
+- Focus moves into the popup when it opens (the first focusable element, or the
+  popup itself) and returns to the trigger when it closes.
+- Focus is **not** trapped: the popover is non-modal, so tabbing past the last
+  control moves into the rest of the page, and the page stays interactive.
+- Escape closes the popover; an outside pointer press closes it; nested overlays
+  close innermost-first.
+- Where the Popover API is supported the popup renders in the top layer; where it
+  is not, it renders inline with `position: fixed`. An ancestor with a
+  `transform`, `filter`, `contain`, or `will-change` can still clip the inline
+  fallback, so prefer not to anchor a popover inside one.

@@ -51,4 +51,23 @@ describe('docs nav', () => {
     );
     expect(new Set(routes).size).toBe(routes.length);
   });
+
+  it('lists Popover and Tooltip under Overlays', () => {
+    const components = nav.find((a) => a.id === 'components')!;
+    const overlays = components.sections.find((s) => s.heading === 'Overlays')!;
+    const routes = overlays.entries.map((e) => e.route);
+    expect(routes).toContain('/docs/components/popover');
+    expect(routes).toContain('/docs/components/tooltip');
+  });
+
+  it('lists usePosition, useDismiss, and useFocusReturn under Foundations', () => {
+    const components = nav.find((a) => a.id === 'components')!;
+    const foundations = components.sections.find(
+      (s) => s.heading === 'Foundations'
+    )!;
+    const routes = foundations.entries.map((e) => e.route);
+    expect(routes).toContain('/docs/components/use-position');
+    expect(routes).toContain('/docs/components/use-dismiss');
+    expect(routes).toContain('/docs/components/use-focus-return');
+  });
 });
