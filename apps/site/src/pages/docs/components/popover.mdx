@@ -27,6 +27,7 @@ export function Settings() {
       <Popover.Trigger>Open popover</Popover.Trigger>
       <Popover.Positioner>
         <Popover.Popup>
+          <Popover.Arrow />
           <Popover.Title>Settings</Popover.Title>
           <Popover.Description>Adjust your preferences.</Popover.Description>
           <Popover.Close>Done</Popover.Close>
@@ -70,6 +71,37 @@ demo above uses the styles below; copy a starting point in either flavor:
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+/* The arrow is a rotated square; the component sets position:absolute and the
+   cross-axis offset, the per-side rules place it on the edge facing the anchor.
+   The Positioner already clears the UA top-layer styles, so nothing else is
+   needed for the shadow to show. */
+.docs-popover__arrow {
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+}
+.docs-popover__arrow[data-side='bottom'] {
+  top: -5px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.docs-popover__arrow[data-side='top'] {
+  bottom: -5px;
+  border-left: 0;
+  border-top: 0;
+}
+.docs-popover__arrow[data-side='right'] {
+  left: -5px;
+  border-top: 0;
+  border-right: 0;
+}
+.docs-popover__arrow[data-side='left'] {
+  right: -5px;
+  border-bottom: 0;
+  border-left: 0;
 }
 ```
 
@@ -227,6 +259,7 @@ different element. It accepts three forms:
 own components. Several have their own page with examples:
 [usePosition](/docs/components/use-position),
 [useDismiss](/docs/components/use-dismiss),
+[useFocusReturn](/docs/components/use-focus-return),
 [useRender](/docs/components/use-render),
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).

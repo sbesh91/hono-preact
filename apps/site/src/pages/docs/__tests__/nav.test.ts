@@ -60,7 +60,7 @@ describe('docs nav', () => {
     expect(routes).toContain('/docs/components/tooltip');
   });
 
-  it('lists usePosition and useDismiss under Foundations', () => {
+  it('lists usePosition, useDismiss, and useFocusReturn under Foundations', () => {
     const components = nav.find((a) => a.id === 'components')!;
     const foundations = components.sections.find(
       (s) => s.heading === 'Foundations'
@@ -68,5 +68,6 @@ describe('docs nav', () => {
     const routes = foundations.entries.map((e) => e.route);
     expect(routes).toContain('/docs/components/use-position');
     expect(routes).toContain('/docs/components/use-dismiss');
+    expect(routes).toContain('/docs/components/use-focus-return');
   });
 });

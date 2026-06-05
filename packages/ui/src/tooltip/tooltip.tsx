@@ -235,7 +235,19 @@ export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
       ref: ctx.floatingRef,
       'data-side': position.side,
       'data-align': position.align,
-      style: { position: 'fixed' },
+      // Neutralize the UA [popover] rule that applies in the top layer
+      // (overflow/inset/margin/border/padding/background): the UA
+      // `overflow: auto` would clip the popup's box-shadow and `inset: 0`
+      // would fight the computed left/top.
+      style: {
+        position: 'fixed',
+        inset: 'auto',
+        margin: 0,
+        overflow: 'visible',
+        border: 0,
+        padding: 0,
+        background: 'transparent',
+      },
     },
     state: { side: position.side, align: position.align },
     children,

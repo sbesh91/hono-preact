@@ -136,6 +136,10 @@ export const nav: NavArea[] = [
           { title: 'mergeRefs', route: '/docs/components/merge-refs' },
           { title: 'usePosition', route: '/docs/components/use-position' },
           { title: 'useDismiss', route: '/docs/components/use-dismiss' },
+          {
+            title: 'useFocusReturn',
+            route: '/docs/components/use-focus-return',
+          },
         ],
       },
     ],

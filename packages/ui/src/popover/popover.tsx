@@ -214,9 +214,21 @@ export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
       ref: ctx.floatingRef,
       'data-side': position.side,
       'data-align': position.align,
-      // The Positioner is a framework-owned layout wrapper: style it via class
-      // (z-index etc.), not the style prop, which is reserved for positioning.
-      style: { position: 'fixed' },
+      // The Positioner is a framework-owned layout wrapper (style the Popup, not
+      // this). Besides positioning, the style neutralizes the UA [popover]
+      // rule that applies once the element is promoted to the top layer
+      // (overflow/inset/margin/border/padding/background): without this the UA
+      // `overflow: auto` clips the popup's box-shadow and `inset: 0` fights the
+      // computed left/top.
+      style: {
+        position: 'fixed',
+        inset: 'auto',
+        margin: 0,
+        overflow: 'visible',
+        border: 0,
+        padding: 0,
+        background: 'transparent',
+      },
     },
     state: { side: position.side, align: position.align },
     children,

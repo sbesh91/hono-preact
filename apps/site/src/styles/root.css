@@ -827,15 +827,54 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     transform: translateY(-4px);
   }
 }
-.docs-popover__title {
+/* Scope the popup typography by element so it overrides the .mdx-content prose
+   h2/p (a BEM class would lose the specificity tie to `.mdx-content h2`). */
+.docs-popover h2 {
   font-size: 0.95rem;
   font-weight: 600;
   margin: 0 0 0.25rem;
 }
-.docs-popover__desc {
-  margin: 0 0 1rem;
+.docs-popover p {
+  margin: 0 0 0.75rem;
   font-size: 0.875rem;
   color: var(--muted);
+}
+.docs-popover .docs-placement__group {
+  margin-bottom: 0.5rem;
+}
+.docs-popover-close {
+  margin-top: 0.25rem;
+}
+/* Arrow: a small square rotated into a diamond. The component sets it
+   position:absolute and the cross-axis offset (left/top) from Floating UI; the
+   per-side rules below set the static-side offset so it straddles the edge
+   opposite the resolved side, showing the two outer borders as a caret. */
+.docs-popover__arrow {
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+.docs-popover__arrow[data-side='bottom'] {
+  top: -5px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.docs-popover__arrow[data-side='top'] {
+  bottom: -5px;
+  border-left: 0;
+  border-top: 0;
+}
+.docs-popover__arrow[data-side='right'] {
+  left: -5px;
+  border-top: 0;
+  border-right: 0;
+}
+.docs-popover__arrow[data-side='left'] {
+  right: -5px;
+  border-bottom: 0;
+  border-left: 0;
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-popover {
@@ -888,8 +927,80 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     opacity: 0;
   }
 }
+.docs-tooltip__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: var(--foreground);
+}
+.docs-tooltip__arrow[data-side='bottom'] {
+  top: -4px;
+}
+.docs-tooltip__arrow[data-side='top'] {
+  bottom: -4px;
+}
+.docs-tooltip__arrow[data-side='right'] {
+  left: -4px;
+}
+.docs-tooltip__arrow[data-side='left'] {
+  right: -4px;
+}
 @media (prefers-reduced-motion: reduce) {
   .docs-tooltip {
     animation: none;
   }
+}
+
+/* Placement explorer controls shared by the Popover and Tooltip demos. */
+.docs-placement {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+}
+.docs-placement__controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+}
+.docs-placement__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.docs-placement__option {
+  appearance: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-placement__option:hover {
+  color: var(--foreground);
+}
+.docs-placement__option[data-active='true'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: transparent;
+}
+.docs-placement__option:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-placement__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 7rem;
 }
