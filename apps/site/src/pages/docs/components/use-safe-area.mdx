@@ -1,0 +1,66 @@
+# useSafeArea
+
+`useSafeArea` keeps a hover-opened floating element open while the pointer travels
+the empty gap toward it. When the pointer leaves the trigger it would normally
+fire `pointerleave` and close the element before the pointer arrives. This hook
+watches `pointermove` and treats motion through a safe corridor, a quad spanning
+the trigger's edge to the floating element's near edge, as intent to reach the
+element, so it stays open. Leaving the corridor, or dwelling in it past a short
+grace period, closes it.
+
+See also: [usePosition](/docs/components/use-position), [useDismiss](/docs/components/use-dismiss), [Tooltip](/docs/components/tooltip).
+
+## Signature
+
+```ts
+import { useSafeArea } from '@hono-preact/ui';
+
+function useSafeArea(opts: UseSafeAreaOptions): void;
+
+interface UseSafeAreaOptions {
+  enabled: boolean; // typically the open state of a hover-driven element
+  anchorRef: RefObject<HTMLElement>; // the trigger the corridor starts from
+  floatingRef: RefObject<HTMLElement>; // the floating element it points at
+  onClose: () => void; // pointer left the corridor, or the grace lapsed
+  graceMs?: number; // default 300
+}
+```
+
+## Options
+
+| Option        | Type                     | Default | Notes                                                                                          |
+| ------------- | ------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
+| `enabled`     | `boolean`                | none    | Watch the pointer only while the element is open.                                              |
+| `anchorRef`   | `RefObject<HTMLElement>` | none    | The trigger the corridor starts from.                                                          |
+| `floatingRef` | `RefObject<HTMLElement>` | none    | The floating element the corridor points at.                                                   |
+| `onClose`     | `() => void`             | none    | Called when the pointer leaves the corridor or the grace lapses.                               |
+| `graceMs`     | `number`                 | `300`   | Max time the pointer may dwell in the corridor without reaching either element before closing. |
+
+It injects no DOM: it listens to `pointermove` while enabled and runs a
+point-in-polygon test against the live rects of the two elements, so nothing
+under the corridor is blocked from interaction. The corridor follows the elements
+through scroll, resize, and a flipped placement. A pointer session begins only
+once the pointer has been over the trigger or the floating element, so an element
+opened by keyboard focus is not closed by unrelated mouse movement (the consumer
+closes it on blur or Escape instead). Touch pointers are ignored.
+
+## Example
+
+```tsx
+import { useSafeArea } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
+
+function HoverCard({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const floatingRef = useRef<HTMLDivElement>(null);
+
+  useSafeArea({ enabled: open, anchorRef, floatingRef, onClose });
+
+  return (
+    <>
+      <button ref={anchorRef}>Profile</button>
+      {open && <div ref={floatingRef}>card content</div>}
+    </>
+  );
+}
+```

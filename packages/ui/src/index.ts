@@ -18,6 +18,7 @@ export {
   useFocusReturn,
   type UseFocusReturnOptions,
 } from './use-focus-return.js';
+export { useSafeArea, type UseSafeAreaOptions } from './use-safe-area.js';
 export {
   Dialog,
   DialogRoot,
