@@ -150,3 +150,65 @@ export function MenuTrigger(props: MenuTriggerProps): VNode {
     children,
   });
 }
+
+export type MenuItemProps = {
+  render?: RenderProp<{ disabled: boolean; highlighted: boolean }>;
+  disabled?: boolean;
+  // Activation handler. Call event.preventDefault() to keep the menu open.
+  onSelect?: (event: Event) => void;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect'>;
+
+export function MenuItem(props: MenuItemProps): VNode {
+  const {
+    render,
+    children,
+    disabled = false,
+    onSelect,
+    onClick,
+    onPointerEnter,
+    ...rest
+  } = props;
+  const ctx = useMenuContext('Item');
+  const id = useId();
+  const highlighted = ctx.activeId === id;
+
+  const activate = () => {
+    const event = new Event('menu-select', { cancelable: true });
+    onSelect?.(event);
+    if (!event.defaultPrevented) ctx.closeAll();
+  };
+
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (disabled) return;
+    activate();
+  };
+  const handlePointerEnter = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
+    onPointerEnter?.(event);
+    if (disabled) return;
+    ctx.setActiveId(id);
+    event.currentTarget.focus();
+  };
+
+  return useRender<{ disabled: boolean; highlighted: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      id,
+      role: 'menuitem',
+      'data-menu-item': '',
+      tabIndex: highlighted ? 0 : -1,
+      'aria-disabled': disabled ? 'true' : undefined,
+      'data-disabled': disabled ? '' : undefined,
+      'data-highlighted': highlighted ? '' : undefined,
+      onClick: handleClick,
+      onPointerEnter: handlePointerEnter,
+    },
+    state: { disabled, highlighted },
+    children,
+  });
+}
