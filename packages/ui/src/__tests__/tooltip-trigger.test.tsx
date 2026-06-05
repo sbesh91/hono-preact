@@ -42,13 +42,21 @@ describe('Tooltip Trigger', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
-  it('closes after closeDelay on pointer leave', () => {
+  it('cancels a pending open when the pointer leaves before the delay', () => {
     const onOpenChange = vi.fn();
     const { getByText } = render(<Harness onOpenChange={onOpenChange} />);
-    fireEvent.focus(getByText('Hover me')); // open immediately
-    onOpenChange.mockClear();
+    fireEvent.pointerEnter(getByText('Hover me'), { pointerType: 'mouse' });
     fireEvent.pointerLeave(getByText('Hover me'), { pointerType: 'mouse' });
-    vi.advanceTimersByTime(100);
+    vi.advanceTimersByTime(1000);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('closes on blur', () => {
+    const onOpenChange = vi.fn();
+    const { getByText } = render(<Harness onOpenChange={onOpenChange} />);
+    fireEvent.focus(getByText('Hover me'));
+    onOpenChange.mockClear();
+    fireEvent.blur(getByText('Hover me'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
