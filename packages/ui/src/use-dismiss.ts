@@ -8,11 +8,15 @@ export interface UseDismissOptions {
   refs: Array<RefObject<HTMLElement>>; // stable RefObjects treated as "inside"
   escape?: boolean; // default true
   outsidePress?: boolean; // default true
+  // Dismiss-tree node id for menus. Omitted = single-node layer (Popover/Tooltip).
+  id?: string;
+  // Parent menu's id for submenu coordination. Omitted = tree root.
+  parentId?: string | null;
   onDismiss: (reason: DismissReason) => void;
 }
 
 export function useDismiss(opts: UseDismissOptions): void {
-  const { enabled, refs, escape = true, outsidePress = true, onDismiss } = opts;
+  const { enabled, refs, escape = true, outsidePress = true, id, parentId, onDismiss } = opts;
 
   // Forward to the latest onDismiss without re-registering the layer.
   const onDismissRef = useRef(onDismiss);
@@ -32,7 +36,9 @@ export function useDismiss(opts: UseDismissOptions): void {
       refs: refsRef.current,
       escape,
       outsidePress,
+      id,
+      parentId,
       onDismiss: (reason) => onDismissRef.current(reason),
     });
-  }, [enabled, escape, outsidePress]);
+  }, [enabled, escape, outsidePress, id, parentId]);
 }
