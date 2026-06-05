@@ -112,21 +112,21 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 30356,
-      "actions": 16159,
-      "core": 37334,
-      "components": 37032,
+      "app": 32330,
+      "actions": 16442,
+      "core": 37665,
+      "components": 37702,
       "guards": 2196,
-      "middleware": 12572,
+      "middleware": 12845,
       "vendor": 8302,
-      "prefetch": 4263,
-      "loaders": 13820,
-      "streaming": 6634,
-      "transitions": 4430
+      "prefetch": 4534,
+      "loaders": 14246,
+      "streaming": 6743,
+      "transitions": 5087
     },
-    "total": 173098,
-    "unmatched": 17,
-    "fileCount": 64
+    "total": 178092,
+    "unmatched": 18,
+    "fileCount": 65
   },
   "sectionC": {
     "ui-core": {
