@@ -1,0 +1,78 @@
+export {
+  MenuRoot,
+  MenuTrigger,
+  MenuPositioner,
+  MenuPopup,
+  MenuItem,
+  MenuCheckboxItem,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuArrow,
+  type MenuRootProps,
+  type MenuTriggerProps,
+  type MenuPositionerProps,
+  type MenuPopupProps,
+  type MenuItemProps,
+  type MenuCheckboxItemProps,
+  type MenuRadioGroupProps,
+  type MenuRadioItemProps,
+  type MenuSeparatorProps,
+  type MenuGroupProps,
+  type MenuGroupLabelProps,
+  type MenuArrowProps,
+} from './menu.js';
+
+export {
+  SubmenuRoot,
+  SubmenuTrigger,
+  SubmenuPositioner,
+  SubmenuPopup,
+  type SubmenuRootProps,
+  type SubmenuTriggerProps,
+  type SubmenuPositionerProps,
+  type SubmenuPopupProps,
+} from './submenu.js';
+
+import {
+  MenuRoot,
+  MenuTrigger,
+  MenuPositioner,
+  MenuPopup,
+  MenuItem,
+  MenuCheckboxItem,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuArrow,
+} from './menu.js';
+
+import {
+  SubmenuRoot,
+  SubmenuTrigger,
+  SubmenuPositioner,
+  SubmenuPopup,
+} from './submenu.js';
+
+export const Menu = {
+  Root: MenuRoot,
+  Trigger: MenuTrigger,
+  Positioner: MenuPositioner,
+  Popup: MenuPopup,
+  Item: MenuItem,
+  CheckboxItem: MenuCheckboxItem,
+  RadioGroup: MenuRadioGroup,
+  RadioItem: MenuRadioItem,
+  Separator: MenuSeparator,
+  Group: MenuGroup,
+  GroupLabel: MenuGroupLabel,
+  Arrow: MenuArrow,
+  SubmenuRoot,
+  SubmenuTrigger,
+  SubmenuPositioner,
+  SubmenuPopup,
+};
