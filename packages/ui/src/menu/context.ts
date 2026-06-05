@@ -17,7 +17,10 @@ export interface MenuContextValue {
   // Dismiss-tree identity.
   dismissId: string;
   parentDismissId: string | null;
-  anchorRef: RefObject<HTMLElement>; // trigger (Menu) or unused (ContextMenu)
+  // Position anchor for Menu (the Trigger). For ContextMenu positioning uses
+  // getAnchorRect instead, so anchorRef there is the dismiss "inside" region
+  // (a press on the trigger area is not an outside-press), not the anchor.
+  anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>; // Positioner element
   popupRef: RefObject<HTMLElement>; // Popup surface (focus + nav root)
   arrowRef: RefObject<HTMLElement>;
