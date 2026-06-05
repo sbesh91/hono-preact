@@ -17,4 +17,10 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.Menu.CheckboxItem).toBe('function');
     expect(typeof ui.Menu.SubmenuTrigger).toBe('function');
   });
+
+  it('exposes the ContextMenu namespace', () => {
+    expect(typeof ui.ContextMenu.Root).toBe('function');
+    expect(typeof ui.ContextMenu.Trigger).toBe('function');
+    expect(typeof ui.ContextMenu.Item).toBe('function');
+  });
 });

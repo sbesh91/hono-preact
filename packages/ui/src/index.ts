@@ -103,3 +103,10 @@ export {
   type SubmenuPositionerProps,
   type SubmenuPopupProps,
 } from './menu/index.js';
+export {
+  ContextMenu,
+  ContextMenuRoot,
+  ContextMenuTrigger,
+  type ContextMenuRootProps,
+  type ContextMenuTriggerProps,
+} from './context-menu/index.js';

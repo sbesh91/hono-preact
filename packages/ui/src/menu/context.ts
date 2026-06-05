@@ -37,6 +37,9 @@ export interface MenuContextValue {
   setPosition: (p: PositionState) => void;
   // Context menu only: positions at the pointer. Undefined for Menu.
   getAnchorRect?: ClientRectGetter;
+  // Context menu only: open the menu at the given pointer coordinates. Undefined
+  // for the button-triggered Menu.
+  openAt?: (x: number, y: number) => void;
 }
 
 export const MenuContext = createContext<MenuContextValue | null>(null);
