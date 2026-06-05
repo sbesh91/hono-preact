@@ -9,6 +9,8 @@ import {
   shift,
   arrow as arrowMiddleware,
   type Placement,
+  type VirtualElement,
+  type ClientRectObject,
 } from '@floating-ui/dom';
 
 export type Side = 'top' | 'right' | 'bottom' | 'left';
@@ -46,11 +48,20 @@ export function sideAlignFromPlacement(placement: Placement): {
   return { side, align };
 }
 
+function defaultRect(): ClientRectObject {
+  return { width: 0, height: 0, x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0 };
+}
+
 export interface UsePositionOptions {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
   arrowRef?: RefObject<HTMLElement>;
+  // When provided, positions against this rect (a floating-ui virtual element)
+  // instead of anchorRef.current. Used by the context menu to anchor at the
+  // pointer. Returning null yields a zero rect at the origin (defaultRect), so
+  // computePosition always receives a valid reference.
+  getAnchorRect?: () => ClientRectObject | null;
   side?: Side; // default 'bottom'
   align?: Align; // default 'center'
   offset?: number; // gap in px, default 8
@@ -69,6 +80,7 @@ export function usePosition(opts: UsePositionOptions): PositionState {
     anchorRef,
     floatingRef,
     arrowRef,
+    getAnchorRect,
     side = 'bottom',
     align = 'center',
     offset = 8,
@@ -88,9 +100,13 @@ export function usePosition(opts: UsePositionOptions): PositionState {
   stateRef.current = state;
 
   useLayoutEffect(() => {
-    const anchor = anchorRef.current;
     const floating = floatingRef.current;
-    if (!open || !anchor || !floating) return;
+    if (!open || !floating) return;
+    const virtual: VirtualElement | null = getAnchorRect
+      ? { getBoundingClientRect: () => getAnchorRect() ?? defaultRect() }
+      : null;
+    const reference: HTMLElement | VirtualElement | null = virtual ?? anchorRef.current;
+    if (!reference) return;
 
     // computePosition is async; guard its resolution so a promise still in
     // flight when the effect tears down (the floating element unmounted) does
@@ -106,7 +122,7 @@ export function usePosition(opts: UsePositionOptions): PositionState {
       if (arrowRef?.current) {
         middleware.push(arrowMiddleware({ element: arrowRef.current }));
       }
-      computePosition(anchor, floating, {
+      computePosition(reference, floating, {
         strategy: 'fixed',
         placement: placementFor(side, align),
         middleware,
@@ -136,14 +152,14 @@ export function usePosition(opts: UsePositionOptions): PositionState {
       });
     };
 
-    const stopAutoUpdate = autoUpdate(anchor, floating, update);
+    const stopAutoUpdate = autoUpdate(reference, floating, update);
     return () => {
       cancelled = true;
       stopAutoUpdate();
     };
     // anchorRef/floatingRef/arrowRef are stable RefObjects; depend on the
     // values that change the computation.
-  }, [open, side, align, offset]);
+  }, [open, side, align, offset, getAnchorRect]);
 
   return state;
 }
