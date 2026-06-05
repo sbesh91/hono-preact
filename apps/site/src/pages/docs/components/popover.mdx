@@ -38,10 +38,6 @@ export function Settings() {
 }
 ```
 
-Focus moves into the popup on open and returns to the trigger on close. Tab is
-not trapped: tabbing past the last control moves into the rest of the page.
-Escape and an outside press both close it.
-
 ## Styling
 
 Parts expose `data-state="open" | "closed"`; the Positioner and Arrow also
@@ -321,3 +317,7 @@ name with a `Popover.Title` (wired through `aria-labelledby`) or by passing
   is not, it renders inline with `position: fixed`. An ancestor with a
   `transform`, `filter`, `contain`, or `will-change` can still clip the inline
   fallback, so prefer not to anchor a popover inside one.
+
+Focus moves into the popup on open and returns to the trigger on close. Tab is
+not trapped: tabbing past the last control moves into the rest of the page.
+Escape and an outside press both close it.

@@ -1,8 +1,56 @@
 # usePosition
 
-`usePosition` is the positioning binding both Popover and Tooltip use. It wraps
+`usePosition` is the positioning binding [Popover](/docs/components/popover) and [Tooltip](/docs/components/tooltip) use. It wraps
 [Floating UI](https://floating-ui.com) and keeps a floating element anchored to
 a reference element, updating on scroll and resize.
+
+## Signature
+
+```ts
+import { usePosition } from '@hono-preact/ui';
+
+function usePosition(opts: UsePositionOptions): PositionState;
+
+interface UsePositionOptions {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement>;
+  floatingRef: RefObject<HTMLElement>;
+  arrowRef?: RefObject<HTMLElement>;
+  side?: 'top' | 'right' | 'bottom' | 'left'; // default 'bottom'
+  align?: 'start' | 'center' | 'end'; // default 'center'
+  offset?: number; // gap in px, default 8
+}
+
+interface PositionState {
+  side: 'top' | 'right' | 'bottom' | 'left';
+  align: 'start' | 'center' | 'end';
+  arrowX: number | null;
+  arrowY: number | null;
+}
+```
+
+## Options
+
+| Option        | Type                                     | Default    | Notes                             |
+| ------------- | ---------------------------------------- | ---------- | --------------------------------- |
+| `open`        | `boolean`                                | none       | Positioning runs only while open. |
+| `anchorRef`   | `RefObject`                              | none       | The reference element.            |
+| `floatingRef` | `RefObject`                              | none       | The element being positioned.     |
+| `arrowRef`    | `RefObject`                              | optional   | Enables arrow positioning.        |
+| `side`        | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side.                   |
+| `align`       | `'start' \| 'center' \| 'end'`           | `'center'` | Alignment along the side.         |
+| `offset`      | `number`                                 | `8`        | Gap in pixels.                    |
+
+## Returns
+
+| Field    | Type                                     | Description                             |
+| -------- | ---------------------------------------- | --------------------------------------- |
+| `side`   | `'top' \| 'right' \| 'bottom' \| 'left'` | Resolved side after collision handling. |
+| `align`  | `'start' \| 'center' \| 'end'`           | Resolved alignment.                     |
+| `arrowX` | `number \| null`                         | Arrow x offset in px, or null.          |
+| `arrowY` | `number \| null`                         | Arrow y offset in px, or null.          |
+
+## Example
 
 ```tsx
 import { usePosition } from '@hono-preact/ui';
@@ -31,19 +79,3 @@ function Anchored({ open }: { open: boolean }) {
   );
 }
 ```
-
-## Options
-
-| Option        | Type                                     | Default    | Notes                             |
-| ------------- | ---------------------------------------- | ---------- | --------------------------------- |
-| `open`        | `boolean`                                | none       | Positioning runs only while open. |
-| `anchorRef`   | `RefObject`                              | none       | The reference element.            |
-| `floatingRef` | `RefObject`                              | none       | The element being positioned.     |
-| `arrowRef`    | `RefObject`                              | optional   | Enables arrow positioning.        |
-| `side`        | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side.                   |
-| `align`       | `'start' \| 'center' \| 'end'`           | `'center'` | Alignment along the side.         |
-| `offset`      | `number`                                 | `8`        | Gap in pixels.                    |
-
-It returns the resolved `side`, `align`, and arrow `arrowX` / `arrowY` (after
-any flip or shift), so the floating element can render `data-side` /
-`data-align` and position an arrow.
