@@ -37,6 +37,15 @@ export const serverActions = {
 
 `defineAction` is a no-op at runtime; it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` and `<Form>` can infer the payload and result types without codegen.
 
+### `defineAction` options
+
+Pass a second argument to `defineAction(fn, opts)` to configure per-action behavior:
+
+| Option      | Type              | Default | Description                                 |
+| ----------- | ----------------- | ------- | ------------------------------------------- |
+| `use`       | `ActionUse`       | none    | Per-action middleware and stream observers. |
+| `timeoutMs` | `number \| false` | `30000` | Per-action deadline; `false` disables it.   |
+
 The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `AbortSignal` tied to the HTTP request) and `c` (the request's Hono `Context`). Use `ctx.c` to read cookies (`getCookie`), set response headers, or reach Hono `Bindings` via `ctx.c.env`.
 
 ## Registering the handler
@@ -176,13 +185,13 @@ const Movies = () => {
 
 ### Options
 
-| Option       | Type                                      | Description                                                                                                                                                                                                                                      |
-| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of `LoaderRef`s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
-| `onMutate`   | `(payload) => unknown`                    | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback.                                                                                                                                      |
-| `onSuccess`  | `(data) => void`                          | Called with the action's return value on success.                                                                                                                                                                                                |
-| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot on failure.                                                                                                                                                                                    |
-| `onChunk`    | `(chunk: string) => void`                 | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                             |
+| Option       | Type                                      | Description                                                                                                                                                                                                                                                       |
+| ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of [`LoaderRef`](/docs/loaders)s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
+| `onMutate`   | `(payload) => unknown`                    | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback.                                                                                                                                                       |
+| `onSuccess`  | `(data) => void`                          | Called with the action's return value on success.                                                                                                                                                                                                                 |
+| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot on failure.                                                                                                                                                                                                     |
+| `onChunk`    | `(chunk: string) => void`                 | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                                              |
 
 ### Return value
 

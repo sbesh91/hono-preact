@@ -237,3 +237,9 @@ curl -N -X POST http://localhost:5173/movies \
 ```
 
 Each chunk arrives as a `data:` line followed by a blank line (standard SSE framing). The final result for actions arrives as a `result:` line. Parsing is handled automatically by the framework on the client.
+
+## See also
+
+- [Server Loaders](/docs/loaders): non-streaming loaders.
+- [Server Actions](/docs/actions): streaming actions.
+- [Loading States](/docs/loading-states): fallbacks while a stream fills.

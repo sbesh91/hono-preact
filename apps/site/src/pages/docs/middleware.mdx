@@ -198,6 +198,16 @@ Streaming loaders and actions accept `defineStreamObserver` entries in the same 
 
 Failure isolation: if one observer's callback throws, the framework logs it and continues firing the remaining observers and the stream itself. Observers cannot break the stream.
 
+### Callbacks
+
+| Callback  | Signature                           | Description                            |
+| --------- | ----------------------------------- | -------------------------------------- |
+| `onStart` | `(ctx) => void`                     | The stream opened.                     |
+| `onChunk` | `(ctx, chunk, index) => void`       | Each chunk, with its zero-based index. |
+| `onEnd`   | `(ctx, { chunks, result }) => void` | The stream completed.                  |
+| `onError` | `(ctx, err, { chunks }) => void`    | The stream threw.                      |
+| `onAbort` | `(ctx, { chunks }) => void`         | The client navigated away or aborted.  |
+
 ```ts
 import { defineStreamObserver, defineLoader } from 'hono-preact';
 

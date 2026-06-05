@@ -190,6 +190,7 @@ Prefer `useOptimistic` or `useOptimisticAction` when the optimistic state is loc
 `useOptimistic` and `useOptimisticAction` accept `{ transition: true }` to
 wrap settle and revert state changes in
 [`document.startViewTransition`](https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition).
+See [View Transitions](/docs/view-transitions) for the full toolkit of named elements, lifecycle hooks, and direction-driven types.
 The initial optimistic update is never wrapped so it paints in the same
 frame. When `startViewTransition` is not available (older browsers or SSR),
 the option is a no-op.

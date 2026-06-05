@@ -33,6 +33,15 @@ import { ViewTransitionName } from 'hono-preact';
 
 The matching `name` between list and detail tells the browser to animate the elements as a continuous group.
 
+### Props
+
+| Prop         | Type                                    | Default  | Description                                                        |
+| ------------ | --------------------------------------- | -------- | ------------------------------------------------------------------ |
+| `name`       | `string \| null \| undefined`           | required | The `view-transition-name` to apply; `null`/`undefined` clears it. |
+| `groupClass` | `string \| string[]`                    | none     | Adds a `view-transition-class` for grouping.                       |
+| `render`     | `VNode \| string \| ((props) => VNode)` | `<div>`  | The element to render: a tag string, an element, or a function.    |
+| `children`   | `ComponentChildren`                     | none     | Content.                                                           |
+
 For hand-written components, the `useViewTransitionName` hook returns a ref callback:
 
 ```tsx
@@ -73,7 +82,18 @@ useViewTransitionLifecycle({
 });
 ```
 
-The event carries `to`, `from`, `direction` (`'initial' | 'push' | 'replace' | 'back' | 'forward'`), `types` (mutable), and a `set(key, value)` / `get(key)` stash to carry data from one phase to the next.
+Each callback receives a `ViewTransitionEvent`:
+
+| Member                         | Type                                                      | Description                                |
+| ------------------------------ | --------------------------------------------------------- | ------------------------------------------ |
+| `to`                           | `string`                                                  | Destination path.                          |
+| `from`                         | `string \| undefined`                                     | Source path; `undefined` on initial load.  |
+| `direction`                    | `'initial' \| 'push' \| 'replace' \| 'back' \| 'forward'` | Navigation direction.                      |
+| `types`                        | `string[]`                                                | Mutable list of transition type names.     |
+| `skip()`                       | `() => void`                                              | Skip this transition.                      |
+| `set(key, value)` / `get(key)` | method                                                    | Per-event scratch shared across callbacks. |
+
+The four callbacks (`onBeforeTransition`, `onBeforeSwap`, `onAfterSwap`, `onAfterTransition`) each have the signature `(event) => void | Promise<void>`.
 
 ## Direction-driven CSS via types
 
@@ -137,3 +157,8 @@ import { Persist } from 'hono-preact';
 The optional `viewTransitionName` makes the persisted shell animate as a single unit across page transitions.
 
 SSR renders persisted children inline at their declared position; persistence kicks in after the first client-side navigation.
+
+## See also
+
+- [Optimistic UI](/docs/optimistic-ui): the `transition` option on `useOptimistic` and `useOptimisticAction` wraps mutations in a view transition.
+- [Loading States](/docs/loading-states): coordinating loading indicators with transitions.

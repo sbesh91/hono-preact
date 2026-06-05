@@ -1,3 +1,5 @@
+import { CodeTabs } from '../../components/docs/CodeTabs.js';
+
 # Vite Configuration
 
 The `hono-preact/vite` subpath exports a `honoPreact()` plugin that configures Vite for the framework's two-pass build and dev server. Your `vite.config.ts` only needs to wire in the plugins that are specific to your application.
@@ -16,37 +18,50 @@ export default defineConfig({
 
 `adapter` is required; `honoPreact()` throws a clear error if it is omitted. The plugin auto-includes `@preact/preset-vite` internally, so you don't import it yourself. The framework ships two adapters today: `cloudflareAdapter()` for Cloudflare Workers, imported from `hono-preact/adapter-cloudflare`, and `nodeAdapter()` for Node.js (via `@hono/node-server`), imported from `hono-preact/adapter-node`. Each adapter supplies its own Vite plugins and entry wrapper, so the framework core stays target-agnostic.
 
+## honoPreact(options)
+
+| Option        | Type                | Default                        | Description                                                       |
+| ------------- | ------------------- | ------------------------------ | ----------------------------------------------------------------- |
+| `adapter`     | `HonoPreactAdapter` | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`. |
+| `layout`      | `string`            | `'src/Layout.tsx'`             | Root layout component path.                                       |
+| `routes`      | `string`            | `'src/routes.ts'`              | Route table path.                                                 |
+| `api`         | `string`            | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.           |
+| `appConfig`   | `string`            | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.              |
+| `clientEntry` | `string`            | `'virtual:hono-preact/client'` | Client entry module id.                                           |
+
 ## What the plugin handles
 
 `honoPreact()` configures everything the framework requires:
 
-| Concern              | What it sets                                                                                                                                                     |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso`                                                                                     |
-| Build target         | `build.target: 'esnext'`, `build.assetsDir: 'static'`                                                                                                            |
-| Client build output  | `static/client.js` entry, hashed chunk and asset filenames in the `client` environment                                                                           |
-| Deployment target    | Delegated to the configured adapter (Cloudflare Workers, Node.js, etc.), which supplies its own Vite plugins and entry wrapper                                   |
-| Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle                                       |
-| Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                           |
-| Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                |
-| Guard strip          | `guardStripPlugin` rewrites opposite-environment middleware bodies to no-ops so server-only code tree-shakes out of the client bundle                            |
-| Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw |
+| Concern              | What it sets                                                                                                                                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preact deduplication | `resolve.dedupe` for `preact`, `preact/compat`, `preact/hooks`, `preact-iso`                                                                                                                              |
+| Build target         | `build.target: 'esnext'`, `build.assetsDir: 'static'`                                                                                                                                                     |
+| Client build output  | `static/client.js` entry, hashed chunk and asset filenames in the `client` environment                                                                                                                    |
+| Deployment target    | Delegated to the configured adapter (Cloudflare Workers, Node.js, etc.), which supplies its own Vite plugins and entry wrapper                                                                            |
+| Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle (see [Project Structure](/docs/structure) for the `.server.*` file convention) |
+| Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                                                                    |
+| Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                                                         |
+| Guard strip          | `guardStripPlugin` rewrites opposite-environment middleware bodies to no-ops so server-only code tree-shakes out of the client bundle                                                                     |
+| Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw                                          |
 
 ## Peer dependencies
 
 Peer deps depend on the adapter you pick. Install the ones that match your deployment target.
 
-For Cloudflare Workers:
+<CodeTabs labels={['Cloudflare Workers', 'Node.js']}>
 
 ```bash
 npm install -D @cloudflare/vite-plugin wrangler
 ```
 
-For Node.js (add `@hono/node-ws` if you want WebSocket support):
-
 ```bash
 npm install @hono/node-server
 ```
+
+</CodeTabs>
+
+Add `@hono/node-ws` to the Node.js install if you want WebSocket support.
 
 ## Adding MDX
 

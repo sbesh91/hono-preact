@@ -8,7 +8,7 @@ adapter.
 
 The framework targets whichever adapter you choose. Two adapters ship today:
 `cloudflareAdapter()` from `hono-preact/adapter-cloudflare` and `nodeAdapter()`
-from `hono-preact/adapter-node`. You select one in `vite.config.ts` by passing
+from `hono-preact/adapter-node`. You select one in [`vite.config.ts`](/docs/vite-config) by passing
 it to the framework plugin: `honoPreact({ adapter: ... })`. An adapter is
 required.
 
@@ -154,3 +154,8 @@ a system service (systemd), or a PaaS that runs Node processes. Static assets
 must be served from `dist/client/`; the Node adapter serves them in-process
 when you run the bundled server, so a single `node` process handles both
 assets and SSR.
+
+## See also
+
+- [Vite Config](/docs/vite-config): full `honoPreact()` options reference and peer-dependency setup.
+- [Composing Hono Middleware](/docs/hono-middleware): adding custom Hono routes and middleware alongside the framework (via `src/api.ts`).

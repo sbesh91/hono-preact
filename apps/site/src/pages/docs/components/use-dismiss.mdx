@@ -4,18 +4,21 @@
 Escape or pressing outside the overlay dismisses the topmost registered layer,
 so nested overlays close one at a time, innermost first.
 
-```tsx
-import { useDismiss } from '@hono-preact/ui';
-import { useRef } from 'preact/hooks';
+See also: [useFocusReturn](/docs/components/use-focus-return), [usePosition](/docs/components/use-position).
 
-function Panel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useDismiss({
-    enabled: open,
-    refs: [ref],
-    onDismiss: onClose,
-  });
-  return open ? <div ref={ref}>panel</div> : null;
+## Signature
+
+```ts
+import { useDismiss } from '@hono-preact/ui';
+
+function useDismiss(opts: UseDismissOptions): void;
+
+interface UseDismissOptions {
+  enabled: boolean; // typically the open state
+  refs: RefObject<HTMLElement>[]; // elements treated as inside (no outside-press)
+  escape?: boolean; // default true
+  outsidePress?: boolean; // default true
+  onDismiss: (reason: 'escape' | 'outside-press') => void;
 }
 ```
 
@@ -31,3 +34,20 @@ function Panel({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 The listeners are document-level and capture-phase, attached once and shared
 across every registered layer, so adding overlays does not multiply listeners.
+
+## Example
+
+```tsx
+import { useDismiss } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
+
+function Panel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss({
+    enabled: open,
+    refs: [ref],
+    onDismiss: onClose,
+  });
+  return open ? <div ref={ref}>panel</div> : null;
+}
+```
