@@ -55,7 +55,9 @@ describe('Menu Item', () => {
 
   it('preventDefault in onSelect keeps the menu open', async () => {
     const onOpenChange = vi.fn();
-    const { getByText } = render(<Harness keepOpen onOpenChange={onOpenChange} />);
+    const { getByText } = render(
+      <Harness keepOpen onOpenChange={onOpenChange} />
+    );
     await act(async () => {});
     onOpenChange.mockClear();
     fireEvent.click(getByText('Cut'));

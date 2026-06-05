@@ -12,7 +12,13 @@ function makeRef(el: HTMLElement) {
   return { current: el };
 }
 function layer(partial: Partial<DismissLayer>): DismissLayer {
-  return { refs: [], escape: true, outsidePress: true, onDismiss: vi.fn(), ...partial };
+  return {
+    refs: [],
+    escape: true,
+    outsidePress: true,
+    onDismiss: vi.fn(),
+    ...partial,
+  };
 }
 
 describe('dismiss stack tree', () => {

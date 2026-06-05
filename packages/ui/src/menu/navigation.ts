@@ -7,14 +7,22 @@
 // aria-disabled="true" and are excluded here.
 export const ITEM_SELECTOR = '[data-menu-item]:not([aria-disabled="true"])';
 
-export function wrapNext(current: number, length: number, loop: boolean): number {
+export function wrapNext(
+  current: number,
+  length: number,
+  loop: boolean
+): number {
   if (length === 0) return -1;
   const next = current + 1;
   if (next < length) return next;
   return loop ? 0 : length - 1;
 }
 
-export function wrapPrev(current: number, length: number, loop: boolean): number {
+export function wrapPrev(
+  current: number,
+  length: number,
+  loop: boolean
+): number {
   if (length === 0) return -1;
   const prev = current - 1;
   if (prev >= 0) return prev;

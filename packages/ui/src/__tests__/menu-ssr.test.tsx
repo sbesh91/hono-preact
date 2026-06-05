@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
-import { MenuRoot, MenuTrigger, MenuPositioner, MenuPopup, MenuItem } from '../menu/menu.js';
+import {
+  MenuRoot,
+  MenuTrigger,
+  MenuPositioner,
+  MenuPopup,
+  MenuItem,
+} from '../menu/menu.js';
 
 describe('Menu SSR', () => {
   it('renders the trigger and omits the closed surface on the server', () => {

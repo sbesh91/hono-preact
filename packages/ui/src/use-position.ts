@@ -54,7 +54,16 @@ export function sideAlignFromPlacement(placement: Placement): {
 }
 
 function defaultRect(): ClientRectObject {
-  return { width: 0, height: 0, x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0 };
+  return {
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  };
 }
 
 export interface UsePositionOptions {
@@ -110,7 +119,8 @@ export function usePosition(opts: UsePositionOptions): PositionState {
     const virtual: VirtualElement | null = getAnchorRect
       ? { getBoundingClientRect: () => getAnchorRect() ?? defaultRect() }
       : null;
-    const reference: HTMLElement | VirtualElement | null = virtual ?? anchorRef.current;
+    const reference: HTMLElement | VirtualElement | null =
+      virtual ?? anchorRef.current;
     if (!reference) return;
 
     // computePosition is async; guard its resolution so a promise still in

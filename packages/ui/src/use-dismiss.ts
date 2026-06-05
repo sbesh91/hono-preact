@@ -16,7 +16,15 @@ export interface UseDismissOptions {
 }
 
 export function useDismiss(opts: UseDismissOptions): void {
-  const { enabled, refs, escape = true, outsidePress = true, id, parentId, onDismiss } = opts;
+  const {
+    enabled,
+    refs,
+    escape = true,
+    outsidePress = true,
+    id,
+    parentId,
+    onDismiss,
+  } = opts;
 
   // Forward to the latest onDismiss without re-registering the layer.
   const onDismissRef = useRef(onDismiss);

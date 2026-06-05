@@ -2,8 +2,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup, act } from '@testing-library/preact';
 import {
-  MenuRoot, MenuTrigger, MenuPositioner, MenuPopup, MenuItem,
-  MenuSeparator, MenuGroup, MenuGroupLabel,
+  MenuRoot,
+  MenuTrigger,
+  MenuPositioner,
+  MenuPopup,
+  MenuItem,
+  MenuSeparator,
+  MenuGroup,
+  MenuGroupLabel,
 } from '../menu/menu.js';
 
 afterEach(cleanup);

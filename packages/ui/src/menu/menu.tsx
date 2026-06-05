@@ -1,5 +1,11 @@
 // packages/ui/src/menu/menu.tsx
-import { h, createContext, type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  h,
+  createContext,
+  type ComponentChildren,
+  type JSX,
+  type VNode,
+} from 'preact';
 import {
   useCallback,
   useContext,
@@ -16,7 +22,12 @@ import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { useTypeahead } from '../use-typeahead.js';
-import { wrapNext, wrapPrev, matchTypeahead, getMenuItems } from './navigation.js';
+import {
+  wrapNext,
+  wrapPrev,
+  matchTypeahead,
+  getMenuItems,
+} from './navigation.js';
 import {
   MenuContext,
   useMenuContext,
@@ -138,7 +149,11 @@ export function MenuTrigger(props: MenuTriggerProps): VNode {
     event: JSX.TargetedKeyboardEvent<HTMLButtonElement>
   ) => {
     onKeyDown?.(event);
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+    if (
+      event.key === 'ArrowDown' ||
+      event.key === 'Enter' ||
+      event.key === ' '
+    ) {
       event.preventDefault();
       ctx.pendingEdgeRef.current = 'first';
       ctx.setOpen(true);
@@ -311,7 +326,13 @@ export type MenuPopupProps = {
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function MenuPopup(props: MenuPopupProps): VNode {
-  const { render, children, 'aria-label': ariaLabel, onKeyDown, ...rest } = props;
+  const {
+    render,
+    children,
+    'aria-label': ariaLabel,
+    onKeyDown,
+    ...rest
+  } = props;
   const ctx = useMenuContext('Popup');
   const runTypeahead = useTypeahead();
 
@@ -335,7 +356,9 @@ export function MenuPopup(props: MenuPopupProps): VNode {
     const items = getMenuItems(surface);
     if (items.length === 0) return;
     const el =
-      ctx.pendingEdgeRef.current === 'last' ? items[items.length - 1] : items[0];
+      ctx.pendingEdgeRef.current === 'last'
+        ? items[items.length - 1]
+        : items[0];
     ctx.setActiveId(el.id);
     el.focus();
   }, [ctx.open]);
@@ -424,14 +447,21 @@ export function MenuPopup(props: MenuPopupProps): VNode {
 }
 
 export type MenuCheckboxItemProps = {
-  render?: RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>;
+  render?: RenderProp<{
+    checked: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>;
   checked?: boolean;
   defaultChecked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   disabled?: boolean;
   onSelect?: (event: Event) => void;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect' | 'checked'>;
+} & Omit<
+  JSX.HTMLAttributes<HTMLDivElement>,
+  'children' | 'onSelect' | 'checked'
+>;
 
 export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
   const {
@@ -466,14 +496,20 @@ export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
     if (disabled) return;
     activate();
   };
-  const handlePointerEnter = (event: JSX.TargetedPointerEvent<HTMLDivElement>) => {
+  const handlePointerEnter = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);
     event.currentTarget.focus();
   };
 
-  return useRender<{ checked: boolean; disabled: boolean; highlighted: boolean }>({
+  return useRender<{
+    checked: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>({
     render,
     defaultTag: 'div',
     props: {
@@ -504,7 +540,14 @@ export type MenuRadioGroupProps = {
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'value'>;
 
 export function MenuRadioGroup(props: MenuRadioGroupProps) {
-  const { value: valueProp, defaultValue, onValueChange, render, children, ...rest } = props;
+  const {
+    value: valueProp,
+    defaultValue,
+    onValueChange,
+    render,
+    children,
+    ...rest
+  } = props;
   const [value, setValue] = useControllableState<string | undefined>({
     value: valueProp,
     defaultValue: defaultValue,
@@ -525,7 +568,11 @@ export function MenuRadioGroup(props: MenuRadioGroupProps) {
 
 export type MenuRadioItemProps = {
   value: string;
-  render?: RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>;
+  render?: RenderProp<{
+    checked: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>;
   disabled?: boolean;
   onSelect?: (event: Event) => void;
   children?: ComponentChildren;
@@ -559,14 +606,20 @@ export function MenuRadioItem(props: MenuRadioItemProps): VNode {
     if (disabled) return;
     activate();
   };
-  const handlePointerEnter = (event: JSX.TargetedPointerEvent<HTMLDivElement>) => {
+  const handlePointerEnter = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);
     event.currentTarget.focus();
   };
 
-  return useRender<{ checked: boolean; disabled: boolean; highlighted: boolean }>({
+  return useRender<{
+    checked: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>({
     render,
     defaultTag: 'div',
     props: {

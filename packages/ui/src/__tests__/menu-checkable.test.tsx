@@ -2,8 +2,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 import {
-  MenuRoot, MenuTrigger, MenuPositioner, MenuPopup,
-  MenuCheckboxItem, MenuRadioGroup, MenuRadioItem,
+  MenuRoot,
+  MenuTrigger,
+  MenuPositioner,
+  MenuPopup,
+  MenuCheckboxItem,
+  MenuRadioGroup,
+  MenuRadioItem,
 } from '../menu/menu.js';
 
 afterEach(cleanup);
@@ -16,7 +21,9 @@ describe('Menu checkable items', () => {
         <MenuTrigger>Open</MenuTrigger>
         <MenuPositioner>
           <MenuPopup>
-            <MenuCheckboxItem checked={false} onCheckedChange={onCheckedChange}>Bold</MenuCheckboxItem>
+            <MenuCheckboxItem checked={false} onCheckedChange={onCheckedChange}>
+              Bold
+            </MenuCheckboxItem>
           </MenuPopup>
         </MenuPositioner>
       </MenuRoot>

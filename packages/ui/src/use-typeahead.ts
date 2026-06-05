@@ -8,7 +8,9 @@ export interface UseTypeaheadOptions {
 // Returns an onChar(char) callback that accumulates printable characters into a
 // query string and returns the current query. The buffer resets after idleMs of
 // no input. The caller matches the returned query against item labels.
-export function useTypeahead(opts: UseTypeaheadOptions = {}): (char: string) => string {
+export function useTypeahead(
+  opts: UseTypeaheadOptions = {}
+): (char: string) => string {
   const { idleMs = 500 } = opts;
   const bufferRef = useRef('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
