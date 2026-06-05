@@ -12,6 +12,30 @@
 
 ---
 
+## Implementation notes (as shipped, PR #75 on branch `standardize-docs-pages`)
+
+Two deviations from the hook draft below, discovered when PR #74's new
+component-area pages (`use-dismiss`, `use-focus-return`, `use-position`) revealed
+a third, leaner hook-page shape whose API surface lives under a bare `## Options`
+(no `## Signature` or `## API reference`):
+
+1. **API-reference pillar aliases widened** to `## API reference`, `## Signature`,
+   `## Options`, or `## Parameters` (plus a table), not just the first two. The
+   draft regex (`api reference|signature`) would have false-warned on the three
+   bare-`## Options` hook pages.
+2. **Recommended Demo/Styling/Accessibility nudges gated on an "is-component"
+   signal** (a live `<Example>` or a `## Styling`/`## Demo` heading) instead of a
+   `## Signature` check, so hook/primitive pages are never nagged about those.
+
+Ratification: the shipped hook produces zero output across all 31 validated docs
+pages (2 `index.mdx` overviews exempt). The lone non-conforming page,
+`deployment.mdx`, got a one-line lead paragraph so it meets the Prose pillar; that
+edit is an extra commit not in the task list below. The embedded script in Task 1
+is the original draft and is kept for the historical record; the version that
+shipped is `.claude/hooks/docs-template-check.sh`.
+
+---
+
 ## File Structure
 
 | File | Responsibility |
