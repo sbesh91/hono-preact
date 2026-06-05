@@ -37,6 +37,19 @@ export const serverLoaders = {
 
 A single-loader page conventionally uses the key `default`. Multi-loader pages give each loader a descriptive name. There is no special-cased single-loader export; the plugin treats all entries the same way.
 
+## Options
+
+Pass a second argument to `defineLoader` to configure a loader:
+
+| Option      | Type              | Default | Description                                               |
+| ----------- | ----------------- | ------- | --------------------------------------------------------- |
+| `params`    | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any. |
+| `cache`     | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.           |
+| `timeoutMs` | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                 |
+| `use`       | `LoaderUse`       | none    | Per-loader middleware and stream observers.               |
+
+Each option has a fuller section below; this table is the at-a-glance summary.
+
 ## Example: listing page
 
 Snippets on this page assume:
@@ -520,4 +533,11 @@ The framework default is configurable per handler via
 
 ## The server/client boundary
 
-Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs; imported `pageUse` / `loaderUse` / `actionUse` become empty arrays. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs; imported `pageUse` / `loaderUse` / `actionUse` become empty arrays. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
+
+## See also
+
+- [Loading States](/docs/loading-states): the loading and error UI for a loader's data.
+- [Reloading Data](/docs/reloading): invalidating and re-running loaders.
+- [Prefetching](/docs/prefetch): warming a loader before navigation.
+- [Server Actions](/docs/actions): mutations that can invalidate loaders.

@@ -97,6 +97,15 @@ const MoviesView = moviesLoader.View(
 
 Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [cross-page invalidation](/docs/loaders#cross-page-invalidation).
 
+## `.View()` options reference
+
+Both options are passed as the second argument to `loader.View(render, opts)`:
+
+| Option          | Type                                                       | Description                                                       |
+| --------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| `fallback`      | `ComponentChildren`                                        | Shown while the loader is pending.                                |
+| `errorFallback` | `ComponentChildren \| ((err, reset) => ComponentChildren)` | Shown when the loader errors; the function form receives `reset`. |
+
 ## Page-level fallbacks
 
 `definePage` accepts a page-level `errorFallback` that catches errors from the rest of the page tree (e.g. a render-time throw outside any loader boundary):
@@ -112,3 +121,6 @@ Loader-specific loading and error UI lives on `.View()` / `.Boundary`. The page-
 ## See also
 
 See [Middleware](/docs/middleware) for the `use` binding, and [Project Structure](/docs/structure) for the full `definePage` bindings list (including `Wrapper`).
+
+- [Server Loaders](/docs/loaders): where `.View()` comes from.
+- [Streaming](/docs/streaming): fallback behavior for streaming loaders.

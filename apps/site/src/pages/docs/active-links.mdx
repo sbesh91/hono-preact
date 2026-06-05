@@ -70,3 +70,21 @@ Use `exact={false}` for section links, and `match` when the link target differs 
   Posts
 </NavLink>
 ```
+
+## API reference
+
+`<NavLink>` forwards any other `<a>` attribute (e.g. `target`, `rel`, `data-*`) to the underlying anchor and sets `aria-current="page"` while the link is active.
+
+| Prop            | Type      | Default  | Description                                                     |
+| --------------- | --------- | -------- | --------------------------------------------------------------- |
+| `href`          | `string`  | required | Destination path.                                               |
+| `match`         | `string`  | `href`   | Pattern tested for the active state.                            |
+| `exact`         | `boolean` | `true`   | Match the full path; set `false` for prefix (section) matching. |
+| `class`         | `string`  | none     | Always applied.                                                 |
+| `activeClass`   | `string`  | none     | Merged in when the link is active.                              |
+| `inactiveClass` | `string`  | none     | Merged in when the link is not active.                          |
+
+## See also
+
+- [The Route Table](/docs/routes): the path grammar `match` tests against.
+- [Link Prefetch](/docs/link-prefetch): prefetching the page a link points to.
