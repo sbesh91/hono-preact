@@ -122,6 +122,8 @@ export const nav: NavArea[] = [
           { title: 'Dialog', route: '/docs/components/dialog' },
           { title: 'Popover', route: '/docs/components/popover' },
           { title: 'Tooltip', route: '/docs/components/tooltip' },
+          { title: 'Menu', route: '/docs/components/menu' },
+          { title: 'Context Menu', route: '/docs/components/context-menu' },
         ],
       },
       {

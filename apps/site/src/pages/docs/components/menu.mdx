@@ -1,0 +1,465 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { MenuDemo } from '../../../components/docs/MenuDemo.js';
+
+# Menu
+
+A button-triggered dropdown of commands: a list of actions, toggles, and
+single-select choices that opens from a trigger and closes when you pick
+something or dismiss it. Positioning runs on Floating UI; the popup renders in
+place and promotes to the browser top layer where the Popover API is available.
+It ships unstyled: style it through the `data-state`, `data-highlighted`,
+`data-disabled`, `data-side`, and `data-align` contract.
+
+The popup uses the `role="menu"` pattern, which is for application and command
+menus (a list of actions to perform), not for site navigation. For a set of
+links between pages, use a plain list of anchors so each link is a real `<a>`
+in the tab order; reserve Menu for commands.
+
+## Demo
+
+<Example>
+  <MenuDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Menu } from '@hono-preact/ui';
+
+export function Actions() {
+  return (
+    <Menu.Root>
+      <Menu.Trigger>Actions</Menu.Trigger>
+      <Menu.Positioner>
+        <Menu.Popup aria-label="Actions">
+          <Menu.Item onSelect={() => create()}>New file</Menu.Item>
+          <Menu.Item onSelect={() => open()}>Open</Menu.Item>
+          <Menu.Separator />
+          <Menu.CheckboxItem defaultChecked>Word wrap</Menu.CheckboxItem>
+          <Menu.Separator />
+          <Menu.Group>
+            <Menu.GroupLabel>Density</Menu.GroupLabel>
+            <Menu.RadioGroup defaultValue="comfortable">
+              <Menu.RadioItem value="comfortable">Comfortable</Menu.RadioItem>
+              <Menu.RadioItem value="compact">Compact</Menu.RadioItem>
+            </Menu.RadioGroup>
+          </Menu.Group>
+          <Menu.Separator />
+          <Menu.SubmenuRoot>
+            <Menu.SubmenuTrigger>Share</Menu.SubmenuTrigger>
+            <Menu.SubmenuPositioner>
+              <Menu.SubmenuPopup aria-label="Share">
+                <Menu.Item>Copy link</Menu.Item>
+                <Menu.Item>Email</Menu.Item>
+              </Menu.SubmenuPopup>
+            </Menu.SubmenuPositioner>
+          </Menu.SubmenuRoot>
+        </Menu.Popup>
+      </Menu.Positioner>
+    </Menu.Root>
+  );
+}
+```
+
+`Menu.Item` activates and closes the menu on click or Enter; call
+`event.preventDefault()` in its `onSelect` to keep the menu open after a choice.
+`Menu.CheckboxItem` and `Menu.RadioItem` carry their own checked state (each
+takes a controlled `checked`/`value` pair or an uncontrolled `defaultChecked`/
+`defaultValue`). A `Menu.SubmenuRoot` nests another menu off a trigger row.
+
+## Styling
+
+Parts expose `data-state` (`open`/`closed` on the popup and submenu trigger;
+`checked`/`unchecked` on checkbox and radio items). Items expose
+`data-highlighted` while active and `data-disabled` when disabled; the
+Positioner and Arrow expose `data-side` and `data-align`. The Positioner is the
+fixed-positioned wrapper, so size, z-index, and the entry animation go on the
+Popup inside it. The demo above uses the styles below; copy a starting point in
+either flavor:
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-menu-positioner {
+  z-index: 50;
+}
+.docs-menu {
+  box-sizing: border-box;
+  min-width: 12rem;
+  padding: 0.25rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.625rem;
+  background: #fff;
+  color: #18181b;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+}
+.docs-menu[data-state='open'] {
+  animation: docs-menu-in 120ms ease-out;
+}
+@keyframes docs-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Items are roving-tabindex rows; the active row is highlighted via the
+   data-attribute the component sets on hover and arrow navigation. */
+.docs-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+}
+.docs-menu__item[data-highlighted] {
+  background: #18181b;
+  color: #fafafa;
+}
+.docs-menu__item[data-disabled] {
+  color: #a1a1aa;
+  pointer-events: none;
+}
+.docs-menu__separator {
+  height: 1px;
+  margin: 0.25rem 0.3rem;
+  background: #e4e4e7;
+}
+.docs-menu__label {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #71717a;
+}
+@media (prefers-color-scheme: dark) {
+  .docs-menu {
+    border-color: #27272a;
+    background: #18181b;
+    color: #fafafa;
+  }
+  .docs-menu__item[data-highlighted] {
+    background: #fafafa;
+    color: #18181b;
+  }
+  .docs-menu__separator {
+    background: #27272a;
+  }
+}
+```
+
+```tsx
+<Menu.Positioner className="z-50">
+  <Menu.Popup className="min-w-48 rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+    <Menu.Item className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none cursor-pointer data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900">
+      New file
+    </Menu.Item>
+    <Menu.Separator className="my-1 mx-1.5 h-px bg-zinc-200 dark:bg-zinc-800" />
+    <Menu.GroupLabel className="px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+      Density
+    </Menu.GroupLabel>
+  </Menu.Popup>
+</Menu.Positioner>
+```
+
+</CodeTabs>
+
+## Keyboard
+
+| Keys                          | When                 | Action                                                                 |
+| ----------------------------- | -------------------- | ---------------------------------------------------------------------- |
+| `Enter` / `Space` / `↓` / `↑` | Trigger, closed      | Open the menu. `↓` focuses the first item, `↑` the last.               |
+| `↓` / `↑`                     | Menu open            | Move to the next / previous item, wrapping at the ends.                |
+| `Home` / `End`                | Menu open            | Move to the first / last item.                                         |
+| _printable characters_        | Menu open            | Typeahead: focus the next item whose label starts with the typed text. |
+| `Enter` / `Space`             | On an item           | Activate the highlighted item.                                         |
+| `Escape`                      | Menu open            | Close the menu and return focus to the trigger.                        |
+| `Tab`                         | Menu open            | Close the menu, then move focus to the next element.                   |
+| `→`                           | On a submenu trigger | Open the submenu and focus its first item.                             |
+| `←`                           | In a submenu         | Close the submenu and return focus to its trigger.                     |
+| `Escape`                      | In a submenu         | Close the innermost open menu first.                                   |
+
+Set `loop={false}` on `Menu.Root` to stop arrow navigation from wrapping, and
+`typeahead={false}` to disable type-to-focus.
+
+## Data attributes
+
+| Attribute          | On                                            | Values                                            |
+| ------------------ | --------------------------------------------- | ------------------------------------------------- |
+| `data-state`       | Trigger, Popup, SubmenuTrigger                | `open` \| `closed`                                |
+| `data-state`       | CheckboxItem, RadioItem                       | `checked` \| `unchecked`                          |
+| `data-highlighted` | Item, CheckboxItem, RadioItem, SubmenuTrigger | present while the item is the active row          |
+| `data-disabled`    | Item, CheckboxItem, RadioItem                 | present when the item is disabled                 |
+| `data-side`        | Positioner, Arrow                             | `top` \| `right` \| `bottom` \| `left` (resolved) |
+| `data-align`       | Positioner                                    | `start` \| `center` \| `end` (resolved)           |
+
+## API reference
+
+Every part accepts a `render` prop for composition (see
+[useRender](/docs/components/use-render)) and forwards unknown props to the
+element it renders. Items pass their `{ disabled, highlighted }` (plus `checked`
+on checkbox / radio items) state to a render function.
+
+### Menu.Root
+
+Provides open state, ids, refs, navigation config, and placement to the parts.
+Renders only its children.
+
+| Prop           | Type                               | Default    | Description                                       |
+| -------------- | ---------------------------------- | ---------- | ------------------------------------------------- |
+| `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.  |
+| `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.             |
+| `onOpenChange` | `(open: boolean) => void`          | -          | Called when the menu requests an open or close.   |
+| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'bottom'` | Preferred side of the trigger to place the popup. |
+| `align`        | `'start'\|'center'\|'end'`         | `'start'`  | Alignment along that side.                        |
+| `offset`       | `number`                           | `8`        | Gap in pixels between the trigger and the popup.  |
+| `loop`         | `boolean`                          | `true`     | Wrap arrow navigation at the first / last item.   |
+| `typeahead`    | `boolean`                          | `true`     | Focus items by typing their leading characters.   |
+| `children`     | `ComponentChildren`                | -          | The trigger and positioner.                       |
+
+### Menu.Trigger
+
+Toggles the menu on click and anchors it. Default element
+`<button type="button">`.
+
+| Prop       | Type                                    | Default | Description                                                                |
+| ---------- | --------------------------------------- | ------- | -------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`         | -       | Compose or replace the element.                                            |
+| `children` | `ComponentChildren`                     | -       | Trigger label.                                                             |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded to the element; a passed `onClick` runs before the menu toggles. |
+
+Sets `aria-haspopup="menu"`, `aria-expanded`, `id`, `data-state`, and
+`aria-controls` (only while open, since the popup is mounted on open).
+
+### Menu.Positioner
+
+The fixed-positioned wrapper that Floating UI drives. Renders nothing until the
+menu is open (mount on open). Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
+browser supports the Popover API, the element is promoted to the top layer so it
+escapes ancestor clipping.
+
+### Menu.Popup
+
+The menu surface and navigation root. Default element `<div>` with
+`role="menu"`.
+
+| Prop         | Type                                 | Default | Description                                       |
+| ------------ | ------------------------------------ | ------- | ------------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                   |
+| `aria-label` | `string`                             | -       | Accessible name. Defaults to the trigger's label. |
+| `children`   | `ComponentChildren`                  | -       | Items, separators, groups, and submenus.          |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                         |
+
+Sets `role="menu"`, `id`, `tabindex="-1"`, `aria-orientation="vertical"`,
+`data-state`, and `aria-labelledby` (the trigger) or `aria-label`. Owns the
+keyboard navigation, typeahead, Escape / outside-press dismissal, and focus
+move-in / return.
+
+### Menu.Item
+
+A command row. Default element `<div>` with `role="menuitem"`.
+
+| Prop       | Type                                                      | Default | Description                                                                |
+| ---------- | --------------------------------------------------------- | ------- | -------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ disabled: boolean; highlighted: boolean }>` | -       | Compose or replace the element.                                            |
+| `disabled` | `boolean`                                                 | `false` | Skip the item in navigation and ignore activation.                         |
+| `onSelect` | `(event: Event) => void`                                  | -       | Called on activation. Call `event.preventDefault()` to keep the menu open. |
+| `children` | `ComponentChildren`                                       | -       | Item content.                                                              |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                      | -       | Forwarded to the element.                                                  |
+
+### Menu.CheckboxItem
+
+A toggle row that holds its own checked state. Default element `<div>` with
+`role="menuitemcheckbox"`.
+
+| Prop              | Type                                                                        | Default | Description                                                   |
+| ----------------- | --------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
+| `render`          | `RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>` | -       | Compose or replace the element.                               |
+| `checked`         | `boolean`                                                                   | -       | Controlled checked state. Pair with `onCheckedChange`.        |
+| `defaultChecked`  | `boolean`                                                                   | `false` | Initial checked state when uncontrolled.                      |
+| `onCheckedChange` | `(checked: boolean) => void`                                                | -       | Called when the checked state changes.                        |
+| `disabled`        | `boolean`                                                                   | `false` | Skip the item and ignore activation.                          |
+| `onSelect`        | `(event: Event) => void`                                                    | -       | Called on activation; `preventDefault()` keeps the menu open. |
+| `children`        | `ComponentChildren`                                                         | -       | Item content (render your own check indicator).               |
+| `...props`        | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -       | Forwarded to the element.                                     |
+
+Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+
+### Menu.RadioGroup
+
+Single-select context for the radio items inside it. Default element `<div>`
+with `role="group"`.
+
+| Prop            | Type                                 | Default | Description                                           |
+| --------------- | ------------------------------------ | ------- | ----------------------------------------------------- |
+| `render`        | `RenderProp`                         | -       | Compose or replace the element.                       |
+| `value`         | `string`                             | -       | Controlled selected value. Pair with `onValueChange`. |
+| `defaultValue`  | `string`                             | -       | Initial selected value when uncontrolled.             |
+| `onValueChange` | `(value: string) => void`            | -       | Called when the selection changes.                    |
+| `children`      | `ComponentChildren`                  | -       | The radio items.                                      |
+| `...props`      | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                             |
+
+### Menu.RadioItem
+
+A choice within a `Menu.RadioGroup`. Default element `<div>` with
+`role="menuitemradio"`.
+
+| Prop       | Type                                                                        | Default  | Description                                                   |
+| ---------- | --------------------------------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `value`    | `string`                                                                    | required | Identifies the item within its group.                         |
+| `render`   | `RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>` | -        | Compose or replace the element.                               |
+| `disabled` | `boolean`                                                                   | `false`  | Skip the item and ignore activation.                          |
+| `onSelect` | `(event: Event) => void`                                                    | -        | Called on activation; `preventDefault()` keeps the menu open. |
+| `children` | `ComponentChildren`                                                         | -        | Item content (render your own selected indicator).            |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -        | Forwarded to the element.                                     |
+
+Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+
+### Menu.Separator
+
+A horizontal divider between groups of items. Default element `<div>` with
+`role="separator"`.
+
+| Prop       | Type                                 | Default | Description               |
+| ---------- | ------------------------------------ | ------- | ------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.    |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element. |
+
+### Menu.Group
+
+Wraps related items and labels them with a `Menu.GroupLabel`. Default element
+`<div>` with `role="group"`.
+
+| Prop       | Type                                 | Default | Description                        |
+| ---------- | ------------------------------------ | ------- | ---------------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.             |
+| `children` | `ComponentChildren`                  | -       | A `Menu.GroupLabel` and the items. |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.          |
+
+Wires its label to `aria-labelledby`.
+
+### Menu.GroupLabel
+
+The accessible name for a `Menu.Group`. Presentational, not focusable. Default
+element `<div>`.
+
+| Prop       | Type                                 | Default | Description               |
+| ---------- | ------------------------------------ | ------- | ------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.    |
+| `children` | `ComponentChildren`                  | -       | Label text.               |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element. |
+
+### Menu.Arrow
+
+Optional pointer positioned from the Floating UI arrow data. Default element
+`<div>`. Place it on the correct edge with CSS keyed on `data-side`.
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp<{ side: Side }>`         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | Optional arrow content.         |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.       |
+
+Sets `data-side` and `position: absolute` with the computed offset.
+
+### Menu.SubmenuRoot
+
+Provides a nested menu's open state and placement off a trigger row. Must be
+placed inside a `Menu.Popup`. Renders only its children.
+
+| Prop           | Type                               | Default   | Description                                                |
+| -------------- | ---------------------------------- | --------- | ---------------------------------------------------------- |
+| `open`         | `boolean`                          | -         | Controlled open state. Pair with `onOpenChange`.           |
+| `defaultOpen`  | `boolean`                          | `false`   | Initial open state when uncontrolled.                      |
+| `onOpenChange` | `(open: boolean) => void`          | -         | Called when the submenu requests an open or close.         |
+| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'right'` | Preferred side of the trigger to place the submenu.        |
+| `align`        | `'start'\|'center'\|'end'`         | `'start'` | Alignment along that side.                                 |
+| `offset`       | `number`                           | `0`       | Gap in pixels between the trigger and the submenu.         |
+| `openDelay`    | `number`                           | `100`     | Hover open delay in ms.                                    |
+| `closeDelay`   | `number`                           | `300`     | Safe-corridor grace in ms before closing on pointer leave. |
+| `children`     | `ComponentChildren`                | -         | The submenu trigger and positioner.                        |
+
+### Menu.SubmenuTrigger
+
+The row that opens the submenu. It is itself a `menuitem` in the parent menu.
+Default element `<div>` with `role="menuitem"`.
+
+| Prop       | Type                                                  | Default | Description                         |
+| ---------- | ----------------------------------------------------- | ------- | ----------------------------------- |
+| `render`   | `RenderProp<{ open: boolean; highlighted: boolean }>` | -       | Compose or replace the element.     |
+| `disabled` | `boolean`                                             | `false` | Skip the row and ignore activation. |
+| `children` | `ComponentChildren`                                   | -       | Row content.                        |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                  | -       | Forwarded to the element.           |
+
+Sets `aria-haspopup="menu"`, `aria-expanded`, and (while open) `aria-controls`.
+Opens on hover (after `openDelay`), `→`, `Enter`, `Space`, or click; the safe
+corridor keeps it open while the pointer travels toward the submenu.
+
+### Menu.SubmenuPositioner
+
+The submenu's fixed-positioned wrapper. Same surface as `Menu.Positioner`,
+bound to the submenu. Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The submenu popup.                                       |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+### Menu.SubmenuPopup
+
+The submenu surface. Same surface as `Menu.Popup`, with `←` wired to close the
+submenu and return focus to its trigger. Default element `<div>` with
+`role="menu"`.
+
+| Prop         | Type                                 | Default | Description                                       |
+| ------------ | ------------------------------------ | ------- | ------------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                   |
+| `aria-label` | `string`                             | -       | Accessible name. Defaults to the submenu trigger. |
+| `children`   | `ComponentChildren`                  | -       | The nested items.                                 |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                         |
+
+### Primitives
+
+`@hono-preact/ui` exports the building blocks the parts use, for composing your
+own components. Several have their own page with examples:
+[usePosition](/docs/components/use-position),
+[useDismiss](/docs/components/use-dismiss),
+[useFocusReturn](/docs/components/use-focus-return),
+[useSafeArea](/docs/components/use-safe-area),
+[useRender](/docs/components/use-render),
+[useControllableState](/docs/components/use-controllable-state), and
+[mergeRefs](/docs/components/merge-refs).
+
+## Accessibility
+
+The menu follows the ARIA menu-button pattern. The trigger carries
+`aria-haspopup="menu"`, `aria-expanded`, and (while open) `aria-controls`; the
+popup is a `role="menu"` with `aria-orientation="vertical"`, named by the
+trigger or an explicit `aria-label`. Items are `menuitem`, `menuitemcheckbox`,
+and `menuitemradio`.
+
+- Both Enter / Space and the arrow keys open the menu from the trigger, so it is
+  reachable without a pointer.
+- Focus moves into the menu when it opens (the first or last item) and returns to
+  the trigger when it closes. The items use a roving tabindex, so only the active
+  item is in the tab order.
+- Escape closes the menu, an outside pointer press closes it, and nested submenus
+  close innermost-first.
+- Use the `role="menu"` pattern only for commands. For navigation between pages,
+  render a list of links instead, so each destination is a real `<a>`.
