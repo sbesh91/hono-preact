@@ -9,7 +9,6 @@ export function TooltipDemo() {
       <Tooltip.Trigger class="docs-tooltip-trigger">Hover me</Tooltip.Trigger>
       <Tooltip.Positioner class="docs-tooltip-positioner">
         <Tooltip.Popup class="docs-tooltip">
-          <Tooltip.Arrow class="docs-tooltip__arrow" />
           Saved to your library
         </Tooltip.Popup>
       </Tooltip.Positioner>

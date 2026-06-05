@@ -368,6 +368,13 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* First-column code is an identifier (a part/prop name), not a long signature,
+   so keep it on one line. Overrides the td code wrapping above (which is for
+   long type signatures in later columns). */
+.mdx-content td:first-child code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 
 /* Code samples and API tables read better wider than the prose measure. On
    desktop there is room to the right of the content column, so let them grow
@@ -820,14 +827,6 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     transform: translateY(-4px);
   }
 }
-.docs-popover__arrow {
-  width: 8px;
-  height: 8px;
-  rotate: 45deg;
-  background: var(--surface);
-  border-left: 1px solid var(--border-color);
-  border-top: 1px solid var(--border-color);
-}
 .docs-popover__title {
   font-size: 0.95rem;
   font-weight: 600;
@@ -854,16 +853,17 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   line-height: 1;
   padding: 0.6rem 1rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--foreground);
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-foreground);
   cursor: pointer;
   transition:
     background-color 120ms ease,
-    border-color 120ms ease;
+    border-color 120ms ease,
+    color 120ms ease;
 }
 .docs-tooltip-trigger:hover {
-  background: var(--surface-subtle);
+  background: var(--accent-hover);
 }
 .docs-tooltip-trigger:focus-visible {
   outline: 2px solid var(--ring);
@@ -887,12 +887,6 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   from {
     opacity: 0;
   }
-}
-.docs-tooltip__arrow {
-  width: 8px;
-  height: 8px;
-  rotate: 45deg;
-  background: var(--foreground);
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-tooltip {

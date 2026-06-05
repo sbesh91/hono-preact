@@ -11,7 +11,6 @@ export function PopoverDemo() {
       </Popover.Trigger>
       <Popover.Positioner class="docs-popover-positioner">
         <Popover.Popup class="docs-popover">
-          <Popover.Arrow class="docs-popover__arrow" />
           <Popover.Title class="docs-popover__title">Settings</Popover.Title>
           <Popover.Description class="docs-popover__desc">
             Adjust how the demo behaves.
