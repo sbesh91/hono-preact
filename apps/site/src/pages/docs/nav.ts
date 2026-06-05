@@ -140,6 +140,10 @@ export const nav: NavArea[] = [
             title: 'useFocusReturn',
             route: '/docs/components/use-focus-return',
           },
+          {
+            title: 'useSafeArea',
+            route: '/docs/components/use-safe-area',
+          },
         ],
       },
     ],

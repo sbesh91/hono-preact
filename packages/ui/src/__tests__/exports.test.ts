@@ -7,6 +7,7 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.usePosition).toBe('function');
     expect(typeof ui.useDismiss).toBe('function');
     expect(typeof ui.useFocusReturn).toBe('function');
+    expect(typeof ui.useSafeArea).toBe('function');
     expect(typeof ui.placementFor).toBe('function');
   });
 });

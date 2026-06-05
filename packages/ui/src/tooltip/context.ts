@@ -8,7 +8,6 @@ export interface TooltipContextValue {
   // open/close go through delayed schedulers; `immediate` skips the timers
   // (used by focus/blur and Escape).
   scheduleOpen: () => void;
-  scheduleClose: () => void;
   setOpenImmediate: (open: boolean) => void;
   cancelPending: () => void;
   anchorRef: RefObject<HTMLElement>;
@@ -18,6 +17,7 @@ export interface TooltipContextValue {
   side: Side;
   align: Align;
   offset: number;
+  closeDelay: number; // grace window for the safe corridor
   position: PositionState;
   setPosition: (p: PositionState) => void;
 }

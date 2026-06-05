@@ -18,6 +18,7 @@ import {
   type PositionState,
 } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
+import { useSafeArea } from '../use-safe-area.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
 export interface TooltipRootProps {
@@ -25,7 +26,7 @@ export interface TooltipRootProps {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   delay?: number; // open delay (ms), default 600
-  closeDelay?: number; // close delay (ms), default 300
+  closeDelay?: number; // safe-corridor grace window (ms), default 300
   side?: Side; // default 'top'
   align?: Align; // default 'center'
   offset?: number; // default 8
@@ -74,10 +75,6 @@ export function TooltipRoot(props: TooltipRootProps) {
     cancelPending();
     timer.current = setTimeout(() => setOpen(true), delay);
   }, [cancelPending, setOpen, delay]);
-  const scheduleClose = useCallback(() => {
-    cancelPending();
-    timer.current = setTimeout(() => setOpen(false), closeDelay);
-  }, [cancelPending, setOpen, closeDelay]);
 
   // Clear any pending open/close timer if the Root unmounts mid-delay, so the
   // timer cannot fire setOpen after unmount.
@@ -94,7 +91,6 @@ export function TooltipRoot(props: TooltipRootProps) {
     () => ({
       open,
       scheduleOpen,
-      scheduleClose,
       setOpenImmediate,
       cancelPending,
       anchorRef,
@@ -104,19 +100,20 @@ export function TooltipRoot(props: TooltipRootProps) {
       side,
       align,
       offset,
+      closeDelay,
       position,
       setPosition,
     }),
     [
       open,
       scheduleOpen,
-      scheduleClose,
       setOpenImmediate,
       cancelPending,
       popupId,
       side,
       align,
       offset,
+      closeDelay,
       position,
     ]
   );
@@ -154,7 +151,9 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
   ) => {
     onPointerLeave?.(event);
     if (event.pointerType === 'touch') return;
-    ctx.scheduleClose();
+    // Cancel a pending open if the pointer leaves before the open delay fires.
+    // While open, the safe corridor (useSafeArea in Popup) governs the close.
+    ctx.cancelPending();
   };
   const handleFocus = (event: JSX.TargetedFocusEvent<HTMLButtonElement>) => {
     onFocus?.(event);
@@ -272,8 +271,19 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
     onDismiss: () => ctx.setOpenImmediate(false),
   });
 
-  // Hoverable (WCAG 1.4.13): moving onto the popup keeps it open; leaving it
-  // re-schedules the close.
+  // While open, keep the tooltip open as the pointer travels the safe corridor
+  // from the trigger toward the popup; close once it leaves the corridor or the
+  // grace period elapses.
+  useSafeArea({
+    enabled: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    onClose: () => ctx.setOpenImmediate(false),
+    graceMs: ctx.closeDelay,
+  });
+
+  // Hoverable (WCAG 1.4.13): moving onto the popup keeps it open. The close is
+  // governed by the safe corridor (useSafeArea), not a leave timer.
   const handlePointerEnter = (
     event: JSX.TargetedPointerEvent<HTMLDivElement>
   ) => {
@@ -284,7 +294,6 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
     event: JSX.TargetedPointerEvent<HTMLDivElement>
   ) => {
     onPointerLeave?.(event);
-    ctx.scheduleClose();
   };
 
   // No ref here: the Positioner holds floatingRef, and the dismiss layer's

@@ -39,7 +39,7 @@ describe('Tooltip Positioner + Popup', () => {
     const { getByText, getByRole, queryByRole } = render(<Example />);
     fireEvent.focus(getByText('Help')); // open
     fireEvent.pointerLeave(getByText('Help'), { pointerType: 'mouse' });
-    // Before the close timer fires, hovering the popup cancels the close.
+    // Moving onto the popup keeps it open (hoverable); no leave-close timer runs.
     fireEvent.pointerEnter(getByRole('tooltip'), { pointerType: 'mouse' });
     vi.advanceTimersByTime(100);
     expect(queryByRole('tooltip')).not.toBeNull();
