@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/keep-docs-fresh.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/docs-template-check.sh"
           }
         ]
       }
