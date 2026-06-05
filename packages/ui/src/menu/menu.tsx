@@ -16,7 +16,12 @@ import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { useTypeahead } from '../use-typeahead.js';
 import { wrapNext, wrapPrev, matchTypeahead, getMenuItems } from './navigation.js';
-import { MenuContext, useMenuContext } from './context.js';
+import {
+  MenuContext,
+  useMenuContext,
+  MenuRadioGroupContext,
+  useMenuRadioGroupContext,
+} from './context.js';
 
 export interface MenuRootProps {
   open?: boolean;
@@ -413,6 +418,171 @@ export function MenuPopup(props: MenuPopupProps): VNode {
       onKeyDown: handleKeyDown,
     },
     state: { open: ctx.open },
+    children,
+  });
+}
+
+export type MenuCheckboxItemProps = {
+  render?: RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>;
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  disabled?: boolean;
+  onSelect?: (event: Event) => void;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect' | 'checked'>;
+
+export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
+  const {
+    render,
+    children,
+    checked: checkedProp,
+    defaultChecked,
+    onCheckedChange,
+    disabled = false,
+    onSelect,
+    onClick,
+    onPointerEnter,
+    ...rest
+  } = props;
+  const ctx = useMenuContext('CheckboxItem');
+  const id = useId();
+  const highlighted = ctx.activeId === id;
+  const [checked, setChecked] = useControllableState<boolean>({
+    value: checkedProp,
+    defaultValue: defaultChecked ?? false,
+    onChange: onCheckedChange,
+  });
+
+  const activate = () => {
+    setChecked(!checked);
+    const event = new Event('menu-select', { cancelable: true });
+    onSelect?.(event);
+    if (!event.defaultPrevented) ctx.closeAll();
+  };
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (disabled) return;
+    activate();
+  };
+  const handlePointerEnter = (event: JSX.TargetedPointerEvent<HTMLDivElement>) => {
+    onPointerEnter?.(event);
+    if (disabled) return;
+    ctx.setActiveId(id);
+    event.currentTarget.focus();
+  };
+
+  return useRender<{ checked: boolean; disabled: boolean; highlighted: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      id,
+      role: 'menuitemcheckbox',
+      'data-menu-item': '',
+      tabIndex: highlighted ? 0 : -1,
+      'aria-checked': checked,
+      'aria-disabled': disabled ? 'true' : undefined,
+      'data-state': checked ? 'checked' : 'unchecked',
+      'data-disabled': disabled ? '' : undefined,
+      'data-highlighted': highlighted ? '' : undefined,
+      onClick: handleClick,
+      onPointerEnter: handlePointerEnter,
+    },
+    state: { checked, disabled, highlighted },
+    children,
+  });
+}
+
+export type MenuRadioGroupProps = {
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'value'>;
+
+export function MenuRadioGroup(props: MenuRadioGroupProps) {
+  const { value: valueProp, defaultValue, onValueChange, render, children, ...rest } = props;
+  const [value, setValue] = useControllableState<string | undefined>({
+    value: valueProp,
+    defaultValue: defaultValue,
+    onChange: (v) => v !== undefined && onValueChange?.(v),
+  });
+  const groupCtx = useMemo(
+    () => ({ value, setValue: (v: string) => setValue(v) }),
+    [value, setValue]
+  );
+  const node = useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, role: 'group' },
+    children,
+  });
+  return h(MenuRadioGroupContext.Provider, { value: groupCtx }, node);
+}
+
+export type MenuRadioItemProps = {
+  value: string;
+  render?: RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>;
+  disabled?: boolean;
+  onSelect?: (event: Event) => void;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect'>;
+
+export function MenuRadioItem(props: MenuRadioItemProps): VNode {
+  const {
+    value,
+    render,
+    children,
+    disabled = false,
+    onSelect,
+    onClick,
+    onPointerEnter,
+    ...rest
+  } = props;
+  const ctx = useMenuContext('RadioItem');
+  const group = useMenuRadioGroupContext();
+  const id = useId();
+  const highlighted = ctx.activeId === id;
+  const checked = group.value === value;
+
+  const activate = () => {
+    group.setValue(value);
+    const event = new Event('menu-select', { cancelable: true });
+    onSelect?.(event);
+    if (!event.defaultPrevented) ctx.closeAll();
+  };
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (disabled) return;
+    activate();
+  };
+  const handlePointerEnter = (event: JSX.TargetedPointerEvent<HTMLDivElement>) => {
+    onPointerEnter?.(event);
+    if (disabled) return;
+    ctx.setActiveId(id);
+    event.currentTarget.focus();
+  };
+
+  return useRender<{ checked: boolean; disabled: boolean; highlighted: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      id,
+      role: 'menuitemradio',
+      'data-menu-item': '',
+      tabIndex: highlighted ? 0 : -1,
+      'aria-checked': checked,
+      'aria-disabled': disabled ? 'true' : undefined,
+      'data-state': checked ? 'checked' : 'unchecked',
+      'data-disabled': disabled ? '' : undefined,
+      'data-highlighted': highlighted ? '' : undefined,
+      onClick: handleClick,
+      onPointerEnter: handlePointerEnter,
+    },
+    state: { checked, disabled, highlighted },
     children,
   });
 }
