@@ -1,9 +1,21 @@
 // packages/ui/src/menu/menu.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import { useCallback, useId, useMemo, useRef, useState } from 'preact/hooks';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
+import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
+import { useDismiss } from '../use-dismiss.js';
+import { useFocusReturn } from '../use-focus-return.js';
+import { useTypeahead } from '../use-typeahead.js';
+import { wrapNext, wrapPrev, matchTypeahead, getMenuItems } from './navigation.js';
 import { MenuContext, useMenuContext } from './context.js';
 
 export interface MenuRootProps {
@@ -209,6 +221,198 @@ export function MenuItem(props: MenuItemProps): VNode {
       onPointerEnter: handlePointerEnter,
     },
     state: { disabled, highlighted },
+    children,
+  });
+}
+
+function supportsPopover(el: HTMLElement): boolean {
+  return typeof el.showPopover === 'function';
+}
+
+export type MenuPositionerProps = {
+  render?: RenderProp<{ side: Side; align: Align }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function MenuPositioner(props: MenuPositionerProps): VNode | null {
+  const { render, children, ...rest } = props;
+  const ctx = useMenuContext('Positioner');
+
+  const position = usePosition({
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    arrowRef: ctx.arrowRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+    getAnchorRect: ctx.getAnchorRect,
+  });
+
+  useLayoutEffect(() => {
+    ctx.setPosition(position);
+  }, [position.side, position.align, position.arrowX, position.arrowY]);
+
+  // Promote to the native top layer where supported (progressive enhancement).
+  // Applied imperatively so there is no SSR/hydration attribute mismatch.
+  useLayoutEffect(() => {
+    const el = ctx.floatingRef.current;
+    // Runs when open flips true and the element has mounted (refs are assigned
+    // before layout effects). Empty deps would never re-run, so showPopover
+    // would never fire on a mount-on-open element.
+    if (!ctx.open || !el || !supportsPopover(el)) return;
+    el.setAttribute('popover', 'manual');
+    el.showPopover();
+    return () => {
+      el.hidePopover();
+      el.removeAttribute('popover');
+    };
+  }, [ctx.open]);
+
+  if (!ctx.open) return null;
+
+  return useRender<{ side: Side; align: Align }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.floatingRef,
+      'data-side': position.side,
+      'data-align': position.align,
+      // Neutralize the UA [popover] rule that applies once the element is
+      // promoted to the top layer (overflow/inset/margin/border/padding/
+      // background): the UA `overflow: auto` would clip the popup's box-shadow
+      // and `inset: 0` would fight the computed left/top.
+      style: {
+        position: 'fixed',
+        inset: 'auto',
+        margin: 0,
+        overflow: 'visible',
+        border: 0,
+        padding: 0,
+        background: 'transparent',
+      },
+    },
+    state: { side: position.side, align: position.align },
+    children,
+  });
+}
+
+export type MenuPopupProps = {
+  render?: RenderProp<{ open: boolean }>;
+  'aria-label'?: string;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function MenuPopup(props: MenuPopupProps): VNode {
+  const { render, children, 'aria-label': ariaLabel, onKeyDown, ...rest } = props;
+  const ctx = useMenuContext('Popup');
+  const runTypeahead = useTypeahead();
+
+  useDismiss({
+    enabled: ctx.open,
+    refs: [ctx.floatingRef, ctx.anchorRef],
+    escape: true,
+    outsidePress: true,
+    onDismiss: () => ctx.setOpen(false),
+    id: ctx.dismissId,
+    parentId: ctx.parentDismissId,
+  });
+
+  useFocusReturn({ open: ctx.open, popupRef: ctx.popupRef });
+
+  // On open, focus the first (or last, on ArrowUp open) enabled item.
+  useLayoutEffect(() => {
+    if (!ctx.open) return;
+    const surface = ctx.popupRef.current;
+    if (!surface) return;
+    const items = getMenuItems(surface);
+    if (items.length === 0) return;
+    const el =
+      ctx.pendingEdgeRef.current === 'last' ? items[items.length - 1] : items[0];
+    ctx.setActiveId(el.id);
+    el.focus();
+  }, [ctx.open]);
+
+  const focusIndex = (items: HTMLElement[], index: number) => {
+    if (index < 0 || index >= items.length) return;
+    const el = items[index];
+    ctx.setActiveId(el.id);
+    el.focus();
+  };
+
+  const handleKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(event);
+    if (event.defaultPrevented) return;
+    const surface = ctx.popupRef.current;
+    if (!surface) return;
+    const items = getMenuItems(surface);
+    const current = items.findIndex((el) => el.id === ctx.activeId);
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        focusIndex(items, wrapNext(current, items.length, ctx.loop));
+        return;
+      case 'ArrowUp':
+        event.preventDefault();
+        focusIndex(items, wrapPrev(current, items.length, ctx.loop));
+        return;
+      case 'Home':
+        event.preventDefault();
+        focusIndex(items, 0);
+        return;
+      case 'End':
+        event.preventDefault();
+        focusIndex(items, items.length - 1);
+        return;
+      case 'Tab':
+        ctx.setOpen(false);
+        return;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        if (current >= 0) items[current].click();
+        return;
+    }
+
+    if (
+      event.key.length === 1 &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      const query = runTypeahead(event.key);
+      const labels = items.map((el) => el.textContent ?? '');
+      // matchTypeahead searches starting after `from`. On the first keystroke
+      // search after the current item (so repeats cycle); on a refining query
+      // search from current-1 so the current item is re-tested first and keeps
+      // focus while it still matches the growing query.
+      const from = current < 0 ? -1 : current - (query.length > 1 ? 1 : 0);
+      const match = matchTypeahead(labels, query, from);
+      if (match >= 0) {
+        event.preventDefault();
+        focusIndex(items, match);
+      }
+    }
+  };
+
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.popupRef,
+      role: 'menu',
+      id: ctx.popupId,
+      tabIndex: -1,
+      'aria-orientation': 'vertical',
+      'aria-label': ariaLabel,
+      'aria-labelledby': ariaLabel ? undefined : ctx.triggerId,
+      'data-state': ctx.open ? 'open' : 'closed',
+      onKeyDown: handleKeyDown,
+    },
+    state: { open: ctx.open },
     children,
   });
 }
