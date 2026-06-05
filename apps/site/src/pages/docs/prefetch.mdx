@@ -45,3 +45,9 @@ If you don't read any of those fields, omit both arguments and `prefetch(loader)
 **Programmatic prefetch** works anywhere: a router transition listener, a search-as-you-type debounce, an intersection observer for cards scrolling into view.
 
 `prefetch` checks the loader's cache first and returns immediately when the destination is already warm. A hover handler firing repeatedly (mouse over → off → back over the same link), an intersection observer re-entering visibility, or duplicate idle-callback scheduling will not issue redundant network requests. The cache key combines path with whatever `searchParams` the loader's `params` option declares, so two prefetches for `/movies/41` and `/movies/42` each hit the network exactly once.
+
+## See also
+
+- [Server Loaders](/docs/loaders): the loader cache prefetch fills.
+- [Link Prefetch](/docs/link-prefetch): the declarative `data-prefetch` attribute.
+- [Loading States](/docs/loading-states): what prefetching lets you skip.

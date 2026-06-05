@@ -92,3 +92,9 @@ const { reload, reloading } = useReload();
 | ----------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `reload`    | `() => void` | Re-runs the `serverLoader`. If called while a fetch (initial load or a previous reload) is still in flight, the call is queued and runs once the in-flight fetch settles; concurrent calls coalesce into a single queued run. |
 | `reloading` | `boolean`    | `true` while the loader is fetching, `false` otherwise.                                                                                                                                                                       |
+
+## See also
+
+- [Server Loaders](/docs/loaders): `loader.invalidate()` in context.
+- [Server Actions](/docs/actions): `useAction` invalidate option.
+- [Loading States](/docs/loading-states): the fallback shown during a refetch.

@@ -51,3 +51,8 @@ Add `data-no-prefetch` to the links that lead to those routes, or refactor them 
 ## Strict-CSP apps
 
 The emitted script is a normal `<script>` element and is subject to your `Content-Security-Policy`. Apps with strict CSPs that don't allow inline scripts will see the speculation script blocked by the browser. The framework does not currently plumb a CSP nonce. If your app needs Speculation Rules under strict CSP, file an issue describing the use case.
+
+## See also
+
+- [Middleware](/docs/middleware): `defineApp` accepts other options beyond `speculation`, including `use` for middleware composition.
+- [renderPage](/docs/render-page): how the `appConfig` (including `speculation`) is threaded into the server render.

@@ -14,6 +14,8 @@ browser, manifest driven routes, typed RPC, streaming everywhere.
 - [Pages](/docs/pages): view components and `definePage()`.
 - [Layouts](/docs/layouts): nested layouts that survive navigation.
 - [Vite config](/docs/vite-config): what `defineApp()` does for you.
+- [Active links](/docs/active-links): marking the current route in navigation.
+- [View transitions](/docs/view-transitions): animated route changes with the View Transition API.
 
 ## Data
 
@@ -26,13 +28,17 @@ browser, manifest driven routes, typed RPC, streaming everywhere.
 ## Auth and access
 
 - [Middleware](/docs/middleware): the unified `use` primitive for auth gates, redirects, request-scoped setup, and stream observers.
+- [CSRF protection](/docs/csrf): built-in CSRF token validation for forms and mutations.
+- [Composing Hono middleware](/docs/hono-middleware): wiring Hono-native middleware and custom routes alongside the framework.
 
 ## Operations
 
 - [Prefetch](/docs/prefetch): preloading routes on hover or focus.
+- [Link prefetch](/docs/link-prefetch): browser-level speculation rules for near-instant navigation.
 - [Reloading](/docs/reloading): invalidating loaders after mutations.
 - [`renderPage`](/docs/render-page): the SSR entry point.
-- [Deployment](/docs/deployment): shipping to Cloudflare Workers.
+- [Deployment](/docs/deployment): shipping to Cloudflare Workers or Node.js.
+- [WebSockets](/docs/websockets): full-duplex connections via Hono's WebSocket helper.
 
 ---
 
