@@ -16,6 +16,11 @@ import {
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 export type Align = 'start' | 'center' | 'end';
 
+// A rect-getter for positioning against a point or virtual element. Lets other
+// modules (e.g. the context menu) name the option type without importing
+// floating-ui directly.
+export type ClientRectGetter = () => ClientRectObject | null;
+
 // Our (side, align) maps to a floating-ui Placement: center is the bare side,
 // start/end become the `-start` / `-end` suffix. After the center early-return,
 // align narrows to 'start' | 'end', so the template literal is structurally a
@@ -61,7 +66,7 @@ export interface UsePositionOptions {
   // instead of anchorRef.current. Used by the context menu to anchor at the
   // pointer. Returning null yields a zero rect at the origin (defaultRect), so
   // computePosition always receives a valid reference.
-  getAnchorRect?: () => ClientRectObject | null;
+  getAnchorRect?: ClientRectGetter;
   side?: Side; // default 'bottom'
   align?: Align; // default 'center'
   offset?: number; // gap in px, default 8
