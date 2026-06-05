@@ -1,7 +1,8 @@
 // packages/ui/src/menu/menu.tsx
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
+import { h, createContext, type ComponentChildren, type JSX, type VNode } from 'preact';
 import {
   useCallback,
+  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -583,6 +584,84 @@ export function MenuRadioItem(props: MenuRadioItemProps): VNode {
       onPointerEnter: handlePointerEnter,
     },
     state: { checked, disabled, highlighted },
+    children,
+  });
+}
+
+// MenuGroup context: carries the label id from MenuGroup down to MenuGroupLabel.
+const MenuGroupContext = createContext<{ labelId: string } | null>(null);
+
+export type MenuGroupProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function MenuGroup(props: MenuGroupProps) {
+  const { render, children, ...rest } = props;
+  const labelId = useId();
+  const node = useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
+    children,
+  });
+  return h(MenuGroupContext.Provider, { value: { labelId } }, node);
+}
+
+export type MenuGroupLabelProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function MenuGroupLabel(props: MenuGroupLabelProps): VNode {
+  const { render, children, ...rest } = props;
+  const group = useContext(MenuGroupContext);
+  // Presentational: not focusable, no item role. Wires its id to the Group's
+  // aria-labelledby.
+  return useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, id: group?.labelId },
+    children,
+  });
+}
+
+export type MenuSeparatorProps = {
+  render?: RenderProp;
+} & JSX.HTMLAttributes<HTMLDivElement>;
+
+export function MenuSeparator(props: MenuSeparatorProps): VNode {
+  const { render, ...rest } = props;
+  return useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, role: 'separator', 'aria-orientation': 'horizontal' },
+  });
+}
+
+export type MenuArrowProps = {
+  render?: RenderProp<{ side: Side }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function MenuArrow(props: MenuArrowProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useMenuContext('Arrow');
+  const { side, arrowX, arrowY } = ctx.position;
+  return useRender<{ side: Side }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.arrowRef,
+      'data-side': side,
+      style: {
+        position: 'absolute',
+        left: arrowX != null ? `${arrowX}px` : undefined,
+        top: arrowY != null ? `${arrowY}px` : undefined,
+      },
+    },
+    state: { side },
     children,
   });
 }
