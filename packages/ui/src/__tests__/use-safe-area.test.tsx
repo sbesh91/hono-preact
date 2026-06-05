@@ -57,6 +57,9 @@ function stub(getByText: (t: string) => HTMLElement) {
 const move = (clientX: number, clientY: number) =>
   fireEvent.pointerMove(document, { clientX, clientY, pointerType: 'mouse' });
 
+const leaveDocument = () =>
+  fireEvent.pointerLeave(document.documentElement, { pointerType: 'mouse' });
+
 describe('useSafeArea', () => {
   it('does not close before the pointer has touched a reference (engaged gate)', () => {
     const onClose = vi.fn();
@@ -65,57 +68,97 @@ describe('useSafeArea', () => {
     );
     stub(getByText);
     move(150, 130); // gap, outside corridor, but no reference hit yet
+    act(() => vi.advanceTimersByTime(300));
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('closes immediately when the pointer leaves the corridor', () => {
+  it('stays open while the pointer dwells inside the corridor', () => {
+    const onClose = vi.fn();
+    const { getByText } = render(
+      <Harness enabled onClose={onClose} graceMs={300} />
+    );
+    stub(getByText);
+    move(50, 25); // engaged
+    move(150, 25); // inside corridor -> safe region
+    act(() => vi.advanceTimersByTime(300));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes after the grace period when the pointer leaves the corridor', () => {
     const onClose = vi.fn();
     const { getByText } = render(
       <Harness enabled onClose={onClose} graceMs={300} />
     );
     stub(getByText);
     move(50, 25); // over the anchor -> engaged
-    move(150, 130); // gap, outside corridor
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('stays open inside the corridor, then closes on grace expiry', () => {
-    const onClose = vi.fn();
-    const { getByText } = render(
-      <Harness enabled onClose={onClose} graceMs={300} />
-    );
-    stub(getByText);
-    move(50, 25); // engaged
-    move(150, 25); // inside corridor -> arms grace
+    move(150, 130); // gap, outside corridor -> arms the close grace
     expect(onClose).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(300));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('does not re-arm the grace timer on continued movement in the corridor', () => {
+  it('does not re-arm the grace timer while the pointer stays outside the corridor', () => {
     const onClose = vi.fn();
     const { getByText } = render(
       <Harness enabled onClose={onClose} graceMs={300} />
     );
     stub(getByText);
     move(50, 25); // engaged
-    move(150, 25); // inside corridor -> arms grace at t=0
+    move(150, 130); // outside corridor -> arms grace at t=0
     act(() => vi.advanceTimersByTime(200)); // t=200, still pending
-    move(150, 30); // still inside; must NOT reset the deadline
+    move(160, 140); // still outside; must NOT reset the deadline
     expect(onClose).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(100)); // t=300 from arm -> fires
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('clears the grace timer when the pointer reaches the floating element', () => {
+  it('cancels a pending close when the pointer re-enters the corridor', () => {
     const onClose = vi.fn();
     const { getByText } = render(
       <Harness enabled onClose={onClose} graceMs={300} />
     );
     stub(getByText);
     move(50, 25); // engaged
-    move(150, 25); // inside corridor -> arms grace
+    move(150, 130); // outside corridor -> arms grace
+    act(() => vi.advanceTimersByTime(200)); // still pending
+    move(150, 25); // back inside the corridor -> cancels the close
+    act(() => vi.advanceTimersByTime(300));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending close when the pointer reaches the floating element', () => {
+    const onClose = vi.fn();
+    const { getByText } = render(
+      <Harness enabled onClose={onClose} graceMs={300} />
+    );
+    stub(getByText);
+    move(50, 25); // engaged
+    move(150, 130); // outside corridor -> arms grace
     move(250, 75); // over the floating element -> clears grace
+    act(() => vi.advanceTimersByTime(300));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes after the grace period when the pointer leaves the document', () => {
+    const onClose = vi.fn();
+    const { getByText } = render(
+      <Harness enabled onClose={onClose} graceMs={300} />
+    );
+    stub(getByText);
+    move(50, 25); // engaged over the anchor
+    leaveDocument(); // pointer left the viewport -> arms the close grace
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(300));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a document leave before the session is engaged', () => {
+    const onClose = vi.fn();
+    const { getByText } = render(
+      <Harness enabled onClose={onClose} graceMs={300} />
+    );
+    stub(getByText);
+    leaveDocument(); // never engaged -> nothing to close
     act(() => vi.advanceTimersByTime(300));
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -136,6 +179,7 @@ describe('useSafeArea', () => {
       clientY: 130,
       pointerType: 'touch',
     });
+    act(() => vi.advanceTimersByTime(300));
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -147,7 +191,9 @@ describe('useSafeArea', () => {
     stub(getByText);
     move(50, 25); // engaged
     rerender(<Harness enabled={false} onClose={onClose} graceMs={300} />);
-    move(150, 130); // would close if still listening
+    move(150, 130); // would arm a close if still listening
+    leaveDocument(); // and so would this
+    act(() => vi.advanceTimersByTime(300));
     expect(onClose).not.toHaveBeenCalled();
   });
 });

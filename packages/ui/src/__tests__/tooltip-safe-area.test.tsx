@@ -73,25 +73,26 @@ describe('Tooltip safe area', () => {
     expect(queryByRole('tooltip')).not.toBeNull();
   });
 
-  it('closes when the pointer leaves the corridor (away from the popup)', () => {
+  it('stays open while the pointer dwells inside the corridor', () => {
     const { queryByRole } = openAndStub();
-    move(150, 130); // gap, below the corridor
+    move(150, 25); // park inside the corridor
+    act(() => vi.advanceTimersByTime(300));
+    expect(queryByRole('tooltip')).not.toBeNull();
+  });
+
+  it('closes after the grace period once the pointer leaves the corridor', () => {
+    const { queryByRole } = openAndStub();
+    move(150, 130); // gap, below the corridor -> arms grace
+    expect(queryByRole('tooltip')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(300));
     expect(queryByRole('tooltip')).toBeNull();
   });
 
   it('keeps it open after the pointer reaches the popup', () => {
     const { queryByRole } = openAndStub();
-    move(150, 25); // arm grace in the corridor
+    move(150, 130); // leave the corridor -> arms grace
     move(250, 75); // reach the popup -> clears grace
     act(() => vi.advanceTimersByTime(300));
     expect(queryByRole('tooltip')).not.toBeNull();
-  });
-
-  it('closes when the grace period expires mid-corridor', () => {
-    const { queryByRole } = openAndStub();
-    move(150, 25); // dawdle in the corridor
-    expect(queryByRole('tooltip')).not.toBeNull();
-    act(() => vi.advanceTimersByTime(300));
-    expect(queryByRole('tooltip')).toBeNull();
   });
 });

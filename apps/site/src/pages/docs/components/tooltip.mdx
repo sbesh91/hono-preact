@@ -40,10 +40,10 @@ export function SaveHint() {
 The trigger opens after a short delay on hover and immediately on focus. Set
 `delay` and `closeDelay` on `Tooltip.Root` to tune the timing.
 
-Once open, the tooltip stays open while you move from the trigger toward the
-popup, even across the gap between them, by tracking a safe corridor toward the
-popup; it closes when the pointer leaves that corridor or after `closeDelay`
-elapses. See [useSafeArea](/docs/components/use-safe-area).
+Once open, the tooltip stays open while the pointer rests on the trigger, the
+popup, or the safe corridor across the gap between them; it closes `closeDelay`
+after the pointer leaves that region, and a move back inside cancels the close.
+See [useSafeArea](/docs/components/use-safe-area).
 
 ## Styling
 
@@ -127,17 +127,17 @@ element it renders. The Trigger, Positioner, Popup, and Arrow also expose
 Provides open state, ids, refs, timing, and placement config to the parts.
 Renders only its children.
 
-| Prop           | Type                               | Default    | Description                                                |
-| -------------- | ---------------------------------- | ---------- | ---------------------------------------------------------- |
-| `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.           |
-| `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.                      |
-| `onOpenChange` | `(open: boolean) => void`          | -          | Called when the tooltip requests an open or close.         |
-| `delay`        | `number`                           | `600`      | Open delay in ms after the pointer enters the trigger.     |
-| `closeDelay`   | `number`                           | `300`      | Grace window in ms for the safe corridor toward the popup. |
-| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'top'`    | Preferred side of the anchor to place the popup.           |
-| `align`        | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                                 |
-| `offset`       | `number`                           | `8`        | Gap in pixels between the anchor and the popup.            |
-| `children`     | `ComponentChildren`                | -          | The trigger and positioner.                                |
+| Prop           | Type                               | Default    | Description                                                                              |
+| -------------- | ---------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.                                         |
+| `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.                                                    |
+| `onOpenChange` | `(open: boolean) => void`          | -          | Called when the tooltip requests an open or close.                                       |
+| `delay`        | `number`                           | `600`      | Open delay in ms after the pointer enters the trigger.                                   |
+| `closeDelay`   | `number`                           | `300`      | Grace in ms before closing once the pointer leaves the trigger, popup, or safe corridor. |
+| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'top'`    | Preferred side of the anchor to place the popup.                                         |
+| `align`        | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                                                               |
+| `offset`       | `number`                           | `8`        | Gap in pixels between the anchor and the popup.                                          |
+| `children`     | `ComponentChildren`                | -          | The trigger and positioner.                                                              |
 
 ### Tooltip.Trigger
 
@@ -153,8 +153,8 @@ The element the tooltip describes. Binds hover and focus, wires
 
 Sets `data-state` and `aria-describedby` (the popup id, only while open). Opens
 after `delay` on a mouse `pointerenter`, immediately on `focus`; once open, it
-closes when the pointer leaves the safe corridor toward the popup, on `blur`, or
-on Escape. A touch pointer does not open it.
+closes `closeDelay` after the pointer leaves the trigger, popup, and safe
+corridor, immediately on `blur`, or on Escape. A touch pointer does not open it.
 
 ### Tooltip.Positioner
 
@@ -219,8 +219,8 @@ has `role="tooltip"`.
 - It is **hoverable**: moving the pointer from the trigger onto the popup keeps
   it open (WCAG 1.4.13), so content that needs to be read or selected does not
   vanish.
-- It is **dismissible** with Escape and **persistent**: while the pointer is over
-  the trigger or popup it never auto-hides on a timer; it closes when focus or the
-  pointer leaves.
+- It is **dismissible** with Escape and **persistent**: while the pointer rests on
+  the trigger, the popup, or the safe corridor between them it never auto-hides on
+  a timer; it closes once focus or the pointer leaves.
 - Touch input cannot hover, so the tooltip is suppressed there. Do not place
   information that is only available through a tooltip; keep it supplementary.

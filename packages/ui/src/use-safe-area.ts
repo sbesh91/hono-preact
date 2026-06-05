@@ -12,8 +12,8 @@ export interface UseSafeAreaOptions {
   enabled: boolean; // typically the open state of a hover-driven element
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
-  onClose: () => void; // intent abandoned, or grace expired
-  graceMs?: number; // default 300
+  onClose: () => void; // pointer left the safe region and the grace expired
+  graceMs?: number; // close grace after leaving the safe region, default 300
 }
 
 export function useSafeArea(opts: UseSafeAreaOptions): void {
@@ -47,6 +47,13 @@ export function useSafeArea(opts: UseSafeAreaOptions): void {
       onCloseRef.current();
     };
 
+    // Start the close countdown once the pointer has left the safe region. Arm
+    // once: continued movement outside the region keeps the original deadline,
+    // and re-entering (clearGrace) cancels it.
+    const armGrace = () => {
+      if (graceTimer == null) graceTimer = setTimeout(close, graceMs);
+    };
+
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerType === 'touch') return;
       const point = { x: event.clientX, y: event.clientY };
@@ -64,20 +71,34 @@ export function useSafeArea(opts: UseSafeAreaOptions): void {
       //    stray mouse move never closes a focus-opened element.
       if (!engaged) return;
 
-      // 3. In the gap: honor the corridor toward the floating element.
+      // 3. Inside the corridor toward the floating element: still in the safe
+      //    region, so stay open and cancel any pending close.
       const side = sideFromRects(anchorRect, floatingRect);
       const polygon = buildSafePolygon(anchorRect, floatingRect, side);
       if (pointInPolygon(point, polygon)) {
-        if (graceTimer == null) graceTimer = setTimeout(close, graceMs);
+        clearGrace();
         return;
       }
-      close();
+
+      // 4. Left the safe region (reference + corridor): start the close grace.
+      //    Moving back in before it elapses cancels the close.
+      armGrace();
     };
 
+    // The pointer leaving the viewport ends the hover session: no further
+    // pointermove will carry it back into the safe region, so a tooltip last
+    // seen inside the corridor would otherwise hang open. Start the same grace.
+    const onDocumentLeave = () => {
+      if (engaged) armGrace();
+    };
+
+    const root = document.documentElement;
     document.addEventListener('pointermove', onPointerMove);
+    root.addEventListener('pointerleave', onDocumentLeave);
     return () => {
       clearGrace();
       document.removeEventListener('pointermove', onPointerMove);
+      root.removeEventListener('pointerleave', onDocumentLeave);
     };
   }, [enabled, graceMs]);
 }

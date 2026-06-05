@@ -26,7 +26,7 @@ export interface TooltipRootProps {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   delay?: number; // open delay (ms), default 600
-  closeDelay?: number; // safe-corridor grace window (ms), default 300
+  closeDelay?: number; // grace before close after leaving the safe corridor (ms), default 300
   side?: Side; // default 'top'
   align?: Align; // default 'center'
   offset?: number; // default 8
@@ -271,9 +271,9 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
     onDismiss: () => ctx.setOpenImmediate(false),
   });
 
-  // While open, keep the tooltip open as the pointer travels the safe corridor
-  // from the trigger toward the popup; close once it leaves the corridor or the
-  // grace period elapses.
+  // While open, keep the tooltip open while the pointer rests over the trigger,
+  // the popup, or the safe corridor between them; once it leaves that region,
+  // close after the grace period (re-entering cancels the close).
   useSafeArea({
     enabled: ctx.open,
     anchorRef: ctx.anchorRef,

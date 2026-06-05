@@ -1,14 +1,32 @@
+import { SafeAreaDiagram } from '../../../components/docs/SafeAreaDiagram.js';
+
 # useSafeArea
 
 `useSafeArea` keeps a hover-opened floating element open while the pointer travels
 the empty gap toward it. When the pointer leaves the trigger it would normally
 fire `pointerleave` and close the element before the pointer arrives. This hook
-watches `pointermove` and treats motion through a safe corridor, a quad spanning
-the trigger's edge to the floating element's near edge, as intent to reach the
-element, so it stays open. Leaving the corridor, or dwelling in it past a short
-grace period, closes it.
+watches `pointermove` and treats the trigger, the floating element, and a safe
+corridor between them, a quad spanning the trigger's edge to the floating
+element's near edge, as one safe region: while the pointer rests anywhere inside
+it the element stays open, including when it dwells in the gap. Once the pointer
+leaves that region the element closes after a short grace period, which a move
+back inside cancels.
 
 See also: [usePosition](/docs/components/use-position), [useDismiss](/docs/components/use-dismiss), [Tooltip](/docs/components/tooltip).
+
+## How it works
+
+<SafeAreaDiagram />
+
+The safe corridor is a quad joining the trigger's near edge to the floating
+element's near edge, spanning the gap between them. While the element is open, a
+`pointermove` that stays inside the corridor, even on a diagonal that does not aim
+straight at the element, keeps it open, and so does pausing there. A move that
+leaves the corridor without reaching the floating element starts the grace timer
+and then closes the element; returning to the corridor or either element before
+the grace lapses cancels the close. The point-in-polygon test runs against the
+live rects of both elements on every move, so the corridor follows them through
+scroll, resize, and a flipped placement.
 
 ## Signature
 
@@ -21,20 +39,20 @@ interface UseSafeAreaOptions {
   enabled: boolean; // typically the open state of a hover-driven element
   anchorRef: RefObject<HTMLElement>; // the trigger the corridor starts from
   floatingRef: RefObject<HTMLElement>; // the floating element it points at
-  onClose: () => void; // pointer left the corridor, or the grace lapsed
-  graceMs?: number; // default 300
+  onClose: () => void; // pointer left the safe region and the grace lapsed
+  graceMs?: number; // close grace after leaving the safe region, default 300
 }
 ```
 
 ## Options
 
-| Option        | Type                     | Default | Notes                                                                                          |
-| ------------- | ------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
-| `enabled`     | `boolean`                | none    | Watch the pointer only while the element is open.                                              |
-| `anchorRef`   | `RefObject<HTMLElement>` | none    | The trigger the corridor starts from.                                                          |
-| `floatingRef` | `RefObject<HTMLElement>` | none    | The floating element the corridor points at.                                                   |
-| `onClose`     | `() => void`             | none    | Called when the pointer leaves the corridor or the grace lapses.                               |
-| `graceMs`     | `number`                 | `300`   | Max time the pointer may dwell in the corridor without reaching either element before closing. |
+| Option        | Type                     | Default | Notes                                                                                                 |
+| ------------- | ------------------------ | ------- | ----------------------------------------------------------------------------------------------------- |
+| `enabled`     | `boolean`                | none    | Watch the pointer only while the element is open.                                                     |
+| `anchorRef`   | `RefObject<HTMLElement>` | none    | The trigger the corridor starts from.                                                                 |
+| `floatingRef` | `RefObject<HTMLElement>` | none    | The floating element the corridor points at.                                                          |
+| `onClose`     | `() => void`             | none    | Called after the pointer leaves the safe region and the grace period lapses.                          |
+| `graceMs`     | `number`                 | `300`   | Grace period after the pointer leaves the safe region before `onClose` fires; re-entering cancels it. |
 
 It injects no DOM: it listens to `pointermove` while enabled and runs a
 point-in-polygon test against the live rects of the two elements, so nothing
@@ -42,7 +60,9 @@ under the corridor is blocked from interaction. The corridor follows the element
 through scroll, resize, and a flipped placement. A pointer session begins only
 once the pointer has been over the trigger or the floating element, so an element
 opened by keyboard focus is not closed by unrelated mouse movement (the consumer
-closes it on blur or Escape instead). Touch pointers are ignored.
+closes it on blur or Escape instead). If the pointer leaves the document while a
+session is active, the same grace timer starts, so the element does not hang open
+when the cursor exits the window. Touch pointers are ignored.
 
 ## Example
 

@@ -1004,3 +1004,175 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   justify-content: center;
   min-height: 7rem;
 }
+
+/* useSafeArea explainer diagram (SafeAreaDiagram.tsx). Every color is a page
+   theme token, so the figure tracks light/dark/system automatically; the pointer
+   dots stop moving under prefers-reduced-motion (handled at the end). */
+.docs-safe-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.25rem 0;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.docs-safe-area .sa {
+  width: 100%;
+  max-width: 24rem;
+  height: auto;
+}
+
+/* The safe corridor quad. */
+.sa-corridor {
+  fill: var(--accent);
+  fill-opacity: 0.1;
+  stroke: var(--accent);
+  stroke-opacity: 0.55;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+/* Trigger / floating boxes and their labels. */
+.sa-box {
+  fill: var(--surface-subtle);
+  stroke: var(--border-color);
+  stroke-width: 1.5;
+}
+.sa-label {
+  fill: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+/* Direction tracks (visible without motion) and their arrowheads. */
+.sa-track {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 4;
+}
+.sa-track--open {
+  stroke: var(--badge-success-foreground);
+  marker-end: url(#sa-arrow-open);
+}
+.sa-track--close {
+  stroke: var(--danger);
+  marker-end: url(#sa-arrow-close);
+}
+.sa-arrowhead--open {
+  fill: var(--badge-success-foreground);
+}
+.sa-arrowhead--close {
+  fill: var(--danger);
+}
+
+/* The point where the closing path leaves the corridor. */
+.sa-x line {
+  stroke: var(--danger);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Pointer dots (positioned and looped purely by transform). */
+.sa-dot {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.sa-dot--open {
+  fill: var(--badge-success-foreground);
+  animation: sa-travel-open 3.8s ease-in-out infinite;
+}
+.sa-dot--close {
+  fill: var(--danger);
+  animation: sa-travel-close 3.8s ease-in-out infinite;
+}
+
+@keyframes sa-travel-open {
+  0% {
+    transform: translate(190px, 52px);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(140px, 130px);
+    opacity: 1;
+  }
+  82% {
+    transform: translate(140px, 130px);
+    opacity: 1;
+  }
+  90% {
+    transform: translate(140px, 130px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(190px, 52px);
+    opacity: 0;
+  }
+}
+@keyframes sa-travel-close {
+  0% {
+    transform: translate(190px, 52px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  42% {
+    transform: translate(244px, 87px);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(270px, 104px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(270px, 104px);
+    opacity: 0;
+  }
+}
+
+/* Legend. */
+.sa-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.sa-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sa-legend__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+}
+.sa-legend__dot--open {
+  background: var(--badge-success-foreground);
+}
+.sa-legend__dot--close {
+  background: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-dot--open {
+    animation: none;
+    transform: translate(162px, 100px);
+    opacity: 1;
+  }
+  .sa-dot--close {
+    animation: none;
+    transform: translate(244px, 87px);
+    opacity: 1;
+  }
+}
