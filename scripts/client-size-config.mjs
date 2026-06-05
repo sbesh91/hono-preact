@@ -71,6 +71,8 @@ export const COMPONENT_MODULES = {
   dialog: ['dialog/index.js'],
   popover: ['popover/index.js'],
   tooltip: ['tooltip/index.js'],
+  menu: ['menu/index.js'],
+  'context-menu': ['context-menu/index.js'],
 };
 
 // Section B: ordered prefix -> bucket for the site's emitted chunks. A prefix
@@ -86,6 +88,8 @@ export const CHUNK_PREFIXES = [
   ['dialog', 'components'],
   ['popover', 'components'],
   ['tooltip', 'components'],
+  ['menu', 'components'],
+  ['context-menu', 'components'],
   ['use-position', 'components'],
   ['use-dismiss', 'components'],
   ['use-render', 'components'],
