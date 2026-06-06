@@ -10,4 +10,17 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.useSafeArea).toBe('function');
     expect(typeof ui.placementFor).toBe('function');
   });
+
+  it('exposes the Menu namespace', () => {
+    expect(typeof ui.Menu.Root).toBe('function');
+    expect(typeof ui.Menu.Item).toBe('function');
+    expect(typeof ui.Menu.CheckboxItem).toBe('function');
+    expect(typeof ui.Menu.SubmenuTrigger).toBe('function');
+  });
+
+  it('exposes the ContextMenu namespace', () => {
+    expect(typeof ui.ContextMenu.Root).toBe('function');
+    expect(typeof ui.ContextMenu.Trigger).toBe('function');
+    expect(typeof ui.ContextMenu.Item).toBe('function');
+  });
 });

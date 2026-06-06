@@ -52,12 +52,14 @@ describe('docs nav', () => {
     expect(new Set(routes).size).toBe(routes.length);
   });
 
-  it('lists Popover and Tooltip under Overlays', () => {
+  it('lists Popover, Tooltip, Menu, and Context Menu under Overlays', () => {
     const components = nav.find((a) => a.id === 'components')!;
     const overlays = components.sections.find((s) => s.heading === 'Overlays')!;
     const routes = overlays.entries.map((e) => e.route);
     expect(routes).toContain('/docs/components/popover');
     expect(routes).toContain('/docs/components/tooltip');
+    expect(routes).toContain('/docs/components/menu');
+    expect(routes).toContain('/docs/components/context-menu');
   });
 
   it('lists usePosition, useDismiss, and useFocusReturn under Foundations', () => {

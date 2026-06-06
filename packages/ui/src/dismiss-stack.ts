@@ -4,6 +4,11 @@ import type { RefObject } from 'preact';
 export type DismissReason = 'escape' | 'outside-press';
 
 export interface DismissLayer {
+  // Optional tree identity. A layer with a parentId coordinates with its
+  // ancestors/descendants for outside-press (whole-tree dismissal). Layers with
+  // no id are single-node trees (Popover, Tooltip), preserving prior behavior.
+  id?: string;
+  parentId?: string | null;
   // Elements considered "inside" this layer. A pointerdown within any of them
   // is not an outside-press. Pass the floating element and the anchor/trigger.
   refs: Array<RefObject<HTMLElement>>;
@@ -14,6 +19,7 @@ export interface DismissLayer {
 
 const stack: DismissLayer[] = [];
 let listening = false;
+let autoId = 0;
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return;
@@ -25,24 +31,41 @@ function onKeyDown(event: KeyboardEvent) {
   }
 }
 
+// Walk parentId pointers to the root layer of the tree the given layer is in.
+function rootOf(layer: DismissLayer): DismissLayer {
+  let current = layer;
+  while (current.parentId != null) {
+    const parent = stack.find((l) => l.id === current.parentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current;
+}
+
+function pressInside(layer: DismissLayer, target: Node | null): boolean {
+  return layer.refs.some(
+    (ref) =>
+      ref.current != null && target != null && ref.current.contains(target)
+  );
+}
+
 function onPointerDown(event: Event) {
-  // event.target is EventTarget | null; narrow to Node via instanceof so
-  // contains() is callable without a cast.
   const target = event.target;
   const targetNode = target instanceof Node ? target : null;
   for (let i = stack.length - 1; i >= 0; i--) {
     const layer = stack[i];
     if (!layer.outsidePress) continue;
-    const inside = layer.refs.some(
-      (ref) =>
-        ref.current != null &&
-        targetNode != null &&
-        ref.current.contains(targetNode)
-    );
-    // The first outside-press layer from the top decides: if the press landed
-    // inside it, nothing dismisses; otherwise it dismisses and we stop.
+
+    // The press is "inside" if it landed within any layer of this layer's tree
+    // (the layer, its ancestors, or its descendants). The tree is identified by
+    // a shared root.
+    const root = rootOf(layer);
+    const tree = stack.filter((l) => rootOf(l) === root);
+    const inside = tree.some((l) => pressInside(l, targetNode));
     if (inside) return;
-    layer.onDismiss('outside-press');
+
+    // Outside the whole tree: dismiss the root (which unmounts the subtree).
+    root.onDismiss('outside-press');
     return;
   }
 }
@@ -61,9 +84,11 @@ function stopListening() {
   listening = false;
 }
 
-// Push a layer onto the stack; returns an unregister function. The shared
-// document listeners attach on the first layer and detach when the last leaves.
+// Push a layer onto the stack; returns an unregister function. A layer with no
+// id is assigned a unique one so rootOf treats it as its own single-node tree.
 export function registerDismissLayer(layer: DismissLayer): () => void {
+  if (layer.id == null) layer.id = `dismiss-${autoId++}`;
+  if (layer.parentId === undefined) layer.parentId = null;
   stack.push(layer);
   ensureListening();
   return () => {
