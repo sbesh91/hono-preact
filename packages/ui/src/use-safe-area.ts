@@ -27,9 +27,6 @@ export function useSafeArea(opts: UseSafeAreaOptions): void {
   // change the listener's behavior. Matches useDismiss's effect shape.
   useLayoutEffect(() => {
     if (!enabled) return;
-    const anchor = anchorRef.current;
-    const floating = floatingRef.current;
-    if (!anchor || !floating) return;
 
     // Per-session state lives in the effect closure (reset on each open).
     let engaged = false;
@@ -56,6 +53,14 @@ export function useSafeArea(opts: UseSafeAreaOptions): void {
 
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerType === 'touch') return;
+      // Read the refs per-move, not once at effect setup. A floating element
+      // that mounts on open (e.g. a submenu positioner that mounts after this
+      // trigger-side effect has already run) is null at setup but present by
+      // the first move. Capturing once would attach the listener with a null
+      // floating element, so the element could never close.
+      const anchor = anchorRef.current;
+      const floating = floatingRef.current;
+      if (!anchor || !floating) return;
       const point = { x: event.clientX, y: event.clientY };
       const anchorRect = anchor.getBoundingClientRect();
       const floatingRect = floating.getBoundingClientRect();
