@@ -47,10 +47,10 @@ export function Canvas() {
 `ContextMenu.Trigger` wraps the right-clickable region; it captures the pointer
 position and opens the menu there. The other parts (`Positioner`, `Popup`,
 `Item`, `Separator`, `CheckboxItem`, `RadioGroup`, `RadioItem`, `Group`,
-`GroupLabel`, `Arrow`, and the `Submenu*` parts) are the same components the
-Menu page documents, re-exported under the `ContextMenu` namespace so an example
-never mixes the two. See the [Menu reference](/docs/components/menu) for their
-props, keyboard map, and data attributes.
+`GroupLabel`, `Arrow`, and the `Submenu*` parts) are the same components the Menu
+component uses, re-exported under the `ContextMenu` namespace so an example never
+mixes the two. They are documented in the API reference below, and the keyboard
+map and navigation behave exactly as in [Menu](/docs/components/menu).
 
 ### Touch
 
@@ -177,11 +177,13 @@ exactly like a `Menu.Popup`; the demo above uses the styles below:
 
 ## API reference
 
-Only `ContextMenu.Root` and `ContextMenu.Trigger` differ from Menu. Every other
-part is the same component re-exported under `ContextMenu`; for those, see the
-[Menu API reference](/docs/components/menu#api-reference). Every part accepts a
-`render` prop for composition (see [useRender](/docs/components/use-render)) and
-forwards unknown props to the element it renders.
+`ContextMenu.Root` and `ContextMenu.Trigger` are unique to this component; the
+rest are the same components as their `Menu.*` counterparts, re-exported under
+the `ContextMenu` namespace and documented below. Every part accepts a `render`
+prop for composition (see [useRender](/docs/components/use-render)) and forwards
+unknown props to the element it renders. Items pass their
+`{ disabled, highlighted }` state (plus `checked` on checkbox and radio items)
+to a render function.
 
 ### ContextMenu.Root
 
@@ -216,16 +218,200 @@ Sets `data-state="open" | "closed"`. Unlike `Menu.Trigger` it is not a button
 and carries no `aria-haspopup`: the menu is reached by right-click, not by
 activating the region.
 
-### Other parts
+### ContextMenu.Positioner
 
-`ContextMenu.Positioner`, `ContextMenu.Popup`, `ContextMenu.Item`,
-`ContextMenu.CheckboxItem`, `ContextMenu.RadioGroup`, `ContextMenu.RadioItem`,
-`ContextMenu.Separator`, `ContextMenu.Group`, `ContextMenu.GroupLabel`,
-`ContextMenu.Arrow`, `ContextMenu.SubmenuRoot`, `ContextMenu.SubmenuTrigger`,
-`ContextMenu.SubmenuPositioner`, and `ContextMenu.SubmenuPopup` are the same
-components as their `Menu.*` counterparts. See the
-[Menu API reference](/docs/components/menu#api-reference) for their props, the
-keyboard map, and the data-attribute contract.
+The fixed-positioned wrapper that Floating UI drives. Renders nothing until the
+menu is open (mount on open). Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
+browser supports the Popover API, the element is promoted to the top layer so it
+escapes ancestor clipping.
+
+### ContextMenu.Popup
+
+The menu surface and navigation root. Default element `<div>` with
+`role="menu"`.
+
+| Prop         | Type                                 | Default | Description                                                            |
+| ------------ | ------------------------------------ | ------- | ---------------------------------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                                        |
+| `aria-label` | `string`                             | -       | Accessible name. Set one, since there is no named trigger to label it. |
+| `children`   | `ComponentChildren`                  | -       | Items, separators, groups, and submenus.                               |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                                              |
+
+Sets `role="menu"`, `id`, `tabindex="-1"`, `aria-orientation="vertical"`, and
+`data-state`. Owns the keyboard navigation, typeahead, Escape / outside-press
+dismissal, and focus move-in / return.
+
+### ContextMenu.Item
+
+A command row. Default element `<div>` with `role="menuitem"`.
+
+| Prop       | Type                                                      | Default | Description                                                                |
+| ---------- | --------------------------------------------------------- | ------- | -------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ disabled: boolean; highlighted: boolean }>` | -       | Compose or replace the element.                                            |
+| `disabled` | `boolean`                                                 | `false` | Skip the item in navigation and ignore activation.                         |
+| `onSelect` | `(event: Event) => void`                                  | -       | Called on activation. Call `event.preventDefault()` to keep the menu open. |
+| `children` | `ComponentChildren`                                       | -       | Item content.                                                              |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                      | -       | Forwarded to the element.                                                  |
+
+### ContextMenu.CheckboxItem
+
+A toggle row that holds its own checked state. Default element `<div>` with
+`role="menuitemcheckbox"`.
+
+| Prop              | Type                                                                        | Default | Description                                                   |
+| ----------------- | --------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
+| `render`          | `RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>` | -       | Compose or replace the element.                               |
+| `checked`         | `boolean`                                                                   | -       | Controlled checked state. Pair with `onCheckedChange`.        |
+| `defaultChecked`  | `boolean`                                                                   | `false` | Initial checked state when uncontrolled.                      |
+| `onCheckedChange` | `(checked: boolean) => void`                                                | -       | Called when the checked state changes.                        |
+| `disabled`        | `boolean`                                                                   | `false` | Skip the item and ignore activation.                          |
+| `onSelect`        | `(event: Event) => void`                                                    | -       | Called on activation; `preventDefault()` keeps the menu open. |
+| `children`        | `ComponentChildren`                                                         | -       | Item content (render your own check indicator).               |
+| `...props`        | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -       | Forwarded to the element.                                     |
+
+Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+
+### ContextMenu.RadioGroup
+
+Single-select context for the radio items inside it. Default element `<div>`
+with `role="group"`.
+
+| Prop            | Type                                 | Default | Description                                           |
+| --------------- | ------------------------------------ | ------- | ----------------------------------------------------- |
+| `render`        | `RenderProp`                         | -       | Compose or replace the element.                       |
+| `value`         | `string`                             | -       | Controlled selected value. Pair with `onValueChange`. |
+| `defaultValue`  | `string`                             | -       | Initial selected value when uncontrolled.             |
+| `onValueChange` | `(value: string) => void`            | -       | Called when the selection changes.                    |
+| `children`      | `ComponentChildren`                  | -       | The radio items.                                      |
+| `...props`      | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                             |
+
+### ContextMenu.RadioItem
+
+A choice within a `ContextMenu.RadioGroup`. Default element `<div>` with
+`role="menuitemradio"`.
+
+| Prop       | Type                                                                        | Default  | Description                                                   |
+| ---------- | --------------------------------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `value`    | `string`                                                                    | required | Identifies the item within its group.                         |
+| `render`   | `RenderProp<{ checked: boolean; disabled: boolean; highlighted: boolean }>` | -        | Compose or replace the element.                               |
+| `disabled` | `boolean`                                                                   | `false`  | Skip the item and ignore activation.                          |
+| `onSelect` | `(event: Event) => void`                                                    | -        | Called on activation; `preventDefault()` keeps the menu open. |
+| `children` | `ComponentChildren`                                                         | -        | Item content (render your own selected indicator).            |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -        | Forwarded to the element.                                     |
+
+Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+
+### ContextMenu.Separator
+
+A horizontal divider between groups of items. Default element `<div>` with
+`role="separator"`.
+
+| Prop       | Type                                 | Default | Description               |
+| ---------- | ------------------------------------ | ------- | ------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.    |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element. |
+
+### ContextMenu.Group
+
+Wraps related items and labels them with a `ContextMenu.GroupLabel`. Default
+element `<div>` with `role="group"`.
+
+| Prop       | Type                                 | Default | Description                               |
+| ---------- | ------------------------------------ | ------- | ----------------------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.                    |
+| `children` | `ComponentChildren`                  | -       | A `ContextMenu.GroupLabel` and the items. |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                 |
+
+Wires its label to `aria-labelledby`.
+
+### ContextMenu.GroupLabel
+
+The accessible name for a `ContextMenu.Group`. Presentational, not focusable.
+Default element `<div>`.
+
+| Prop       | Type                                 | Default | Description               |
+| ---------- | ------------------------------------ | ------- | ------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.    |
+| `children` | `ComponentChildren`                  | -       | Label text.               |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element. |
+
+### ContextMenu.Arrow
+
+Optional pointer positioned from the Floating UI arrow data. Default element
+`<div>`. Place it on the correct edge with CSS keyed on `data-side`.
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp<{ side: Side }>`         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | Optional arrow content.         |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.       |
+
+Sets `data-side` and `position: absolute` with the computed offset.
+
+### ContextMenu.SubmenuRoot
+
+Provides a nested menu's open state and placement off a trigger row. Must be
+placed inside a `ContextMenu.Popup`. Renders only its children.
+
+| Prop           | Type                               | Default   | Description                                                |
+| -------------- | ---------------------------------- | --------- | ---------------------------------------------------------- |
+| `open`         | `boolean`                          | -         | Controlled open state. Pair with `onOpenChange`.           |
+| `defaultOpen`  | `boolean`                          | `false`   | Initial open state when uncontrolled.                      |
+| `onOpenChange` | `(open: boolean) => void`          | -         | Called when the submenu requests an open or close.         |
+| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'right'` | Preferred side of the trigger to place the submenu.        |
+| `align`        | `'start'\|'center'\|'end'`         | `'start'` | Alignment along that side.                                 |
+| `offset`       | `number`                           | `0`       | Gap in pixels between the trigger and the submenu.         |
+| `openDelay`    | `number`                           | `100`     | Hover open delay in ms.                                    |
+| `closeDelay`   | `number`                           | `300`     | Safe-corridor grace in ms before closing on pointer leave. |
+| `children`     | `ComponentChildren`                | -         | The submenu trigger and positioner.                        |
+
+### ContextMenu.SubmenuTrigger
+
+The row that opens the submenu. It is itself a `menuitem` in the parent menu.
+Default element `<div>` with `role="menuitem"`.
+
+| Prop       | Type                                                  | Default | Description                         |
+| ---------- | ----------------------------------------------------- | ------- | ----------------------------------- |
+| `render`   | `RenderProp<{ open: boolean; highlighted: boolean }>` | -       | Compose or replace the element.     |
+| `disabled` | `boolean`                                             | `false` | Skip the row and ignore activation. |
+| `children` | `ComponentChildren`                                   | -       | Row content.                        |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                  | -       | Forwarded to the element.           |
+
+Sets `aria-haspopup="menu"`, `aria-expanded`, and (while open) `aria-controls`.
+Opens on hover (after `openDelay`), `→`, `Enter`, `Space`, or click; the safe
+corridor keeps it open while the pointer travels toward the submenu.
+
+### ContextMenu.SubmenuPositioner
+
+The submenu's fixed-positioned wrapper. Same surface as `ContextMenu.Positioner`,
+bound to the submenu. Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The submenu popup.                                       |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+### ContextMenu.SubmenuPopup
+
+The submenu surface. Same surface as `ContextMenu.Popup`, with `←` wired to close
+the submenu and return focus to its trigger. Default element `<div>` with
+`role="menu"`.
+
+| Prop         | Type                                 | Default | Description                                       |
+| ------------ | ------------------------------------ | ------- | ------------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                   |
+| `aria-label` | `string`                             | -       | Accessible name. Defaults to the submenu trigger. |
+| `children`   | `ComponentChildren`                  | -       | The nested items.                                 |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                         |
 
 ### Primitives
 
