@@ -479,6 +479,51 @@ export function ComboboxOptionGroupLabel(
 }
 
 // ---------------------------------------------------------------------------
+// Task 10: Status (aria-live announcer)
+// ---------------------------------------------------------------------------
+
+const VISUALLY_HIDDEN: JSX.CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+};
+
+export type ComboboxStatusProps = {
+  render?: RenderProp<{ count: number; open: boolean }>;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'render'>;
+
+export function ComboboxStatus(props: ComboboxStatusProps): VNode {
+  const { render, style, ...rest } = props;
+  const ctx = useComboboxContext('Status');
+  const count = ctx.optionCount;
+  const message = !ctx.open
+    ? ''
+    : count === 0
+      ? 'No results'
+      : `${count} result${count === 1 ? '' : 's'} available`;
+
+  return useRender<{ count: number; open: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-atomic': 'true',
+      style: { ...VISUALLY_HIDDEN, ...(style as JSX.CSSProperties) },
+    },
+    state: { count, open: ctx.open },
+    children: render ? undefined : message,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Task 8: Input (core keyboard + filtering, modes none/list)
 // ---------------------------------------------------------------------------
 
