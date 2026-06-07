@@ -1,5 +1,11 @@
 // packages/ui/src/select/select.tsx
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  h,
+  Fragment,
+  type ComponentChildren,
+  type JSX,
+  type VNode,
+} from 'preact';
 import {
   useCallback,
   useContext,
@@ -57,9 +63,11 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     open: openProp,
     defaultOpen,
     onOpenChange,
+    name,
     disabled = false,
     required = false,
     isValueEqual,
+    serializeValue,
     side = 'bottom',
     align = 'start',
     offset = 8,
@@ -108,6 +116,14 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
       return isValueEqual(a as Value, b as Value);
     },
     [isValueEqual]
+  );
+
+  // String form of a value for the hidden form field. Same generic-erasure
+  // seam as `equal`: only consulted when `name` is set.
+  const serialize = useCallback(
+    (v: unknown): string =>
+      serializeValue ? serializeValue(v as Value) : String(v),
+    [serializeValue]
   );
 
   const valuesArray = useCallback((): unknown[] => {
@@ -206,7 +222,27 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     ]
   );
 
-  return h(SelectContext.Provider, { value: ctx }, children);
+  // Hidden native field(s) so the value submits in a real form. Single: one
+  // input; multi: one per selected value (repeated name, the native
+  // multi-select convention). Real inputs, so the value is present pre-hydration.
+  const hiddenFields =
+    name == null
+      ? null
+      : valuesArray().map((v, i) =>
+          h('input', {
+            key: `${name}-${i}`,
+            type: 'hidden',
+            name,
+            value: serialize(v),
+            disabled: disabled || undefined,
+          })
+        );
+
+  return h(
+    SelectContext.Provider,
+    { value: ctx },
+    h(Fragment, null, children, hiddenFields)
+  );
 }
 
 function supportsPopover(el: HTMLElement): boolean {
