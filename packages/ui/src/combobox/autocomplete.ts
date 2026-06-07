@@ -19,7 +19,11 @@ export function computeInlineCompletion(
   if (firstLabel.slice(0, typed.length).toLowerCase() !== typed.toLowerCase()) {
     return null;
   }
-  return { text: firstLabel, selStart: typed.length, selEnd: firstLabel.length };
+  return {
+    text: firstLabel,
+    selStart: typed.length,
+    selEnd: firstLabel.length,
+  };
 }
 
 // True when `next` appended characters to `prev` (a forward insertion). Used to

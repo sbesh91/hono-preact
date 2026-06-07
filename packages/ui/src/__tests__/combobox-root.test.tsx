@@ -38,7 +38,9 @@ describe('ComboboxRoot', () => {
       </ComboboxRoot>
     );
     await act(async () => {});
-    const hidden = container.querySelector('input[type="hidden"][name="fruit"]');
+    const hidden = container.querySelector(
+      'input[type="hidden"][name="fruit"]'
+    );
     expect((hidden as HTMLInputElement).value).toBe('apple');
   });
 
