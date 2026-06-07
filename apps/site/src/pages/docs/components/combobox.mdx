@@ -1,0 +1,912 @@
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+
+# Combobox
+
+An editable text input combined with a popup listbox. The user types a query,
+the consumer filters and renders matching options, and the component handles
+navigation, ARIA wiring, and selection commit. It ships unstyled: style it
+through the `data-state`, `data-highlighted`, `data-selected`, `data-disabled`,
+`data-side`, `data-align`, and `data-empty` contract.
+
+Use a Combobox when the user needs to search or filter before picking. Use
+[Select](/docs/components/select) when the list is short and always fully
+visible without filtering.
+
+**The consumer owns filtering.** The component never filters its children.
+Read `inputValue` (the typed query) and render only the matching
+`<Combobox.Option>` elements. A `matchSubstring` helper is exported for the
+common in-memory case.
+
+**`inputValue` is always the typed query.** In `autocomplete="both"` mode the
+DOM input may show a longer inline completion, but the public `inputValue`
+(and `onInputChange`) is always the prefix the user typed, so consumer
+filtering is identical across all three autocomplete modes.
+
+## Usage
+
+```tsx
+import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon'];
+
+export function FruitCombobox() {
+  const [query, setQuery] = useState('');
+  const filtered = FRUITS.filter((f) => matchSubstring(f, query));
+
+  return (
+    <Combobox.Root onInputChange={setQuery}>
+      <Combobox.Input placeholder="Search fruit…" aria-label="Fruit" />
+      <Combobox.Trigger aria-label="Open" />
+      <Combobox.Status />
+      <Combobox.Positioner>
+        <Combobox.Popup aria-label="Fruit">
+          {filtered.map((f) => (
+            <Combobox.Option key={f} value={f}>
+              {f}
+            </Combobox.Option>
+          ))}
+          <Combobox.Empty>No results</Combobox.Empty>
+        </Combobox.Popup>
+      </Combobox.Positioner>
+    </Combobox.Root>
+  );
+}
+```
+
+## Styling
+
+Parts expose `data-state` (`open` / `closed` on the Input, Trigger, and
+Popup). Options expose `data-highlighted` while active, `data-selected` when
+selected, and `data-disabled` when disabled. The Positioner and Arrow expose
+`data-side` and `data-align`. The Popup carries `data-empty` when no options
+are registered. The five examples below use the styles in their respective CSS
+tabs; copy a starting point in either flavor.
+
+### Single-select with filtering
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-cb-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 14rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+.docs-cb-wrap:focus-within {
+  border-color: #18181b;
+}
+.docs-cb-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #18181b;
+  min-width: 0;
+}
+.docs-cb-trigger {
+  padding: 0 0.5rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #71717a;
+  line-height: 1;
+}
+.docs-cb-positioner {
+  z-index: 50;
+}
+.docs-cb-popup {
+  box-sizing: border-box;
+  min-width: 14rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.625rem;
+  background: #fff;
+  color: #18181b;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+}
+.docs-cb-popup[data-state='open'] {
+  animation: docs-cb-in 120ms ease-out;
+}
+@keyframes docs-cb-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-cb-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+}
+.docs-cb-option[data-highlighted] {
+  background: #18181b;
+  color: #fafafa;
+}
+.docs-cb-option[data-selected]::after {
+  content: '✓';
+  margin-left: auto;
+}
+.docs-cb-option[data-disabled] {
+  color: #a1a1aa;
+  pointer-events: none;
+}
+.docs-cb-empty {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+  color: #71717a;
+}
+@media (prefers-color-scheme: dark) {
+  .docs-cb-wrap {
+    border-color: #27272a;
+    background: #18181b;
+  }
+  .docs-cb-wrap:focus-within {
+    border-color: #fafafa;
+  }
+  .docs-cb-input {
+    color: #fafafa;
+  }
+  .docs-cb-popup {
+    border-color: #27272a;
+    background: #18181b;
+    color: #fafafa;
+  }
+  .docs-cb-option[data-highlighted] {
+    background: #fafafa;
+    color: #18181b;
+  }
+}
+```
+
+```tsx
+import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon'];
+
+export function FruitCombobox() {
+  const [query, setQuery] = useState('');
+  const filtered = FRUITS.filter((f) => matchSubstring(f, query));
+
+  return (
+    <Combobox.Root onInputChange={setQuery} name="fruit">
+      <div className="relative inline-flex min-w-56 items-center rounded-lg border border-zinc-200 bg-white focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:focus-within:border-zinc-50">
+        <Combobox.Input
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+          placeholder="Search fruit…"
+          aria-label="Fruit"
+        />
+        <Combobox.Trigger
+          className="px-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+          aria-label="Open"
+        >
+          ▾
+        </Combobox.Trigger>
+      </div>
+      <Combobox.Status />
+      <Combobox.Positioner className="z-50">
+        <Combobox.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+          {filtered.map((f) => (
+            <Combobox.Option
+              key={f}
+              value={f}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900"
+            >
+              {f}
+            </Combobox.Option>
+          ))}
+          <Combobox.Empty className="px-2.5 py-2 text-sm text-zinc-500">
+            No results
+          </Combobox.Empty>
+        </Combobox.Popup>
+      </Combobox.Positioner>
+    </Combobox.Root>
+  );
+}
+```
+
+</CodeTabs>
+
+### Multiple selection with tokens
+
+Set `multiple` on `Combobox.Root`. Selecting an option toggles it and keeps
+the popup open. Use `Combobox.Value` to render the selected chips; it exposes
+`{ selectedItems, remove }` via a render function. Backspace on an empty input
+removes the last token.
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-cb-multi-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 16rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  background: #fff;
+  cursor: text;
+}
+.docs-cb-multi-wrap:focus-within {
+  border-color: #18181b;
+}
+.docs-cb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: #e4e4e7;
+  font-size: 0.75rem;
+  color: #18181b;
+}
+.docs-cb-chip-remove {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0;
+  color: #71717a;
+}
+.docs-cb-chip-remove:hover {
+  color: #18181b;
+}
+.docs-cb-multi-input {
+  flex: 1;
+  min-width: 4rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.875rem;
+  color: #18181b;
+  padding: 0.125rem 0.25rem;
+}
+@media (prefers-color-scheme: dark) {
+  .docs-cb-multi-wrap {
+    border-color: #27272a;
+    background: #18181b;
+  }
+  .docs-cb-multi-wrap:focus-within {
+    border-color: #fafafa;
+  }
+  .docs-cb-chip {
+    background: #3f3f46;
+    color: #fafafa;
+  }
+  .docs-cb-chip-remove:hover {
+    color: #fafafa;
+  }
+  .docs-cb-multi-input {
+    color: #fafafa;
+  }
+}
+```
+
+```tsx
+import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+const LANGS = ['TypeScript', 'JavaScript', 'Rust', 'Go', 'Python', 'Ruby'];
+
+export function MultiCombobox() {
+  const [query, setQuery] = useState('');
+  const filtered = LANGS.filter((l) => matchSubstring(l, query));
+
+  return (
+    <Combobox.Root multiple onInputChange={setQuery}>
+      <div className="inline-flex min-w-64 flex-wrap items-center gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:focus-within:border-zinc-50">
+        <Combobox.Value>
+          {({ selectedItems, remove }) =>
+            selectedItems.map((it) => (
+              <span
+                key={String(it.value)}
+                className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
+              >
+                {it.label}
+                <button
+                  type="button"
+                  onClick={() => remove(it.value)}
+                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  aria-label={`Remove ${it.label}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))
+          }
+        </Combobox.Value>
+        <Combobox.Input
+          className="min-w-16 flex-1 bg-transparent px-1 py-0.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+          placeholder="Add language…"
+          aria-label="Languages"
+        />
+      </div>
+      <Combobox.Status />
+      <Combobox.Positioner className="z-50">
+        <Combobox.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+          {filtered.map((l) => (
+            <Combobox.Option
+              key={l}
+              value={l}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900"
+            >
+              {l}
+            </Combobox.Option>
+          ))}
+          <Combobox.Empty className="px-2.5 py-2 text-sm text-zinc-500">
+            No results
+          </Combobox.Empty>
+        </Combobox.Popup>
+      </Combobox.Positioner>
+    </Combobox.Root>
+  );
+}
+```
+
+</CodeTabs>
+
+### Creatable (add new options)
+
+When the query matches nothing, render a synthetic option marked with `create`.
+Selecting it calls `onCreate(inputValue)` instead of committing a value, so
+`onValueChange` does not fire. Your handler persists the new option and
+typically sets `value` to it. If `onCreate` is not provided, a `create` option
+falls back to normal selection (it commits the typed text as the value).
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+/* Reuse .docs-cb-* from the single-select example above. */
+.docs-cb-create {
+  font-style: italic;
+  color: #6366f1;
+}
+.docs-cb-option[data-highlighted].docs-cb-create {
+  color: #fafafa;
+}
+```
+
+```tsx
+import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+export function CreatableCombobox() {
+  const [options, setOptions] = useState(['Apple', 'Banana', 'Cherry']);
+  const [value, setValue] = useState('');
+  const [query, setQuery] = useState('');
+  const filtered = options.filter((o) => matchSubstring(o, query));
+  const showCreate =
+    query !== '' &&
+    !options.some((o) => o.toLowerCase() === query.toLowerCase());
+
+  return (
+    <Combobox.Root
+      value={value}
+      onValueChange={(v) => setValue(Array.isArray(v) ? (v[0] ?? '') : v)}
+      onInputChange={setQuery}
+      onCreate={(newLabel) => {
+        setOptions((prev) => [...prev, newLabel]);
+        setValue(newLabel);
+      }}
+    >
+      <div className="relative inline-flex min-w-56 items-center rounded-lg border border-zinc-200 bg-white focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:focus-within:border-zinc-50">
+        <Combobox.Input
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+          placeholder="Pick or create…"
+          aria-label="Fruit"
+        />
+        <Combobox.Trigger className="px-2 text-zinc-400" aria-label="Open">
+          ▾
+        </Combobox.Trigger>
+      </div>
+      <Combobox.Status />
+      <Combobox.Positioner className="z-50">
+        <Combobox.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+          {filtered.map((o) => (
+            <Combobox.Option
+              key={o}
+              value={o}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900"
+            >
+              {o}
+            </Combobox.Option>
+          ))}
+          {showCreate && (
+            <Combobox.Option
+              value={query}
+              create
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm italic text-indigo-500 outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900"
+            >
+              Create &ldquo;{query}&rdquo;
+            </Combobox.Option>
+          )}
+          <Combobox.Empty className="px-2.5 py-2 text-sm text-zinc-500">
+            No results
+          </Combobox.Empty>
+        </Combobox.Popup>
+      </Combobox.Positioner>
+    </Combobox.Root>
+  );
+}
+```
+
+</CodeTabs>
+
+### Async options with `Combobox.Status`
+
+`Combobox.Status` is a visually-hidden `aria-live="polite"` region. By default
+it announces the result count when open. Override it with a render prop to show
+loading or error states instead.
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+/* Reuse .docs-cb-* from the single-select example. */
+.docs-cb-loading {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+  color: #71717a;
+  font-style: italic;
+}
+```
+
+```tsx
+import { Combobox } from '@hono-preact/ui';
+import { useState, useEffect } from 'preact/hooks';
+
+const ALL_COUNTRIES = [
+  'Australia',
+  'Brazil',
+  'Canada',
+  'Denmark',
+  'Egypt',
+  'France',
+  'Germany',
+  'Hungary',
+  'India',
+  'Japan',
+];
+
+export function AsyncCombobox() {
+  const [query, setQuery] = useState('');
+  const [options, setOptions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!query) {
+      setOptions([]);
+      return;
+    }
+    setLoading(true);
+    const id = setTimeout(() => {
+      setOptions(
+        ALL_COUNTRIES.filter((c) =>
+          c.toLowerCase().includes(query.toLowerCase())
+        )
+      );
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  return (
+    <Combobox.Root onInputChange={setQuery}>
+      <div className="relative inline-flex min-w-56 items-center rounded-lg border border-zinc-200 bg-white focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:focus-within:border-zinc-50">
+        <Combobox.Input
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+          placeholder="Search countries…"
+          aria-label="Country"
+        />
+        <Combobox.Trigger className="px-2 text-zinc-400" aria-label="Open">
+          ▾
+        </Combobox.Trigger>
+      </div>
+      <Combobox.Status
+        render={({ count, open }) =>
+          open
+            ? loading
+              ? 'Loading…'
+              : count === 0
+                ? 'No results'
+                : `${count} result${count === 1 ? '' : 's'} available`
+            : ''
+        }
+      />
+      <Combobox.Positioner className="z-50">
+        <Combobox.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+          {loading ? (
+            <div className="px-2.5 py-2 text-sm italic text-zinc-500">
+              Loading…
+            </div>
+          ) : (
+            <>
+              {options.map((c) => (
+                <Combobox.Option
+                  key={c}
+                  value={c}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900"
+                >
+                  {c}
+                </Combobox.Option>
+              ))}
+              <Combobox.Empty className="px-2.5 py-2 text-sm text-zinc-500">
+                No results
+              </Combobox.Empty>
+            </>
+          )}
+        </Combobox.Popup>
+      </Combobox.Positioner>
+    </Combobox.Root>
+  );
+}
+```
+
+</CodeTabs>
+
+### Inline autocomplete (`autocomplete="both"`)
+
+In `both` mode, the input displays the first matching option's label as a
+selected suffix after the typed text. Press Enter or Tab to accept it; press
+Backspace or ArrowLeft to dismiss and keep typing.
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+/* Reuse .docs-cb-* from the single-select example. */
+```
+
+```tsx
+import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+const CITIES = [
+  'Amsterdam',
+  'Barcelona',
+  'Copenhagen',
+  'Dublin',
+  'Edinburgh',
+  'Florence',
+  'Geneva',
+  'Helsinki',
+];
+
+export function InlineCombobox() {
+  const [query, setQuery] = useState('');
+  const filtered = CITIES.filter((c) => matchSubstring(c, query));
+
+  return (
+    <Combobox.Root autocomplete="both" onInputChange={setQuery}>
+      <div className="relative inline-flex min-w-56 items-center rounded-lg border border-zinc-200 bg-white focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:focus-within:border-zinc-50">
+        <Combobox.Input
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+          placeholder="Type a city…"
+          aria-label="City"
+        />
+        <Combobox.Trigger className="px-2 text-zinc-400" aria-label="Open">
+          ▾
+        </Combobox.Trigger>
+      </div>
+      <Combobox.Status />
+      <Combobox.Positioner className="z-50">
+        <Combobox.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+          {filtered.map((c) => (
+            <Combobox.Option
+              key={c}
+              value={c}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900"
+            >
+              {c}
+            </Combobox.Option>
+          ))}
+          <Combobox.Empty className="px-2.5 py-2 text-sm text-zinc-500">
+            No results
+          </Combobox.Empty>
+        </Combobox.Popup>
+      </Combobox.Positioner>
+    </Combobox.Root>
+  );
+}
+```
+
+</CodeTabs>
+
+## Keyboard
+
+| Key                  | When                    | Action                                                                       |
+| -------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| Printable characters | Input focused           | Update query, open the popup, auto-highlight the first match (list/both).    |
+| `↓` / `↑`            | Input focused, closed   | Open the popup.                                                              |
+| `↓` / `↑`            | Popup open              | Move the active option to the next / previous, wrapping at the ends.         |
+| `Alt` + `↑`          | Popup open              | Close the popup.                                                             |
+| `Home` / `End`       | Input focused           | Move the text caret (native; the popup is not navigated).                    |
+| `Enter`              | Popup open, active set  | Commit the active option and close (single) or toggle and stay open (multi). |
+| `Tab`                | Popup open, `both` mode | Accept the inline completion (commit the active option).                     |
+| `Tab`                | Popup open, other modes | Close the popup, then move focus to the next element.                        |
+| `Escape`             | Popup open              | Close and revert the display to the typed query (does not reset the value).  |
+| `Escape`             | Input focused, closed   | Reset the input to the selected value's label (or empty in multiple mode).   |
+| `Backspace`          | Empty input, multi      | Remove the last selected token.                                              |
+
+Focus stays in the input the whole time. The active option is tracked with
+`aria-activedescendant`; it does not receive DOM focus. Arrow navigation wraps
+by default; pass `loop={false}` on `Combobox.Root` to disable.
+
+## Data attributes
+
+| Attribute          | On                    | Values                                            |
+| ------------------ | --------------------- | ------------------------------------------------- |
+| `data-state`       | Input, Trigger, Popup | `open` \| `closed`                                |
+| `data-highlighted` | Option                | Present while the option is the active descendant |
+| `data-selected`    | Option                | Present when the option is selected               |
+| `data-disabled`    | Option                | Present when the option is disabled               |
+| `data-side`        | Positioner, Arrow     | `top` \| `right` \| `bottom` \| `left` (resolved) |
+| `data-align`       | Positioner            | `start` \| `center` \| `end` (resolved)           |
+| `data-empty`       | Popup                 | Present when no options are registered            |
+
+## API reference
+
+Every part accepts a `render` prop for composition (see
+[useRender](/docs/components/use-render)) and forwards unknown props to the
+element it renders. `Combobox.Option` passes `{ selected, disabled, highlighted
+}` to a render function; `Combobox.Status` passes `{ count, open }`;
+`Combobox.Value` exposes `{ selectedItems, remove }` via a required children
+function.
+
+### Combobox.Root
+
+Provides value, open state, input value, autocomplete mode, refs, and
+positioning to the parts. Generic over the value type (`Combobox.Root<Value>`);
+defaults to `string`. Renders children and the hidden form field(s) when `name`
+is set.
+
+| Prop                | Type                                | Default     | Description                                                                                    |
+| ------------------- | ----------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `value`             | `Value \| Value[]`                  | -           | Controlled selection. Pair with `onValueChange`.                                               |
+| `defaultValue`      | `Value \| Value[]`                  | -           | Initial selection when uncontrolled.                                                           |
+| `onValueChange`     | `(value: Value \| Value[]) => void` | -           | Called when the selection changes (not called for `create` options).                           |
+| `multiple`          | `boolean`                           | `false`     | Allow more than one selection; value becomes an array; popup stays open on pick.               |
+| `open`              | `boolean`                           | -           | Controlled open state. Pair with `onOpenChange`.                                               |
+| `defaultOpen`       | `boolean`                           | `false`     | Initial open state when uncontrolled.                                                          |
+| `onOpenChange`      | `(open: boolean) => void`           | -           | Called when the popup requests an open or close.                                               |
+| `inputValue`        | `string`                            | -           | Controlled typed query. Pair with `onInputChange`.                                             |
+| `defaultInputValue` | `string`                            | `''`        | Initial query when uncontrolled.                                                               |
+| `onInputChange`     | `(value: string) => void`           | -           | Called when the user edits the input (always the typed query, not completion).                 |
+| `autocomplete`      | `'none' \| 'list' \| 'both'`        | `'list'`    | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                     |
+| `onCreate`          | `(inputValue: string) => void`      | -           | Called when a `create` option is selected; if absent, `create` falls back to normal selection. |
+| `itemToString`      | `(value: Value) => string`          | -           | Resolve a label for a value whose option is not currently rendered (SSR, filter).              |
+| `name`              | `string`                            | -           | Submit the value as a hidden field (one per value in multiple mode).                           |
+| `disabled`          | `boolean`                           | `false`     | Disable the input and skip the hidden field.                                                   |
+| `required`          | `boolean`                           | `false`     | Mark the input `aria-required`.                                                                |
+| `isValueEqual`      | `(a: Value, b: Value) => boolean`   | `Object.is` | Compare values for selection matching (use for object values).                                 |
+| `serializeValue`    | `(value: Value) => string`          | `String`    | Stringify a value for the hidden form field.                                                   |
+| `side`              | `'top'\|'right'\|'bottom'\|'left'`  | `'bottom'`  | Preferred side of the input to place the popup.                                                |
+| `align`             | `'start'\|'center'\|'end'`          | `'start'`   | Alignment along that side.                                                                     |
+| `offset`            | `number`                            | `8`         | Gap in pixels between the input and the popup.                                                 |
+| `loop`              | `boolean`                           | `true`      | Wrap arrow navigation at the first / last option.                                              |
+| `children`          | `ComponentChildren`                 | -           | The input, trigger, positioner, and status parts.                                              |
+
+### Combobox.Input
+
+The editable text input. Owns keyboard navigation, filtering side effects,
+inline completion (in `both` mode), and IME composition handling. Default
+element `<input type="text">` with `role="combobox"`.
+
+| Prop       | Type                                   | Default | Description                                                    |
+| ---------- | -------------------------------------- | ------- | -------------------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`        | -       | Compose or replace the element.                                |
+| `...props` | `JSX.HTMLAttributes<HTMLInputElement>` | -       | Forwarded; `value` and `onInput` are managed by the component. |
+
+Sets `role="combobox"`, `aria-autocomplete`, `aria-expanded`, `aria-controls`,
+`aria-activedescendant` (while open), `aria-required` (when required), `id`,
+`disabled`, and `data-state`.
+
+### Combobox.Trigger
+
+An optional chevron button that toggles the popup. Removes itself from the tab
+order (`tabIndex=-1`) so focus stays in the input. Default element
+`<button type="button">`.
+
+| Prop       | Type                                    | Default | Description                                           |
+| ---------- | --------------------------------------- | ------- | ----------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`         | -       | Compose or replace the element.                       |
+| `children` | `ComponentChildren`                     | -       | Chevron icon or label.                                |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded; a passed `onClick` runs before the toggle. |
+
+Sets `aria-controls`, `aria-expanded`, `aria-label` (defaults to `"Open"`),
+`disabled`, and `data-state`.
+
+### Combobox.Clear
+
+An optional button that resets the selection and the input, then focuses the
+input. Default element `<button type="button">`.
+
+| Prop       | Type                                    | Default | Description                                          |
+| ---------- | --------------------------------------- | ------- | ---------------------------------------------------- |
+| `render`   | `RenderProp`                            | -       | Compose or replace the element.                      |
+| `children` | `ComponentChildren`                     | -       | Button content.                                      |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded; a passed `onClick` runs before the clear. |
+
+Sets `aria-label` (defaults to `"Clear"`) and `disabled`.
+
+### Combobox.Positioner
+
+The fixed-positioned wrapper that Floating UI drives. Always mounted so options
+register their labels even while closed. Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                               |
+| ---------- | ------------------------------------------ | ------- | ----------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.           |
+| `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).           |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded. Style positioning via `class`. |
+
+Sets `position: fixed`, resolved `data-side` / `data-align`, and `hidden`
+while closed. Promotes to the browser top layer via the Popover API where
+supported.
+
+### Combobox.Popup
+
+The listbox surface. Default element `<div>` with `role="listbox"`.
+
+| Prop         | Type                                 | Default | Description                                     |
+| ------------ | ------------------------------------ | ------- | ----------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                 |
+| `aria-label` | `string`                             | -       | Accessible name. Defaults to the input's label. |
+| `children`   | `ComponentChildren`                  | -       | Options, groups, and Empty.                     |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded.                                      |
+
+Sets `role="listbox"`, `id`, `aria-multiselectable` (in multiple mode),
+`data-state`, `data-empty` (when no options are registered), and
+`aria-labelledby` (the input) or `aria-label`. Owns outside-press dismissal.
+
+### Combobox.Empty
+
+Renders only when the popup is open and no options are registered. Use for
+"No results" messages. Default element `<div>`.
+
+| Prop       | Type                                 | Default | Description            |
+| ---------- | ------------------------------------ | ------- | ---------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it. |
+| `children` | `ComponentChildren`                  | -       | Message content.       |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded.             |
+
+### Combobox.Option
+
+A selectable row in the popup. Default element `<div>` with `role="option"`.
+
+| Prop       | Type                                                                         | Default  | Description                                                    |
+| ---------- | ---------------------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
+| `value`    | `Value`                                                                      | required | The value this option selects.                                 |
+| `create`   | `boolean`                                                                    | `false`  | Route selection to `onCreate` instead of committing the value. |
+| `render`   | `RenderProp<{ selected: boolean; disabled: boolean; highlighted: boolean }>` | -        | Compose or replace the element.                                |
+| `disabled` | `boolean`                                                                    | `false`  | Skip in navigation and ignore selection.                       |
+| `children` | `ComponentChildren`                                                          | -        | Option content; a string child is used as the option's label.  |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                                         | -        | Forwarded.                                                     |
+
+Sets `role="option"`, `aria-selected`, `aria-disabled` (when disabled), and
+`data-selected` / `data-highlighted` / `data-disabled`.
+
+### Combobox.OptionGroup
+
+Wraps related options and labels them with a `Combobox.OptionGroupLabel`.
+Default element `<div>` with `role="group"`.
+
+| Prop       | Type                                 | Default | Description                                |
+| ---------- | ------------------------------------ | ------- | ------------------------------------------ |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.                     |
+| `children` | `ComponentChildren`                  | -       | A `Combobox.OptionGroupLabel` and options. |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded.                                 |
+
+Wires its label to `aria-labelledby`.
+
+### Combobox.OptionGroupLabel
+
+The accessible name for a `Combobox.OptionGroup`. Presentational, not
+selectable. Default element `<div>`.
+
+| Prop       | Type                                 | Default | Description            |
+| ---------- | ------------------------------------ | ------- | ---------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it. |
+| `children` | `ComponentChildren`                  | -       | Label text.            |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded.             |
+
+### Combobox.Arrow
+
+Optional pointer positioned by Floating UI arrow data. Default element
+`<div>`. Place it on the correct edge with CSS keyed on `data-side`.
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp<{ side: Side }>`         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | Optional arrow content.         |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded.                      |
+
+Sets `data-side` and `position: absolute` with the computed offset.
+
+### Combobox.Status
+
+A visually-hidden `aria-live="polite"` region that announces the result count
+to screen readers. Default content: `"{N} results available"` when open and
+options exist; `"No results"` when open and empty; cleared when closed. Default
+element `<div>`.
+
+| Prop       | Type                                           | Default | Description                                                              |
+| ---------- | ---------------------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `render`   | `RenderProp<{ count: number; open: boolean }>` | -       | Override the content. Receives the current option count and open state.  |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`           | -       | Forwarded (excluding `children`); merged with the visually-hidden style. |
+
+Sets `role="status"`, `aria-live="polite"`, `aria-atomic="true"`, and
+visually-hidden styles.
+
+### Combobox.Value
+
+A non-visual render-prop accessor for the selected items. Required in multiple
+mode to render chips; optional in single mode. Renders a fragment (no DOM
+element of its own).
+
+| Prop       | Type                                               | Default  | Description                                   |
+| ---------- | -------------------------------------------------- | -------- | --------------------------------------------- |
+| `children` | `(state: ComboboxValueState) => ComponentChildren` | required | Render function receiving the selected items. |
+
+`ComboboxValueState` has:
+
+| Field           | Type                       | Description                                                      |
+| --------------- | -------------------------- | ---------------------------------------------------------------- |
+| `selectedItems` | `OptionEntry[]`            | Selected items in value order, each with `{ id, value, label }`. |
+| `remove`        | `(value: unknown) => void` | Toggle an item off (de-select it).                               |
+
+### Primitives
+
+`@hono-preact/ui` exports the building blocks the parts use, for composing
+your own components. Several have their own page with examples:
+[useListNavigation](/docs/components/use-list-navigation),
+[usePosition](/docs/components/use-position),
+[useDismiss](/docs/components/use-dismiss),
+[useRender](/docs/components/use-render),
+[useControllableState](/docs/components/use-controllable-state), and
+[mergeRefs](/docs/components/merge-refs).
+
+The `matchSubstring` helper is also exported from `@hono-preact/ui` for the
+common in-memory filter case:
+`matchSubstring(label: string, query: string): boolean`.
+
+## Accessibility
+
+The Combobox follows the WAI-ARIA combobox with listbox pattern. The input is
+`role="combobox"` carrying `aria-haspopup="listbox"`, `aria-expanded`,
+`aria-controls`, `aria-autocomplete`, and `aria-activedescendant` (while
+open). The popup is `role="listbox"` (`aria-multiselectable` in multiple mode),
+named by the input or an explicit `aria-label`. Options are `role="option"`
+with `aria-selected`.
+
+- Focus stays in the input at all times. The active option is tracked with
+  `aria-activedescendant` and scrolled into view rather than receiving DOM
+  focus.
+- Arrow keys open the popup from a closed input; Alt+ArrowUp closes it.
+- Escape closes without changing the selection; a second Escape resets the
+  input to the selected value's label.
+- Home and End move the text caret (native behavior); they do not navigate the
+  list, per the APG pattern.
+- `Combobox.Status` announces the result count politely after each filter so
+  screen readers report how many options are available without interrupting
+  ongoing speech.
+- Set a `name` so the committed value submits in a real form; the hidden field
+  is present before hydration.
