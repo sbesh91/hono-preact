@@ -31,4 +31,11 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.matchTypeahead).toBe('function');
     expect(typeof ui.getItems).toBe('function');
   });
+
+  it('exposes the Select namespace', () => {
+    expect(typeof ui.Select.Root).toBe('function');
+    expect(typeof ui.Select.Trigger).toBe('function');
+    expect(typeof ui.Select.Option).toBe('function');
+    expect(typeof ui.Select.Value).toBe('function');
+  });
 });
