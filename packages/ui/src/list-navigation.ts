@@ -68,6 +68,7 @@ export interface UseListNavigationOptions {
   mode: ListNavigationMode;
   loop?: boolean; // default true
   typeahead?: boolean; // default true
+  homeEnd?: boolean; // handle Home/End (default true); false leaves them native
   scopeSelector?: string; // exclude nested same-role containers (menus)
 }
 
@@ -94,6 +95,7 @@ export function useListNavigation(
     mode,
     loop = true,
     typeahead = true,
+    homeEnd = true,
     scopeSelector,
   } = opts;
   const runTypeahead = useTypeahead();
@@ -130,10 +132,12 @@ export function useListNavigation(
         activate(list, wrapPrev(current, list.length, loop));
         return;
       case 'Home':
+        if (!homeEnd) return;
         event.preventDefault();
         activate(list, 0);
         return;
       case 'End':
+        if (!homeEnd) return;
         event.preventDefault();
         activate(list, list.length - 1);
         return;
