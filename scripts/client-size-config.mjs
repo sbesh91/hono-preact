@@ -73,6 +73,7 @@ export const COMPONENT_MODULES = {
   tooltip: ['tooltip/index.js'],
   menu: ['menu/index.js'],
   'context-menu': ['context-menu/index.js'],
+  select: ['select/index.js'],
 };
 
 // Section B: ordered prefix -> bucket for the site's emitted chunks. A prefix
@@ -90,6 +91,7 @@ export const CHUNK_PREFIXES = [
   ['tooltip', 'components'],
   ['menu', 'components'],
   ['context-menu', 'components'],
+  ['select', 'components'],
   ['use-position', 'components'],
   ['use-dismiss', 'components'],
   ['use-render', 'components'],
