@@ -74,6 +74,7 @@ export const COMPONENT_MODULES = {
   menu: ['menu/index.js'],
   'context-menu': ['context-menu/index.js'],
   select: ['select/index.js'],
+  combobox: ['combobox/index.js'],
 };
 
 // Section B: ordered prefix -> bucket for the site's emitted chunks. A prefix
@@ -92,6 +93,7 @@ export const CHUNK_PREFIXES = [
   ['menu', 'components'],
   ['context-menu', 'components'],
   ['select', 'components'],
+  ['combobox', 'components'],
   ['use-position', 'components'],
   ['use-dismiss', 'components'],
   ['use-render', 'components'],
