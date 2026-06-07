@@ -1,10 +1,30 @@
 // packages/ui/src/combobox/combobox.tsx
-import { h, Fragment, type ComponentChildren } from 'preact';
-import { useCallback, useId, useMemo, useRef, useState } from 'preact/hooks';
+import {
+  h,
+  Fragment,
+  type ComponentChildren,
+  type JSX,
+  type VNode,
+} from 'preact';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { useControllableState } from '../use-controllable-state.js';
+import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
+import { useDismiss } from '../use-dismiss.js';
+import { useRender, type RenderProp } from '../use-render.js';
 import { useListboxSelection } from '../listbox/selection.js';
-import { ComboboxContext, type AutocompleteMode } from './context.js';
+import {
+  ComboboxContext,
+  useComboboxContext,
+  type AutocompleteMode,
+} from './context.js';
 
 export interface ComboboxRootProps<Value = string> {
   value?: Value | Value[];
@@ -199,4 +219,134 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
     { value: ctx },
     h(Fragment, null, children, sel.hiddenFields)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Task 6: Positioner, Popup (listbox), Arrow
+// ---------------------------------------------------------------------------
+
+function supportsPopover(el: HTMLElement): boolean {
+  return typeof el.showPopover === 'function';
+}
+
+export type ComboboxPositionerProps = {
+  render?: RenderProp<{ side: Side; align: Align }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useComboboxContext('Positioner');
+
+  const position = usePosition({
+    open: ctx.open,
+    anchorRef: ctx.inputRef,
+    floatingRef: ctx.floatingRef,
+    arrowRef: ctx.arrowRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+  });
+
+  useLayoutEffect(() => {
+    ctx.setPosition(position);
+  }, [position.side, position.align, position.arrowX, position.arrowY]);
+
+  useLayoutEffect(() => {
+    const el = ctx.floatingRef.current;
+    if (!ctx.open || !el || !supportsPopover(el)) return;
+    el.setAttribute('popover', 'manual');
+    el.showPopover();
+    return () => {
+      el.hidePopover();
+      el.removeAttribute('popover');
+    };
+  }, [ctx.open]);
+
+  return useRender<{ side: Side; align: Align }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.floatingRef,
+      hidden: ctx.open ? undefined : true,
+      'data-side': position.side,
+      'data-align': position.align,
+      style: {
+        position: 'fixed',
+        inset: 'auto',
+        margin: 0,
+        overflow: 'visible',
+        border: 0,
+        padding: 0,
+        background: 'transparent',
+      },
+    },
+    state: { side: position.side, align: position.align },
+    children,
+  });
+}
+
+export type ComboboxPopupProps = {
+  render?: RenderProp<{ open: boolean }>;
+  'aria-label'?: string;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxPopup(props: ComboboxPopupProps): VNode {
+  const { render, children, 'aria-label': ariaLabel, ...rest } = props;
+  const ctx = useComboboxContext('Popup');
+
+  useDismiss({
+    enabled: ctx.open,
+    refs: [ctx.floatingRef, ctx.inputRef, ctx.triggerRef, ctx.clearRef],
+    escape: false, // Escape is handled by the Input (close then revert)
+    outsidePress: true,
+    onDismiss: () => ctx.setOpen(false),
+  });
+
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.listboxRef,
+      role: 'listbox',
+      id: ctx.listboxId,
+      'aria-label': ariaLabel,
+      'aria-labelledby': ariaLabel ? undefined : ctx.inputId,
+      'aria-multiselectable': ctx.multiple ? true : undefined,
+      'data-state': ctx.open ? 'open' : 'closed',
+      'data-empty': ctx.optionCount === 0 ? '' : undefined,
+    },
+    state: { open: ctx.open },
+    children,
+  });
+}
+
+export type ComboboxArrowProps = {
+  render?: RenderProp<{ side: Side }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxArrow(props: ComboboxArrowProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useComboboxContext('Arrow');
+  const { side, arrowX, arrowY } = ctx.position;
+  return useRender<{ side: Side }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.arrowRef,
+      'data-side': side,
+      style: {
+        position: 'absolute',
+        left: arrowX != null ? `${arrowX}px` : undefined,
+        top: arrowY != null ? `${arrowY}px` : undefined,
+      },
+    },
+    state: { side },
+    children,
+  });
 }
