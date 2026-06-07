@@ -538,7 +538,7 @@ export function ComboboxStatus(props: ComboboxStatusProps): VNode {
 
 export type ComboboxInputProps = {
   render?: RenderProp<{ open: boolean }>;
-} & Omit<JSX.HTMLAttributes<HTMLInputElement>, 'value' | 'render'>;
+} & Omit<JSX.InputHTMLAttributes<HTMLInputElement>, 'value' | 'render'>;
 
 export function ComboboxInput(props: ComboboxInputProps): VNode {
   const { render, onInput, onKeyDown, ...rest } = props;
