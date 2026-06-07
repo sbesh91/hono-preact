@@ -1,10 +1,25 @@
 // packages/ui/src/select/select.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import { useCallback, useId, useMemo, useRef, useState } from 'preact/hooks';
+import {
+  useCallback,
+  useContext,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
+import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
-import { SelectContext, useSelectContext } from './context.js';
+import { useDismiss } from '../use-dismiss.js';
+import { useListNavigation } from '../list-navigation.js';
+import {
+  SelectContext,
+  useSelectContext,
+  SelectOptionGroupContext,
+} from './context.js';
 
 interface OptionEntry {
   id: string;
@@ -194,6 +209,12 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
   return h(SelectContext.Provider, { value: ctx }, children);
 }
 
+function supportsPopover(el: HTMLElement): boolean {
+  return typeof el.showPopover === 'function';
+}
+
+export const OPTION_SELECTOR = '[role="option"]:not([aria-disabled="true"])';
+
 export type SelectTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
@@ -202,6 +223,30 @@ export type SelectTriggerProps = {
 export function SelectTrigger(props: SelectTriggerProps): VNode {
   const { render, children, onClick, onKeyDown, ...rest } = props;
   const ctx = useSelectContext('Trigger');
+
+  // Focus stays on the trigger; navigation moves aria-activedescendant over the
+  // options in the (separate) listbox.
+  const nav = useListNavigation({
+    enabled: ctx.open,
+    containerRef: ctx.listboxRef,
+    itemSelector: OPTION_SELECTOR,
+    activeId: ctx.activeId,
+    setActiveId: ctx.setActiveId,
+    mode: 'activedescendant',
+    loop: ctx.loop,
+    typeahead: ctx.typeahead,
+  });
+
+  // On open, set the active descendant to the selected option (or the first).
+  useLayoutEffect(() => {
+    if (!ctx.open) return;
+    const list = nav.getItems();
+    if (list.length === 0) return;
+    const selectedIdx = list.findIndex(
+      (el) => el.getAttribute('aria-selected') === 'true'
+    );
+    nav.setActiveItem(selectedIdx >= 0 ? selectedIdx : 0);
+  }, [ctx.open]);
 
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
@@ -213,15 +258,30 @@ export function SelectTrigger(props: SelectTriggerProps): VNode {
   ) => {
     onKeyDown?.(event);
     if (ctx.disabled || event.defaultPrevented) return;
-    if (
-      !ctx.open &&
-      (event.key === 'ArrowDown' ||
+    if (!ctx.open) {
+      if (
+        event.key === 'ArrowDown' ||
         event.key === 'ArrowUp' ||
         event.key === 'Enter' ||
-        event.key === ' ')
-    ) {
+        event.key === ' '
+      ) {
+        event.preventDefault();
+        ctx.setOpen(true);
+      }
+      return;
+    }
+    nav.onKeyDown(event);
+    if (event.defaultPrevented) return;
+    const list = nav.getItems();
+    const current = list.findIndex((el) => el.id === ctx.activeId);
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      ctx.setOpen(true);
+      if (current >= 0) list[current].click();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      ctx.setOpen(false);
+    } else if (event.key === 'Tab') {
+      ctx.setOpen(false);
     }
   };
 
@@ -272,5 +332,241 @@ export function SelectValue(props: SelectValueProps): VNode {
     },
     state: { selectedLabels: labels },
     children: content,
+  });
+}
+
+export type SelectPositionerProps = {
+  render?: RenderProp<{ side: Side; align: Align }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function SelectPositioner(props: SelectPositionerProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useSelectContext('Positioner');
+
+  const position = usePosition({
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    arrowRef: ctx.arrowRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+  });
+
+  useLayoutEffect(() => {
+    ctx.setPosition(position);
+  }, [position.side, position.align, position.arrowX, position.arrowY]);
+
+  // Promote to the native top layer where supported, only while open.
+  useLayoutEffect(() => {
+    const el = ctx.floatingRef.current;
+    if (!ctx.open || !el || !supportsPopover(el)) return;
+    el.setAttribute('popover', 'manual');
+    el.showPopover();
+    return () => {
+      el.hidePopover();
+      el.removeAttribute('popover');
+    };
+  }, [ctx.open]);
+
+  // Always rendered so options register their labels; `hidden` while closed
+  // makes it inert and invisible without consumer CSS, and composes with the
+  // Popover-API promotion (which only runs while open).
+  return useRender<{ side: Side; align: Align }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.floatingRef,
+      hidden: ctx.open ? undefined : true,
+      'data-side': position.side,
+      'data-align': position.align,
+      style: {
+        position: 'fixed',
+        inset: 'auto',
+        margin: 0,
+        overflow: 'visible',
+        border: 0,
+        padding: 0,
+        background: 'transparent',
+      },
+    },
+    state: { side: position.side, align: position.align },
+    children,
+  });
+}
+
+export type SelectPopupProps = {
+  render?: RenderProp<{ open: boolean }>;
+  'aria-label'?: string;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function SelectPopup(props: SelectPopupProps): VNode {
+  const { render, children, 'aria-label': ariaLabel, ...rest } = props;
+  const ctx = useSelectContext('Popup');
+
+  useDismiss({
+    enabled: ctx.open,
+    refs: [ctx.floatingRef, ctx.anchorRef],
+    escape: true,
+    outsidePress: true,
+    onDismiss: () => ctx.setOpen(false),
+  });
+
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.listboxRef,
+      role: 'listbox',
+      id: ctx.listboxId,
+      'aria-label': ariaLabel,
+      'aria-labelledby': ariaLabel ? undefined : ctx.triggerId,
+      'aria-multiselectable': ctx.multiple ? true : undefined,
+      'data-state': ctx.open ? 'open' : 'closed',
+    },
+    state: { open: ctx.open },
+    children,
+  });
+}
+
+export type SelectOptionProps<Value = string> = {
+  value: Value;
+  render?: RenderProp<{
+    selected: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>;
+  disabled?: boolean;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function SelectOption<Value = string>(
+  props: SelectOptionProps<Value>
+): VNode {
+  const {
+    value,
+    render,
+    children,
+    disabled = false,
+    onClick,
+    onPointerEnter,
+    ...rest
+  } = props;
+  const ctx = useSelectContext('Option');
+  const id = useId();
+  const selected = ctx.isSelected(value);
+  const highlighted = ctx.activeId === id;
+
+  // Register this option's label (its text content) for the trigger auto-label.
+  useLayoutEffect(() => {
+    const label =
+      typeof children === 'string'
+        ? children
+        : (document.getElementById(id)?.textContent ?? '');
+    return ctx.registerOption(id, value, label);
+  }, [id, value, ctx.registerOption]);
+
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (disabled) return;
+    ctx.toggle(value);
+  };
+  const handlePointerEnter = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
+    onPointerEnter?.(event);
+    if (disabled) return;
+    ctx.setActiveId(id);
+  };
+
+  return useRender<{
+    selected: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      id,
+      role: 'option',
+      'aria-selected': selected,
+      'aria-disabled': disabled ? 'true' : undefined,
+      'data-selected': selected ? '' : undefined,
+      'data-highlighted': highlighted ? '' : undefined,
+      'data-disabled': disabled ? '' : undefined,
+      onClick: handleClick,
+      onPointerEnter: handlePointerEnter,
+    },
+    state: { selected, disabled, highlighted },
+    children,
+  });
+}
+
+export type SelectOptionGroupProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+// Return type left inferred: h(Context.Provider, ...) yields a VNode with more
+// specific props than VNode<{}> (matches the MenuGroup precedent).
+export function SelectOptionGroup(props: SelectOptionGroupProps) {
+  const { render, children, ...rest } = props;
+  const labelId = useId();
+  const node = useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
+    children,
+  });
+  return h(SelectOptionGroupContext.Provider, { value: { labelId } }, node);
+}
+
+export type SelectOptionGroupLabelProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function SelectOptionGroupLabel(
+  props: SelectOptionGroupLabelProps
+): VNode {
+  const { render, children, ...rest } = props;
+  const group = useContext(SelectOptionGroupContext);
+  return useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, id: group?.labelId },
+    children,
+  });
+}
+
+export type SelectArrowProps = {
+  render?: RenderProp<{ side: Side }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function SelectArrow(props: SelectArrowProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useSelectContext('Arrow');
+  const { side, arrowX, arrowY } = ctx.position;
+  return useRender<{ side: Side }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      ref: ctx.arrowRef,
+      'data-side': side,
+      style: {
+        position: 'absolute',
+        left: arrowX != null ? `${arrowX}px` : undefined,
+        top: arrowY != null ? `${arrowY}px` : undefined,
+      },
+    },
+    state: { side },
+    children,
   });
 }
