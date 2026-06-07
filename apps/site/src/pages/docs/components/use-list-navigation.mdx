@@ -1,0 +1,113 @@
+# useListNavigation
+
+`useListNavigation` is the keyboard navigation binding the [Menu](/docs/components/menu)
+and [Select](/docs/components/select) components use. Given a container of items,
+it handles ArrowUp / ArrowDown, Home / End, and typeahead, tracking which item is
+active and moving the active state through the list (wrapping at the ends, skipping
+disabled items).
+
+It supports two modes. In `roving` mode it moves DOM focus to the active item (a
+roving tabindex list, as in a menu). In `activedescendant` mode focus stays on a
+container element and you render `aria-activedescendant` pointing at the active
+item, scrolling it into view rather than focusing it (as in a listbox where the
+trigger keeps focus).
+
+## Signature
+
+```ts
+import { useListNavigation } from '@hono-preact/ui';
+
+function useListNavigation(opts: UseListNavigationOptions): ListNavigation;
+
+interface UseListNavigationOptions {
+  enabled: boolean;
+  containerRef: RefObject<HTMLElement>;
+  itemSelector: string;
+  activeId: string | null;
+  setActiveId: (id: string | null) => void;
+  mode: 'roving' | 'activedescendant';
+  loop?: boolean; // default true
+  typeahead?: boolean; // default true
+  scopeSelector?: string;
+}
+
+interface ListNavigation {
+  onKeyDown: (event: KeyboardEvent) => void;
+  getItems: () => HTMLElement[];
+  setActiveItem: (index: number) => void;
+}
+```
+
+## Options
+
+| Option          | Type                             | Default | Notes                                                                           |
+| --------------- | -------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `enabled`       | `boolean`                        | none    | Handle keys only while active (typically the open state).                       |
+| `containerRef`  | `RefObject<HTMLElement>`         | none    | The element holding the items.                                                  |
+| `itemSelector`  | `string`                         | none    | CSS selector matching the navigable items (exclude disabled items here).        |
+| `activeId`      | `string \| null`                 | none    | The id of the active item; drives `aria-activedescendant`.                      |
+| `setActiveId`   | `(id: string \| null) => void`   | none    | Called to change the active item.                                               |
+| `mode`          | `'roving' \| 'activedescendant'` | none    | `roving` moves DOM focus; `activedescendant` keeps focus and scrolls into view. |
+| `loop`          | `boolean`                        | `true`  | Wrap arrow navigation at the first / last item.                                 |
+| `typeahead`     | `boolean`                        | `true`  | Activate items by typing their leading characters.                              |
+| `scopeSelector` | `string`                         | none    | Exclude items nested in a closer same-role container (a submenu).               |
+
+## Returns
+
+| Field           | Type                             | Description                                                                          |
+| --------------- | -------------------------------- | ------------------------------------------------------------------------------------ |
+| `onKeyDown`     | `(event: KeyboardEvent) => void` | Handle navigation keys; calls `preventDefault` on keys it consumes.                  |
+| `getItems`      | `() => HTMLElement[]`            | The current enabled items, queried live from the DOM in order.                       |
+| `setActiveItem` | `(index: number) => void`        | Activate the item at `index`: sets the active id and focuses or scrolls it per mode. |
+
+`onKeyDown` calls `event.preventDefault()` on the keys it handles, so a caller
+that adds its own keys (Enter to select, Escape to close) can early-return on
+`event.defaultPrevented` after delegating.
+
+## Example
+
+A listbox where the trigger keeps focus and the active option is tracked with
+`aria-activedescendant`:
+
+```tsx
+import { useListNavigation } from '@hono-preact/ui';
+import { useRef, useState } from 'preact/hooks';
+
+function Listbox({ open }: { open: boolean }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const nav = useListNavigation({
+    enabled: open,
+    containerRef: listRef,
+    itemSelector: '[role="option"]:not([aria-disabled="true"])',
+    activeId,
+    setActiveId,
+    mode: 'activedescendant',
+  });
+  return (
+    <button
+      role="combobox"
+      aria-expanded={open}
+      aria-activedescendant={open ? (activeId ?? undefined) : undefined}
+      onKeyDown={nav.onKeyDown}
+    >
+      <div ref={listRef} role="listbox">
+        {/* role="option" rows */}
+      </div>
+    </button>
+  );
+}
+```
+
+## Companion exports
+
+`@hono-preact/ui` also exports the pieces `useListNavigation` is built from, for
+composing your own navigation:
+
+| Export           | Type                                                                                  | Description                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `useTypeahead`   | `(opts?: UseTypeaheadOptions) => (char: string) => string`                            | A hook returning a callback that accumulates printable chars into a query, resetting after an idle gap. |
+| `wrapNext`       | `(current: number, length: number, loop: boolean) => number`                          | Next index, wrapping or clamping at the end.                                                            |
+| `wrapPrev`       | `(current: number, length: number, loop: boolean) => number`                          | Previous index, wrapping or clamping at the start.                                                      |
+| `matchTypeahead` | `(labels: string[], query: string, fromIndex: number) => number`                      | The next index (circularly) whose label starts with the query, or `-1`.                                 |
+| `getItems`       | `(container: HTMLElement, selector: string, scopeSelector?: string) => HTMLElement[]` | The enabled items in a container in DOM order.                                                          |

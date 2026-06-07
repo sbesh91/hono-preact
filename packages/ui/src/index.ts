@@ -110,3 +110,36 @@ export {
   type ContextMenuRootProps,
   type ContextMenuTriggerProps,
 } from './context-menu/index.js';
+export {
+  useListNavigation,
+  getItems,
+  wrapNext,
+  wrapPrev,
+  matchTypeahead,
+  type UseListNavigationOptions,
+  type ListNavigation,
+  type ListNavigationMode,
+} from './list-navigation.js';
+export { useTypeahead, type UseTypeaheadOptions } from './use-typeahead.js';
+export {
+  Select,
+  SelectRoot,
+  SelectTrigger,
+  SelectValue,
+  SelectPositioner,
+  SelectPopup,
+  SelectOption,
+  SelectOptionGroup,
+  SelectOptionGroupLabel,
+  SelectArrow,
+  OPTION_SELECTOR,
+  type SelectRootProps,
+  type SelectTriggerProps,
+  type SelectValueProps,
+  type SelectPositionerProps,
+  type SelectPopupProps,
+  type SelectOptionProps,
+  type SelectOptionGroupProps,
+  type SelectOptionGroupLabelProps,
+  type SelectArrowProps,
+} from './select/index.js';

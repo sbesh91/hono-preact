@@ -21,13 +21,7 @@ import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
-import { useTypeahead } from '../use-typeahead.js';
-import {
-  wrapNext,
-  wrapPrev,
-  matchTypeahead,
-  getMenuItems,
-} from './navigation.js';
+import { useListNavigation } from '../list-navigation.js';
 import {
   MenuContext,
   useMenuContext,
@@ -334,7 +328,18 @@ export function MenuPopup(props: MenuPopupProps): VNode {
     ...rest
   } = props;
   const ctx = useMenuContext('Popup');
-  const runTypeahead = useTypeahead();
+
+  const nav = useListNavigation({
+    enabled: ctx.open,
+    containerRef: ctx.popupRef,
+    itemSelector: '[data-menu-item]:not([aria-disabled="true"])',
+    scopeSelector: '[role="menu"]',
+    activeId: ctx.activeId,
+    setActiveId: ctx.setActiveId,
+    mode: 'roving',
+    loop: ctx.loop,
+    typeahead: ctx.typeahead,
+  });
 
   useDismiss({
     enabled: ctx.open,
@@ -351,78 +356,25 @@ export function MenuPopup(props: MenuPopupProps): VNode {
   // On open, focus the first (or last, on ArrowUp open) enabled item.
   useLayoutEffect(() => {
     if (!ctx.open) return;
-    const surface = ctx.popupRef.current;
-    if (!surface) return;
-    const items = getMenuItems(surface);
-    if (items.length === 0) return;
-    const el =
-      ctx.pendingEdgeRef.current === 'last'
-        ? items[items.length - 1]
-        : items[0];
-    ctx.setActiveId(el.id);
-    el.focus();
+    const list = nav.getItems();
+    if (list.length === 0) return;
+    nav.setActiveItem(
+      ctx.pendingEdgeRef.current === 'last' ? list.length - 1 : 0
+    );
   }, [ctx.open]);
-
-  const focusIndex = (items: HTMLElement[], index: number) => {
-    if (index < 0 || index >= items.length) return;
-    const el = items[index];
-    ctx.setActiveId(el.id);
-    el.focus();
-  };
 
   const handleKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (event.defaultPrevented) return;
-    const surface = ctx.popupRef.current;
-    if (!surface) return;
-    const items = getMenuItems(surface);
-    const current = items.findIndex((el) => el.id === ctx.activeId);
-
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault();
-        focusIndex(items, wrapNext(current, items.length, ctx.loop));
-        return;
-      case 'ArrowUp':
-        event.preventDefault();
-        focusIndex(items, wrapPrev(current, items.length, ctx.loop));
-        return;
-      case 'Home':
-        event.preventDefault();
-        focusIndex(items, 0);
-        return;
-      case 'End':
-        event.preventDefault();
-        focusIndex(items, items.length - 1);
-        return;
-      case 'Tab':
-        ctx.setOpen(false);
-        return;
-      case 'Enter':
-      case ' ':
-        event.preventDefault();
-        if (current >= 0) items[current].click();
-        return;
-    }
-
-    if (
-      event.key.length === 1 &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey
-    ) {
-      const query = runTypeahead(event.key);
-      const labels = items.map((el) => el.textContent ?? '');
-      // matchTypeahead searches starting after `from`. On the first keystroke
-      // search after the current item (so repeats cycle); on a refining query
-      // search from current-1 so the current item is re-tested first and keeps
-      // focus while it still matches the growing query.
-      const from = current < 0 ? -1 : current - (query.length > 1 ? 1 : 0);
-      const match = matchTypeahead(labels, query, from);
-      if (match >= 0) {
-        event.preventDefault();
-        focusIndex(items, match);
-      }
+    nav.onKeyDown(event);
+    if (event.defaultPrevented) return;
+    const list = nav.getItems();
+    const current = list.findIndex((el) => el.id === ctx.activeId);
+    if (event.key === 'Tab') {
+      ctx.setOpen(false);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (current >= 0) list[current].click();
     }
   };
 

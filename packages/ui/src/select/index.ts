@@ -1,0 +1,45 @@
+export {
+  SelectRoot,
+  SelectTrigger,
+  SelectValue,
+  SelectPositioner,
+  SelectPopup,
+  SelectOption,
+  SelectOptionGroup,
+  SelectOptionGroupLabel,
+  SelectArrow,
+  OPTION_SELECTOR,
+  type SelectRootProps,
+  type SelectTriggerProps,
+  type SelectValueProps,
+  type SelectPositionerProps,
+  type SelectPopupProps,
+  type SelectOptionProps,
+  type SelectOptionGroupProps,
+  type SelectOptionGroupLabelProps,
+  type SelectArrowProps,
+} from './select.js';
+
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValue,
+  SelectPositioner,
+  SelectPopup,
+  SelectOption,
+  SelectOptionGroup,
+  SelectOptionGroupLabel,
+  SelectArrow,
+} from './select.js';
+
+export const Select = {
+  Root: SelectRoot,
+  Trigger: SelectTrigger,
+  Value: SelectValue,
+  Positioner: SelectPositioner,
+  Popup: SelectPopup,
+  Option: SelectOption,
+  OptionGroup: SelectOptionGroup,
+  OptionGroupLabel: SelectOptionGroupLabel,
+  Arrow: SelectArrow,
+};

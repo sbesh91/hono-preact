@@ -23,4 +23,19 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.ContextMenu.Trigger).toBe('function');
     expect(typeof ui.ContextMenu.Item).toBe('function');
   });
+
+  it('exposes the list-navigation primitive + helpers', () => {
+    expect(typeof ui.useListNavigation).toBe('function');
+    expect(typeof ui.useTypeahead).toBe('function');
+    expect(typeof ui.wrapNext).toBe('function');
+    expect(typeof ui.matchTypeahead).toBe('function');
+    expect(typeof ui.getItems).toBe('function');
+  });
+
+  it('exposes the Select namespace', () => {
+    expect(typeof ui.Select.Root).toBe('function');
+    expect(typeof ui.Select.Trigger).toBe('function');
+    expect(typeof ui.Select.Option).toBe('function');
+    expect(typeof ui.Select.Value).toBe('function');
+  });
 });

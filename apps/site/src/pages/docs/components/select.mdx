@@ -1,0 +1,442 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { SelectDemo } from '../../../components/docs/SelectDemo.js';
+import { SelectMultiDemo } from '../../../components/docs/SelectMultiDemo.js';
+
+# Select
+
+A custom listbox select: a button that opens a popup of options and writes the
+chosen value back. It supports single and multiple selection, carries a generic
+value type so an option's `value` is your own data rather than a string, and
+submits in a real form through a `name`. Positioning runs on Floating UI; the
+popup renders in place and promotes to the browser top layer where the Popover
+API is available. It ships unstyled: style it through the `data-state`,
+`data-highlighted`, `data-selected`, `data-disabled`, `data-placeholder`,
+`data-side`, and `data-align` contract.
+
+`Select.Value` shows the selected option's label by reading the registered
+options client-side, so on the server (before hydration) it falls back to the
+placeholder. For a label that is correct in server-rendered HTML, pass
+`Select.Value` a render prop (or a children function) and resolve the label from
+your own data, which runs on the server too.
+
+## Demo
+
+A single select closes when you pick an option; the trigger shows the chosen
+label.
+
+<Example>
+  <SelectDemo />
+</Example>
+
+A multiple select toggles each option and stays open; the trigger joins the
+selected labels.
+
+<Example>
+  <SelectMultiDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { Select } from '@hono-preact/ui';
+
+export function FruitPicker() {
+  return (
+    <Select.Root name="fruit">
+      <Select.Trigger>
+        <Select.Value placeholder="Pick a fruit" />
+      </Select.Trigger>
+      <Select.Positioner>
+        <Select.Popup aria-label="Fruit">
+          <Select.Option value="apple">Apple</Select.Option>
+          <Select.Option value="banana">Banana</Select.Option>
+          <Select.Option value="cherry" disabled>
+            Cherry
+          </Select.Option>
+          <Select.OptionGroup>
+            <Select.OptionGroupLabel>Citrus</Select.OptionGroupLabel>
+            <Select.Option value="orange">Orange</Select.Option>
+            <Select.Option value="lemon">Lemon</Select.Option>
+          </Select.OptionGroup>
+        </Select.Popup>
+      </Select.Positioner>
+    </Select.Root>
+  );
+}
+```
+
+Set `multiple` on `Select.Root` for multi-selection: picking an option toggles
+it and keeps the popup open, and the value becomes an array. Pass a `value` /
+`onValueChange` pair to control the selection, or `defaultValue` to leave it
+uncontrolled. When `name` is set, the value submits as a hidden field (one
+field per selected value in multiple mode), present before hydration.
+
+The value type is generic. By default an option's `value` is a string, but you
+can pass objects: give `Select.Root` an `isValueEqual` comparator so the
+component can match selected values by identity, and a `serializeValue` so the
+hidden form field has a string to submit.
+
+```tsx
+<Select.Root<User>
+  isValueEqual={(a, b) => a.id === b.id}
+  serializeValue={(u) => u.id}
+  name="assignee"
+>
+  <Select.Trigger>
+    <Select.Value placeholder="Assign to">
+      {({ selectedLabels }) => selectedLabels.join(', ') || 'Assign to'}
+    </Select.Value>
+  </Select.Trigger>
+  {/* ... */}
+</Select.Root>
+```
+
+## Styling
+
+Parts expose `data-state` (`open` / `closed` on the trigger, positioner, and
+popup). Options expose `data-highlighted` while active, `data-selected` when
+selected, and `data-disabled` when disabled; `Select.Value` exposes
+`data-placeholder` while empty; the Positioner and Arrow expose `data-side` and
+`data-align`. The Positioner is the fixed-positioned wrapper, so size, z-index,
+and the entry animation go on the Popup inside it. The demo above uses the
+styles below; copy a starting point in either flavor:
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.docs-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 14rem;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #18181b;
+  cursor: pointer;
+}
+.docs-select-trigger:hover,
+.docs-select-trigger[data-state='open'] {
+  border-color: #18181b;
+}
+.docs-select__value[data-placeholder] {
+  color: #71717a;
+}
+.docs-select-positioner {
+  z-index: 50;
+}
+.docs-select {
+  box-sizing: border-box;
+  min-width: 14rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.625rem;
+  background: #fff;
+  color: #18181b;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+}
+.docs-select[data-state='open'] {
+  animation: docs-select-in 120ms ease-out;
+}
+@keyframes docs-select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Options: the active descendant is data-highlighted (set by hover and arrow
+   keys); the selected option is data-selected. Both can be true at once. */
+.docs-select__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+}
+.docs-select__option[data-selected]::after {
+  content: '✓';
+  margin-left: auto;
+}
+.docs-select__option[data-highlighted] {
+  background: #18181b;
+  color: #fafafa;
+}
+.docs-select__option[data-disabled] {
+  color: #a1a1aa;
+  pointer-events: none;
+}
+.docs-select__label {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #71717a;
+}
+@media (prefers-color-scheme: dark) {
+  .docs-select-trigger,
+  .docs-select {
+    border-color: #27272a;
+    background: #18181b;
+    color: #fafafa;
+  }
+  .docs-select-trigger:hover,
+  .docs-select-trigger[data-state='open'] {
+    border-color: #fafafa;
+  }
+  .docs-select__option[data-highlighted] {
+    background: #fafafa;
+    color: #18181b;
+  }
+}
+```
+
+```tsx
+<Select.Trigger className="flex min-w-56 items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 cursor-pointer hover:border-zinc-900 data-[state=open]:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-50 dark:data-[state=open]:border-zinc-50">
+  <Select.Value
+    className="data-[placeholder]:text-zinc-500"
+    placeholder="Pick a fruit"
+  />
+</Select.Trigger>
+<Select.Positioner className="z-50">
+  <Select.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+    <Select.Option className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none cursor-pointer data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900">
+      Apple
+    </Select.Option>
+    <Select.OptionGroupLabel className="px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+      Citrus
+    </Select.OptionGroupLabel>
+  </Select.Popup>
+</Select.Positioner>
+```
+
+</CodeTabs>
+
+## Keyboard
+
+| Keys                   | When                    | Action                                                                      |
+| ---------------------- | ----------------------- | --------------------------------------------------------------------------- |
+| `Enter` / `Space`      | Trigger, closed         | Open the listbox.                                                           |
+| `↓` / `↑`              | Trigger, closed         | Open the listbox.                                                           |
+| `Alt` + `↓`            | Trigger, closed         | Open the listbox.                                                           |
+| `↓` / `↑`              | Listbox open            | Move the active option to the next / previous, wrapping at the ends.        |
+| `Home` / `End`         | Listbox open            | Move the active option to the first / last.                                 |
+| _printable characters_ | Listbox open            | Typeahead: activate the next option whose label starts with the typed text. |
+| `Enter` / `Space`      | Listbox open (single)   | Select the active option and close.                                         |
+| `Enter` / `Space`      | Listbox open (multiple) | Toggle the active option and stay open.                                     |
+| `Escape`               | Listbox open            | Close without changing the selection; focus stays on the trigger.           |
+| `Tab`                  | Listbox open            | Close, then move focus to the next element.                                 |
+
+Focus stays on the trigger the whole time; navigation moves the active option
+via `aria-activedescendant` rather than moving DOM focus. Disabled options are
+skipped by arrow keys and typeahead. Set `loop={false}` on `Select.Root` to stop
+arrow navigation from wrapping, and `typeahead={false}` to disable
+type-to-activate.
+
+## Data attributes
+
+| Attribute          | On                         | Values                                            |
+| ------------------ | -------------------------- | ------------------------------------------------- |
+| `data-state`       | Trigger, Positioner, Popup | `open` \| `closed`                                |
+| `data-highlighted` | Option                     | present while the option is the active descendant |
+| `data-selected`    | Option                     | present when the option is selected               |
+| `data-disabled`    | Option                     | present when the option is disabled               |
+| `data-placeholder` | Value                      | present while no option is selected               |
+| `data-side`        | Positioner, Arrow          | `top` \| `right` \| `bottom` \| `left` (resolved) |
+| `data-align`       | Positioner                 | `start` \| `center` \| `end` (resolved)           |
+
+The selected option also carries `aria-selected="true"`, so you can style the
+selection with either the data attribute or the ARIA state.
+
+## API reference
+
+Every part accepts a `render` prop for composition (see
+[useRender](/docs/components/use-render)) and forwards unknown props to the
+element it renders. `Select.Option` passes its
+`{ selected, disabled, highlighted }` state to a render function; `Select.Value`
+passes `{ selectedLabels }`.
+
+### Select.Root
+
+Provides selection and open state, ids, refs, navigation config, and placement
+to the parts. Generic over the value type (`Select.Root<Value>`); defaults to
+`string`. Renders its children plus the hidden form field(s) when `name` is set.
+
+| Prop             | Type                                | Default     | Description                                                                 |
+| ---------------- | ----------------------------------- | ----------- | --------------------------------------------------------------------------- |
+| `value`          | `Value \| Value[]`                  | -           | Controlled selection. Pair with `onValueChange`. An array in multiple mode. |
+| `defaultValue`   | `Value \| Value[]`                  | -           | Initial selection when uncontrolled.                                        |
+| `onValueChange`  | `(value: Value \| Value[]) => void` | -           | Called when the selection changes.                                          |
+| `multiple`       | `boolean`                           | `false`     | Allow more than one selection; the value becomes an array.                  |
+| `open`           | `boolean`                           | -           | Controlled open state. Pair with `onOpenChange`.                            |
+| `defaultOpen`    | `boolean`                           | `false`     | Initial open state when uncontrolled.                                       |
+| `onOpenChange`   | `(open: boolean) => void`           | -           | Called when the listbox requests an open or close.                          |
+| `name`           | `string`                            | -           | Submit the value as a hidden field (one per value in multiple mode).        |
+| `disabled`       | `boolean`                           | `false`     | Disable the trigger and skip the hidden field.                              |
+| `required`       | `boolean`                           | `false`     | Mark the trigger `aria-required`.                                           |
+| `isValueEqual`   | `(a: Value, b: Value) => boolean`   | `Object.is` | Compare values for selection matching (use for object values).              |
+| `serializeValue` | `(value: Value) => string`          | `String`    | Stringify a value for the hidden form field.                                |
+| `side`           | `'top'\|'right'\|'bottom'\|'left'`  | `'bottom'`  | Preferred side of the trigger to place the popup.                           |
+| `align`          | `'start'\|'center'\|'end'`          | `'start'`   | Alignment along that side.                                                  |
+| `offset`         | `number`                            | `8`         | Gap in pixels between the trigger and the popup.                            |
+| `loop`           | `boolean`                           | `true`      | Wrap arrow navigation at the first / last option.                           |
+| `typeahead`      | `boolean`                           | `true`      | Activate options by typing their leading characters.                        |
+| `children`       | `ComponentChildren`                 | -           | The trigger and positioner.                                                 |
+
+### Select.Trigger
+
+Toggles the listbox on click and anchors it. Owns the keyboard navigation and
+typeahead while open (focus stays on it). Default element
+`<button type="button">` with `role="combobox"`.
+
+| Prop       | Type                                    | Default | Description                                                                   |
+| ---------- | --------------------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ open: boolean }>`         | -       | Compose or replace the element.                                               |
+| `children` | `ComponentChildren`                     | -       | Usually a `Select.Value` and an indicator.                                    |
+| `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded to the element; a passed `onClick` runs before the listbox toggles. |
+
+Sets `role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`,
+`aria-controls`, `aria-activedescendant` (while open), `aria-required` (when
+required), `id`, and `data-state`.
+
+### Select.Value
+
+Shows the selected option's label, or the placeholder while empty. Reads the
+registered option labels client-side, so server-rendered HTML shows the
+placeholder unless you supply a children / render function. Default element
+`<span>`.
+
+| Prop          | Type                                                         | Default | Description                                                    |
+| ------------- | ------------------------------------------------------------ | ------- | -------------------------------------------------------------- |
+| `placeholder` | `string`                                                     | `''`    | Text shown while nothing is selected.                          |
+| `render`      | `RenderProp<{ selectedLabels: string[] }>`                   | -       | Compose or replace the element.                                |
+| `children`    | `(state: { selectedLabels: string[] }) => ComponentChildren` | -       | Render the display from the selected labels (server-accurate). |
+| `...props`    | `JSX.HTMLAttributes<HTMLSpanElement>`                        | -       | Forwarded to the element.                                      |
+
+Sets `data-placeholder` while no option is selected.
+
+### Select.Positioner
+
+The fixed-positioned wrapper that Floating UI drives. Always mounted (so options
+register their labels) and `hidden` while closed. Default element `<div>`.
+
+| Prop       | Type                                       | Default | Description                                              |
+| ---------- | ------------------------------------------ | ------- | -------------------------------------------------------- |
+| `render`   | `RenderProp<{ side: Side; align: Align }>` | -       | Compose or replace the element.                          |
+| `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
+
+Sets `position: fixed`, the resolved `data-side` / `data-align`, and `hidden`
+while closed. Where the browser supports the Popover API, the element is promoted
+to the top layer so it escapes ancestor clipping.
+
+### Select.Popup
+
+The listbox surface. Default element `<div>` with `role="listbox"`.
+
+| Prop         | Type                                 | Default | Description                                       |
+| ------------ | ------------------------------------ | ------- | ------------------------------------------------- |
+| `render`     | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                   |
+| `aria-label` | `string`                             | -       | Accessible name. Defaults to the trigger's label. |
+| `children`   | `ComponentChildren`                  | -       | Options and option groups.                        |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                         |
+
+Sets `role="listbox"`, `id`, `aria-multiselectable` (in multiple mode),
+`data-state`, and `aria-labelledby` (the trigger) or `aria-label`. Owns
+Escape / outside-press dismissal.
+
+### Select.Option
+
+A selectable row. Default element `<div>` with `role="option"`.
+
+| Prop       | Type                                                                         | Default  | Description                                         |
+| ---------- | ---------------------------------------------------------------------------- | -------- | --------------------------------------------------- |
+| `value`    | `Value`                                                                      | required | The value this option selects.                      |
+| `render`   | `RenderProp<{ selected: boolean; disabled: boolean; highlighted: boolean }>` | -        | Compose or replace the element.                     |
+| `disabled` | `boolean`                                                                    | `false`  | Skip the option in navigation and ignore selection. |
+| `children` | `ComponentChildren`                                                          | -        | Option content; a string child is its label.        |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                                         | -        | Forwarded to the element.                           |
+
+Sets `role="option"`, `aria-selected`, `aria-disabled` (when disabled), and
+`data-selected` / `data-highlighted` / `data-disabled`.
+
+### Select.OptionGroup
+
+Wraps related options and labels them with a `Select.OptionGroupLabel`. Default
+element `<div>` with `role="group"`.
+
+| Prop       | Type                                 | Default | Description                              |
+| ---------- | ------------------------------------ | ------- | ---------------------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.                   |
+| `children` | `ComponentChildren`                  | -       | A `Select.OptionGroupLabel` and options. |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                |
+
+Wires its label to `aria-labelledby`.
+
+### Select.OptionGroupLabel
+
+The accessible name for a `Select.OptionGroup`. Presentational, not selectable.
+Default element `<div>`.
+
+| Prop       | Type                                 | Default | Description               |
+| ---------- | ------------------------------------ | ------- | ------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace it.    |
+| `children` | `ComponentChildren`                  | -       | Label text.               |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element. |
+
+### Select.Arrow
+
+Optional pointer positioned from the Floating UI arrow data. Default element
+`<div>`. Place it on the correct edge with CSS keyed on `data-side`.
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp<{ side: Side }>`         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | Optional arrow content.         |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.       |
+
+Sets `data-side` and `position: absolute` with the computed offset.
+
+### Primitives
+
+`@hono-preact/ui` exports the building blocks the parts use, for composing your
+own components. Several have their own page with examples:
+[useListNavigation](/docs/components/use-list-navigation),
+[usePosition](/docs/components/use-position),
+[useDismiss](/docs/components/use-dismiss),
+[useRender](/docs/components/use-render),
+[useControllableState](/docs/components/use-controllable-state), and
+[mergeRefs](/docs/components/merge-refs).
+
+## Accessibility
+
+The select follows the ARIA combobox-with-listbox pattern. The trigger is a
+`role="combobox"` carrying `aria-haspopup="listbox"`, `aria-expanded`,
+`aria-controls`, and `aria-activedescendant`; the popup is a `role="listbox"`
+(`aria-multiselectable` in multiple mode), named by the trigger or an explicit
+`aria-label`. Options are `role="option"` with `aria-selected`.
+
+- Both Enter / Space and the arrow keys open the listbox from the trigger, so it
+  is reachable without a pointer.
+- Focus stays on the trigger while the listbox is open; the active option is
+  tracked with `aria-activedescendant` rather than moving DOM focus, and the
+  active option is scrolled into view.
+- On open, the active descendant starts on the selected option (or the first
+  option when nothing is selected).
+- Escape closes without changing the selection, an outside pointer press closes
+  it, and Tab closes then moves on. Disabled options are skipped by navigation,
+  typeahead, and selection.
+- Set a `name` so the value submits in a real form; the hidden field is a real
+  input present before hydration.

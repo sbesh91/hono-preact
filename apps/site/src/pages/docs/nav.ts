@@ -124,6 +124,7 @@ export const nav: NavArea[] = [
           { title: 'Tooltip', route: '/docs/components/tooltip' },
           { title: 'Menu', route: '/docs/components/menu' },
           { title: 'Context Menu', route: '/docs/components/context-menu' },
+          { title: 'Select', route: '/docs/components/select' },
         ],
       },
       {
@@ -136,6 +137,10 @@ export const nav: NavArea[] = [
             route: '/docs/components/use-controllable-state',
           },
           { title: 'mergeRefs', route: '/docs/components/merge-refs' },
+          {
+            title: 'useListNavigation',
+            route: '/docs/components/use-list-navigation',
+          },
           { title: 'usePosition', route: '/docs/components/use-position' },
           { title: 'useDismiss', route: '/docs/components/use-dismiss' },
           {

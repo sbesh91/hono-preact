@@ -52,7 +52,7 @@ describe('docs nav', () => {
     expect(new Set(routes).size).toBe(routes.length);
   });
 
-  it('lists Popover, Tooltip, Menu, and Context Menu under Overlays', () => {
+  it('lists Popover, Tooltip, Menu, Context Menu, and Select under Overlays', () => {
     const components = nav.find((a) => a.id === 'components')!;
     const overlays = components.sections.find((s) => s.heading === 'Overlays')!;
     const routes = overlays.entries.map((e) => e.route);
@@ -60,9 +60,10 @@ describe('docs nav', () => {
     expect(routes).toContain('/docs/components/tooltip');
     expect(routes).toContain('/docs/components/menu');
     expect(routes).toContain('/docs/components/context-menu');
+    expect(routes).toContain('/docs/components/select');
   });
 
-  it('lists usePosition, useDismiss, and useFocusReturn under Foundations', () => {
+  it('lists usePosition, useDismiss, useFocusReturn, and useListNavigation under Foundations', () => {
     const components = nav.find((a) => a.id === 'components')!;
     const foundations = components.sections.find(
       (s) => s.heading === 'Foundations'
@@ -71,5 +72,6 @@ describe('docs nav', () => {
     expect(routes).toContain('/docs/components/use-position');
     expect(routes).toContain('/docs/components/use-dismiss');
     expect(routes).toContain('/docs/components/use-focus-return');
+    expect(routes).toContain('/docs/components/use-list-navigation');
   });
 });
