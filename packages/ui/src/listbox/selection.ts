@@ -1,5 +1,5 @@
 // packages/ui/src/listbox/selection.ts
-import { h, type VNode } from 'preact';
+import { h, type ComponentChild } from 'preact';
 import { useCallback, useRef, useState } from 'preact/hooks';
 
 // An option-disabled-aware selector both Select and Combobox query the listbox
@@ -37,7 +37,7 @@ export interface ListboxSelection {
   // -> serialized fallback).
   labelFor: (value: unknown) => string;
   optionCount: number; // number of currently-registered options
-  hiddenFields: VNode[] | null;
+  hiddenFields: ComponentChild[] | null;
 }
 
 export function useListboxSelection<Value = string>(
@@ -167,7 +167,7 @@ export function useListboxSelection<Value = string>(
     });
   }, [valuesArray, equal, serialize, labelFor]);
 
-  const hiddenFields =
+  const hiddenFields: ComponentChild[] | null =
     name == null
       ? null
       : valuesArray().map((v, i) =>

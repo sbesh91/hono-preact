@@ -7,7 +7,6 @@ import {
   type VNode,
 } from 'preact';
 import {
-  useCallback,
   useContext,
   useId,
   useLayoutEffect,
@@ -21,17 +20,12 @@ import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
+import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
 import {
   SelectContext,
   useSelectContext,
   SelectOptionGroupContext,
 } from './context.js';
-
-interface OptionEntry {
-  id: string;
-  value: unknown;
-  label: string;
-}
 
 export interface SelectRootProps<Value = string> {
   value?: Value | Value[];
@@ -107,84 +101,28 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     arrowY: null,
   });
 
-  // The comparator is the one place the generic is re-applied. Object.is
-  // accepts unknowns; a user comparator is adapted here (the sole
-  // generic-erasure boundary of the component).
-  const equal = useCallback(
-    (a: unknown, b: unknown): boolean => {
-      if (!isValueEqual) return Object.is(a, b);
-      return isValueEqual(a as Value, b as Value);
-    },
-    [isValueEqual]
-  );
-
-  // String form of a value for the hidden form field. Same generic-erasure
-  // seam as `equal`: only consulted when `name` is set.
-  const serialize = useCallback(
-    (v: unknown): string =>
-      serializeValue ? serializeValue(v as Value) : String(v),
-    [serializeValue]
-  );
-
-  const valuesArray = useCallback((): unknown[] => {
-    if (value === undefined) return [];
-    return Array.isArray(value) ? value : [value];
-  }, [value]);
-
-  const isSelected = useCallback(
-    (optionValue: unknown) => valuesArray().some((v) => equal(v, optionValue)),
-    [valuesArray, equal]
-  );
-
-  const toggle = useCallback(
-    (optionValue: unknown) => {
-      if (multiple) {
-        const current = valuesArray();
-        const next = current.some((v) => equal(v, optionValue))
-          ? current.filter((v) => !equal(v, optionValue))
-          : [...current, optionValue];
-        setValue(next as Value[]);
-      } else {
-        setValue(optionValue as Value);
-        setOpen(false);
-      }
-    },
-    [multiple, valuesArray, equal, setValue, setOpen]
-  );
-
-  const registry = useRef<OptionEntry[]>([]);
-  const [, force] = useState(0);
-  const registerOption = useCallback(
-    (id: string, optionValue: unknown, label: string) => {
-      registry.current = [
-        ...registry.current,
-        { id, value: optionValue, label },
-      ];
-      force((n) => n + 1);
-      return () => {
-        registry.current = registry.current.filter((e) => e.id !== id);
-        force((n) => n + 1);
-      };
-    },
-    []
-  );
-  const selectedLabels = useCallback(
-    () =>
-      registry.current.filter((e) => isSelected(e.value)).map((e) => e.label),
-    [isSelected]
-  );
+  const sel = useListboxSelection<Value>({
+    value,
+    setValue,
+    multiple,
+    setOpen,
+    isValueEqual,
+    serializeValue,
+    name,
+    disabled,
+  });
 
   const ctx = useMemo(
     () => ({
       open,
       setOpen,
       multiple,
-      isSelected,
-      toggle,
+      isSelected: sel.isSelected,
+      toggle: sel.toggle,
       activeId,
       setActiveId,
-      registerOption,
-      selectedLabels,
+      registerOption: sel.registerOption,
+      selectedLabels: sel.selectedLabels,
       anchorRef,
       floatingRef,
       listboxRef,
@@ -205,11 +143,11 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
       open,
       setOpen,
       multiple,
-      isSelected,
-      toggle,
+      sel.isSelected,
+      sel.toggle,
       activeId,
-      registerOption,
-      selectedLabels,
+      sel.registerOption,
+      sel.selectedLabels,
       baseId,
       disabled,
       required,
@@ -222,26 +160,10 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     ]
   );
 
-  // Hidden native field(s) so the value submits in a real form. Single: one
-  // input; multi: one per selected value (repeated name, the native
-  // multi-select convention). Real inputs, so the value is present pre-hydration.
-  const hiddenFields =
-    name == null
-      ? null
-      : valuesArray().map((v, i) =>
-          h('input', {
-            key: `${name}-${i}`,
-            type: 'hidden',
-            name,
-            value: serialize(v),
-            disabled: disabled || undefined,
-          })
-        );
-
   return h(
     SelectContext.Provider,
     { value: ctx },
-    h(Fragment, null, children, hiddenFields)
+    h(Fragment, null, children, sel.hiddenFields)
   );
 }
 
@@ -249,7 +171,7 @@ function supportsPopover(el: HTMLElement): boolean {
   return typeof el.showPopover === 'function';
 }
 
-export const OPTION_SELECTOR = '[role="option"]:not([aria-disabled="true"])';
+export { OPTION_SELECTOR } from '../listbox/selection.js';
 
 export type SelectTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
