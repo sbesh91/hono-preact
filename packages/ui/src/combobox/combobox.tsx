@@ -21,6 +21,7 @@ import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
+import type { OptionEntry } from '../listbox/selection.js';
 import { useListNavigation } from '../list-navigation.js';
 import {
   ComboboxContext,
@@ -873,4 +874,24 @@ export function ComboboxEmpty(props: ComboboxEmptyProps): VNode | null {
     props: { ...rest, role: 'presentation' },
     children,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Task 12: Value (multi chips accessor)
+// ---------------------------------------------------------------------------
+
+export interface ComboboxValueState {
+  selectedItems: OptionEntry[];
+  remove: (value: unknown) => void;
+}
+
+export type ComboboxValueProps = {
+  children: (state: ComboboxValueState) => ComponentChildren;
+};
+
+export function ComboboxValue(props: ComboboxValueProps): VNode {
+  const ctx = useComboboxContext('Value');
+  const selectedItems = ctx.selectedItems();
+  const remove = (value: unknown) => ctx.selectOption(value); // toggle off
+  return h(Fragment, null, props.children({ selectedItems, remove }));
 }
