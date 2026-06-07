@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+import { Combobox, ComboboxRoot } from '../index.js';
 import * as ui from '../index.js';
 
 describe('@hono-preact/ui exports', () => {
@@ -37,5 +38,30 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.Select.Trigger).toBe('function');
     expect(typeof ui.Select.Option).toBe('function');
     expect(typeof ui.Select.Value).toBe('function');
+  });
+});
+
+describe('Combobox exports', () => {
+  it('exposes the Combobox namespace with all parts', () => {
+    expect(typeof ComboboxRoot).toBe('function');
+    for (const part of [
+      'Root',
+      'Input',
+      'Trigger',
+      'Clear',
+      'Positioner',
+      'Popup',
+      'Empty',
+      'Option',
+      'OptionGroup',
+      'OptionGroupLabel',
+      'Arrow',
+      'Status',
+      'Value',
+    ]) {
+      expect(typeof (Combobox as Record<string, unknown>)[part]).toBe(
+        'function'
+      );
+    }
   });
 });
