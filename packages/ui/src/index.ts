@@ -110,3 +110,14 @@ export {
   type ContextMenuRootProps,
   type ContextMenuTriggerProps,
 } from './context-menu/index.js';
+export {
+  useListNavigation,
+  getItems,
+  wrapNext,
+  wrapPrev,
+  matchTypeahead,
+  type UseListNavigationOptions,
+  type ListNavigation,
+  type ListNavigationMode,
+} from './list-navigation.js';
+export { useTypeahead, type UseTypeaheadOptions } from './use-typeahead.js';
