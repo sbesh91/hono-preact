@@ -508,6 +508,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
   const composingRef = useRef(false);
   const prevQueryRef = useRef(ctx.inputValue);
   const attemptRef = useRef(false);
+  const hadSelRef = useRef(false);
   const [display, setDisplay] = useState(ctx.inputValue);
   const [selRange, setSelRange] = useState<{
     start: number;
@@ -515,10 +516,16 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
   } | null>(null);
   const inline = ctx.autocomplete === 'both';
 
-  // Keep `display` in sync when the query changes from outside typing (selection
-  // commit, clear, controlled updates) and there is no active completion.
+  // Keep `display` in sync with the query when there is no active completion, and
+  // drop a completion that the query has outgrown. A completion is "stale" when
+  // the query changed from something other than the user typing over it (a
+  // commit, a clear, or a controlled `inputValue` update): the typed-query ref no
+  // longer matches `inputValue`, so the displayed completion must be dropped and
+  // the display resynced to the query.
   useLayoutEffect(() => {
-    if (selRange == null) {
+    const stale = selRange != null && ctx.inputValue !== prevQueryRef.current;
+    if (selRange == null || stale) {
+      setSelRange(null);
       setDisplay(ctx.inputValue);
       prevQueryRef.current = ctx.inputValue;
     }
@@ -541,10 +548,21 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
   }, [ctx.inputValue, ctx.optionCount, ctx.open, inline]);
 
   // Re-apply the selection on every render while a completion is active (Preact
-  // rewrites `.value` each render, clearing the selection).
+  // rewrites `.value` each render, clearing the selection). When a completion
+  // clears (commit, caret keys, Escape, controlled change), collapse the lingering
+  // selection to the caret end exactly once. Doing the collapse here, keyed off
+  // the selRange transition rather than at each clearing site, keeps it robust to
+  // the ordering of the other layout effects.
   useLayoutEffect(() => {
-    if (selRange && ctx.inputRef.current) {
-      ctx.inputRef.current.setSelectionRange(selRange.start, selRange.end);
+    const el = ctx.inputRef.current;
+    if (!el) return;
+    if (selRange) {
+      el.setSelectionRange(selRange.start, selRange.end);
+      hadSelRef.current = true;
+    } else if (hadSelRef.current) {
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+      hadSelRef.current = false;
     }
   });
 
