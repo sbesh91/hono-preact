@@ -20,7 +20,8 @@ import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useRender, type RenderProp } from '../use-render.js';
-import { useListboxSelection } from '../listbox/selection.js';
+import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
+import { useListNavigation } from '../list-navigation.js';
 import {
   ComboboxContext,
   ComboboxOptionGroupContext,
@@ -473,5 +474,156 @@ export function ComboboxOptionGroupLabel(
     defaultTag: 'div',
     props: { ...rest, id: group?.labelId },
     children,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Task 8: Input (core keyboard + filtering, modes none/list)
+// ---------------------------------------------------------------------------
+
+export type ComboboxInputProps = {
+  render?: RenderProp<{ open: boolean }>;
+} & Omit<JSX.HTMLAttributes<HTMLInputElement>, 'value' | 'render'>;
+
+export function ComboboxInput(props: ComboboxInputProps): VNode {
+  const { render, onInput, onKeyDown, ...rest } = props;
+  const ctx = useComboboxContext('Input');
+
+  const nav = useListNavigation({
+    enabled: ctx.open,
+    containerRef: ctx.listboxRef,
+    itemSelector: OPTION_SELECTOR,
+    activeId: ctx.activeId,
+    setActiveId: ctx.setActiveId,
+    mode: 'activedescendant',
+    loop: ctx.loop,
+    typeahead: false,
+    homeEnd: false,
+  });
+
+  // On open, highlight the selected option (single) or the first option.
+  useLayoutEffect(() => {
+    if (!ctx.open) return;
+    const list = nav.getItems();
+    if (list.length === 0) return;
+    const selectedIdx = list.findIndex(
+      (el) => el.getAttribute('aria-selected') === 'true'
+    );
+    nav.setActiveItem(selectedIdx >= 0 ? selectedIdx : 0);
+  }, [ctx.open]);
+
+  // Auto-highlight the first option whenever the filtered set changes while
+  // open, in list/both modes (so Enter commits the top match).
+  useLayoutEffect(() => {
+    if (!ctx.open || ctx.autocomplete === 'none') return;
+    const list = nav.getItems();
+    if (list.length > 0) nav.setActiveItem(0);
+    else ctx.setActiveId(null);
+  }, [ctx.inputValue, ctx.optionCount, ctx.open, ctx.autocomplete]);
+
+  const handleInput = (event: JSX.TargetedInputEvent<HTMLInputElement>) => {
+    onInput?.(event);
+    const next = event.currentTarget.value;
+    ctx.setInputValue(next);
+    if (!ctx.open) ctx.setOpen(true);
+  };
+
+  const commitActive = () => {
+    const list = nav.getItems();
+    const current = list.findIndex((el) => el.id === ctx.activeId);
+    if (current >= 0) list[current].click();
+  };
+
+  const handleKeyDown = (
+    event: JSX.TargetedKeyboardEvent<HTMLInputElement>
+  ) => {
+    onKeyDown?.(event);
+    if (ctx.disabled || event.defaultPrevented) return;
+
+    // multiple: Backspace on an empty input removes the last token
+    if (
+      ctx.multiple &&
+      event.key === 'Backspace' &&
+      ctx.inputValue === '' &&
+      event.currentTarget.value === ''
+    ) {
+      const items = ctx.selectedItems();
+      if (items.length > 0) {
+        event.preventDefault();
+        ctx.selectOption(items[items.length - 1].value);
+        return;
+      }
+    }
+
+    if (!ctx.open) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        ctx.setOpen(true);
+      }
+      return;
+    }
+
+    // Open: Alt+ArrowUp closes; let the nav hook handle Arrow up/down.
+    if (event.altKey && event.key === 'ArrowUp') {
+      event.preventDefault();
+      ctx.setOpen(false);
+      return;
+    }
+    nav.onKeyDown(event);
+    if (event.defaultPrevented) return;
+
+    if (event.key === 'Enter') {
+      // Only consume Enter when there is an option to commit; otherwise let
+      // native form submission proceed (e.g. autocomplete="none" with no
+      // navigation, where activeId is null).
+      if (ctx.activeId != null) {
+        event.preventDefault();
+        commitActive();
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      ctx.setOpen(false);
+    } else if (event.key === 'Tab') {
+      ctx.setOpen(false);
+    }
+  };
+
+  // Second Escape (already closed) resets the input to the selected label.
+  const handleClosedEscape = (
+    event: JSX.TargetedKeyboardEvent<HTMLInputElement>
+  ) => {
+    if (event.key !== 'Escape' || ctx.open) return;
+    event.preventDefault();
+    const items = ctx.selectedItems();
+    ctx.setInputValue(ctx.multiple ? '' : (items[0]?.label ?? ''));
+  };
+
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'input',
+    props: {
+      ...rest,
+      ref: ctx.inputRef,
+      type: 'text',
+      role: 'combobox',
+      autoComplete: 'off',
+      'aria-autocomplete': ctx.autocomplete,
+      'aria-expanded': ctx.open,
+      'aria-controls': ctx.listboxId,
+      'aria-activedescendant': ctx.open
+        ? (ctx.activeId ?? undefined)
+        : undefined,
+      'aria-required': ctx.required ? true : undefined,
+      id: ctx.inputId,
+      disabled: ctx.disabled,
+      value: ctx.inputValue,
+      'data-state': ctx.open ? 'open' : 'closed',
+      onInput: handleInput,
+      onKeyDown: (event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
+        handleKeyDown(event);
+        handleClosedEscape(event);
+      },
+    },
+    state: { open: ctx.open },
   });
 }
