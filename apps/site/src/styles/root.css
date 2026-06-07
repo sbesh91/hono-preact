@@ -1422,3 +1422,150 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     animation: none;
   }
 }
+
+/* Combobox docs demos (single + multiple + creatable + inline). Mirrors the
+   copyable CSS on /docs/components/combobox but uses the site theme tokens so
+   it tracks light/dark. The input is the focus surface; the popup is a
+   role="listbox" of consumer-filtered options with highlighted / selected /
+   disabled states. */
+.docs-cb-field {
+  display: inline-flex;
+  align-items: center;
+  min-width: 16rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  transition: border-color 120ms ease;
+}
+.docs-cb-field:focus-within {
+  border-color: var(--accent);
+}
+.docs-cb-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+}
+.docs-cb-input::placeholder {
+  color: var(--muted);
+}
+.docs-cb-trigger {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.docs-cb-trigger:hover {
+  color: var(--foreground);
+}
+.docs-cb-positioner {
+  z-index: 50;
+}
+.docs-cb {
+  box-sizing: border-box;
+  min-width: 16rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+}
+.docs-cb[data-state='open'] {
+  animation: docs-cb-in 120ms ease-out;
+}
+@keyframes docs-cb-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-cb__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.docs-cb__option[data-selected]::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 0.8125rem;
+}
+.docs-cb__option[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-cb__option[data-disabled] {
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+.docs-cb__create {
+  font-style: italic;
+}
+.docs-cb__empty {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+/* Multiple: chips wrap onto the same field as the input. */
+.docs-cb-field--multi {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  cursor: text;
+}
+.docs-cb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 0.75rem;
+}
+.docs-cb-chip__remove {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.docs-cb-chip__remove:hover {
+  opacity: 1;
+}
+.docs-cb-input--multi {
+  flex: 1;
+  min-width: 5rem;
+  padding: 0.125rem 0.25rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-cb {
+    animation: none;
+  }
+}
