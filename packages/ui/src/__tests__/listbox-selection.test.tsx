@@ -72,7 +72,9 @@ describe('useListboxSelection', () => {
     let api!: ReturnType<typeof useListboxSelection<string>>;
     const { container } = render(<Harness onReady={(a) => (api = a)} />);
     await act(async () => api.toggle('apple'));
-    const hidden = container.querySelector('input[type="hidden"][name="fruit"]');
+    const hidden = container.querySelector(
+      'input[type="hidden"][name="fruit"]'
+    );
     expect(hidden).not.toBeNull();
     expect((hidden as HTMLInputElement).value).toBe('apple');
   });

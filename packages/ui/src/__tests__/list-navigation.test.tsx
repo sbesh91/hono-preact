@@ -111,9 +111,15 @@ function HomeEndHarness({ homeEnd }: { homeEnd: boolean }) {
         onKeyDown={(e) => nav.onKeyDown(e)}
       />
       <div ref={ref}>
-        <div role="option" id="opt-1">One</div>
-        <div role="option" id="opt-2">Two</div>
-        <div role="option" id="opt-3">Three</div>
+        <div role="option" id="opt-1">
+          One
+        </div>
+        <div role="option" id="opt-2">
+          Two
+        </div>
+        <div role="option" id="opt-3">
+          Three
+        </div>
       </div>
     </div>
   );
