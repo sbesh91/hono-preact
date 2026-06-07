@@ -8,6 +8,7 @@ import {
 } from 'preact';
 import {
   useCallback,
+  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -22,6 +23,7 @@ import { useRender, type RenderProp } from '../use-render.js';
 import { useListboxSelection } from '../listbox/selection.js';
 import {
   ComboboxContext,
+  ComboboxOptionGroupContext,
   useComboboxContext,
   type AutocompleteMode,
 } from './context.js';
@@ -347,6 +349,129 @@ export function ComboboxArrow(props: ComboboxArrowProps): VNode {
       },
     },
     state: { side },
+    children,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Task 7: Option, OptionGroup, OptionGroupLabel (with `create` routing)
+// ---------------------------------------------------------------------------
+
+export type ComboboxOptionProps<Value = string> = {
+  value: Value;
+  create?: boolean; // routes selection to onCreate instead of committing value
+  render?: RenderProp<{
+    selected: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>;
+  disabled?: boolean;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxOption<Value = string>(
+  props: ComboboxOptionProps<Value>
+): VNode {
+  const {
+    value,
+    create = false,
+    render,
+    children,
+    disabled = false,
+    onClick,
+    onPointerEnter,
+    ...rest
+  } = props;
+  const ctx = useComboboxContext('Option');
+  const id = useId();
+  const selected = ctx.isSelected(value);
+  const highlighted = ctx.activeId === id;
+
+  useLayoutEffect(() => {
+    const label =
+      typeof children === 'string'
+        ? children
+        : (document.getElementById(id)?.textContent ?? '');
+    return ctx.registerOption(id, value, label);
+  }, [id, value, ctx.registerOption]);
+
+  const commit = () => {
+    if (create) {
+      if (ctx.hasOnCreate) ctx.createOption();
+      else ctx.selectOption(value);
+    } else {
+      ctx.selectOption(value);
+    }
+  };
+
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (disabled) return;
+    commit();
+  };
+  const handlePointerEnter = (
+    event: JSX.TargetedPointerEvent<HTMLDivElement>
+  ) => {
+    onPointerEnter?.(event);
+    if (disabled) return;
+    ctx.setActiveId(id);
+  };
+
+  return useRender<{
+    selected: boolean;
+    disabled: boolean;
+    highlighted: boolean;
+  }>({
+    render,
+    defaultTag: 'div',
+    props: {
+      ...rest,
+      id,
+      role: 'option',
+      'aria-selected': selected,
+      'aria-disabled': disabled ? 'true' : undefined,
+      'data-selected': selected ? '' : undefined,
+      'data-highlighted': highlighted ? '' : undefined,
+      'data-disabled': disabled ? '' : undefined,
+      onClick: handleClick,
+      onPointerEnter: handlePointerEnter,
+    },
+    state: { selected, disabled, highlighted },
+    children,
+  });
+}
+
+export type ComboboxOptionGroupProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxOptionGroup(props: ComboboxOptionGroupProps) {
+  const { render, children, ...rest } = props;
+  const labelId = useId();
+  const node = useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
+    children,
+  });
+  return h(ComboboxOptionGroupContext.Provider, { value: { labelId } }, node);
+}
+
+export type ComboboxOptionGroupLabelProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxOptionGroupLabel(
+  props: ComboboxOptionGroupLabelProps
+): VNode {
+  const { render, children, ...rest } = props;
+  const group = useContext(ComboboxOptionGroupContext);
+  return useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, id: group?.labelId },
     children,
   });
 }
