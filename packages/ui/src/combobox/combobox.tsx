@@ -28,6 +28,7 @@ import {
   useComboboxContext,
   type AutocompleteMode,
 } from './context.js';
+import { computeInlineCompletion, isForwardEdit } from './autocomplete.js';
 
 export interface ComboboxRootProps<Value = string> {
   value?: Value | Value[];
@@ -501,6 +502,52 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     homeEnd: false,
   });
 
+  // Inline completion (mode 'both'): the DOM input is controlled by `display`,
+  // which may carry the first option's completed label with the appended suffix
+  // text-selected. The public `inputValue` always stays the typed query.
+  const composingRef = useRef(false);
+  const prevQueryRef = useRef(ctx.inputValue);
+  const attemptRef = useRef(false);
+  const [display, setDisplay] = useState(ctx.inputValue);
+  const [selRange, setSelRange] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
+  const inline = ctx.autocomplete === 'both';
+
+  // Keep `display` in sync when the query changes from outside typing (selection
+  // commit, clear, controlled updates) and there is no active completion.
+  useLayoutEffect(() => {
+    if (selRange == null) {
+      setDisplay(ctx.inputValue);
+      prevQueryRef.current = ctx.inputValue;
+    }
+  }, [ctx.inputValue]);
+
+  // Compute the completion after the consumer re-renders the filtered list.
+  useLayoutEffect(() => {
+    if (!inline || !attemptRef.current || !ctx.open) return;
+    attemptRef.current = false;
+    const list = nav.getItems();
+    const firstLabel = list.length > 0 ? (list[0].textContent ?? '') : null;
+    const c = computeInlineCompletion(ctx.inputValue, firstLabel);
+    if (c) {
+      setDisplay(c.text);
+      setSelRange({ start: c.selStart, end: c.selEnd });
+    } else {
+      setDisplay(ctx.inputValue);
+      setSelRange(null);
+    }
+  }, [ctx.inputValue, ctx.optionCount, ctx.open, inline]);
+
+  // Re-apply the selection on every render while a completion is active (Preact
+  // rewrites `.value` each render, clearing the selection).
+  useLayoutEffect(() => {
+    if (selRange && ctx.inputRef.current) {
+      ctx.inputRef.current.setSelectionRange(selRange.start, selRange.end);
+    }
+  });
+
   // On open, highlight the selected option (single) or the first option.
   useLayoutEffect(() => {
     if (!ctx.open) return;
@@ -521,11 +568,34 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     else ctx.setActiveId(null);
   }, [ctx.inputValue, ctx.optionCount, ctx.open, ctx.autocomplete]);
 
+  const runInput = (raw: string) => {
+    const forward = isForwardEdit(prevQueryRef.current, raw);
+    prevQueryRef.current = raw;
+    setSelRange(null);
+    setDisplay(raw);
+    ctx.setInputValue(raw);
+    if (!ctx.open) ctx.setOpen(true);
+    if (inline && forward) attemptRef.current = true;
+  };
+
   const handleInput = (event: JSX.TargetedInputEvent<HTMLInputElement>) => {
     onInput?.(event);
-    const next = event.currentTarget.value;
-    ctx.setInputValue(next);
-    if (!ctx.open) ctx.setOpen(true);
+    const raw = event.currentTarget.value;
+    if (composingRef.current) {
+      setDisplay(raw); // mirror the composing text; do not filter/complete yet
+      return;
+    }
+    runInput(raw);
+  };
+
+  const handleCompositionStart = () => {
+    composingRef.current = true;
+  };
+  const handleCompositionEnd = (
+    event: JSX.TargetedCompositionEvent<HTMLInputElement>
+  ) => {
+    composingRef.current = false;
+    runInput(event.currentTarget.value);
   };
 
   const commitActive = () => {
@@ -572,6 +642,25 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     nav.onKeyDown(event);
     if (event.defaultPrevented) return;
 
+    if (event.key === 'Tab' && inline && selRange) {
+      // accept the inline completion by committing the active (first) option
+      event.preventDefault();
+      commitActive();
+      return;
+    }
+    if (selRange && (event.key === 'ArrowLeft' || event.key === 'Home')) {
+      // cancel completion, keep the typed query
+      setSelRange(null);
+      setDisplay(ctx.inputValue);
+      return;
+    }
+    if (selRange && (event.key === 'ArrowRight' || event.key === 'End')) {
+      // accept the completed text (not the option) and refilter to it
+      setSelRange(null);
+      ctx.setInputValue(display);
+      return;
+    }
+
     if (event.key === 'Enter') {
       // Only consume Enter when there is an option to commit; otherwise let
       // native form submission proceed (e.g. autocomplete="none" with no
@@ -582,6 +671,8 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
       }
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      setSelRange(null);
+      setDisplay(ctx.inputValue);
       ctx.setOpen(false);
     } else if (event.key === 'Tab') {
       ctx.setOpen(false);
@@ -616,9 +707,11 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
       'aria-required': ctx.required ? true : undefined,
       id: ctx.inputId,
       disabled: ctx.disabled,
-      value: ctx.inputValue,
+      value: display,
       'data-state': ctx.open ? 'open' : 'closed',
       onInput: handleInput,
+      onCompositionStart: handleCompositionStart,
+      onCompositionEnd: handleCompositionEnd,
       onKeyDown: (event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
         handleKeyDown(event);
         handleClosedEscape(event);
