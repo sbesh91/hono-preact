@@ -156,6 +156,12 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
     }
   }, [onCreate, inputValue, multiple, setInputValue, setOpen]);
 
+  const clear = useCallback(() => {
+    setValue((multiple ? [] : undefined) as Value | Value[]);
+    setInputValue('');
+    inputRef.current?.focus();
+  }, [setValue, multiple, setInputValue]);
+
   const ctx = useMemo(
     () => ({
       open,
@@ -172,6 +178,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       selectedItems: sel.selectedItems,
       labelFor: sel.labelFor,
       optionCount: sel.optionCount,
+      clear,
       activeId,
       setActiveId,
       inputRef,
@@ -206,6 +213,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       sel.selectedItems,
       sel.labelFor,
       sel.optionCount,
+      clear,
       activeId,
       baseId,
       disabled,
@@ -781,5 +789,88 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
       },
     },
     state: { open: ctx.open },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Task 11: Trigger, Clear, Empty
+// ---------------------------------------------------------------------------
+
+export type ComboboxTriggerProps = {
+  render?: RenderProp<{ open: boolean }>;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+
+export function ComboboxTrigger(props: ComboboxTriggerProps): VNode {
+  const { render, children, onClick, ...rest } = props;
+  const ctx = useComboboxContext('Trigger');
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+    onClick?.(event);
+    if (ctx.disabled) return;
+    ctx.setOpen(!ctx.open);
+    ctx.inputRef.current?.focus();
+  };
+  return useRender<{ open: boolean }>({
+    render,
+    defaultTag: 'button',
+    props: {
+      ...rest,
+      ref: ctx.triggerRef,
+      type: 'button',
+      tabIndex: -1,
+      'aria-controls': ctx.listboxId,
+      'aria-expanded': ctx.open,
+      'aria-label': rest['aria-label'] ?? 'Open',
+      disabled: ctx.disabled,
+      'data-state': ctx.open ? 'open' : 'closed',
+      onClick: handleClick,
+    },
+    state: { open: ctx.open },
+    children,
+  });
+}
+
+export type ComboboxClearProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+
+export function ComboboxClear(props: ComboboxClearProps): VNode {
+  const { render, children, onClick, ...rest } = props;
+  const ctx = useComboboxContext('Clear');
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+    onClick?.(event);
+    if (ctx.disabled) return;
+    ctx.clear();
+  };
+  return useRender({
+    render,
+    defaultTag: 'button',
+    props: {
+      ...rest,
+      ref: ctx.clearRef,
+      type: 'button',
+      'aria-label': rest['aria-label'] ?? 'Clear',
+      disabled: ctx.disabled,
+      onClick: handleClick,
+    },
+    children,
+  });
+}
+
+export type ComboboxEmptyProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+
+export function ComboboxEmpty(props: ComboboxEmptyProps): VNode | null {
+  const { render, children, ...rest } = props;
+  const ctx = useComboboxContext('Empty');
+  if (!ctx.open || ctx.optionCount > 0) return null;
+  return useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, role: 'presentation' },
+    children,
   });
 }

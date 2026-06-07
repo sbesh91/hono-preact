@@ -25,6 +25,7 @@ export interface ComboboxContextValue {
   selectedItems: () => OptionEntry[];
   labelFor: (value: unknown) => string;
   optionCount: number;
+  clear: () => void; // reset value + input
   // navigation / active descendant
   activeId: string | null;
   setActiveId: (id: string | null) => void;
