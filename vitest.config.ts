@@ -138,6 +138,7 @@ export default defineConfig({
         'packages/ui/src/dialog/index.ts',
         'packages/ui/src/popover/index.ts',
         'packages/ui/src/tooltip/index.ts',
+        'packages/ui/src/combobox/index.ts',
       ],
     },
   },

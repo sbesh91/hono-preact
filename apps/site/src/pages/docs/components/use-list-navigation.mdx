@@ -28,6 +28,7 @@ interface UseListNavigationOptions {
   mode: 'roving' | 'activedescendant';
   loop?: boolean; // default true
   typeahead?: boolean; // default true
+  homeEnd?: boolean; // default true
   scopeSelector?: string;
 }
 
@@ -40,17 +41,18 @@ interface ListNavigation {
 
 ## Options
 
-| Option          | Type                             | Default | Notes                                                                           |
-| --------------- | -------------------------------- | ------- | ------------------------------------------------------------------------------- |
-| `enabled`       | `boolean`                        | none    | Handle keys only while active (typically the open state).                       |
-| `containerRef`  | `RefObject<HTMLElement>`         | none    | The element holding the items.                                                  |
-| `itemSelector`  | `string`                         | none    | CSS selector matching the navigable items (exclude disabled items here).        |
-| `activeId`      | `string \| null`                 | none    | The id of the active item; drives `aria-activedescendant`.                      |
-| `setActiveId`   | `(id: string \| null) => void`   | none    | Called to change the active item.                                               |
-| `mode`          | `'roving' \| 'activedescendant'` | none    | `roving` moves DOM focus; `activedescendant` keeps focus and scrolls into view. |
-| `loop`          | `boolean`                        | `true`  | Wrap arrow navigation at the first / last item.                                 |
-| `typeahead`     | `boolean`                        | `true`  | Activate items by typing their leading characters.                              |
-| `scopeSelector` | `string`                         | none    | Exclude items nested in a closer same-role container (a submenu).               |
+| Option          | Type                             | Default | Notes                                                                                                   |
+| --------------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `enabled`       | `boolean`                        | none    | Handle keys only while active (typically the open state).                                               |
+| `containerRef`  | `RefObject<HTMLElement>`         | none    | The element holding the items.                                                                          |
+| `itemSelector`  | `string`                         | none    | CSS selector matching the navigable items (exclude disabled items here).                                |
+| `activeId`      | `string \| null`                 | none    | The id of the active item; drives `aria-activedescendant`.                                              |
+| `setActiveId`   | `(id: string \| null) => void`   | none    | Called to change the active item.                                                                       |
+| `mode`          | `'roving' \| 'activedescendant'` | none    | `roving` moves DOM focus; `activedescendant` keeps focus and scrolls into view.                         |
+| `loop`          | `boolean`                        | `true`  | Wrap arrow navigation at the first / last item.                                                         |
+| `typeahead`     | `boolean`                        | `true`  | Activate items by typing their leading characters.                                                      |
+| `homeEnd`       | `boolean`                        | `true`  | Handle Home/End (default true); pass false to leave them as native caret movement (Combobox uses this). |
+| `scopeSelector` | `string`                         | none    | Exclude items nested in a closer same-role container (a submenu).                                       |
 
 ## Returns
 

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/preact';
+import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 import { useRef, useState } from 'preact/hooks';
 import { useListNavigation, getItems, wrapNext } from '../list-navigation.js';
 
@@ -88,5 +88,66 @@ describe('useListNavigation', () => {
     host.focus();
     fireEvent.keyDown(host, { key: 'c' });
     expect(host.getAttribute('aria-activedescendant')).toBe('o3');
+  });
+});
+
+function HomeEndHarness({ homeEnd }: { homeEnd: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>('opt-1');
+  const nav = useListNavigation({
+    enabled: true,
+    containerRef: ref,
+    itemSelector: '[role="option"]',
+    activeId,
+    setActiveId,
+    mode: 'activedescendant',
+    homeEnd,
+  });
+  return (
+    <div>
+      <input
+        data-testid="input"
+        aria-activedescendant={activeId ?? undefined}
+        onKeyDown={(e) => nav.onKeyDown(e)}
+      />
+      <div ref={ref}>
+        <div role="option" id="opt-1">
+          One
+        </div>
+        <div role="option" id="opt-2">
+          Two
+        </div>
+        <div role="option" id="opt-3">
+          Three
+        </div>
+      </div>
+    </div>
+  );
+}
+
+describe('useListNavigation homeEnd option', () => {
+  it('End moves to the last item when homeEnd is true (default)', async () => {
+    const { getByTestId } = render(<HomeEndHarness homeEnd={true} />);
+    const input = getByTestId('input');
+    fireEvent.keyDown(input, { key: 'End' });
+    await act(async () => {});
+    expect(input.getAttribute('aria-activedescendant')).toBe('opt-3');
+  });
+
+  it('Home/End are ignored when homeEnd is false', async () => {
+    const { getByTestId } = render(<HomeEndHarness homeEnd={false} />);
+    const input = getByTestId('input');
+    // End would jump to opt-3 if handled; with homeEnd=false it is a no-op.
+    fireEvent.keyDown(input, { key: 'End' });
+    await act(async () => {});
+    expect(input.getAttribute('aria-activedescendant')).toBe('opt-1');
+    // Move off the first item, then confirm Home is also a no-op (would jump
+    // back to opt-1 if handled).
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    await act(async () => {});
+    expect(input.getAttribute('aria-activedescendant')).toBe('opt-2');
+    fireEvent.keyDown(input, { key: 'Home' });
+    await act(async () => {});
+    expect(input.getAttribute('aria-activedescendant')).toBe('opt-2');
   });
 });
