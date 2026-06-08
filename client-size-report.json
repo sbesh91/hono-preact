@@ -112,10 +112,10 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 43718,
+      "app": 44660,
       "actions": 16442,
-      "core": 37663,
-      "components": 62565,
+      "core": 37664,
+      "components": 76974,
       "guards": 2196,
       "middleware": 12845,
       "vendor": 8302,
@@ -124,9 +124,9 @@
       "streaming": 6743,
       "transitions": 5087
     },
-    "total": 214341,
-    "unmatched": 24,
-    "fileCount": 74
+    "total": 229693,
+    "unmatched": 25,
+    "fileCount": 76
   },
   "sectionC": {
     "ui-core": {
@@ -179,38 +179,50 @@
     },
     "menu": {
       "total": {
-        "raw": 34496,
-        "gzip": 12586,
-        "brotli": 11233
+        "raw": 34535,
+        "gzip": 12605,
+        "brotli": 11263
       },
       "marginalOverUiCore": {
-        "raw": 33343,
-        "gzip": 11954,
-        "brotli": 10667
+        "raw": 33382,
+        "gzip": 11973,
+        "brotli": 10696
       }
     },
     "context-menu": {
       "total": {
-        "raw": 34179,
-        "gzip": 12576,
-        "brotli": 11197
+        "raw": 34214,
+        "gzip": 12594,
+        "brotli": 11211
       },
       "marginalOverUiCore": {
-        "raw": 33024,
-        "gzip": 11934,
-        "brotli": 10641
+        "raw": 33059,
+        "gzip": 11955,
+        "brotli": 10657
       }
     },
     "select": {
       "total": {
-        "raw": 28365,
-        "gzip": 11189,
-        "brotli": 10110
+        "raw": 29301,
+        "gzip": 11482,
+        "brotli": 10364
       },
       "marginalOverUiCore": {
-        "raw": 27211,
-        "gzip": 10548,
-        "brotli": 9493
+        "raw": 28147,
+        "gzip": 10843,
+        "brotli": 9758
+      }
+    },
+    "combobox": {
+      "total": {
+        "raw": 33725,
+        "gzip": 12884,
+        "brotli": 11628
+      },
+      "marginalOverUiCore": {
+        "raw": 32571,
+        "gzip": 12238,
+        "brotli": 11080
       }
     }
   }
