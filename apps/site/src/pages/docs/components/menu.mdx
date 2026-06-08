@@ -106,6 +106,15 @@ either flavor:
     transform: translateY(-4px);
   }
 }
+.docs-menu[data-state='closed'] {
+  animation: docs-menu-out 120ms ease-in forwards;
+}
+@keyframes docs-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* Items are roving-tabindex rows; the active row is highlighted via the
    data-attribute the component sets on hover and arrow navigation. */
 .docs-menu__item {
@@ -151,6 +160,12 @@ either flavor:
   }
   .docs-menu__separator {
     background: #27272a;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-menu[data-state='open'],
+  .docs-menu[data-state='closed'] {
+    animation: none;
   }
 }
 ```

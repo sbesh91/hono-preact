@@ -232,6 +232,15 @@ a starting point in either flavor:
     transform: translateY(-4px);
   }
 }
+.docs-cb[data-state='closed'] {
+  animation: docs-cb-out 120ms ease-in forwards;
+}
+@keyframes docs-cb-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 .docs-cb__option {
   display: flex;
   align-items: center;
@@ -272,6 +281,12 @@ a starting point in either flavor:
   .docs-cb__option[data-highlighted] {
     background: #fafafa;
     color: #18181b;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-cb[data-state='open'],
+  .docs-cb[data-state='closed'] {
+    animation: none;
   }
 }
 ```

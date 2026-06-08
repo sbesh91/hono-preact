@@ -153,6 +153,15 @@ styles below; copy a starting point in either flavor:
     transform: translateY(-4px);
   }
 }
+.docs-select[data-state='closed'] {
+  animation: docs-select-out 120ms ease-in forwards;
+}
+@keyframes docs-select-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* Options: the active descendant is data-highlighted (set by hover and arrow
    keys); the selected option is data-selected. Both can be true at once. */
 .docs-select__option {
@@ -199,6 +208,12 @@ styles below; copy a starting point in either flavor:
   .docs-select__option[data-highlighted] {
     background: #fafafa;
     color: #18181b;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-select[data-state='open'],
+  .docs-select[data-state='closed'] {
+    animation: none;
   }
 }
 ```

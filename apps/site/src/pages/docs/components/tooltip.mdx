@@ -74,6 +74,14 @@ starting point in either flavor:
     opacity: 0;
   }
 }
+.docs-tooltip[data-state='closed'] {
+  animation: docs-tooltip-out 100ms ease-in forwards;
+}
+@keyframes docs-tooltip-out {
+  to {
+    opacity: 0;
+  }
+}
 /* A solid rotated square, same color as the chip, straddling the edge facing
    the anchor. */
 .docs-tooltip__arrow {
@@ -101,6 +109,12 @@ starting point in either flavor:
   }
   .docs-tooltip__arrow {
     background: #27272a;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-tooltip[data-state='open'],
+  .docs-tooltip[data-state='closed'] {
+    animation: none;
   }
 }
 ```

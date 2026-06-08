@@ -91,9 +91,21 @@ dialog::backdrop {
   }
 }
 
+dialog[data-state='closed'] {
+  animation: dialog-out 160ms ease-in forwards;
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  dialog[data-state='open'] {
+  dialog[data-state='open'],
+  dialog[data-state='closed'] {
     transition: none;
+    animation: none;
   }
 }
 ```

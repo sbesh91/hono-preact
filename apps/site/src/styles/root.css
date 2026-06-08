@@ -690,9 +690,20 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   gap: 0.5rem;
   margin-top: 1.5rem;
 }
+.docs-dialog[data-state='closed'] {
+  animation: docs-dialog-out 160ms ease-in forwards;
+}
+@keyframes docs-dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .docs-dialog {
+  .docs-dialog[data-state='open'],
+  .docs-dialog[data-state='closed'] {
     transition: none;
+    animation: none;
   }
 }
 
@@ -827,6 +838,15 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     transform: translateY(-4px);
   }
 }
+.docs-popover[data-state='closed'] {
+  animation: docs-popover-out 120ms ease-in forwards;
+}
+@keyframes docs-popover-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* Scope the popup typography by element so it overrides the .mdx-content prose
    h2/p (a BEM class would lose the specificity tie to `.mdx-content h2`). */
 .docs-popover h2 {
@@ -877,7 +897,8 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   border-left: 0;
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-popover {
+  .docs-popover[data-state='open'],
+  .docs-popover[data-state='closed'] {
     animation: none;
   }
 }
@@ -927,6 +948,14 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     opacity: 0;
   }
 }
+.docs-tooltip[data-state='closed'] {
+  animation: docs-tooltip-out 100ms ease-in forwards;
+}
+@keyframes docs-tooltip-out {
+  to {
+    opacity: 0;
+  }
+}
 .docs-tooltip__arrow {
   width: 8px;
   height: 8px;
@@ -946,7 +975,8 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   right: -4px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-tooltip {
+  .docs-tooltip[data-state='open'],
+  .docs-tooltip[data-state='closed'] {
     animation: none;
   }
 }
@@ -1230,6 +1260,15 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     transform: translateY(-4px);
   }
 }
+.docs-menu[data-state='closed'] {
+  animation: docs-menu-out 120ms ease-in forwards;
+}
+@keyframes docs-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* Items: roving-tabindex rows; the active row is :focus, so highlight on
    data-highlighted (set by hover and arrow keys) reads in both modes. */
 .docs-menu__item {
@@ -1305,7 +1344,8 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   color: var(--foreground);
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-menu {
+  .docs-menu[data-state='open'],
+  .docs-menu[data-state='closed'] {
     animation: none;
   }
 }
@@ -1378,6 +1418,15 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     transform: translateY(-4px);
   }
 }
+.docs-select[data-state='closed'] {
+  animation: docs-select-out 120ms ease-in forwards;
+}
+@keyframes docs-select-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* Options: the active descendant is data-highlighted (set by hover and arrow
    keys); the selected option is data-selected. Both can be true at once. */
 .docs-select__option {
@@ -1418,7 +1467,8 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   color: var(--muted);
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-select {
+  .docs-select[data-state='open'],
+  .docs-select[data-state='closed'] {
     animation: none;
   }
 }
@@ -1512,6 +1562,15 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     transform: translateY(-4px);
   }
 }
+.docs-cb[data-state='closed'] {
+  animation: docs-cb-out 120ms ease-in forwards;
+}
+@keyframes docs-cb-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 .docs-cb__option {
   display: flex;
   align-items: center;
@@ -1571,7 +1630,8 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-cb {
+  .docs-cb[data-state='open'],
+  .docs-cb[data-state='closed'] {
     animation: none;
   }
 }

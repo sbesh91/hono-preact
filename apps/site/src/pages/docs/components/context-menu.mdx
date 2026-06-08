@@ -113,6 +113,15 @@ exactly like a `Menu.Popup`; the demo above uses the styles below:
     transform: translateY(-4px);
   }
 }
+.docs-menu[data-state='closed'] {
+  animation: docs-menu-out 120ms ease-in forwards;
+}
+@keyframes docs-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 .docs-menu__item {
   display: flex;
   align-items: center;
@@ -156,6 +165,12 @@ exactly like a `Menu.Popup`; the demo above uses the styles below:
   }
   .docs-menu__separator {
     background: #27272a;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-menu[data-state='open'],
+  .docs-menu[data-state='closed'] {
+    animation: none;
   }
 }
 ```

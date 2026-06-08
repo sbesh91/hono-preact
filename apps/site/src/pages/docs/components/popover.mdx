@@ -84,6 +84,15 @@ demo above uses the styles below; copy a starting point in either flavor:
     transform: translateY(-4px);
   }
 }
+.docs-popover[data-state='closed'] {
+  animation: docs-popover-out 120ms ease-in forwards;
+}
+@keyframes docs-popover-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* The arrow is a rotated square; the component sets position:absolute and the
    cross-axis offset, the per-side rules place it on the edge facing the anchor.
    The Positioner already clears the UA top-layer styles, so nothing else is
@@ -127,6 +136,12 @@ demo above uses the styles below; copy a starting point in either flavor:
   .docs-popover__arrow {
     background: #18181b;
     border-color: #27272a;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-popover[data-state='open'],
+  .docs-popover[data-state='closed'] {
+    animation: none;
   }
 }
 ```
