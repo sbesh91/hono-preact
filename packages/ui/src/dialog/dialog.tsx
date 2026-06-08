@@ -10,6 +10,8 @@ import {
 } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
+import { mergeRefs } from '../merge-refs.js';
+import { usePresence } from '../use-presence.js';
 import { DialogContext, useDialogContext } from './context.js';
 
 export interface DialogRootProps {
@@ -145,13 +147,17 @@ export function DialogPopup(props: DialogPopupProps): VNode {
   const openRef = useRef(ctx.open);
   openRef.current = ctx.open;
 
-  // Drive the native element from open-state. showModal/close live in a
-  // layout effect (client only), so the server never touches the DOM.
+  const presence = usePresence(ctx.open, {
+    onExitComplete: () => ctx.dialogRef.current?.close(),
+  });
+
+  // Open imperatively; the close is deferred to the exit animation
+  // (usePresence.onExitComplete), so the dialog stays in the top layer with
+  // inert/focus-trap/::backdrop intact while it animates out.
   useLayoutEffect(() => {
     const el = ctx.dialogRef.current;
     if (!el) return;
     if (ctx.open && !el.open) el.showModal();
-    else if (!ctx.open && el.open) el.close();
   }, [ctx.open]);
 
   // Native dismissal (Escape, programmatic close()) fires `close`; mirror it
@@ -168,6 +174,19 @@ export function DialogPopup(props: DialogPopupProps): VNode {
     return () => el.removeEventListener('close', onClose);
   }, [ctx.setOpen]);
 
+  // Esc fires `cancel` then natively closes instantly. Intercept it and route
+  // through state so the close animates like every other close path.
+  useEffect(() => {
+    const el = ctx.dialogRef.current;
+    if (!el) return;
+    const onCancel = (event: Event) => {
+      event.preventDefault();
+      ctx.setOpen(false);
+    };
+    el.addEventListener('cancel', onCancel);
+    return () => el.removeEventListener('cancel', onCancel);
+  }, [ctx.setOpen]);
+
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLDialogElement>) => {
     onClick?.(event);
     // A modal <dialog> reports backdrop clicks as targeting the element itself.
@@ -181,7 +200,7 @@ export function DialogPopup(props: DialogPopupProps): VNode {
     defaultTag: 'dialog',
     props: {
       ...rest,
-      ref: ctx.dialogRef,
+      ref: mergeRefs(ctx.dialogRef, presence.ref),
       id: ctx.popupId,
       'data-state': ctx.open ? 'open' : 'closed',
       'aria-label': ariaLabel,
