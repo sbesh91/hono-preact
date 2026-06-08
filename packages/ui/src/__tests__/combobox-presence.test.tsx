@@ -2,10 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, act, cleanup, fireEvent } from '@testing-library/preact';
 import { Combobox } from '../combobox/index.js';
-import {
-  makeAnimation,
-  installGetAnimations,
-} from './presence-helpers.js';
+import { makeAnimation, installGetAnimations } from './presence-helpers.js';
 
 afterEach(cleanup);
 
@@ -36,7 +33,7 @@ describe('Combobox exit animation', () => {
 
     // Single Escape closes without reverting (Model A two-stage).
     await act(async () =>
-      fireEvent.keyDown(getByTestId('input'), { key: 'Escape' }),
+      fireEvent.keyDown(getByTestId('input'), { key: 'Escape' })
     );
     // Still visible (animating out), marked closed for exit CSS.
     expect(positioner.hidden).toBe(false);

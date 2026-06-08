@@ -122,9 +122,12 @@ export function usePresence(
       }
     };
 
-    timer = setTimeout(() => {
-      finalize();
-    }, exitTimeout(animations, timeoutCapRef.current));
+    timer = setTimeout(
+      () => {
+        finalize();
+      },
+      exitTimeout(animations, timeoutCapRef.current)
+    );
 
     for (const a of animations) {
       a.finished.then(onSettled, onSettled);

@@ -9,7 +9,9 @@ export interface FakeAnimation {
   effect: { getComputedTiming: () => { endTime: number; iterations: number } };
 }
 
-export function makeAnimation(opts: { endTime?: number; iterations?: number } = {}): FakeAnimation {
+export function makeAnimation(
+  opts: { endTime?: number; iterations?: number } = {}
+): FakeAnimation {
   let resolve!: () => void;
   let reject!: (reason?: unknown) => void;
   const finished = new Promise<void>((res, rej) => {

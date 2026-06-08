@@ -22,7 +22,7 @@ import { usePresence } from '@hono-preact/ui';
 
 function usePresence(
   present: boolean,
-  options?: UsePresenceOptions,
+  options?: UsePresenceOptions
 ): UsePresenceResult;
 
 interface UsePresenceOptions {
@@ -85,13 +85,21 @@ function Panel() {
   animation: panel-out 160ms ease-in forwards;
 }
 @keyframes panel-in {
-  from { opacity: 0; transform: translateY(-6px); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 @keyframes panel-out {
-  to { opacity: 0; transform: translateY(-6px); }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-state='open'],
-  [data-state='closed'] { animation: none; }
+  [data-state='closed'] {
+    animation: none;
+  }
 }
 ```

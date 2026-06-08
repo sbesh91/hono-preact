@@ -56,7 +56,9 @@ describe('usePresence', () => {
   it('stays present in closing while an animation runs, then unmounts', async () => {
     const anim = makeAnimation();
     const restore = installGetAnimations([anim]);
-    const { rerender, getByTestId, queryByTestId } = render(<Harness present />);
+    const { rerender, getByTestId, queryByTestId } = render(
+      <Harness present />
+    );
     await act(async () => rerender(<Harness present={false} />));
     expect(getByTestId('status').textContent).toBe('closing');
     expect(getByTestId('box').getAttribute('data-state')).toBe('closed');
@@ -72,10 +74,16 @@ describe('usePresence', () => {
     const restore = installGetAnimations([anim]);
     const seenWhileMounted: boolean[] = [];
     const onExitComplete = vi.fn(() => {
-      seenWhileMounted.push(document.querySelector('[data-testid="box"]') != null);
+      seenWhileMounted.push(
+        document.querySelector('[data-testid="box"]') != null
+      );
     });
-    const { rerender } = render(<Harness present onExitComplete={onExitComplete} />);
-    await act(async () => rerender(<Harness present={false} onExitComplete={onExitComplete} />));
+    const { rerender } = render(
+      <Harness present onExitComplete={onExitComplete} />
+    );
+    await act(async () =>
+      rerender(<Harness present={false} onExitComplete={onExitComplete} />)
+    );
     await act(async () => {
       anim.resolve();
     });

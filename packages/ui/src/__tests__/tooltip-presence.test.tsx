@@ -2,10 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, act, cleanup, fireEvent } from '@testing-library/preact';
 import { Tooltip } from '../tooltip/index.js';
-import {
-  makeAnimation,
-  installGetAnimations,
-} from './presence-helpers.js';
+import { makeAnimation, installGetAnimations } from './presence-helpers.js';
 
 afterEach(cleanup);
 
