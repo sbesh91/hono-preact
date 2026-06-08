@@ -54,6 +54,7 @@ export interface ComboboxRootProps<Value = string> {
   align?: Align; // default 'start'
   offset?: number; // default 8
   loop?: boolean; // default true
+  openOnFocus?: boolean; // open the popup when the input gains focus (default true)
   children?: ComponentChildren;
 }
 
@@ -81,6 +82,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
     align = 'start',
     offset = 8,
     loop = true,
+    openOnFocus = true,
     children,
   } = props;
 
@@ -105,6 +107,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const anchorRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLElement>(null);
   const clearRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
@@ -183,6 +186,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       activeId,
       setActiveId,
       inputRef,
+      anchorRef,
       triggerRef,
       clearRef,
       floatingRef,
@@ -193,6 +197,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       disabled,
       required,
       loop,
+      openOnFocus,
       side,
       align,
       offset,
@@ -220,6 +225,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       disabled,
       required,
       loop,
+      openOnFocus,
       side,
       align,
       offset,
@@ -251,6 +257,16 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Positioner');
 
+  // Anchor to the <Combobox.Anchor> field if one is rendered, else the input.
+  // Both refs are stable, so the callback is stable (no autoUpdate churn).
+  const getAnchorRect = useCallback(
+    () =>
+      (
+        ctx.anchorRef.current ?? ctx.inputRef.current
+      )?.getBoundingClientRect() ?? null,
+    [ctx.anchorRef, ctx.inputRef]
+  );
+
   const position = usePosition({
     open: ctx.open,
     anchorRef: ctx.inputRef,
@@ -259,6 +275,7 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
     side: ctx.side,
     align: ctx.align,
     offset: ctx.offset,
+    getAnchorRect,
   });
 
   useLayoutEffect(() => {
@@ -312,7 +329,13 @@ export function ComboboxPopup(props: ComboboxPopupProps): VNode {
 
   useDismiss({
     enabled: ctx.open,
-    refs: [ctx.floatingRef, ctx.inputRef, ctx.triggerRef, ctx.clearRef],
+    refs: [
+      ctx.floatingRef,
+      ctx.anchorRef,
+      ctx.inputRef,
+      ctx.triggerRef,
+      ctx.clearRef,
+    ],
     escape: false, // Escape is handled by the Input (close then revert)
     outsidePress: true,
     onDismiss: () => ctx.setOpen(false),
@@ -333,6 +356,27 @@ export function ComboboxPopup(props: ComboboxPopupProps): VNode {
       'data-empty': ctx.optionCount === 0 ? '' : undefined,
     },
     state: { open: ctx.open },
+    children,
+  });
+}
+
+export type ComboboxAnchorProps = {
+  render?: RenderProp;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLElement>, 'children'>;
+
+// Optional wrapper that becomes the positioning anchor for the popup. Wrap the
+// Input (and any chips / Trigger / Clear) in it so the popup aligns to the whole
+// field instead of the bare input. It writes the shared anchorRef; because it
+// wraps the Input, its parent ref fires after the Input's, so it wins. Also a
+// dismiss-safe region (clicking the field's padding or chips will not close).
+export function ComboboxAnchor(props: ComboboxAnchorProps): VNode {
+  const { render, children, ...rest } = props;
+  const ctx = useComboboxContext('Anchor');
+  return useRender({
+    render,
+    defaultTag: 'div',
+    props: { ...rest, ref: ctx.anchorRef },
     children,
   });
 }
@@ -541,7 +585,7 @@ export type ComboboxInputProps = {
 } & Omit<JSX.InputHTMLAttributes<HTMLInputElement>, 'value' | 'render'>;
 
 export function ComboboxInput(props: ComboboxInputProps): VNode {
-  const { render, onInput, onKeyDown, ...rest } = props;
+  const { render, onInput, onKeyDown, onFocus, onClick, ...rest } = props;
   const ctx = useComboboxContext('Input');
 
   const nav = useListNavigation({
@@ -761,6 +805,20 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     ctx.setInputValue(ctx.multiple ? '' : (items[0]?.label ?? ''));
   };
 
+  // openOnFocus: open the popup when the input gains focus, and when it is
+  // clicked while focused-but-closed (focus does not re-fire on a repeat click).
+  const openIfFocusOpen = () => {
+    if (ctx.openOnFocus && !ctx.disabled && !ctx.open) ctx.setOpen(true);
+  };
+  const handleFocus = (event: JSX.TargetedFocusEvent<HTMLInputElement>) => {
+    onFocus?.(event);
+    openIfFocusOpen();
+  };
+  const handleClick = (event: JSX.TargetedMouseEvent<HTMLInputElement>) => {
+    onClick?.(event);
+    openIfFocusOpen();
+  };
+
   return useRender<{ open: boolean }>({
     render,
     defaultTag: 'input',
@@ -782,6 +840,8 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
       value: display,
       'data-state': ctx.open ? 'open' : 'closed',
       onInput: handleInput,
+      onFocus: handleFocus,
+      onClick: handleClick,
       onCompositionStart: handleCompositionStart,
       onCompositionEnd: handleCompositionEnd,
       onKeyDown: (event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {

@@ -31,6 +31,9 @@ export interface ComboboxContextValue {
   setActiveId: (id: string | null) => void;
   // refs + ids
   inputRef: RefObject<HTMLInputElement>;
+  // The positioning anchor. Defaults to the input; a <Combobox.Anchor> wrapper
+  // overrides it (it wraps the input, so its parent ref wins last-write).
+  anchorRef: RefObject<HTMLElement>;
   triggerRef: RefObject<HTMLElement>;
   clearRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
@@ -42,6 +45,7 @@ export interface ComboboxContextValue {
   disabled: boolean;
   required: boolean;
   loop: boolean;
+  openOnFocus: boolean;
   side: Side;
   align: Align;
   offset: number;

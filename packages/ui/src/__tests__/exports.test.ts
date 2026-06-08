@@ -49,6 +49,7 @@ describe('Combobox exports', () => {
       'Input',
       'Trigger',
       'Clear',
+      'Anchor',
       'Positioner',
       'Popup',
       'Empty',
