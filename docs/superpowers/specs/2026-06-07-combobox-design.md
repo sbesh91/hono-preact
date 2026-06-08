@@ -149,12 +149,23 @@ Internally the Input is a controlled input whose value is `displayText`:
 | --- | --- | --- |
 | Type a char | set `inputValue` = typed; open; auto-highlight first match (list/both); inline-complete (both) | same |
 | Commit an option (click / Enter) | set value; `inputValue` = selected label; close; clear active | toggle value; `inputValue` = ''; stay open; keep focus in input |
-| Close without selecting | revert `inputValue` to the selected value's label (or '') | `inputValue` = '' (tokens already reflect value) |
+| Focus the input | select the text (first keystroke replaces it) | same |
+| Dismiss without selecting (outside-press / Tab) | revert `inputValue` to the selected value's label (or '') | `inputValue` = '' (tokens already reflect value) |
 | `Combobox.Clear` | value -> empty; `inputValue` = ''; focus input | same |
 | Backspace on empty input | (no-op) | remove the last token |
 
-Open triggers: typing a printable char, ArrowDown/ArrowUp on a closed input, clicking
-the Input or the `Trigger`. `openOnFocus` is deferred (Section 8).
+**Idle reflects the value (Model A).** Because the committed value is always a
+known option (select-from-list-only), the input mirrors that value whenever the user
+is not actively editing: focusing selects the text so typing starts a fresh search,
+and dismissing without a fresh pick (outside-press, Tab) reverts the text to the
+committed label rather than leaving a dangling, unselected query. Escape is the one
+deliberate exception (the two-stage behavior in 7.1): a first press closes while
+keeping the typed query so the user can reopen and keep editing; a second press
+reverts. This resolves the earlier 4.3/7.1 inconsistency: every dismiss reverts except
+the first Escape, which intentionally preserves the in-progress query.
+
+Open triggers: typing a printable char, ArrowDown/ArrowUp on a closed input, focusing
+or clicking the Input (when `openOnFocus`, the default), or clicking the `Trigger`.
 
 ## 5. Component API
 
@@ -315,8 +326,8 @@ arrow keys do.
 | `Alt+ArrowUp` | (no-op) | close |
 | `Home` / `End` | caret (default) | caret (default) |
 | `Enter` | submit form (default) | commit active option; `preventDefault` |
-| `Escape` | reset input to selected label / clear | close + revert display to query |
-| `Tab` | (default focus move) | `both`: accept inline completion (commit active); else close; then default focus move |
+| `Escape` | revert input to committed label (second-stage) | close, keep typed query (first-stage); next Escape reverts |
+| `Tab` | (default focus move) | `both`: accept inline completion (commit active); else revert + close; then default focus move |
 | `Backspace` | (multi, empty input) remove last token | (multi, empty input) remove last token |
 
 `preventDefault` is called only on keys the component handles, so unhandled keys retain
@@ -423,7 +434,6 @@ investigation's "do this last, with the most test budget").
 
 - Free-solo / `allowCustomValue`: explicitly not built (creatable-only decision).
 - Option virtualization (large / async lists).
-- `openOnFocus` prop.
 - Promote `useListboxSelection` (and / or a standalone collection primitive) to a
   public Foundations primitive; internal in v1, revisit at a third consumer.
 - Positioner / Popup / Arrow trio dedup across Popover / Tooltip / Menu / Select /

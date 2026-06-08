@@ -316,7 +316,7 @@ a starting point in either flavor:
 | `Home` / `End`       | Input focused           | Move the text caret (native; the popup is not navigated).                    |
 | `Enter`              | Popup open, active set  | Commit the active option and close (single) or toggle and stay open (multi). |
 | `Tab`                | Popup open, `both` mode | Accept the inline completion (commit the active option).                     |
-| `Tab`                | Popup open, other modes | Close the popup, then move focus to the next element.                        |
+| `Tab`                | Popup open, other modes | Revert the input to the committed value, close, then move focus.             |
 | `Escape`             | Popup open              | Close and revert the display to the typed query (does not reset the value).  |
 | `Escape`             | Input focused, closed   | Reset the input to the selected value's label (or empty in multiple mode).   |
 | `Backspace`          | Empty input, multi      | Remove the last selected token.                                              |
@@ -590,9 +590,14 @@ with `aria-selected`.
 - Focus stays in the input at all times. The active option is tracked with
   `aria-activedescendant` and scrolled into view rather than receiving DOM
   focus.
+- Focusing the input opens the popup (`openOnFocus`, default `true`) and selects
+  its text, so the first keystroke starts a fresh search.
+- The input mirrors the committed value when you are not editing: dismissing
+  without a fresh pick (clicking away or Tab) reverts the text to the selected
+  value's label, so it never shows a dangling, unselected query.
 - Arrow keys open the popup from a closed input; Alt+ArrowUp closes it.
-- Escape closes without changing the selection; a second Escape resets the
-  input to the selected value's label.
+- Escape closes but keeps the typed query so you can keep editing; a second
+  Escape reverts the input to the selected value's label.
 - Home and End move the text caret (native behavior); they do not navigate the
   list, per the APG pattern.
 - `Combobox.Status` announces the result count politely after each filter so

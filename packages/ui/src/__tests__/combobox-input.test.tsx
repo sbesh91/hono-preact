@@ -124,4 +124,41 @@ describe('Combobox Input', () => {
     await act(async () => {});
     expect(notCanceled).toBe(true);
   });
+
+  function Committed() {
+    return (
+      <ComboboxRoot defaultValue="apple" defaultInputValue="Apple">
+        <ComboboxInput aria-label="Fruit" />
+        <ComboboxPositioner>
+          <ComboboxPopup aria-label="Fruit">
+            <ComboboxOption value="apple">Apple</ComboboxOption>
+            <ComboboxOption value="banana">Banana</ComboboxOption>
+          </ComboboxPopup>
+        </ComboboxPositioner>
+      </ComboboxRoot>
+    );
+  }
+
+  it('reverts a dangling query to the committed label on outside-press', async () => {
+    const { getByRole } = render(<Committed />);
+    const input = getByRole('combobox') as HTMLInputElement;
+    input.focus();
+    fireEvent.input(input, { target: { value: 'xyz' } });
+    await act(async () => {});
+    expect(input.value).toBe('xyz');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await act(async () => {});
+    expect(input.value).toBe('Apple'); // reverted to the committed value
+  });
+
+  it('reverts a dangling query to the committed label on Tab', async () => {
+    const { getByRole } = render(<Committed />);
+    const input = getByRole('combobox') as HTMLInputElement;
+    input.focus();
+    fireEvent.input(input, { target: { value: 'xyz' } });
+    await act(async () => {});
+    fireEvent.keyDown(input, { key: 'Tab' });
+    await act(async () => {});
+    expect(input.value).toBe('Apple');
+  });
 });

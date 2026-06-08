@@ -166,6 +166,14 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
     inputRef.current?.focus();
   }, [setValue, multiple, setInputValue]);
 
+  // Revert the input text to the committed value when dismissing without a fresh
+  // pick (single -> the selected option's label; multiple -> '' since the chips
+  // carry the value). Keeps the input from showing dangling, unselected text.
+  const revertInput = useCallback(() => {
+    const items = sel.selectedItems();
+    setInputValue(multiple ? '' : (items[0]?.label ?? ''));
+  }, [sel.selectedItems, multiple, setInputValue]);
+
   const ctx = useMemo(
     () => ({
       open,
@@ -183,6 +191,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       labelFor: sel.labelFor,
       optionCount: sel.optionCount,
       clear,
+      revertInput,
       activeId,
       setActiveId,
       inputRef,
@@ -220,6 +229,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       sel.labelFor,
       sel.optionCount,
       clear,
+      revertInput,
       activeId,
       baseId,
       disabled,
@@ -338,7 +348,10 @@ export function ComboboxPopup(props: ComboboxPopupProps): VNode {
     ],
     escape: false, // Escape is handled by the Input (close then revert)
     outsidePress: true,
-    onDismiss: () => ctx.setOpen(false),
+    onDismiss: () => {
+      ctx.revertInput(); // restore the committed label; drop any dangling query
+      ctx.setOpen(false);
+    },
   });
 
   return useRender<{ open: boolean }>({
@@ -786,23 +799,26 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
         commitActive();
       }
     } else if (event.key === 'Escape') {
+      // First Escape: close but keep the typed query (the deliberate two-stage
+      // exception, so you can reopen and keep editing).
       event.preventDefault();
       setSelRange(null);
       setDisplay(ctx.inputValue);
       ctx.setOpen(false);
     } else if (event.key === 'Tab') {
+      // Leaving the field without a fresh pick: revert to the committed value.
+      ctx.revertInput();
       ctx.setOpen(false);
     }
   };
 
-  // Second Escape (already closed) resets the input to the selected label.
+  // Second Escape (already closed) reverts the input to the committed value.
   const handleClosedEscape = (
     event: JSX.TargetedKeyboardEvent<HTMLInputElement>
   ) => {
     if (event.key !== 'Escape' || ctx.open) return;
     event.preventDefault();
-    const items = ctx.selectedItems();
-    ctx.setInputValue(ctx.multiple ? '' : (items[0]?.label ?? ''));
+    ctx.revertInput();
   };
 
   // openOnFocus: open the popup when the input gains focus, and when it is
@@ -812,6 +828,10 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
   };
   const handleFocus = (event: JSX.TargetedFocusEvent<HTMLInputElement>) => {
     onFocus?.(event);
+    // Select the text so the first keystroke starts a fresh search (keyboard
+    // focus; a mouse click then places the caret, which is the expected
+    // behavior). Reverts on dismiss if nothing new is picked.
+    event.currentTarget.select();
     openIfFocusOpen();
   };
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLInputElement>) => {

@@ -26,6 +26,9 @@ export interface ComboboxContextValue {
   labelFor: (value: unknown) => string;
   optionCount: number;
   clear: () => void; // reset value + input
+  // revert the input text to the committed value's label (or '' for multiple);
+  // used when dismissing without a fresh selection (outside-press, Tab, Escape)
+  revertInput: () => void;
   // navigation / active descendant
   activeId: string | null;
   setActiveId: (id: string | null) => void;
