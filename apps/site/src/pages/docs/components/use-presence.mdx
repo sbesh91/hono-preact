@@ -1,0 +1,97 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UsePresenceDemo } from '../../../components/docs/UsePresenceDemo.js';
+
+# usePresence
+
+`usePresence` keeps an element mounted while it animates out, then unmounts it.
+It is the primitive every overlay in this library uses to run a closing
+animation: on close it holds the element in the DOM, lets a `[data-state="closed"]`
+CSS animation run, and unmounts only once the animation finishes. Animation is
+opt-in: with no closing rule the element unmounts immediately, exactly as before.
+
+## Demo
+
+<Example>
+  <UsePresenceDemo />
+</Example>
+
+## Signature
+
+```ts
+import { usePresence } from '@hono-preact/ui';
+
+function usePresence(
+  present: boolean,
+  options?: UsePresenceOptions,
+): UsePresenceResult;
+
+interface UsePresenceOptions {
+  onExitComplete?: () => void; // fires when the exit resolves, before unmount
+  timeoutCap?: number; // ms cap on the exit wait (default 3000)
+}
+
+interface UsePresenceResult {
+  isPresent: boolean; // render the element while true (open or animating out)
+  status: 'open' | 'closing' | 'closed'; // map to data-state (closing -> "closed")
+  ref: (node: Element | null) => void; // attach to the animated element
+}
+```
+
+## Options
+
+| Option           | Type         | Default | Notes                                                                 |
+| ---------------- | ------------ | ------- | --------------------------------------------------------------------- |
+| `present`        | `boolean`    | none    | The desired visibility. Flip it to false to start the exit animation. |
+| `onExitComplete` | `() => void` | none    | Runs when the exit resolves, immediately before `isPresent` is false. |
+| `timeoutCap`     | `number`     | `3000`  | Safety cap (ms) so a stuck animation can never block teardown.        |
+
+Gate rendering on `isPresent`, attach `ref` to the element that carries the
+transition, and map `status` to `data-state` (both `closing` and `closed` map to
+`"closed"`, so one `[data-state="closed"]` rule styles the exit). It reads
+`Element.getAnimations()` after a forced reflow, races the animations' `finished`
+promises against `timeoutCap`, and short-circuits under
+`prefers-reduced-motion`. There is no exit on first mount or during SSR.
+
+## Example
+
+```tsx
+import { usePresence } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+function Panel() {
+  const [open, setOpen] = useState(false);
+  const presence = usePresence(open);
+  return (
+    <div>
+      <button onClick={() => setOpen((o) => !o)}>Toggle</button>
+      {presence.isPresent ? (
+        <div
+          ref={presence.ref}
+          data-state={presence.status === 'open' ? 'open' : 'closed'}
+        >
+          Content
+        </div>
+      ) : null}
+    </div>
+  );
+}
+```
+
+```css
+[data-state='open'] {
+  animation: panel-in 160ms ease-out;
+}
+[data-state='closed'] {
+  animation: panel-out 160ms ease-in forwards;
+}
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes panel-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-state='open'],
+  [data-state='closed'] { animation: none; }
+}
+```

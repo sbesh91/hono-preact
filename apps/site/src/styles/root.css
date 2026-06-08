@@ -1575,3 +1575,66 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     animation: none;
   }
 }
+
+/* usePresence docs demo */
+.docs-presence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.docs-presence-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-presence-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-presence-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-presence-box {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.docs-presence-box[data-state='open'] {
+  animation: docs-presence-in 160ms ease-out;
+}
+.docs-presence-box[data-state='closed'] {
+  animation: docs-presence-out 160ms ease-in forwards;
+}
+@keyframes docs-presence-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes docs-presence-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-presence-box[data-state='open'],
+  .docs-presence-box[data-state='closed'] {
+    animation: none;
+  }
+}
