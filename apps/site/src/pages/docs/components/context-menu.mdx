@@ -180,7 +180,7 @@ exactly like a `Menu.Popup`; the demo above uses the styles below:
   Right-click here
 </ContextMenu.Trigger>
 <ContextMenu.Positioner className="z-50">
-  <ContextMenu.Popup className="min-w-48 rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+  <ContextMenu.Popup className="min-w-48 rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 data-[state=closed]:opacity-0 data-[state=closed]:-translate-y-1 motion-reduce:transition-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
     <ContextMenu.Item className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none cursor-pointer data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900">
       Copy
     </ContextMenu.Item>

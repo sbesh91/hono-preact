@@ -226,7 +226,7 @@ styles below; copy a starting point in either flavor:
   />
 </Select.Trigger>
 <Select.Positioner className="z-50">
-  <Select.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+  <Select.Popup className="min-w-56 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 data-[state=closed]:opacity-0 data-[state=closed]:-translate-y-1 motion-reduce:transition-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
     <Select.Option className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none cursor-pointer data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900">
       Apple
     </Select.Option>

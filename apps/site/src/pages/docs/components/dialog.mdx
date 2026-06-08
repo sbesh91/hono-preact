@@ -117,6 +117,8 @@ dialog[data-state='closed'] {
          rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl
          opacity-100 transition-[opacity,transform] duration-[160ms] ease-out
          starting:opacity-0 starting:[transform:translate(-50%,calc(-50%_+_8px))_scale(0.98)]
+         data-[state=closed]:opacity-0 data-[state=closed]:[transform:translate(-50%,calc(-50%_+_8px))_scale(0.98)]
+         motion-reduce:transition-none
          backdrop:bg-black/50 backdrop:backdrop-blur-sm
          dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
 >

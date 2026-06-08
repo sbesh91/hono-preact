@@ -121,7 +121,7 @@ starting point in either flavor:
 
 ```tsx
 <Tooltip.Positioner className="z-50">
-  <Tooltip.Popup className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-[13px] text-zinc-50 shadow-lg opacity-100 transition-opacity duration-100 ease-out starting:opacity-0">
+  <Tooltip.Popup className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-[13px] text-zinc-50 shadow-lg opacity-100 transition-opacity duration-100 ease-out starting:opacity-0 data-[state=closed]:opacity-0 motion-reduce:transition-none">
     Saved to your library
   </Tooltip.Popup>
 </Tooltip.Positioner>
