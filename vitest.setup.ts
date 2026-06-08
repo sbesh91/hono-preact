@@ -2,6 +2,27 @@ import { expect } from 'vitest';
 import * as matchers from '@testing-library/jest-dom/matchers';
 expect.extend(matchers);
 
+// The UI components require the Popover API (no runtime feature-detection); they
+// call `showPopover()` to promote overlays to the top layer. happy-dom (v20)
+// does not implement it, so stub the methods in the test env. happy-dom does not
+// apply the popover UA hiding either, so the elements stay queryable; no-ops are
+// sufficient to exercise the same code path without throwing. Guarded so the
+// node test environment (no HTMLElement) is unaffected.
+const popoverProto = globalThis.HTMLElement?.prototype as
+  | (HTMLElement & {
+      showPopover?: () => void;
+      hidePopover?: () => void;
+      togglePopover?: () => boolean;
+    })
+  | undefined;
+if (popoverProto && typeof popoverProto.showPopover !== 'function') {
+  popoverProto.showPopover = function () {};
+  popoverProto.hidePopover = function () {};
+  popoverProto.togglePopover = function () {
+    return false;
+  };
+}
+
 // Filter known-spurious happy-dom error noise from the test runner output.
 // Without this, every render that includes the SSR'd `<script
 // src="virtual:hono-preact/client">` tag (most page tests) and every

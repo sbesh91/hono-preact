@@ -254,10 +254,6 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
 // Task 6: Positioner, Popup (listbox), Arrow
 // ---------------------------------------------------------------------------
 
-function supportsPopover(el: HTMLElement): boolean {
-  return typeof el.showPopover === 'function';
-}
-
 export type ComboboxPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
@@ -294,7 +290,7 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
 
   useLayoutEffect(() => {
     const el = ctx.floatingRef.current;
-    if (!ctx.open || !el || !supportsPopover(el)) return;
+    if (!ctx.open || !el) return;
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
