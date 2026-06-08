@@ -19,6 +19,8 @@ import {
 } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useSafeArea } from '../use-safe-area.js';
+import { mergeRefs } from '../merge-refs.js';
+import { usePresence } from '../use-presence.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
 export interface TooltipRootProps {
@@ -196,8 +198,10 @@ export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = useTooltipContext('Positioner');
 
+  const presence = usePresence(ctx.open);
+
   const position = usePosition({
-    open: ctx.open,
+    open: presence.isPresent,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
@@ -212,26 +216,26 @@ export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
 
   useLayoutEffect(() => {
     const el = ctx.floatingRef.current;
-    // Runs when open flips true and the element has mounted (refs are assigned
-    // before layout effects). Empty deps would never re-run, so showPopover
-    // would never fire on a mount-on-open element.
-    if (!ctx.open || !el || !supportsPopover(el)) return;
+    // Runs when isPresent flips true and the element has mounted (refs are
+    // assigned before layout effects). Empty deps would never re-run, so
+    // showPopover would never fire on a mount-on-open element.
+    if (!presence.isPresent || !el || !supportsPopover(el)) return;
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
       el.hidePopover();
       el.removeAttribute('popover');
     };
-  }, [ctx.open]);
+  }, [presence.isPresent]);
 
-  if (!ctx.open) return null;
+  if (!presence.isPresent) return null;
 
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: {
       ...rest,
-      ref: ctx.floatingRef,
+      ref: mergeRefs(ctx.floatingRef, presence.ref),
       'data-side': position.side,
       'data-align': position.align,
       // Neutralize the UA [popover] rule that applies in the top layer
