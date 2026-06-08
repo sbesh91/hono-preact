@@ -18,6 +18,12 @@ export {
   useFocusReturn,
   type UseFocusReturnOptions,
 } from './use-focus-return.js';
+export {
+  usePresence,
+  type UsePresenceOptions,
+  type UsePresenceResult,
+  type PresenceStatus,
+} from './use-presence.js';
 export { useSafeArea, type UseSafeAreaOptions } from './use-safe-area.js';
 export {
   Dialog,
