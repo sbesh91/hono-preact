@@ -250,10 +250,6 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Task 6: Positioner, Popup (listbox), Arrow
-// ---------------------------------------------------------------------------
-
 export type ComboboxPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
@@ -417,10 +413,6 @@ export function ComboboxArrow(props: ComboboxArrowProps): VNode {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Task 7: Option, OptionGroup, OptionGroupLabel (with `create` routing)
-// ---------------------------------------------------------------------------
-
 export type ComboboxOptionProps<Value = string> = {
   value: Value;
   create?: boolean; // routes selection to onCreate instead of committing value
@@ -540,10 +532,6 @@ export function ComboboxOptionGroupLabel(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Task 10: Status (aria-live announcer)
-// ---------------------------------------------------------------------------
-
 const VISUALLY_HIDDEN: JSX.CSSProperties = {
   position: 'absolute',
   width: 1,
@@ -584,10 +572,6 @@ export function ComboboxStatus(props: ComboboxStatusProps): VNode {
     children: render ? undefined : message,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Task 8: Input (core keyboard + filtering, modes none/list)
-// ---------------------------------------------------------------------------
 
 export type ComboboxInputProps = {
   render?: RenderProp<{ open: boolean }>;
@@ -869,10 +853,6 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Task 11: Trigger, Clear, Empty
-// ---------------------------------------------------------------------------
-
 export type ComboboxTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
@@ -951,10 +931,6 @@ export function ComboboxEmpty(props: ComboboxEmptyProps): VNode | null {
     children,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Task 12: Value (multi chips accessor)
-// ---------------------------------------------------------------------------
 
 export interface ComboboxValueState {
   selectedItems: OptionEntry[];
