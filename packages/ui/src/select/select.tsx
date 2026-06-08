@@ -21,6 +21,8 @@ import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
+import { mergeRefs } from '../merge-refs.js';
+import { usePresence } from '../use-presence.js';
 import {
   SelectContext,
   useSelectContext,
@@ -302,8 +304,10 @@ export function SelectPositioner(props: SelectPositionerProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useSelectContext('Positioner');
 
+  const presence = usePresence(ctx.open);
+
   const position = usePosition({
-    open: ctx.open,
+    open: presence.isPresent,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
@@ -316,28 +320,29 @@ export function SelectPositioner(props: SelectPositionerProps): VNode {
     ctx.setPosition(position);
   }, [position.side, position.align, position.arrowX, position.arrowY]);
 
-  // Promote to the native top layer where supported, only while open.
+  // Promote to the native top layer where supported, while present (open or
+  // animating out), so exit animations play in the top layer.
   useLayoutEffect(() => {
     const el = ctx.floatingRef.current;
-    if (!ctx.open || !el || !supportsPopover(el)) return;
+    if (!presence.isPresent || !el || !supportsPopover(el)) return;
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
       el.hidePopover();
       el.removeAttribute('popover');
     };
-  }, [ctx.open]);
+  }, [presence.isPresent]);
 
-  // Always rendered so options register their labels; `hidden` while closed
-  // makes it inert and invisible without consumer CSS, and composes with the
-  // Popover-API promotion (which only runs while open).
+  // Always rendered so options register their labels; `hidden` while not
+  // present makes it inert and invisible without consumer CSS, and composes
+  // with the Popover-API promotion (which only runs while present).
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: {
       ...rest,
-      ref: ctx.floatingRef,
-      hidden: ctx.open ? undefined : true,
+      ref: mergeRefs(ctx.floatingRef, presence.ref),
+      hidden: presence.isPresent ? undefined : true,
       'data-side': position.side,
       'data-align': position.align,
       style: {
