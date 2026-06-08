@@ -3,15 +3,17 @@ import { useState } from 'preact/hooks';
 
 const LANGS = ['TypeScript', 'JavaScript', 'Rust', 'Go', 'Python', 'Ruby'];
 
-// Multiple selection: picking an option toggles it and keeps the popup open.
-// `Combobox.Value` renders the selected chips through a render function;
-// Backspace on an empty input removes the last token.
+// Multiple selection shows the two optional parts: Combobox.Anchor wraps the
+// chips + input into one field (so the popup aligns to the whole control and
+// the field is dismiss-safe), and Combobox.Trigger is a chevron that toggles
+// the popup. Picking toggles and keeps the popup open; Combobox.Value renders
+// the chips; Backspace on an empty input removes the last token.
 export function ComboboxMultiDemo() {
   const [query, setQuery] = useState('');
   const filtered = LANGS.filter((l) => matchSubstring(l, query));
   return (
     <Combobox.Root multiple onInputChange={setQuery}>
-      <div class="docs-cb-field docs-cb-field--multi">
+      <Combobox.Anchor class="docs-cb-field">
         <Combobox.Value>
           {({ selectedItems, remove }) =>
             selectedItems.map((it) => (
@@ -30,11 +32,14 @@ export function ComboboxMultiDemo() {
           }
         </Combobox.Value>
         <Combobox.Input
-          class="docs-cb-input docs-cb-input--multi"
+          class="docs-cb-input"
           placeholder="Add language…"
           aria-label="Languages"
         />
-      </div>
+        <Combobox.Trigger class="docs-cb-trigger" aria-label="Open">
+          ▾
+        </Combobox.Trigger>
+      </Combobox.Anchor>
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="Languages">

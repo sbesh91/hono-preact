@@ -4,7 +4,7 @@ import { useState } from 'preact/hooks';
 // Creatable: when the query matches no existing option, a `create` option is
 // rendered. Selecting it calls `onCreate` (which persists and selects the new
 // value) instead of firing `onValueChange`, so the select-from-list invariant
-// holds.
+// holds. Minimal form: just an Input (no field wrapper or trigger needed).
 export function ComboboxCreatableDemo() {
   const [options, setOptions] = useState(['Apple', 'Banana', 'Cherry']);
   const [value, setValue] = useState('');
@@ -23,16 +23,11 @@ export function ComboboxCreatableDemo() {
         setValue(label);
       }}
     >
-      <div class="docs-cb-field">
-        <Combobox.Input
-          class="docs-cb-input"
-          placeholder="Pick or create…"
-          aria-label="Tag"
-        />
-        <Combobox.Trigger class="docs-cb-trigger" aria-label="Open">
-          ▾
-        </Combobox.Trigger>
-      </div>
+      <Combobox.Input
+        class="docs-cb-input"
+        placeholder="Pick or create…"
+        aria-label="Tag"
+      />
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="Tag">

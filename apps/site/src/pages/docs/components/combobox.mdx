@@ -29,15 +29,19 @@ filtering is identical across all three autocomplete modes.
 
 ## Demo
 
-Type to filter; the consumer renders the matching options while the component
+The minimal form is a single `Combobox.Input`. Focus it (or click it) to open,
+type to filter; the consumer renders the matching options while the component
 handles navigation and selection. A single select commits and closes on pick.
 
 <Example>
   <ComboboxDemo />
 </Example>
 
-Multiple selection keeps the popup open and renders the picks as removable chips
-through `Combobox.Value`. Backspace on an empty input removes the last chip.
+Multiple selection shows the two optional parts: `Combobox.Anchor` wraps the
+chips and input into one bordered field (the popup aligns to it and clicks in it
+are dismiss-safe), and `Combobox.Trigger` is the chevron toggle. Picking keeps
+the popup open; `Combobox.Value` renders the chips; Backspace on an empty input
+removes the last one.
 
 <Example>
   <ComboboxMultiDemo />
@@ -72,7 +76,6 @@ export function FruitCombobox() {
   return (
     <Combobox.Root onInputChange={setQuery}>
       <Combobox.Input placeholder="Search fruit…" aria-label="Fruit" />
-      <Combobox.Trigger aria-label="Open" />
       <Combobox.Status />
       <Combobox.Positioner>
         <Combobox.Popup aria-label="Fruit">
@@ -89,12 +92,27 @@ export function FruitCombobox() {
 }
 ```
 
-The combobox is uncontrolled by default. Pass `value` / `onValueChange`,
+The only required part is `Combobox.Input` (it carries `role="combobox"`); it
+opens on focus by default and anchors the popup to itself. Everything else is an
+opt-in. The combobox is uncontrolled by default; pass `value` / `onValueChange`,
 `open` / `onOpenChange`, or `inputValue` / `onInputChange` to control any piece.
 
+**Field wrapper + trigger (optional).** For a bordered field that holds chips or
+adornments, wrap the input in `Combobox.Anchor`: the popup then aligns to the
+whole field and clicks anywhere in it are dismiss-safe. Add `Combobox.Trigger`
+for an explicit chevron toggle button (focus already opens the popup, so this is
+only needed when you want a dedicated open/close control):
+
+```tsx
+<Combobox.Anchor>
+  <Combobox.Input aria-label="Fruit" />
+  <Combobox.Trigger aria-label="Open">▾</Combobox.Trigger>
+</Combobox.Anchor>
+```
+
 **Multiple selection.** Set `multiple`; the value becomes an array and the popup
-stays open on pick. Render the selected chips with `Combobox.Value`, which
-exposes `{ selectedItems, remove }`:
+stays open on pick. Wrap the field in `Combobox.Anchor` and render the selected
+chips with `Combobox.Value`, which exposes `{ selectedItems, remove }`:
 
 ```tsx
 <Combobox.Value>
@@ -143,26 +161,42 @@ a starting point in either flavor:
 <CodeTabs labels={['CSS', 'Tailwind']}>
 
 ```css
-.docs-cb-field {
-  display: inline-flex;
-  align-items: center;
+.docs-cb-input {
+  box-sizing: border-box;
   min-width: 16rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
   border: 1px solid #e4e4e7;
   border-radius: 0.5rem;
   background: #fff;
+  color: #18181b;
+  outline: none;
+}
+.docs-cb-input:focus {
+  border-color: #18181b;
+}
+/* Optional Combobox.Anchor field wrapper (chips / adornments): the wrapper takes
+   the border and the input inside goes borderless. */
+.docs-cb-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 16rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  background: #fff;
+  cursor: text;
 }
 .docs-cb-field:focus-within {
   border-color: #18181b;
 }
-.docs-cb-input {
+.docs-cb-field .docs-cb-input {
   flex: 1;
-  min-width: 0;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  min-width: 5rem;
+  padding: 0.125rem 0.25rem;
   border: none;
-  outline: none;
-  background: transparent;
-  color: #18181b;
 }
 .docs-cb-trigger {
   padding: 0 0.5rem;
@@ -243,10 +277,20 @@ a starting point in either flavor:
 ```
 
 ```tsx
-<div className="inline-flex min-w-64 items-center rounded-lg border border-zinc-200 bg-white focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:focus-within:border-zinc-50">
-  <Combobox.Input className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100" />
-  <Combobox.Trigger className="px-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300" />
-</div>
+{
+  /* Minimal: the Input is the field box. */
+}
+<Combobox.Input className="min-w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-50" />;
+
+{
+  /* For chips or a chevron, wrap in Combobox.Anchor (the border moves to the
+    wrapper and the input goes borderless):
+<Combobox.Anchor className="inline-flex min-w-64 flex-wrap items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 focus-within:border-zinc-900 dark:border-zinc-800 dark:bg-zinc-900">
+  <Combobox.Input className="min-w-20 flex-1 border-0 bg-transparent px-1 text-sm outline-none" />
+  <Combobox.Trigger className="px-2 text-zinc-400" />
+</Combobox.Anchor> */
+}
+
 <Combobox.Positioner className="z-50">
   <Combobox.Popup className="min-w-64 max-h-64 overflow-y-auto rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
     <Combobox.Option className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[selected]:after:content-['✓'] data-[selected]:after:ml-auto data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900">
@@ -256,7 +300,7 @@ a starting point in either flavor:
       No results
     </Combobox.Empty>
   </Combobox.Popup>
-</Combobox.Positioner>
+</Combobox.Positioner>;
 ```
 
 </CodeTabs>
@@ -309,31 +353,32 @@ positioning to the parts. Generic over the value type (`Combobox.Root<Value>`);
 defaults to `string`. Renders children and the hidden form field(s) when `name`
 is set.
 
-| Prop                | Type                                | Default     | Description                                                                                    |
-| ------------------- | ----------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `value`             | `Value \| Value[]`                  | -           | Controlled selection. Pair with `onValueChange`.                                               |
-| `defaultValue`      | `Value \| Value[]`                  | -           | Initial selection when uncontrolled.                                                           |
-| `onValueChange`     | `(value: Value \| Value[]) => void` | -           | Called when the selection changes (not called for `create` options).                           |
-| `multiple`          | `boolean`                           | `false`     | Allow more than one selection; value becomes an array; popup stays open on pick.               |
-| `open`              | `boolean`                           | -           | Controlled open state. Pair with `onOpenChange`.                                               |
-| `defaultOpen`       | `boolean`                           | `false`     | Initial open state when uncontrolled.                                                          |
-| `onOpenChange`      | `(open: boolean) => void`           | -           | Called when the popup requests an open or close.                                               |
-| `inputValue`        | `string`                            | -           | Controlled typed query. Pair with `onInputChange`.                                             |
-| `defaultInputValue` | `string`                            | `''`        | Initial query when uncontrolled.                                                               |
-| `onInputChange`     | `(value: string) => void`           | -           | Called when the user edits the input (always the typed query, not completion).                 |
-| `autocomplete`      | `'none' \| 'list' \| 'both'`        | `'list'`    | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                     |
-| `onCreate`          | `(inputValue: string) => void`      | -           | Called when a `create` option is selected; if absent, `create` falls back to normal selection. |
-| `itemToString`      | `(value: Value) => string`          | -           | Resolve a label for a value whose option is not currently rendered (SSR, filter).              |
-| `name`              | `string`                            | -           | Submit the value as a hidden field (one per value in multiple mode).                           |
-| `disabled`          | `boolean`                           | `false`     | Disable the input and skip the hidden field.                                                   |
-| `required`          | `boolean`                           | `false`     | Mark the input `aria-required`.                                                                |
-| `isValueEqual`      | `(a: Value, b: Value) => boolean`   | `Object.is` | Compare values for selection matching (use for object values).                                 |
-| `serializeValue`    | `(value: Value) => string`          | `String`    | Stringify a value for the hidden form field.                                                   |
-| `side`              | `'top'\|'right'\|'bottom'\|'left'`  | `'bottom'`  | Preferred side of the input to place the popup.                                                |
-| `align`             | `'start'\|'center'\|'end'`          | `'start'`   | Alignment along that side.                                                                     |
-| `offset`            | `number`                            | `8`         | Gap in pixels between the input and the popup.                                                 |
-| `loop`              | `boolean`                           | `true`      | Wrap arrow navigation at the first / last option.                                              |
-| `children`          | `ComponentChildren`                 | -           | The input, trigger, positioner, and status parts.                                              |
+| Prop                | Type                                | Default     | Description                                                                                     |
+| ------------------- | ----------------------------------- | ----------- | ----------------------------------------------------------------------------------------------- |
+| `value`             | `Value \| Value[]`                  | -           | Controlled selection. Pair with `onValueChange`.                                                |
+| `defaultValue`      | `Value \| Value[]`                  | -           | Initial selection when uncontrolled.                                                            |
+| `onValueChange`     | `(value: Value \| Value[]) => void` | -           | Called when the selection changes (not called for `create` options).                            |
+| `multiple`          | `boolean`                           | `false`     | Allow more than one selection; value becomes an array; popup stays open on pick.                |
+| `open`              | `boolean`                           | -           | Controlled open state. Pair with `onOpenChange`.                                                |
+| `defaultOpen`       | `boolean`                           | `false`     | Initial open state when uncontrolled.                                                           |
+| `onOpenChange`      | `(open: boolean) => void`           | -           | Called when the popup requests an open or close.                                                |
+| `inputValue`        | `string`                            | -           | Controlled typed query. Pair with `onInputChange`.                                              |
+| `defaultInputValue` | `string`                            | `''`        | Initial query when uncontrolled.                                                                |
+| `onInputChange`     | `(value: string) => void`           | -           | Called when the user edits the input (always the typed query, not completion).                  |
+| `autocomplete`      | `'none' \| 'list' \| 'both'`        | `'list'`    | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                      |
+| `onCreate`          | `(inputValue: string) => void`      | -           | Called when a `create` option is selected; if absent, `create` falls back to normal selection.  |
+| `itemToString`      | `(value: Value) => string`          | -           | Resolve a label for a value whose option is not currently rendered (SSR, filter).               |
+| `name`              | `string`                            | -           | Submit the value as a hidden field (one per value in multiple mode).                            |
+| `disabled`          | `boolean`                           | `false`     | Disable the input and skip the hidden field.                                                    |
+| `required`          | `boolean`                           | `false`     | Mark the input `aria-required`.                                                                 |
+| `isValueEqual`      | `(a: Value, b: Value) => boolean`   | `Object.is` | Compare values for selection matching (use for object values).                                  |
+| `serializeValue`    | `(value: Value) => string`          | `String`    | Stringify a value for the hidden form field.                                                    |
+| `side`              | `'top'\|'right'\|'bottom'\|'left'`  | `'bottom'`  | Preferred side of the input to place the popup.                                                 |
+| `align`             | `'start'\|'center'\|'end'`          | `'start'`   | Alignment along that side.                                                                      |
+| `offset`            | `number`                            | `8`         | Gap in pixels between the input and the popup.                                                  |
+| `loop`              | `boolean`                           | `true`      | Wrap arrow navigation at the first / last option.                                               |
+| `openOnFocus`       | `boolean`                           | `true`      | Open the popup when the input gains focus (or is clicked while closed). Set `false` to opt out. |
+| `children`          | `ComponentChildren`                 | -           | The input, trigger, positioner, and status parts.                                               |
 
 ### Combobox.Input
 
@@ -377,6 +422,20 @@ input. Default element `<button type="button">`.
 | `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded; a passed `onClick` runs before the clear. |
 
 Sets `aria-label` (defaults to `"Clear"`) and `disabled`.
+
+### Combobox.Anchor
+
+Optional wrapper that becomes the popup's positioning anchor. Wrap the Input
+(plus any chips, Trigger, or Clear) in it so the popup aligns to the whole field
+instead of the bare input. It is also a dismiss-safe region: pressing its padding
+or a chip will not close the popup. When omitted, the popup anchors to the Input.
+Default element `<div>`.
+
+| Prop       | Type                              | Default | Description                     |
+| ---------- | --------------------------------- | ------- | ------------------------------- |
+| `render`   | `RenderProp`                      | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`               | -       | The input and adornments.       |
+| `...props` | `JSX.HTMLAttributes<HTMLElement>` | -       | Forwarded.                      |
 
 ### Combobox.Positioner
 

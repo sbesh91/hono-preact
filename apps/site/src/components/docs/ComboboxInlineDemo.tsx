@@ -15,21 +15,17 @@ const CITIES = [
 // Inline autocomplete (autocomplete="both"): the input displays the first
 // matching option's label as a selected suffix after the typed text. Enter or
 // Tab accepts it; Backspace or ArrowLeft dismisses it and keeps the query.
+// Minimal form: just an Input.
 export function ComboboxInlineDemo() {
   const [query, setQuery] = useState('');
   const filtered = CITIES.filter((c) => matchSubstring(c, query));
   return (
     <Combobox.Root autocomplete="both" onInputChange={setQuery}>
-      <div class="docs-cb-field">
-        <Combobox.Input
-          class="docs-cb-input"
-          placeholder="Type a city…"
-          aria-label="City"
-        />
-        <Combobox.Trigger class="docs-cb-trigger" aria-label="Open">
-          ▾
-        </Combobox.Trigger>
-      </div>
+      <Combobox.Input
+        class="docs-cb-input"
+        placeholder="Type a city…"
+        aria-label="City"
+      />
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="City">

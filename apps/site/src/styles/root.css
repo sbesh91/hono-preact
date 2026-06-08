@@ -1428,31 +1428,49 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
    it tracks light/dark. The input is the focus surface; the popup is a
    role="listbox" of consumer-filtered options with highlighted / selected /
    disabled states. */
-.docs-cb-field {
-  display: inline-flex;
-  align-items: center;
+.docs-cb-input {
+  box-sizing: border-box;
   min-width: 16rem;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   background: var(--surface);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.docs-cb-input::placeholder {
+  color: var(--muted);
+}
+.docs-cb-input:focus {
+  border-color: var(--accent);
+}
+/* The optional field wrapper (Combobox.Anchor) for chips / adornments: it
+   carries the border + focus ring, and the input inside goes borderless. */
+.docs-cb-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 16rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  cursor: text;
   transition: border-color 120ms ease;
 }
 .docs-cb-field:focus-within {
   border-color: var(--accent);
 }
-.docs-cb-input {
+.docs-cb-field .docs-cb-input {
   flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 0.875rem;
-  padding: 0.5rem 0.75rem;
+  min-width: 5rem;
+  padding: 0.125rem 0.25rem;
   border: none;
-  outline: none;
   background: transparent;
-  color: var(--foreground);
-}
-.docs-cb-input::placeholder {
-  color: var(--muted);
 }
 .docs-cb-trigger {
   appearance: none;
@@ -1528,13 +1546,6 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   font-size: 0.875rem;
   color: var(--muted);
 }
-/* Multiple: chips wrap onto the same field as the input. */
-.docs-cb-field--multi {
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.375rem 0.5rem;
-  cursor: text;
-}
 .docs-cb-chip {
   display: inline-flex;
   align-items: center;
@@ -1558,11 +1569,6 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 .docs-cb-chip__remove:hover {
   opacity: 1;
-}
-.docs-cb-input--multi {
-  flex: 1;
-  min-width: 5rem;
-  padding: 0.125rem 0.25rem;
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-cb {

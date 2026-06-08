@@ -3,25 +3,19 @@ import { useState } from 'preact/hooks';
 
 const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon', 'Mango'];
 
-// A single-select combobox: the consumer filters FRUITS by the typed query and
-// renders the matches, while the component owns navigation, ARIA wiring, and
-// the commit. Styling is in root.css (.docs-cb*), using the site theme tokens
-// so it tracks light/dark.
+// A single-select combobox in its minimal form: just an Input. It opens on
+// focus (the default), anchors the popup to itself, and the consumer filters
+// FRUITS by the typed query. Styling is in root.css (.docs-cb*).
 export function ComboboxDemo() {
   const [query, setQuery] = useState('');
   const filtered = FRUITS.filter((f) => matchSubstring(f, query));
   return (
     <Combobox.Root onInputChange={setQuery}>
-      <div class="docs-cb-field">
-        <Combobox.Input
-          class="docs-cb-input"
-          placeholder="Search fruit…"
-          aria-label="Fruit"
-        />
-        <Combobox.Trigger class="docs-cb-trigger" aria-label="Open">
-          ▾
-        </Combobox.Trigger>
-      </div>
+      <Combobox.Input
+        class="docs-cb-input"
+        placeholder="Search fruit…"
+        aria-label="Fruit"
+      />
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="Fruit">
