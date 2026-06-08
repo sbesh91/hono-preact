@@ -65,6 +65,7 @@ export const UI_CORE_MODULES = [
   'use-render.js',
   'merge-refs.js',
   'use-controllable-state.js',
+  'use-presence.js',
 ];
 
 export const COMPONENT_MODULES = {
@@ -98,6 +99,7 @@ export const CHUNK_PREFIXES = [
   ['use-dismiss', 'components'],
   ['use-render', 'components'],
   ['use-controllable-state', 'components'],
+  ['use-presence', 'components'],
   ['merge-refs', 'components'],
   ['components', 'components'], // the Components-area landing page chunk
   ['guard', 'guards'],
