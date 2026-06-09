@@ -84,7 +84,12 @@ export function useListboxSelection<Value = string>(
   );
 
   const registry = useRef<OptionEntry[]>([]);
-  const [, force] = useState(0);
+  // `version` bumps on every registry mutation. The registry lives in a ref, so
+  // the callbacks that read it (registryLabelFor/selectedLabels/selectedItems)
+  // must list `version` as a dep, or their identity would never change and the
+  // consuming Root's context memo (keyed on those callbacks) would never
+  // recompute, leaving a stale auto-label after an add/remove/text change.
+  const [version, force] = useState(0);
   const registerOption = useCallback(
     (id: string, optionValue: unknown, label: string) => {
       registry.current = [
@@ -107,7 +112,7 @@ export function useListboxSelection<Value = string>(
   const registryLabelFor = useCallback(
     (v: unknown): string | undefined =>
       registry.current.find((e) => equal(e.value, v))?.label,
-    [equal]
+    [equal, version]
   );
 
   const snapshotLabel = useCallback(
@@ -153,7 +158,7 @@ export function useListboxSelection<Value = string>(
   const selectedLabels = useCallback(
     () =>
       registry.current.filter((e) => isSelected(e.value)).map((e) => e.label),
-    [isSelected]
+    [isSelected, version]
   );
 
   const selectedItems = useCallback((): OptionEntry[] => {
@@ -165,7 +170,7 @@ export function useListboxSelection<Value = string>(
         label: labelFor(v),
       };
     });
-  }, [valuesArray, equal, serialize, labelFor]);
+  }, [valuesArray, equal, serialize, labelFor, version]);
 
   const hiddenFields: ComponentChild[] | null =
     name == null

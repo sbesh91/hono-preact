@@ -293,7 +293,14 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
-      el.hidePopover();
+      // Best-effort un-promotion: hidePopover() throws if the element already
+      // left the top layer (closed by another path or disconnected). Either way
+      // the goal state (not promoted) is met, so ignore the throw.
+      try {
+        el.hidePopover();
+      } catch {
+        // already hidden / disconnected
+      }
       el.removeAttribute('popover');
     };
   }, [presence.isPresent]);
@@ -446,13 +453,15 @@ export function ComboboxOption<Value = string>(
   const selected = ctx.isSelected(value);
   const highlighted = ctx.activeId === id;
 
+  // Register this option's label for the value->label cache and chips. For
+  // string children we track the text reactively so a same-value text edit
+  // re-registers; for non-string children the label is read once from the DOM
+  // (changing their text without changing `value` won't update the registration).
+  const stringLabel = typeof children === 'string' ? children : undefined;
   useLayoutEffect(() => {
-    const label =
-      typeof children === 'string'
-        ? children
-        : (document.getElementById(id)?.textContent ?? '');
+    const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
     return ctx.registerOption(id, value, label);
-  }, [id, value, ctx.registerOption]);
+  }, [id, value, stringLabel, ctx.registerOption]);
 
   const commit = () => {
     if (create) {

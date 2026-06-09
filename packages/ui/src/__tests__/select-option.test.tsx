@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/preact';
+import { useState } from 'preact/hooks';
 import {
   SelectRoot,
   SelectTrigger,
@@ -66,6 +67,41 @@ describe('Select Option', () => {
       'true'
     );
     expect(utils.getByText('Apple').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('updates the trigger auto-label when an option text changes (same value)', async () => {
+    function Harness() {
+      const [label, setLabel] = useState('Apple');
+      return (
+        <div>
+          <button
+            data-testid="rename"
+            type="button"
+            onClick={() => setLabel('Apricot')}
+          >
+            rename
+          </button>
+          <SelectRoot value="apple">
+            <SelectTrigger>
+              <SelectValue placeholder="Pick" />
+            </SelectTrigger>
+            <SelectPositioner>
+              <SelectPopup aria-label="Fruits">
+                <SelectOption value="apple">{label}</SelectOption>
+                <SelectOption value="banana">Banana</SelectOption>
+              </SelectPopup>
+            </SelectPositioner>
+          </SelectRoot>
+        </div>
+      );
+    }
+    const utils = render(<Harness />);
+    await act(async () => {});
+    expect(utils.getByRole('combobox').textContent).toContain('Apple');
+    await act(async () => {
+      fireEvent.click(utils.getByTestId('rename'));
+    });
+    expect(utils.getByRole('combobox').textContent).toContain('Apricot');
   });
 
   it('disabled option is not selectable and is aria-disabled', async () => {

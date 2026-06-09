@@ -55,4 +55,22 @@ describe('Menu navigation', () => {
     fireEvent.keyDown(menu, { key: 'p' });
     expect(document.activeElement).toBe(getByText('Paste'));
   });
+
+  it('ArrowUp on a closed trigger opens the menu focused on the last item', async () => {
+    const { getByText } = render(
+      <MenuRoot>
+        <MenuTrigger>Open</MenuTrigger>
+        <MenuPositioner>
+          <MenuPopup>
+            <MenuItem>Cut</MenuItem>
+            <MenuItem>Copy</MenuItem>
+            <MenuItem>Paste</MenuItem>
+          </MenuPopup>
+        </MenuPositioner>
+      </MenuRoot>
+    );
+    fireEvent.keyDown(getByText('Open'), { key: 'ArrowUp' });
+    await act(async () => {});
+    expect(document.activeElement).toBe(getByText('Paste'));
+  });
 });

@@ -2,7 +2,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 import { useRef, useState } from 'preact/hooks';
-import { useListNavigation, getItems, wrapNext } from '../list-navigation.js';
+import {
+  useListNavigation,
+  getItems,
+  wrapNext,
+  wrapPrev,
+  matchTypeahead,
+} from '../list-navigation.js';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -21,6 +27,57 @@ describe('getItems', () => {
     const c = document.getElementById('c')!;
     const items = getItems(c, '[data-x]:not([aria-disabled="true"])');
     expect(items.map((e) => e.textContent)).toEqual(['A', 'C']);
+  });
+
+  it('scopeSelector excludes items nested in a closer same-role container', () => {
+    document.body.innerHTML = `
+      <div role="menu" id="m">
+        <div role="menuitem" data-menu-item>A</div>
+        <div role="menuitem" data-menu-item aria-disabled="true">B</div>
+        <div role="separator"></div>
+        <div role="menuitemcheckbox" data-menu-item>C</div>
+        <div role="menu" id="sub">
+          <div role="menuitem" data-menu-item>NESTED</div>
+        </div>
+      </div>`;
+    const surface = document.getElementById('m')!;
+    const items = getItems(
+      surface,
+      '[data-menu-item]:not([aria-disabled="true"])',
+      '[role="menu"]'
+    );
+    expect(items.map((e) => e.textContent)).toEqual(['A', 'C']);
+  });
+});
+
+describe('navigation math', () => {
+  it('wrapNext advances and wraps when loop is true', () => {
+    expect(wrapNext(0, 3, true)).toBe(1);
+    expect(wrapNext(2, 3, true)).toBe(0);
+    expect(wrapNext(-1, 3, true)).toBe(0);
+  });
+  it('wrapNext clamps at the end when loop is false', () => {
+    expect(wrapNext(2, 3, false)).toBe(2);
+  });
+  it('wrapPrev retreats and wraps when loop is true', () => {
+    expect(wrapPrev(0, 3, true)).toBe(2);
+    expect(wrapPrev(2, 3, true)).toBe(1);
+  });
+  it('wrapPrev clamps at the start when loop is false', () => {
+    expect(wrapPrev(0, 3, false)).toBe(0);
+  });
+});
+
+describe('typeahead matching', () => {
+  const labels = ['Cut', 'Copy', 'Paste', 'Delete'];
+  it('matches the next label starting with the query (circular)', () => {
+    expect(matchTypeahead(labels, 'p', 0)).toBe(2);
+    expect(matchTypeahead(labels, 'c', 0)).toBe(1);
+    expect(matchTypeahead(labels, 'c', 1)).toBe(0);
+  });
+  it('is case-insensitive and returns -1 on no match', () => {
+    expect(matchTypeahead(labels, 'PA', 0)).toBe(2);
+    expect(matchTypeahead(labels, 'z', 0)).toBe(-1);
   });
 });
 
@@ -88,6 +145,19 @@ describe('useListNavigation', () => {
     host.focus();
     fireEvent.keyDown(host, { key: 'c' });
     expect(host.getAttribute('aria-activedescendant')).toBe('o3');
+  });
+
+  it('Space is reserved for selection: it neither moves the active item nor is consumed', () => {
+    const { getByTestId } = render(<Harness mode="activedescendant" />);
+    const host = getByTestId('focusable');
+    host.focus();
+    fireEvent.keyDown(host, { key: 'c' });
+    expect(host.getAttribute('aria-activedescendant')).toBe('o3');
+    // Space must fall through (no preventDefault) so a parent listbox/menu can
+    // use it to select, and it must not start a typeahead session.
+    const notCancelled = fireEvent.keyDown(host, { key: ' ' });
+    expect(host.getAttribute('aria-activedescendant')).toBe('o3');
+    expect(notCancelled).toBe(true);
   });
 });
 

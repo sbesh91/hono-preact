@@ -203,7 +203,14 @@ export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
-      el.hidePopover();
+      // Best-effort un-promotion: hidePopover() throws if the element already
+      // left the top layer (closed by another path or disconnected). Either way
+      // the goal state (not promoted) is met, so ignore the throw.
+      try {
+        el.hidePopover();
+      } catch {
+        // already hidden / disconnected
+      }
       el.removeAttribute('popover');
     };
   }, [presence.isPresent]);
