@@ -45,10 +45,52 @@ describe('usePresence', () => {
     expect(queryByTestId('box')).toBeNull();
   });
 
-  it('finalizes synchronously when there is no animation (empty set)', async () => {
+  it('holds in closing then finalizes via the fallback when no animation starts', async () => {
+    vi.useFakeTimers();
     const restore = installGetAnimations([]);
-    const { rerender, queryByTestId } = render(<Harness present />);
+    const { rerender, getByTestId, queryByTestId } = render(
+      <Harness present />
+    );
+    rerender(<Harness present={false} />);
+    // No animation is running on the first read, so the element is NOT removed
+    // synchronously — it waits for one to start (it may be a child whose
+    // data-state flips a tick later).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(getByTestId('status').textContent).toBe('closing');
+    expect(queryByTestId('box')).not.toBeNull();
+    // After the no-animation fallback elapses, it finalizes.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(queryByTestId('box')).toBeNull();
+    restore();
+    vi.useRealTimers();
+  });
+
+  it('waits for a late-starting transition (empty read, then transitionrun)', async () => {
+    const anim = makeAnimation();
+    const restore = installGetAnimations([]); // nothing running yet
+    const { rerender, getByTestId, queryByTestId } = render(
+      <Harness present />
+    );
     await act(async () => rerender(<Harness present={false} />));
+    // Held in closing, awaiting a transition.
+    expect(getByTestId('status').textContent).toBe('closing');
+    expect(queryByTestId('box')).not.toBeNull();
+    // The child's transition starts: getAnimations now reports it and a
+    // transitionrun bubbles up to the ref'd element.
+    installGetAnimations([anim]);
+    await act(async () => {
+      getByTestId('box').dispatchEvent(
+        new Event('transitionrun', { bubbles: true })
+      );
+    });
+    expect(queryByTestId('box')).not.toBeNull(); // now awaiting the real animation
+    await act(async () => {
+      anim.resolve();
+    });
     expect(queryByTestId('box')).toBeNull();
     restore();
   });
@@ -118,13 +160,18 @@ describe('usePresence', () => {
     restoreAnim();
   });
 
-  it('ignores infinite-iteration animations (treats as empty)', async () => {
+  it('ignores infinite-iteration animations (treated as no exit; finalizes via fallback)', async () => {
+    vi.useFakeTimers();
     const anim = makeAnimation({ iterations: Infinity });
     const restore = installGetAnimations([anim]);
     const { rerender, queryByTestId } = render(<Harness present />);
-    await act(async () => rerender(<Harness present={false} />));
+    rerender(<Harness present={false} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
     expect(queryByTestId('box')).toBeNull();
     restore();
+    vi.useRealTimers();
   });
 
   it('finalizes via the timeout when an animation never resolves', async () => {
@@ -164,5 +211,28 @@ describe('usePresence', () => {
     expect(onExitComplete).toHaveBeenCalledTimes(1);
     restore();
     vi.useRealTimers();
+  });
+
+  it('never drops isPresent to false on the close render (no unmount/display flash)', async () => {
+    const anim = makeAnimation();
+    const restore = installGetAnimations([anim]);
+    const seen: boolean[] = [];
+    function Rec({ present }: { present: boolean }) {
+      const p = usePresence(present);
+      seen.push(p.isPresent);
+      return p.isPresent ? <div ref={p.ref} data-testid="box" /> : null;
+    }
+    const { rerender } = render(<Rec present />);
+    seen.length = 0; // ignore the initial open renders
+    // Closing: isPresent must stay true across every render until finalize, or
+    // the element unmounts/hides for a frame and the exit animation is cancelled.
+    await act(async () => rerender(<Rec present={false} />));
+    expect(seen.every((v) => v === true)).toBe(true);
+    // Only after the animation resolves does isPresent flip false.
+    await act(async () => {
+      anim.resolve();
+    });
+    expect(seen[seen.length - 1]).toBe(false);
+    restore();
   });
 });
