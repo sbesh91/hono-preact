@@ -455,7 +455,8 @@ export function ComboboxOption<Value = string>(
 
   // Register this option's label for the value->label cache and chips. For
   // string children we track the text reactively so a same-value text edit
-  // re-registers; for non-string children the label is read once from the DOM.
+  // re-registers; for non-string children the label is read once from the DOM
+  // (changing their text without changing `value` won't update the registration).
   const stringLabel = typeof children === 'string' ? children : undefined;
   useLayoutEffect(() => {
     const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
