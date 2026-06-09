@@ -672,6 +672,13 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 .docs-dialog::backdrop {
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+@starting-style {
+  .docs-dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 /* Compact dialog-local typography (overrides the .mdx-content h2/p defaults). */
 .docs-dialog h2 {
@@ -690,9 +697,30 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   gap: 0.5rem;
   margin-top: 1.5rem;
 }
+.docs-dialog[data-state='closed'] {
+  animation: docs-dialog-out 160ms ease-in forwards;
+}
+@keyframes docs-dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+}
+.docs-dialog[data-state='closed']::backdrop {
+  animation: docs-backdrop-out 160ms ease-in forwards;
+}
+@keyframes docs-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .docs-dialog {
+  .docs-dialog[data-state='open'],
+  .docs-dialog[data-state='closed'],
+  .docs-dialog::backdrop,
+  .docs-dialog[data-state='closed']::backdrop {
     transition: none;
+    animation: none;
   }
 }
 
@@ -817,12 +845,23 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.25),
     0 4px 6px -4px rgb(0 0 0 / 0.25);
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
-.docs-popover[data-state='open'] {
-  animation: docs-popover-in 120ms ease-out;
+@starting-style {
+  .docs-popover[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
-@keyframes docs-popover-in {
-  from {
+.docs-popover[data-state='closed'] {
+  animation: docs-popover-out 120ms ease-in forwards;
+}
+@keyframes docs-popover-out {
+  to {
     opacity: 0;
     transform: translateY(-4px);
   }
@@ -878,6 +917,9 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-popover {
+    transition: none;
+  }
+  .docs-popover[data-state='closed'] {
     animation: none;
   }
 }
@@ -918,12 +960,19 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   color: var(--background);
   font-size: 0.8125rem;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  opacity: 1;
+  transition: opacity 100ms ease;
 }
-.docs-tooltip[data-state='open'] {
-  animation: docs-tooltip-in 100ms ease-out;
+@starting-style {
+  .docs-tooltip[data-state='open'] {
+    opacity: 0;
+  }
 }
-@keyframes docs-tooltip-in {
-  from {
+.docs-tooltip[data-state='closed'] {
+  animation: docs-tooltip-out 100ms ease-in forwards;
+}
+@keyframes docs-tooltip-out {
+  to {
     opacity: 0;
   }
 }
@@ -947,7 +996,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-tooltip {
-    animation: none;
+    transition: none;
   }
 }
 
@@ -1220,15 +1269,21 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     0 10px 15px -3px rgb(0 0 0 / 0.25),
     0 4px 6px -4px rgb(0 0 0 / 0.25);
   outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
-.docs-menu[data-state='open'] {
-  animation: docs-menu-in 120ms ease-out;
-}
-@keyframes docs-menu-in {
-  from {
+@starting-style {
+  .docs-menu[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+.docs-menu[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 /* Items: roving-tabindex rows; the active row is :focus, so highlight on
    data-highlighted (set by hover and arrow keys) reads in both modes. */
@@ -1306,7 +1361,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-menu {
-    animation: none;
+    transition: none;
   }
 }
 
@@ -1368,15 +1423,21 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     0 10px 15px -3px rgb(0 0 0 / 0.25),
     0 4px 6px -4px rgb(0 0 0 / 0.25);
   outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
-.docs-select[data-state='open'] {
-  animation: docs-select-in 120ms ease-out;
-}
-@keyframes docs-select-in {
-  from {
+@starting-style {
+  .docs-select[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+.docs-select[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 /* Options: the active descendant is data-highlighted (set by hover and arrow
    keys); the selected option is data-selected. Both can be true at once. */
@@ -1419,7 +1480,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-select {
-    animation: none;
+    transition: none;
   }
 }
 
@@ -1502,15 +1563,21 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     0 10px 15px -3px rgb(0 0 0 / 0.25),
     0 4px 6px -4px rgb(0 0 0 / 0.25);
   outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
-.docs-cb[data-state='open'] {
-  animation: docs-cb-in 120ms ease-out;
-}
-@keyframes docs-cb-in {
-  from {
+@starting-style {
+  .docs-cb[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+.docs-cb[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 .docs-cb__option {
   display: flex;
@@ -1572,6 +1639,69 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 @media (prefers-reduced-motion: reduce) {
   .docs-cb {
+    transition: none;
+  }
+}
+
+/* usePresence docs demo */
+.docs-presence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.docs-presence-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-presence-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-presence-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-presence-box {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.docs-presence-box[data-state='open'] {
+  animation: docs-presence-in 160ms ease-out;
+}
+.docs-presence-box[data-state='closed'] {
+  animation: docs-presence-out 160ms ease-in forwards;
+}
+@keyframes docs-presence-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes docs-presence-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-presence-box[data-state='open'],
+  .docs-presence-box[data-state='closed'] {
     animation: none;
   }
 }

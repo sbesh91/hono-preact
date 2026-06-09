@@ -49,7 +49,7 @@ The demo above uses the styles below; copy a starting point in either flavor:
    that normally centers a modal <dialog>. Keep centering in `transform`, not the
    standalone `translate` property: a rule that sets both can have its `translate`
    dropped by a CSS minifier, silently un-centering the dialog in a production
-   build. The entry animation folds the offset into its own transform. */
+   build. */
 dialog[data-state='open'] {
   position: fixed;
   top: 50%;
@@ -62,10 +62,11 @@ dialog[data-state='open'] {
   border-radius: 14px;
   background: #fff;
   color: #18181b;
-  transform: translate(-50%, -50%);
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.2),
     0 4px 6px -4px rgb(0 0 0 / 0.2);
+  opacity: 1;
+  transform: translate(-50%, -50%);
   transition:
     opacity 160ms ease,
     transform 160ms ease;
@@ -81,6 +82,14 @@ dialog[data-state='open'] {
 dialog::backdrop {
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
+@starting-style {
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -91,9 +100,32 @@ dialog::backdrop {
   }
 }
 
+dialog[data-state='closed'] {
+  animation: dialog-out 160ms ease-in forwards;
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+}
+
+dialog[data-state='closed']::backdrop {
+  animation: dialog-backdrop-out 160ms ease-in forwards;
+}
+@keyframes dialog-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  dialog[data-state='open'] {
+  dialog[data-state='open'],
+  dialog[data-state='closed'],
+  dialog::backdrop,
+  dialog[data-state='closed']::backdrop {
     transition: none;
+    animation: none;
   }
 }
 ```
@@ -105,6 +137,8 @@ dialog::backdrop {
          rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl
          opacity-100 transition-[opacity,transform] duration-[160ms] ease-out
          starting:opacity-0 starting:[transform:translate(-50%,calc(-50%_+_8px))_scale(0.98)]
+         data-[state=closed]:opacity-0 data-[state=closed]:[transform:translate(-50%,calc(-50%_+_8px))_scale(0.98)]
+         motion-reduce:transition-none
          backdrop:bg-black/50 backdrop:backdrop-blur-sm
          dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
 >

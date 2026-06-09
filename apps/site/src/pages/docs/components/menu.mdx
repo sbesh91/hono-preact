@@ -96,15 +96,21 @@ either flavor:
     0 10px 15px -3px rgb(0 0 0 / 0.25),
     0 4px 6px -4px rgb(0 0 0 / 0.25);
   outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
-.docs-menu[data-state='open'] {
-  animation: docs-menu-in 120ms ease-out;
-}
-@keyframes docs-menu-in {
-  from {
+@starting-style {
+  .docs-menu[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+.docs-menu[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 /* Items are roving-tabindex rows; the active row is highlighted via the
    data-attribute the component sets on hover and arrow navigation. */
@@ -153,11 +159,16 @@ either flavor:
     background: #27272a;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .docs-menu {
+    transition: none;
+  }
+}
 ```
 
 ```tsx
 <Menu.Positioner className="z-50">
-  <Menu.Popup className="min-w-48 rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+  <Menu.Popup className="min-w-48 rounded-[0.625rem] border border-zinc-200 bg-white p-1 text-zinc-900 shadow-xl outline-none opacity-100 translate-y-0 transition-[opacity,translate] duration-[120ms] ease-out starting:opacity-0 starting:-translate-y-1 data-[state=closed]:opacity-0 data-[state=closed]:-translate-y-1 motion-reduce:transition-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
     <Menu.Item className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none cursor-pointer data-[highlighted]:bg-zinc-900 data-[highlighted]:text-zinc-50 data-[disabled]:pointer-events-none data-[disabled]:text-zinc-400 dark:data-[highlighted]:bg-zinc-50 dark:data-[highlighted]:text-zinc-900">
       New file
     </Menu.Item>

@@ -152,6 +152,10 @@ export const nav: NavArea[] = [
             title: 'useSafeArea',
             route: '/docs/components/use-safe-area',
           },
+          {
+            title: 'usePresence',
+            route: '/docs/components/use-presence',
+          },
         ],
       },
     ],

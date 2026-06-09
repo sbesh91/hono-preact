@@ -65,12 +65,19 @@ starting point in either flavor:
   color: #fafafa;
   font-size: 0.8125rem;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  opacity: 1;
+  transition: opacity 100ms ease;
 }
-.docs-tooltip[data-state='open'] {
-  animation: docs-tooltip-in 100ms ease-out;
+@starting-style {
+  .docs-tooltip[data-state='open'] {
+    opacity: 0;
+  }
 }
-@keyframes docs-tooltip-in {
-  from {
+.docs-tooltip[data-state='closed'] {
+  animation: docs-tooltip-out 100ms ease-in forwards;
+}
+@keyframes docs-tooltip-out {
+  to {
     opacity: 0;
   }
 }
@@ -103,11 +110,16 @@ starting point in either flavor:
     background: #27272a;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .docs-tooltip {
+    transition: none;
+  }
+}
 ```
 
 ```tsx
 <Tooltip.Positioner className="z-50">
-  <Tooltip.Popup className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-[13px] text-zinc-50 shadow-lg opacity-100 transition-opacity duration-100 ease-out starting:opacity-0">
+  <Tooltip.Popup className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-[13px] text-zinc-50 shadow-lg opacity-100 transition-opacity duration-100 ease-out starting:opacity-0 data-[state=closed]:opacity-0 motion-reduce:transition-none">
     Saved to your library
   </Tooltip.Popup>
 </Tooltip.Positioner>

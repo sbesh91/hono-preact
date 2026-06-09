@@ -13,6 +13,8 @@ import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
+import { mergeRefs } from '../merge-refs.js';
+import { usePresence } from '../use-presence.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { PopoverContext, usePopoverContext } from './context.js';
 
@@ -173,8 +175,10 @@ export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Positioner');
 
+  const presence = usePresence(ctx.open);
+
   const position = usePosition({
-    open: ctx.open,
+    open: presence.isPresent,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
@@ -192,26 +196,26 @@ export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
   // Applied imperatively so there is no SSR/hydration attribute mismatch.
   useLayoutEffect(() => {
     const el = ctx.floatingRef.current;
-    // Runs when open flips true and the element has mounted (refs are assigned
-    // before layout effects). Empty deps would never re-run, so showPopover
-    // would never fire on a mount-on-open element.
-    if (!ctx.open || !el || !supportsPopover(el)) return;
+    // Runs when isPresent flips true and the element has mounted (refs are
+    // assigned before layout effects). Stays mounted through the exit animation
+    // so hidePopover fires only after the closing transition completes.
+    if (!presence.isPresent || !el || !supportsPopover(el)) return;
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
       el.hidePopover();
       el.removeAttribute('popover');
     };
-  }, [ctx.open]);
+  }, [presence.isPresent]);
 
-  if (!ctx.open) return null;
+  if (!presence.isPresent) return null;
 
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: {
       ...rest,
-      ref: ctx.floatingRef,
+      ref: mergeRefs(ctx.floatingRef, presence.ref),
       'data-side': position.side,
       'data-align': position.align,
       // The Positioner is a framework-owned layout wrapper (style the Popup, not

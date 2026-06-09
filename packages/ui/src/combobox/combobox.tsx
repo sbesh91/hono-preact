@@ -15,6 +15,8 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
+import { mergeRefs } from '../merge-refs.js';
+import { usePresence } from '../use-presence.js';
 import { useControllableState } from '../use-controllable-state.js';
 import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
@@ -258,6 +260,7 @@ export type ComboboxPositionerProps = {
 export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Positioner');
+  const presence = usePresence(ctx.open);
 
   // Anchor to the <Combobox.Anchor> field if one is rendered, else the input.
   // Both refs are stable, so the callback is stable (no autoUpdate churn).
@@ -270,7 +273,7 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
   );
 
   const position = usePosition({
-    open: ctx.open,
+    open: presence.isPresent,
     anchorRef: ctx.inputRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
@@ -286,22 +289,22 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
 
   useLayoutEffect(() => {
     const el = ctx.floatingRef.current;
-    if (!ctx.open || !el) return;
+    if (!presence.isPresent || !el) return;
     el.setAttribute('popover', 'manual');
     el.showPopover();
     return () => {
       el.hidePopover();
       el.removeAttribute('popover');
     };
-  }, [ctx.open]);
+  }, [presence.isPresent]);
 
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: {
       ...rest,
-      ref: ctx.floatingRef,
-      hidden: ctx.open ? undefined : true,
+      ref: mergeRefs(ctx.floatingRef, presence.ref),
+      hidden: presence.isPresent ? undefined : true,
       'data-side': position.side,
       'data-align': position.align,
       style: {
