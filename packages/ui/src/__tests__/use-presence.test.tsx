@@ -60,9 +60,14 @@ describe('usePresence', () => {
     });
     expect(getByTestId('status').textContent).toBe('closing');
     expect(queryByTestId('box')).not.toBeNull();
-    // After the no-animation fallback elapses, it finalizes.
+    // Still held just under the fallback window.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(queryByTestId('box')).not.toBeNull();
+    // Past the no-animation fallback (~250ms), it finalizes.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
     });
     expect(queryByTestId('box')).toBeNull();
     restore();
@@ -90,6 +95,42 @@ describe('usePresence', () => {
     expect(queryByTestId('box')).not.toBeNull(); // now awaiting the real animation
     await act(async () => {
       anim.resolve();
+    });
+    expect(queryByTestId('box')).toBeNull();
+    restore();
+  });
+
+  it('tracks a second exit animation that starts after the first (rescue path)', async () => {
+    const a1 = makeAnimation({ endTime: 100 });
+    const a2 = makeAnimation({ endTime: 300 });
+    const restore = installGetAnimations([]); // empty first read -> rescue path
+    const { rerender, getByTestId, queryByTestId } = render(
+      <Harness present />
+    );
+    await act(async () => rerender(<Harness present={false} />));
+    // First (short) transition starts.
+    installGetAnimations([a1]);
+    await act(async () => {
+      getByTestId('box').dispatchEvent(
+        new Event('transitionrun', { bubbles: true })
+      );
+    });
+    // A second, longer transition starts a tick later (e.g. opacity then a
+    // longer transform). The listeners stay live, so it is tracked too.
+    installGetAnimations([a1, a2]);
+    await act(async () => {
+      getByTestId('box').dispatchEvent(
+        new Event('transitionrun', { bubbles: true })
+      );
+    });
+    // Resolving only the first must NOT finalize — the longer one is still going.
+    await act(async () => {
+      a1.resolve();
+    });
+    expect(queryByTestId('box')).not.toBeNull();
+    // Resolving the longer one finalizes.
+    await act(async () => {
+      a2.resolve();
     });
     expect(queryByTestId('box')).toBeNull();
     restore();
@@ -167,7 +208,7 @@ describe('usePresence', () => {
     const { rerender, queryByTestId } = render(<Harness present />);
     rerender(<Harness present={false} />);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(300);
     });
     expect(queryByTestId('box')).toBeNull();
     restore();

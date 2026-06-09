@@ -3,23 +3,43 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'preact/hooks';
 export type PresenceStatus = 'open' | 'closing' | 'closed';
 
 export interface UsePresenceOptions {
-  // Fires when the exit animation resolves, immediately before isPresent flips
-  // false. Dialog passes close() here so native focus return runs before unmount.
+  // Fires when the exit resolves, immediately before isPresent flips false.
+  // Dialog passes close() here so native focus return runs before unmount.
+  // Intentionally argument-less; if a "why did it finalize" reason is ever
+  // wanted, add it as an optional arg (non-breaking for existing callers).
   onExitComplete?: () => void;
-  // Hard cap (ms) on the exit-timeout race; guards a stuck or under-reported
-  // animation, or a backgrounded tab. Default 3000.
+  // Hard cap (ms) on the wait once an exit animation is RUNNING; guards a stuck
+  // or under-reported animation, or a backgrounded tab. Default 3000. It does
+  // not bound the separate, shorter wait for an animation to START
+  // (NO_ANIMATION_FALLBACK_MS).
   timeoutCap?: number;
 }
 
 export interface UsePresenceResult {
   // Render the element while true (open OR animating out).
   isPresent: boolean;
-  // 'open' | 'closing' | 'closed'. Map to data-state: closing -> "closed".
+  // 'open' | 'closing' | 'closed'. Map to a data-state attribute, collapsing
+  // closing+closed to "closed". Mapping your own open flag is equivalent (during
+  // closing the element is logically closed); the library's own components do
+  // that. `status` is here for consumers who want to react to the closing phase.
   status: PresenceStatus;
-  // Attach to the element carrying the exit transition. Merge with the
-  // component's own ref via mergeRefs.
+  // Attach to the element carrying the exit animation, OR an ancestor of it
+  // (reads use getAnimations({ subtree: true })) — never a sibling. Merge with
+  // the component's own ref via mergeRefs.
   ref: (node: Element | null) => void;
 }
+
+// How long to wait for an exit transition/animation to START before concluding
+// there is none. The animated element is often a child that flips its
+// data-state a render-tick after this hook's effect runs, so an empty first
+// read is not proof of "no exit". This is a "did anything start?" detector, NOT
+// an animation timer, and is unrelated to timeoutCap. Erring high avoids
+// silently skipping the exit on a slow commit; it only delays teardown when
+// there is genuinely no exit animation.
+const NO_ANIMATION_FALLBACK_MS = 250;
+// Grace added to the longest running animation's end time before the safety cap.
+const TIMEOUT_SLACK_MS = 100;
+const DEFAULT_TIMEOUT_CAP_MS = 3000;
 
 function prefersReducedMotion(): boolean {
   return (
@@ -29,6 +49,8 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+// Longest end time across the given animations + slack, capped. Assumes
+// infinite-iteration animations are already filtered out.
 function exitTimeout(animations: Animation[], cap: number): number {
   let max = 0;
   for (const a of animations) {
@@ -36,14 +58,14 @@ function exitTimeout(animations: Animation[], cap: number): number {
     const end = typeof timing?.endTime === 'number' ? timing.endTime : 0;
     if (end > max) max = end;
   }
-  return Math.min(max > 0 ? max + 100 : cap, cap);
+  return Math.min(max > 0 ? max + TIMEOUT_SLACK_MS : cap, cap);
 }
 
 export function usePresence(
   present: boolean,
   options: UsePresenceOptions = {}
 ): UsePresenceResult {
-  const { onExitComplete, timeoutCap = 3000 } = options;
+  const { onExitComplete, timeoutCap = DEFAULT_TIMEOUT_CAP_MS } = options;
 
   const [status, setStatus] = useState<PresenceStatus>(
     present ? 'open' : 'closed'
@@ -72,32 +94,30 @@ export function usePresence(
     setStatus(present ? 'open' : 'closing');
   }, [present]);
 
-  // Run the exit when we enter 'closing'. The element that actually animates is
-  // often a CHILD of the ref'd node whose `data-state` flips a render-tick later
-  // (it is consumer/context-driven), so an empty animation set on the first
-  // synchronous read does NOT mean "no exit animation". We read synchronously
-  // first (covers the native-dialog case, where the animated element IS the
-  // ref'd element); if empty, we wait briefly for a transition/animation to
-  // START (transitionrun/animationstart bubble up from the child) before
-  // concluding there is none.
+  // Drive the exit once we enter 'closing'.
+  //
+  // The animated element is often a CHILD of the ref'd node, and its data-state
+  // flips a render-tick after this effect runs (it is consumer/context-driven),
+  // so an empty getAnimations() on the first read does NOT mean "no exit". We
+  // read once after a forced reflow (covers the native-dialog case, where the
+  // animated element IS the ref'd element); if nothing is running we keep
+  // transitionrun/animationstart listeners attached and collect each animation
+  // as it starts (they bubble up from the child), so staggered or
+  // different-duration exits are all awaited. We finalize when every tracked
+  // animation has settled, fall back to finalizing if none ever starts, and cap
+  // the total wait as a stuck-animation safety net.
+  //
+  // Locals: track() collects newly-started exit animations; onSettled finalizes
+  // once all tracked ones end; finalize is the single-fire, generation-guarded
+  // teardown and is also the effect's cleanup, so reopen/unmount aborts cleanly.
   useLayoutEffect(() => {
     if (status !== 'closing') return;
-    const myGen = genRef.current;
     const node = nodeRef.current;
-    let finalized = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const myGen = genRef.current;
 
-    const cleanup = () => {
-      if (timer !== undefined) clearTimeout(timer);
-      node?.removeEventListener('transitionrun', onStart);
-      node?.removeEventListener('animationstart', onStart);
-    };
-
-    const finalize = () => {
-      if (finalized) return;
-      finalized = true;
-      cleanup();
-      if (genRef.current !== myGen) return; // reopened mid-exit; abandon
+    // Commit the close, unless a reopen advanced the generation in the meantime.
+    const commit = () => {
+      if (genRef.current !== myGen) return;
       onExitCompleteRef.current?.();
       setStatus('closed');
     };
@@ -107,67 +127,86 @@ export function usePresence(
       typeof node.getAnimations !== 'function' ||
       prefersReducedMotion()
     ) {
-      finalize();
+      commit();
       return;
     }
 
-    const getActive = (): Animation[] =>
-      node
+    let finalized = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    let capTimer: ReturnType<typeof setTimeout> | undefined;
+    const tracked = new Set<Animation>();
+    let pending = 0;
+
+    const stop = () => {
+      if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
+      if (capTimer !== undefined) clearTimeout(capTimer);
+      node.removeEventListener('transitionrun', onStart);
+      node.removeEventListener('animationstart', onStart);
+    };
+
+    const finalize = () => {
+      if (finalized) return;
+      finalized = true;
+      stop();
+      commit();
+    };
+
+    const onSettled = () => {
+      pending--;
+      if (pending === 0) finalize();
+    };
+
+    const track = () => {
+      const active = node
         .getAnimations({ subtree: true })
         .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity);
-
-    const awaitAll = (animations: Animation[]) => {
-      cleanup(); // drop the start-listeners and the no-animation fallback timer
-      if (finalized) return;
-      let remaining = animations.length;
-      const onSettled = () => {
-        remaining--;
-        if (remaining === 0) finalize();
-      };
-      timer = setTimeout(
-        finalize,
-        exitTimeout(animations, timeoutCapRef.current)
-      );
-      for (const a of animations) a.finished.then(onSettled, onSettled);
+      for (const a of active) {
+        if (tracked.has(a)) continue;
+        tracked.add(a);
+        pending++;
+        a.finished.then(onSettled, onSettled);
+      }
+      if (tracked.size > 0) {
+        // An exit animation is running: drop the no-animation fallback and
+        // (re)arm the safety cap to cover the longest tracked animation.
+        if (fallbackTimer !== undefined) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = undefined;
+        }
+        if (capTimer !== undefined) clearTimeout(capTimer);
+        capTimer = setTimeout(
+          finalize,
+          exitTimeout([...tracked], timeoutCapRef.current)
+        );
+      }
     };
 
     function onStart() {
-      const active = getActive();
-      if (active.length > 0) awaitAll(active);
+      track();
     }
 
-    // Forced reflow so any already-applied closed-state styles register, then
-    // read. getBoundingClientRect (Element) avoids a cast; never rAF (paused in
-    // background tabs).
+    // Forced reflow so just-applied closed-state styles register, then read.
+    // getBoundingClientRect (Element) avoids a cast; never rAF (paused in
+    // background tabs, which would hang the close).
     node.getBoundingClientRect();
-    const initial = getActive();
-    if (initial.length > 0) {
-      awaitAll(initial);
-    } else {
-      // Nothing is running yet: the animated child may flip `data-state` a tick
-      // after this effect. Wait for a transition/animation to start; if none
-      // does shortly, there is no exit animation, so finalize.
+    track();
+    if (pending === 0) {
       node.addEventListener('transitionrun', onStart);
       node.addEventListener('animationstart', onStart);
-      timer = setTimeout(finalize, 100);
+      fallbackTimer = setTimeout(finalize, NO_ANIMATION_FALLBACK_MS);
     }
 
-    // Cleanup on reopen/unmount: finalize is generation-guarded (it will not
-    // fire onExitComplete / setStatus once the generation advanced on reopen)
-    // and tears down the listeners + timer.
     return finalize;
   }, [status]);
 
+  // isPresent stays true until status is 'closed' (not merely while 'closing'):
+  // the 'closing' status is set in the layout effect above, which runs AFTER the
+  // close render commits, so on that first present===false render status is
+  // still 'open'. Keying off 'closing' would drop isPresent false for that one
+  // committed render, unmounting / display:none-ing the element and cancelling
+  // its exit before it starts. Staying present until 'closed' keeps the element
+  // rendered continuously so the exit animation plays.
   return {
-    // `status !== 'closed'` (not `=== 'closing'`): the closing transition is set
-    // in a layout effect that runs AFTER the close render commits, so on that
-    // first `present === false` render `status` is still 'open'. Keying off
-    // 'closing' would drop isPresent false for that one committed render,
-    // unmounting / `display:none`-ing the element and cancelling its exit
-    // animation (the always-mounted Select/Combobox never animated; the others
-    // only survived via a wasteful unmount/remount). Staying present until
-    // 'closed' keeps the element rendered continuously so a transition/animation
-    // on the `data-state` flip plays.
     isPresent: present || status !== 'closed',
     status,
     ref,
