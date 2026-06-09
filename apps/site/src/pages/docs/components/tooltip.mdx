@@ -65,12 +65,11 @@ starting point in either flavor:
   color: #fafafa;
   font-size: 0.8125rem;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  opacity: 1;
+  transition: opacity 100ms ease;
 }
-.docs-tooltip[data-state='open'] {
-  animation: docs-tooltip-in 100ms ease-out;
-}
-@keyframes docs-tooltip-in {
-  from {
+@starting-style {
+  .docs-tooltip[data-state='open'] {
     opacity: 0;
   }
 }
@@ -112,9 +111,8 @@ starting point in either flavor:
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-tooltip[data-state='open'],
-  .docs-tooltip[data-state='closed'] {
-    animation: none;
+  .docs-tooltip {
+    transition: none;
   }
 }
 ```
