@@ -46,12 +46,15 @@ interface UsePresenceResult {
 | `onExitComplete` | `() => void` | none    | Runs when the exit resolves, immediately before `isPresent` is false. |
 | `timeoutCap`     | `number`     | `3000`  | Safety cap (ms) so a stuck animation can never block teardown.        |
 
-Gate rendering on `isPresent`, attach `ref` to the element that carries the
-transition, and map `status` to `data-state` (both `closing` and `closed` map to
-`"closed"`, so one `[data-state="closed"]` rule styles the exit). It reads
-`Element.getAnimations()` after a forced reflow, races the animations' `finished`
-promises against `timeoutCap`, and short-circuits under
-`prefers-reduced-motion`. There is no exit on first mount or during SSR.
+Gate rendering on `isPresent` and attach `ref` to the element that carries the
+exit animation — or an ancestor of it, but never a sibling — merged with your
+own ref via [mergeRefs](/docs/components/merge-refs). Drive `data-state` from
+`status` (both `closing` and `closed` map to `"closed"`, so one
+`[data-state="closed"]` rule styles the exit), or equivalently from your own
+open flag — the library's own components do the latter. It reads
+`Element.getAnimations({ subtree: true })` after a forced reflow, waits for every
+exit animation to finish (with a `timeoutCap` safety net), and short-circuits
+under `prefers-reduced-motion`. There is no exit on first mount or during SSR.
 
 ## Example
 
