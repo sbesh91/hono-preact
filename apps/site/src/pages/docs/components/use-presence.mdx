@@ -6,8 +6,9 @@ import { UsePresenceDemo } from '../../../components/docs/UsePresenceDemo.js';
 `usePresence` keeps an element mounted while it animates out, then unmounts it.
 It is the primitive every overlay in this library uses to run a closing
 animation: on close it holds the element in the DOM, lets a `[data-state="closed"]`
-CSS animation run, and unmounts only once the animation finishes. Animation is
-opt-in: with no closing rule the element unmounts immediately, exactly as before.
+CSS **transition or keyframe animation** run, and unmounts only once it finishes.
+Animation is opt-in: with no closing rule the element unmounts immediately,
+exactly as before.
 
 ## Demo
 
@@ -103,3 +104,47 @@ function Panel() {
   }
 }
 ```
+
+## Transition or keyframes
+
+The exit can be a keyframe `animation` (above) or a plain CSS `transition`,
+`usePresence` waits for either. A transition is often simpler: put the resting
+values and a `transition` on the element, drive entry with `@starting-style`,
+and the exit values on `[data-state="closed"]`.
+
+```css
+[data-state] {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+@starting-style {
+  [data-state='open'] {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-state] {
+    transition: none;
+  }
+}
+```
+
+Under the hood, `usePresence` reads `Element.getAnimations({ subtree: true })`,
+which reports both transitions and keyframe animations, and if nothing is
+running on the first read it waits for a `transitionrun`/`animationstart` to
+bubble up before deciding there is no exit. That `subtree`/event handling is why
+the animated element can be a child of the one you attach `ref` to, and why a
+child whose `data-state` flips a render-tick later still animates.
+
+**Exit animations must be finite.** An `animation-iteration-count: infinite`
+exit is ignored (it would never resolve, blocking teardown), so the element
+finalizes as if there were no exit, use a finite count with `forwards`. Entry
+animations may loop freely; only the closing animation is awaited.
