@@ -11,15 +11,13 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useId,
   useMemo,
   useRef,
-  useState,
 } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
-import { useControllableState } from '../use-controllable-state.js';
 import { useSafeArea } from '../use-safe-area.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
+import { useMenuCore } from './use-menu-core.js';
 import {
   MenuContext,
   useMenuContext,
@@ -66,7 +64,7 @@ export interface SubmenuRootProps {
 
 export function SubmenuRoot(props: SubmenuRootProps) {
   const {
-    open: openProp,
+    open,
     defaultOpen,
     onOpenChange,
     side = 'right',
@@ -78,26 +76,17 @@ export function SubmenuRoot(props: SubmenuRootProps) {
   } = props;
   const parent = useMenuContext('SubmenuRoot');
 
-  const [open, setOpen] = useControllableState<boolean>({
-    value: openProp,
-    defaultValue: defaultOpen ?? false,
-    onChange: onOpenChange,
-  });
-
-  const anchorRef = useRef<HTMLElement>(null); // the SubmenuTrigger element
-  const floatingRef = useRef<HTMLElement>(null);
-  const popupRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
-  const pendingEdgeRef = useRef<'first' | 'last'>('first');
-  const baseId = useId();
-  const triggerId = `${baseId}-trigger`;
-  const popupId = `${baseId}-popup`;
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [position, setPosition] = useState<PositionState>({
+  const core = useMenuCore({
+    open,
+    defaultOpen,
+    onOpenChange,
     side,
     align,
-    arrowX: null,
-    arrowY: null,
+    offset,
+    loop: parent.loop,
+    typeahead: parent.typeahead,
+    closeAll: parent.closeAll,
+    parentDismissId: parent.dismissId,
   });
 
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,77 +98,31 @@ export function SubmenuRoot(props: SubmenuRootProps) {
   }, []);
   const scheduleOpen = useCallback(() => {
     cancelOpen();
-    openTimer.current = setTimeout(() => setOpen(true), openDelay);
-  }, [cancelOpen, setOpen, openDelay]);
+    openTimer.current = setTimeout(() => core.setOpen(true), openDelay);
+  }, [cancelOpen, core.setOpen, openDelay]);
   // Clear a pending open if the SubmenuRoot unmounts mid-delay.
   useEffect(() => cancelOpen, [cancelOpen]);
 
-  // The submenu's own MenuContext: parentDismissId links it into the dismiss
-  // tree; closeAll is the parent's so activating a nested item collapses the
-  // whole tree.
-  const menuCtx = useMemo<MenuContextValue>(
-    () => ({
-      open,
-      setOpen,
-      closeAll: parent.closeAll,
-      dismissId: baseId,
-      parentDismissId: parent.dismissId,
-      anchorRef,
-      floatingRef,
-      popupRef,
-      arrowRef,
-      triggerId,
-      popupId,
-      activeId,
-      setActiveId,
-      pendingEdgeRef,
-      side,
-      align,
-      offset,
-      loop: parent.loop,
-      typeahead: parent.typeahead,
-      position,
-      setPosition,
-      getAnchorRect: undefined,
-    }),
-    [
-      open,
-      setOpen,
-      parent.closeAll,
-      parent.dismissId,
-      parent.loop,
-      parent.typeahead,
-      baseId,
-      triggerId,
-      popupId,
-      activeId,
-      side,
-      align,
-      offset,
-      position,
-    ]
-  );
-
   const submenuCtx = useMemo<SubmenuContextValue>(
     () => ({
-      menuCtx,
-      open,
-      setOpen,
-      triggerId,
-      popupId,
-      anchorRef,
-      floatingRef,
-      pendingEdgeRef,
+      menuCtx: core.menuCtx,
+      open: core.open,
+      setOpen: core.setOpen,
+      triggerId: core.triggerId,
+      popupId: core.popupId,
+      anchorRef: core.anchorRef,
+      floatingRef: core.floatingRef,
+      pendingEdgeRef: core.pendingEdgeRef,
       scheduleOpen,
       cancelOpen,
       closeDelay,
     }),
     [
-      menuCtx,
-      open,
-      setOpen,
-      triggerId,
-      popupId,
+      core.menuCtx,
+      core.open,
+      core.setOpen,
+      core.triggerId,
+      core.popupId,
       scheduleOpen,
       cancelOpen,
       closeDelay,
