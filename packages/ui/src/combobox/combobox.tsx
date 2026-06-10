@@ -15,11 +15,9 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import { mergeRefs } from '../merge-refs.js';
-import { usePresence } from '../use-presence.js';
 import { useControllableState } from '../use-controllable-state.js';
-import { usePosition } from '../use-position.js';
 import type { Side, Align, PositionState } from '../use-position.js';
+import { usePositioner } from '../use-positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
@@ -260,8 +258,6 @@ export type ComboboxPositionerProps = {
 export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Positioner');
-  const presence = usePresence(ctx.open);
-
   // Anchor to the <Combobox.Anchor> field if one is rendered, else the input.
   // Both refs are stable, so the callback is stable (no autoUpdate churn).
   const getAnchorRect = useCallback(
@@ -271,9 +267,8 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
       )?.getBoundingClientRect() ?? null,
     [ctx.anchorRef, ctx.inputRef]
   );
-
-  const position = usePosition({
-    open: presence.isPresent,
+  const { positionerProps, state } = usePositioner({
+    open: ctx.open,
     anchorRef: ctx.inputRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
@@ -281,50 +276,14 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
     align: ctx.align,
     offset: ctx.offset,
     getAnchorRect,
+    setPosition: ctx.setPosition,
+    mount: 'hidden',
   });
-
-  useLayoutEffect(() => {
-    ctx.setPosition(position);
-  }, [position.side, position.align, position.arrowX, position.arrowY]);
-
-  useLayoutEffect(() => {
-    const el = ctx.floatingRef.current;
-    if (!presence.isPresent || !el) return;
-    el.setAttribute('popover', 'manual');
-    el.showPopover();
-    return () => {
-      // Best-effort un-promotion: hidePopover() throws if the element already
-      // left the top layer (closed by another path or disconnected). Either way
-      // the goal state (not promoted) is met, so ignore the throw.
-      try {
-        el.hidePopover();
-      } catch {
-        // already hidden / disconnected
-      }
-      el.removeAttribute('popover');
-    };
-  }, [presence.isPresent]);
-
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: mergeRefs(ctx.floatingRef, presence.ref),
-      hidden: presence.isPresent ? undefined : true,
-      'data-side': position.side,
-      'data-align': position.align,
-      style: {
-        position: 'fixed',
-        inset: 'auto',
-        margin: 0,
-        overflow: 'visible',
-        border: 0,
-        padding: 0,
-        background: 'transparent',
-      },
-    },
-    state: { side: position.side, align: position.align },
+    props: { ...rest, ...positionerProps },
+    state,
     children,
   });
 }

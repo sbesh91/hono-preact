@@ -4,23 +4,16 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import {
-  usePosition,
-  type Side,
-  type Align,
-  type PositionState,
-} from '../use-position.js';
+import { type Side, type Align, type PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useSafeArea } from '../use-safe-area.js';
-import { mergeRefs } from '../merge-refs.js';
-import { usePresence } from '../use-presence.js';
+import { usePositioner } from '../use-positioner.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
 export interface TooltipRootProps {
@@ -185,10 +178,6 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
   });
 }
 
-function supportsPopover(el: HTMLElement): boolean {
-  return typeof el.showPopover === 'function';
-}
-
 export type TooltipPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
@@ -197,69 +186,23 @@ export type TooltipPositionerProps = {
 export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = useTooltipContext('Positioner');
-
-  const presence = usePresence(ctx.open);
-
-  const position = usePosition({
-    open: presence.isPresent,
+  const { isPresent, positionerProps, state } = usePositioner({
+    open: ctx.open,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
     side: ctx.side,
     align: ctx.align,
     offset: ctx.offset,
+    setPosition: ctx.setPosition,
+    mount: 'unmount',
   });
-
-  useLayoutEffect(() => {
-    ctx.setPosition(position);
-  }, [position.side, position.align, position.arrowX, position.arrowY]);
-
-  useLayoutEffect(() => {
-    const el = ctx.floatingRef.current;
-    // Runs when isPresent flips true and the element has mounted (refs are
-    // assigned before layout effects). Empty deps would never re-run, so
-    // showPopover would never fire on a mount-on-open element.
-    if (!presence.isPresent || !el || !supportsPopover(el)) return;
-    el.setAttribute('popover', 'manual');
-    el.showPopover();
-    return () => {
-      // Best-effort un-promotion: hidePopover() throws if the element already
-      // left the top layer (closed by another path or disconnected). Either way
-      // the goal state (not promoted) is met, so ignore the throw.
-      try {
-        el.hidePopover();
-      } catch {
-        // already hidden / disconnected
-      }
-      el.removeAttribute('popover');
-    };
-  }, [presence.isPresent]);
-
-  if (!presence.isPresent) return null;
-
+  if (!isPresent) return null;
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: mergeRefs(ctx.floatingRef, presence.ref),
-      'data-side': position.side,
-      'data-align': position.align,
-      // Neutralize the UA [popover] rule that applies in the top layer
-      // (overflow/inset/margin/border/padding/background): the UA
-      // `overflow: auto` would clip the popup's box-shadow and `inset: 0`
-      // would fight the computed left/top.
-      style: {
-        position: 'fixed',
-        inset: 'auto',
-        margin: 0,
-        overflow: 'visible',
-        border: 0,
-        padding: 0,
-        background: 'transparent',
-      },
-    },
-    state: { side: position.side, align: position.align },
+    props: { ...rest, ...positionerProps },
+    state,
     children,
   });
 }

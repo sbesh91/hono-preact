@@ -9,8 +9,8 @@ A custom listbox select: a button that opens a popup of options and writes the
 chosen value back. It supports single and multiple selection, carries a generic
 value type so an option's `value` is your own data rather than a string, and
 submits in a real form through a `name`. Positioning runs on Floating UI; the
-popup renders in place and promotes to the browser top layer where the Popover
-API is available. It ships unstyled: style it through the `data-state`,
+popup renders in place and promotes to the browser top layer using the Popover
+API. It ships unstyled: style it through the `data-state`,
 `data-highlighted`, `data-selected`, `data-disabled`, `data-placeholder`,
 `data-side`, and `data-align` contract.
 
@@ -350,8 +350,8 @@ register their labels) and `hidden` while closed. Default element `<div>`.
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
 
 Sets `position: fixed`, the resolved `data-side` / `data-align`, and `hidden`
-while closed. Where the browser supports the Popover API, the element is promoted
-to the top layer so it escapes ancestor clipping.
+while closed. The element is promoted to the top layer via the Popover API, so it
+escapes ancestor clipping.
 
 ### Select.Popup
 
