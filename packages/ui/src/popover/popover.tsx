@@ -8,14 +8,12 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import { usePosition } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import { mergeRefs } from '../merge-refs.js';
-import { usePresence } from '../use-presence.js';
 import type { Side, Align, PositionState } from '../use-position.js';
+import { usePositioner } from '../use-positioner.js';
 import { PopoverContext, usePopoverContext } from './context.js';
 
 export interface PopoverRootProps {
@@ -162,10 +160,6 @@ export function PopoverAnchor(props: PopoverAnchorProps): VNode {
   });
 }
 
-function supportsPopover(el: HTMLElement): boolean {
-  return typeof el.showPopover === 'function';
-}
-
 export type PopoverPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
@@ -174,74 +168,23 @@ export type PopoverPositionerProps = {
 export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Positioner');
-
-  const presence = usePresence(ctx.open);
-
-  const position = usePosition({
-    open: presence.isPresent,
+  const { isPresent, positionerProps, state } = usePositioner({
+    open: ctx.open,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
     arrowRef: ctx.arrowRef,
     side: ctx.side,
     align: ctx.align,
     offset: ctx.offset,
+    setPosition: ctx.setPosition,
+    mount: 'unmount',
   });
-
-  // Publish the resolved position so Arrow (and any consumer) can read it.
-  useLayoutEffect(() => {
-    ctx.setPosition(position);
-  }, [position.side, position.align, position.arrowX, position.arrowY]);
-
-  // Promote to the native top layer where supported (progressive enhancement).
-  // Applied imperatively so there is no SSR/hydration attribute mismatch.
-  useLayoutEffect(() => {
-    const el = ctx.floatingRef.current;
-    // Runs when isPresent flips true and the element has mounted (refs are
-    // assigned before layout effects). Stays mounted through the exit animation
-    // so hidePopover fires only after the closing transition completes.
-    if (!presence.isPresent || !el || !supportsPopover(el)) return;
-    el.setAttribute('popover', 'manual');
-    el.showPopover();
-    return () => {
-      // Best-effort un-promotion: hidePopover() throws if the element already
-      // left the top layer (closed by another path or disconnected). Either way
-      // the goal state (not promoted) is met, so ignore the throw.
-      try {
-        el.hidePopover();
-      } catch {
-        // already hidden / disconnected
-      }
-      el.removeAttribute('popover');
-    };
-  }, [presence.isPresent]);
-
-  if (!presence.isPresent) return null;
-
+  if (!isPresent) return null;
   return useRender<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: mergeRefs(ctx.floatingRef, presence.ref),
-      'data-side': position.side,
-      'data-align': position.align,
-      // The Positioner is a framework-owned layout wrapper (style the Popup, not
-      // this). Besides positioning, the style neutralizes the UA [popover]
-      // rule that applies once the element is promoted to the top layer
-      // (overflow/inset/margin/border/padding/background): without this the UA
-      // `overflow: auto` clips the popup's box-shadow and `inset: 0` fights the
-      // computed left/top.
-      style: {
-        position: 'fixed',
-        inset: 'auto',
-        margin: 0,
-        overflow: 'visible',
-        border: 0,
-        padding: 0,
-        background: 'transparent',
-      },
-    },
-    state: { side: position.side, align: position.align },
+    props: { ...rest, ...positionerProps },
+    state,
     children,
   });
 }
