@@ -7,7 +7,7 @@ import { MenuDemo } from '../../../components/docs/MenuDemo.js';
 A button-triggered dropdown of commands: a list of actions, toggles, and
 single-select choices that opens from a trigger and closes when you pick
 something or dismiss it. Positioning runs on Floating UI; the popup renders in
-place and promotes to the browser top layer where the Popover API is available.
+place and promotes to the browser top layer using the Popover API.
 It ships unstyled: style it through the `data-state`, `data-highlighted`,
 `data-disabled`, `data-side`, and `data-align` contract.
 
@@ -260,9 +260,8 @@ menu is open (mount on open). Default element `<div>`.
 | `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
 
-Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
-browser supports the Popover API, the element is promoted to the top layer so it
-escapes ancestor clipping.
+Sets `position: fixed` and the resolved `data-side` / `data-align`. The element
+is promoted to the top layer via the Popover API, so it escapes ancestor clipping.
 
 ### Menu.Popup
 

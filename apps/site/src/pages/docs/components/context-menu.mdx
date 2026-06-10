@@ -240,9 +240,8 @@ menu is open (mount on open). Default element `<div>`.
 | `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
 
-Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
-browser supports the Popover API, the element is promoted to the top layer so it
-escapes ancestor clipping.
+Sets `position: fixed` and the resolved `data-side` / `data-align`. The element
+is promoted to the top layer via the Popover API, so it escapes ancestor clipping.
 
 ### ContextMenu.Popup
 

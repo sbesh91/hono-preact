@@ -6,8 +6,8 @@ import { PopoverDemo } from '../../../components/docs/PopoverDemo.js';
 
 A non-modal, anchored overlay for interactive content: menus of actions, small
 forms, or detail panels. Positioning runs on Floating UI; the overlay renders
-in place and promotes to the browser top layer where the Popover API is
-available. It ships unstyled: style it through the `data-state`, `data-side`,
+in place and promotes to the browser top layer using the Popover API.
+It ships unstyled: style it through the `data-state`, `data-side`,
 and `data-align` contract.
 
 ## Demo
@@ -222,9 +222,8 @@ popover is open (mount on open). Default element `<div>`.
 | `children` | `ComponentChildren`                        | -       | The popup (and optional arrow).                          |
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`       | -       | Forwarded to the element. Style positioning via `class`. |
 
-Sets `position: fixed` and the resolved `data-side` / `data-align`. Where the
-browser supports the Popover API, the element is promoted to the top layer so it
-escapes ancestor clipping.
+Sets `position: fixed` and the resolved `data-side` / `data-align`. The element
+is promoted to the top layer via the Popover API, so it escapes ancestor clipping.
 
 ### Popover.Popup
 
@@ -312,7 +311,5 @@ name with a `Popover.Title` (wired through `aria-labelledby`) or by passing
   control moves into the rest of the page, and the page stays interactive.
 - Escape closes the popover; an outside pointer press closes it; nested overlays
   close innermost-first.
-- Where the Popover API is supported the popup renders in the top layer; where it
-  is not, it renders inline with `position: fixed`. An ancestor with a
-  `transform`, `filter`, `contain`, or `will-change` can still clip the inline
-  fallback, so prefer not to anchor a popover inside one.
+- The popup renders in the top layer via the Popover API, so an ancestor
+  `transform`, `filter`, `contain`, or `will-change` does not clip it.
