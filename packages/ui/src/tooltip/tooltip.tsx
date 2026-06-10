@@ -10,11 +10,7 @@ import {
 } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import {
-  type Side,
-  type Align,
-  type PositionState,
-} from '../use-position.js';
+import { type Side, type Align, type PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useSafeArea } from '../use-safe-area.js';
 import { usePositioner } from '../use-positioner.js';
