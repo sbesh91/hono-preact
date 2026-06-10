@@ -6,12 +6,7 @@ import {
   type JSX,
   type VNode,
 } from 'preact';
-import {
-  useContext,
-  useId,
-  useLayoutEffect,
-  useMemo,
-} from 'preact/hooks';
+import { useContext, useId, useLayoutEffect, useMemo } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
