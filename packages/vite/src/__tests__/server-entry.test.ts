@@ -98,7 +98,10 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain(`import { Hono } from 'hono';`);
     expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
     expect(src).toContain(
-      `import {\n  loadersHandler,\n  makePageActionResolvers,\n  makePageUseResolvers,\n  pageActionHandler,\n  renderPage,\n  routeServerModules,\n} from 'hono-preact/server';`
+      `import {\n  loadersHandler,\n  pageActionHandler,\n  renderPage,\n} from 'hono-preact/server';`
+    );
+    expect(src).toContain(
+      `import {\n  makePageActionResolvers,\n  makePageUseResolvers,\n  routeServerModules,\n} from 'hono-preact/server/internal/runtime';`
     );
 
     // User imports (absolute paths)
