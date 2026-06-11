@@ -25,7 +25,7 @@ import {
   isAsyncGenerator,
 } from './sse.js';
 import type { ActionEntry } from './page-action-resolvers.js';
-import { pickAccept, type Accept } from './accept.js';
+import { pickAccept } from './accept.js';
 import type { VNode } from 'preact';
 
 export interface PageActionHandlerOptions {
