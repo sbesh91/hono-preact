@@ -33,9 +33,12 @@ export { OptimisticOverlay } from './internal/optimistic-overlay.js';
 
 export {
   serializeActionOutcome,
+  decodeActionResponse,
+  RENDER_PAGE_SCOPE_MESSAGE,
   type ActionEnvelope,
   type ActionResolution,
   type SerializedEnvelope,
+  type DecodedEnvelope,
 } from './internal/action-envelope.js';
 
 export { LoaderIdContext, LoaderDataContext } from './internal/contexts.js';

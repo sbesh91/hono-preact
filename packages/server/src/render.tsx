@@ -24,6 +24,7 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { speculationRulesTag } from './speculation-rules.js';
+import { translateRootOutcome } from './outcome-translation.js';
 
 function escapeHtml(str: string): string {
   return str
@@ -47,29 +48,6 @@ function toAttrs(obj: Record<string, string | undefined>): string {
     .filter(([, v]) => v != null)
     .map(([k, v]) => `${k}="${escapeHtml(String(v))}"`)
     .join(' ');
-}
-
-// Outcome translation for the root chain dispatched around prerender. The
-// root layer (appConfig.use) only legitimately produces `redirect` or
-// `deny`; a `render` outcome is page-scope and must not flow through here.
-// Defense-in-depth: surface programmer error as a 500 rather than crash.
-function translateRootOutcome(c: Context, outcome: Outcome): Response {
-  if (outcome.__outcome === 'redirect') {
-    if (outcome.headers) {
-      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
-    }
-    return c.redirect(outcome.to, outcome.status);
-  }
-  if (outcome.__outcome === 'deny') {
-    if (outcome.headers) {
-      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
-    }
-    return c.text(outcome.message ?? 'Forbidden', outcome.status);
-  }
-  return c.text(
-    'render outcome is page-scope only and cannot be issued by root middleware',
-    500
-  );
 }
 
 function buildActionResultContext(): ActionResultContextValue {

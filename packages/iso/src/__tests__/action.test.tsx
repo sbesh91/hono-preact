@@ -733,6 +733,29 @@ describe('useAction — outcome envelope decoding', () => {
       expect(mutateResult!.error.message).toBe('Upload forbidden');
     }
   });
+
+  it('surfaces a non-envelope body as a malformed-envelope error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('<!doctype html><p>bad gateway</p>', { status: 502 })
+        )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(mutateResult!.ok).toBe(false);
+    if (!mutateResult!.ok) {
+      expect(mutateResult!.error.message).toMatch(
+        /Malformed envelope \(HTTP 502\)/
+      );
+    }
+  });
 });
 
 describe('useAction — streaming (onChunk)', () => {

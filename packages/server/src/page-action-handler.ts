@@ -16,6 +16,7 @@ import {
   serializeActionOutcome,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
+import { applyOutcomeHeaders } from './outcome-translation.js';
 import {
   sseGeneratorResponse,
   sseReadableStreamResponse,
@@ -317,9 +318,7 @@ export function pageActionHandler(
     // JSON path: serialize the resolution into the uniform envelope.
     if (accept === 'json') {
       const env = serializeActionOutcome(resolution);
-      if (env.headers) {
-        for (const [k, v] of Object.entries(env.headers)) c.header(k, v);
-      }
+      applyOutcomeHeaders(c, env.headers);
       return c.json(env.body, env.status);
     }
 
@@ -331,9 +330,7 @@ export function pageActionHandler(
       resolution.outcome.__outcome === 'redirect'
     ) {
       const { to, status, headers } = resolution.outcome;
-      if (headers) {
-        for (const [k, v] of Object.entries(headers)) c.header(k, v);
-      }
+      applyOutcomeHeaders(c, headers);
       return c.redirect(to, status);
     }
 

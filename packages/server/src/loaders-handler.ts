@@ -3,7 +3,6 @@ import {
   isOutcome,
   timeoutOutcome,
   type AppConfig,
-  type Outcome,
   type ServerMiddleware,
   type ServerLoaderCtx,
   type Middleware,
@@ -14,6 +13,7 @@ import {
   dispatchServer,
   partitionUse,
 } from '@hono-preact/iso/internal';
+import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
   sseGeneratorResponse,
   sseReadableStreamResponse,
@@ -141,46 +141,6 @@ export interface LoadersHandlerOptions {
    * a deadline).
    */
   defaultTimeoutMs?: number | false;
-}
-
-function translateOutcomeForLoader(c: Context, outcome: Outcome): Response {
-  if (outcome.__outcome === 'redirect') {
-    // Headers from the outcome ride the HTTP response via `c.header()`. They
-    // are deliberately NOT embedded in the JSON envelope: the client only
-    // reads `to` and calls `window.location.assign(to)`; any embedded
-    // headers would be dead bytes the client never inspects.
-    if (outcome.headers) {
-      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
-    }
-    return c.json(
-      {
-        __outcome: 'redirect',
-        to: outcome.to,
-        status: outcome.status,
-      },
-      200
-    );
-  }
-  if (outcome.__outcome === 'deny') {
-    if (outcome.headers) {
-      for (const [k, v] of Object.entries(outcome.headers)) c.header(k, v);
-    }
-    return c.json(
-      { __outcome: 'deny', message: outcome.message },
-      outcome.status
-    );
-  }
-  if (outcome.__outcome === 'timeout') {
-    return c.json({ __outcome: 'timeout', timeoutMs: outcome.timeoutMs }, 504);
-  }
-  // render outcome should never reach the loader RPC; this is defense in depth.
-  return c.json(
-    {
-      __outcome: 'error',
-      message: 'render outcome is page-scope only',
-    },
-    500
-  );
 }
 
 export function loadersHandler(

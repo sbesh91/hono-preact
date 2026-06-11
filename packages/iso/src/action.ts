@@ -10,6 +10,7 @@ import {
   setLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
+import { decodeActionResponse } from './internal/action-envelope.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -405,21 +406,12 @@ export function useAction<
         } else {
           // Uniform envelope path. All non-streaming responses carry a JSON
           // body shaped as { __outcome, ... } regardless of HTTP status.
-          let env: {
-            __outcome?: string;
-            data?: unknown;
-            to?: string;
-            status?: number;
-            message?: string;
-            timeoutMs?: number;
-          };
-          try {
-            env = (await response.json()) as typeof env;
-          } catch {
-            throw new Error(`Malformed envelope (HTTP ${response.status})`);
+          const decoded = await decodeActionResponse(response);
+          if (decoded.kind === 'malformed') {
+            throw new Error(`Malformed envelope (HTTP ${decoded.httpStatus})`);
           }
-          if (env.__outcome === 'success') {
-            const data = env.data as TResult;
+          if (decoded.kind === 'success') {
+            const data = decoded.data as TResult;
             setData(data);
             invokeSuccess(data);
             finalResult = data;
@@ -429,51 +421,44 @@ export function useAction<
               submittedPayload: payload,
             });
             outcomeRecorded = true;
-          } else if (
-            env.__outcome === 'redirect' &&
-            typeof env.to === 'string'
-          ) {
-            if (assignSafeRedirect(env.to)) {
+          } else if (decoded.kind === 'redirect') {
+            if (assignSafeRedirect(decoded.to)) {
               // Navigation issued; this promise never settles.
               return await new Promise<MutateResult<TResult>>(() => {});
             }
             // Cross-origin: surface as an error so the caller can handle it.
-            throw new Error(`Refused cross-origin redirect to ${env.to}`);
-          } else if (env.__outcome === 'deny') {
-            const msg =
-              env.message ??
-              `Request denied (${env.status ?? response.status})`;
+            throw new Error(`Refused cross-origin redirect to ${decoded.to}`);
+          } else if (decoded.kind === 'deny') {
             recordOutcome(currentStub.__module, currentStub.__action, {
               kind: 'deny',
-              status: env.status ?? response.status,
-              message: msg,
-              data: env.data,
+              status: decoded.status,
+              message: decoded.message,
+              data: decoded.data,
               submittedPayload: payload,
             });
             outcomeRecorded = true;
-            throw new Error(msg);
-          } else if (
-            env.__outcome === 'timeout' &&
-            typeof env.timeoutMs === 'number'
-          ) {
+            throw new Error(decoded.message);
+          } else if (decoded.kind === 'timeout') {
             recordOutcome(currentStub.__module, currentStub.__action, {
               kind: 'error',
-              message: `Request timed out after ${env.timeoutMs}ms`,
+              message: `Request timed out after ${decoded.timeoutMs}ms`,
               submittedPayload: payload,
             });
             outcomeRecorded = true;
-            throw new TimeoutError(env.timeoutMs);
-          } else if (env.__outcome === 'error') {
-            const msg = env.message ?? 'Action failed';
+            throw new TimeoutError(decoded.timeoutMs);
+          } else if (decoded.kind === 'error') {
             recordOutcome(currentStub.__module, currentStub.__action, {
               kind: 'error',
-              message: msg,
+              message: decoded.message,
               submittedPayload: payload,
             });
             outcomeRecorded = true;
-            throw new Error(msg);
+            throw new Error(decoded.message);
+          } else if (decoded.kind === 'unknown') {
+            throw new Error(`Unknown action outcome: ${decoded.outcome}`);
           } else {
-            throw new Error(`Unknown action outcome: ${env.__outcome}`);
+            decoded satisfies never;
+            throw new Error('Unreachable: unhandled decoded envelope kind');
           }
         }
 
