@@ -1,4 +1,5 @@
 import type { ServerRoute } from '@hono-preact/iso';
+import { makeRouteModuleResolvers } from './route-module-resolvers.js';
 
 type ActionFn = (ctx: unknown, payload: unknown) => Promise<unknown>;
 
@@ -44,42 +45,14 @@ function extractActions(
   return out;
 }
 
-function segmentsOf(p: string): string[] {
-  return p.split('/').filter((s) => s !== '');
-}
-
-function urlPathMatchesPattern(urlPath: string, pattern: string): boolean {
-  const ps = segmentsOf(pattern);
-  const us = segmentsOf(urlPath);
-  for (let i = 0; i < ps.length; i++) {
-    const p = ps[i];
-    if (p === '*') return true;
-    if (i >= us.length) return false;
-    if (p.startsWith(':')) continue;
-    if (p !== us[i]) return false;
-  }
-  return ps.length === us.length;
-}
-
-function patternScore(pattern: string): number {
-  let score = 0;
-  for (const seg of segmentsOf(pattern)) {
-    if (seg === '*') score += 0;
-    else if (seg.startsWith(':')) score += 1;
-    else score += 2;
-  }
-  return score;
-}
-
 /**
  * Build action resolvers keyed by route path and by module key. Each
  * ServerRoute contributes its own serverActions and its ancestors' serverActions
  * to the merged map for that path. Ancestor entries are written first so that
  * a page-level action shadows a same-named layout action when names collide.
  *
- * Lazy semantics: the first call triggers loading all server modules. The result
- * is cached for the process lifetime (unless dev=true, which rebuilds on every
- * call so edits take effect without restarting the server).
+ * Build lifecycle (thunk dedup, evict-on-failure caching, dev rebuild)
+ * and URL-path matching live in `makeRouteModuleResolvers`.
  *
  * NOTE: framework-private. Intended consumer is the generated server entry and
  * pageActionHandler.
@@ -94,93 +67,42 @@ export function makePageActionResolvers(
     actionName: string
   ) => Promise<ActionEntry | undefined>;
 } {
-  const dev = options.dev ?? false;
-
-  type Built = {
-    byPathMap: Map<string, Map<string, ActionEntry>>;
-    byModuleKeyMap: Map<string, Map<string, ActionEntry>>;
-  };
-  let buildPromise: Promise<Built> | null = null;
-
-  const build = async (): Promise<Built> => {
-    // Load each distinct server thunk once; a thunk may appear as `server`
-    // on one route and as an `ancestor` on its children.
-    const thunkCache = new Map<() => Promise<unknown>, Promise<ServerModule>>();
-    const load = (thunk: () => Promise<unknown>): Promise<ServerModule> => {
-      let p = thunkCache.get(thunk);
-      if (!p) {
-        p = thunk().then((m) => m as ServerModule);
-        thunkCache.set(thunk, p);
-      }
-      return p;
-    };
-
-    const byPathMap = new Map<string, Map<string, ActionEntry>>();
-    const byModuleKeyMap = new Map<string, Map<string, ActionEntry>>();
-
-    await Promise.all(
-      serverRoutes.map(async (route) => {
-        const ancestorMods = await Promise.all(route.ancestors.map(load));
-        const selfMod = await load(route.server);
-
-        const merged = new Map<string, ActionEntry>();
-        // Write ancestors first (outer -> inner), then self. Later writes
-        // shadow earlier ones, so a page-level action wins over a layout
-        // action of the same name.
-        for (const mod of [...ancestorMods, selfMod]) {
-          for (const { name, entry } of extractActions(mod)) {
-            merged.set(name, entry);
-            let m = byModuleKeyMap.get(entry.moduleKey);
-            if (!m) {
-              m = new Map();
-              byModuleKeyMap.set(entry.moduleKey, m);
-            }
-            m.set(name, entry);
+  const core = makeRouteModuleResolvers<
+    ServerModule,
+    Map<string, ActionEntry>,
+    Map<string, Map<string, ActionEntry>>
+  >(serverRoutes, options, {
+    createExtra: () => new Map<string, Map<string, ActionEntry>>(),
+    compose: (_route, ancestorMods, selfMod, byModuleKeyMap) => {
+      const merged = new Map<string, ActionEntry>();
+      // Write ancestors first (outer -> inner), then self. Later writes
+      // shadow earlier ones, so a page-level action wins over a layout
+      // action of the same name.
+      for (const mod of [...ancestorMods, selfMod]) {
+        for (const { name, entry } of extractActions(mod)) {
+          merged.set(name, entry);
+          let m = byModuleKeyMap.get(entry.moduleKey);
+          if (!m) {
+            m = new Map();
+            byModuleKeyMap.set(entry.moduleKey, m);
           }
+          m.set(name, entry);
         }
-        byPathMap.set(route.path, merged);
-      })
-    );
-
-    return { byPathMap, byModuleKeyMap };
-  };
-
-  const get = (): Promise<Built> => {
-    if (dev) return build();
-    if (buildPromise) return buildPromise;
-    buildPromise = build().catch((err) => {
-      buildPromise = null;
-      return Promise.reject(err);
-    });
-    return buildPromise;
-  };
+      }
+      return merged;
+    },
+  });
 
   return {
     async byPath(path: string): Promise<Map<string, ActionEntry>> {
-      const { byPathMap } = await get();
-      let bestPattern: string | null = null;
-      let bestScore = -1;
-      let bestDepth = -1;
-      for (const pattern of byPathMap.keys()) {
-        if (!urlPathMatchesPattern(path, pattern)) continue;
-        const score = patternScore(pattern);
-        const depth = segmentsOf(pattern).length;
-        if (score > bestScore || (score === bestScore && depth > bestDepth)) {
-          bestPattern = pattern;
-          bestScore = score;
-          bestDepth = depth;
-        }
-      }
-      return bestPattern
-        ? (byPathMap.get(bestPattern) ?? new Map())
-        : new Map();
+      return (await core.byPath(path)) ?? new Map<string, ActionEntry>();
     },
     async byModuleKey(
       moduleKey: string,
       actionName: string
     ): Promise<ActionEntry | undefined> {
-      const { byModuleKeyMap } = await get();
-      return byModuleKeyMap.get(moduleKey)?.get(actionName);
+      const { extra } = await core.built();
+      return extra.get(moduleKey)?.get(actionName);
     },
   };
 }
