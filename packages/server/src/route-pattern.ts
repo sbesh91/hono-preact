@@ -6,7 +6,7 @@ function segmentsOf(path: string): string[] {
  * True when `urlPath` (the concrete URL the user navigated to, with all
  * params substituted) matches `pattern` exactly: same segment count, and
  * each pattern segment either equals the URL segment, is a `:param`, or is
- * a trailing `*`.
+ * a `*` (which matches the entire remainder; pattern segments after it are ignored).
  *
  * Used at lookup time. Callers resolve the URL to the most specific
  * pattern in their map via `findBestPattern`.
@@ -28,12 +28,12 @@ export function urlPathMatchesPattern(
 }
 
 /**
- * Score a route pattern for tiebreaker purposes when multiple patterns at
- * the same segment depth match the URL. Mirrors preact-iso's runtime
+ * Score a route pattern's specificity; findBestPattern uses this as the primary
+ * ranking when multiple patterns match the URL. Mirrors preact-iso's runtime
  * preference for literal segments: literal=2, param=1, wildcard=0. Within
  * the same score, `findBestPattern` falls back to depth, and within the
- * same depth, to iteration order. Pre-merged literal wins over
- * `/admin/users/:id` when the URL is `/admin/users/me`.
+ * same depth, to iteration order. A literal pattern such as /admin/users/me
+ * wins over `/admin/users/:id` when the URL is `/admin/users/me`.
  */
 export function patternScore(pattern: string): number {
   let score = 0;

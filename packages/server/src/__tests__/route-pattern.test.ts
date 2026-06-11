@@ -30,6 +30,16 @@ describe('urlPathMatchesPattern', () => {
     expect(urlPathMatchesPattern('/a/b/', '/a/b')).toBe(true);
     expect(urlPathMatchesPattern('a/b', '/a/b')).toBe(true);
   });
+
+  it('a mid-pattern * matches the remainder; later segments are ignored', () => {
+    // Inherited characterization: the matcher returns true on the first *,
+    // wherever it appears. Generated route tables only emit trailing *.
+    expect(urlPathMatchesPattern('/a/x/c', '/a/*/b')).toBe(true);
+  });
+
+  it('treats the empty pattern like the root pattern', () => {
+    expect(urlPathMatchesPattern('/', '')).toBe(true);
+  });
 });
 
 describe('patternScore', () => {
@@ -73,5 +83,17 @@ describe('findBestPattern', () => {
       ['/p/new', 2],
     ]);
     expect(findBestPattern(m.keys(), '/p/new')).toBe('/p/new');
+  });
+
+  it('score is primary across different depths', () => {
+    // '/a/b' (score 4, depth 2) beats '/a/:x/*' (score 3, depth 3).
+    expect(findBestPattern(['/a/b', '/a/:x/*'], '/a/b')).toBe('/a/b');
+  });
+
+  it('the catch-all outranks the root pattern at the root URL', () => {
+    // Inherited characterization: '/' and '/*' both score 0 for '/', and
+    // the catch-all's depth 1 beats root's depth 0. Pinned so a future
+    // matcher rewrite cannot flip it silently.
+    expect(findBestPattern(['/', '/*'], '/')).toBe('/*');
   });
 });
