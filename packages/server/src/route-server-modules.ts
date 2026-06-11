@@ -98,8 +98,8 @@ export function makePageUseResolvers(
       return (await core.byPath(path)) ?? [];
     },
     async byModuleKey(key: string) {
-      const { byPathMap, extra } = await core.built();
-      const pattern = extra.get(key);
+      const { byPathMap, extra: patternByModuleKey } = await core.built();
+      const pattern = patternByModuleKey.get(key);
       return pattern ? (byPathMap.get(pattern) ?? []) : [];
     },
   };

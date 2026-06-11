@@ -101,8 +101,8 @@ export function makePageActionResolvers(
       moduleKey: string,
       actionName: string
     ): Promise<ActionEntry | undefined> {
-      const { extra } = await core.built();
-      return extra.get(moduleKey)?.get(actionName);
+      const { extra: byModuleKeyMap } = await core.built();
+      return byModuleKeyMap.get(moduleKey)?.get(actionName);
     },
   };
 }
