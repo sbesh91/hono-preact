@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
-import { pageActionHandler, pickAccept } from '../page-action-handler.js';
+import { pageActionHandler } from '../page-action-handler.js';
 import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
 
 function buildHandler(
@@ -311,47 +311,5 @@ describe('pageActionHandler timeouts', () => {
     await post({ module: 'pages/timed', action: 'create', payload: {} });
     expect(observedReason).toBeInstanceOf(DOMException);
     expect((observedReason as DOMException).name).toBe('TimeoutError');
-  });
-});
-
-describe('pickAccept', () => {
-  it('returns json when only application/json is requested', () => {
-    expect(pickAccept('application/json')).toBe('json');
-  });
-  it('returns event-stream when only text/event-stream is requested', () => {
-    expect(pickAccept('text/event-stream')).toBe('event-stream');
-  });
-  it('returns html when only text/html is requested', () => {
-    expect(pickAccept('text/html')).toBe('html');
-  });
-  it('returns html when */* is requested', () => {
-    expect(pickAccept('*/*')).toBe('html');
-  });
-  it('returns html when no header is given', () => {
-    expect(pickAccept(undefined)).toBe('html');
-    expect(pickAccept('')).toBe('html');
-  });
-  it('prefers higher-q candidate in mixed Accept', () => {
-    // The JS-on default header sent by useAction.
-    expect(pickAccept('application/json, text/event-stream;q=0.9')).toBe(
-      'json'
-    );
-  });
-  it('breaks ties on first occurrence (stable sort)', () => {
-    expect(pickAccept('application/json, text/event-stream')).toBe('json');
-    expect(pickAccept('text/event-stream, application/json')).toBe(
-      'event-stream'
-    );
-  });
-  it('handles malformed q values gracefully (defaults to 1.0)', () => {
-    expect(pickAccept('application/json;q=invalid')).toBe('json');
-  });
-  it('ignores unknown media types', () => {
-    expect(pickAccept('text/plain, application/json;q=0.5')).toBe('json');
-  });
-  it('respects q=0 by deprioritizing (still picks if it is the only candidate)', () => {
-    // q=0 technically means "not acceptable" per RFC 9110, but our parser is lenient.
-    // The function returns the highest-q; q=0 wins over no candidates.
-    expect(pickAccept('application/json;q=0')).toBe('json');
   });
 });
