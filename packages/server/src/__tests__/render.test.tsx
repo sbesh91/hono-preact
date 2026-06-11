@@ -137,7 +137,7 @@ describe('renderPage', () => {
 
   // B7 defensive 500: render() outcomes are page-scope only. If an
   // app-level middleware leaks one through to translateRootOutcome, the
-  // third branch in render.tsx should return 500 rather than crash.
+  // third branch in translateRootOutcome (outcome-translation.ts) should return 500 rather than crash.
   it('returns 500 when an app-level middleware throws a render outcome', async () => {
     const Alt = () => (
       <html>

@@ -1,3 +1,9 @@
+// Outcome -> HTTP response translation for the root middleware chain and the
+// loader RPC. Action outcomes are translated elsewhere: serializeActionOutcome
+// (iso internal) builds the JSON envelope, and pageActionHandler keeps its
+// HTML/PE translation inline because it is entangled with page re-rendering
+// and the request-scope action-result slot.
+
 import type { Context } from 'hono';
 import type { Outcome } from '@hono-preact/iso';
 import { RENDER_PAGE_SCOPE_MESSAGE } from '@hono-preact/iso/internal';
@@ -11,10 +17,12 @@ export function applyOutcomeHeaders(
   for (const [k, v] of Object.entries(headers)) c.header(k, v);
 }
 
-// Outcome translation for the root chain dispatched around prerender. The
-// root layer (appConfig.use) only legitimately produces `redirect` or
-// `deny`; a `render` outcome is page-scope and must not flow through here.
-// Defense-in-depth: surface programmer error as a 500 rather than crash.
+/**
+ * Outcome translation for the root chain dispatched around prerender. The
+ * root layer (appConfig.use) only legitimately produces `redirect` or
+ * `deny`; a `render` outcome is page-scope and must not flow through here.
+ * Defense-in-depth: surface programmer error as a 500 rather than crash.
+ */
 export function translateRootOutcome(c: Context, outcome: Outcome): Response {
   if (outcome.__outcome === 'redirect') {
     applyOutcomeHeaders(c, outcome.headers);
@@ -30,6 +38,10 @@ export function translateRootOutcome(c: Context, outcome: Outcome): Response {
   );
 }
 
+/**
+ * Translate a middleware/loader outcome into the loader RPC's JSON envelope
+ * response.
+ */
 export function translateOutcomeForLoader(
   c: Context,
   outcome: Outcome
