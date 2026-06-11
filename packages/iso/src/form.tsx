@@ -162,6 +162,8 @@ export function Form<TPayload, TResult>({
               submittedPayload: payload,
             });
             return;
+          default:
+            decoded satisfies never;
         }
       } catch (err) {
         handle?.revert();

@@ -34,6 +34,7 @@ function makeStub(): ActionStub<{ text: string }, { id: number }, never> {
 afterEach(() => {
   cleanup();
   clearLastActionResult('pages/test.server', 'submit');
+  vi.restoreAllMocks();
 });
 
 describe('<Form>', () => {
@@ -99,7 +100,6 @@ describe('<Form>', () => {
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
     const headers = new Headers((init as RequestInit).headers);
     expect(headers.get('Accept')).toMatch(/application\/json/);
-    fetchMock.mockRestore();
   });
 
   it('sends action identity from props even when hydrated hidden inputs are stale', async () => {
@@ -137,7 +137,6 @@ describe('<Form>', () => {
     const body = (init as RequestInit).body as FormData;
     expect(body.get('__module')).toBe('pages/test.server');
     expect(body.get('__action')).toBe('submit');
-    fetchMock.mockRestore();
   });
 
   it('writes deny outcome to the client store on JS-on path', async () => {
@@ -170,7 +169,6 @@ describe('<Form>', () => {
       expect(stored.status).toBe(422);
       expect(stored.message).toBe('bad');
     }
-    vi.restoreAllMocks();
   });
 
   it('writes success outcome to the client store', async () => {
@@ -193,7 +191,6 @@ describe('<Form>', () => {
       __action: stub.__action,
     });
     expect(stored?.kind).toBe('success');
-    vi.restoreAllMocks();
   });
 
   it('writes a timeout error result instead of an unknown-outcome error', async () => {
@@ -219,7 +216,6 @@ describe('<Form>', () => {
     if (stored?.kind === 'error') {
       expect(stored.message).toBe('Request timed out after 5000ms');
     }
-    vi.restoreAllMocks();
   });
 
   it('reloads the page on a malformed (non-envelope) body', async () => {
@@ -241,6 +237,5 @@ describe('<Form>', () => {
     expect(
       getLastActionResult({ __module: stub.__module, __action: stub.__action })
     ).toBeNull();
-    vi.restoreAllMocks();
   });
 });
