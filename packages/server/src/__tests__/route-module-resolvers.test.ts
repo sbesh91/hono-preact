@@ -115,6 +115,34 @@ describe('makeRouteModuleResolvers', () => {
     expect(await core.byPath('/nope')).toBeUndefined();
   });
 
+  it('concurrent first calls share one in-flight build', async () => {
+    const calls = { n: 0 };
+    let release!: (mod: TestMod) => void;
+    const gated = () => {
+      calls.n++;
+      return new Promise<TestMod>((resolve) => {
+        release = resolve;
+      });
+    };
+    const routes: ServerRoute[] = [
+      { path: '/a', server: gated, ancestors: [] },
+    ];
+    const core = makeRouteModuleResolvers<
+      TestMod,
+      string[],
+      Map<string, string>
+    >(routes, {}, tagStrategy);
+    const first = core.byPath('/a');
+    const second = core.byPath('/a');
+    // Flush enough microtasks for build() to reach the gated thunk before
+    // we release it (the thunk is called inside an async Promise.all body).
+    await Promise.resolve();
+    release({ tag: 'a' });
+    expect(await first).toEqual(['a']);
+    expect(await second).toEqual(['a']);
+    expect(calls.n).toBe(1);
+  });
+
   it('built() exposes the byPathMap and the strategy-accumulated extra', async () => {
     const calls = { n: 0 };
     const layout = countingThunk('layout', calls);

@@ -28,7 +28,7 @@ import { findBestPattern } from './route-pattern.js';
  */
 export function makeRouteModuleResolvers<TMod, TComposed, TExtra>(
   serverRoutes: ReadonlyArray<ServerRoute>,
-  options: { dev?: boolean },
+  options: { dev?: boolean } = {},
   strategy: {
     createExtra: () => TExtra;
     compose: (
@@ -90,7 +90,7 @@ export function makeRouteModuleResolvers<TMod, TComposed, TExtra>(
     if (buildPromise) return buildPromise;
     buildPromise = build().catch((err) => {
       buildPromise = null;
-      return Promise.reject(err);
+      throw err;
     });
     return buildPromise;
   };
