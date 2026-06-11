@@ -101,7 +101,12 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   //
   // `Object.defineProperty` is used instead of direct assignment so a frozen
   // module export (strict ESM, HMR-frozen modules) does not throw.
-  const attach = (key: string, value: unknown) => {
+  // The key union pins the form-field constants to the typed ActionStub
+  // property names at compile time; a divergence fails here, not at runtime.
+  const attach = (
+    key: 'use' | 'timeoutMs' | '__module' | '__action',
+    value: unknown
+  ) => {
     Object.defineProperty(fn, key, {
       value,
       configurable: true,
