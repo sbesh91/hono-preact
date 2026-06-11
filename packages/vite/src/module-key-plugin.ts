@@ -10,6 +10,14 @@ import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
+// Built from MODULE_KEY_EXPORT so the already-transformed check cannot
+// drift from the emitted export. Assumes the name contains no regex
+// metacharacters (it is a plain identifier).
+const ALREADY_KEYED = new RegExp(
+  `^\\s*export\\s+const\\s+${MODULE_KEY_EXPORT}\\s*=`,
+  'm'
+);
+
 /**
  * Transforms `.server.*` files to inject a stable module-level
  * `__moduleKey` export and to thread that key into `defineLoader` calls.
@@ -36,11 +44,7 @@ export function moduleKeyPlugin(): Plugin {
       if (viteRoot === undefined) return;
       if (!/\.server\.[jt]sx?$/.test(id)) return;
       if (!id.startsWith(viteRoot + '/')) return;
-      const alreadyKeyed = new RegExp(
-        `^\\s*export\\s+const\\s+${MODULE_KEY_EXPORT}\\s*=`,
-        'm'
-      );
-      if (alreadyKeyed.test(code)) return;
+      if (ALREADY_KEYED.test(code)) return;
 
       const key = deriveModuleKey(id, viteRoot);
       const s = new MagicString(code);

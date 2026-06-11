@@ -93,7 +93,7 @@ export type ApiShadowingRoute =
 // Framework-reserved request paths. A literal registration of either in
 // api.ts shadows the framework's RPC handler now that the user app mounts
 // ahead of them.
-const RESERVED_PATHS = new Set([LOADERS_RPC_PATH, '/__actions']);
+const RESERVED_PATHS = new Set([LOADERS_RPC_PATH, '/__actions']); // '/__actions' stays literal; slated for removal (see iso internal/contract.ts)
 
 const HONO_METHODS = new Set([
   'get',
