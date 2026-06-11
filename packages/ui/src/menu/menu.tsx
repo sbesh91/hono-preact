@@ -6,18 +6,11 @@ import {
   type JSX,
   type VNode,
 } from 'preact';
-import {
-  useCallback,
-  useContext,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'preact/hooks';
+import { useContext, useId, useLayoutEffect, useMemo } from 'preact/hooks';
 import { useRender, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
+import { useMenuCore } from './use-menu-core.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { useListNavigation } from '../list-navigation.js';
@@ -43,7 +36,7 @@ export interface MenuRootProps {
 
 export function MenuRoot(props: MenuRootProps) {
   const {
-    open: openProp,
+    open,
     defaultOpen,
     onOpenChange,
     side = 'bottom',
@@ -53,76 +46,17 @@ export function MenuRoot(props: MenuRootProps) {
     typeahead = true,
     children,
   } = props;
-
-  const [open, setOpen] = useControllableState<boolean>({
-    value: openProp,
-    defaultValue: defaultOpen ?? false,
-    onChange: onOpenChange,
-  });
-
-  const anchorRef = useRef<HTMLElement>(null);
-  const floatingRef = useRef<HTMLElement>(null);
-  const popupRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
-  const pendingEdgeRef = useRef<'first' | 'last'>('first');
-
-  const baseId = useId();
-  const triggerId = `${baseId}-trigger`;
-  const popupId = `${baseId}-popup`;
-
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [position, setPosition] = useState<PositionState>({
+  const core = useMenuCore({
+    open,
+    defaultOpen,
+    onOpenChange,
     side,
     align,
-    arrowX: null,
-    arrowY: null,
+    offset,
+    loop,
+    typeahead,
   });
-
-  const closeAll = useCallback(() => setOpen(false), [setOpen]);
-
-  const ctx = useMemo(
-    () => ({
-      open,
-      setOpen,
-      closeAll,
-      dismissId: baseId,
-      parentDismissId: null,
-      anchorRef,
-      floatingRef,
-      popupRef,
-      arrowRef,
-      triggerId,
-      popupId,
-      activeId,
-      setActiveId,
-      pendingEdgeRef,
-      side,
-      align,
-      offset,
-      loop,
-      typeahead,
-      position,
-      setPosition,
-      getAnchorRect: undefined,
-    }),
-    [
-      open,
-      setOpen,
-      closeAll,
-      baseId,
-      triggerId,
-      popupId,
-      activeId,
-      side,
-      align,
-      offset,
-      loop,
-      typeahead,
-      position,
-    ]
-  );
-
-  return h(MenuContext.Provider, { value: ctx }, children);
+  return h(MenuContext.Provider, { value: core.menuCtx }, children);
 }
 
 export type MenuTriggerProps = {
