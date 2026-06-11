@@ -170,6 +170,16 @@ describe('decodeActionResponse', () => {
     });
   });
 
+  it('treats a JSON array body as unknown, not malformed', async () => {
+    // typeof [] === 'object' passes the envelope-object gate on purpose:
+    // both pre-consolidation parsers treated arrays like an empty object.
+    expect(await decodeActionResponse(jsonRes([1, 2]))).toEqual({
+      kind: 'unknown',
+      outcome: undefined,
+      message: undefined,
+    });
+  });
+
   it('returns malformed for a non-JSON body, carrying the HTTP status', async () => {
     const res = new Response('<!doctype html><p>oops</p>', { status: 200 });
     expect(await decodeActionResponse(res)).toEqual({

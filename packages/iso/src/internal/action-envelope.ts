@@ -21,8 +21,9 @@ export type SerializedEnvelope = {
 
 /**
  * The defense-in-depth message for `render` outcomes reaching a channel
- * that cannot host them (actions, loaders, root middleware). One copy;
- * the server translators import it from `@hono-preact/iso/internal`.
+ * that cannot host them. Used verbatim by the action envelope and the
+ * loader RPC; root middleware composes a longer variant on top of it
+ * (see the server package's outcome translation).
  */
 export const RENDER_PAGE_SCOPE_MESSAGE = 'render outcome is page-scope only';
 
