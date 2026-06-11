@@ -454,8 +454,11 @@ export function useAction<
             });
             outcomeRecorded = true;
             throw new Error(decoded.message);
-          } else {
+          } else if (decoded.kind === 'unknown') {
             throw new Error(`Unknown action outcome: ${decoded.outcome}`);
+          } else {
+            decoded satisfies never;
+            throw new Error('Unreachable: unhandled decoded envelope kind');
           }
         }
 
