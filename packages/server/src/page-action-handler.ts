@@ -14,6 +14,8 @@ import {
   dispatchServer,
   partitionUse,
   serializeActionOutcome,
+  FORM_MODULE_FIELD,
+  FORM_ACTION_FIELD,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
 import { applyOutcomeHeaders } from './outcome-translation.js';
@@ -145,18 +147,18 @@ async function parseBody(
     } catch {
       return { error: 'Invalid form data', status: 400 };
     }
-    const m = fd.get('__module');
-    const a = fd.get('__action');
+    const m = fd.get(FORM_MODULE_FIELD);
+    const a = fd.get(FORM_ACTION_FIELD);
     if (typeof m !== 'string' || typeof a !== 'string') {
       return {
-        error: 'Form data must include __module and __action fields',
+        error: `Form data must include ${FORM_MODULE_FIELD} and ${FORM_ACTION_FIELD} fields`,
         status: 400,
       };
     }
     const payload: Record<string, FormDataEntryValue | FormDataEntryValue[]> =
       {};
     for (const [key, value] of fd.entries()) {
-      if (key === '__module' || key === '__action') continue;
+      if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD) continue;
       const existing = payload[key];
       if (existing !== undefined) {
         payload[key] = Array.isArray(existing)
