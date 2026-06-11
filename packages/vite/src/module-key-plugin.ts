@@ -2,6 +2,10 @@ import { parse } from '@babel/parser';
 import MagicString from 'magic-string';
 import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
+import {
+  MODULE_KEY_EXPORT,
+  LOADER_NAME_OPTION,
+} from '@hono-preact/iso/internal';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
@@ -32,11 +36,17 @@ export function moduleKeyPlugin(): Plugin {
       if (viteRoot === undefined) return;
       if (!/\.server\.[jt]sx?$/.test(id)) return;
       if (!id.startsWith(viteRoot + '/')) return;
-      if (/^\s*export\s+const\s+__moduleKey\s*=/m.test(code)) return;
+      const alreadyKeyed = new RegExp(
+        `^\\s*export\\s+const\\s+${MODULE_KEY_EXPORT}\\s*=`,
+        'm'
+      );
+      if (alreadyKeyed.test(code)) return;
 
       const key = deriveModuleKey(id, viteRoot);
       const s = new MagicString(code);
-      s.prepend(`export const __moduleKey = ${JSON.stringify(key)};\n`);
+      s.prepend(
+        `export const ${MODULE_KEY_EXPORT} = ${JSON.stringify(key)};\n`
+      );
 
       // Walk the AST for top-level CallExpressions whose callee is the
       // identifier `defineLoader` and which have exactly one argument.
@@ -77,11 +87,11 @@ export function moduleKeyPlugin(): Plugin {
           const insertAt = fnArg.end;
           if (insertAt == null) return;
           const namePart = loaderName
-            ? `, __loaderName: ${JSON.stringify(loaderName)}`
+            ? `, ${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}`
             : '';
           s.appendRight(
             insertAt,
-            `, { __moduleKey: ${JSON.stringify(key)}${namePart} }`
+            `, { ${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}${namePart} }`
           );
           return;
         }
@@ -92,11 +102,11 @@ export function moduleKeyPlugin(): Plugin {
         if (optsArg.type !== 'ObjectExpression') return;
         const insertAt = optsArg.properties[0]?.start ?? optsArg.start! + 1;
         const namePart = loaderName
-          ? `__loaderName: ${JSON.stringify(loaderName)}, `
+          ? `${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}, `
           : '';
         s.appendRight(
           insertAt,
-          `__moduleKey: ${JSON.stringify(key)}, ${namePart}`
+          `${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}, ${namePart}`
         );
       };
 

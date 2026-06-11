@@ -1,5 +1,6 @@
 import preact from '@preact/preset-vite';
 import { type Plugin } from 'vite';
+import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal';
 import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
@@ -79,7 +80,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
               rollupOptions: {
                 input: [clientEntry],
                 output: {
-                  entryFileNames: 'static/client.js',
+                  entryFileNames: CLIENT_ENTRY_FILE,
                   chunkFileNames: 'static/[name]-[hash].js',
                   assetFileNames: 'static/[name]-[hash].[ext]',
                 },

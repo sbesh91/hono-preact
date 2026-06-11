@@ -4,6 +4,12 @@ import { parse } from '@babel/parser';
 import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
+import {
+  MODULE_KEY_EXPORT,
+  LOADER_NAME_OPTION,
+  FORM_MODULE_FIELD,
+  FORM_ACTION_FIELD,
+} from '@hono-preact/iso/internal';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
@@ -232,8 +238,8 @@ export function serverOnlyPlugin(): Plugin {
                 `  get(_, name) {\n` +
                 `    const __meta = ${metaVar}[String(name)];\n` +
                 `    return __$createLoaderStub_hpiso({\n` +
-                `      __moduleKey: ${JSON.stringify(moduleKey)},\n` +
-                `      __loaderName: String(name),\n` +
+                `      ${MODULE_KEY_EXPORT}: ${JSON.stringify(moduleKey)},\n` +
+                `      ${LOADER_NAME_OPTION}: String(name),\n` +
                 `      params: __meta,\n` +
                 `    });\n` +
                 `  }\n` +
@@ -267,7 +273,7 @@ export function serverOnlyPlugin(): Plugin {
             stubs.push(
               `const ${specifier.local.name} = new Proxy({}, {\n` +
                 `  get(_, action) {\n` +
-                `    const stub = { __module: ${JSON.stringify(moduleKey)}, __action: String(action) };\n` +
+                `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_ACTION_FIELD}: String(action) };\n` +
                 `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
                 `    return stub;\n` +
                 `  }\n` +
@@ -305,7 +311,7 @@ export function serverOnlyPlugin(): Plugin {
           const absServerPath = path.resolve(importerDir, imp.source);
           const moduleKey = deriveModuleKey(absServerPath, viteRoot as string);
           if (!moduleKey.startsWith('..')) {
-            stubContent = `{ __moduleKey: ${JSON.stringify(moduleKey)} }`;
+            stubContent = `{ ${MODULE_KEY_EXPORT}: ${JSON.stringify(moduleKey)} }`;
           }
         }
         s.overwrite(imp.start, imp.end, `Promise.resolve(${stubContent})`);

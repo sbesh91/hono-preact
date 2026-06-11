@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 import type { Plugin } from 'vite';
+import { VIRTUAL_CLIENT_ID } from '@hono-preact/iso/internal';
 
-export const VIRTUAL_CLIENT_ENTRY_ID = 'virtual:hono-preact/client';
+export const VIRTUAL_CLIENT_ENTRY_ID = VIRTUAL_CLIENT_ID;
 const RESOLVED_ID = '\0' + VIRTUAL_CLIENT_ENTRY_ID;
 
 export interface GenerateClientEntrySourceOptions {
