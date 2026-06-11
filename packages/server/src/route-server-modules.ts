@@ -43,7 +43,7 @@ function pageUseFromMod(
  * pageActionHandler. The loader handler matches by the location's URL path;
  * the action handler matches by the action's owning module key. Both
  * lookups share one underlying composed map populated by loading every
- * routed `.server.*` module exactly once (then caching the result).
+ * routed `.server.*` module exactly once.
  *
  * Ancestor composition: each ServerRoute carries an explicit list of
  * ancestor server thunks captured during the route-tree walk. The
