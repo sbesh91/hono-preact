@@ -195,4 +195,52 @@ describe('<Form>', () => {
     expect(stored?.kind).toBe('success');
     vi.restoreAllMocks();
   });
+
+  it('writes a timeout error result instead of an unknown-outcome error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'timeout', timeoutMs: 5000 }), {
+        status: 504,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const stub = makeStub();
+    const { container } = render(
+      <Form action={stub}>
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    const stored = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(stored?.kind).toBe('error');
+    if (stored?.kind === 'error') {
+      expect(stored.message).toBe('Request timed out after 5000ms');
+    }
+    vi.restoreAllMocks();
+  });
+
+  it('reloads the page on a malformed (non-envelope) body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<!doctype html><p>not an envelope</p>', { status: 200 })
+    );
+    const reloadSpy = vi
+      .spyOn(window.location, 'reload')
+      .mockImplementation(() => {});
+    const stub = makeStub();
+    const { container } = render(
+      <Form action={stub}>
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(
+      getLastActionResult({ __module: stub.__module, __action: stub.__action })
+    ).toBeNull();
+    vi.restoreAllMocks();
+  });
 });
