@@ -11,6 +11,7 @@ import {
   type StoredActionResult,
 } from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
+import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -110,8 +111,8 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   };
   if (opts?.use) attach('use', opts.use);
   if (opts?.timeoutMs !== undefined) attach('timeoutMs', opts.timeoutMs);
-  if (opts?.__module !== undefined) attach('__module', opts.__module);
-  if (opts?.__action !== undefined) attach('__action', opts.__action);
+  if (opts?.__module !== undefined) attach(FORM_MODULE_FIELD, opts.__module);
+  if (opts?.__action !== undefined) attach(FORM_ACTION_FIELD, opts.__action);
   return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
 }
 
@@ -297,12 +298,13 @@ export function useAction<
         let response: Response;
         if (hasFileValues(payload)) {
           const fd = new FormData();
-          fd.append('__module', currentStub.__module);
-          fd.append('__action', currentStub.__action);
+          fd.append(FORM_MODULE_FIELD, currentStub.__module);
+          fd.append(FORM_ACTION_FIELD, currentStub.__action);
           for (const [key, value] of Object.entries(
             payload as Record<string, unknown>
           )) {
-            if (key === '__module' || key === '__action') continue;
+            if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD)
+              continue;
             if (value instanceof File) {
               fd.append(key, value);
             } else if (typeof value === 'string') {

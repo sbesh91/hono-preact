@@ -1,5 +1,6 @@
 import { readSSE } from './sse-decoder.js';
 import { TimeoutError } from '../action.js';
+import { LOADERS_RPC_PATH } from './contract.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -28,7 +29,7 @@ export async function fetchLoaderData<T>(
   signal: AbortSignal,
   callbacks: LoaderFetchCallbacks<T>
 ): Promise<T> {
-  const res = await fetch('/__loaders', {
+  const res = await fetch(LOADERS_RPC_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
