@@ -59,6 +59,10 @@
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./dist/internal.js"
+    },
+    "./server/internal/runtime": {
+      "types": "./dist/server-internal-runtime.d.ts",
+      "import": "./dist/server-internal-runtime.js"
     }
   },
   "scripts": {
