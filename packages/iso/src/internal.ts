@@ -123,6 +123,18 @@ export {
   fanAbort,
 } from './internal/stream-observer-runner.js';
 
+// Cross-package wire-contract constants (paths, field names, generated ids).
+export {
+  LOADERS_RPC_PATH,
+  CLIENT_ENTRY_FILE,
+  CLIENT_ENTRY_URL,
+  VIRTUAL_CLIENT_ID,
+  VIRTUAL_CLIENT_DEV_URL,
+  MODULE_KEY_EXPORT,
+  FORM_MODULE_FIELD,
+  FORM_ACTION_FIELD,
+} from './internal/contract.js';
+
 // ─── Section 2: framework-emitted (DO NOT IMPORT FROM USER CODE) ─────────
 // The `__$..._hpiso` naming makes the convention visible at every grep:
 // these symbols are referenced by code the framework's Vite plugins emit
