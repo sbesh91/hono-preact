@@ -113,8 +113,8 @@ Zero documented-API breakage: no symbol with a docs page changes location. The o
 
 ## PR decomposition
 
-- **PR B1 — server:** factories → `/internal/runtime`, re-export `LoadersHandlerOptions`, de-export `pickAccept`, server-entry codegen update + tests. Self-contained within the server + vite packages.
-- **PR B2 — iso:** new `/internal/runtime` door (installers + stub + contract module), `/internal` reduced to escape-hatch + header rewrite + SSE comment, barrel leak fix, client-entry/server-only/plugin codegen + the invariant test + leak-test fixtures.
+- **PR B1 (server):** factories → `/internal/runtime`, re-export `LoadersHandlerOptions`, de-export `pickAccept`, server-entry codegen update + tests. Self-contained within the server + vite packages.
+- **PR B2 (iso):** new `/internal/runtime` door (installers + stub + contract module), `/internal` reduced to escape-hatch + header rewrite + SSE comment, barrel leak fix, client-entry/server-only/plugin codegen + the invariant test + leak-test fixtures.
 
 Both PRs touch the umbrella (`package.json` exports + `consolidate.mjs` + the two re-export files); the umbrella changes naturally split by which sub-package each subpath points at, so each PR carries its own umbrella half. Order is flexible (the two doors are independent), but landing B1 first keeps the smaller, lower-risk change ahead of the iso churn.
 

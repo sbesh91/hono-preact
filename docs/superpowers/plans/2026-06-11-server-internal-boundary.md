@@ -19,19 +19,19 @@
 
 ## File map
 
-- **Create** `packages/server/src/accept.ts` — the `Accept` type + `pickAccept` content negotiation helper, moved out of `page-action-handler.ts`.
-- **Create** `packages/server/src/__tests__/accept.test.ts` — the `pickAccept` unit tests, moved out of `page-action-handler.test.ts`.
-- **Create** `packages/server/src/internal-runtime.ts` — the framework-emitted door re-exporting the three factories.
-- **Create** `packages/server/src/__tests__/boundary.test.ts` — asserts the factory relocation and the `LoadersHandlerOptions` re-export.
-- **Create** `packages/hono-preact/src/server-internal-runtime.ts` — umbrella re-export of the server runtime door.
-- **Modify** `packages/server/src/page-action-handler.ts` — import `Accept`/`pickAccept` from `./accept.js`, delete the local definitions.
-- **Modify** `packages/server/src/__tests__/page-action-handler.test.ts` — drop the `pickAccept` import and its `describe` block.
-- **Modify** `packages/server/src/index.ts` — remove the three factory re-exports; add `LoadersHandlerOptions`.
-- **Modify** `packages/server/package.json` — add the `./internal/runtime` export.
-- **Modify** `packages/vite/src/server-entry.ts` — split the generated import so the factories come from `hono-preact/server/internal/runtime`.
-- **Modify** `packages/vite/src/__tests__/server-entry.test.ts` — update the expected generated-import string.
-- **Modify** `packages/hono-preact/package.json` — add the `./server/internal/runtime` export.
-- **Modify** `packages/hono-preact/scripts/consolidate.mjs` — add the `DIST_PATHS` rewrite entry.
+- **Create** `packages/server/src/accept.ts`, the `Accept` type + `pickAccept` content negotiation helper, moved out of `page-action-handler.ts`.
+- **Create** `packages/server/src/__tests__/accept.test.ts`, the `pickAccept` unit tests, moved out of `page-action-handler.test.ts`.
+- **Create** `packages/server/src/internal-runtime.ts`, the framework-emitted door re-exporting the three factories.
+- **Create** `packages/server/src/__tests__/boundary.test.ts`, asserts the factory relocation and the `LoadersHandlerOptions` re-export.
+- **Create** `packages/hono-preact/src/server-internal-runtime.ts`, umbrella re-export of the server runtime door.
+- **Modify** `packages/server/src/page-action-handler.ts`, import `Accept`/`pickAccept` from `./accept.js`, delete the local definitions.
+- **Modify** `packages/server/src/__tests__/page-action-handler.test.ts`, drop the `pickAccept` import and its `describe` block.
+- **Modify** `packages/server/src/index.ts`, remove the three factory re-exports; add `LoadersHandlerOptions`.
+- **Modify** `packages/server/package.json`, add the `./internal/runtime` export.
+- **Modify** `packages/vite/src/server-entry.ts`, split the generated import so the factories come from `hono-preact/server/internal/runtime`.
+- **Modify** `packages/vite/src/__tests__/server-entry.test.ts`, update the expected generated-import string.
+- **Modify** `packages/hono-preact/package.json`, add the `./server/internal/runtime` export.
+- **Modify** `packages/hono-preact/scripts/consolidate.mjs`, add the `DIST_PATHS` rewrite entry.
 
 ---
 
@@ -94,7 +94,7 @@ describe('pickAccept', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm exec vitest run packages/server/src/__tests__/accept.test.ts`
-Expected: FAIL — `Failed to resolve import "../accept.js"` (module does not exist yet).
+Expected: FAIL. `Failed to resolve import "../accept.js"` (module does not exist yet).
 
 - [ ] **Step 3: Create the `accept.ts` module**
 
@@ -139,7 +139,7 @@ export function pickAccept(header: string | undefined): Accept {
 }
 ```
 
-(Note: the `*\/*` in the doc comment above is an escaped block-comment terminator — write it as `*/*` in the actual file.)
+(Note: the `*\/*` in the doc comment above is an escaped block-comment terminator, write it as `*/*` in the actual file.)
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -167,7 +167,7 @@ In `packages/server/src/__tests__/page-action-handler.test.ts`:
 - [ ] **Step 7: Run the full server test suite**
 
 Run: `pnpm exec vitest run packages/server`
-Expected: PASS — `accept.test.ts` green, `page-action-handler.test.ts` green without the moved block, nothing else changed.
+Expected: PASS. `accept.test.ts` green, `page-action-handler.test.ts` green without the moved block, nothing else changed.
 
 - [ ] **Step 8: Commit**
 
@@ -238,19 +238,19 @@ describe('server boundary', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm exec vitest run packages/server/src/__tests__/boundary.test.ts`
-Expected: FAIL — `Failed to resolve import "../internal-runtime.js"` (module missing). (After the module exists, the `does not re-export` assertion is what the index edit must satisfy.)
+Expected: FAIL. `Failed to resolve import "../internal-runtime.js"` (module missing). (After the module exists, the `does not re-export` assertion is what the index edit must satisfy.)
 
 - [ ] **Step 3: Create the framework-emitted door**
 
 Create `packages/server/src/internal-runtime.ts`:
 
 ```ts
-// @hono-preact/server/internal/runtime — framework-emitted tier.
+// @hono-preact/server/internal/runtime, framework-emitted tier.
 //
 // These factories exist ONLY because the framework's generated server entry
 // imports and calls them (serverEntryPlugin). They are a private contract
 // between this version's vite plugins and this version's runtime; they have
-// no standalone user story. DO NOT IMPORT FROM USER CODE — this door is
+// no standalone user story. DO NOT IMPORT FROM USER CODE, this door is
 // undocumented and may change in any non-major release in lockstep with the
 // codegen that emits it.
 export {
@@ -297,12 +297,12 @@ In `packages/server/package.json`, change the `exports` block to:
 - [ ] **Step 6: Run the boundary test and the full server suite**
 
 Run: `pnpm exec vitest run packages/server`
-Expected: PASS — `boundary.test.ts` green; resolver/handler tests unchanged (they import from their source modules, not the index).
+Expected: PASS. `boundary.test.ts` green; resolver/handler tests unchanged (they import from their source modules, not the index).
 
 - [ ] **Step 7: Typecheck the server package (validates the `LoadersHandlerOptions` re-export)**
 
 Run: `pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm typecheck`
-Expected: PASS. (Build first so `dist/` is current — `typecheck` resolves cross-package types through `dist/`. The `_loadersHandlerOptions: LoadersHandlerOptions = {}` line in `boundary.test.ts` fails `tsc` if the type re-export is missing.)
+Expected: PASS. (Build first so `dist/` is current, `typecheck` resolves cross-package types through `dist/`. The `_loadersHandlerOptions: LoadersHandlerOptions = {}` line in `boundary.test.ts` fails `tsc` if the type re-export is missing.)
 
 - [ ] **Step 8: Commit**
 
@@ -337,12 +337,12 @@ In `packages/vite/src/__tests__/server-entry.test.ts`, replace the single-block 
     );
 ```
 
-(The other assertions in this file — `makePageUseResolvers(routes.serverRoutes, { dev })`, `makePageActionResolvers(routes.serverRoutes, { dev })`, the `loadersHandler(serverModules, …)` call, etc. — stay valid: only the import source changes, not the call sites.)
+(The other assertions in this file, `makePageUseResolvers(routes.serverRoutes, { dev })`, `makePageActionResolvers(routes.serverRoutes, { dev })`, the `loadersHandler(serverModules, …)` call, etc., stay valid: only the import source changes, not the call sites.)
 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm exec vitest run packages/vite/src/__tests__/server-entry.test.ts`
-Expected: FAIL — the generated source still emits the old single combined import from `hono-preact/server`.
+Expected: FAIL. the generated source still emits the old single combined import from `hono-preact/server`.
 
 - [ ] **Step 3: Split the codegen import block**
 
@@ -382,7 +382,7 @@ Expected: PASS.
 - [ ] **Step 5: Run the full vite suite (catch any other codegen snapshot)**
 
 Run: `pnpm exec vitest run packages/vite`
-Expected: PASS — no other test asserts the old combined import (adapter/node-dev-server tests assert the entry-wrapper path, not the import block).
+Expected: PASS. no other test asserts the old combined import (adapter/node-dev-server tests assert the entry-wrapper path, not the import block).
 
 - [ ] **Step 6: Commit**
 
@@ -428,7 +428,7 @@ In `packages/hono-preact/package.json`, add to the `exports` block (after the `.
 
 `consolidate.mjs` rewrites a cross-package import only if (a) the specifier matches a hardcoded **regex alternation** and (b) it has a `DIST_PATHS` entry. Both must be updated, or the umbrella's `server-internal-runtime.js` keeps a bare `@hono-preact/server/internal/runtime` import that cannot resolve in a user's installed tarball.
 
-First, the `DIST_PATHS` map (around line 48) — add:
+First, the `DIST_PATHS` map (around line 48), add:
 
 ```js
   '@hono-preact/server/internal/runtime': 'server/internal-runtime.js',
