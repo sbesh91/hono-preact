@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
 import type { Plugin } from 'vite';
+import { LOADERS_RPC_PATH } from '@hono-preact/iso/internal';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import type { HonoPreactAdapter } from './adapter.js';
 
@@ -58,7 +59,7 @@ export function generateCoreAppModule(
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
-    `  .post('/__loaders', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
+    `  .post('${LOADERS_RPC_PATH}', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
     `  .post('*', pageActionHandler({\n` +
     `    resolverByPath: pageActionResolvers.byPath,\n` +
     `    resolvePageUseByPath: pageUseResolvers.byPath,\n` +
@@ -92,7 +93,7 @@ export type ApiShadowingRoute =
 // Framework-reserved request paths. A literal registration of either in
 // api.ts shadows the framework's RPC handler now that the user app mounts
 // ahead of them.
-const RESERVED_PATHS = new Set(['/__loaders', '/__actions']);
+const RESERVED_PATHS = new Set([LOADERS_RPC_PATH, '/__actions']); // '/__actions' stays literal; slated for removal (see iso internal/contract.ts)
 
 const HONO_METHODS = new Set([
   'get',

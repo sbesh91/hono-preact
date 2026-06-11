@@ -7,6 +7,7 @@ import {
 } from './optimistic-action.js';
 import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
+import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { setLastActionResult } from './internal/action-result-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
@@ -40,7 +41,7 @@ function collectFormData(
 ): Record<string, FormDataEntryValue | FormDataEntryValue[]> {
   const out: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
   for (const [key, value] of fd.entries()) {
-    if (key === '__module' || key === '__action') continue;
+    if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD) continue;
     const existing = out[key];
     out[key] =
       existing === undefined
@@ -79,8 +80,8 @@ export function Form<TPayload, TResult>({
       // initial SSR page those inputs render empty (server-side defineAction
       // carries no name metadata) and Preact's hydrate() does not patch their
       // values, so reading them back would post __module/__action='' and 404.
-      fd.set('__module', moduleKey);
-      fd.set('__action', actionName);
+      fd.set(FORM_MODULE_FIELD, moduleKey);
+      fd.set(FORM_ACTION_FIELD, actionName);
       const payload = collectFormData(fd) as TPayload;
       let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);
@@ -187,8 +188,8 @@ export function Form<TPayload, TResult>({
       enctype="multipart/form-data"
       onSubmit={handleSubmit}
     >
-      <input type="hidden" name="__module" value={moduleKey} />
-      <input type="hidden" name="__action" value={actionName} />
+      <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
+      <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />
       <fieldset disabled={pending} class="hp-form-fieldset">
         {children}
       </fieldset>

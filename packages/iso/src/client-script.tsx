@@ -1,9 +1,11 @@
 import type { VNode } from 'preact';
+import {
+  CLIENT_ENTRY_URL,
+  VIRTUAL_CLIENT_DEV_URL,
+} from './internal/contract.js';
 
 export function ClientScript(): VNode {
-  const src = import.meta.env.PROD
-    ? '/static/client.js'
-    : '/@id/__x00__virtual:hono-preact/client';
+  const src = import.meta.env.PROD ? CLIENT_ENTRY_URL : VIRTUAL_CLIENT_DEV_URL;
   // `async` on a module script: download in parallel with parsing AND execute
   // as soon as available, rather than waiting for the document to finish
   // parsing. Critical for streaming SSR: without it, the client entry waits
