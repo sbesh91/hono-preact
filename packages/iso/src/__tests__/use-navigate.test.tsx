@@ -12,7 +12,13 @@ vi.mock('preact-iso', async (importOriginal) => {
 beforeEach(() => mockRoute.mockClear());
 afterEach(cleanup);
 
-function Harness({ path, options }: { path: string; options?: NavigateOptions }) {
+function Harness({
+  path,
+  options,
+}: {
+  path: string;
+  options?: NavigateOptions;
+}) {
   const navigate = useNavigate();
   return <button onClick={() => navigate(path, options)}>go</button>;
 }

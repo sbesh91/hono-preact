@@ -1,4 +1,9 @@
-import { definePage, useAction, useNavigate, ViewTransitionName } from 'hono-preact';
+import {
+  definePage,
+  useAction,
+  useNavigate,
+  ViewTransitionName,
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
