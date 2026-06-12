@@ -71,6 +71,30 @@ Use `exact={false}` for section links, and `match` when the link target differs 
 </NavLink>
 ```
 
+## Navigating programmatically
+
+`useNavigate()` returns a `navigate(path, options?)` function for navigating from
+an event handler (a logout button, a post-action redirect). A soft navigate runs
+the same client middleware, loaders, and view transitions as a `<NavLink>` click.
+
+```tsx
+import { useNavigate } from 'hono-preact';
+
+function LogoutButton() {
+  const navigate = useNavigate();
+  return (
+    <button onClick={() => navigate('/login', { replace: true })}>
+      Log out
+    </button>
+  );
+}
+```
+
+| Option    | Type      | Default | Description                                                             |
+| --------- | --------- | ------- | ----------------------------------------------------------------------- |
+| `replace` | `boolean` | `false` | Replace the current history entry instead of pushing a new one.         |
+| `reload`  | `boolean` | `false` | Do a full-page navigation (clean slate) instead of a client navigation. |
+
 ## API reference
 
 `<NavLink>` forwards any other `<a>` attribute (e.g. `target`, `rel`, `data-*`) to the underlying anchor and sets `aria-current="page"` while the link is active.
