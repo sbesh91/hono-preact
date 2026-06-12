@@ -21,30 +21,30 @@ function useListboxSelection<Value = string>(
 
 ## Options
 
-| Option           | Type                                  | Notes                                                                       |
-| ---------------- | ------------------------------------- | --------------------------------------------------------------------------- |
-| `value`          | `Value \| Value[] \| undefined`       | The controlled selected value(s).                                            |
-| `setValue`       | `(next: Value \| Value[]) => void`    | Called with the next selection.                                              |
-| `multiple`       | `boolean`                             | Whether multiple options can be selected.                                    |
-| `setOpen`        | `(open: boolean) => void`             | Called to close the control after a single-select choice.                    |
-| `isValueEqual`   | `(a: Value, b: Value) => boolean`     | Optional. Custom equality; defaults to `Object.is`.                          |
-| `serializeValue` | `(value: Value) => string`            | Optional. Serializes a value for the hidden form field.                      |
-| `itemToString`   | `(value: Value) => string`            | Optional. Resolves a display label when no option is registered for a value. |
-| `name`           | `string`                              | Optional. Hidden form-field name; enables native form submission.            |
-| `disabled`       | `boolean`                             | Optional. Disables selection.                                                |
+| Option           | Type                               | Notes                                                                        |
+| ---------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `value`          | `Value \| Value[] \| undefined`    | The controlled selected value(s).                                            |
+| `setValue`       | `(next: Value \| Value[]) => void` | Called with the next selection.                                              |
+| `multiple`       | `boolean`                          | Whether multiple options can be selected.                                    |
+| `setOpen`        | `(open: boolean) => void`          | Called to close the control after a single-select choice.                    |
+| `isValueEqual`   | `(a: Value, b: Value) => boolean`  | Optional. Custom equality; defaults to `Object.is`.                          |
+| `serializeValue` | `(value: Value) => string`         | Optional. Serializes a value for the hidden form field.                      |
+| `itemToString`   | `(value: Value) => string`         | Optional. Resolves a display label when no option is registered for a value. |
+| `name`           | `string`                           | Optional. Hidden form-field name; enables native form submission.            |
+| `disabled`       | `boolean`                          | Optional. Disables selection.                                                |
 
 ## Result
 
-| Member           | Type                                                  | Notes                                                              |
-| ---------------- | ----------------------------------------------------- | ------------------------------------------------------------------ |
-| `isSelected`     | `(optionValue: unknown) => boolean`                   | Whether a value is currently selected.                             |
-| `toggle`         | `(optionValue: unknown) => void`                      | Select or deselect a value (closes the control in single-select).  |
-| `registerOption` | `(id, value, label) => () => void`                    | Register an option in the label registry; returns a cleanup fn.    |
-| `selectedLabels` | `() => string[]`                                      | Selected labels in registry (DOM) order.                           |
-| `selectedItems`  | `() => OptionEntry[]`                                  | Selected options in value order, labels resolved via the registry. |
-| `labelFor`       | `(value: unknown) => string`                          | Resolve a single value's display label.                            |
-| `optionCount`    | `number`                                              | Number of currently-registered options.                           |
-| `hiddenFields`   | `ComponentChild[] \| null`                            | Hidden `<input>`s for native form submission, or `null`.           |
+| Member           | Type                                | Notes                                                              |
+| ---------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| `isSelected`     | `(optionValue: unknown) => boolean` | Whether a value is currently selected.                             |
+| `toggle`         | `(optionValue: unknown) => void`    | Select or deselect a value (closes the control in single-select).  |
+| `registerOption` | `(id, value, label) => () => void`  | Register an option in the label registry; returns a cleanup fn.    |
+| `selectedLabels` | `() => string[]`                    | Selected labels in registry (DOM) order.                           |
+| `selectedItems`  | `() => OptionEntry[]`               | Selected options in value order, labels resolved via the registry. |
+| `labelFor`       | `(value: unknown) => string`        | Resolve a single value's display label.                            |
+| `optionCount`    | `number`                            | Number of currently-registered options.                            |
+| `hiddenFields`   | `ComponentChild[] \| null`          | Hidden `<input>`s for native form submission, or `null`.           |
 
 ## Example
 

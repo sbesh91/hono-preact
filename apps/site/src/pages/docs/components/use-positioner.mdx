@@ -19,18 +19,18 @@ function usePositioner(opts: UsePositionerOptions): UsePositionerResult;
 
 ## Options
 
-| Option          | Type                          | Notes                                                                                              |
-| --------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| `open`          | `boolean`                     | The overlay's open state; drives the presence lifecycle.                                            |
-| `anchorRef`     | `RefObject<HTMLElement>`      | The element the overlay is positioned against.                                                      |
-| `floatingRef`   | `RefObject<HTMLElement>`      | The positioned overlay element.                                                                     |
-| `arrowRef`      | `RefObject<HTMLElement>`      | The arrow element, positioned along the chosen side.                                                |
-| `side`          | `Side`                        | Preferred side: `top`, `right`, `bottom`, or `left`.                                                 |
-| `align`         | `Align`                       | Alignment along the side: `start`, `center`, or `end`.                                               |
-| `offset`        | `number`                      | Gap in pixels between anchor and overlay.                                                            |
-| `getAnchorRect` | `ClientRectGetter`            | Optional. Position against a point or virtual element instead of `anchorRef` (e.g. a pointer position). |
-| `setPosition`   | `(p: PositionState) => void`  | Publishes the resolved position so an arrow part can read it.                                        |
-| `mount`         | `'unmount' \| 'hidden'`       | `'unmount'`: branch on `isPresent` and return `null` while closed. `'hidden'`: keep the element mounted and `hidden` while closed. |
+| Option          | Type                         | Notes                                                                                                                              |
+| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `open`          | `boolean`                    | The overlay's open state; drives the presence lifecycle.                                                                           |
+| `anchorRef`     | `RefObject<HTMLElement>`     | The element the overlay is positioned against.                                                                                     |
+| `floatingRef`   | `RefObject<HTMLElement>`     | The positioned overlay element.                                                                                                    |
+| `arrowRef`      | `RefObject<HTMLElement>`     | The arrow element, positioned along the chosen side.                                                                               |
+| `side`          | `Side`                       | Preferred side: `top`, `right`, `bottom`, or `left`.                                                                               |
+| `align`         | `Align`                      | Alignment along the side: `start`, `center`, or `end`.                                                                             |
+| `offset`        | `number`                     | Gap in pixels between anchor and overlay.                                                                                          |
+| `getAnchorRect` | `ClientRectGetter`           | Optional. Position against a point or virtual element instead of `anchorRef` (e.g. a pointer position).                            |
+| `setPosition`   | `(p: PositionState) => void` | Publishes the resolved position so an arrow part can read it.                                                                      |
+| `mount`         | `'unmount' \| 'hidden'`      | `'unmount'`: branch on `isPresent` and return `null` while closed. `'hidden'`: keep the element mounted and `hidden` while closed. |
 
 `usePositioner` returns `{ isPresent, positionerProps, state }`: spread
 `positionerProps` onto your positioner element (it already carries the merged

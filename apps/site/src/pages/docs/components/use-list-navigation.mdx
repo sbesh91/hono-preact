@@ -106,6 +106,6 @@ function Listbox({ open }: { open: boolean }) {
 `@hono-preact/ui` also exports `useTypeahead`, the type-to-select hook
 `useListNavigation` uses internally, for composing your own navigation:
 
-| Export           | Type                                                                                  | Description                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `useTypeahead`   | `(opts?: UseTypeaheadOptions) => (char: string) => string`                            | A hook returning a callback that accumulates printable chars into a query, resetting after an idle gap. |
+| Export         | Type                                                       | Description                                                                                             |
+| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `useTypeahead` | `(opts?: UseTypeaheadOptions) => (char: string) => string` | A hook returning a callback that accumulates printable chars into a query, resetting after an idle gap. |
