@@ -16,6 +16,7 @@ import {
   useState,
 } from 'preact/hooks';
 import { useControllableState } from '../use-controllable-state.js';
+import { useFormReset } from '../use-form-reset.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { usePositioner } from '../use-positioner.js';
 import { useDismiss } from '../use-dismiss.js';
@@ -107,6 +108,10 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  useFormReset(inputRef, () => {
+    setValue(defaultValue ?? emptyDefault);
+    setInputValue(defaultInputValue ?? '');
+  });
   const anchorRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLElement>(null);
   const clearRef = useRef<HTMLElement>(null);
