@@ -471,7 +471,7 @@ export type RoutesProps = {
 export const Routes: ComponentType<RoutesProps> = ({ routes }) => {
   return h(
     RouteManifestContext.Provider,
-    { value: routes.flat },
+    { value: routes.serverRoutes },
     h(
       asRouteComponent(Router),
       {

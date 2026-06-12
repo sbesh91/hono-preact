@@ -21,8 +21,8 @@ function parseHref(href: string): {
 
 // Specificity for picking among overlapping matches (a `:param`/`*` catch-all
 // can match the same href as a literal leaf). Literal segments rank highest,
-// then `:param`, then `*`; the most specific route is the one the router lands
-// on, so its params are the ones the target loader reads.
+// then `:param`, then `*`; the most specific server route is the one the
+// router lands on, so its params are the ones the target loader reads.
 function specificity(pattern: string): number {
   let score = 0;
   for (const seg of pattern.split('/')) {
@@ -45,12 +45,12 @@ export function usePrefetch(
   href: string,
   refs: LoaderRef<unknown> | ReadonlyArray<LoaderRef<unknown>>
 ): () => void {
-  const flat = useContext(RouteManifestContext);
+  const routes = useContext(RouteManifestContext);
   return useCallback(() => {
     const { path, searchParams } = parseHref(href);
     let bestParams: Record<string, string> | null = null;
     let bestScore = -1;
-    for (const route of flat) {
+    for (const route of routes) {
       const params = matchPath(path, route.path, true);
       if (!params) continue;
       const score = specificity(route.path);
@@ -63,5 +63,5 @@ export function usePrefetch(
     const location: RouteHook = { path, pathParams: bestParams, searchParams };
     const list = Array.isArray(refs) ? refs : [refs];
     for (const ref of list) void prefetch(ref, { location });
-  }, [href, refs, flat]);
+  }, [href, refs, routes]);
 }

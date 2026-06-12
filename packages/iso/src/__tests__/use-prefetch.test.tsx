@@ -4,7 +4,7 @@ import { render, cleanup, fireEvent } from '@testing-library/preact';
 import { RouteManifestContext } from '../internal/route-manifest.js';
 import { usePrefetch } from '../use-prefetch.js';
 import { defineLoader } from '../define-loader.js';
-import type { FlatRoute } from '../define-routes.js';
+import { defineRoutes } from '../define-routes.js';
 import type { LoaderRef } from '../define-loader.js';
 
 const prefetchSpy = vi.fn();
@@ -15,13 +15,25 @@ vi.mock('../prefetch.js', () => ({
 beforeEach(() => prefetchSpy.mockClear());
 afterEach(cleanup);
 
-const FLAT: ReadonlyArray<FlatRoute> = [
+// Build the manifest the way an app does: a layout group with a nested leaf
+// that has a server module. The leaf pattern lives in `serverRoutes`, NOT in
+// `flat` (flat only has the group `/demo` and `/demo/*`).
+const manifest = defineRoutes([
   {
-    path: '/demo/projects/:projectId/issues/:issueId',
-    component: () => null,
-    key: 'k1',
+    path: '/demo',
+    layout: () =>
+      Promise.resolve({
+        default: ({ children }: { children: unknown }) => children as never,
+      }),
+    children: [
+      {
+        path: 'projects/:projectId/issues/:issueId',
+        view: () => Promise.resolve({ default: () => null }),
+        server: () => Promise.resolve({}),
+      },
+    ],
   },
-];
+]);
 
 const ref = defineLoader(async () => ({ ok: true }), { __moduleKey: 'pf' });
 
@@ -38,14 +50,14 @@ function Harness({
 
 function renderIn(href: string, refs: LoaderRef<unknown>) {
   return render(
-    <RouteManifestContext.Provider value={FLAT}>
+    <RouteManifestContext.Provider value={manifest.serverRoutes}>
       <Harness href={href} refs={refs} />
     </RouteManifestContext.Provider>
   );
 }
 
 describe('usePrefetch', () => {
-  it('resolves params from the manifest and prefetches the loader', () => {
+  it('resolves nested-leaf params from the manifest and prefetches the loader', () => {
     const { getByRole } = renderIn('/demo/projects/p1/issues/i1', ref);
     fireEvent.click(getByRole('button'));
     expect(prefetchSpy).toHaveBeenCalledWith(ref, {

@@ -8,8 +8,8 @@ import { LocationProvider, Router } from 'preact-iso';
 import {
   defineRoutes,
   Routes,
-  type FlatRoute,
   type LayoutProps,
+  type ServerRoute,
   type ViewProps,
 } from '../define-routes.js';
 import { RouteManifestContext } from '../internal/route-manifest.js';
@@ -456,20 +456,24 @@ describe('<Routes>', () => {
   });
 
   it('provides the route manifest via RouteManifestContext', async () => {
-    let seen: ReadonlyArray<FlatRoute> | null = null;
+    let seen: ReadonlyArray<ServerRoute> | null = null;
     const Probe = () => {
       seen = useContext(RouteManifestContext);
       return h('div', { 'data-testid': 'probe' }, 'ok');
     };
     const manifest = defineRoutes([
-      { path: '/ctx', view: () => Promise.resolve({ default: Probe }) },
+      {
+        path: '/ctx',
+        view: () => Promise.resolve({ default: Probe }),
+        server: () => Promise.resolve({}),
+      },
     ]);
     history.replaceState(null, '', '/ctx');
     const { findByTestId } = render(
       h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode
     );
     await findByTestId('probe');
-    expect(seen).toBe(manifest.flat);
+    expect(seen).toBe(manifest.serverRoutes);
   });
 });
 
