@@ -29,7 +29,11 @@ const ProjectIssuesPage: FunctionComponent = () => {
       </div>
 
       {showForm && (
-        <Form action={serverActions.createIssue} onSuccess={() => setShowForm(false)} class="border p-3 space-y-2">
+        <Form
+          action={serverActions.createIssue}
+          onSuccess={() => setShowForm(false)}
+          class="border p-3 space-y-2"
+        >
           <input type="hidden" name="projectId" value={project.id} />
           <input
             name="title"

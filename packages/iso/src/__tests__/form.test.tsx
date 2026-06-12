@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, fireEvent, cleanup, act, waitFor } from '@testing-library/preact';
+import {
+  render,
+  fireEvent,
+  cleanup,
+  act,
+  waitFor,
+} from '@testing-library/preact';
 import { Form } from '../form.js';
 import type { ActionStub } from '../action.js';
 import {
@@ -244,10 +250,13 @@ describe('<Form>', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ __outcome: 'success', data: { id: 7 } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 7 } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
     );
     const onSuccess = vi.fn();
@@ -297,10 +306,13 @@ describe('<Form>', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 1 } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
     );
     const { getByRole } = render(

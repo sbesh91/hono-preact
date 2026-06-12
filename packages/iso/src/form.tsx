@@ -46,8 +46,7 @@ function resetFormFields(formEl: HTMLFormElement, fields?: string[]): void {
   }
   for (const name of fields) {
     const el = formEl.elements.namedItem(name);
-    const nodes =
-      el instanceof RadioNodeList ? Array.from(el) : el ? [el] : [];
+    const nodes = el instanceof RadioNodeList ? Array.from(el) : el ? [el] : [];
     for (const node of nodes) {
       if (node instanceof HTMLInputElement) {
         if (node.type === 'checkbox' || node.type === 'radio')
@@ -167,7 +166,9 @@ export function Form<TPayload, TResult>({
               data: decoded.data,
               submittedPayload: payload,
             });
-            lifecycle.current.onSuccess?.(decoded.data as TResult, { reset: resetForm });
+            lifecycle.current.onSuccess?.(decoded.data as TResult, {
+              reset: resetForm,
+            });
             applyInvalidate(lifecycle.current.invalidate);
             if (lifecycle.current.reset) resetForm();
             return;

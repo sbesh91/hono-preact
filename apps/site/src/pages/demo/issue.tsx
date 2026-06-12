@@ -158,7 +158,12 @@ const CommentsSection: FunctionComponent<{
     <section class="space-y-3">
       <h3 class="font-semibold">Comments</h3>
       <CommentList comments={addComment.value} />
-      <Form action={addComment} reset invalidate={[commentsLoader]} class="space-y-2">
+      <Form
+        action={addComment}
+        reset
+        invalidate={[commentsLoader]}
+        class="space-y-2"
+      >
         <input type="hidden" name="issueId" value={issueId} />
         <textarea
           name="body"
