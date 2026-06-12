@@ -118,10 +118,6 @@ export {
 } from './context-menu/index.js';
 export {
   useListNavigation,
-  getItems,
-  wrapNext,
-  wrapPrev,
-  matchTypeahead,
   type UseListNavigationOptions,
   type ListNavigation,
   type ListNavigationMode,
@@ -138,7 +134,6 @@ export {
   SelectOptionGroup,
   SelectOptionGroupLabel,
   SelectArrow,
-  OPTION_SELECTOR,
   type SelectRootProps,
   type SelectTriggerProps,
   type SelectValueProps,

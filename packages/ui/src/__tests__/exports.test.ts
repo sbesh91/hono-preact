@@ -25,12 +25,19 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.ContextMenu.Item).toBe('function');
   });
 
-  it('exposes the list-navigation primitive + helpers', () => {
+  it('exposes the list-navigation primitive but not its internal helpers', () => {
     expect(typeof ui.useListNavigation).toBe('function');
     expect(typeof ui.useTypeahead).toBe('function');
-    expect(typeof ui.wrapNext).toBe('function');
-    expect(typeof ui.matchTypeahead).toBe('function');
-    expect(typeof ui.getItems).toBe('function');
+    // The granular helpers are internal implementation details, not public API.
+    expect('getItems' in ui).toBe(false);
+    expect('wrapNext' in ui).toBe(false);
+    expect('wrapPrev' in ui).toBe(false);
+    expect('matchTypeahead' in ui).toBe(false);
+    expect('OPTION_SELECTOR' in ui).toBe(false);
+  });
+
+  it('keeps matchSubstring public (used by the Combobox filter demos)', () => {
+    expect(typeof ui.matchSubstring).toBe('function');
   });
 
   it('exposes the Select namespace', () => {
