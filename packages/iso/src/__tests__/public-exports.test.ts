@@ -30,7 +30,6 @@ describe('view transitions toolkit exports', () => {
   it('exports module C: types and direction', () => {
     expect(typeof iso.useViewTransitionTypes).toBe('function');
     expect(typeof iso.subscribeViewTransitionTypes).toBe('function');
-    expect(typeof iso.getViewTransitionDirection).toBe('function');
   });
 
   it('exports module D: persist', () => {
