@@ -46,9 +46,9 @@ import { useRef, useState } from 'preact/hooks';
 import type { PositionState } from '@hono-preact/ui';
 
 function Anchored({ open }: { open: boolean }) {
-  const anchorRef = useRef<HTMLElement>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
+  const arrowRef = useRef<HTMLDivElement>(null);
   const [, setPosition] = useState<PositionState>({
     side: 'bottom',
     align: 'center',
