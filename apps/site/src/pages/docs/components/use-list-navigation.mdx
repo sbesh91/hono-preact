@@ -103,13 +103,9 @@ function Listbox({ open }: { open: boolean }) {
 
 ## Companion exports
 
-`@hono-preact/ui` also exports the pieces `useListNavigation` is built from, for
-composing your own navigation:
+`@hono-preact/ui` also exports `useTypeahead`, the type-to-select hook
+`useListNavigation` uses internally, for composing your own navigation:
 
 | Export           | Type                                                                                  | Description                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `useTypeahead`   | `(opts?: UseTypeaheadOptions) => (char: string) => string`                            | A hook returning a callback that accumulates printable chars into a query, resetting after an idle gap. |
-| `wrapNext`       | `(current: number, length: number, loop: boolean) => number`                          | Next index, wrapping or clamping at the end.                                                            |
-| `wrapPrev`       | `(current: number, length: number, loop: boolean) => number`                          | Previous index, wrapping or clamping at the start.                                                      |
-| `matchTypeahead` | `(labels: string[], query: string, fromIndex: number) => number`                      | The next index (circularly) whose label starts with the query, or `-1`.                                 |
-| `getItems`       | `(container: HTMLElement, selector: string, scopeSelector?: string) => HTMLElement[]` | The enabled items in a container in DOM order.                                                          |
