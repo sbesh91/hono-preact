@@ -14,10 +14,9 @@ import {
   dispatchServer,
   partitionUse,
   serializeActionOutcome,
-  FORM_MODULE_FIELD,
-  FORM_ACTION_FIELD,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
+import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from '@hono-preact/iso/internal/runtime';
 import { applyOutcomeHeaders } from './outcome-translation.js';
 import {
   sseGeneratorResponse,
