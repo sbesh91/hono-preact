@@ -25,4 +25,10 @@ describe('iso /internal/runtime door', () => {
       );
     }
   });
+
+  it('exports exactly the plumbing set plus the contract module (no drift)', () => {
+    const expected = new Set<string>([...PLUMBING, ...Object.keys(contract)]);
+    const actual = new Set(Object.keys(runtime));
+    expect([...actual].sort()).toEqual([...expected].sort());
+  });
 });
