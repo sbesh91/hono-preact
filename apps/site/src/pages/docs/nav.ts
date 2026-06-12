@@ -142,7 +142,12 @@ export const nav: NavArea[] = [
             title: 'useListNavigation',
             route: '/docs/components/use-list-navigation',
           },
+          {
+            title: 'useListboxSelection',
+            route: '/docs/components/use-listbox-selection',
+          },
           { title: 'usePosition', route: '/docs/components/use-position' },
+          { title: 'usePositioner', route: '/docs/components/use-positioner' },
           { title: 'useDismiss', route: '/docs/components/use-dismiss' },
           {
             title: 'useFocusReturn',

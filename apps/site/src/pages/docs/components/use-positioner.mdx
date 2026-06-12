@@ -1,0 +1,83 @@
+# usePositioner
+
+`usePositioner` is the complete anchored-overlay positioning hook the library's
+own Popover, Tooltip, Menu, Select, and Combobox parts are built on. It composes
+`usePosition` (floating placement), `usePresence` (the open/close lifecycle),
+top-layer promotion, and the user-agent `[popover]` style neutralization into a
+single hook, so a custom anchored overlay does not have to rediscover the
+platform quirks the library already handles.
+
+See also: [usePosition](/docs/components/use-position), [usePresence](/docs/components/use-presence), [useDismiss](/docs/components/use-dismiss).
+
+## Signature
+
+```ts
+import { usePositioner } from '@hono-preact/ui';
+
+function usePositioner(opts: UsePositionerOptions): UsePositionerResult;
+```
+
+## Options
+
+| Option          | Type                          | Notes                                                                                              |
+| --------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `open`          | `boolean`                     | The overlay's open state; drives the presence lifecycle.                                            |
+| `anchorRef`     | `RefObject<HTMLElement>`      | The element the overlay is positioned against.                                                      |
+| `floatingRef`   | `RefObject<HTMLElement>`      | The positioned overlay element.                                                                     |
+| `arrowRef`      | `RefObject<HTMLElement>`      | The arrow element, positioned along the chosen side.                                                |
+| `side`          | `Side`                        | Preferred side: `top`, `right`, `bottom`, or `left`.                                                 |
+| `align`         | `Align`                       | Alignment along the side: `start`, `center`, or `end`.                                               |
+| `offset`        | `number`                      | Gap in pixels between anchor and overlay.                                                            |
+| `getAnchorRect` | `ClientRectGetter`            | Optional. Position against a point or virtual element instead of `anchorRef` (e.g. a pointer position). |
+| `setPosition`   | `(p: PositionState) => void`  | Publishes the resolved position so an arrow part can read it.                                        |
+| `mount`         | `'unmount' \| 'hidden'`       | `'unmount'`: branch on `isPresent` and return `null` while closed. `'hidden'`: keep the element mounted and `hidden` while closed. |
+
+`usePositioner` returns `{ isPresent, positionerProps, state }`: spread
+`positionerProps` onto your positioner element (it already carries the merged
+ref including `floatingRef`, Popover-API promotion, and UA style resets),
+branch on `isPresent` when `mount` is `'unmount'`, and read `state.side` /
+`state.align` for side-aware styling.
+
+## Example
+
+```tsx
+import { usePositioner } from '@hono-preact/ui';
+import { useRef, useState } from 'preact/hooks';
+import type { PositionState } from '@hono-preact/ui';
+
+function Anchored({ open }: { open: boolean }) {
+  const anchorRef = useRef<HTMLElement>(null);
+  const floatingRef = useRef<HTMLElement>(null);
+  const arrowRef = useRef<HTMLElement>(null);
+  const [, setPosition] = useState<PositionState>({
+    side: 'bottom',
+    align: 'center',
+    arrowX: null,
+    arrowY: null,
+  });
+
+  const { isPresent, positionerProps } = usePositioner({
+    open,
+    anchorRef,
+    floatingRef,
+    arrowRef,
+    side: 'bottom',
+    align: 'center',
+    offset: 8,
+    setPosition,
+    mount: 'unmount',
+  });
+
+  return (
+    <>
+      <button ref={anchorRef}>anchor</button>
+      {isPresent && (
+        <div {...positionerProps}>
+          overlay contents
+          <div ref={arrowRef} />
+        </div>
+      )}
+    </>
+  );
+}
+```
