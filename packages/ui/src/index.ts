@@ -11,7 +11,14 @@ export {
   type PositionState,
   type Side,
   type Align,
+  type ClientRectGetter,
 } from './use-position.js';
+export {
+  usePositioner,
+  type UsePositionerOptions,
+  type PositionerProps,
+  type UsePositionerResult,
+} from './use-positioner.js';
 export { useDismiss, type UseDismissOptions } from './use-dismiss.js';
 export { type DismissReason } from './dismiss-stack.js';
 export {
@@ -178,3 +185,9 @@ export {
   type AutocompleteMode,
 } from './combobox/index.js';
 export { matchSubstring } from './combobox/autocomplete.js';
+export {
+  useListboxSelection,
+  type UseListboxSelectionOptions,
+  type ListboxSelection,
+  type OptionEntry,
+} from './listbox/selection.js';

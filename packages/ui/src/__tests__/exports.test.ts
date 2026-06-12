@@ -46,6 +46,11 @@ describe('@hono-preact/ui exports', () => {
     expect(typeof ui.Select.Option).toBe('function');
     expect(typeof ui.Select.Value).toBe('function');
   });
+
+  it('exposes the promoted composition hooks', () => {
+    expect(typeof ui.usePositioner).toBe('function');
+    expect(typeof ui.useListboxSelection).toBe('function');
+  });
 });
 
 describe('Combobox exports', () => {
