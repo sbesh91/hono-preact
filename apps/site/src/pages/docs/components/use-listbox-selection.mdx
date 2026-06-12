@@ -1,0 +1,83 @@
+# useListboxSelection
+
+`useListboxSelection` is the selection core shared by Select and Combobox. It
+owns single- and multi-select value tracking, an option registry that resolves
+display labels in DOM order (so a closed control can show the selected label
+without rendering its list), and hidden form-field serialization. Reach for it
+when building a custom listbox-style control that needs the same selection
+semantics as the built-in components.
+
+See also: [useListNavigation](/docs/components/use-list-navigation), [Select](/docs/components/select), [Combobox](/docs/components/combobox).
+
+## Signature
+
+```ts
+import { useListboxSelection } from '@hono-preact/ui';
+
+function useListboxSelection<Value = string>(
+  opts: UseListboxSelectionOptions<Value>
+): ListboxSelection;
+```
+
+## Options
+
+| Option           | Type                               | Notes                                                                        |
+| ---------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `value`          | `Value \| Value[] \| undefined`    | The controlled selected value(s).                                            |
+| `setValue`       | `(next: Value \| Value[]) => void` | Called with the next selection.                                              |
+| `multiple`       | `boolean`                          | Whether multiple options can be selected.                                    |
+| `setOpen`        | `(open: boolean) => void`          | Called to close the control after a single-select choice.                    |
+| `isValueEqual`   | `(a: Value, b: Value) => boolean`  | Optional. Custom equality; defaults to `Object.is`.                          |
+| `serializeValue` | `(value: Value) => string`         | Optional. Serializes a value for the hidden form field.                      |
+| `itemToString`   | `(value: Value) => string`         | Optional. Resolves a display label when no option is registered for a value. |
+| `name`           | `string`                           | Optional. Hidden form-field name; enables native form submission.            |
+| `disabled`       | `boolean`                          | Optional. Disables selection.                                                |
+
+## Result
+
+| Member           | Type                                | Notes                                                              |
+| ---------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| `isSelected`     | `(optionValue: unknown) => boolean` | Whether a value is currently selected.                             |
+| `toggle`         | `(optionValue: unknown) => void`    | Select or deselect a value (closes the control in single-select).  |
+| `registerOption` | `(id, value, label) => () => void`  | Register an option in the label registry; returns a cleanup fn.    |
+| `selectedLabels` | `() => string[]`                    | Selected labels in registry (DOM) order.                           |
+| `selectedItems`  | `() => OptionEntry[]`               | Selected options in value order, labels resolved via the registry. |
+| `labelFor`       | `(value: unknown) => string`        | Resolve a single value's display label.                            |
+| `optionCount`    | `number`                            | Number of currently-registered options.                            |
+| `hiddenFields`   | `ComponentChild[] \| null`          | Hidden `<input>`s for native form submission, or `null`.           |
+
+## Example
+
+```tsx
+import { useListboxSelection } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+function CustomSelect() {
+  const [value, setValue] = useState<string | undefined>(undefined);
+  const [, setOpen] = useState(false);
+
+  const selection = useListboxSelection<string>({
+    value,
+    setValue: (next) => setValue(Array.isArray(next) ? next[0] : next),
+    multiple: false,
+    setOpen,
+    name: 'fruit',
+  });
+
+  return (
+    <ul role="listbox">
+      {['apple', 'pear'].map((v) => (
+        <li
+          key={v}
+          role="option"
+          aria-selected={selection.isSelected(v)}
+          onClick={() => selection.toggle(v)}
+        >
+          {v}
+        </li>
+      ))}
+      {selection.hiddenFields}
+    </ul>
+  );
+}
+```

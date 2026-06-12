@@ -27,15 +27,15 @@ const POSITIONER_STYLE: JSX.CSSProperties = {
 
 export interface UsePositionerOptions {
   open: boolean;
-  // usePosition anchor (the Combobox passes its inputRef here).
+  // The element the overlay is positioned against.
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
   arrowRef: RefObject<HTMLElement>;
   side: Side;
   align: Align;
   offset: number;
-  // Position against a point/virtual element instead of anchorRef (context-menu
-  // pointer anchor, combobox anchor-or-input). Undefined for the common case.
+  // Position against a point or virtual element instead of anchorRef (e.g. a
+  // pointer position). Undefined for the common anchor-element case.
   getAnchorRect?: ClientRectGetter;
   // Publish the resolved position so an Arrow part can read it.
   setPosition: (p: PositionState) => void;
