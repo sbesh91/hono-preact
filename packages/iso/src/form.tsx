@@ -1,5 +1,5 @@
 import type { JSX, ComponentChildren } from 'preact';
-import { useState, useCallback, useMemo } from 'preact/hooks';
+import { useState, useCallback, useMemo, useRef } from 'preact/hooks';
 import type { ActionStub } from './action.js';
 import {
   OPTIMISTIC_BRAND,
@@ -11,6 +11,8 @@ import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { setLastActionResult } from './internal/action-result-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
+import type { LoaderRef } from './define-loader.js';
+import { useInvalidate } from './use-invalidate.js';
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value
@@ -28,7 +30,38 @@ export type FormProps<TPayload, TResult> = Omit<
 > & {
   action: FormActionInput<TPayload, TResult>;
   children?: ComponentChildren;
+  onSuccess?: (
+    data: TResult,
+    helpers: { reset: (fields?: string[]) => void }
+  ) => void;
+  onError?: (err: Error) => void;
+  invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
+  reset?: boolean;
 };
+
+function resetFormFields(formEl: HTMLFormElement, fields?: string[]): void {
+  if (!fields) {
+    formEl.reset();
+    return;
+  }
+  for (const name of fields) {
+    const el = formEl.elements.namedItem(name);
+    const nodes =
+      el instanceof RadioNodeList ? Array.from(el) : el ? [el] : [];
+    for (const node of nodes) {
+      if (node instanceof HTMLInputElement) {
+        if (node.type === 'checkbox' || node.type === 'radio')
+          node.checked = node.defaultChecked;
+        else node.value = node.defaultValue;
+      } else if (node instanceof HTMLTextAreaElement) {
+        node.value = node.defaultValue;
+      } else if (node instanceof HTMLSelectElement) {
+        for (const opt of Array.from(node.options))
+          opt.selected = opt.defaultSelected;
+      }
+    }
+  }
+}
 
 function hasOptimisticBrand<TPayload, TResult>(
   action: FormActionInput<TPayload, TResult>
@@ -56,11 +89,18 @@ function collectFormData(
 export function Form<TPayload, TResult>({
   action,
   children,
+  onSuccess,
+  onError,
+  invalidate,
+  reset,
   ...rest
 }: FormProps<TPayload, TResult>) {
   const [pending, setPending] = useState(false);
   const moduleKey = action.__module;
   const actionName = action.__action;
+  const applyInvalidate = useInvalidate();
+  const lifecycle = useRef({ onSuccess, onError, invalidate, reset });
+  lifecycle.current = { onSuccess, onError, invalidate, reset };
 
   const optimistic = useMemo(
     () => (hasOptimisticBrand(action) ? action[OPTIMISTIC_BRAND] : undefined),
@@ -71,6 +111,7 @@ export function Form<TPayload, TResult>({
     async (e: Event) => {
       e.preventDefault();
       const formEl = e.currentTarget as HTMLFormElement;
+      const resetForm = (fields?: string[]) => resetFormFields(formEl, fields);
       const target =
         typeof window !== 'undefined'
           ? window.location.pathname + window.location.search
@@ -126,6 +167,9 @@ export function Form<TPayload, TResult>({
               data: decoded.data,
               submittedPayload: payload,
             });
+            lifecycle.current.onSuccess?.(decoded.data as TResult, { reset: resetForm });
+            applyInvalidate(lifecycle.current.invalidate);
+            if (lifecycle.current.reset) resetForm();
             return;
           case 'deny':
             handle?.revert();
@@ -144,6 +188,7 @@ export function Form<TPayload, TResult>({
               message: decoded.message,
               submittedPayload: payload,
             });
+            lifecycle.current.onError?.(new Error(decoded.message));
             return;
           case 'timeout':
             handle?.revert();
@@ -152,6 +197,9 @@ export function Form<TPayload, TResult>({
               message: `Request timed out after ${decoded.timeoutMs}ms`,
               submittedPayload: payload,
             });
+            lifecycle.current.onError?.(
+              new Error(`Request timed out after ${decoded.timeoutMs}ms`)
+            );
             return;
           case 'unknown':
             handle?.revert();
@@ -162,6 +210,12 @@ export function Form<TPayload, TResult>({
                 `Unexpected outcome: ${decoded.outcome ?? 'unknown'}`,
               submittedPayload: payload,
             });
+            lifecycle.current.onError?.(
+              new Error(
+                decoded.message ??
+                  `Unexpected outcome: ${decoded.outcome ?? 'unknown'}`
+              )
+            );
             return;
           default:
             decoded satisfies never;
@@ -173,12 +227,15 @@ export function Form<TPayload, TResult>({
           message: err instanceof Error ? err.message : String(err),
           submittedPayload: payload,
         });
+        lifecycle.current.onError?.(
+          err instanceof Error ? err : new Error(String(err))
+        );
       } finally {
         setPending(false);
         endSubmit(moduleKey, actionName);
       }
     },
-    [moduleKey, actionName, optimistic]
+    [moduleKey, actionName, optimistic, applyInvalidate]
   );
 
   return (
