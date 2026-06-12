@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, fireEvent, cleanup } from '@testing-library/preact';
+import {
+  render,
+  fireEvent,
+  cleanup,
+  act,
+  waitFor,
+} from '@testing-library/preact';
 import { Form } from '../form.js';
 import type { ActionStub } from '../action.js';
 import {
@@ -237,5 +243,89 @@ describe('<Form>', () => {
     expect(
       getLastActionResult({ __module: stub.__module, __action: stub.__action })
     ).toBeNull();
+  });
+
+  it('calls onSuccess with the action data on a success outcome', async () => {
+    const stub = makeStub();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 7 } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    const onSuccess = vi.fn();
+    const { getByRole } = render(
+      <Form action={stub} onSuccess={onSuccess}>
+        <button type="submit">go</button>
+      </Form>
+    );
+    await act(async () => {
+      fireEvent.submit(getByRole('button').closest('form')!);
+    });
+    await waitFor(() =>
+      expect(onSuccess).toHaveBeenCalledWith(
+        { id: 7 },
+        expect.objectContaining({ reset: expect.any(Function) })
+      )
+    );
+  });
+
+  it('calls onError on an error outcome and not on deny', async () => {
+    const stub = makeStub();
+    const onError = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ __outcome: 'error', message: 'boom' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+    const { getByRole } = render(
+      <Form action={stub} onError={onError}>
+        <button type="submit">go</button>
+      </Form>
+    );
+    await act(async () => {
+      fireEvent.submit(getByRole('button').closest('form')!);
+    });
+    await waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect((onError.mock.calls[0][0] as Error).message).toBe('boom');
+  });
+
+  it('resets the form after success when reset is set', async () => {
+    const stub = makeStub();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { id: 1 } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    const { getByRole } = render(
+      <Form action={stub} reset>
+        <input name="text" defaultValue="" />
+        <button type="submit">go</button>
+      </Form>
+    );
+    const input = getByRole('textbox') as HTMLInputElement;
+    input.value = 'typed';
+    await act(async () => {
+      fireEvent.submit(getByRole('button').closest('form')!);
+    });
+    await waitFor(() => expect(input.value).toBe(''));
   });
 });

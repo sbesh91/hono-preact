@@ -1,6 +1,6 @@
-import { definePage, Form, useFormStatus, useActionResult } from 'hono-preact';
+import { definePage, Form, useFormStatus } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { serverLoaders, serverActions } from './project-issues.server.js';
 import { requireSession } from '../../demo/guard.js';
 import IssueRow from '../../components/demo/IssueRow.js';
@@ -11,15 +11,6 @@ const ProjectIssuesPage: FunctionComponent = () => {
   const data = issuesLoader.useData();
   const [showForm, setShowForm] = useState(false);
   const { pending: creating } = useFormStatus(serverActions.createIssue);
-  const result = useActionResult(serverActions.createIssue);
-  const lastSeenSuccess = useRef<unknown>(null);
-
-  useEffect(() => {
-    if (result?.kind === 'success' && result !== lastSeenSuccess.current) {
-      lastSeenSuccess.current = result;
-      setShowForm(false);
-    }
-  }, [result]);
 
   if (!data) return <p>Unknown project.</p>;
   const { project, issues } = data;
@@ -38,7 +29,11 @@ const ProjectIssuesPage: FunctionComponent = () => {
       </div>
 
       {showForm && (
-        <Form action={serverActions.createIssue} class="border p-3 space-y-2">
+        <Form
+          action={serverActions.createIssue}
+          onSuccess={() => setShowForm(false)}
+          class="border p-3 space-y-2"
+        >
           <input type="hidden" name="projectId" value={project.id} />
           <input
             name="title"

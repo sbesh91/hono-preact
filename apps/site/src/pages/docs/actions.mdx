@@ -97,6 +97,34 @@ defineAction<{ title: string; tags: string[]; photos: File[] }, ...>
 
 String values are passed as strings; coerce them in the action body if you need numbers or booleans. File inputs are handled automatically; see [File uploads](#file-uploads).
 
+### Form lifecycle
+
+`<Form>` accepts optional callbacks that fire after a submission resolves, plus
+declarative cache invalidation and form reset:
+
+| Prop         | Type                             | Notes                                                                                                                                             |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onSuccess`  | `(data, { reset }) => void`      | Fires on a successful action. `reset()` clears the form; `reset(names)` clears specific fields.                                                   |
+| `onError`    | `(err: Error) => void`           | Fires on an error, timeout, or unknown outcome. A `deny` is not an error; read it via `useActionResult`.                                          |
+| `invalidate` | `'auto' \| false \| LoaderRef[]` | Same semantics as `useAction`'s `invalidate`: `'auto'` re-runs the active loader; an array clears each (and re-runs the active loader if listed). |
+| `reset`      | `boolean`                        | Reset the form to its defaults after a successful submit.                                                                                         |
+
+```tsx
+<Form
+  action={serverActions.createIssue}
+  reset
+  invalidate="auto"
+  onSuccess={() => setShowForm(false)}
+>
+  <input name="title" />
+  <button type="submit">Create</button>
+</Form>
+```
+
+`reset` calls the form's native reset (restoring uncontrolled fields to their
+defaults and firing a `reset` event). Controlled custom fields can subscribe to
+that event to reset themselves.
+
 ## Progressive enhancement (PE): forms without JS
 
 `<Form action={stub}>` works without JavaScript. On a no-JS page load the form submits as a standard HTML POST to the page URL. The server runs the action, then re-renders the page. Inside the rendered page, `useActionResult(stub?)` returns the outcome of that action call so you can show validation errors or a success message without requiring JavaScript.
