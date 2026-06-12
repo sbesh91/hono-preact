@@ -44,6 +44,7 @@ export type {
   UseOptimisticActionOptions,
   UseOptimisticActionResult,
 } from './optimistic-action.js';
+export { useNavigate, type NavigateOptions } from './use-navigate.js';
 
 // Active-route detection.
 export {
