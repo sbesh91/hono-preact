@@ -1,8 +1,7 @@
-import { useCallback, useContext, useRef, useState } from 'preact/hooks';
+import { useCallback, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
-import { ReloadContext } from './reload-context.js';
-import { ActiveLoaderIdContext } from './internal/contexts.js';
 import type { LoaderRef } from './define-loader.js';
+import { useInvalidate } from './use-invalidate.js';
 import type { ActionUse } from './internal/use-types.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
@@ -227,8 +226,7 @@ export function useAction<
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [data, setData] = useState<TResult | null>(null);
-  const reloadCtx = useContext(ReloadContext);
-  const activeLoaderId = useContext(ActiveLoaderIdContext);
+  const applyInvalidate = useInvalidate();
 
   const stubRef = useRef(stub);
   stubRef.current = stub;
@@ -469,24 +467,7 @@ export function useAction<
           }
         }
 
-        if (currentOptions?.invalidate === 'auto') {
-          reloadCtx?.reload();
-        } else if (Array.isArray(currentOptions?.invalidate)) {
-          let invalidatedActive = false;
-          for (const ref of currentOptions.invalidate) {
-            ref.invalidate();
-            if (activeLoaderId && ref.__id === activeLoaderId) {
-              invalidatedActive = true;
-            }
-          }
-          // If the user's invalidate list includes the active page's loader,
-          // also re-run that loader so the visible <Loader> picks up fresh
-          // data. Other refs (sibling pages) just clear their caches; those
-          // pages will refetch on their next mount.
-          if (invalidatedActive) {
-            reloadCtx?.reload();
-          }
-        }
+        applyInvalidate(currentOptions?.invalidate);
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
         // Write to the store only for unclassified errors (network failures,
