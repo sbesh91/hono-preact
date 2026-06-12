@@ -1,4 +1,4 @@
-import { definePage, useAction, ViewTransitionName } from 'hono-preact';
+import { definePage, useAction, useNavigate, ViewTransitionName } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
@@ -11,14 +11,15 @@ const projectsLoader = serverLoaders.default;
 const LogoutInline: FunctionComponent<{ user: { name: string } | null }> = ({
   user,
 }) => {
+  const navigate = useNavigate();
   const { mutate, pending } = useAction(loginActions.logout, {
     onSuccess: () => {
       try {
         window.localStorage.removeItem(DEMO_AUTHED_KEY);
       } catch {
-        // ignore: full reload still drops the in-memory flag.
+        // ignore: a soft nav still leaves the in-memory flag cleared
       }
-      window.location.assign('/demo/login');
+      navigate('/demo/login', { replace: true });
     },
   });
   return (
