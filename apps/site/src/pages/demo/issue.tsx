@@ -3,11 +3,10 @@ import {
   Form,
   useFormStatus,
   useOptimisticAction,
-  useActionResult,
   ViewTransitionName,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { serverLoaders as projectIssuesLoaders } from './project-issues.server.js';
@@ -132,9 +131,6 @@ const CommentsSection: FunctionComponent<{
   comments: CommentData[];
   issueId: string;
 }> = ({ comments, issueId }) => {
-  const [formKey, setFormKey] = useState(0);
-  const result = useActionResult(serverActions.addComment);
-
   // Drive the optimistic list AND the form submit from the SAME action object.
   // Passing it to <Form> is what makes <Form> call addOptimistic on submit, so
   // the new comment paints immediately; a bare `serverActions.addComment` stub
@@ -158,18 +154,11 @@ const CommentsSection: FunctionComponent<{
   });
   const { pending } = useFormStatus(serverActions.addComment);
 
-  useEffect(() => {
-    if (result?.kind === 'success') {
-      setFormKey((k) => k + 1);
-      commentsLoader.invalidate();
-    }
-  }, [result]);
-
   return (
     <section class="space-y-3">
       <h3 class="font-semibold">Comments</h3>
       <CommentList comments={addComment.value} />
-      <Form key={formKey} action={addComment} class="space-y-2">
+      <Form action={addComment} reset invalidate={[commentsLoader]} class="space-y-2">
         <input type="hidden" name="issueId" value={issueId} />
         <textarea
           name="body"
