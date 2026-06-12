@@ -3,14 +3,14 @@
   "sectionA": {
     "core": {
       "total": {
-        "raw": 10254,
-        "gzip": 3862,
-        "brotli": 3491
+        "raw": 10347,
+        "gzip": 3886,
+        "brotli": 3512
       },
       "marginalOverCore": {
-        "raw": 10254,
-        "gzip": 3862,
-        "brotli": 3491
+        "raw": 10347,
+        "gzip": 3886,
+        "brotli": 3512
       }
     },
     "loaders": {
@@ -20,9 +20,9 @@
         "brotli": 5057
       },
       "marginalOverCore": {
-        "raw": 12296,
-        "gzip": 4279,
-        "brotli": 3855
+        "raw": 12295,
+        "gzip": 4278,
+        "brotli": 3845
       }
     },
     "actions": {
@@ -32,9 +32,9 @@
         "brotli": 4371
       },
       "marginalOverCore": {
-        "raw": 13181,
-        "gzip": 4287,
-        "brotli": 3844
+        "raw": 13180,
+        "gzip": 4289,
+        "brotli": 3861
       }
     },
     "transitions": {
@@ -44,9 +44,9 @@
         "brotli": 1138
       },
       "marginalOverCore": {
-        "raw": 3081,
-        "gzip": 993,
-        "brotli": 871
+        "raw": 3080,
+        "gzip": 990,
+        "brotli": 875
       }
     },
     "prefetch": {
@@ -57,8 +57,8 @@
       },
       "marginalOverCore": {
         "raw": 6546,
-        "gzip": 2473,
-        "brotli": 2215
+        "gzip": 2471,
+        "brotli": 2219
       }
     },
     "streaming": {
@@ -70,7 +70,7 @@
       "marginalOverCore": {
         "raw": 101,
         "gzip": 37,
-        "brotli": 32
+        "brotli": 35
       }
     },
     "head": {
@@ -82,7 +82,7 @@
       "marginalOverCore": {
         "raw": 299,
         "gzip": 122,
-        "brotli": 104
+        "brotli": 109
       }
     },
     "persist": {
@@ -92,9 +92,9 @@
         "brotli": 715
       },
       "marginalOverCore": {
-        "raw": 1483,
-        "gzip": 518,
-        "brotli": 471
+        "raw": 1482,
+        "gzip": 515,
+        "brotli": 482
       }
     },
     "middleware": {
@@ -106,27 +106,27 @@
       "marginalOverCore": {
         "raw": 535,
         "gzip": 168,
-        "brotli": 155
+        "brotli": 170
       }
     }
   },
   "sectionB": {
     "buckets": {
-      "app": 49729,
-      "actions": 17156,
-      "core": 37667,
-      "components": 82151,
-      "guards": 2438,
+      "app": 50191,
+      "actions": 17158,
+      "core": 37739,
+      "components": 82146,
+      "guards": 2436,
       "middleware": 12845,
       "vendor": 8302,
-      "prefetch": 4534,
-      "loaders": 14240,
+      "prefetch": 4998,
+      "loaders": 14238,
       "streaming": 6743,
-      "transitions": 5087
+      "transitions": 5086
     },
-    "total": 240892,
-    "unmatched": 27,
-    "fileCount": 80
+    "total": 241882,
+    "unmatched": 29,
+    "fileCount": 82
   },
   "sectionC": {
     "ui-core": {
