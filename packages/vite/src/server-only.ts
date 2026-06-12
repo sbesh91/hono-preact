@@ -9,7 +9,7 @@ import {
   LOADER_NAME_OPTION,
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
-} from '@hono-preact/iso/internal';
+} from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
@@ -319,7 +319,7 @@ export function serverOnlyPlugin(): Plugin {
 
       if (needsCreateLoaderStubImport) {
         s.prepend(
-          `import { __$createLoaderStub_hpiso } from 'hono-preact/internal';\n`
+          `import { __$createLoaderStub_hpiso } from 'hono-preact/internal/runtime';\n`
         );
       }
       if (needsUseActionImport) {

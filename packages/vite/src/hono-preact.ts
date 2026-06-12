@@ -1,6 +1,6 @@
 import preact from '@preact/preset-vite';
 import { type Plugin } from 'vite';
-import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal';
+import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/runtime';
 import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';

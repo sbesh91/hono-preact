@@ -53,6 +53,10 @@ export default defineConfig((env) => ({
     alias: [
       // Umbrella subpaths (longest-prefix first).
       {
+        find: 'hono-preact/internal/runtime',
+        replacement: resolve(__dirname, '../../packages/hono-preact/src/internal-runtime.ts'),
+      },
+      {
         find: 'hono-preact/internal',
         replacement: resolve(__dirname, '../../packages/hono-preact/src/internal.ts'),
       },
@@ -78,6 +82,10 @@ export default defineConfig((env) => ({
       },
       // Workspace packages kept so the umbrella's `export * from '@hono-preact/iso'`
       // chains through to source for HMR.
+      {
+        find: '@hono-preact/iso/internal/runtime',
+        replacement: resolve(__dirname, '../../packages/iso/src/internal-runtime.ts'),
+      },
       {
         find: '@hono-preact/iso/internal',
         replacement: resolve(__dirname, '../../packages/iso/src/internal.ts'),

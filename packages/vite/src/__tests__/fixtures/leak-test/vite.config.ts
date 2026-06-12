@@ -17,12 +17,20 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: 'hono-preact/internal/runtime',
+        replacement: resolve(__dirname, '../../../../../iso/src/internal-runtime.ts'),
+      },
+      {
         find: 'hono-preact/internal',
         replacement: resolve(__dirname, '../../../../../iso/src/internal.ts'),
       },
       {
         find: 'hono-preact',
         replacement: resolve(__dirname, '../../../../../iso/src/index.ts'),
+      },
+      {
+        find: '@hono-preact/iso/internal/runtime',
+        replacement: resolve(__dirname, '../../../../../iso/src/internal-runtime.ts'),
       },
       {
         find: '@hono-preact/iso/internal',

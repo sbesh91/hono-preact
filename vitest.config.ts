@@ -18,6 +18,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@hono-preact/iso/internal/runtime': path.resolve(
+        __dirname,
+        'packages/iso/src/internal-runtime.ts'
+      ),
       '@hono-preact/iso/internal': path.resolve(
         __dirname,
         'packages/iso/src/internal.ts'
@@ -46,6 +50,10 @@ export default defineConfig({
       'hono-preact/vite': path.resolve(
         __dirname,
         'packages/hono-preact/src/vite.ts'
+      ),
+      'hono-preact/internal/runtime': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/internal-runtime.ts'
       ),
       'hono-preact/internal': path.resolve(
         __dirname,
