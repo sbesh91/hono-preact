@@ -148,6 +148,13 @@ turns off auto-highlight for a static, non-filtering suggestion list.
 override `Combobox.Status` with a render prop to announce loading instead of the
 result count.
 
+### Form reset
+
+Inside a `<form>`, the component resets to its `defaultValue` when the form is
+reset (a reset button, or `Form`'s `reset`), the same way a native field resets
+to its default. The input text returns to `defaultInputValue`. A reset whose
+event is `preventDefault`ed is ignored.
+
 ## Styling
 
 Style through the data-attribute contract: `data-state` (`open` / `closed`) on
