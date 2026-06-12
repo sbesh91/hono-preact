@@ -2,15 +2,17 @@
 import { describe, it, expect } from 'vitest';
 import type { ComponentType, VNode } from 'preact';
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useState, useContext } from 'preact/hooks';
 import { fireEvent, render, waitFor } from '@testing-library/preact';
 import { LocationProvider, Router } from 'preact-iso';
 import {
   defineRoutes,
   Routes,
+  type FlatRoute,
   type LayoutProps,
   type ViewProps,
 } from '../define-routes.js';
+import { RouteManifestContext } from '../internal/route-manifest.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
 const noopLayout = () =>
@@ -441,13 +443,33 @@ describe('<Routes>', () => {
     const result = (
       Routes as unknown as (props: { routes: typeof m }) => VNode
     )({ routes: m });
-    expect(result.type).toBe(Router);
-    const props = result.props as {
+    // Routes wraps the Router in a RouteManifestContext.Provider; the Router
+    // is the Provider's sole child.
+    const routerVNode = (result.props as { children: VNode }).children;
+    expect(routerVNode.type).toBe(Router);
+    const props = routerVNode.props as {
       onLoadStart?: unknown;
       onLoadEnd?: unknown;
     };
     expect(typeof props.onLoadStart).toBe('function');
     expect(typeof props.onLoadEnd).toBe('function');
+  });
+
+  it('provides the route manifest via RouteManifestContext', async () => {
+    let seen: ReadonlyArray<FlatRoute> | null = null;
+    const Probe = () => {
+      seen = useContext(RouteManifestContext);
+      return h('div', { 'data-testid': 'probe' }, 'ok');
+    };
+    const manifest = defineRoutes([
+      { path: '/ctx', view: () => Promise.resolve({ default: Probe }) },
+    ]);
+    history.replaceState(null, '', '/ctx');
+    const { findByTestId } = render(
+      h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode
+    );
+    await findByTestId('probe');
+    expect(seen).toBe(manifest.flat);
   });
 });
 

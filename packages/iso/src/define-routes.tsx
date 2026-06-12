@@ -8,6 +8,7 @@ import type {
 import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
+import { RouteManifestContext } from './internal/route-manifest.js';
 import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
 
 function wrapWithRouteLocations(
@@ -469,17 +470,21 @@ export type RoutesProps = {
 
 export const Routes: ComponentType<RoutesProps> = ({ routes }) => {
   return h(
-    asRouteComponent(Router),
-    {
-      onLoadStart: __noteLoadStart,
-      onLoadEnd: __noteLoadEnd,
-    },
-    ...routes.flat.map((r) =>
-      h(Route, {
-        key: r.key,
-        path: r.path,
-        component: asRouteComponent(r.component),
-      })
+    RouteManifestContext.Provider,
+    { value: routes.flat },
+    h(
+      asRouteComponent(Router),
+      {
+        onLoadStart: __noteLoadStart,
+        onLoadEnd: __noteLoadEnd,
+      },
+      ...routes.flat.map((r) =>
+        h(Route, {
+          key: r.key,
+          path: r.path,
+          component: asRouteComponent(r.component),
+        })
+      )
     )
   );
 };
