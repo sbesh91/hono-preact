@@ -1,21 +1,16 @@
-import { prefetch, ViewTransitionName } from 'hono-preact';
+import { usePrefetch, ViewTransitionName } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useCallback } from 'preact/hooks';
 import type { Issue } from '../../demo/data.js';
 import { serverLoaders } from '../../pages/demo/issue.server.js';
 
 type Props = { issue: Issue; projectSlug: string };
-
-const ISSUE_ROUTE = '/demo/projects/:projectId/issues/:issueId';
 
 const IssueRow: FunctionComponent<Props> = ({ issue, projectSlug }) => {
   const href = `/demo/projects/${projectSlug}/issues/${issue.id}`;
 
   // Prefetch the issue page's primary loader on hover/focus. The comments
   // loader streams and the activity loader is small; both stay on-demand.
-  const onPrefetch = useCallback(() => {
-    void prefetch(serverLoaders.issue, { url: href, route: ISSUE_ROUTE });
-  }, [href]);
+  const prefetchIssue = usePrefetch(href, serverLoaders.issue);
 
   return (
     <li class="border p-3 flex items-baseline justify-between">
@@ -25,8 +20,8 @@ const IssueRow: FunctionComponent<Props> = ({ issue, projectSlug }) => {
         render={
           <a
             href={href}
-            onMouseEnter={onPrefetch}
-            onFocus={onPrefetch}
+            onMouseEnter={prefetchIssue}
+            onFocus={prefetchIssue}
             class="font-medium underline"
           />
         }
