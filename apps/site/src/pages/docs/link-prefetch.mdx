@@ -52,6 +52,30 @@ Add `data-no-prefetch` to the links that lead to those routes, or refactor them 
 
 The emitted script is a normal `<script>` element and is subject to your `Content-Security-Policy`. Apps with strict CSPs that don't allow inline scripts will see the speculation script blocked by the browser. The framework does not currently plumb a CSP nonce. If your app needs Speculation Rules under strict CSP, file an issue describing the use case.
 
+## Prefetch on intent
+
+`usePrefetch(href, loaders)` returns a callback that prefetches a link's loader
+data, resolving the target route's params from the route table for you (no
+copied route pattern). Bind it to whatever events express intent, hover and
+focus, touch, an `IntersectionObserver`, a long-press:
+
+```tsx
+import { usePrefetch } from 'hono-preact';
+import { serverLoaders } from '../pages/issue.server.js';
+
+function IssueLink({ href }: { href: string }) {
+  const prefetchIssue = usePrefetch(href, serverLoaders.issue);
+  return (
+    <a href={href} onMouseEnter={prefetchIssue} onFocus={prefetchIssue}>
+      Open issue
+    </a>
+  );
+}
+```
+
+Pass one loader or an array. A warm cache makes repeat fires free, so binding to
+several events is fine.
+
 ## See also
 
 - [Middleware](/docs/middleware): `defineApp` accepts other options beyond `speculation`, including `use` for middleware composition.
