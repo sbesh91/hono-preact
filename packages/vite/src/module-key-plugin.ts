@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
 import {
   MODULE_KEY_EXPORT,
   LOADER_NAME_OPTION,
-} from '@hono-preact/iso/internal';
+} from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';

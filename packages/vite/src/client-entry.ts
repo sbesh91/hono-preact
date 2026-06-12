@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import type { Plugin } from 'vite';
-import { VIRTUAL_CLIENT_ID } from '@hono-preact/iso/internal';
+import { VIRTUAL_CLIENT_ID } from '@hono-preact/iso/internal/runtime';
 
 export const VIRTUAL_CLIENT_ENTRY_ID = VIRTUAL_CLIENT_ID;
 const RESOLVED_ID = '\0' + VIRTUAL_CLIENT_ENTRY_ID;
@@ -16,7 +16,7 @@ export function generateClientEntrySource(
     `import { h, hydrate, render as renderPreact } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes, PersistHost } from 'hono-preact';\n` +
-    `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';\n` +
+    `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal/runtime';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
     `installHistoryShim();\n` +

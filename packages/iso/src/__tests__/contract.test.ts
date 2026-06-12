@@ -9,7 +9,7 @@ import {
   LOADER_NAME_OPTION,
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
-} from '../internal.js';
+} from '../internal-runtime.js';
 
 describe('wire-contract constants', () => {
   it('pins the exact wire values (changing any is a breaking change)', () => {

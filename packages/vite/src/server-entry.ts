@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
 import type { Plugin } from 'vite';
-import { LOADERS_RPC_PATH } from '@hono-preact/iso/internal';
+import { LOADERS_RPC_PATH } from '@hono-preact/iso/internal/runtime';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import type { HonoPreactAdapter } from './adapter.js';
 

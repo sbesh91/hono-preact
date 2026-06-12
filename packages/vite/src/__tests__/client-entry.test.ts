@@ -24,7 +24,7 @@ describe('generateClientEntrySource', () => {
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
     expect(src).toContain(`import { Routes, PersistHost } from 'hono-preact';`);
     expect(src).toContain(
-      `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal';`
+      `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal/runtime';`
     );
     expect(src).toContain(`installHistoryShim();`);
     expect(src).toContain(`installStreamRegistry();`);

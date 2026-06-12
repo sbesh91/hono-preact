@@ -144,8 +144,6 @@ export {
   type ViewTransitionTypesInput,
   type ViewTransitionTypesNav,
 } from './view-transition-types.js';
-export { getNavDirection as getViewTransitionDirection } from './internal/history-shim.js';
-
 // View transition name + group hooks and components.
 export {
   useViewTransitionName,

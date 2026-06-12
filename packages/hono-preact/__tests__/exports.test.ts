@@ -102,10 +102,26 @@ describe('hono-preact/internal export', () => {
     expect(typeof m.dispatchClient).toBe('function');
     expect(typeof m.partitionUse).toBe('function');
     expect(typeof m.HonoRequestContext).toBe('function');
-    expect(typeof m.installStreamRegistry).toBe('function');
     expect(typeof m.subscribeToLoaderStream).toBe('function');
     expect(typeof m.registerServerStreamingLoader).toBe('function');
     expect(typeof m.takeServerStreamingLoaders).toBe('function');
     expect(typeof m.runRequestScope).toBe('function');
+  });
+});
+
+describe('hono-preact/internal/runtime export', () => {
+  it('surfaces the framework-emitted installers + loader stub', async () => {
+    const m = await import('hono-preact/internal/runtime');
+    expect(typeof m.installHistoryShim).toBe('function');
+    expect(typeof m.installNavTransitionScheduler).toBe('function');
+    expect(typeof m.installStreamRegistry).toBe('function');
+    expect(typeof m.__$createLoaderStub_hpiso).toBe('function');
+    expect(typeof m.LOADERS_RPC_PATH).toBe('string');
+  });
+
+  it('no longer surfaces the installers from the escape-hatch /internal door', async () => {
+    const m = await import('hono-preact/internal');
+    expect('installStreamRegistry' in m).toBe(false);
+    expect('installHistoryShim' in m).toBe(false);
   });
 });

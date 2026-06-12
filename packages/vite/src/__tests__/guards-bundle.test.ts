@@ -24,8 +24,10 @@ async function bundleFor(ssr: boolean): Promise<string> {
         external: [
           '@hono-preact/iso',
           '@hono-preact/iso/internal',
+          '@hono-preact/iso/internal/runtime',
           'hono-preact',
           'hono-preact/internal',
+          'hono-preact/internal/runtime',
         ],
       },
       minify: false,
