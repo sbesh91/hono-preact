@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/preact';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, cleanup, fireEvent } from '@testing-library/preact';
 import {
   SelectRoot,
   SelectTrigger,
@@ -69,5 +69,57 @@ describe('Select form field', () => {
       </SelectRoot>
     );
     expect(container.querySelectorAll('input[type="hidden"]').length).toBe(0);
+  });
+
+  it('resets to defaultValue when the enclosing form is reset', () => {
+    const onValueChange = vi.fn();
+    const { container } = render(
+      <form>
+        <SelectRoot
+          name="fruit"
+          value="cherry"
+          defaultValue="banana"
+          onValueChange={onValueChange}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="x" />
+          </SelectTrigger>
+          <SelectPositioner>
+            <SelectPopup aria-label="f">
+              <SelectOption value="banana">Banana</SelectOption>
+              <SelectOption value="cherry">Cherry</SelectOption>
+            </SelectPopup>
+          </SelectPositioner>
+        </SelectRoot>
+      </form>
+    );
+    fireEvent.reset(container.querySelector('form')!);
+    expect(onValueChange).toHaveBeenCalledWith('banana');
+  });
+
+  it('does not reset when the form reset is defaultPrevented', () => {
+    const onValueChange = vi.fn();
+    const { container } = render(
+      <form onReset={(e) => e.preventDefault()}>
+        <SelectRoot
+          name="fruit"
+          value="cherry"
+          defaultValue="banana"
+          onValueChange={onValueChange}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="x" />
+          </SelectTrigger>
+          <SelectPositioner>
+            <SelectPopup aria-label="f">
+              <SelectOption value="banana">Banana</SelectOption>
+              <SelectOption value="cherry">Cherry</SelectOption>
+            </SelectPopup>
+          </SelectPositioner>
+        </SelectRoot>
+      </form>
+    );
+    fireEvent.reset(container.querySelector('form')!);
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });

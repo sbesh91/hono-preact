@@ -21,6 +21,7 @@ import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
 import { usePositioner } from '../use-positioner.js';
+import { useFormReset } from '../use-form-reset.js';
 import {
   SelectContext,
   useSelectContext,
@@ -111,6 +112,8 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     name,
     disabled,
   });
+
+  useFormReset(anchorRef, () => setValue(defaultValue ?? emptyDefault));
 
   const ctx = useMemo(
     () => ({
