@@ -40,12 +40,14 @@ export function generateCoreAppModule(
     `import { Routes, env } from 'hono-preact';\n` +
     `import {\n` +
     `  loadersHandler,\n` +
-    `  makePageActionResolvers,\n` +
-    `  makePageUseResolvers,\n` +
     `  pageActionHandler,\n` +
     `  renderPage,\n` +
-    `  routeServerModules,\n` +
     `} from 'hono-preact/server';\n` +
+    `import {\n` +
+    `  makePageActionResolvers,\n` +
+    `  makePageUseResolvers,\n` +
+    `  routeServerModules,\n` +
+    `} from 'hono-preact/server/internal/runtime';\n` +
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +

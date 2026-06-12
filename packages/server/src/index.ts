@@ -1,14 +1,10 @@
 export { HonoContext, useHonoContext } from './context.js';
 export { renderPage } from './render.js';
-export { loadersHandler } from './loaders-handler.js';
 export {
-  routeServerModules,
-  makePageUseResolvers,
-} from './route-server-modules.js';
-export {
-  makePageActionResolvers,
-  type ActionEntry,
-} from './page-action-resolvers.js';
+  loadersHandler,
+  type LoadersHandlerOptions,
+} from './loaders-handler.js';
+export { type ActionEntry } from './page-action-resolvers.js';
 export {
   pageActionHandler,
   type PageActionHandlerOptions,

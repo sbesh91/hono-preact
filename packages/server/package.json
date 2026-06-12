@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./internal/runtime": {
+      "types": "./dist/internal-runtime.d.ts",
+      "import": "./dist/internal-runtime.js"
     }
   },
   "scripts": {
