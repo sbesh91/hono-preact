@@ -33,6 +33,8 @@ export type {
   LoaderCtx,
   Loader as LoaderFn,
 } from './define-loader.js';
+export { serverRoute } from './server-route.js';
+export type { RouteServer } from './server-route.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
   ActionStub,
