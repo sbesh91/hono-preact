@@ -128,16 +128,30 @@ export const serverLoaders = {
 
 ### Typed loader params
 
-Pass the route id as the first argument and `ctx.location.pathParams` is typed from the route's pattern instead of `Record<string, string>` (requires the one-time [route registration](/docs/layouts#typed-route-params)):
+After the one-time [route registration](/docs/layouts#typed-route-params), bind a server module to its route with `serverRoute`. `route.loader(fn)` types `ctx.location.pathParams` from the route's pattern (no annotation needed), and the route id autocompletes against your registered routes:
 
 ```ts
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/movies/:id');
+
 export const serverLoaders = {
   // location.pathParams.id is typed `string`
-  default: defineLoader('/movies/:id', async ({ location }) => {
+  default: route.loader(async ({ location }) => {
     const movie = await getMovie(location.pathParams.id);
     return { movie };
   }),
 };
+```
+
+`serverRoute` names the route once for the whole module, the common one-module-one-route case. For a route-agnostic or shared-across-routes loader, use `defineLoader` directly: `defineLoader(routeId, fn)` types params the same way, while `defineLoader(fn)` leaves `pathParams` as `Record<string, string>`.
+
+```ts
+// lower-level: route id per loader, or omit it for untyped params
+default: defineLoader('/movies/:id', async ({ location }) => {
+  const movie = await getMovie(location.pathParams.id);
+  return { movie };
+}),
 ```
 
 ### The loader context
