@@ -1,4 +1,9 @@
-import { defineAction, defineLoader, type LoaderCtx } from 'hono-preact';
+import {
+  defineAction,
+  defineLoader,
+  type LoaderCtx,
+  type RouteParams,
+} from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -16,6 +21,9 @@ import { currentUser } from '../../demo/session.js';
 import { requireSession } from '../../demo/guard.js';
 import { assertCanClose } from './issue-guards.js';
 
+const ISSUE_ROUTE = '/demo/projects/:projectId/issues/:issueId';
+type IssueParams = RouteParams<typeof ISSUE_ROUTE>;
+
 export const pageUse = requireSession;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
@@ -25,7 +33,7 @@ const withAuthor = <T extends { authorId: string }>(x: T): WithAuthor<T> => ({
 });
 
 const issueLoader = async (
-  ctx: LoaderCtx
+  ctx: LoaderCtx<IssueParams>
 ): Promise<WithAuthor<Issue> | null> => {
   const id = ctx.location.pathParams.issueId;
   if (!id) return null;
@@ -34,7 +42,7 @@ const issueLoader = async (
 };
 
 const commentsLoader = async function* (
-  ctx: LoaderCtx
+  ctx: LoaderCtx<IssueParams>
 ): AsyncGenerator<WithAuthor<Comment>[]> {
   const id = ctx.location.pathParams.issueId;
   if (!id) {
@@ -55,7 +63,9 @@ const commentsLoader = async function* (
   if (cumulative.length === 0) yield [];
 };
 
-const activityLoader = async (ctx: LoaderCtx): Promise<ActivityItem[]> => {
+const activityLoader = async (
+  ctx: LoaderCtx<IssueParams>
+): Promise<ActivityItem[]> => {
   const issueId = ctx.location.pathParams.issueId;
   const issue = issueId ? getIssue(issueId) : null;
   if (!issue) return [];
@@ -63,9 +73,9 @@ const activityLoader = async (ctx: LoaderCtx): Promise<ActivityItem[]> => {
 };
 
 export const serverLoaders = {
-  issue: defineLoader(issueLoader),
-  comments: defineLoader(commentsLoader),
-  activity: defineLoader(activityLoader),
+  issue: defineLoader(ISSUE_ROUTE, issueLoader),
+  comments: defineLoader(ISSUE_ROUTE, commentsLoader),
+  activity: defineLoader(ISSUE_ROUTE, activityLoader),
 };
 
 export const serverActions = {

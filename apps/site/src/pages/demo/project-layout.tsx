@@ -1,10 +1,9 @@
 import type { LayoutProps } from 'hono-preact';
-import { useRoute, useRouteChange, ViewTransitionName } from 'hono-preact';
+import { useParams, useRouteChange, ViewTransitionName } from 'hono-preact';
 import { useTitle } from 'hoofd/preact';
 
 export default function ProjectLayout({ children }: LayoutProps) {
-  const route = useRoute();
-  const slug = (route.pathParams as { projectId?: string }).projectId ?? '';
+  const { projectId: slug } = useParams('/demo/projects/:projectId');
 
   useTitle(`${slug.toUpperCase()} · demo`);
   useRouteChange(() => {

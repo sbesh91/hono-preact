@@ -1,4 +1,4 @@
-import { defineRoutes } from 'hono-preact';
+import { defineRoutes, type RoutePaths } from 'hono-preact';
 // Registers the global `docs` view-transition type rule (enter/leave/within
 // /docs). Side-effect import: the generated client entry imports this module,
 // so the subscriber is installed once at startup.
@@ -6,7 +6,12 @@ import './docs-transition.js';
 
 const docsView = () => import('./components/DocsRoute.js');
 
-export default defineRoutes([
+// The tree is its own `as const` binding (not just inlined into defineRoutes)
+// so the route registration below can reference `typeof routeTree`. Registering
+// against the manifest (`typeof routes`) would form a type cycle: the manifest
+// is built by `defineRoutes` (a hono-preact value) and the module augmentation
+// is evaluated while resolving it. The tree is a plain literal, so it is safe.
+const routeTree = [
   { path: '/', view: () => import('./pages/home.js') },
   { path: '/docs', view: docsView },
   { path: '/docs/*', view: docsView },
@@ -47,4 +52,12 @@ export default defineRoutes([
     path: '*',
     view: () => import('./pages/not-found.js'),
   },
-]);
+] as const;
+
+export default defineRoutes(routeTree);
+
+declare module 'hono-preact' {
+  interface RegisteredRoutes {
+    paths: RoutePaths<typeof routeTree>;
+  }
+}
