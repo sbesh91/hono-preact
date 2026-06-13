@@ -7,6 +7,7 @@ import type {
 import { useContext } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
+import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
@@ -15,16 +16,16 @@ import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 
-export type LoaderCtx = {
+export type LoaderCtx<TParams = Record<string, string>> = {
   c: Context;
-  location: RouteHook;
+  location: Omit<RouteHook, 'pathParams'> & { pathParams: TParams };
   signal: AbortSignal;
 };
 
-export type Loader<T> =
-  | ((ctx: LoaderCtx) => Promise<T>)
-  | ((ctx: LoaderCtx) => Promise<ReadableStream<T>>)
-  | ((ctx: LoaderCtx) => AsyncGenerator<T, void, unknown>);
+export type Loader<T, TParams = Record<string, string>> =
+  | ((ctx: LoaderCtx<TParams>) => Promise<T>)
+  | ((ctx: LoaderCtx<TParams>) => Promise<ReadableStream<T>>)
+  | ((ctx: LoaderCtx<TParams>) => AsyncGenerator<T, void, unknown>);
 
 export interface LoaderRef<T> {
   readonly __id: symbol;
@@ -163,7 +164,26 @@ function validateTimeoutMs(
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
-): LoaderRef<T> {
+): LoaderRef<T>;
+export function defineLoader<RouteId extends RegisteredPaths, T>(
+  route: RouteId,
+  fn: Loader<T, RouteParams<RouteId>>,
+  opts?: DefineLoaderOpts<T>
+): LoaderRef<T>;
+export function defineLoader(
+  fnOrRoute: Loader<unknown> | string,
+  fnOrOpts?: Loader<unknown> | DefineLoaderOpts<unknown>,
+  maybeOpts?: DefineLoaderOpts<unknown>
+): LoaderRef<unknown> {
+  // Normalize the two overload forms. The route id is type-level only (it
+  // selects the param shape for the loader fn); it is not stored on the ref
+  // and does not affect cache/`params` behavior.
+  const isRouteForm = typeof fnOrRoute === 'string';
+  const fn = (isRouteForm ? fnOrOpts : fnOrRoute) as Loader<unknown>;
+  const opts = (
+    isRouteForm ? maybeOpts : fnOrOpts
+  ) as DefineLoaderOpts<unknown> | undefined;
+
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   const idKey = opts?.__moduleKey
     ? opts.__loaderName
@@ -181,22 +201,22 @@ export function defineLoader<T>(
       // Keyed loaders: dedupe the auto-attached cache by __id so every
       // importer of the same .server module shares one LoaderCache.
       const shared = getSharedCaches();
-      const existing = shared.get(__id) as LoaderCache<T> | undefined;
+      const existing = shared.get(__id) as LoaderCache<unknown> | undefined;
       if (existing) {
         cache = existing;
       } else {
-        cache = createCache<T>();
+        cache = createCache<unknown>();
         shared.set(__id, cache as LoaderCache<unknown>);
       }
     } else {
       // Unkeyed loaders only happen when consumers call defineLoader(fn)
       // directly without the plugin transform (i.e. in tests). Each call
       // gets a fresh cache.
-      cache = createCache<T>();
+      cache = createCache<unknown>();
     }
   }
 
-  const ref: LoaderRef<T> = {
+  const ref: LoaderRef<unknown> = {
     __id,
     __moduleKey: opts?.__moduleKey,
     __loaderName: opts?.__loaderName,
@@ -217,7 +237,7 @@ export function defineLoader<T>(
           'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
         );
       }
-      return ctx.data as T;
+      return ctx.data as unknown;
     },
     useError() {
       return useContext(LoaderErrorContext);
@@ -229,7 +249,7 @@ export function defineLoader<T>(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: ({ fallback, errorFallback, children }) =>
-      h(LoaderHost<T>, {
+      h(LoaderHost<unknown>, {
         loader: ref,
         fallback,
         errorFallback,
@@ -240,7 +260,7 @@ export function defineLoader<T>(
         h(ref.Boundary, {
           fallback: viewOpts?.fallback,
           errorFallback: viewOpts?.errorFallback,
-          children: h(ViewRenderer<T>, {
+          children: h(ViewRenderer<unknown>, {
             loaderRef: ref,
             props,
             render,
