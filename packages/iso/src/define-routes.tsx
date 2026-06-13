@@ -10,6 +10,7 @@ import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
 import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
+import type { PageUse } from './internal/use-types.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -36,6 +37,13 @@ export type RouteDef = {
   layout?: LazyImport<ComponentType<LayoutProps>>;
   server?: LazyServerImport;
   children?: readonly RouteDef[];
+  /**
+   * Page-layer middleware/observers for this node and every descendant.
+   * Composed outer-to-inner with `appConfig.use` and unit-level `use`.
+   * Runs on the page render (SSR + client nav) and on the loader/action
+   * RPC paths. The single declared source of a page guard.
+   */
+  use?: PageUse;
 };
 
 export type FlatRoute = {
@@ -102,25 +110,7 @@ const asRouteComponent = (c: ComponentType<any>): AnyComponent<any> =>
 const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
   c as ComponentType<ViewProps>;
 
-/**
- * Where in the tree a route is being validated. Determines which structural
- * shapes are legal at that position.
- *
- * - `top`: at top level or inside a top-level path-grouping. Anything goes.
- * - `layout`: a direct child of a layout group. May be a leaf, a layout
- *    group, or a path-grouping (which is restricted further).
- * - `layout-grouping`: a child of a path-grouping that is itself inside a
- *    layout group. `buildInnerRoutes` only inlines view-leaves at this depth,
- *    so layouts and further grouping here would silently disappear at runtime.
- *    Reject them at validation time instead.
- */
-type ValidationContext = 'top' | 'layout' | 'layout-grouping';
-
-function validate(
-  routes: ReadonlyArray<RouteDef>,
-  parentPath = '',
-  context: ValidationContext = 'top'
-): void {
+function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
   for (const r of routes) {
     const here = parentPath + (r.path.startsWith('/') ? r.path : '/' + r.path);
     const hasView = !!r.view;
@@ -132,11 +122,13 @@ function validate(
         `Route ${here}: cannot declare both \`view\` and \`layout\`.`
       );
     }
+
     if (hasView && hasChildren) {
       throw new Error(
         `Route ${here}: \`view\` route cannot have \`children\`.`
       );
     }
+
     if (hasLayout && !hasChildren) {
       throw new Error(`Route ${here}: \`layout\` requires \`children\`.`);
     }
@@ -151,20 +143,8 @@ function validate(
       throw new Error(`Route ${here}: child path must not start with \`/\`.`);
     }
 
-    if (context === 'layout-grouping' && (hasLayout || hasChildren)) {
-      throw new Error(
-        `Route ${here}: a path-grouping inside a layout group may only contain view leaves at v0.1. ` +
-          `Move this route up a level (direct child of the layout group) or restructure as its own layout group.`
-      );
-    }
-
     if (hasChildren) {
-      const childContext: ValidationContext = hasLayout
-        ? 'layout'
-        : context === 'layout'
-          ? 'layout-grouping'
-          : 'top';
-      validate(r.children!, here === '/' ? '' : here, childContext);
+      validate(r.children!, here === '/' ? '' : here);
     }
   }
 }
@@ -395,8 +375,9 @@ function buildInnerRoutes(
         })
       );
     } else if (child.children) {
-      // Path-grouping inside a layout. `validate()` already enforces that all
-      // descendants here are view leaves, so we only inline grandchild views.
+      // Path-grouping inside a layout. Inline view-leaf grandchildren.
+      // Nested layouts and deeper groupings inside this path-grouping are
+      // rendered in a later task; for now they are silently skipped here.
       for (const grand of child.children) {
         const joined =
           child.path === '' ? grand.path : child.path + '/' + grand.path;
