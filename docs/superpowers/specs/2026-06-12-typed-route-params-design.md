@@ -242,3 +242,48 @@ None intended. `useParams`/`RouteParams`/`RoutePaths`/`RegisteredRoutes` and the
 - **Search-param typing** (`searchParams` stays `Record<string, string>`; no schema layer).
 - **File-based routing** (the only way to get zero-declaration inference; a much larger change, not one of the six primitives).
 - The remaining Section C primitives (#5 single-source guards, #6 content-glob route helper).
+
+## Addendum (2026-06-13): `serverRoute` factory
+
+Folded into the same PR after a design discussion. `defineLoader(routeId, fn)` types loader params but repeats the route id (and, for standalone loaders, the `LoaderCtx<RouteParams<...>>` annotation) per loader. `serverRoute(routeId)` names the route **once per server module** and returns a `.loader(fn)` that infers `ctx.location.pathParams` from the route's pattern, the dominant one-page-one-loader case.
+
+### Portability note (why this is sound)
+
+The route id is **type-level only** (runtime-inert, never stored on the `LoaderRef`), so a loader's runtime portability is unchanged. The fn-first `defineLoader(fn)` form (params `Record<string,string>`) and the explicit `defineLoader(routeId, fn)` form both remain for route-agnostic or shared-across-routes loaders; `serverRoute` is opt-in sugar over the latter, not a constraint. A shared loader written standalone and typed to the param subset it uses (`LoaderCtx<{ id: string }>`) still binds at any route supplying those params via `defineLoader`.
+
+### API (`packages/iso/src/server-route.ts`)
+
+```ts
+export interface RouteServer<RouteId extends string> {
+  loader<T>(
+    fn: Loader<T, RouteParams<RouteId>>,
+    opts?: DefineLoaderOpts<T>
+  ): LoaderRef<T>;
+}
+
+export function serverRoute<const RouteId extends RegisteredPaths>(
+  route: RouteId
+): RouteServer<RouteId> {
+  return { loader: (fn, opts) => defineLoader(route, fn, opts) };
+}
+```
+
+The route id autocompletes/validates against `RegisteredPaths` exactly like `defineLoader(routeId, ...)`. Barrel-exported (`serverRoute`, `type RouteServer`).
+
+### Vite codegen
+
+`route.loader(fn, opts?)` has the same argument order as fn-first `defineLoader(fn, opts?)`, so the existing injection path handles it once the callee is recognized. Two guard widenings, no new branch:
+
+- `server-loaders-parser.ts` `parseServerLoaders`: accept a `serverLoaders` property value whose callee is a `defineLoader` identifier **or** a non-computed member call with property `loader` (`route.loader(...)`). Its `optsArg` is `arguments[1]` (fn-first), already handled.
+- `module-key-plugin.ts` `visitCallWithName`: same callee widening; `.loader(...)` is not a string-first call so it flows through the fn-first append/merge path, threading `__moduleKey`/`__loaderName` into `.loader`'s opts. At runtime `serverRoute.loader` forwards that opts into `defineLoader(route, fn, opts)`, so the cache key threads identically.
+
+`server-loader-validation.ts` is unaffected: it validates export *names* and `pageUse` shape only; `const route = serverRoute(...)` is a non-exported local and never inspects per-loader call shapes. Recognizing `.loader(...)` is safe by the `serverLoaders` contract (its values must be `LoaderRef`s, and only `defineLoader`/`route.loader` produce them).
+
+### Dogfood + docs
+
+`apps/site/src/pages/demo/issue.server.ts` moves to `serverRoute('/demo/projects/:projectId/issues/:issueId')` + inline `route.loader(...)` (drops the `ISSUE_ROUTE` const, the `IssueParams` alias, and the three `LoaderCtx<IssueParams>` annotations). Docs (`layouts.mdx` typed-params section, `loaders.mdx` typed-loader subsection) lead with `serverRoute` as the recommended form, with `defineLoader(routeId, fn)` noted as the lower-level / shared-loader door.
+
+### Tests
+
+- iso: `serverRoute('/r/:id').loader(fn)` returns a `LoaderRef` behaviorally identical to `defineLoader('/r/:id', fn)`; the route id is inert at runtime.
+- vite: `module-key-plugin.test.ts` injects `__moduleKey`/`__loaderName` into a `serverLoaders = { x: route.loader(fn) }` entry; `server-loaders-parser.test.ts` returns an entry for a `.loader(...)` value with the right name + optsArg.
