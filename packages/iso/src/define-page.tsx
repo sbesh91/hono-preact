@@ -13,12 +13,8 @@ export function definePage(
   Component: ComponentType,
   bindings?: PageBindings
 ): FunctionComponent<RouteHook> {
-  const PageRoute: FunctionComponent<RouteHook> = (location) => (
-    <Page
-      Wrapper={bindings?.Wrapper}
-      errorFallback={bindings?.errorFallback}
-      location={location}
-    >
+  const PageRoute: FunctionComponent<RouteHook> = () => (
+    <Page Wrapper={bindings?.Wrapper} errorFallback={bindings?.errorFallback}>
       <Component />
     </Page>
   );

@@ -39,17 +39,16 @@ afterEach(() => {
   cleanup();
 });
 
-// Per-mechanism middleware behavior is covered by middleware-runner.test.ts
-// and the PageMiddlewareHost integration tests; this file focuses on the
-// Page component's wrapper + errorFallback responsibilities. The legacy
-// guard-prop describes were removed when Page swapped from <Guards> to
-// <PageMiddlewareHost> (Task 25 of the loader-action-middleware plan).
+// Per-mechanism middleware behavior is covered by middleware-runner.test.ts.
+// This file focuses on the Page component's own responsibilities: the error
+// boundary, Wrapper rendering, and loader content passing through with no
+// middleware host present.
 
-describe('Page without a use list', () => {
+describe('Page renders children in a default Wrapper', () => {
   it('renders children inside a default Wrapper', async () => {
     render(
       <LocationProvider>
-        <Page location={loc}>
+        <Page>
           <p data-testid="content">Hello</p>
         </Page>
       </LocationProvider>
@@ -85,7 +84,6 @@ describe('Page errorFallback catches loader errors', () => {
         <RouteLocationsContext.Provider value={locMap}>
           <LocationProvider>
             <Page
-              location={loc}
               errorFallback={(err) => (
                 <div data-testid="error">{err.message}</div>
               )}
@@ -104,5 +102,42 @@ describe('Page errorFallback catches loader errors', () => {
     const el = await screen.findByTestId('error');
     expect(el).toHaveTextContent('boom');
     expect(screen.queryByTestId('content')).toBeNull();
+  });
+});
+
+describe('Page renders loader content', () => {
+  it('renders a resolving loader through Page', async () => {
+    env.current = 'server';
+
+    const ok = defineLoader<{ msg: string }>(async () => ({ msg: 'loaded' }), {
+      __moduleKey: 'test/page-content',
+    });
+
+    const locMap = new Map();
+    locMap.set('test/page-content', loc);
+
+    function PageContent() {
+      const { msg } = ok.useData();
+      return <p data-testid="content">{msg}</p>;
+    }
+
+    render(
+      <HonoRequestContext.Provider value={{ context: fakeC }}>
+        <RouteLocationsContext.Provider value={locMap}>
+          <LocationProvider>
+            <Page>
+              <ok.Boundary
+                fallback={<div data-testid="loading">Loading...</div>}
+              >
+                <PageContent />
+              </ok.Boundary>
+            </Page>
+          </LocationProvider>
+        </RouteLocationsContext.Provider>
+      </HonoRequestContext.Provider>
+    );
+
+    const el = await screen.findByTestId('content');
+    expect(el).toHaveTextContent('loaded');
   });
 });
