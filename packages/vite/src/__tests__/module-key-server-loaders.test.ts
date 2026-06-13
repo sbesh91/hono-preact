@@ -45,6 +45,27 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     expect(out).toContain('__moduleKey: "src/pages/foo"');
   });
 
+  it('injects __moduleKey + __loaderName into serverRoute().loader(...) calls', () => {
+    const code = `
+      import { serverRoute } from '@hono-preact/iso';
+      const route = serverRoute('/movies/:id');
+      export const serverLoaders = {
+        summary: route.loader(async () => ({})),
+        cast: route.loader(async function* () { yield {}; }, { params: ['q'] }),
+      };
+    `;
+    const out = transform(code, '/Users/me/repo/src/pages/movie.server.ts');
+    // 1-arg .loader(): opts appended after the fn.
+    expect(out).toContain(
+      '__moduleKey: "src/pages/movie", __loaderName: "summary"'
+    );
+    // 2-arg .loader(fn, opts): merged into the existing opts object.
+    expect(out).toContain(
+      '__moduleKey: "src/pages/movie", __loaderName: "cast"'
+    );
+    expect(out).toContain("params: ['q']");
+  });
+
   it('does not inject opts when defineLoader already has a second arg', () => {
     const code = `
       import { defineLoader } from '@hono-preact/iso';

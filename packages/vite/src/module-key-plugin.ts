@@ -7,7 +7,7 @@ import {
   LOADER_NAME_OPTION,
 } from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
-import { parseServerLoaders } from './server-loaders-parser.js';
+import { isLoaderCall, parseServerLoaders } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 // Built from MODULE_KEY_EXPORT so the already-transformed check cannot
@@ -77,12 +77,7 @@ export function moduleKeyPlugin(): Plugin {
         node: CallExpression,
         loaderName: string | undefined
       ) => {
-        if (
-          node.callee.type !== 'Identifier' ||
-          node.callee.name !== 'defineLoader'
-        ) {
-          return;
-        }
+        if (!isLoaderCall(node)) return;
         const args = node.arguments;
         if (args.length === 0) return;
 

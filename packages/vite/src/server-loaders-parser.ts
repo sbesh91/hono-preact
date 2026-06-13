@@ -61,11 +61,31 @@ export function findUseExports(program: Program): ParsedUseExport[] {
 export type ParsedLoaderEntry = {
   /** Loader name (the key in serverLoaders, e.g. "summary"). */
   name: string;
-  /** The defineLoader(...) CallExpression node -- for AST-mutation consumers. */
+  /** The loader CallExpression node -- for AST-mutation consumers. */
   call: CallExpression;
-  /** The opts ObjectExpression if defineLoader has 2 args; otherwise null. */
+  /** The opts ObjectExpression if the call has an opts arg; otherwise null. */
   optsArg: ObjectExpression | null;
 };
+
+/**
+ * Whether a call expression produces a loader inside `serverLoaders`. Matches
+ * both `defineLoader(...)` and the `serverRoute(...).loader(...)` /
+ * `route.loader(...)` factory form (a non-computed `.loader` member call). The
+ * `serverLoaders` contract guarantees its values are `LoaderRef`s, and only
+ * these two forms produce them, so matching `.loader(...)` here is safe.
+ */
+export function isLoaderCall(call: CallExpression): boolean {
+  const callee = call.callee;
+  if (callee.type === 'Identifier' && callee.name === 'defineLoader') {
+    return true;
+  }
+  return (
+    callee.type === 'MemberExpression' &&
+    !callee.computed &&
+    callee.property.type === 'Identifier' &&
+    callee.property.name === 'loader'
+  );
+}
 
 /**
  * Walk a parsed program for `export const serverLoaders = { name: defineLoader(fn, opts?), ... }`.
@@ -101,11 +121,7 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
           continue;
 
         const call = prop.value as CallExpression;
-        if (
-          call.callee.type !== 'Identifier' ||
-          call.callee.name !== 'defineLoader'
-        )
-          continue;
+        if (!isLoaderCall(call)) continue;
 
         // The route-id overload `defineLoader('/r/:id', fn, opts?)` shifts the
         // opts object to the third argument; the fn-first form keeps it second.
