@@ -88,6 +88,15 @@ export type RoutesManifest<
    */
   serverRoutes: ReadonlyArray<ServerRoute>;
   /**
+   * Composed page-layer `use` per server-bearing route pattern (ancestors
+   * outer-first, then the node's own `use`). One entry per node with a
+   * `server` module, matching `serverRoutes`; those are the RPC targets the
+   * resolver matches a request URL against. Guards declared on guard-only
+   * grouping or layout nodes (no `server` module) are folded into these
+   * descendant entries via composition rather than appearing themselves.
+   */
+  routeUse: ReadonlyArray<{ path: string; use: PageUse }>;
+  /**
    * Phantom: carries the literal route-tree type so `RoutePaths<typeof routes>`
    * can extract the route-pattern union for typed params. Never assigned at
    * runtime; the `?` keeps the `defineRoutes` return object unchanged.
@@ -201,6 +210,32 @@ function collectServerRoutes(
     }
   };
   walk(routes, parentPath, []);
+  return out;
+}
+
+function collectRouteUse(
+  routes: ReadonlyArray<RouteDef>,
+  parentPath = '',
+  inherited: PageUse = []
+): Array<{ path: string; use: PageUse }> {
+  const out: Array<{ path: string; use: PageUse }> = [];
+  for (const r of routes) {
+    const here =
+      parentPath === ''
+        ? r.path
+        : parentPath + (r.path === '' ? '' : '/' + r.path);
+    const composed: PageUse = r.use ? [...inherited, ...r.use] : inherited;
+    // Emit one entry per server-bearing node (same key set as
+    // `collectServerRoutes`): those are the only RPC targets. Ancestor `use`
+    // from view/layout/grouping nodes with no server module is already folded
+    // into `composed`, so their guards still reach these descendants.
+    if (r.server) {
+      out.push({ path: here, use: composed });
+    }
+    if (r.children) {
+      out.push(...collectRouteUse(r.children, here, composed));
+    }
+  }
   return out;
 }
 
@@ -452,6 +487,7 @@ export function defineRoutes<const T extends readonly RouteDef[]>(
     flat: flattenTree(tree, viewCache, keyCache),
     serverImports: collectServerImports(tree),
     serverRoutes: collectServerRoutes(tree),
+    routeUse: collectRouteUse(tree),
   };
 }
 

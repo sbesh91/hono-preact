@@ -6,6 +6,17 @@ import { render, waitFor } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineRoutes, Routes } from '../define-routes.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
+import { defineServerMiddleware } from '../define-middleware.js';
+
+const noopView = () => Promise.resolve({ default: () => null });
+const noopLayout = () =>
+  Promise.resolve({
+    default: ({ children }: { children: unknown }) => children as never,
+  });
+const noopServer = () => Promise.resolve({});
+
+const a = defineServerMiddleware(async (_c, next) => next());
+const b = defineServerMiddleware(async (_c, next) => next());
 
 describe('defineRoutes: per-route location plumbing', () => {
   it('installs RouteLocationsProvider for a page-level server module', async () => {
@@ -31,6 +42,44 @@ describe('defineRoutes: per-route location plumbing', () => {
     expect(loc).toBeDefined();
     expect(loc.path).toBe('/foo/123');
     expect(loc.pathParams).toEqual({ id: '123' });
+  });
+});
+
+describe('routeUse', () => {
+  it('composes routeUse outer-to-inner down the tree', () => {
+    const m = defineRoutes([
+      {
+        path: '/app',
+        layout: noopLayout,
+        children: [
+          { path: 'open', view: noopView, server: noopServer },
+          {
+            path: 'area',
+            use: [a],
+            children: [
+              { path: '', view: noopView, server: noopServer },
+              {
+                path: ':id',
+                layout: noopLayout,
+                use: [b],
+                children: [{ path: '', view: noopView, server: noopServer }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    // server-bearing leaf with no guard in its ancestry.
+    expect(byPath.get('/app/open')).toEqual([]);
+    // '' child of the guarded `area` grouping inherits [a].
+    expect(byPath.get('/app/area')).toEqual([a]);
+    // '' child of the guarded `:id` layout inherits [a, b] outer-first.
+    expect(byPath.get('/app/area/:id')).toEqual([a, b]);
+    // Each matchable pattern appears exactly once (no duplicate entries).
+    expect(m.routeUse.filter((r) => r.path === '/app/area/:id')).toHaveLength(
+      1
+    );
   });
 });
 
