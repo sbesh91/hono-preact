@@ -7,9 +7,6 @@ import {
   type Project,
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
-import { requireSession } from '../../demo/guard.js';
-
-export const pageUse = requireSession;
 
 type Row = {
   project: Project;

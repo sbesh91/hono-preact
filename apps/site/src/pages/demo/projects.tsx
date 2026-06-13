@@ -9,7 +9,7 @@ import { useEffect } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders } from './projects.server.js';
 import { serverActions as loginActions } from './login.server.js';
-import { requireSession, DEMO_AUTHED_KEY } from '../../demo/guard.js';
+import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 
 const projectsLoader = serverLoaders.default;
 
@@ -93,4 +93,4 @@ const ProjectsView = projectsLoader.View(() => <ProjectsPage />, {
   fallback: <p class="p-6">Loading projects…</p>,
 });
 
-export default definePage(ProjectsView, { use: requireSession });
+export default definePage(ProjectsView);

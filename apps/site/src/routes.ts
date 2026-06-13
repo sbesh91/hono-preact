@@ -3,6 +3,7 @@ import { defineRoutes, type RoutePaths } from 'hono-preact';
 // /docs). Side-effect import: the generated client entry imports this module,
 // so the subscriber is installed once at startup.
 import './docs-transition.js';
+import { requireSession } from './demo/guard.js';
 
 const docsView = () => import('./components/DocsRoute.js');
 
@@ -27,22 +28,28 @@ const routeTree = [
       },
       {
         path: 'projects',
-        view: () => import('./pages/demo/projects.js'),
-        server: () => import('./pages/demo/projects.server.js'),
-      },
-      {
-        path: 'projects/:projectId',
-        layout: () => import('./pages/demo/project-layout.js'),
+        use: requireSession,
         children: [
           {
             path: '',
-            view: () => import('./pages/demo/project-issues.js'),
-            server: () => import('./pages/demo/project-issues.server.js'),
+            view: () => import('./pages/demo/projects.js'),
+            server: () => import('./pages/demo/projects.server.js'),
           },
           {
-            path: 'issues/:issueId',
-            view: () => import('./pages/demo/issue.js'),
-            server: () => import('./pages/demo/issue.server.js'),
+            path: ':projectId',
+            layout: () => import('./pages/demo/project-layout.js'),
+            children: [
+              {
+                path: '',
+                view: () => import('./pages/demo/project-issues.js'),
+                server: () => import('./pages/demo/project-issues.server.js'),
+              },
+              {
+                path: 'issues/:issueId',
+                view: () => import('./pages/demo/issue.js'),
+                server: () => import('./pages/demo/issue.server.js'),
+              },
+            ],
           },
         ],
       },

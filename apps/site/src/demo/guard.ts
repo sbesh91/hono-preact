@@ -12,10 +12,10 @@ import { currentUser } from './session.js';
 export const DEMO_AUTHED_KEY = 'demo:authed';
 
 // Server-side check (SSR / full reload + RPC requests for loaders/actions):
-// validates the signed cookie and resolves the user. The same middleware
-// runs for page renders (via page-tsx use) and for loaders/actions (via
-// pageUse on .server.ts), so unauthenticated requests redirect the same
-// way no matter the entry point.
+// validates the signed cookie and resolves the user. Declared once as `use`
+// on the route tree node in routes.ts; the framework runs it for every render
+// and every loader/action RPC under that subtree, so unauthenticated requests
+// redirect the same way regardless of entry point.
 const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
   if (!user) throw redirect('/demo/login');
@@ -39,8 +39,8 @@ const requireSessionClient = defineClientMiddleware(async (_ctx, next) => {
   await next();
 });
 
-// requireSession is the unified list used everywhere: page-tsx `use` for
-// in-tree React dispatch, and .server.ts `pageUse` for SSR + RPC paths.
-// The dispatcher partitions server vs client members by their `runs` tag,
-// so handing the same array to both is safe and avoids drift.
+// requireSession is declared once as `use` on the /demo/projects route node
+// in routes.ts. The dispatcher partitions server vs client members by their
+// `runs` tag, so handing the same array to the route node gates both render
+// and RPC paths without drift.
 export const requireSession = [requireSessionServer, requireSessionClient];
