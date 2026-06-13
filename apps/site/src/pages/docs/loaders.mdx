@@ -126,6 +126,20 @@ export const serverLoaders = {
 };
 ```
 
+### Typed loader params
+
+Pass the route id as the first argument and `ctx.location.pathParams` is typed from the route's pattern instead of `Record<string, string>` (requires the one-time [route registration](/docs/layouts#typed-route-params)):
+
+```ts
+export const serverLoaders = {
+  // location.pathParams.id is typed `string`
+  default: defineLoader('/movies/:id', async ({ location }) => {
+    const movie = await getMovie(location.pathParams.id);
+    return { movie };
+  }),
+};
+```
+
 ### The loader context
 
 Every loader is called with a single context argument with the same three fields, regardless of whether it returns a value or streams:
