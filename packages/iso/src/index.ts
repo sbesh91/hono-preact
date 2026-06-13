@@ -19,6 +19,13 @@ export type {
   ViewProps,
 } from './define-routes.js';
 
+// Typed route params.
+export type {
+  RouteParams,
+  RoutePaths,
+  RegisteredRoutes,
+} from './internal/typed-routes.js';
+
 // Server bindings.
 export { defineLoader } from './define-loader.js';
 export type {
