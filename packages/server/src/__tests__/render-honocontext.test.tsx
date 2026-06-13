@@ -71,12 +71,12 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
   // rendering errorFallback), and renderPage's outer catch translates to
   // a status-coded text response.
   //
-  // Wrap in <Page> here (not just <PageMiddlewareHost>) so RouteBoundary
-  // is in the tree; that's the exact path that B1 fixes. Without the B1
-  // fix the deny outcome would be coerced to `new Error('[object Object]')`
-  // by getDerivedStateFromError, the boundary would render its null
-  // errorFallback, and the response would arrive as 200 with empty body
-  // instead of 403 with the deny message.
+  // <Page> is in the tree to supply RouteBoundary; an explicit
+  // <PageMiddlewareHost> is nested inside it to run the gate middleware.
+  // Without the RouteBoundary rethrow the deny outcome would be coerced
+  // to `new Error('[object Object]')` by getDerivedStateFromError, the
+  // boundary would render its null errorFallback, and the response would
+  // arrive as 200 with empty body instead of 403 with the deny message.
   it('a server middleware can short-circuit by throwing a deny outcome', async () => {
     const gate = defineServerMiddleware<'page'>(async () => {
       throw deny(403, 'Forbidden');
@@ -85,8 +85,10 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
     const Layout = () => (
       <html>
         <body>
-          <Page location={loc} use={[gate]}>
-            <div>secret</div>
+          <Page>
+            <PageMiddlewareHost use={[gate]} location={loc}>
+              <div>secret</div>
+            </PageMiddlewareHost>
           </Page>
         </body>
       </html>
