@@ -10,6 +10,7 @@ import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
 import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
+import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
 
 function wrapWithRouteLocations(
@@ -239,6 +240,25 @@ function collectRouteUse(
   return out;
 }
 
+// Wrap a leaf view in a page-middleware host carrying the node's composed
+// page-layer `use`. Identity is recomputed per registration; leaves are
+// registered once each, so the shared-component memo (getOrCreateLazyView)
+// is unaffected. No-op when there is nothing to run.
+function withLeafGuard(
+  component: ComponentType<ViewProps>,
+  use: PageUse
+): ComponentType<ViewProps> {
+  if (use.length === 0) return component;
+  const Guarded: ComponentType<ViewProps> = (location) =>
+    h(PageMiddlewareHost, {
+      use,
+      location,
+      children: h(component, location),
+    });
+  Guarded.displayName = `Guarded(${component.displayName ?? component.name ?? 'View'})`;
+  return Guarded;
+}
+
 /**
  * Memoize `lazy(view)` per view-thunk identity. When the same `view` thunk is
  * referenced by multiple route registrations (e.g. `/docs` and `/docs/*`),
@@ -303,7 +323,8 @@ function makeLayoutGroupComponent(
   server: RouteDef['server'] | undefined,
   layoutPathPattern: string,
   children: ReadonlyArray<RouteDef>,
-  viewCache: Map<unknown, ComponentType<ViewProps>>
+  viewCache: Map<unknown, ComponentType<ViewProps>>,
+  guardUse: PageUse
 ): ComponentType<ViewProps> {
   return asViewComponent(
     lazy(async () => {
@@ -329,7 +350,23 @@ function makeLayoutGroupComponent(
             ...inner
           )
         );
-        return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
+        const withLocations = wrapWithRouteLocations(
+          serverMod,
+          layoutLocation,
+          layoutNode
+        );
+        // Gate the layout (and, via its inner Router, every descendant) on the
+        // composed page-layer `use`, dispatching against the layout's OWN
+        // matched location so the guard re-runs only when the layout's path
+        // changes, not on every inner-leaf navigation. Nested layout hosts
+        // compose ancestor -> leaf guards for free.
+        return guardUse.length === 0
+          ? withLocations
+          : h(PageMiddlewareHost, {
+              use: guardUse,
+              location: layoutLocation,
+              children: withLocations,
+            });
       };
       return { default: Wrapper };
     })
@@ -375,21 +412,28 @@ function deriveLayoutLocation(
  * Build the inner <Route> children for a layout group's <Router>. Each child
  * is either a leaf (registered under its relative path) or another layout
  * group (registered under bare + wildcard paths within the inner router).
+ *
+ * `pendingUse` carries the composed page-layer `use` from bare groupings (which
+ * have no component of their own) down to the next node that actually renders a
+ * component, where it is applied via a host wrapper.
  */
 function buildInnerRoutes(
   children: ReadonlyArray<RouteDef>,
-  viewCache: Map<unknown, ComponentType<ViewProps>>
+  viewCache: Map<unknown, ComponentType<ViewProps>>,
+  pendingUse: PageUse = []
 ): VNode<any>[] {
   const nodes: VNode<any>[] = [];
   for (const child of children) {
+    const ownUse: PageUse = child.use
+      ? [...pendingUse, ...child.use]
+      : pendingUse;
     if (child.view) {
+      const component = withLeafGuard(
+        getOrCreateLazyView(child.view, child.server, viewCache),
+        ownUse
+      );
       nodes.push(
-        h(Route, {
-          path: child.path,
-          component: asRouteComponent(
-            getOrCreateLazyView(child.view, child.server, viewCache)
-          ),
-        })
+        h(Route, { path: child.path, component: asRouteComponent(component) })
       );
     } else if (child.layout && child.children) {
       const Group = makeLayoutGroupComponent(
@@ -397,7 +441,8 @@ function buildInnerRoutes(
         child.server,
         child.path,
         child.children,
-        viewCache
+        viewCache,
+        ownUse
       );
       // Same shared-component trick at this nesting level.
       nodes.push(
@@ -410,23 +455,13 @@ function buildInnerRoutes(
         })
       );
     } else if (child.children) {
-      // Path-grouping inside a layout. Inline view-leaf grandchildren.
-      // Nested layouts and deeper groupings inside this path-grouping are
-      // rendered in a later task; for now they are silently skipped here.
-      for (const grand of child.children) {
-        const joined =
-          child.path === '' ? grand.path : child.path + '/' + grand.path;
-        if (grand.view) {
-          nodes.push(
-            h(Route, {
-              path: joined,
-              component: asRouteComponent(
-                getOrCreateLazyView(grand.view, grand.server, viewCache)
-              ),
-            })
-          );
-        }
-      }
+      // Bare grouping: prefix child paths and carry `use` down. A grouping
+      // may now contain nested layouts/groupings, not just view leaves.
+      const prefixed = child.children.map((grand) => ({
+        ...grand,
+        path: child.path === '' ? grand.path : child.path + '/' + grand.path,
+      }));
+      nodes.push(...buildInnerRoutes(prefixed, viewCache, ownUse));
     }
   }
   return nodes;
@@ -436,7 +471,8 @@ function flattenTree(
   routes: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
   keyCache: Map<ComponentType<ViewProps>, string>,
-  parentPath = ''
+  parentPath = '',
+  pendingUse: PageUse = []
 ): FlatRoute[] {
   const keyFor = (c: ComponentType<ViewProps>): string => {
     let k = keyCache.get(c);
@@ -452,9 +488,13 @@ function flattenTree(
       parentPath === ''
         ? r.path
         : parentPath + (r.path === '' ? '' : '/' + r.path);
+    const ownUse: PageUse = r.use ? [...pendingUse, ...r.use] : pendingUse;
 
     if (r.view) {
-      const component = getOrCreateLazyView(r.view, r.server, viewCache);
+      const component = withLeafGuard(
+        getOrCreateLazyView(r.view, r.server, viewCache),
+        ownUse
+      );
       out.push({ path: here, component, key: keyFor(component) });
     } else if (r.layout && r.children) {
       const Group = makeLayoutGroupComponent(
@@ -462,15 +502,18 @@ function flattenTree(
         r.server,
         here,
         r.children,
-        viewCache
+        viewCache,
+        ownUse
       );
       const key = keyFor(Group);
       out.push({ path: here, component: Group, key });
       out.push({ path: here + '/*', component: Group, key });
     } else if (r.children) {
-      // Path-grouping at top level: recurse with the prefix.
+      // Path-grouping at top level: recurse with the prefix, carrying `use`.
       const childParent = here === '/' ? '' : here;
-      out.push(...flattenTree(r.children, viewCache, keyCache, childParent));
+      out.push(
+        ...flattenTree(r.children, viewCache, keyCache, childParent, ownUse)
+      );
     }
   }
   return out;
