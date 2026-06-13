@@ -281,7 +281,7 @@ The route id autocompletes/validates against `RegisteredPaths` exactly like `def
 
 ### Dogfood + docs
 
-`apps/site/src/pages/demo/issue.server.ts` moves to `serverRoute('/demo/projects/:projectId/issues/:issueId')` + inline `route.loader(...)` (drops the `ISSUE_ROUTE` const, the `IssueParams` alias, and the three `LoaderCtx<IssueParams>` annotations). Docs (`layouts.mdx` typed-params section, `loaders.mdx` typed-loader subsection) lead with `serverRoute` as the recommended form, with `defineLoader(routeId, fn)` noted as the lower-level / shared-loader door.
+`apps/site/src/pages/demo/issue.server.ts` moves to `serverRoute('/demo/projects/:projectId/issues/:issueId')` + inline `route.loader(...)` (drops the `ISSUE_ROUTE` const, the `IssueParams` alias, and the three `LoaderCtx<IssueParams>` annotations). The `loaders.mdx` typed-loader subsection leads with `serverRoute` as the recommended form, with `defineLoader(routeId, fn)` noted as the lower-level / shared-loader door. The `layouts.mdx` typed-params section stays scoped to `useParams` (the client hook) and is unchanged.
 
 ### Tests
 
