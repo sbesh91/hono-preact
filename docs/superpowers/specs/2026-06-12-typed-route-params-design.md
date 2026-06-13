@@ -9,9 +9,9 @@
 
 1. **Full inference, validated typed-routing (option 1), via a type-only registry (mechanism A).** The user names the route once per consumer (`useParams('/demo/projects/:projectId')`); that string is constrained to the union of real route patterns; the param object is derived from the named pattern. No file-based routing (loaders/components are decoupled from the route table by thunks, so types cannot flow definition->use automatically), and no codegen step (the type machinery is ~45 self-contained lines of template-literal types). This is the realistic ceiling for inference in a manifest-based router.
 2. **No new dependency, no TypeScript upgrade.** The workspace already runs `typescript@6.0.3` (an earlier "4.9.4" reading was a stray global Homebrew `tsc` shadowing the workspace binary; `pnpm -r exec tsc`, which `pnpm typecheck` uses, resolves the local 6.0.3). `const` type parameters and recursive template-literal types are native. A spike (`AbsolutePaths` + `RouteParams` + registry fallback, typechecked under `tsc@6.0.3 --strict`) confirmed every assertion. No helper lib (`type-fest`, a codegen router) earns its keep here.
-3. **Loaders are covered via a `defineLoader(routeId, fn)` overload** (user's choice). The route id comes first so TypeScript can use it to contextually type `ctx` in the loader fn (a later argument cannot constrain an earlier one, which is why an opts-bag `{ route }` cannot type `ctx`). This drags in the Vite codegen (see PR 2) because the plugin currently treats a string-first `defineLoader` as an invalid form and skips it.
+3. **Loaders are covered via a `defineLoader(routeId, fn)` overload** (user's choice). The route id comes first so TypeScript can use it to contextually type `ctx` in the loader fn (a later argument cannot constrain an earlier one, which is why an opts-bag `{ route }` cannot type `ctx`). This drags in the Vite codegen (see the loader-overload section) because the plugin currently treats a string-first `defineLoader` as an invalid form and skips it.
 4. **Graceful degradation before registration.** With no `declare module` augmentation, `RegisteredPaths` falls back to `string`, so `useParams`/`defineLoader(routeId, ...)` still compile and return the param shape for whatever literal is passed. Registration only adds validation of the route id against the real table.
-5. **Ship as two PRs.** PR 1 (iso-only) lands the shared type machinery + `useParams` + the `project-layout.tsx` migration. PR 2 (iso + vite) lands the `defineLoader` overload + the codegen changes + the `issue.server.ts` migration. This mirrors the primitive #1 split (#91 iso / #92 ui), keeps each PR focused and reviewable, and isolates the codegen risk in PR 2.
+5. **Ship as one PR** (iso + vite + site). The type machinery, `useParams`, the `defineLoader` overload, the Vite codegen changes, and both site migrations land together. The two halves share the same type machinery (`typed-routes.ts`, `RegisteredRoutes`, `RouteParams`) and reshapes, so a single PR keeps the feature coherent; the plan sequences the codegen work as its own tasks so the risk stays isolated within the PR.
 
 ## The type machinery (internal `packages/iso/src/internal/typed-routes.ts`)
 
@@ -126,7 +126,7 @@ export function defineRoutes<const T extends readonly RouteDef[]>(
 
 The default type parameter means all four existing `RoutesManifest` references resolve unchanged (`packages/server/src/route-server-modules.ts`, the barrel re-export, the `Routes` props, the definition). The `const` type parameter gives users typed routes **without writing `as const`**; a caller who passes an already-widened `RouteDef[]` variable simply falls back to `string` route ids. The phantom field is optional and never constructed, so `defineRoutes`'s return literal is unchanged at runtime.
 
-## Public API (PR 1)
+## Public API: `useParams`
 
 Re-exported from the iso barrel (`packages/iso/src/index.ts`), surfaced through `hono-preact`:
 
@@ -166,9 +166,9 @@ declare module 'hono-preact' {
 }
 ```
 
-After this, `useParams` (and the PR-2 loader overload) constrain the route id to the real pattern union; a typo or a deleted route is a compile error.
+After this, `useParams` (and the `defineLoader` overload) constrain the route id to the real pattern union; a typo or a deleted route is a compile error.
 
-## Loader overload (PR 2)
+## Loader overload: `defineLoader(routeId, fn)`
 
 ### iso: generic `LoaderCtx` + the overload
 
@@ -211,22 +211,23 @@ The `moduleKeyPlugin` (`packages/vite/src/module-key-plugin.ts`) threads `__modu
 
 ## Dogfood migrations
 
-- **PR 1, `apps/site/src/pages/demo/project-layout.tsx`:** replace `const slug = (route.pathParams as { projectId?: string }).projectId ?? '';` with `const { projectId } = useParams('/demo/projects/:projectId');` (typed `{ projectId: string }`). `projectId` is now a non-optional `string`, so the `?? ''` guard becomes dead; drop it and use `projectId` directly. Add the `declare module` registration block to the site's `routes.ts` (next to the `defineRoutes` call).
-- **PR 2, `apps/site/src/pages/demo/issue.server.ts`:** change the `issue` loader to `defineLoader('/demo/projects/:projectId/issues/:issueId', issueLoader)` (and the sibling `comments`/`activity` loaders likewise if they read params), so `ctx.location.pathParams.issueId` / `.projectId` are typed `string` instead of `Record<string,string>` index access. Loader bodies are otherwise unchanged.
+- **`apps/site/src/pages/routes.ts` (or wherever `defineRoutes` is called):** add the `declare module 'hono-preact' { interface RegisteredRoutes { paths: RoutePaths<typeof routes> } }` registration block next to the `defineRoutes` call. This unlocks validated route ids for every `useParams`/`defineLoader(routeId, ...)` in the app.
+- **`apps/site/src/pages/demo/project-layout.tsx`:** replace `const slug = (route.pathParams as { projectId?: string }).projectId ?? '';` with `const { projectId } = useParams('/demo/projects/:projectId');` (typed `{ projectId: string }`). `projectId` is now a non-optional `string`, so the `?? ''` guard becomes dead; drop it and use `projectId` directly.
+- **`apps/site/src/pages/demo/issue.server.ts`:** change the `issue` loader to `defineLoader('/demo/projects/:projectId/issues/:issueId', issueLoader)` (and the sibling `comments`/`activity` loaders likewise if they read params), so `ctx.location.pathParams.issueId` / `.projectId` are typed `string` instead of `Record<string,string>` index access. Loader bodies are otherwise unchanged.
 
 ## Docs
 
-- **PR 1:** a "Typed route params" section on `apps/site/src/pages/docs/layouts.mdx` (it already introduces dynamic segments and `pathParams.id` for views/layouts at line ~35), showing the one-time `declare module` registration and `useParams('/route/:id')`. Follow the `add-docs-page` conventions (prose + example + a short API note). No new page.
-- **PR 2:** extend `apps/site/src/pages/docs/loaders.mdx` (its "Example: detail page (using route params)" section documents `location.pathParams`) with the `defineLoader('/route/:id', fn)` form and a note that `ctx.location.pathParams` is then typed.
+- A "Typed route params" section on `apps/site/src/pages/docs/layouts.mdx` (it already introduces dynamic segments and `pathParams.id` for views/layouts at line ~35), showing the one-time `declare module` registration and `useParams('/route/:id')`. Follow the `add-docs-page` conventions (prose + example + a short API note). No new page.
+- Extend `apps/site/src/pages/docs/loaders.mdx` (its "Example: detail page (using route params)" section documents `location.pathParams`) with the `defineLoader('/route/:id', fn)` form and a note that `ctx.location.pathParams` is then typed.
 
 ## Tests
 
-**PR 1 (`packages/iso/src/__tests__/`):**
+**Type machinery + `useParams` (`packages/iso/src/__tests__/`):**
 - A **type-level test** (a `.ts` file with `Expect<Equal<...>>` assertions, like the spike, run under the normal `pnpm typecheck`) for `AbsolutePaths` over a layout-group tree (asserting the deep leaf pattern is present), `RouteParams` (single/multi/optional/empty), and the `RegisteredPaths` `string` fallback. This is the real oracle for the type machinery.
 - A **runtime test** for `useParams`: render a harness inside a route match (mock `useRoute` to return `{ pathParams: { projectId: 'p1' } }`, the `page.test.tsx` mock precedent) and assert `useParams('/demo/projects/:projectId')` returns `{ projectId: 'p1' }`.
 - A **typecheck guard** that `defineRoutes([...])` (no `as const`) still yields a usable `RoutePaths<typeof routes>` and that an existing `defineRoutes` caller without registration still compiles.
 
-**PR 2:**
+**Loader overload:**
 - iso: a runtime test that `defineLoader('/r/:id', fn)` returns a `LoaderRef` behaviorally identical to `defineLoader(fn)` (the route id is inert at runtime), and a type-level test that `ctx.location.pathParams` is typed from the route id.
 - vite: the updated `module-key-plugin.test.ts` (route-id form gets `__moduleKey` injected, 2-arg and 3-arg) and `server-loaders-parser.test.ts` (opts position shift). Run the full vite plugin suite to catch validation regressions.
 
@@ -236,7 +237,7 @@ None intended. `useParams`/`RouteParams`/`RoutePaths`/`RegisteredRoutes` and the
 
 ## Out of scope (deferred)
 
-- **Dev-mode "named the wrong route" guard.** `useParams` constrains the id to a *valid* pattern but cannot statically prove it matches the *active* route; a dev-only `console.warn` when the active path does not match the named pattern (using the existing `RouteManifestContext` + a matcher) is a nice hardening, deferred to keep PR 1 iso-only and context-free.
+- **Dev-mode "named the wrong route" guard.** `useParams` constrains the id to a *valid* pattern but cannot statically prove it matches the *active* route; a dev-only `console.warn` when the active path does not match the named pattern (using the existing `RouteManifestContext` + a matcher) is a nice hardening, deferred to keep `useParams` context-free.
 - **Auto-deriving the cache-key `params` from the route id** in `defineLoader(routeId, fn)` (would change cache behavior; keep `params` explicit).
 - **Search-param typing** (`searchParams` stays `Record<string, string>`; no schema layer).
 - **File-based routing** (the only way to get zero-declaration inference; a much larger change, not one of the six primitives).
