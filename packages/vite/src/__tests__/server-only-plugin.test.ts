@@ -101,17 +101,11 @@ describe('serverOnlyPlugin', () => {
     expect(result).toBeUndefined();
   });
 
-  it('replaces pageUse named import with an empty array stub', () => {
+  it('rejects a pageUse named import (no longer a recognized export)', () => {
     const code = `import { pageUse } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const pageUse = [];');
-  });
-
-  it('handles pageUse alongside serverActions in the same statement', () => {
-    const code = `import { pageUse, serverActions } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const pageUse = [];');
-    expect(result?.code).toContain('const serverActions = new Proxy(');
+    expect(() =>
+      transform(code, '/Users/me/repo/src/pages/movies.tsx')
+    ).toThrow(/pageUse.*not a recognized/i);
   });
 
   it('stubs loaderUse and actionUse imports too', () => {
@@ -119,12 +113,6 @@ describe('serverOnlyPlugin', () => {
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
     expect(result?.code).toContain('const loaderUse = [];');
     expect(result?.code).toContain('const actionUse = [];');
-  });
-
-  it('stubs renamed pageUse imports using the local alias name', () => {
-    const code = `import { pageUse as gating } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const gating = [];');
   });
 
   it('derives module key for serverLoaders stub from the import source, not the consumer file', () => {
@@ -175,9 +163,9 @@ describe('unknown specifiers from .server.* imports', () => {
       const msg = (err as Error).message;
       expect(msg).toContain('serverActions');
       expect(msg).toContain('serverLoaders');
-      expect(msg).toContain('pageUse');
       expect(msg).toContain('loaderUse');
       expect(msg).toContain('actionUse');
+      expect(msg).not.toContain('pageUse');
     }
   });
 });

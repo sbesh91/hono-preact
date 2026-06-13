@@ -128,13 +128,13 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('found: serverGuards');
   });
 
-  it('passes a *.server.* file with pageUse as a named export', () => {
+  it('rejects a *.server.* file with pageUse as a named export (no longer recognized)', () => {
     const code = [
       'export const pageUse = [];',
       'export const serverActions = {};',
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
-    expect(error).toBeNull();
+    expect(error).toContain('found: pageUse');
   });
 
   it('error message lists all allowed named exports', () => {
@@ -145,9 +145,9 @@ describe('serverLoaderValidationPlugin', () => {
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain("'serverActions'");
     expect(error).toContain("'serverLoaders'");
-    expect(error).toContain("'pageUse'");
     expect(error).toContain("'loaderUse'");
     expect(error).toContain("'actionUse'");
+    expect(error).not.toContain("'pageUse'");
     expect(error).not.toContain("'actionGuards'");
     expect(error).not.toContain("'loader'");
     expect(error).not.toContain("'cache'");
@@ -164,32 +164,28 @@ describe('serverLoaderValidationPlugin', () => {
     ].join('\n');
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toMatch(
-      /'serverActions'.*'serverLoaders'.*'pageUse'.*'loaderUse'.*'actionUse'/
+      /'serverActions'.*'serverLoaders'.*'loaderUse'.*'actionUse'/
     );
   });
 
-  // F3 / F11: a `pageUse` (or loaderUse/actionUse) declared as an
-  // obviously-non-array literal silently disables the gate at runtime.
-  // Reject the literal denylist here; let identifiers/member-expressions
-  // through and rely on the runtime guard in makePageUseResolvers.
+  // F3 / F11: a `loaderUse` or `actionUse` declared as an obviously-non-array
+  // literal silently disables the middleware at runtime. Reject those literal
+  // shapes here; let identifiers/member-expressions through (we cannot
+  // statically prove an imported identifier holds an array). There is no
+  // runtime backstop, so an indirect non-array value cannot be caught until
+  // the middleware chain runs.
   describe('use-export shape validation', () => {
-    it('accepts pageUse = identifier (e.g. re-exporting a shared array)', () => {
-      // This is the legitimate share-pattern: definePage({ use: requireSession })
-      // on the page-tsx and `export const pageUse = requireSession` on the
-      // .server.ts so both surfaces gate identically. Build-time can't prove
-      // `requireSession` is an array (it's imported from another module), so
-      // we accept and let the runtime guard catch any non-array value at
-      // first request.
+    it('accepts loaderUse = identifier (e.g. re-exporting a shared array)', () => {
       const code = [
         "import { requireSession } from '../auth.js';",
-        'export const pageUse = requireSession;',
+        'export const loaderUse = requireSession;',
         'export const serverLoaders = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
       expect(error).toBeNull();
     });
 
-    it('accepts loaderUse = identifier', () => {
+    it('accepts loaderUse = identifier (audit)', () => {
       const code = [
         "import { audit } from '../audit.js';",
         'export const loaderUse = audit;',
@@ -209,62 +205,71 @@ describe('serverLoaderValidationPlugin', () => {
       expect(error).toBeNull();
     });
 
-    it('accepts pageUse = [mw, mw2] (array literal)', () => {
+    it('accepts loaderUse = [mw, mw2] (array literal)', () => {
       const code = [
         "import { defineServerMiddleware } from '@hono-preact/iso';",
         'const requireAuth = defineServerMiddleware(async (_c, next) => next());',
         'const audit = defineServerMiddleware(async (_c, next) => next());',
-        'export const pageUse = [requireAuth, audit];',
+        'export const loaderUse = [requireAuth, audit];',
         'export const serverLoaders = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
       expect(error).toBeNull();
     });
 
-    it('accepts pageUse = [] (empty array literal)', () => {
+    it('accepts loaderUse = [] (empty array literal)', () => {
+      const code = [
+        'export const loaderUse = [];',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts loaderUse = auth.requireSession (member expression)', () => {
+      const code = [
+        "import * as auth from '../auth.js';",
+        'export const loaderUse = auth.requireSession;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('rejects loaderUse = someObjectLiteral (object expression is not an array)', () => {
+      const code = [
+        'export const loaderUse = { x: 1 };',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`loaderUse` must be an array literal');
+    });
+
+    it('rejects loaderUse = 42 (numeric literal)', () => {
+      const code = [
+        'export const loaderUse = 42;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`loaderUse` must be an array literal');
+    });
+
+    it('rejects loaderUse = "foo" (string literal)', () => {
+      const code = [
+        'export const loaderUse = "foo";',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('`loaderUse` must be an array literal');
+    });
+
+    it('rejects pageUse = [] as an unrecognized export (not a use-export)', () => {
       const code = [
         'export const pageUse = [];',
         'export const serverLoaders = {};',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
-      expect(error).toBeNull();
-    });
-
-    it('accepts pageUse = auth.requireSession (member expression)', () => {
-      const code = [
-        "import * as auth from '../auth.js';",
-        'export const pageUse = auth.requireSession;',
-        'export const serverLoaders = {};',
-      ].join('\n');
-      const { error } = transform(code, 'movies.server.ts');
-      expect(error).toBeNull();
-    });
-
-    it('rejects pageUse = someObjectLiteral (object expression is not an array)', () => {
-      const code = [
-        'export const pageUse = { x: 1 };',
-        'export const serverLoaders = {};',
-      ].join('\n');
-      const { error } = transform(code, 'movies.server.ts');
-      expect(error).toContain('`pageUse` must be an array literal');
-    });
-
-    it('rejects pageUse = 42 (numeric literal)', () => {
-      const code = [
-        'export const pageUse = 42;',
-        'export const serverLoaders = {};',
-      ].join('\n');
-      const { error } = transform(code, 'movies.server.ts');
-      expect(error).toContain('`pageUse` must be an array literal');
-    });
-
-    it('rejects pageUse = "foo" (string literal)', () => {
-      const code = [
-        'export const pageUse = "foo";',
-        'export const serverLoaders = {};',
-      ].join('\n');
-      const { error } = transform(code, 'movies.server.ts');
-      expect(error).toContain('`pageUse` must be an array literal');
+      expect(error).toContain('found: pageUse');
     });
   });
 

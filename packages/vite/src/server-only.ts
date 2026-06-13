@@ -13,7 +13,10 @@ import {
 import { deriveModuleKey } from './module-key.js';
 import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
-import { RECOGNIZED_SERVER_EXPORTS } from './server-exports-contract.js';
+import {
+  RECOGNIZED_SERVER_EXPORTS,
+  RECOGNIZED_USE_EXPORTS_SET,
+} from './server-exports-contract.js';
 
 // The unknown-specifier rejection message lists every recognized server
 // export so a user can immediately see the valid set. The list is derived
@@ -248,14 +251,12 @@ export function serverOnlyPlugin(): Plugin {
           } else if (
             specifier.type === 'ImportSpecifier' &&
             specifier.imported.type === 'Identifier' &&
-            (specifier.imported.name === 'pageUse' ||
-              specifier.imported.name === 'loaderUse' ||
-              specifier.imported.name === 'actionUse')
+            RECOGNIZED_USE_EXPORTS_SET.has(specifier.imported.name)
           ) {
             // Middleware-carrying named exports never run on the client; the
             // client only needs the array to exist so user imports don't
             // crash. The real `use` arrays live on the server side and are
-            // wired into the dispatcher via pageUse resolvers.
+            // wired into the dispatcher.
             stubs.push(`const ${specifier.local.name} = [];`);
           } else if (
             specifier.type === 'ImportSpecifier' &&
