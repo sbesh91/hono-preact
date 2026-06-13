@@ -6,11 +6,6 @@ import type { JSX } from 'preact';
 import type { Context } from 'hono';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
-import {
-  defineServerMiddleware,
-  defineClientMiddleware,
-} from '../define-middleware.js';
-import type { PageUse } from '../internal/use-types.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import { HonoRequestContext } from '../internal/contexts.js';
 
@@ -87,18 +82,11 @@ describe('definePage', () => {
     expect(await screen.findByText('plain')).toBeInTheDocument();
   });
 
-  it('threads errorFallback and use into <Page>', async () => {
-    const sm = defineServerMiddleware<'page'>(async (_ctx, next) => {
-      await next();
-    });
-    const cm = defineClientMiddleware(async (_ctx, next) => {
-      await next();
-    });
+  it('threads errorFallback into <Page>', async () => {
     const bindings: PageBindings = {
       errorFallback: (err, reset) => (
         <button onClick={reset}>{err.message}</button>
       ),
-      use: [sm, cm],
     };
     function Body() {
       return <p>ok</p>;
@@ -125,21 +113,16 @@ describe('definePage', () => {
 });
 
 describe('PageBindings surface', () => {
-  it('accepts errorFallback and use on the bindings type', () => {
-    const mw = defineServerMiddleware<'page'>(async (_ctx, next) => {
-      await next();
-    });
+  it('accepts errorFallback on the bindings type', () => {
     const bindings: PageBindings = {
       errorFallback: (err, reset) => (
         <button onClick={reset}>{err.message}</button>
       ),
-      use: [mw],
     };
     expectTypeOf(bindings.errorFallback).toMatchTypeOf<
       | JSX.Element
       | ((error: Error, reset: () => void) => JSX.Element)
       | undefined
     >();
-    expectTypeOf(bindings.use).toEqualTypeOf<PageUse | undefined>();
   });
 });
