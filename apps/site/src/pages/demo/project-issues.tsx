@@ -2,7 +2,6 @@ import { definePage, Form, useFormStatus } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { serverLoaders, serverActions } from './project-issues.server.js';
-import { requireSession } from '../../demo/guard.js';
 import IssueRow from '../../components/demo/IssueRow.js';
 
 const issuesLoader = serverLoaders.default;
@@ -70,4 +69,4 @@ const ProjectIssuesView = issuesLoader.View(() => <ProjectIssuesPage />, {
   fallback: <p>Loading issues…</p>,
 });
 
-export default definePage(ProjectIssuesView, { use: requireSession });
+export default definePage(ProjectIssuesView);

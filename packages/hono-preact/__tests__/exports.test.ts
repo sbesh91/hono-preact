@@ -79,7 +79,7 @@ describe('hono-preact/server export', () => {
   it('no longer surfaces the framework-emitted resolver factories (moved to /internal/runtime)', async () => {
     const m = await import('hono-preact/server');
     expect('routeServerModules' in m).toBe(false);
-    expect('makePageUseResolvers' in m).toBe(false);
+    expect('makePageUseResolver' in m).toBe(false);
     expect('makePageActionResolvers' in m).toBe(false);
   });
 });

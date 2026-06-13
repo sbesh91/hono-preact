@@ -61,15 +61,15 @@ export function serverLoaderValidationPlugin(): Plugin {
         }
       }
 
-      // F3: pageUse / loaderUse / actionUse must resolve to an array at
-      // runtime so the route-map builder and dispatcher receive a real
-      // ReadonlyArray. We can't statically prove that an identifier (e.g.
-      // `pageUse = requireSession` re-exporting an array from another
-      // module) holds an array, so we reject only the obviously-wrong
-      // literal shapes here and let the runtime guard in
-      // `makePageUseResolvers` catch indirect non-array values at first
-      // request. The literal denylist still catches the canonical typo
-      // case (`pageUse = singleMwObject`). findUseExports is shared with
+      // F3: loaderUse / actionUse must resolve to an array at runtime so
+      // the dispatcher receives a real ReadonlyArray. We cannot statically
+      // prove that an identifier (e.g. `loaderUse = requireSession`
+      // re-exporting an array from another module) holds an array, so we
+      // reject only the obviously-wrong literal shapes here. There is no
+      // runtime backstop, so an indirect (identifier) non-array value
+      // cannot be caught until the middleware chain runs. The literal
+      // denylist covers the canonical typo case (`loaderUse =
+      // singleMwObject`). findUseExports is shared with
       // server-loaders-parser so the recognized-name list stays in one
       // place.
       const REJECTED_LITERAL_TYPES = new Set([

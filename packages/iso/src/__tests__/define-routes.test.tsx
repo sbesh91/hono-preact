@@ -13,6 +13,7 @@ import {
   type ViewProps,
 } from '../define-routes.js';
 import { RouteManifestContext } from '../internal/route-manifest.js';
+import { defineServerMiddleware } from '../define-middleware.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
 const noopLayout = () =>
@@ -20,6 +21,10 @@ const noopLayout = () =>
     default: ({ children }: { children: unknown }) => children as never,
   });
 const noopServer = () => Promise.resolve({});
+
+const mw = defineServerMiddleware(async (_ctx, next) => {
+  await next();
+});
 
 describe('defineRoutes validation', () => {
   it('accepts a leaf route with view', () => {
@@ -129,7 +134,7 @@ describe('defineRoutes validation', () => {
     ).not.toThrow();
   });
 
-  it('rejects a layout inside a path-grouping that is inside a layout group', () => {
+  it('accepts a layout inside a path-grouping that is inside a layout group', () => {
     expect(() =>
       defineRoutes([
         {
@@ -149,12 +154,10 @@ describe('defineRoutes validation', () => {
           ],
         },
       ])
-    ).toThrow(
-      /path-grouping inside a layout group may only contain view leaves/
-    );
+    ).not.toThrow();
   });
 
-  it('rejects further path-grouping inside a path-grouping that is inside a layout group', () => {
+  it('accepts further path-grouping inside a path-grouping that is inside a layout group', () => {
     expect(() =>
       defineRoutes([
         {
@@ -170,9 +173,7 @@ describe('defineRoutes validation', () => {
           ],
         },
       ])
-    ).toThrow(
-      /path-grouping inside a layout group may only contain view leaves/
-    );
+    ).not.toThrow();
   });
 
   it('still allows layouts inside top-level path-groupings (no restriction at top)', () => {
@@ -185,6 +186,38 @@ describe('defineRoutes validation', () => {
               path: 'users',
               layout: noopLayout,
               children: [{ path: '', view: noopView }],
+            },
+          ],
+        },
+      ])
+    ).not.toThrow();
+  });
+
+  it('accepts `use` on a leaf node', () => {
+    expect(() =>
+      defineRoutes([{ path: '/', view: noopView, use: [mw] }])
+    ).not.toThrow();
+  });
+
+  it('validation accepts `use` on a bare grouping with a nested layout (render support lands in task 3)', () => {
+    // validate() no longer rejects this shape; buildInnerRoutes render support comes in task 3.
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/app',
+          layout: noopLayout,
+          children: [
+            {
+              path: 'area',
+              use: [mw],
+              children: [
+                { path: '', view: noopView },
+                {
+                  path: ':id',
+                  layout: noopLayout,
+                  children: [{ path: '', view: noopView }],
+                },
+              ],
             },
           ],
         },

@@ -428,7 +428,7 @@ export const serverActions = {
 };
 ```
 
-For module-wide gating (every action plus every loader), export `pageUse` from the `.server.ts` file instead. See [Middleware](/docs/middleware) for the full chain model.
+For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model.
 
 ## Timeouts
 
@@ -464,7 +464,7 @@ surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `pageUse` / `loaderUse` / `actionUse` named exports become empty arrays on the client. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or the recognized `use` exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. Any imported `loaderUse` / `actionUse` named exports become empty arrays on the client. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, or the recognized `use` exports. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
 
 ## Security: SameSite cookies on form posts
 

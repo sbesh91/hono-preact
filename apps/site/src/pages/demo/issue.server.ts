@@ -13,14 +13,11 @@ import {
   type ActivityItem,
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
-import { requireSession } from '../../demo/guard.js';
 import { assertCanClose } from './issue-guards.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (issueId/projectId) from the route's pattern.
 const route = serverRoute('/demo/projects/:projectId/issues/:issueId');
-
-export const pageUse = requireSession;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
 const withAuthor = <T extends { authorId: string }>(x: T): WithAuthor<T> => ({

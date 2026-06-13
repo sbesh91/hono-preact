@@ -10,6 +10,8 @@ import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
 import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
+import { PageMiddlewareHost } from './internal/page-middleware-host.js';
+import type { PageUse } from './internal/use-types.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -36,6 +38,13 @@ export type RouteDef = {
   layout?: LazyImport<ComponentType<LayoutProps>>;
   server?: LazyServerImport;
   children?: readonly RouteDef[];
+  /**
+   * Page-layer middleware/observers for this node and every descendant.
+   * Composed outer-to-inner with `appConfig.use` and unit-level `use`.
+   * Runs on the page render (SSR + client nav) and on the loader/action
+   * RPC paths. The single declared source of a page guard.
+   */
+  use?: PageUse;
 };
 
 export type FlatRoute = {
@@ -57,10 +66,11 @@ export type ServerRoute = {
   /**
    * Lazy server-module loaders for every server-bearing ancestor in the
    * route tree, outermost first, NOT including this route's own server.
-   * Used by the server-side pageUse resolver to compose page-layer
-   * middleware along the actual tree of layouts rather than relying on
-   * URL-prefix matching (which conflates siblings that share a path
-   * prefix, e.g. `/demo/projects` and `/demo/projects/:projectId/...`).
+   * Used by the page-action resolver (`makePageActionResolvers` via
+   * `makeRouteModuleResolvers`) to compose page-layer middleware along the
+   * actual tree of layouts rather than relying on URL-prefix matching
+   * (which conflates siblings that share a path prefix, e.g.
+   * `/demo/projects` and `/demo/projects/:projectId/...`).
    */
   ancestors: ReadonlyArray<LazyServerImport>;
 };
@@ -79,6 +89,15 @@ export type RoutesManifest<
    * existing call sites only need the lazy thunks.
    */
   serverRoutes: ReadonlyArray<ServerRoute>;
+  /**
+   * Composed page-layer `use` per server-bearing route pattern (ancestors
+   * outer-first, then the node's own `use`). One entry per node with a
+   * `server` module, matching `serverRoutes`; those are the RPC targets the
+   * resolver matches a request URL against. Guards declared on guard-only
+   * grouping or layout nodes (no `server` module) are folded into these
+   * descendant entries via composition rather than appearing themselves.
+   */
+  routeUse: ReadonlyArray<{ path: string; use: PageUse }>;
   /**
    * Phantom: carries the literal route-tree type so `RoutePaths<typeof routes>`
    * can extract the route-pattern union for typed params. Never assigned at
@@ -102,25 +121,7 @@ const asRouteComponent = (c: ComponentType<any>): AnyComponent<any> =>
 const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
   c as ComponentType<ViewProps>;
 
-/**
- * Where in the tree a route is being validated. Determines which structural
- * shapes are legal at that position.
- *
- * - `top`: at top level or inside a top-level path-grouping. Anything goes.
- * - `layout`: a direct child of a layout group. May be a leaf, a layout
- *    group, or a path-grouping (which is restricted further).
- * - `layout-grouping`: a child of a path-grouping that is itself inside a
- *    layout group. `buildInnerRoutes` only inlines view-leaves at this depth,
- *    so layouts and further grouping here would silently disappear at runtime.
- *    Reject them at validation time instead.
- */
-type ValidationContext = 'top' | 'layout' | 'layout-grouping';
-
-function validate(
-  routes: ReadonlyArray<RouteDef>,
-  parentPath = '',
-  context: ValidationContext = 'top'
-): void {
+function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
   for (const r of routes) {
     const here = parentPath + (r.path.startsWith('/') ? r.path : '/' + r.path);
     const hasView = !!r.view;
@@ -132,11 +133,13 @@ function validate(
         `Route ${here}: cannot declare both \`view\` and \`layout\`.`
       );
     }
+
     if (hasView && hasChildren) {
       throw new Error(
         `Route ${here}: \`view\` route cannot have \`children\`.`
       );
     }
+
     if (hasLayout && !hasChildren) {
       throw new Error(`Route ${here}: \`layout\` requires \`children\`.`);
     }
@@ -151,20 +154,8 @@ function validate(
       throw new Error(`Route ${here}: child path must not start with \`/\`.`);
     }
 
-    if (context === 'layout-grouping' && (hasLayout || hasChildren)) {
-      throw new Error(
-        `Route ${here}: a path-grouping inside a layout group may only contain view leaves at v0.1. ` +
-          `Move this route up a level (direct child of the layout group) or restructure as its own layout group.`
-      );
-    }
-
     if (hasChildren) {
-      const childContext: ValidationContext = hasLayout
-        ? 'layout'
-        : context === 'layout'
-          ? 'layout-grouping'
-          : 'top';
-      validate(r.children!, here === '/' ? '' : here, childContext);
+      validate(r.children!, here === '/' ? '' : here);
     }
   }
 }
@@ -222,6 +213,51 @@ function collectServerRoutes(
   };
   walk(routes, parentPath, []);
   return out;
+}
+
+function collectRouteUse(
+  routes: ReadonlyArray<RouteDef>,
+  parentPath = '',
+  inherited: PageUse = []
+): Array<{ path: string; use: PageUse }> {
+  const out: Array<{ path: string; use: PageUse }> = [];
+  for (const r of routes) {
+    const here =
+      parentPath === ''
+        ? r.path
+        : parentPath + (r.path === '' ? '' : '/' + r.path);
+    const composed: PageUse = r.use ? [...inherited, ...r.use] : inherited;
+    // Emit one entry per server-bearing node (same key set as
+    // `collectServerRoutes`): those are the only RPC targets. Ancestor `use`
+    // from view/layout/grouping nodes with no server module is already folded
+    // into `composed`, so their guards still reach these descendants.
+    if (r.server) {
+      out.push({ path: here, use: composed });
+    }
+    if (r.children) {
+      out.push(...collectRouteUse(r.children, here, composed));
+    }
+  }
+  return out;
+}
+
+// Wrap a leaf view in a page-middleware host carrying the node's composed
+// page-layer `use`. Identity is recomputed per registration; leaves are
+// registered once each, so the shared-component memo (getOrCreateLazyView)
+// is unaffected. No-op when there is nothing to run.
+function withLeafGuard(
+  component: ComponentType<ViewProps>,
+  use: PageUse
+): ComponentType<ViewProps> {
+  if (use.length === 0) return component;
+  const Guarded: ComponentType<ViewProps> = (location) =>
+    h(PageMiddlewareHost, {
+      use,
+      location,
+      children: h(component, location),
+    });
+  Guarded.displayName = `Guarded(${component.displayName ?? component.name ?? 'View'})`;
+  return Guarded;
 }
 
 /**
@@ -288,7 +324,8 @@ function makeLayoutGroupComponent(
   server: RouteDef['server'] | undefined,
   layoutPathPattern: string,
   children: ReadonlyArray<RouteDef>,
-  viewCache: Map<unknown, ComponentType<ViewProps>>
+  viewCache: Map<unknown, ComponentType<ViewProps>>,
+  guardUse: PageUse
 ): ComponentType<ViewProps> {
   return asViewComponent(
     lazy(async () => {
@@ -314,7 +351,23 @@ function makeLayoutGroupComponent(
             ...inner
           )
         );
-        return wrapWithRouteLocations(serverMod, layoutLocation, layoutNode);
+        const withLocations = wrapWithRouteLocations(
+          serverMod,
+          layoutLocation,
+          layoutNode
+        );
+        // Gate the layout (and, via its inner Router, every descendant) on the
+        // composed page-layer `use`, dispatching against the layout's OWN
+        // matched location so the guard re-runs only when the layout's path
+        // changes, not on every inner-leaf navigation. Nested layout hosts
+        // compose ancestor -> leaf guards for free.
+        return guardUse.length === 0
+          ? withLocations
+          : h(PageMiddlewareHost, {
+              use: guardUse,
+              location: layoutLocation,
+              children: withLocations,
+            });
       };
       return { default: Wrapper };
     })
@@ -360,21 +413,28 @@ function deriveLayoutLocation(
  * Build the inner <Route> children for a layout group's <Router>. Each child
  * is either a leaf (registered under its relative path) or another layout
  * group (registered under bare + wildcard paths within the inner router).
+ *
+ * `pendingUse` carries the composed page-layer `use` from bare groupings (which
+ * have no component of their own) down to the next node that actually renders a
+ * component, where it is applied via a host wrapper.
  */
 function buildInnerRoutes(
   children: ReadonlyArray<RouteDef>,
-  viewCache: Map<unknown, ComponentType<ViewProps>>
+  viewCache: Map<unknown, ComponentType<ViewProps>>,
+  pendingUse: PageUse = []
 ): VNode<any>[] {
   const nodes: VNode<any>[] = [];
   for (const child of children) {
+    const ownUse: PageUse = child.use
+      ? [...pendingUse, ...child.use]
+      : pendingUse;
     if (child.view) {
+      const component = withLeafGuard(
+        getOrCreateLazyView(child.view, child.server, viewCache),
+        ownUse
+      );
       nodes.push(
-        h(Route, {
-          path: child.path,
-          component: asRouteComponent(
-            getOrCreateLazyView(child.view, child.server, viewCache)
-          ),
-        })
+        h(Route, { path: child.path, component: asRouteComponent(component) })
       );
     } else if (child.layout && child.children) {
       const Group = makeLayoutGroupComponent(
@@ -382,7 +442,8 @@ function buildInnerRoutes(
         child.server,
         child.path,
         child.children,
-        viewCache
+        viewCache,
+        ownUse
       );
       // Same shared-component trick at this nesting level.
       nodes.push(
@@ -395,22 +456,13 @@ function buildInnerRoutes(
         })
       );
     } else if (child.children) {
-      // Path-grouping inside a layout. `validate()` already enforces that all
-      // descendants here are view leaves, so we only inline grandchild views.
-      for (const grand of child.children) {
-        const joined =
-          child.path === '' ? grand.path : child.path + '/' + grand.path;
-        if (grand.view) {
-          nodes.push(
-            h(Route, {
-              path: joined,
-              component: asRouteComponent(
-                getOrCreateLazyView(grand.view, grand.server, viewCache)
-              ),
-            })
-          );
-        }
-      }
+      // Bare grouping: prefix child paths and carry `use` down. A grouping
+      // may now contain nested layouts/groupings, not just view leaves.
+      const prefixed = child.children.map((grand) => ({
+        ...grand,
+        path: child.path === '' ? grand.path : child.path + '/' + grand.path,
+      }));
+      nodes.push(...buildInnerRoutes(prefixed, viewCache, ownUse));
     }
   }
   return nodes;
@@ -420,7 +472,8 @@ function flattenTree(
   routes: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
   keyCache: Map<ComponentType<ViewProps>, string>,
-  parentPath = ''
+  parentPath = '',
+  pendingUse: PageUse = []
 ): FlatRoute[] {
   const keyFor = (c: ComponentType<ViewProps>): string => {
     let k = keyCache.get(c);
@@ -436,9 +489,13 @@ function flattenTree(
       parentPath === ''
         ? r.path
         : parentPath + (r.path === '' ? '' : '/' + r.path);
+    const ownUse: PageUse = r.use ? [...pendingUse, ...r.use] : pendingUse;
 
     if (r.view) {
-      const component = getOrCreateLazyView(r.view, r.server, viewCache);
+      const component = withLeafGuard(
+        getOrCreateLazyView(r.view, r.server, viewCache),
+        ownUse
+      );
       out.push({ path: here, component, key: keyFor(component) });
     } else if (r.layout && r.children) {
       const Group = makeLayoutGroupComponent(
@@ -446,15 +503,18 @@ function flattenTree(
         r.server,
         here,
         r.children,
-        viewCache
+        viewCache,
+        ownUse
       );
       const key = keyFor(Group);
       out.push({ path: here, component: Group, key });
       out.push({ path: here + '/*', component: Group, key });
     } else if (r.children) {
-      // Path-grouping at top level: recurse with the prefix.
+      // Path-grouping at top level: recurse with the prefix, carrying `use`.
       const childParent = here === '/' ? '' : here;
-      out.push(...flattenTree(r.children, viewCache, keyCache, childParent));
+      out.push(
+        ...flattenTree(r.children, viewCache, keyCache, childParent, ownUse)
+      );
     }
   }
   return out;
@@ -471,6 +531,7 @@ export function defineRoutes<const T extends readonly RouteDef[]>(
     flat: flattenTree(tree, viewCache, keyCache),
     serverImports: collectServerImports(tree),
     serverRoutes: collectServerRoutes(tree),
+    routeUse: collectRouteUse(tree),
   };
 }
 

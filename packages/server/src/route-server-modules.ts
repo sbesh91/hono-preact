@@ -1,5 +1,5 @@
-import type { RoutesManifest, ServerRoute } from '@hono-preact/iso';
-import { makeRouteModuleResolvers } from './route-module-resolvers.js';
+import type { RoutesManifest } from '@hono-preact/iso';
+import { findBestPattern } from './route-pattern.js';
 
 /**
  * Convert a RoutesManifest into the array of lazy server-module loaders
@@ -16,91 +16,23 @@ export function routeServerModules(
   return manifest.serverImports;
 }
 
-type PageUseModule = {
-  __moduleKey?: unknown;
-  pageUse?: unknown;
-};
-
-function pageUseFromMod(
-  mod: PageUseModule,
-  patternPath: string
-): ReadonlyArray<unknown> {
-  if (mod.pageUse === undefined || mod.pageUse === null) return [];
-  if (Array.isArray(mod.pageUse)) return mod.pageUse as ReadonlyArray<unknown>;
-  // Runtime guard for non-array pageUse: surface a descriptive error so
-  // the user finds the typo (`pageUse = mySingleMw` instead of `[mySingleMw]`)
-  // immediately rather than experiencing a silent gate failure. The
-  // build-time plugin should catch this first; this is the runtime backstop.
-  throw new Error(
-    `Route '${patternPath}' exports a non-array \`pageUse\`. ` +
-      `pageUse must be an array (typically a reference to a const declared as \`[mw1, mw2]\`). ` +
-      `Wrap a single middleware in brackets: pageUse = [myMiddleware].`
-  );
-}
-
 /**
- * Build the two page-layer `use` resolvers wired into loadersHandler and
- * pageActionHandler. The loader handler matches by the location's URL path;
- * the action handler matches by the action's owning module key. Both
- * lookups share one underlying composed map populated by loading every
- * routed `.server.*` module exactly once.
+ * Build the page-layer `use` resolver from the route manifest. The composed
+ * `use` per pattern is static tree data (`manifest.routeUse`), so this is a
+ * synchronous lookup: match the request URL to the most specific pattern and
+ * return its array (empty when nothing matches or the route is unguarded).
  *
- * Ancestor composition: each ServerRoute carries an explicit list of
- * ancestor server thunks captured during the route-tree walk. The
- * resolver loads each ancestor's `pageUse` (if any) and concatenates them
- * outer-first, with the route's own pageUse appended last. So a layout
- * group's pageUse runs before each nested leaf's pageUse without the user
- * having to repeat the import in every leaf .server.*. Order matches the
- * middleware dispatcher's outer -> inner contract: app -> outermost
- * layout -> ... -> leaf -> per-unit.
- *
- * Why route-tree ancestry (not URL-prefix ancestry): two routes can share
- * a URL prefix without being parent/child in the tree. For example,
- * `/demo/projects` and `/demo/projects/:projectId/issues/:issueId` are
- * siblings of the `/demo` layout group; the latter is NOT a descendant of
- * the former. URL-prefix matching incorrectly conflates them and runs the
- * shared gate twice on every nested request.
- *
- * Build lifecycle (thunk dedup, evict-on-failure caching, dev rebuild)
- * and URL-path matching live in `makeRouteModuleResolvers`.
- *
- * NOTE: framework-private. The only intended consumer outside tests is
- * the generated server entry. Reach for it at your own risk.
+ * NOTE: framework-private. The only intended consumer is the generated server
+ * entry.
  */
-export function makePageUseResolvers(
-  serverRoutes: ReadonlyArray<ServerRoute>,
-  options: { dev?: boolean } = {}
-): {
-  byPath: (path: string) => Promise<ReadonlyArray<unknown>>;
-  byModuleKey: (key: string) => Promise<ReadonlyArray<unknown>>;
+export function makePageUseResolver(manifest: RoutesManifest): {
+  byPath: (path: string) => ReadonlyArray<unknown>;
 } {
-  const core = makeRouteModuleResolvers<
-    PageUseModule,
-    ReadonlyArray<unknown>,
-    Map<string, string>
-  >(serverRoutes, options, {
-    createExtra: () => new Map<string, string>(),
-    compose: (route, ancestorMods, selfMod, patternByModuleKey) => {
-      const composed: unknown[] = [];
-      for (const mod of ancestorMods) {
-        composed.push(...pageUseFromMod(mod, route.path));
-      }
-      composed.push(...pageUseFromMod(selfMod, route.path));
-      if (typeof selfMod.__moduleKey === 'string') {
-        patternByModuleKey.set(selfMod.__moduleKey, route.path);
-      }
-      return composed;
-    },
-  });
-
+  const map = new Map(manifest.routeUse.map((r) => [r.path, r.use]));
   return {
-    async byPath(path: string) {
-      return (await core.byPath(path)) ?? [];
-    },
-    async byModuleKey(key: string) {
-      const { byPathMap, extra: patternByModuleKey } = await core.built();
-      const pattern = patternByModuleKey.get(key);
-      return pattern ? (byPathMap.get(pattern) ?? []) : [];
+    byPath(path: string) {
+      const pattern = findBestPattern(map.keys(), path);
+      return pattern === null ? [] : (map.get(pattern) ?? []);
     },
   };
 }

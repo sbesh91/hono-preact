@@ -28,7 +28,7 @@ export function hasNamedUseExport(program: Program, name: string): boolean {
 }
 
 export type ParsedUseExport = {
-  /** The export name -- one of pageUse / loaderUse / actionUse. */
+  /** The export name -- one of loaderUse / actionUse. */
   name: string;
   /** The initializer expression, or null if `export const foo;` with no init. */
   init: Expression | null;
@@ -37,7 +37,7 @@ export type ParsedUseExport = {
 /**
  * Walk a parsed program for top-level `export const <use> = ...` declarations
  * where `<use>` is one of the recognized middleware-carrying names
- * (`pageUse` / `loaderUse` / `actionUse`). Returns each one with its
+ * (`loaderUse` / `actionUse`). Returns each one with its
  * initializer expression so callers can validate the shape (e.g. require
  * an ArrayExpression literal).
  */

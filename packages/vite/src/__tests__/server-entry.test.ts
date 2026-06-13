@@ -60,15 +60,15 @@ describe('generateCoreAppModule', () => {
     // No import; an inline empty config so the middleware chain still works.
     expect(src).not.toContain('app-config');
     expect(src).toContain('const appConfig = { use: [] };');
-    // The handler options still thread it through, plus the page-use resolvers.
-    expect(src).toContain('makePageUseResolvers(routes.serverRoutes, { dev })');
-    expect(src).toContain('resolvePageUse: pageUseResolvers.byPath');
+    // The handler options still thread it through, plus the page-use resolver.
+    expect(src).toContain('makePageUseResolver(routes)');
+    expect(src).toContain('resolvePageUse: pageUseResolver.byPath');
     // pageActionHandler uses its own resolver, not byModuleKey.
     expect(src).toContain(
       'makePageActionResolvers(routes.serverRoutes, { dev })'
     );
     expect(src).toContain('resolverByPath: pageActionResolvers.byPath');
-    expect(src).toContain('resolvePageUseByPath: pageUseResolvers.byPath');
+    expect(src).toContain('resolvePageUseByPath: pageUseResolver.byPath');
     // renderPage receives appConfig as a third argument.
     expect(src).toContain(
       `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
@@ -101,7 +101,7 @@ describe('generateCoreAppModule', () => {
       `import {\n  loadersHandler,\n  pageActionHandler,\n  renderPage,\n} from 'hono-preact/server';`
     );
     expect(src).toContain(
-      `import {\n  makePageActionResolvers,\n  makePageUseResolvers,\n  routeServerModules,\n} from 'hono-preact/server/internal/runtime';`
+      `import {\n  makePageActionResolvers,\n  makePageUseResolver,\n  routeServerModules,\n} from 'hono-preact/server/internal/runtime';`
     );
 
     // User imports (absolute paths)
@@ -126,16 +126,16 @@ describe('generateCoreAppModule', () => {
     // library handlers themselves. They also carry appConfig + per-handler
     // resolver closures so the framework's middleware chain composes correctly.
     expect(src).toContain(`const dev = import.meta.env.DEV;`);
-    expect(src).toContain(`makePageUseResolvers(routes.serverRoutes, { dev })`);
+    expect(src).toContain(`makePageUseResolver(routes)`);
     expect(src).toContain(
-      `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath })`
+      `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolver.byPath })`
     );
     expect(src).toContain(
       `makePageActionResolvers(routes.serverRoutes, { dev })`
     );
     expect(src).toContain(`pageActionHandler({`);
     expect(src).toContain(`resolverByPath: pageActionResolvers.byPath`);
-    expect(src).toContain(`resolvePageUseByPath: pageUseResolvers.byPath`);
+    expect(src).toContain(`resolvePageUseByPath: pageUseResolver.byPath`);
 
     // Hono pipeline in correct order: /__loaders POST, then wildcard POST (actions),
     // then wildcard GET (SSR).

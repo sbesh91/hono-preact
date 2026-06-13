@@ -2,17 +2,17 @@
 
 Middleware wraps loader, action, and page calls in an outer/inner chain. Each middleware receives a `ctx` and a `next` continuation; the framework calls them in order, then unwinds. Throw a [redirect, deny, or render outcome](#outcomes) to short-circuit. Use middleware for auth gates, request-scoped setup/teardown, tracing, timing, and request logging.
 
-Page bindings, loaders, and actions all accept the same `use` array, and the framework partitions server- vs client-bound members by their `runs` tag.
+App config, route nodes, loaders, and actions all accept the same `use` array, and the framework partitions server- vs client-bound members by their `runs` tag.
 
 ## The three layers
 
 Each layer attaches its `use` array through a different surface:
 
-| Layer | Where you declare it                                                | What it wraps                                    |
-| ----- | ------------------------------------------------------------------- | ------------------------------------------------ |
-| App   | `defineApp({ use })` default-exported from `src/app-config.ts`      | Every page render, every loader, every action.   |
-| Page  | `definePage(View, { use })` and `export const pageUse` (.server.ts) | The matched page tree and its loaders / actions. |
-| Unit  | `defineLoader(fn, { use })` / `defineAction(fn, { use })`           | Just that one loader or action call.             |
+| Layer | Where you declare it                                           | What it wraps                                                              |
+| ----- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| App   | `defineApp({ use })` default-exported from `src/app-config.ts` | Every page render, every loader, every action.                             |
+| Page  | `use` on a route node in `src/routes.ts`                       | The matched node and all its descendants (render + their loaders/actions). |
+| Unit  | `defineLoader(fn, { use })` / `defineAction(fn, { use })`      | Just that one loader or action call.                                       |
 
 ```ts
 // apps/site/src/app-config.ts (optional file)
@@ -26,31 +26,39 @@ const requestId = defineServerMiddleware(async (ctx, next) => {
 export default defineApp({ use: [requestId] });
 ```
 
-```tsx
-// apps/site/src/pages/admin/page.tsx
-import { definePage } from 'hono-preact';
-import { requireSession } from '../../auth/session.js';
+```ts
+// src/routes.ts
+import { defineRoutes } from 'hono-preact';
+import { requireSession } from './auth/session.js';
 
-// The `use` binding on definePage drives the page React tree:
-// PageMiddlewareHost runs server members during SSR prerender and
-// client members during intra-app navigation.
-export default definePage(AdminView, { use: requireSession });
+export default defineRoutes([
+  { path: '/login', view: () => import('./pages/login.js') }, // public
+  {
+    path: '/admin',
+    use: [requireSession], // one declaration
+    children: [
+      {
+        path: '',
+        view: () => import('./pages/admin/index.js'),
+        server: () => import('./pages/admin/index.server.js'),
+      },
+      {
+        path: 'users',
+        view: () => import('./pages/admin/users.js'),
+        server: () => import('./pages/admin/users.server.js'),
+      },
+    ],
+  },
+]);
 ```
 
 ```ts
-// apps/site/src/pages/admin/page.server.ts
+// src/pages/admin/index.server.ts
 import { defineLoader, defineAction } from 'hono-preact';
 import { auditLog } from '../../audit.js';
-import { requireSession } from '../../auth/session.js';
 
-// `pageUse` is a recognized named export on .server.* modules. The
-// loader and action handlers read it at runtime and apply the same
-// middleware around every loader and action defined in this file.
-// Reference the same array you passed to definePage so the page tree
-// and the RPC paths gate identically. (`loaderUse` and `actionUse`
-// are reserved alongside it; today only `pageUse` is wired.)
-export const pageUse = requireSession;
-
+// requireSession is declared on the route node in routes.ts and
+// covers both render and RPC paths for this entire subtree.
 export const serverLoaders = {
   default: defineLoader(async () => listAdminRows()),
 };
@@ -62,18 +70,9 @@ export const serverActions = {
 };
 ```
 
-### Why two declarations for the page layer
-
-`definePage({ use })` and `pageUse` cover two different dispatch paths for the same page:
-
-- **`definePage({ use })`** is consumed by `PageMiddlewareHost` inside the page's React tree. It runs during SSR prerender and during intra-app navigation. This is the path a `redirect` outcome takes when a logged-out user clicks a link to the page.
-- **`pageUse` on `.server.*`** is consumed by `loadersHandler` and the page POST handler directly, around every loader RPC and action POST that belongs to this page. The page React tree never renders for those calls, so the page-tsx `use` binding wouldn't fire.
-
-Export the same array from both surfaces so a user can't hit a loader behind a back-door RPC call when the page-tsx binding would have blocked them.
-
 ### Chain order
 
-Outer-to-inner the chain is `appConfig.use → pageUse → unit-level use`. The dispatcher runs each `before` body in order, then `next()` enters the next ring, then each `after` body unwinds in reverse:
+Outer-to-inner the chain is `appConfig.use → node use (ancestors outer-first) → unit-level use`. The dispatcher runs each `before` body in order, then `next()` enters the next ring, then each `after` body unwinds in reverse:
 
 ```
 root:before
@@ -89,32 +88,36 @@ A `throw` in any ring propagates up through the surrounding `after` blocks (so a
 
 ### Nested routes compose down the tree
 
-When routes nest under a layout, the page layer composes every ancestor `.server.*` module's `pageUse` outermost first, then the matched route's own. So with a tree like:
+A `use` on a route node inherits down the tree: it applies to the node's own view (if any) and every descendant, covering both the render path and the RPC paths (loaders and actions). You declare the guard once on the ancestor; leaves under it are gated without repeating anything. A sibling route that is not a descendant of the guarded node stays ungated.
 
 ```ts
 // src/routes.ts
-defineRoutes([
+import { defineRoutes } from 'hono-preact';
+import { adminGate } from './auth/admin.js';
+import { auditLog } from './audit.js';
+
+export default defineRoutes([
   {
     path: '/admin',
-    layout: () => import('./admin/layout.js'),
-    server: () => import('./admin/layout.server.js'), // exports pageUse = [adminGate]
+    use: [adminGate], // guards everything below
     children: [
       {
         path: 'users/:id',
         view: () => import('./admin/users.js'),
-        server: () => import('./admin/users.server.js'), // exports pageUse = [auditLog]
+        server: () => import('./admin/users.server.js'), // no redundant guard needed
       },
     ],
   },
+  { path: '/public', view: () => import('./pages/public.js') }, // not a descendant: ungated
 ]);
 ```
 
-a request to `/admin/users/42` runs:
+A request to `/admin/users/42` runs:
 
 ```
 root:before                     // appConfig.use
-  admin:before                  // /admin layout's pageUse: adminGate
-    audit:before                // /admin/users/:id leaf's pageUse: auditLog
+  admin:before                  // /admin node use: adminGate
+    audit:before                // /admin/users/:id loader unit use: auditLog
       unit:before               // defineLoader({ use })
         inner
       unit:after
@@ -123,7 +126,7 @@ root:before                     // appConfig.use
 root:after
 ```
 
-You don't have to repeat the ancestor's gate in every leaf. The composition is keyed by route-pattern prefix: any `.server.*` module whose route is an ancestor of the matched route contributes its `pageUse` to the chain. Path parameters at the same position are treated as structurally equivalent for prefix matching (`:projectId` in the layout aligns with `:projectId` in the leaf).
+When multiple ancestors each carry `use`, they compose outer-to-inner in tree order (outermost ancestor first, then each child toward the matched leaf, then the leaf's own `use`).
 
 ## Server vs client middleware
 
@@ -239,7 +242,7 @@ export const serverLoaders = {
 use: [requireSessionServer, requireSessionClient, rateLimit, trace];
 ```
 
-Ordering matters for middleware: outer-to-inner is `appConfig.use` first, then `pageUse`, then per-unit `use`, in the order each array lists them. Observers have no relative ordering: they all fire on every chunk in registration order, and one observer's slowness doesn't gate the others.
+Ordering matters for middleware: outer-to-inner is `appConfig.use` first, then node `use` (ancestors outer-first), then per-unit `use`, in the order each array lists them. Observers have no relative ordering: they all fire on every chunk in registration order, and one observer's slowness doesn't gate the others.
 
 ## Worked examples
 

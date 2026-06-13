@@ -1,6 +1,5 @@
 import type { ComponentType, FunctionComponent, JSX } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import type { PageUse } from './internal/use-types.js';
 import { Page, type WrapperProps } from './page.js';
 
 export type PageBindings = {
@@ -8,12 +7,6 @@ export type PageBindings = {
   errorFallback?:
     | JSX.Element
     | ((error: Error, reset: () => void) => JSX.Element);
-  /**
-   * Page-scope middleware and stream observers. The dispatcher partitions
-   * server vs client members by their `runs` tag, so mixed arrays of
-   * defineServerMiddleware + defineClientMiddleware work as one list.
-   */
-  use?: PageUse;
 };
 
 export function definePage(
@@ -24,7 +17,6 @@ export function definePage(
     <Page
       Wrapper={bindings?.Wrapper}
       errorFallback={bindings?.errorFallback}
-      use={bindings?.use}
       location={location}
     >
       <Component />

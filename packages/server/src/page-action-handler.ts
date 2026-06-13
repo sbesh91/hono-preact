@@ -40,7 +40,7 @@ export interface PageActionHandlerOptions {
   /**
    * Optional per-page middleware resolver, keyed by URL path. The handler
    * composes the chain as [appConfig.use, resolvePageUseByPath(path), action.use].
-   * Pass `pageUseResolvers.byPath` from makePageUseResolvers (same resolver
+   * Pass `pageUseResolver.byPath` from makePageUseResolver (same resolver
    * loadersHandler uses). Defaults to returning empty so the option is
    * additive: handlers wired without it lose page-level middleware (matches
    * the previous behavior of this handler, which dropped them entirely).
@@ -184,11 +184,11 @@ export function pageActionHandler(
       : c.req.raw.signal;
     const actionCtx = { c, signal };
 
-    // Chain order: app-level (outermost) -> page-level (from the page's
-    // `.server.ts` and ancestor layouts' pageUse arrays) -> action-level (from
-    // defineAction's `use` option). Outer middleware runs first on the way in,
-    // last on the way out, matching the convention every middleware system
-    // users have seen (Hono, Express, Koa).
+    // Chain order: app-level (outermost) -> page-level (route-node `use`
+    // composed along the tree, supplied by `resolvePageUseByPath`) ->
+    // action-level (from defineAction's `use` option). Outer middleware runs
+    // first on the way in, last on the way out, matching the convention every
+    // middleware system users have seen (Hono, Express, Koa).
     const rootUse = appConfig?.use ?? [];
     const pageUse = (await resolvePageUseByPath?.(urlPath)) ?? [];
     const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =

@@ -8,6 +8,6 @@
 // codegen that emits it.
 export {
   routeServerModules,
-  makePageUseResolvers,
+  makePageUseResolver,
 } from './route-server-modules.js';
 export { makePageActionResolvers } from './page-action-resolvers.js';

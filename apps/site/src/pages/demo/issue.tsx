@@ -10,7 +10,6 @@ import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { serverLoaders, serverActions } from './issue.server.js';
 import { serverLoaders as projectIssuesLoaders } from './project-issues.server.js';
-import { requireSession } from '../../demo/guard.js';
 import CommentList from '../../components/demo/CommentList.js';
 import type { ActivityItem, Comment, Issue, User } from '../../demo/data.js';
 
@@ -244,4 +243,4 @@ const IssueView = issueLoader.View(
   { fallback: <p>Loading issue…</p> }
 );
 
-export default definePage(IssueView, { use: requireSession });
+export default definePage(IssueView);

@@ -4,7 +4,7 @@ A page is two things: a view component (and optionally a sibling `.server.ts` fo
 
 ## Standard pages
 
-A view component is a default-exported Preact component. Loaders, middleware, and Wrappers attach to it via `definePage`. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module).
+A view component is a default-exported Preact component. The page itself imports only what it consumes. The route table maps a URL to the view (and optionally its server module); `definePage` wraps the component with a `Wrapper` or `errorFallback` when needed, and page-layer middleware attaches as `use` on the route node in `routes.ts`.
 
 ### Step 1: Create `src/pages/about.tsx`
 
@@ -20,7 +20,7 @@ About.displayName = 'About';
 export default About;
 ```
 
-The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs a Wrapper, an `errorFallback`, or a `use` middleware list).
+The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs a `Wrapper` or an `errorFallback`).
 
 ### Step 2: Add to `src/routes.ts`
 
@@ -116,5 +116,5 @@ Route changes trigger a view transition automatically in browsers that support `
 - [The Route Table](/docs/routes): full reference for `defineRoutes`.
 - [Layouts & Nested Routes](/docs/layouts): when and how to share chrome across URLs.
 - [Server Loaders](/docs/loaders): what goes in the `.server.ts` file.
-- [Middleware](/docs/middleware): the `use` binding on `definePage` for auth gates and per-page middleware.
+- [Middleware](/docs/middleware): the `use` field on a route node in `routes.ts` for auth gates and per-page middleware.
 - [Active Links](/docs/active-links): linking between pages with active-state highlighting.

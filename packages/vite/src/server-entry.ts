@@ -45,7 +45,7 @@ export function generateCoreAppModule(
     `} from 'hono-preact/server';\n` +
     `import {\n` +
     `  makePageActionResolvers,\n` +
-    `  makePageUseResolvers,\n` +
+    `  makePageUseResolver,\n` +
     `  routeServerModules,\n` +
     `} from 'hono-preact/server/internal/runtime';\n` +
     `import Layout from '${layoutAbsPath}';\n` +
@@ -56,15 +56,15 @@ export function generateCoreAppModule(
     `env.current = 'server';\n` +
     `const dev = import.meta.env.DEV;\n` +
     `const serverModules = routeServerModules(routes);\n` +
-    `const pageUseResolvers = makePageUseResolvers(routes.serverRoutes, { dev });\n` +
+    `const pageUseResolver = makePageUseResolver(routes);\n` +
     `const pageActionResolvers = makePageActionResolvers(routes.serverRoutes, { dev });\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
-    `  .post('${LOADERS_RPC_PATH}', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolvers.byPath }))\n` +
+    `  .post('${LOADERS_RPC_PATH}', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolver.byPath }))\n` +
     `  .post('*', pageActionHandler({\n` +
     `    resolverByPath: pageActionResolvers.byPath,\n` +
-    `    resolvePageUseByPath: pageUseResolvers.byPath,\n` +
+    `    resolvePageUseByPath: pageUseResolver.byPath,\n` +
     `    renderPage,\n` +
     `    resolvePageNode: () => h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),\n` +
     `    appConfig,\n` +
