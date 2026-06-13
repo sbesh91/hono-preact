@@ -115,6 +115,9 @@ export function makePageActionResolvers(
             m.set(name, entry);
           }
         }
+        // Last write wins if two ServerRoutes share a route.path (two
+        // .server.* files claiming the same route); the route validator is
+        // the right place to surface that.
         byPathMap.set(route.path, merged);
       })
     );
