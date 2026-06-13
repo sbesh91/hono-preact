@@ -46,6 +46,21 @@ describe('defineRoutes: per-route location plumbing', () => {
 });
 
 describe('routeUse', () => {
+  it('a server-bearing leaf under a guarded grouping is gated with no pageUse export', () => {
+    const gate = defineServerMiddleware(async (_c, next) => next());
+    const m = defineRoutes([
+      {
+        path: '/admin',
+        use: [gate],
+        children: [{ path: 'data', view: noopView, server: noopServer }],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    // The loader RPC for /admin/data resolves to the gate purely from the tree,
+    // with no `pageUse` export anywhere.
+    expect(byPath.get('/admin/data')).toEqual([gate]);
+  });
+
   it('composes routeUse outer-to-inner down the tree', () => {
     const m = defineRoutes([
       {
