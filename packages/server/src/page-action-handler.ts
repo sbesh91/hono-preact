@@ -184,11 +184,11 @@ export function pageActionHandler(
       : c.req.raw.signal;
     const actionCtx = { c, signal };
 
-    // Chain order: app-level (outermost) -> page-level (from the page's
-    // `.server.ts` and ancestor layouts' pageUse arrays) -> action-level (from
-    // defineAction's `use` option). Outer middleware runs first on the way in,
-    // last on the way out, matching the convention every middleware system
-    // users have seen (Hono, Express, Koa).
+    // Chain order: app-level (outermost) -> page-level (route-node `use`
+    // composed along the tree, supplied by `resolvePageUseByPath`) ->
+    // action-level (from defineAction's `use` option). Outer middleware runs
+    // first on the way in, last on the way out, matching the convention every
+    // middleware system users have seen (Hono, Express, Koa).
     const rootUse = appConfig?.use ?? [];
     const pageUse = (await resolvePageUseByPath?.(urlPath)) ?? [];
     const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =

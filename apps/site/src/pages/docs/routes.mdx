@@ -57,7 +57,7 @@ That table covers four URL behaviours:
 | `view`     | `() => Promise<{ default: ComponentType }>`              | for leaves                  | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.                                                              |
 | `layout`   | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups           | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts).                                                                                   |
 | `server`   | `() => Promise<unknown>`                                 | optional, leaves only       | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders`, `serverActions`, and optional `loaderUse` / `actionUse` middleware arrays.                  |
-| `use`      | `Middleware \| Middleware[]`                             | optional                    | Page-layer middleware attached to this node and all its descendants. See [Middleware](/docs/middleware#the-three-layers).                                                     |
+| `use`      | `Middleware[]`                                           | optional                    | An array of page-layer middleware run for this node and all its descendants. See [Middleware](/docs/middleware#the-three-layers).                                             |
 | `children` | `RouteDef[]`                                             | for layouts and path groups | Nested routes.                                                                                                                                                                |
 
 ## The three valid shapes
@@ -123,7 +123,7 @@ export default defineRoutes([
   { path: '/login', view: () => import('./pages/login.js') }, // ungated
   {
     path: '/dashboard',
-    use: requireSession, // gates everything below
+    use: [requireSession], // gates everything below
     children: [
       {
         path: '',
@@ -140,7 +140,7 @@ export default defineRoutes([
 ]);
 ```
 
-`use` accepts a single middleware entry or an array. When multiple ancestors each carry `use`, they compose outer-to-inner in tree order (outermost ancestor first). A sibling that is not a descendant of the guarded node is not affected.
+`use` takes an array of middleware. When multiple ancestors each carry `use`, they compose outer-to-inner in tree order (outermost ancestor first). A sibling that is not a descendant of the guarded node is not affected.
 
 For the full chain model and middleware authoring, see [Middleware](/docs/middleware).
 

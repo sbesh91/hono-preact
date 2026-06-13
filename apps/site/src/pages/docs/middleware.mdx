@@ -35,7 +35,7 @@ export default defineRoutes([
   { path: '/login', view: () => import('./pages/login.js') }, // public
   {
     path: '/admin',
-    use: requireSession, // one declaration
+    use: [requireSession], // one declaration
     children: [
       {
         path: '',
