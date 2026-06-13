@@ -83,35 +83,52 @@ export function moduleKeyPlugin(): Plugin {
         ) {
           return;
         }
-        if (node.arguments.length === 0 || node.arguments.length > 2) return;
-        const fnArg = node.arguments[0];
-        if (fnArg.type === 'StringLiteral') return; // not a valid defineLoader fn form; skip
+        const args = node.arguments;
+        if (args.length === 0) return;
 
-        if (node.arguments.length === 1) {
-          const insertAt = fnArg.end;
-          if (insertAt == null) return;
-          const namePart = loaderName
-            ? `, ${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}`
-            : '';
+        const namePartAfter = loaderName
+          ? `, ${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}`
+          : '';
+        const namePartBefore = loaderName
+          ? `${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}, `
+          : '';
+        const appendOptsAfter = (afterEnd: number) =>
+          s.appendRight(
+            afterEnd,
+            `, { ${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}${namePartAfter} }`
+          );
+        const mergeInto = (opts: (typeof args)[number]) => {
+          if (opts.type !== 'ObjectExpression') return;
+          const insertAt = opts.properties[0]?.start ?? opts.start! + 1;
           s.appendRight(
             insertAt,
-            `, { ${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}${namePart} }`
+            `${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}, ${namePartBefore}`
           );
+        };
+
+        const isRouteForm = args[0].type === 'StringLiteral';
+        if (isRouteForm) {
+          // defineLoader('/r/:id', fn) | defineLoader('/r/:id', fn, opts)
+          if (args.length < 2 || args.length > 3) return;
+          if (args.length === 2) {
+            const fnEnd = args[1].end;
+            if (fnEnd == null) return;
+            appendOptsAfter(fnEnd);
+          } else {
+            mergeInto(args[2]);
+          }
           return;
         }
 
-        // arguments.length === 2: merge __moduleKey/__loaderName into the
-        // existing opts object literal. Bail if it isn't an ObjectExpression.
-        const optsArg = node.arguments[1];
-        if (optsArg.type !== 'ObjectExpression') return;
-        const insertAt = optsArg.properties[0]?.start ?? optsArg.start! + 1;
-        const namePart = loaderName
-          ? `${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}, `
-          : '';
-        s.appendRight(
-          insertAt,
-          `${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}, ${namePart}`
-        );
+        // fn-first form: defineLoader(fn) | defineLoader(fn, opts)
+        if (args.length > 2) return;
+        if (args.length === 1) {
+          const fnEnd = args[0].end;
+          if (fnEnd == null) return;
+          appendOptsAfter(fnEnd);
+          return;
+        }
+        mergeInto(args[1]);
       };
 
       // Walk serverLoaders entries via the shared parser, then mutate each call.

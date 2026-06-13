@@ -107,10 +107,15 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
         )
           continue;
 
-        const secondArg = call.arguments[1];
+        // The route-id overload `defineLoader('/r/:id', fn, opts?)` shifts the
+        // opts object to the third argument; the fn-first form keeps it second.
+        const isRouteForm = call.arguments[0]?.type === 'StringLiteral';
+        const optsCandidate = isRouteForm
+          ? call.arguments[2]
+          : call.arguments[1];
         const optsArg =
-          secondArg?.type === 'ObjectExpression'
-            ? (secondArg as ObjectExpression)
+          optsCandidate?.type === 'ObjectExpression'
+            ? (optsCandidate as ObjectExpression)
             : null;
 
         entries.push({ name: prop.key.name, call, optsArg });
