@@ -100,8 +100,9 @@ export type DefineLoaderOpts<T> = {
 
 // Stash a shared cache map on globalThis so duplicate copies of
 // @hono-preact/iso (workspace hoisting quirks) still see the same map.
-// The serverOnlyPlugin emits a `defineLoader(fn, { __moduleKey })` call at
-// EVERY importer of a `.server.*` module, so without this dedup each
+// The module-key plugin threads `{ __moduleKey }` into every `defineLoader`
+// call (both the `defineLoader(fn, opts)` and `defineLoader(routeId, fn, opts)`
+// forms) at EVERY importer of a `.server.*` module, so without this dedup each
 // importer would get its own private LoaderCache and `ref.invalidate()`
 // would only clear the calling importer's copy. That breaks cross-route
 // invalidation (movie.tsx invalidating `moviesListLoader` no longer flushes
