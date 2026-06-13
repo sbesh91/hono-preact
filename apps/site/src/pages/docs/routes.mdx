@@ -56,7 +56,8 @@ That table covers four URL behaviours:
 | `path`     | `string`                                                 | always                      | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings. |
 | `view`     | `() => Promise<{ default: ComponentType }>`              | for leaves                  | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.                                                              |
 | `layout`   | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups           | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts).                                                                                   |
-| `server`   | `() => Promise<unknown>`                                 | optional, leaves only       | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders`, `serverActions`, and optional `pageUse` / `loaderUse` / `actionUse` middleware arrays.      |
+| `server`   | `() => Promise<unknown>`                                 | optional, leaves only       | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders`, `serverActions`, and optional `loaderUse` / `actionUse` middleware arrays.                  |
+| `use`      | `Middleware \| Middleware[]`                             | optional                    | Page-layer middleware attached to this node and all its descendants. See [Middleware](/docs/middleware#the-three-layers).                                                     |
 | `children` | `RouteDef[]`                                             | for layouts and path groups | Nested routes.                                                                                                                                                                |
 
 ## The three valid shapes
@@ -110,9 +111,43 @@ type RoutesManifest = {
 
 `tree` is the original input retained for devtools and dev-time introspection. `flat` is what `<Routes>` registers with preact-iso. `serverImports` is what `routeServerModules` adapts into the existing handler API.
 
+## Page-layer middleware on a route node
+
+A route entry can carry a `use` field to attach page-layer middleware to that node and all its descendants. The guard applies to the node's own view render (SSR and client navigation) and to every loader and action RPC under that subtree, so the render gate and the data gate cannot drift.
+
+```ts
+import { defineRoutes } from 'hono-preact';
+import { requireSession } from './auth/session.js';
+
+export default defineRoutes([
+  { path: '/login', view: () => import('./pages/login.js') }, // ungated
+  {
+    path: '/dashboard',
+    use: requireSession, // gates everything below
+    children: [
+      {
+        path: '',
+        view: () => import('./pages/dashboard.js'),
+        server: () => import('./pages/dashboard.server.js'),
+      },
+      {
+        path: 'settings',
+        view: () => import('./pages/settings.js'),
+        server: () => import('./pages/settings.server.js'),
+      },
+    ],
+  },
+]);
+```
+
+`use` accepts a single middleware entry or an array. When multiple ancestors each carry `use`, they compose outer-to-inner in tree order (outermost ancestor first). A sibling that is not a descendant of the guarded node is not affected.
+
+For the full chain model and middleware authoring, see [Middleware](/docs/middleware).
+
 ## See also
 
 - [Layouts & Nested Routes](/docs/layouts) — the `layout` field, `LayoutProps`, identity preservation, the inner-router lowering.
 - [Adding Pages](/docs/pages) — the page-authoring side: views, server bindings, definePage.
 - [Server Loaders](/docs/loaders) — what the `server` import contains.
+- [Middleware](/docs/middleware): the full middleware chain and `use` authoring.
 - [Project Structure](/docs/structure) — where each piece lives in the demo app.

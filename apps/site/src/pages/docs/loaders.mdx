@@ -457,7 +457,7 @@ On Cloudflare Workers (the framework's primary target) each request runs in a sh
 
 ## Page bindings with `definePage`
 
-Per-page concerns (Wrapper, errorFallback, middleware via `use`) live with the page component, not with the route declaration. `definePage` captures them:
+Per-page bindings (`Wrapper`, `errorFallback`) live with the page component. `definePage` captures them:
 
 ```tsx
 import { definePage } from 'hono-preact';
@@ -561,7 +561,7 @@ The framework default is configurable per handler via
 
 ## The server/client boundary
 
-Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs; imported `pageUse` / `loaderUse` / `actionUse` become empty arrays. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs; imported `loaderUse` / `actionUse` become empty arrays. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
 
 ## See also
 
