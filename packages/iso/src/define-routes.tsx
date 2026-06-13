@@ -35,7 +35,7 @@ export type RouteDef = {
   view?: LazyImport<ComponentType<ViewProps>>;
   layout?: LazyImport<ComponentType<LayoutProps>>;
   server?: LazyServerImport;
-  children?: RouteDef[];
+  children?: readonly RouteDef[];
 };
 
 export type FlatRoute = {
@@ -65,7 +65,9 @@ export type ServerRoute = {
   ancestors: ReadonlyArray<LazyServerImport>;
 };
 
-export type RoutesManifest = {
+export type RoutesManifest<
+  T extends readonly RouteDef[] = readonly RouteDef[],
+> = {
   tree: ReadonlyArray<RouteDef>;
   flat: ReadonlyArray<FlatRoute>;
   serverImports: ReadonlyArray<LazyServerImport>;
@@ -77,6 +79,12 @@ export type RoutesManifest = {
    * existing call sites only need the lazy thunks.
    */
   serverRoutes: ReadonlyArray<ServerRoute>;
+  /**
+   * Phantom: carries the literal route-tree type so `RoutePaths<typeof routes>`
+   * can extract the route-pattern union for typed params. Never assigned at
+   * runtime; the `?` keeps the `defineRoutes` return object unchanged.
+   */
+  readonly __tree?: T;
 };
 
 // preact-iso's `Route<P>` and `Router` carry strict generics that reject our
@@ -452,7 +460,9 @@ function flattenTree(
   return out;
 }
 
-export function defineRoutes(tree: RouteDef[]): RoutesManifest {
+export function defineRoutes<const T extends readonly RouteDef[]>(
+  tree: T
+): RoutesManifest<T> {
   validate(tree);
   const viewCache = new Map<unknown, ComponentType<ViewProps>>();
   const keyCache = new Map<ComponentType<ViewProps>, string>();
