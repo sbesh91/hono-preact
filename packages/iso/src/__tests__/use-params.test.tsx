@@ -3,7 +3,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/preact';
 import { useParams } from '../use-params.js';
 
-const mockRoute = { path: '/demo/projects/p1', searchParams: {}, pathParams: {} as Record<string, string> };
+const mockRoute = {
+  path: '/demo/projects/p1',
+  searchParams: {},
+  pathParams: {} as Record<string, string>,
+};
 vi.mock('preact-iso', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return { ...actual, useRoute: () => mockRoute };

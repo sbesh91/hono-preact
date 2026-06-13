@@ -180,9 +180,9 @@ export function defineLoader(
   // and does not affect cache/`params` behavior.
   const isRouteForm = typeof fnOrRoute === 'string';
   const fn = (isRouteForm ? fnOrOpts : fnOrRoute) as Loader<unknown>;
-  const opts = (
-    isRouteForm ? maybeOpts : fnOrOpts
-  ) as DefineLoaderOpts<unknown> | undefined;
+  const opts = (isRouteForm ? maybeOpts : fnOrOpts) as
+    | DefineLoaderOpts<unknown>
+    | undefined;
 
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   const idKey = opts?.__moduleKey
