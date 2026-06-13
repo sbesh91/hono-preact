@@ -2,8 +2,8 @@ import type { ServerRoute } from '@hono-preact/iso';
 import { findBestPattern } from './route-pattern.js';
 
 /**
- * Shared core of the page-layer resolver factories (`makePageUseResolvers`
- * and `makePageActionResolvers`). Owns the lazy build lifecycle and the
+ * Shared core of the page-action resolver factory (`makePageActionResolvers`).
+ * Owns the lazy build lifecycle and the
  * URL-path lookup:
  *
  * - Loads every distinct server thunk exactly once per build. A given

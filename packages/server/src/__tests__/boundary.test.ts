@@ -10,7 +10,7 @@ void _loadersHandlerOptions;
 
 const FACTORIES = [
   'routeServerModules',
-  'makePageUseResolvers',
+  'makePageUseResolver',
   'makePageActionResolvers',
 ] as const;
 

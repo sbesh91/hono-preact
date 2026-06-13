@@ -40,7 +40,7 @@ export interface PageActionHandlerOptions {
   /**
    * Optional per-page middleware resolver, keyed by URL path. The handler
    * composes the chain as [appConfig.use, resolvePageUseByPath(path), action.use].
-   * Pass `pageUseResolvers.byPath` from makePageUseResolvers (same resolver
+   * Pass `pageUseResolver.byPath` from makePageUseResolver (same resolver
    * loadersHandler uses). Defaults to returning empty so the option is
    * additive: handlers wired without it lose page-level middleware (matches
    * the previous behavior of this handler, which dropped them entirely).

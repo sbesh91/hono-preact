@@ -126,10 +126,11 @@ export interface LoadersHandlerOptions {
   appConfig?: AppConfig;
   /**
    * Per-page layer lookup keyed by the matched route's location path.
-   * Returns the `use` array declared on the matching page's `.server.*`
-   * module (as `export const pageUse = [...]`). The lookup may be sync
-   * (an in-memory map) or async (loaded lazily on first request). The
-   * handler awaits the result either way. Default returns an empty array.
+   * Returns the composed page-layer `use` for the matched route pattern,
+   * sourced from the route manifest's `routeUse` (which already folds in
+   * ancestor `use` outer-first). The lookup may be sync (an in-memory map)
+   * or async (loaded lazily on first request). The handler awaits the result
+   * either way. Default returns an empty array.
    */
   resolvePageUse?: (
     path: string
