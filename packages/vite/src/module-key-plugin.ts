@@ -7,7 +7,7 @@ import {
   LOADER_NAME_OPTION,
 } from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
-import { parseServerLoaders } from './server-loaders-parser.js';
+import { isLoaderCall, parseServerLoaders } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 // Built from MODULE_KEY_EXPORT so the already-transformed check cannot
@@ -77,41 +77,53 @@ export function moduleKeyPlugin(): Plugin {
         node: CallExpression,
         loaderName: string | undefined
       ) => {
-        if (
-          node.callee.type !== 'Identifier' ||
-          node.callee.name !== 'defineLoader'
-        ) {
-          return;
-        }
-        if (node.arguments.length === 0 || node.arguments.length > 2) return;
-        const fnArg = node.arguments[0];
-        if (fnArg.type === 'StringLiteral') return; // not a valid defineLoader fn form; skip
+        if (!isLoaderCall(node)) return;
+        const args = node.arguments;
+        if (args.length === 0) return;
 
-        if (node.arguments.length === 1) {
-          const insertAt = fnArg.end;
-          if (insertAt == null) return;
-          const namePart = loaderName
-            ? `, ${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}`
-            : '';
-          s.appendRight(
-            insertAt,
-            `, { ${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}${namePart} }`
-          );
-          return;
-        }
-
-        // arguments.length === 2: merge __moduleKey/__loaderName into the
-        // existing opts object literal. Bail if it isn't an ObjectExpression.
-        const optsArg = node.arguments[1];
-        if (optsArg.type !== 'ObjectExpression') return;
-        const insertAt = optsArg.properties[0]?.start ?? optsArg.start! + 1;
-        const namePart = loaderName
+        const namePartAfter = loaderName
+          ? `, ${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}`
+          : '';
+        const namePartBefore = loaderName
           ? `${LOADER_NAME_OPTION}: ${JSON.stringify(loaderName)}, `
           : '';
-        s.appendRight(
-          insertAt,
-          `${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}, ${namePart}`
-        );
+        const appendOptsAfter = (afterEnd: number) =>
+          s.appendRight(
+            afterEnd,
+            `, { ${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}${namePartAfter} }`
+          );
+        const mergeInto = (opts: (typeof args)[number]) => {
+          if (opts.type !== 'ObjectExpression') return;
+          const insertAt = opts.properties[0]?.start ?? opts.start! + 1;
+          s.appendRight(
+            insertAt,
+            `${MODULE_KEY_EXPORT}: ${JSON.stringify(key)}, ${namePartBefore}`
+          );
+        };
+
+        const isRouteForm = args[0].type === 'StringLiteral';
+        if (isRouteForm) {
+          // defineLoader('/r/:id', fn) | defineLoader('/r/:id', fn, opts)
+          if (args.length < 2 || args.length > 3) return;
+          if (args.length === 2) {
+            const fnEnd = args[1].end;
+            if (fnEnd == null) return;
+            appendOptsAfter(fnEnd);
+          } else {
+            mergeInto(args[2]);
+          }
+          return;
+        }
+
+        // fn-first form: defineLoader(fn) | defineLoader(fn, opts)
+        if (args.length > 2) return;
+        if (args.length === 1) {
+          const fnEnd = args[0].end;
+          if (fnEnd == null) return;
+          appendOptsAfter(fnEnd);
+          return;
+        }
+        mergeInto(args[1]);
       };
 
       // Walk serverLoaders entries via the shared parser, then mutate each call.

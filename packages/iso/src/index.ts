@@ -19,6 +19,13 @@ export type {
   ViewProps,
 } from './define-routes.js';
 
+// Typed route params.
+export type {
+  RouteParams,
+  RoutePaths,
+  RegisteredRoutes,
+} from './internal/typed-routes.js';
+
 // Server bindings.
 export { defineLoader } from './define-loader.js';
 export type {
@@ -26,6 +33,8 @@ export type {
   LoaderCtx,
   Loader as LoaderFn,
 } from './define-loader.js';
+export { serverRoute } from './server-route.js';
+export type { RouteServer } from './server-route.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
   ActionStub,
@@ -45,6 +54,7 @@ export type {
   UseOptimisticActionResult,
 } from './optimistic-action.js';
 export { useNavigate, type NavigateOptions } from './use-navigate.js';
+export { useParams } from './use-params.js';
 
 // Active-route detection.
 export {

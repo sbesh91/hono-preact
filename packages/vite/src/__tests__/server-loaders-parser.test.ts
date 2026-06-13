@@ -117,6 +117,42 @@ describe('parseServerLoaders', () => {
     const [entry] = parseServerLoaders(program);
     expect(entry.optsArg).toBeNull();
   });
+
+  it('reads opts from the third arg for the route-id form', () => {
+    const program = parseProgram(`
+      export const serverLoaders = {
+        x: defineLoader('/things/:id', async () => ({}), { params: ['q'] }),
+      };
+    `);
+    const [entry] = parseServerLoaders(program);
+    expect(entry.optsArg?.type).toBe('ObjectExpression');
+  });
+
+  it('route-id form with no opts has optsArg === null', () => {
+    const program = parseProgram(`
+      export const serverLoaders = {
+        x: defineLoader('/things/:id', async () => ({})),
+      };
+    `);
+    const [entry] = parseServerLoaders(program);
+    expect(entry.optsArg).toBeNull();
+  });
+
+  it('recognizes serverRoute().loader(...) factory calls', () => {
+    const program = parseProgram(`
+      const route = serverRoute('/things/:id');
+      export const serverLoaders = {
+        a: route.loader(async () => ({})),
+        b: route.loader(async () => ({}), { params: ['q'] }),
+      };
+    `);
+    const entries = parseServerLoaders(program);
+    expect(entries).toHaveLength(2);
+    expect(entries[0].name).toBe('a');
+    expect(entries[0].optsArg).toBeNull();
+    expect(entries[1].name).toBe('b');
+    expect(entries[1].optsArg?.type).toBe('ObjectExpression');
+  });
 });
 
 describe('use exports', () => {

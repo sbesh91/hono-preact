@@ -63,6 +63,46 @@ export default function MoviesLayout({ children }: LayoutProps) {
 
 `children` is the matched descendant tree. The framework injects it.
 
+## Typed route params
+
+`pathParams` is `Record<string, string>` by default, so reading `route.pathParams.id` is unchecked. Register your route tree once and `useParams` returns params typed from the route's own pattern, with the route id validated against your real routes.
+
+Register in `routes.ts`, next to `defineRoutes`. Give the tree its own `as const` binding and register against `typeof routeTree`:
+
+```ts
+import { defineRoutes, type RoutePaths } from 'hono-preact';
+
+const routeTree = [
+  {
+    path: '/movies',
+    layout: () => import('./pages/movies-layout.js'),
+    children: [{ path: ':id', view: () => import('./pages/movie.js') }],
+  },
+] as const;
+
+export default defineRoutes(routeTree);
+
+declare module 'hono-preact' {
+  interface RegisteredRoutes {
+    paths: RoutePaths<typeof routeTree>;
+  }
+}
+```
+
+Then name the route you are on; the params are inferred from its pattern:
+
+```tsx
+import { useParams } from 'hono-preact';
+
+export default function Movie() {
+  // id is typed `string`; an unknown or misspelled route id is a type error.
+  const { id } = useParams('/movies/:id');
+  return <h1>{id}</h1>;
+}
+```
+
+Register against `typeof routeTree` (the tree array), not `typeof routes` (the manifest `defineRoutes` returns). The manifest form creates a type cycle. Before you register, `useParams` still works: it accepts any string and projects that pattern's params.
+
 ## URL composition rules
 
 | Rule                                                     | Why                                                                         |
