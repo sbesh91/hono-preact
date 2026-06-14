@@ -151,7 +151,7 @@ dialog[data-state='closed']::backdrop {
 ## API reference
 
 Every part accepts a `render` prop for composition (see
-[renderElement](/docs/components/use-render)) and forwards unknown props to the
+[renderElement](/docs/components/render-element)) and forwards unknown props to the
 element it renders. `Dialog.Trigger`, `Dialog.Popup`, and `Dialog.Close` also
 expose `data-state="open" | "closed"` and pass `{ open }` to a render function.
 
@@ -231,7 +231,7 @@ Closes the dialog on click. Default element `<button type="button">`.
 
 `@hono-preact/ui` also exports the building blocks the parts use, for composing
 your own components. Each has its own page with examples:
-[renderElement](/docs/components/use-render),
+[renderElement](/docs/components/render-element),
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).
 
