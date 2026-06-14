@@ -96,6 +96,6 @@ Vite plugins for the framework (`packages/vite/`). The primary export is `honoPr
 
 - **`honoPreact()`** configures resolve deduplication, SSR bundling, client/server build outputs, and the client-shim auto-injection. Deployment target plugins (the worker or dev-server toolchain) come from the required `adapter` option, currently `cloudflareAdapter()` from `hono-preact/adapter-cloudflare` or `nodeAdapter()` from `hono-preact/adapter-node`.
 - **`serverOnlyPlugin`** rewrites `*.server.*` imports during the client bundle build, replacing static imports with no-op stubs and dynamic `import('./*.server.*')` calls with `Promise.resolve({})` so server code never reaches the browser.
-- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders`, `serverActions`, or the recognized `use` exports (`loaderUse`, `actionUse`).
+- **`serverLoaderValidationPlugin`** fails the build if a `.server.*` file has named exports other than `serverLoaders` or `serverActions`.
 - **`moduleKeyPlugin`** rewrites each `.server.*` file at build time with a `__moduleKey` derived from the file path, which the loader/action handlers use to dispatch RPC requests.
 - **`clientShimPlugin`** prepends a `globalThis.process ??= { env: { NODE_ENV } }` shim to the client entry so libraries that read `process.env.NODE_ENV` at module-eval time in the browser do not throw.
