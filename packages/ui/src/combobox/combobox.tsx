@@ -19,7 +19,7 @@ import { useFormReset } from '../use-form-reset.js';
 import type { Side, Align } from '../use-position.js';
 import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 import {
   useListboxSelection,
   useRegisterOption,

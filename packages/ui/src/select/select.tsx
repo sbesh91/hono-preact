@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
 import { Positioner } from '../positioner.js';

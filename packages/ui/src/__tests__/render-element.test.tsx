@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/preact';
 import { h } from 'preact';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 
 function Widget(props: {
   render?: RenderProp<{ active: boolean }>;

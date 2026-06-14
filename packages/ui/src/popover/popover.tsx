@@ -4,7 +4,7 @@ import { useId, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import { useDescriptionRegistry } from '../use-description-registry.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
 import { Positioner } from '../positioner.js';
