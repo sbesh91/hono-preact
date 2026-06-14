@@ -3,12 +3,8 @@ import { Hono } from 'hono';
 import { useTitle, useLang, useMeta, useLink } from 'hoofd/preact';
 import type { JSX } from 'preact';
 import { LocationProvider, useLocation } from 'preact-iso';
-import {
-  defineApp,
-  defineServerMiddleware,
-  env,
-  redirect,
-} from '@hono-preact/iso';
+import { defineApp, defineServerMiddleware, redirect } from '@hono-preact/iso';
+import { env } from '@hono-preact/iso/internal/runtime';
 import { render as renderOutcome } from '@hono-preact/iso/page';
 import { renderPage } from '../render.js';
 

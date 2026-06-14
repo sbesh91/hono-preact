@@ -5,8 +5,7 @@
 // literals. Typed property positions (e.g. `ActionStub.__module`,
 // `mod.__moduleKey` reads) keep literal syntax; these constants own the
 // value positions of the contracts listed below (FormData keys, fetch
-// URLs, codegen template strings). The /__actions reserved path stays a
-// literal in vite; it is slated for removal.
+// URLs, codegen template strings).
 
 /**
  * RPC endpoint for client loader fetches. Consumers: iso

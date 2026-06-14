@@ -6,7 +6,7 @@ import * as path from 'node:path';
  * The key is the file's path relative to the Vite project root, with the
  * `.server.{ts,tsx,js,jsx}` extension stripped, and path separators
  * normalized to forward slashes (so the key is identical on Windows and
- * POSIX). Used as the routing key for `__loaders`/`__actions` RPC, the
+ * POSIX). Used as the routing key for `__loaders` RPC, the
  * payload of `Symbol.for(...)` for `__id`, and the value of the
  * module-level `__moduleKey` export.
  */

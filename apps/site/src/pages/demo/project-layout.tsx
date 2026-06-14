@@ -1,13 +1,19 @@
 import type { LayoutProps } from 'hono-preact';
-import { useParams, useRouteChange, ViewTransitionName } from 'hono-preact';
+import {
+  useParams,
+  useViewTransitionLifecycle,
+  ViewTransitionName,
+} from 'hono-preact';
 import { useTitle } from 'hoofd/preact';
 
 export default function ProjectLayout({ children }: LayoutProps) {
   const { projectId: slug } = useParams('/demo/projects/:projectId');
 
   useTitle(`${slug.toUpperCase()} · demo`);
-  useRouteChange(() => {
-    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  useViewTransitionLifecycle({
+    onAfterSwap: () => {
+      if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    },
   });
 
   return (

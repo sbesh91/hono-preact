@@ -10,3 +10,4 @@ export { installNavTransitionScheduler } from './internal/route-change.js';
 export { installStreamRegistry } from './internal/stream-registry.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export * from './internal/contract.js';
+export { env } from './is-browser.js';

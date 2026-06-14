@@ -108,13 +108,6 @@ describe('serverOnlyPlugin', () => {
     ).toThrow(/pageUse.*not a recognized/i);
   });
 
-  it('stubs loaderUse and actionUse imports too', () => {
-    const code = `import { loaderUse, actionUse } from './movies.server.js';`;
-    const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
-    expect(result?.code).toContain('const loaderUse = [];');
-    expect(result?.code).toContain('const actionUse = [];');
-  });
-
   it('derives module key for serverLoaders stub from the import source, not the consumer file', () => {
     const code = `import { serverLoaders } from './profile.server.ts';`;
     const result = transform(
@@ -163,8 +156,8 @@ describe('unknown specifiers from .server.* imports', () => {
       const msg = (err as Error).message;
       expect(msg).toContain('serverActions');
       expect(msg).toContain('serverLoaders');
-      expect(msg).toContain('loaderUse');
-      expect(msg).toContain('actionUse');
+      expect(msg).not.toContain('loaderUse');
+      expect(msg).not.toContain('actionUse');
       expect(msg).not.toContain('pageUse');
     }
   });

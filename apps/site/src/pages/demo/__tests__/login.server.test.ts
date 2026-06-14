@@ -6,7 +6,7 @@ import { DEMO_SESSION_COOKIE } from '../../../demo/session.js';
 
 // defineAction returns the handler function as-is (no wrapper object).
 // So serverActions.login IS the ActionFn; we cast and call it directly.
-// The full /__actions wire is integration-tested in packages/server;
+// The full page-action wire is integration-tested in packages/server;
 // here we only check the action handler's behavior.
 
 describe('login action', () => {

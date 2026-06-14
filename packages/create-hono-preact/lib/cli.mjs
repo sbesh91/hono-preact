@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { readdir, mkdir } from 'node:fs/promises';
 import { spawn as realSpawn } from 'node:child_process';
 import readline from 'node:readline/promises';
@@ -35,7 +36,10 @@ export async function run({
     return 0;
   }
   if (parsed.kind === 'version') {
-    console.log('create-hono-preact 0.1.0');
+    const { version } = JSON.parse(
+      readFileSync(resolve(here, '..', 'package.json'), 'utf8')
+    );
+    console.log(`create-hono-preact ${version}`);
     return 0;
   }
   if (parsed.kind === 'error') {

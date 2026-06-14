@@ -2,21 +2,21 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/preact';
 import { h } from 'preact';
-import { useRender } from '../internal/use-render.js';
+import { renderElement } from '../internal/use-render.js';
 
 function Wrap(props: {
-  render?: Parameters<typeof useRender>[0]['render'];
+  render?: Parameters<typeof renderElement>[0]['render'];
   defaultTag?: string;
   className?: string;
 }) {
-  return useRender({
+  return renderElement({
     render: props.render,
     defaultTag: props.defaultTag ?? 'div',
     props: { class: props.className ?? 'wrap' },
   });
 }
 
-describe('useRender', () => {
+describe('renderElement', () => {
   it('renders the default tag with merged props', () => {
     const { container } = render(<Wrap className="x" />);
     const el = container.firstElementChild!;

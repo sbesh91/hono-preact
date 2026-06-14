@@ -37,7 +37,8 @@ export function generateCoreAppModule(
     `import { Hono } from 'hono';\n` +
     `import { h } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes, env } from 'hono-preact';\n` +
+    `import { Routes } from 'hono-preact';\n` +
+    `import { env } from 'hono-preact/internal/runtime';\n` +
     `import {\n` +
     `  loadersHandler,\n` +
     `  pageActionHandler,\n` +
@@ -95,7 +96,7 @@ export type ApiShadowingRoute =
 // Framework-reserved request paths. A literal registration of either in
 // api.ts shadows the framework's RPC handler now that the user app mounts
 // ahead of them.
-const RESERVED_PATHS = new Set([LOADERS_RPC_PATH, '/__actions']); // '/__actions' stays literal; slated for removal (see iso internal/contract.ts)
+const RESERVED_PATHS = new Set([LOADERS_RPC_PATH]);
 
 const HONO_METHODS = new Set([
   'get',
@@ -380,7 +381,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
           `[hono-preact] api.ts registers routes that shadow framework handlers:\n` +
             errors.map((e) => `  - ${e}`).join('\n') +
             `\nThe framework mounts your app ahead of its reserved paths ` +
-            `(/__loaders, /__actions) and the SSR handler, so these routes break ` +
+            `(/__loaders) and the SSR handler, so these routes break ` +
             `loaders/actions and/or page rendering. Use specific, non-wildcard paths.`
         );
       }

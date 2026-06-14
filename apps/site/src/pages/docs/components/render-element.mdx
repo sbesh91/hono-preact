@@ -1,6 +1,6 @@
-# useRender
+# renderElement
 
-`useRender` is the composition engine behind every component's `render` prop. It
+`renderElement` is the composition engine behind every component's `render` prop. It
 takes the framework-controlled props (ARIA attributes, refs, event handlers) and
 applies them to whatever element you want to render: the default tag, a tag you
 name, an element you pass, or a function you supply. It is how a part can lend
@@ -10,9 +10,9 @@ either.
 ## Signature
 
 ```tsx
-import { useRender, type RenderProp } from '@hono-preact/ui';
+import { renderElement, type RenderProp } from '@hono-preact/ui';
 
-function useRender<State>(opts: {
+function renderElement<State>(opts: {
   render?: RenderProp<State>; // the consumer's override (optional)
   defaultTag: string; // element to use when no render is given
   props: Record<string, unknown>; // framework-controlled props (ref, aria-*, handlers)
@@ -48,7 +48,7 @@ Returns a `VNode`.
 Build a component that owns its behavior but lets the caller swap the element:
 
 ```tsx
-import { useRender, type RenderProp } from '@hono-preact/ui';
+import { renderElement, type RenderProp } from '@hono-preact/ui';
 import type { ComponentChildren, JSX, VNode } from 'preact';
 
 type ButtonProps = {
@@ -63,7 +63,7 @@ export function Button({
   children,
   ...rest
 }: ButtonProps): VNode {
-  return useRender<{ pressed: boolean }>({
+  return renderElement<{ pressed: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -94,5 +94,5 @@ A consumer can drive `render` three ways:
 )} />
 ```
 
-`useRender` ships in `@hono-preact/ui` and powers every [Dialog](/docs/components/dialog), [Popover](/docs/components/popover), and [Tooltip](/docs/components/tooltip) part, so anything
+`renderElement` ships in `@hono-preact/ui` and powers every [Dialog](/docs/components/dialog), [Popover](/docs/components/popover), and [Tooltip](/docs/components/tooltip) part, so anything
 you build with it composes the same way the built-in components do.

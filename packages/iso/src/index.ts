@@ -132,11 +132,9 @@ export type {
 // Utilities.
 export { prefetch } from './prefetch.js';
 export { usePrefetch } from './use-prefetch.js';
-export { isBrowser, env } from './is-browser.js';
+export { isBrowser } from './is-browser.js';
 
 // Client entry primitives (item 4 of v0.1).
-export { useRouteChange } from './route-change.js';
-export type { RouteChangeHandler } from './route-change.js';
 export { Head } from './head.js';
 export type { HeadProps } from './head.js';
 export { ClientScript } from './client-script.js';

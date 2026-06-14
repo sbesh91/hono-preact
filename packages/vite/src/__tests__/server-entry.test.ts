@@ -96,7 +96,10 @@ describe('generateCoreAppModule', () => {
 
     // Framework imports
     expect(src).toContain(`import { Hono } from 'hono';`);
-    expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
+    expect(src).toContain(`import { Routes } from 'hono-preact';`);
+    expect(src).toContain(
+      `import { env } from 'hono-preact/internal/runtime';`
+    );
     expect(src).toContain(
       `import {\n  loadersHandler,\n  pageActionHandler,\n  renderPage,\n} from 'hono-preact/server';`
     );
@@ -278,21 +281,6 @@ describe('findApiShadowingRoutes', () => {
     });
   });
 
-  it('flags a literal /__actions registration as a reserved-path error', () => {
-    const src = `
-      import { Hono } from 'hono';
-      export default new Hono().post('/__actions', (c) => c.text('mine'));
-    `;
-    const found = findApiShadowingRoutes(src);
-    expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({
-      kind: 'reserved',
-      method: 'post',
-      pattern: '/__actions',
-      severity: 'error',
-    });
-  });
-
   it('flags a literal /__loaders registration as a reserved-path error', () => {
     const src = `
       import { Hono } from 'hono';
@@ -311,14 +299,14 @@ describe('findApiShadowingRoutes', () => {
   it('flags an app.on() registration of a reserved path (path is the second argument)', () => {
     const src = `
       import { Hono } from 'hono';
-      export default new Hono().on('POST', '/__actions', (c) => c.text('mine'));
+      export default new Hono().on('GET', '/__loaders', (c) => c.text('mine'));
     `;
     const found = findApiShadowingRoutes(src);
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({
       kind: 'reserved',
       method: 'on',
-      pattern: '/__actions',
+      pattern: '/__loaders',
       severity: 'error',
     });
   });
@@ -533,55 +521,6 @@ describe('serverEntryPlugin', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('buildStart throws via this.error for a literal /__actions registration', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
-    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmp, 'src', 'api.ts'),
-      `import { Hono } from 'hono';\nexport default new Hono().post('/__actions', (c) => c.text('mine'));\n`
-    );
-    const coreAppPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'core-app.tsx'
-    );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
-    const plugin = serverEntryPlugin({
-      layout: 'src/Layout.tsx',
-      routes: 'src/routes.ts',
-      api: 'src/api.ts',
-      appConfig: 'src/app-config.ts',
-      adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
-    });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
-
-    const ctx = {
-      warn: () => {},
-      error: (m: unknown) => {
-        throw new Error(typeof m === 'string' ? m : String(m));
-      },
-    };
-    expect(() =>
-      (plugin as { buildStart?: (this: typeof ctx) => void }).buildStart?.call(
-        ctx
-      )
-    ).toThrow(/reserved/);
-
-    fs.rmSync(tmp, { recursive: true, force: true });
-  });
-
   // F4 / F12: when the user authors an app-config.ts but exports the
   // config as a named export (`export const appConfig = ...`) instead of
   // `export default ...`, the generated `import appConfig from '...'`
@@ -792,22 +731,22 @@ describe('serverEntryPlugin', () => {
 });
 
 describe('mount-order composition (why api.ts is mounted first)', () => {
-  it('middleware in the user app guards the reserved /__actions path', async () => {
+  it('middleware in the user app guards the reserved /__loaders path', async () => {
     const { Hono } = await import('hono');
     const { csrf } = await import('hono/csrf');
 
-    let actionRan = false;
+    let loadersRan = false;
     const userApp = new Hono();
     userApp.use('*', csrf({ origin: 'https://example.com' }));
 
     // Mirrors the order generateCoreAppModule emits: userApp first.
-    const app = new Hono().route('/', userApp).post('/__actions', (c) => {
-      actionRan = true;
+    const app = new Hono().route('/', userApp).post('/__loaders', (c) => {
+      loadersRan = true;
       return c.json({ ok: true });
     });
 
-    // Cross-origin form post: csrf rejects before the action handler runs.
-    const blocked = await app.request('https://example.com/__actions', {
+    // Cross-origin form post: csrf rejects before the loaders handler runs.
+    const blocked = await app.request('https://example.com/__loaders', {
       method: 'POST',
       headers: {
         Origin: 'https://evil.example',
@@ -816,10 +755,10 @@ describe('mount-order composition (why api.ts is mounted first)', () => {
       body: 'x=1',
     });
     expect(blocked.status).toBe(403);
-    expect(actionRan).toBe(false);
+    expect(loadersRan).toBe(false);
 
-    // Same-origin form post: passes csrf, reaches the action handler.
-    const ok = await app.request('https://example.com/__actions', {
+    // Same-origin form post: passes csrf, reaches the loaders handler.
+    const ok = await app.request('https://example.com/__loaders', {
       method: 'POST',
       headers: {
         Origin: 'https://example.com',
@@ -828,6 +767,6 @@ describe('mount-order composition (why api.ts is mounted first)', () => {
       body: 'x=1',
     });
     expect(ok.status).toBe(200);
-    expect(actionRan).toBe(true);
+    expect(loadersRan).toBe(true);
   });
 });

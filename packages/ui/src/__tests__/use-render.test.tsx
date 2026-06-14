@@ -2,13 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/preact';
 import { h } from 'preact';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 
 function Widget(props: {
   render?: RenderProp<{ active: boolean }>;
   active?: boolean;
 }) {
-  return useRender<{ active: boolean }>({
+  return renderElement<{ active: boolean }>({
     render: props.render,
     defaultTag: 'button',
     props: { class: 'fw', 'data-fw': 'yes', type: 'button' },
@@ -17,7 +17,7 @@ function Widget(props: {
   });
 }
 
-describe('useRender', () => {
+describe('renderElement', () => {
   it('renders the default tag with framework props and children', () => {
     const { container } = render(<Widget />);
     const el = container.querySelector('button')!;

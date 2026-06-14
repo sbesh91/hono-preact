@@ -6,8 +6,6 @@ import {
   RECOGNIZED_SERVER_EXPORTS,
   RECOGNIZED_SERVER_EXPORTS_SET,
 } from './server-exports-contract.js';
-import { findUseExports } from './server-loaders-parser.js';
-
 const ALLOWED_NAMED_EXPORTS_LIST = RECOGNIZED_SERVER_EXPORTS.map(
   (n) => `'${n}'`
 ).join(', ');
@@ -58,40 +56,6 @@ export function serverLoaderValidationPlugin(): Plugin {
                 namedExports.push(decl.id.name);
             }
           }
-        }
-      }
-
-      // F3: loaderUse / actionUse must resolve to an array at runtime so
-      // the dispatcher receives a real ReadonlyArray. We cannot statically
-      // prove that an identifier (e.g. `loaderUse = requireSession`
-      // re-exporting an array from another module) holds an array, so we
-      // reject only the obviously-wrong literal shapes here. There is no
-      // runtime backstop, so an indirect (identifier) non-array value
-      // cannot be caught until the middleware chain runs. The literal
-      // denylist covers the canonical typo case (`loaderUse =
-      // singleMwObject`). findUseExports is shared with
-      // server-loaders-parser so the recognized-name list stays in one
-      // place.
-      const REJECTED_LITERAL_TYPES = new Set([
-        'ObjectExpression',
-        'NumericLiteral',
-        'StringLiteral',
-        'BooleanLiteral',
-        'NullLiteral',
-        'RegExpLiteral',
-        'TemplateLiteral',
-        'BigIntLiteral',
-      ]);
-      for (const useExport of findUseExports(ast.program)) {
-        if (useExport.init == null) continue;
-        if (REJECTED_LITERAL_TYPES.has(useExport.init.type)) {
-          errors.push(
-            `${id}: \`${useExport.name}\` must be an array literal or an ` +
-              `identifier that points to an array ` +
-              `(e.g. \`export const ${useExport.name} = [requireAuth]\` or ` +
-              `\`export const ${useExport.name} = requireSession\`). ` +
-              `A non-array value silently disables the middleware at runtime.`
-          );
         }
       }
 

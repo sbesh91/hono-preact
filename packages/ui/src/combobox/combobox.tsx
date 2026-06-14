@@ -20,7 +20,7 @@ import { useFormReset } from '../use-form-reset.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { usePositioner } from '../use-positioner.js';
 import { useDismiss } from '../use-dismiss.js';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
 import type { OptionEntry } from '../listbox/selection.js';
 import { useListNavigation } from '../list-navigation.js';
@@ -284,7 +284,7 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
     setPosition: ctx.setPosition,
     mount: 'hidden',
   });
-  return useRender<{ side: Side; align: Align }>({
+  return renderElement<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: { ...rest, ...positionerProps },
@@ -320,7 +320,7 @@ export function ComboboxPopup(props: ComboboxPopupProps): VNode {
     },
   });
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -352,7 +352,7 @@ export type ComboboxAnchorProps = {
 export function ComboboxAnchor(props: ComboboxAnchorProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Anchor');
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, ref: ctx.anchorRef },
@@ -369,7 +369,7 @@ export function ComboboxArrow(props: ComboboxArrowProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Arrow');
   const { side, arrowX, arrowY } = ctx.position;
-  return useRender<{ side: Side }>({
+  return renderElement<{ side: Side }>({
     render,
     defaultTag: 'div',
     props: {
@@ -449,7 +449,7 @@ export function ComboboxOption<Value = string>(
     ctx.setActiveId(id);
   };
 
-  return useRender<{
+  return renderElement<{
     selected: boolean;
     disabled: boolean;
     highlighted: boolean;
@@ -481,7 +481,7 @@ export type ComboboxOptionGroupProps = {
 export function ComboboxOptionGroup(props: ComboboxOptionGroupProps) {
   const { render, children, ...rest } = props;
   const labelId = useId();
-  const node = useRender({
+  const node = renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, role: 'group', 'aria-labelledby': labelId },
@@ -500,7 +500,7 @@ export function ComboboxOptionGroupLabel(
 ): VNode {
   const { render, children, ...rest } = props;
   const group = useContext(ComboboxOptionGroupContext);
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, id: group?.labelId },
@@ -534,7 +534,7 @@ export function ComboboxStatus(props: ComboboxStatusProps): VNode {
       ? 'No results'
       : `${count} result${count === 1 ? '' : 's'} available`;
 
-  return useRender<{ count: number; open: boolean }>({
+  return renderElement<{ count: number; open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -795,7 +795,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     openIfFocusOpen();
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'input',
     props: {
@@ -843,7 +843,7 @@ export function ComboboxTrigger(props: ComboboxTriggerProps): VNode {
     ctx.setOpen(!ctx.open);
     ctx.inputRef.current?.focus();
   };
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -876,7 +876,7 @@ export function ComboboxClear(props: ComboboxClearProps): VNode {
     if (ctx.disabled) return;
     ctx.clear();
   };
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'button',
     props: {
@@ -900,7 +900,7 @@ export function ComboboxEmpty(props: ComboboxEmptyProps): VNode | null {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Empty');
   if (!ctx.open || ctx.optionCount > 0) return null;
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, role: 'presentation' },

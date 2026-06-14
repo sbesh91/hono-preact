@@ -3,7 +3,6 @@ import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender, locationStub } from 'preact-iso/prerender';
 import {
-  env,
   isOutcome,
   type AppConfig,
   type Middleware,
@@ -13,6 +12,7 @@ import {
   ActionResultContext,
   type ActionResultContextValue,
 } from '@hono-preact/iso';
+import { env } from '@hono-preact/iso/internal/runtime';
 import {
   HonoRequestContext,
   runRequestScope,

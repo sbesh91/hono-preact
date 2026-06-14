@@ -26,8 +26,18 @@ describe('iso /internal/runtime door', () => {
     }
   });
 
+  it('exposes the mutable env runtime-mode flag', () => {
+    const { env } = runtime;
+    expect(typeof env).toBe('object');
+    expect(env).toHaveProperty('current');
+  });
+
   it('exports exactly the plumbing set plus the contract module (no drift)', () => {
-    const expected = new Set<string>([...PLUMBING, ...Object.keys(contract)]);
+    const expected = new Set<string>([
+      ...PLUMBING,
+      'env',
+      ...Object.keys(contract),
+    ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());
   });

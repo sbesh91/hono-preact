@@ -12,10 +12,10 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import {
   defineLoader,
   defineAction,
-  env,
   useAction,
   type ActionStub,
 } from '@hono-preact/iso';
+import { env } from '@hono-preact/iso/internal/runtime';
 import { Loader } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
 import { pageActionHandler } from '../page-action-handler.js';
