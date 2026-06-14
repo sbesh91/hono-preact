@@ -59,6 +59,14 @@ export default defineConfig({
         __dirname,
         'packages/hono-preact/src/internal.ts'
       ),
+      'hono-preact/adapter-cloudflare': path.resolve(
+        __dirname,
+        'packages/vite/src/adapter-cloudflare.ts'
+      ),
+      'hono-preact/adapter-node': path.resolve(
+        __dirname,
+        'packages/vite/src/adapter-node.ts'
+      ),
       'hono-preact/page': path.resolve(
         __dirname,
         'packages/hono-preact/src/page.ts'
