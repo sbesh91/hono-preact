@@ -20,7 +20,11 @@ import type { Side, Align } from '../use-position.js';
 import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { renderElement, type RenderProp } from '../use-render.js';
-import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
+import {
+  useListboxSelection,
+  useRegisterOption,
+  OPTION_SELECTOR,
+} from '../listbox/selection.js';
 import type { OptionEntry } from '../listbox/selection.js';
 import { useListNavigation } from '../list-navigation.js';
 import {
@@ -380,10 +384,7 @@ export function ComboboxOption<Value = string>(
   // re-registers; for non-string children the label is read once from the DOM
   // (changing their text without changing `value` won't update the registration).
   const stringLabel = typeof children === 'string' ? children : undefined;
-  useLayoutEffect(() => {
-    const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
-    return ctx.registerOption(id, value, label);
-  }, [id, value, stringLabel, ctx.registerOption]);
+  useRegisterOption(ctx.registerOption, id, value, stringLabel);
 
   const commit = () => {
     if (create) {

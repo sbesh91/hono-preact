@@ -1,6 +1,6 @@
 // packages/ui/src/listbox/selection.ts
 import { h, type ComponentChild } from 'preact';
-import { useCallback, useRef, useState } from 'preact/hooks';
+import { useCallback, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 // An option-disabled-aware selector both Select and Combobox query the listbox
 // with. Lives here so both slices share one definition.
@@ -195,4 +195,21 @@ export function useListboxSelection<Value = string>(
     optionCount: registry.current.length,
     hiddenFields,
   };
+}
+
+// Shared by Select.Option and Combobox.Option: register an option's label with
+// the listbox registry on mount, re-register when its identity/label changes,
+// and deregister on unmount. For non-string children stringLabel is undefined
+// and the label is read from the element's textContent at effect time (post-
+// mount), matching the original per-component behavior.
+export function useRegisterOption(
+  register: (id: string, value: unknown, label: string) => () => void,
+  id: string,
+  value: unknown,
+  stringLabel: string | undefined
+): void {
+  useLayoutEffect(() => {
+    const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
+    return register(id, value, label);
+  }, [id, value, stringLabel, register]);
 }
