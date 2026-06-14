@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mdxToMarkdown, extractDescription } from '../generate-llms.js';
+import { nav } from '../../pages/docs/nav.js';
+import { routeToFile, generateLlmsFiles } from '../generate-llms.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const docsDir = resolve(here, '../../pages/docs');
 
 describe('mdxToMarkdown', () => {
   it('strips top-of-file import lines', () => {
@@ -49,5 +56,46 @@ describe('extractDescription', () => {
     expect(extractDescription(`# Title\n\n## Straight to a heading\n`)).toBe(
       ''
     );
+  });
+});
+
+describe('routeToFile', () => {
+  it('resolves a top-level guide route', () => {
+    expect(routeToFile(docsDir, '/docs/loaders')).toMatch(/loaders\.mdx$/);
+  });
+  it('resolves an area-root route to its index.mdx', () => {
+    expect(routeToFile(docsDir, '/docs/components')).toMatch(
+      /components\/index\.mdx$/
+    );
+  });
+  it('returns null for an unknown route', () => {
+    expect(routeToFile(docsDir, '/docs/does-not-exist')).toBeNull();
+  });
+});
+
+describe('generateLlmsFiles', () => {
+  const { llmsTxt, llmsFullTxt } = generateLlmsFiles(nav, docsDir);
+
+  it('every nav route resolves to a real MDX file', () => {
+    const routes = nav.flatMap((a) =>
+      a.sections.flatMap((s) => s.entries.map((e) => e.route))
+    );
+    for (const route of routes) {
+      expect(routeToFile(docsDir, route), `route ${route}`).not.toBeNull();
+    }
+  });
+
+  it('llms.txt has the expected header and a known annotated link', () => {
+    expect(llmsTxt.startsWith('# hono-preact')).toBe(true);
+    expect(llmsTxt).toContain('> ');
+    expect(llmsTxt).toContain('## ');
+    expect(llmsTxt).toContain('](https://framework.sbesh.com/docs/loaders)');
+  });
+
+  it('llms-full.txt is non-empty, includes real page content, and has no leftover JSX', () => {
+    expect(llmsFullTxt.length).toBeGreaterThan(1000);
+    expect(llmsFullTxt).toContain('# Server Loaders');
+    expect(llmsFullTxt).not.toContain('<Example>');
+    expect(llmsFullTxt).not.toContain('<CodeTabs');
   });
 });

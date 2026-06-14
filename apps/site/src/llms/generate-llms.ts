@@ -55,3 +55,74 @@ export function extractDescription(markdown: string): string {
   }
   return '';
 }
+
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { NavArea } from '../pages/docs/nav.js';
+
+const SITE_ORIGIN = 'https://framework.sbesh.com';
+const SUMMARY =
+  'A small full-stack framework: Hono on the server, Preact in the browser, ' +
+  'routes declared in code, typed loaders/actions/guards, streaming everywhere.';
+
+export interface LlmsFiles {
+  llmsTxt: string;
+  llmsFullTxt: string;
+}
+
+/** Map a `/docs/...` route back to the MDX file that serves it, or null. */
+export function routeToFile(docsDir: string, route: string): string | null {
+  const slug = route === '/docs' ? '' : route.replace(/^\/docs\//, '');
+  const direct =
+    slug === '' ? join(docsDir, 'index.mdx') : join(docsDir, `${slug}.mdx`);
+  if (existsSync(direct)) return direct;
+  const indexed = join(docsDir, slug, 'index.mdx');
+  if (existsSync(indexed)) return indexed;
+  return null;
+}
+
+/** Build the llms.txt (curated index) and llms-full.txt (full corpus) strings. */
+export function generateLlmsFiles(nav: NavArea[], docsDir: string): LlmsFiles {
+  const indexLines: string[] = ['# hono-preact', '', `> ${SUMMARY}`, ''];
+  const corpusParts: string[] = [];
+
+  for (const area of nav) {
+    for (const section of area.sections) {
+      indexLines.push(`## ${section.heading}`, '');
+      for (const entry of section.entries) {
+        const file = routeToFile(docsDir, entry.route);
+        if (!file) {
+          throw new Error(
+            `llms.txt: nav route ${entry.route} (${entry.title}) has no matching MDX file under ${docsDir}`
+          );
+        }
+        const markdown = mdxToMarkdown(readFileSync(file, 'utf8'));
+        const url = `${SITE_ORIGIN}${entry.route}`;
+        const description = extractDescription(markdown);
+        indexLines.push(
+          description
+            ? `- [${entry.title}](${url}): ${description}`
+            : `- [${entry.title}](${url})`
+        );
+        corpusParts.push(`> Source: ${url}\n\n${markdown}`);
+      }
+      indexLines.push('');
+    }
+  }
+
+  indexLines.push(
+    '## Full corpus',
+    '',
+    `- [Complete documentation](${SITE_ORIGIN}/llms-full.txt): every page above concatenated as one file`,
+    ''
+  );
+
+  return {
+    llmsTxt:
+      indexLines
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd() + '\n',
+    llmsFullTxt: corpusParts.join('\n\n---\n\n').trimEnd() + '\n',
+  };
+}
