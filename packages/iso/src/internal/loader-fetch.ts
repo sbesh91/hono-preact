@@ -60,7 +60,10 @@ export async function fetchLoaderData<T>(
           : `Request denied (${res.status})`;
       throw new Error(msg);
     }
-    throw new Error(body.error ?? `Loader failed with status ${res.status}. Check the loader's .server.ts for a thrown error, and the server logs for details.`);
+    throw new Error(
+      body.error ??
+        `Loader failed with status ${res.status}. Check the loader's .server.ts for a thrown error, and the server logs for details.`
+    );
   }
 
   const contentType = res.headers.get('Content-Type') ?? '';

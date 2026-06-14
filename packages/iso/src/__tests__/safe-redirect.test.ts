@@ -40,7 +40,9 @@ describe('assignSafeRedirect', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     assignSafeRedirect('https://evil.example.com/foo');
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('redirect() must return a same-origin path (e.g. "/dashboard").')
+      expect.stringContaining(
+        'redirect() must return a same-origin path (e.g. "/dashboard").'
+      )
     );
     errorSpy.mockRestore();
   });

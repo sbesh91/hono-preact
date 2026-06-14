@@ -739,7 +739,11 @@ describe('useAction — outcome envelope decoding', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         new Response(
-          JSON.stringify({ __outcome: 'redirect', to: 'https://evil.example.com/steal', status: 302 }),
+          JSON.stringify({
+            __outcome: 'redirect',
+            to: 'https://evil.example.com/steal',
+            status: 302,
+          }),
           {
             status: 200,
             headers: { 'Content-Type': 'application/json' },

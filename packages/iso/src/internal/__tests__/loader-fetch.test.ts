@@ -162,7 +162,7 @@ describe('fetchLoaderData: deny outcome envelope', () => {
         noopCbs
       )
     ).rejects.toThrow(
-      'Loader failed with status 503. Check the loader\'s .server.ts for a thrown error, and the server logs for details.'
+      "Loader failed with status 503. Check the loader's .server.ts for a thrown error, and the server logs for details."
     );
   });
 });
