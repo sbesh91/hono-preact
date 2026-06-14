@@ -1,5 +1,5 @@
 import type { JSX, RefObject } from 'preact';
-import { useLayoutEffect } from 'preact/hooks';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { usePosition } from './use-position.js';
 import type {
   Side,
@@ -30,15 +30,18 @@ export interface UsePositionerOptions {
   // The element the overlay is positioned against.
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
-  arrowRef: RefObject<HTMLElement>;
+  // Optional during the migration to PositionerContext: when omitted the hook
+  // creates and owns the ref. Removed once every component stops passing it.
+  arrowRef?: RefObject<HTMLElement>;
   side: Side;
   align: Align;
   offset: number;
   // Position against a point or virtual element instead of anchorRef (e.g. a
   // pointer position). Undefined for the common anchor-element case.
   getAnchorRect?: ClientRectGetter;
-  // Publish the resolved position so an Arrow part can read it.
-  setPosition: (p: PositionState) => void;
+  // Optional legacy publish hook (pre-PositionerContext); removed once every
+  // component reads the position from the hook return instead.
+  setPosition?: (p: PositionState) => void;
   // 'unmount': the component returns null while closed (branch on isPresent).
   // 'hidden': the element stays mounted (so options can register their labels)
   // and is `hidden` while closed.
@@ -59,25 +62,33 @@ export interface UsePositionerResult {
   isPresent: boolean;
   positionerProps: PositionerProps;
   state: { side: Side; align: Align };
+  // The resolved position, for a Positioner to publish via PositionerContext.
+  position: PositionState;
+  // The ref floating-ui measures and the Arrow attaches to.
+  arrowRef: RefObject<HTMLElement>;
 }
 
 export function usePositioner(opts: UsePositionerOptions): UsePositionerResult {
   const presence = usePresence(opts.open);
 
+  const ownArrowRef = useRef<HTMLElement>(null);
+  const arrowRef = opts.arrowRef ?? ownArrowRef;
+
   const position = usePosition({
     open: presence.isPresent,
     anchorRef: opts.anchorRef,
     floatingRef: opts.floatingRef,
-    arrowRef: opts.arrowRef,
+    arrowRef,
     side: opts.side,
     align: opts.align,
     offset: opts.offset,
     getAnchorRect: opts.getAnchorRect,
   });
 
-  // Publish the resolved position so Arrow (and any consumer) can read it.
+  // Legacy publish to the Root (back-compat during migration). No-op once a
+  // component reads `position` from this hook's return instead.
   useLayoutEffect(() => {
-    opts.setPosition(position);
+    opts.setPosition?.(position);
   }, [position.side, position.align, position.arrowX, position.arrowY]);
 
   // Promote to the native top layer. The Popover API is a hard dependency of
@@ -113,5 +124,7 @@ export function usePositioner(opts: UsePositionerOptions): UsePositionerResult {
       style: POSITIONER_STYLE,
     },
     state: { side: position.side, align: position.align },
+    position,
+    arrowRef,
   };
 }

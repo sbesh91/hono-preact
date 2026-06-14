@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/preact';
 import { useRef } from 'preact/hooks';
 import { usePositioner } from '../use-positioner.js';
-import type { PositionState, ClientRectGetter } from '../use-position.js';
+import type { ClientRectGetter } from '../use-position.js';
 
 afterEach(cleanup);
 
@@ -11,27 +11,26 @@ function Harness(props: {
   open: boolean;
   mount: 'unmount' | 'hidden';
   getAnchorRect?: ClientRectGetter;
-  onPosition?: (p: PositionState) => void;
+  onSide?: (side: string) => void;
 }) {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const floatingRef = useRef<HTMLDivElement>(null);
-  const arrowRef = useRef<HTMLDivElement>(null);
-  const { isPresent, positionerProps } = usePositioner({
+  const { isPresent, positionerProps, position, arrowRef } = usePositioner({
     open: props.open,
     anchorRef,
     floatingRef,
-    arrowRef,
     side: 'bottom',
     align: 'start',
     offset: 8,
     getAnchorRect: props.getAnchorRect,
-    setPosition: (p) => props.onPosition?.(p),
     mount: props.mount,
   });
+  props.onSide?.(position.side);
   return (
     <div>
       <button ref={anchorRef}>anchor</button>
       <span data-testid="present">{String(isPresent)}</span>
+      <span data-testid="has-arrow-ref">{String(arrowRef != null)}</span>
       {props.mount === 'unmount' && !isPresent ? null : (
         <div data-testid="floating" {...positionerProps} />
       )}
@@ -53,7 +52,6 @@ describe('usePositioner', () => {
 
   it('hidden mode: stays mounted; hidden toggles with open', () => {
     const closed = render(<Harness open={false} mount="hidden" />);
-    // Always rendered, but hidden while closed.
     expect(closed.queryByTestId('floating')).not.toBeNull();
     expect(closed.getByTestId('floating').hasAttribute('hidden')).toBe(true);
     cleanup();
@@ -69,12 +67,13 @@ describe('usePositioner', () => {
     expect(el.getAttribute('data-align')).toBe('start');
   });
 
-  it('publishes the resolved position via setPosition', () => {
-    const seen: PositionState[] = [];
-    render(<Harness open mount="unmount" onPosition={(p) => seen.push(p)} />);
-    expect(seen.length).toBeGreaterThan(0);
-    expect(seen[0].side).toBe('bottom');
-    expect(seen[0].align).toBe('start');
+  it('returns the resolved position and owns an arrow ref', () => {
+    const seen: string[] = [];
+    const { getByTestId } = render(
+      <Harness open mount="unmount" onSide={(s) => seen.push(s)} />
+    );
+    expect(getByTestId('has-arrow-ref').textContent).toBe('true');
+    expect(seen[seen.length - 1]).toBe('bottom');
   });
 
   it('forwards getAnchorRect to usePosition', async () => {
