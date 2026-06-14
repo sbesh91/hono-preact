@@ -16,7 +16,7 @@ import {
 } from 'preact/hooks';
 import { useControllableState } from '../use-controllable-state.js';
 import { useFormReset } from '../use-form-reset.js';
-import type { Side, Align } from '../use-position.js';
+import type { Side, Align, PositioningProps } from '../use-position.js';
 import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { renderElement, type RenderProp } from '../render-element.js';
@@ -24,6 +24,7 @@ import {
   useListboxSelection,
   useRegisterOption,
   OPTION_SELECTOR,
+  type SelectionProps,
 } from '../listbox/selection.js';
 import type { OptionEntry } from '../listbox/selection.js';
 import { useListNavigation } from '../list-navigation.js';
@@ -34,11 +35,8 @@ import {
 } from './context.js';
 import { computeInlineCompletion, isForwardEdit } from './autocomplete.js';
 
-export interface ComboboxRootProps<Value = string> {
-  value?: Value | Value[];
-  defaultValue?: Value | Value[];
-  onValueChange?: (value: Value | Value[]) => void;
-  multiple?: boolean;
+export interface ComboboxRootProps<Value = string>
+  extends SelectionProps<Value>, PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -53,9 +51,6 @@ export interface ComboboxRootProps<Value = string> {
   required?: boolean;
   isValueEqual?: (a: Value, b: Value) => boolean;
   serializeValue?: (value: Value) => string;
-  side?: Side; // default 'bottom'
-  align?: Align; // default 'start'
-  offset?: number; // default 8
   loop?: boolean; // default true
   openOnFocus?: boolean; // open the popup when the input gains focus (default true)
   children?: ComponentChildren;

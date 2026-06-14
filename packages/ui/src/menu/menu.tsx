@@ -9,7 +9,7 @@ import {
 import { useContext, useId, useLayoutEffect, useMemo } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align } from '../use-position.js';
+import type { Side, Align, PositioningProps } from '../use-position.js';
 import { useMenuCore } from './use-menu-core.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
@@ -22,13 +22,10 @@ import {
   useMenuRadioGroupContext,
 } from './context.js';
 
-export interface MenuRootProps {
+export interface MenuRootProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  side?: Side; // default 'bottom'
-  align?: Align; // default 'start'
-  offset?: number; // default 8
   loop?: boolean; // wrap arrow navigation, default true
   typeahead?: boolean; // type-to-focus, default true
   children?: ComponentChildren;

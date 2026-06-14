@@ -12,6 +12,15 @@ export interface OptionEntry<Value = unknown> {
   label: string;
 }
 
+// Shared controlled/uncontrolled selection props for Select + Combobox Roots.
+// The generic stays on each Root (both default Value = string).
+export interface SelectionProps<Value> {
+  value?: Value | Value[];
+  defaultValue?: Value | Value[];
+  onValueChange?: (value: Value | Value[]) => void;
+  multiple?: boolean;
+}
+
 export interface UseListboxSelectionOptions<Value> {
   value: Value | Value[] | undefined;
   setValue: (next: Value | Value[]) => void;

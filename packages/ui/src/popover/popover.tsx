@@ -6,17 +6,14 @@ import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align } from '../use-position.js';
+import type { Side, Align, PositioningProps } from '../use-position.js';
 import { Positioner } from '../positioner.js';
 import { PopoverContext, usePopoverContext } from './context.js';
 
-export interface PopoverRootProps {
+export interface PopoverRootProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  side?: Side; // default 'bottom'
-  align?: Align; // default 'center'
-  offset?: number; // default 8
   children?: ComponentChildren;
 }
 
