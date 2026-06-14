@@ -1,17 +1,14 @@
 // packages/ui/src/context-menu/context-menu.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
 import { renderElement, type RenderProp } from '../render-element.js';
-import type { Side, Align } from '../use-position.js';
+import type { PositioningProps } from '../use-position.js';
 import { MenuContext, useMenuContext } from '../menu/context.js';
 import { useMenuCore } from '../menu/use-menu-core.js';
 
-export interface ContextMenuRootProps {
+export interface ContextMenuRootProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  side?: Side; // default 'bottom'
-  align?: Align; // default 'start'
-  offset?: number; // default 0
   loop?: boolean;
   typeahead?: boolean;
   children?: ComponentChildren;

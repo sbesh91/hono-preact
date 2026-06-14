@@ -38,7 +38,7 @@ export function SaveHint() {
 ```
 
 The trigger opens after a short delay on hover and immediately on focus. Set
-`delay` and `closeDelay` on `Tooltip.Root` to tune the timing.
+`openDelay` and `closeDelay` on `Tooltip.Root` to tune the timing.
 
 Once open, the tooltip stays open while the pointer rests on the trigger, the
 popup, or the safe corridor across the gap between them; it closes `closeDelay`
@@ -144,7 +144,7 @@ Renders only its children.
 | `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.                                         |
 | `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.                                                    |
 | `onOpenChange` | `(open: boolean) => void`          | -          | Called when the tooltip requests an open or close.                                       |
-| `delay`        | `number`                           | `600`      | Open delay in ms after the pointer enters the trigger.                                   |
+| `openDelay`    | `number`                           | `600`      | Open delay in ms after the pointer enters the trigger.                                   |
 | `closeDelay`   | `number`                           | `300`      | Grace in ms before closing once the pointer leaves the trigger, popup, or safe corridor. |
 | `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'top'`    | Preferred side of the anchor to place the popup.                                         |
 | `align`        | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                                                               |
@@ -164,7 +164,7 @@ The element the tooltip describes. Binds hover and focus, wires
 | `...props` | `JSX.HTMLAttributes<HTMLButtonElement>` | -       | Forwarded; passed pointer / focus handlers run first. |
 
 Sets `data-state` and `aria-describedby` (the popup id, only while open). Opens
-after `delay` on a mouse `pointerenter`, immediately on `focus`; once open, it
+after `openDelay` on a mouse `pointerenter`, immediately on `focus`; once open, it
 closes `closeDelay` after the pointer leaves the trigger, popup, and safe
 corridor, immediately on `blur`, or on Escape. A touch pointer does not open it.
 

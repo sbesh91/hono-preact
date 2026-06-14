@@ -112,10 +112,12 @@ only needed when you want a dedicated open/close control):
 
 **Multiple selection.** Set `multiple`; the value becomes an array and the popup
 stays open on pick. Wrap the field in `Combobox.Anchor` and render the selected
-chips with `Combobox.Value`, which exposes `{ selectedItems, remove }`:
+chips with `Combobox.Value`, which exposes `{ selectedItems, remove }`. It
+renders a `<span>` and accepts standard HTML attributes (like `class`) and a
+`render` prop for full control:
 
 ```tsx
-<Combobox.Value>
+<Combobox.Value class="chip-list">
   {({ selectedItems, remove }) =>
     selectedItems.map((it) => (
       <button key={String(it.value)} onClick={() => remove(it.value)}>
@@ -361,8 +363,8 @@ Every part accepts a `render` prop for composition (see
 [renderElement](/docs/components/render-element)) and forwards unknown props to the
 element it renders. `Combobox.Option` passes `{ selected, disabled, highlighted
 }` to a render function; `Combobox.Status` passes `{ count, open }`;
-`Combobox.Value` exposes `{ selectedItems, remove }` via a required children
-function.
+`Combobox.Value` exposes `{ selectedItems, remove }` via a children function or
+a `render` prop.
 
 ### Combobox.Root
 
@@ -565,20 +567,23 @@ visually-hidden styles.
 
 ### Combobox.Value
 
-A non-visual render-prop accessor for the selected items. Required in multiple
-mode to render chips; optional in single mode. Renders a fragment (no DOM
-element of its own).
+Renders selected items. Required in multiple mode to render chips; optional in
+single mode. Renders a `<span>` wrapper and accepts standard HTML attributes
+(like `class` for styling the chip container). Generic over the root's value
+type (`Combobox.Value<Value>`).
 
-| Prop       | Type                                               | Default  | Description                                   |
-| ---------- | -------------------------------------------------- | -------- | --------------------------------------------- |
-| `children` | `(state: ComboboxValueState) => ComponentChildren` | required | Render function receiving the selected items. |
+| Prop       | Type                                                      | Default | Description                                                                                   |
+| ---------- | --------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `children` | `(state: ComboboxValueState<Value>) => ComponentChildren` | -       | Render function receiving the selected items. Optional when `render` is provided.             |
+| `render`   | `(props, state: ComboboxValueState<Value>) => VNode`      | -       | Replace the default `<span>` entirely; receives forwarded props and state.                    |
+| `...props` | `JSX.HTMLAttributes<HTMLSpanElement>`                     | -       | Forwarded to the `<span>` wrapper (excluding `children`); e.g. `class` for chip-list styling. |
 
-`ComboboxValueState` has:
+`ComboboxValueState<Value>` has:
 
-| Field           | Type                       | Description                                                      |
-| --------------- | -------------------------- | ---------------------------------------------------------------- |
-| `selectedItems` | `OptionEntry[]`            | Selected items in value order, each with `{ id, value, label }`. |
-| `remove`        | `(value: unknown) => void` | Toggle an item off (de-select it).                               |
+| Field           | Type                     | Description                                                      |
+| --------------- | ------------------------ | ---------------------------------------------------------------- |
+| `selectedItems` | `OptionEntry<Value>[]`   | Selected items in value order, each with `{ id, value, label }`. |
+| `remove`        | `(value: Value) => void` | Toggle an item off (de-select it).                               |
 
 ### Primitives
 

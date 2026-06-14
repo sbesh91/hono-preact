@@ -16,6 +16,15 @@ import {
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 export type Align = 'start' | 'center' | 'end';
 
+// Shared positioning props for every overlay Root. Defaults are applied per-Root
+// in its destructure (they differ: side 'top'/'bottom', offset 0/8, etc.), so
+// this type only declares the props, not their defaults.
+export interface PositioningProps {
+  side?: Side;
+  align?: Align;
+  offset?: number;
+}
+
 // A rect-getter for positioning against a point or virtual element. Lets other
 // modules (e.g. the context menu) name the option type without importing
 // floating-ui directly.

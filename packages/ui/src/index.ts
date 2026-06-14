@@ -11,6 +11,7 @@ export {
   type PositionState,
   type Side,
   type Align,
+  type PositioningProps,
   type ClientRectGetter,
 } from './use-position.js';
 export {
@@ -190,4 +191,5 @@ export {
   type UseListboxSelectionOptions,
   type ListboxSelection,
   type OptionEntry,
+  type SelectionProps,
 } from './listbox/selection.js';

@@ -50,6 +50,60 @@ describe('Combobox Value (multi)', () => {
     expect(onValueChange).toHaveBeenLastCalledWith([]);
   });
 
+  it('wraps function-children in a span carrying rest props', async () => {
+    render(
+      <ComboboxRoot multiple defaultOpen value={['apple']}>
+        <ComboboxValue class="chips">
+          {({ selectedItems }) =>
+            selectedItems.map((it) => (
+              <span key={it.id} data-testid="chip">
+                {it.label}
+              </span>
+            ))
+          }
+        </ComboboxValue>
+        <ComboboxInput aria-label="Fruit" />
+        <ComboboxPositioner>
+          <ComboboxPopup aria-label="Fruits">
+            <ComboboxOption value="apple">Apple</ComboboxOption>
+          </ComboboxPopup>
+        </ComboboxPositioner>
+      </ComboboxRoot>
+    );
+    await act(async () => {});
+    const wrapper = document.querySelector(
+      '[data-testid="chip"]'
+    )!.parentElement!;
+    expect(wrapper.tagName).toBe('SPAN');
+    expect(wrapper.className).toContain('chips');
+  });
+
+  it('render prop replaces the default span and receives state', async () => {
+    render(
+      <ComboboxRoot multiple defaultOpen value={['apple']}>
+        <ComboboxValue
+          render={(props, state) => (
+            <ul {...props} data-testid="value-list">
+              {state.selectedItems.map((it) => (
+                <li key={it.id}>{it.label}</li>
+              ))}
+            </ul>
+          )}
+        />
+        <ComboboxInput aria-label="Fruit" />
+        <ComboboxPositioner>
+          <ComboboxPopup aria-label="Fruits">
+            <ComboboxOption value="apple">Apple</ComboboxOption>
+          </ComboboxPopup>
+        </ComboboxPositioner>
+      </ComboboxRoot>
+    );
+    await act(async () => {});
+    const list = document.querySelector('[data-testid="value-list"]')!;
+    expect(list.tagName).toBe('UL');
+    expect(list.textContent).toContain('Apple');
+  });
+
   it('updates a selected chip label when the option text changes (same value)', async () => {
     function Harness() {
       const [label, setLabel] = useState('Apple');

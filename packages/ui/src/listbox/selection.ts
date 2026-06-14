@@ -6,10 +6,19 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'preact/hooks';
 // with. Lives here so both slices share one definition.
 export const OPTION_SELECTOR = '[role="option"]:not([aria-disabled="true"])';
 
-export interface OptionEntry {
+export interface OptionEntry<Value = unknown> {
   id: string;
-  value: unknown;
+  value: Value;
   label: string;
+}
+
+// Shared controlled/uncontrolled selection props for Select + Combobox Roots.
+// The generic stays on each Root (both default Value = string).
+export interface SelectionProps<Value> {
+  value?: Value | Value[];
+  defaultValue?: Value | Value[];
+  onValueChange?: (value: Value | Value[]) => void;
+  multiple?: boolean;
 }
 
 export interface UseListboxSelectionOptions<Value> {

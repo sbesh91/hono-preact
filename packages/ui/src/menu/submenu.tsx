@@ -16,7 +16,7 @@ import {
 } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useSafeArea } from '../use-safe-area.js';
-import type { Side, Align } from '../use-position.js';
+import type { Side, Align, PositioningProps } from '../use-position.js';
 import { useMenuCore } from './use-menu-core.js';
 import {
   MenuContext,
@@ -50,13 +50,10 @@ function useSubmenuContext(part: string): SubmenuContextValue {
   return ctx;
 }
 
-export interface SubmenuRootProps {
+export interface SubmenuRootProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  side?: Side; // default 'right'
-  align?: Align; // default 'start'
-  offset?: number; // default 0
   openDelay?: number; // hover open delay (ms), default 100
   closeDelay?: number; // safe-area grace (ms), default 300
   children?: ComponentChildren;

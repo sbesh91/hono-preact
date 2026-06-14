@@ -15,7 +15,7 @@ import {
 } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align } from '../use-position.js';
+import type { Side, Align, PositioningProps } from '../use-position.js';
 import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
@@ -23,15 +23,13 @@ import {
   useListboxSelection,
   useRegisterOption,
   OPTION_SELECTOR,
+  type SelectionProps,
 } from '../listbox/selection.js';
 import { useFormReset } from '../use-form-reset.js';
 import { SelectContext, useSelectContext } from './context.js';
 
-export interface SelectRootProps<Value = string> {
-  value?: Value | Value[];
-  defaultValue?: Value | Value[];
-  onValueChange?: (value: Value | Value[]) => void;
-  multiple?: boolean;
+export interface SelectRootProps<Value = string>
+  extends SelectionProps<Value>, PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -40,9 +38,6 @@ export interface SelectRootProps<Value = string> {
   required?: boolean;
   isValueEqual?: (a: Value, b: Value) => boolean;
   serializeValue?: (value: Value) => string;
-  side?: Side; // default 'bottom'
-  align?: Align; // default 'start'
-  offset?: number; // default 8
   loop?: boolean; // default true
   typeahead?: boolean; // default true
   children?: ComponentChildren;

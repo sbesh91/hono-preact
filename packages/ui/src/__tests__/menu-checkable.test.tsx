@@ -32,6 +32,7 @@ describe('Menu checkable items', () => {
     const item = getByText('Bold');
     expect(item.getAttribute('role')).toBe('menuitemcheckbox');
     expect(item.getAttribute('aria-checked')).toBe('false');
+    expect(item.hasAttribute('data-checked')).toBe(false);
     fireEvent.click(item);
     expect(onCheckedChange).toHaveBeenCalledWith(true);
   });
@@ -54,6 +55,8 @@ describe('Menu checkable items', () => {
     await act(async () => {});
     expect(getByText('Small').getAttribute('aria-checked')).toBe('true');
     expect(getByText('Large').getAttribute('aria-checked')).toBe('false');
+    expect(getByText('Small').getAttribute('data-checked')).toBe('');
+    expect(getByText('Large').hasAttribute('data-checked')).toBe(false);
     fireEvent.click(getByText('Large'));
     expect(onValueChange).toHaveBeenCalledWith('lg');
   });

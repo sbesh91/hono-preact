@@ -3,21 +3,22 @@ import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
 import { useCallback, useEffect, useId, useMemo, useRef } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
-import { type Side, type Align } from '../use-position.js';
+import {
+  type Side,
+  type Align,
+  type PositioningProps,
+} from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useSafeArea } from '../use-safe-area.js';
 import { Positioner } from '../positioner.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
-export interface TooltipRootProps {
+export interface TooltipRootProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  delay?: number; // open delay (ms), default 600
+  openDelay?: number; // open delay (ms), default 600
   closeDelay?: number; // grace before close after leaving the safe corridor (ms), default 300
-  side?: Side; // default 'top'
-  align?: Align; // default 'center'
-  offset?: number; // default 8
   children?: ComponentChildren;
 }
 
@@ -26,7 +27,7 @@ export function TooltipRoot(props: TooltipRootProps) {
     open: openProp,
     defaultOpen,
     onOpenChange,
-    delay = 600,
+    openDelay = 600,
     closeDelay = 300,
     side = 'top',
     align = 'center',
@@ -60,8 +61,8 @@ export function TooltipRoot(props: TooltipRootProps) {
   );
   const scheduleOpen = useCallback(() => {
     cancelPending();
-    timer.current = setTimeout(() => setOpen(true), delay);
-  }, [cancelPending, setOpen, delay]);
+    timer.current = setTimeout(() => setOpen(true), openDelay);
+  }, [cancelPending, setOpen, openDelay]);
 
   // Clear any pending open/close timer if the Root unmounts mid-delay, so the
   // timer cannot fire setOpen after unmount.
