@@ -42,6 +42,34 @@ describe('mdxToMarkdown', () => {
     expect(out).toContain('| a | b |');
     expect(out).toContain('const x = 1;');
   });
+
+  it('keeps import lines and standalone JSX that live inside fenced code', () => {
+    const src = [
+      '# T',
+      '',
+      'Lead.',
+      '',
+      '```tsx',
+      "import { defineLoader } from 'hono-preact';",
+      '',
+      'export const x = 1;',
+      '<AddMovieForm />',
+      '```',
+      '',
+    ].join('\n');
+    const out = mdxToMarkdown(src);
+    expect(out).toContain("import { defineLoader } from 'hono-preact';");
+    expect(out).toContain('<AddMovieForm />');
+  });
+
+  it('still strips imports and standalone demo tags outside fences', () => {
+    const out = mdxToMarkdown(
+      "import { DialogDemo } from './x.js';\n\n# T\n\nLead.\n\n<DialogDemo />\n"
+    );
+    expect(out).not.toContain("from './x.js'");
+    expect(out).not.toContain('<DialogDemo />');
+    expect(out).toContain('Lead.');
+  });
 });
 
 describe('extractDescription', () => {
@@ -56,6 +84,12 @@ describe('extractDescription', () => {
     expect(extractDescription(`# Title\n\n## Straight to a heading\n`)).toBe(
       ''
     );
+  });
+
+  it('strips markdown link syntax and keeps only the first sentence', () => {
+    const md =
+      '# T\n\nUses [Popover](/docs/components/popover) under the hood. More detail here.\n';
+    expect(extractDescription(md)).toBe('Uses Popover under the hood.');
   });
 });
 
@@ -97,5 +131,9 @@ describe('generateLlmsFiles', () => {
     expect(llmsFullTxt).toContain('# Server Loaders');
     expect(llmsFullTxt).not.toContain('<Example>');
     expect(llmsFullTxt).not.toContain('<CodeTabs');
+  });
+
+  it('preserves import lines from real code examples', () => {
+    expect(/\bimport \{[^}]*\} from '/.test(llmsFullTxt)).toBe(true);
   });
 });
