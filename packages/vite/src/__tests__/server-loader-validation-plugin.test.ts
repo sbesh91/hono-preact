@@ -51,6 +51,17 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).toContain('found: helper');
   });
 
+  it('disallowed-export error names the correct remediation', () => {
+    const code = [
+      'export const helper = () => {};',
+      'export const serverLoaders = {};',
+    ].join('\n');
+    const { error } = transform(code, 'movies.server.ts');
+    expect(error).toContain(
+      'Export loaders via `serverLoaders` and actions via `serverActions`.'
+    );
+  });
+
   it('fails when a *.server.* file has neither serverLoaders nor serverActions', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
