@@ -363,8 +363,8 @@ Every part accepts a `render` prop for composition (see
 [renderElement](/docs/components/render-element)) and forwards unknown props to the
 element it renders. `Combobox.Option` passes `{ selected, disabled, highlighted
 }` to a render function; `Combobox.Status` passes `{ count, open }`;
-`Combobox.Value` exposes `{ selectedItems, remove }` via a required children
-function.
+`Combobox.Value` exposes `{ selectedItems, remove }` via a children function or
+a `render` prop.
 
 ### Combobox.Root
 
