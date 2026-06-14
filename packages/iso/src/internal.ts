@@ -47,8 +47,6 @@ export { default as wrapPromise } from './internal/wrap-promise.js';
 export { HonoRequestContext } from './internal/contexts.js';
 export { PageMiddlewareHost } from './internal/page-middleware-host.js';
 
-export { __subscribeRouteChange } from './internal/route-change.js';
-
 export { getNavDirection } from './internal/history-shim.js';
 export { __subscribePhase, type PhaseName } from './internal/route-change.js';
 export {

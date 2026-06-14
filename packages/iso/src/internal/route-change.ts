@@ -12,7 +12,6 @@ export type PhaseName =
   | 'afterTransition';
 
 type PhaseSub = (event: ViewTransitionEvent) => void | Promise<void>;
-type LegacySub = (to: string, from: string | undefined) => void;
 
 const phaseSubs: Record<PhaseName, Set<PhaseSub>> = {
   beforeTransition: new Set(),
@@ -21,24 +20,11 @@ const phaseSubs: Record<PhaseName, Set<PhaseSub>> = {
   afterTransition: new Set(),
 };
 
-const legacySubs = new Set<LegacySub>();
-
 export function __subscribePhase(phase: PhaseName, sub: PhaseSub): () => void {
   phaseSubs[phase].add(sub);
   return () => {
     phaseSubs[phase].delete(sub);
   };
-}
-
-export function __subscribeRouteChange(sub: LegacySub): () => void {
-  legacySubs.add(sub);
-  return () => {
-    legacySubs.delete(sub);
-  };
-}
-
-function fireLegacy(to: string, from: string | undefined): void {
-  for (const sub of legacySubs) sub(to, from);
 }
 
 function getStartViewTransition():
@@ -120,9 +106,6 @@ export function __resetTransitionStateForTesting(): void {
 
 function fireAfterSwap(event: ViewTransitionEvent): void {
   for (const sub of phaseSubs.afterSwap) sub(event);
-  // Legacy subscribers fire at the afterSwap slot: after the DOM swap, before
-  // the browser begins animating the new frame.
-  fireLegacy(event.to, event.from);
 }
 
 function fireAfterTransition(

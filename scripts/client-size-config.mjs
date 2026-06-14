@@ -11,7 +11,6 @@ export const CORE_MODULES = [
   'define-page.js',
   'page.js',
   'client-script.js',
-  'route-change.js',
   'is-browser.js',
 ];
 
