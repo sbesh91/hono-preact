@@ -96,7 +96,10 @@ describe('generateCoreAppModule', () => {
 
     // Framework imports
     expect(src).toContain(`import { Hono } from 'hono';`);
-    expect(src).toContain(`import { Routes, env } from 'hono-preact';`);
+    expect(src).toContain(`import { Routes } from 'hono-preact';`);
+    expect(src).toContain(
+      `import { env } from 'hono-preact/internal/runtime';`
+    );
     expect(src).toContain(
       `import {\n  loadersHandler,\n  pageActionHandler,\n  renderPage,\n} from 'hono-preact/server';`
     );

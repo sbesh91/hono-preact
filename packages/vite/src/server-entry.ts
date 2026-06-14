@@ -37,7 +37,8 @@ export function generateCoreAppModule(
     `import { Hono } from 'hono';\n` +
     `import { h } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes, env } from 'hono-preact';\n` +
+    `import { Routes } from 'hono-preact';\n` +
+    `import { env } from 'hono-preact/internal/runtime';\n` +
     `import {\n` +
     `  loadersHandler,\n` +
     `  pageActionHandler,\n` +

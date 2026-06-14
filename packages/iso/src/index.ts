@@ -132,7 +132,7 @@ export type {
 // Utilities.
 export { prefetch } from './prefetch.js';
 export { usePrefetch } from './use-prefetch.js';
-export { isBrowser, env } from './is-browser.js';
+export { isBrowser } from './is-browser.js';
 
 // Client entry primitives (item 4 of v0.1).
 export { Head } from './head.js';
