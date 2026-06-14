@@ -1,15 +1,14 @@
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
 import {
-  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
+import { useDescriptionRegistry } from '../use-description-registry.js';
 import { mergeRefs } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
 import { DialogContext, useDialogContext } from './context.js';
@@ -44,13 +43,7 @@ export function DialogRoot(props: DialogRootProps) {
   const titleId = `${baseId}-title`;
   const descriptionId = `${baseId}-description`;
 
-  // Reference-counted description presence so the Popup wires aria-describedby
-  // only when a Description is actually rendered.
-  const [descriptionCount, setDescriptionCount] = useState(0);
-  const registerDescription = useCallback(() => {
-    setDescriptionCount((c) => c + 1);
-    return () => setDescriptionCount((c) => c - 1);
-  }, []);
+  const { hasDescription, registerDescription } = useDescriptionRegistry();
 
   const ctx = useMemo(
     () => ({
@@ -61,7 +54,7 @@ export function DialogRoot(props: DialogRootProps) {
       popupId,
       titleId,
       descriptionId,
-      hasDescription: descriptionCount > 0,
+      hasDescription,
       registerDescription,
     }),
     [
@@ -71,7 +64,7 @@ export function DialogRoot(props: DialogRootProps) {
       popupId,
       titleId,
       descriptionId,
-      descriptionCount,
+      hasDescription,
       registerDescription,
     ]
   );

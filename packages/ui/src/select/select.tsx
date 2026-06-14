@@ -7,7 +7,6 @@ import {
   type VNode,
 } from 'preact';
 import {
-  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -17,17 +16,16 @@ import {
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
-import { PositionerContext } from '../positioner-context.js';
+import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
-import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
-import { usePositioner } from '../use-positioner.js';
-import { useFormReset } from '../use-form-reset.js';
 import {
-  SelectContext,
-  useSelectContext,
-  SelectOptionGroupContext,
-} from './context.js';
+  useListboxSelection,
+  useRegisterOption,
+  OPTION_SELECTOR,
+} from '../listbox/selection.js';
+import { useFormReset } from '../use-form-reset.js';
+import { SelectContext, useSelectContext } from './context.js';
 
 export interface SelectRootProps<Value = string> {
   value?: Value | Value[];
@@ -293,7 +291,7 @@ export function SelectPositioner(props: SelectPositionerProps) {
   // Always rendered (mount: 'hidden') so options register their labels; the
   // hook drives `hidden` while not present, which composes with the top-layer
   // promotion (active only while present).
-  const { positionerProps, state, position, arrowRef } = usePositioner({
+  return h(Positioner, {
     open: ctx.open,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
@@ -301,19 +299,10 @@ export function SelectPositioner(props: SelectPositionerProps) {
     align: ctx.align,
     offset: ctx.offset,
     mount: 'hidden',
+    render,
+    children,
+    ...rest,
   });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
 }
 
 export type SelectPopupProps = {
@@ -385,10 +374,7 @@ export function SelectOption<Value = string>(
   // re-registers; for non-string children the label is read once from the DOM
   // (changing their text without changing `value` won't update the registration).
   const stringLabel = typeof children === 'string' ? children : undefined;
-  useLayoutEffect(() => {
-    const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
-    return ctx.registerOption(id, value, label);
-  }, [id, value, stringLabel, ctx.registerOption]);
+  useRegisterOption(ctx.registerOption, id, value, stringLabel);
 
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
@@ -427,42 +413,12 @@ export function SelectOption<Value = string>(
   });
 }
 
-export type SelectOptionGroupProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-// Return type left inferred: h(Context.Provider, ...) yields a VNode with more
-// specific props than VNode<{}> (matches the MenuGroup precedent).
-export function SelectOptionGroup(props: SelectOptionGroupProps) {
-  const { render, children, ...rest } = props;
-  const labelId = useId();
-  const node = renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
-    children,
-  });
-  return h(SelectOptionGroupContext.Provider, { value: { labelId } }, node);
-}
-
-export type SelectOptionGroupLabelProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function SelectOptionGroupLabel(
-  props: SelectOptionGroupLabelProps
-): VNode {
-  const { render, children, ...rest } = props;
-  const group = useContext(SelectOptionGroupContext);
-  return renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, id: group?.labelId },
-    children,
-  });
-}
+export {
+  OptionGroup as SelectOptionGroup,
+  OptionGroupLabel as SelectOptionGroupLabel,
+  type OptionGroupProps as SelectOptionGroupProps,
+  type OptionGroupLabelProps as SelectOptionGroupLabelProps,
+} from '../option-group.js';
 
 export {
   Arrow as SelectArrow,

@@ -8,7 +8,6 @@ import {
 } from 'preact';
 import {
   useCallback,
-  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -18,16 +17,18 @@ import {
 import { useControllableState } from '../use-controllable-state.js';
 import { useFormReset } from '../use-form-reset.js';
 import type { Side, Align } from '../use-position.js';
-import { usePositioner } from '../use-positioner.js';
-import { PositionerContext } from '../positioner-context.js';
+import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { renderElement, type RenderProp } from '../use-render.js';
-import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
+import {
+  useListboxSelection,
+  useRegisterOption,
+  OPTION_SELECTOR,
+} from '../listbox/selection.js';
 import type { OptionEntry } from '../listbox/selection.js';
 import { useListNavigation } from '../list-navigation.js';
 import {
   ComboboxContext,
-  ComboboxOptionGroupContext,
   useComboboxContext,
   type AutocompleteMode,
 } from './context.js';
@@ -254,7 +255,6 @@ export function ComboboxPositioner(props: ComboboxPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Positioner');
   // Anchor to the <Combobox.Anchor> field if one is rendered, else the input.
-  // Both refs are stable, so the callback is stable (no autoUpdate churn).
   const getAnchorRect = useCallback(
     () =>
       (
@@ -262,7 +262,7 @@ export function ComboboxPositioner(props: ComboboxPositionerProps) {
       )?.getBoundingClientRect() ?? null,
     [ctx.anchorRef, ctx.inputRef]
   );
-  const { positionerProps, state, position, arrowRef } = usePositioner({
+  return h(Positioner, {
     open: ctx.open,
     anchorRef: ctx.inputRef,
     floatingRef: ctx.floatingRef,
@@ -271,19 +271,10 @@ export function ComboboxPositioner(props: ComboboxPositionerProps) {
     offset: ctx.offset,
     getAnchorRect,
     mount: 'hidden',
+    render,
+    children,
+    ...rest,
   });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
 }
 
 export type ComboboxPopupProps = {
@@ -393,10 +384,7 @@ export function ComboboxOption<Value = string>(
   // re-registers; for non-string children the label is read once from the DOM
   // (changing their text without changing `value` won't update the registration).
   const stringLabel = typeof children === 'string' ? children : undefined;
-  useLayoutEffect(() => {
-    const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
-    return ctx.registerOption(id, value, label);
-  }, [id, value, stringLabel, ctx.registerOption]);
+  useRegisterOption(ctx.registerOption, id, value, stringLabel);
 
   const commit = () => {
     if (create) {
@@ -444,40 +432,12 @@ export function ComboboxOption<Value = string>(
   });
 }
 
-export type ComboboxOptionGroupProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function ComboboxOptionGroup(props: ComboboxOptionGroupProps) {
-  const { render, children, ...rest } = props;
-  const labelId = useId();
-  const node = renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
-    children,
-  });
-  return h(ComboboxOptionGroupContext.Provider, { value: { labelId } }, node);
-}
-
-export type ComboboxOptionGroupLabelProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function ComboboxOptionGroupLabel(
-  props: ComboboxOptionGroupLabelProps
-): VNode {
-  const { render, children, ...rest } = props;
-  const group = useContext(ComboboxOptionGroupContext);
-  return renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, id: group?.labelId },
-    children,
-  });
-}
+export {
+  OptionGroup as ComboboxOptionGroup,
+  OptionGroupLabel as ComboboxOptionGroupLabel,
+  type OptionGroupProps as ComboboxOptionGroupProps,
+  type OptionGroupLabelProps as ComboboxOptionGroupLabelProps,
+} from '../option-group.js';
 
 const VISUALLY_HIDDEN: JSX.CSSProperties = {
   position: 'absolute',

@@ -42,7 +42,7 @@ export interface UsePositionerOptions {
   mount: 'unmount' | 'hidden';
 }
 
-export interface PositionerProps {
+export interface PositionerElementProps {
   ref: (node: HTMLElement | null) => void;
   hidden?: true;
   'data-side': Side;
@@ -54,7 +54,7 @@ export interface UsePositionerResult {
   // Raw presence value. 'unmount' components branch on this (`return null`);
   // 'hidden' components ignore it (the hook bakes `hidden` into the props).
   isPresent: boolean;
-  positionerProps: PositionerProps;
+  positionerProps: PositionerElementProps;
   state: { side: Side; align: Align };
   // The resolved position, for a Positioner to publish via PositionerContext.
   position: PositionState;

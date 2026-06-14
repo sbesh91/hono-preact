@@ -6,8 +6,7 @@ import { useControllableState } from '../use-controllable-state.js';
 import { type Side, type Align } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useSafeArea } from '../use-safe-area.js';
-import { usePositioner } from '../use-positioner.js';
-import { PositionerContext } from '../positioner-context.js';
+import { Positioner } from '../positioner.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
 export interface TooltipRootProps {
@@ -168,29 +167,18 @@ export type TooltipPositionerProps = {
 export function TooltipPositioner(props: TooltipPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useTooltipContext('Positioner');
-  const { isPresent, positionerProps, state, position, arrowRef } =
-    usePositioner({
-      open: ctx.open,
-      anchorRef: ctx.anchorRef,
-      floatingRef: ctx.floatingRef,
-      side: ctx.side,
-      align: ctx.align,
-      offset: ctx.offset,
-      mount: 'unmount',
-    });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  if (!isPresent) return null;
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
+  return h(Positioner, {
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+    mount: 'unmount',
+    render,
+    children,
+    ...rest,
+  });
 }
 
 export type TooltipPopupProps = {
