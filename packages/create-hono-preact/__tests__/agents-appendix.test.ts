@@ -16,7 +16,7 @@ const pkg = JSON.parse(
 
 function publicSubpaths(): string[] {
   return Object.keys(pkg.exports)
-    .filter((k) => !k.startsWith('./internal'))
+    .filter((k) => !k.includes('/internal'))
     .map((k) =>
       k === '.' ? 'hono-preact' : `hono-preact/${k.slice('./'.length)}`
     );
