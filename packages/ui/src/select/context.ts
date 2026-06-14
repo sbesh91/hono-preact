@@ -1,7 +1,7 @@
 // packages/ui/src/select/context.ts
 import { createContext, type RefObject } from 'preact';
 import { useContext } from 'preact/hooks';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
 
 // The value generic is erased to `unknown` at this module-level context (a
 // Preact context cannot carry a per-instance generic). The public Root/Option
@@ -20,7 +20,6 @@ export interface SelectContextValue {
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
   listboxRef: RefObject<HTMLElement>;
-  arrowRef: RefObject<HTMLElement>;
   triggerId: string;
   listboxId: string;
   disabled: boolean;
@@ -30,8 +29,6 @@ export interface SelectContextValue {
   offset: number;
   loop: boolean;
   typeahead: boolean;
-  position: PositionState;
-  setPosition: (p: PositionState) => void;
 }
 
 export const SelectContext = createContext<SelectContextValue | null>(null);
