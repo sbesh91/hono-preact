@@ -7,7 +7,7 @@ import {
   type VNode,
 } from 'preact';
 import { useContext, useId, useLayoutEffect, useMemo } from 'preact/hooks';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
 import { useMenuCore } from './use-menu-core.js';
@@ -92,7 +92,7 @@ export function MenuTrigger(props: MenuTriggerProps): VNode {
     }
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -154,7 +154,7 @@ export function MenuItem(props: MenuItemProps): VNode {
     event.currentTarget.focus();
   };
 
-  return useRender<{ disabled: boolean; highlighted: boolean }>({
+  return renderElement<{ disabled: boolean; highlighted: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -195,7 +195,7 @@ export function MenuPositioner(props: MenuPositionerProps): VNode | null {
     mount: 'unmount',
   });
   if (!isPresent) return null;
-  return useRender<{ side: Side; align: Align }>({
+  return renderElement<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: { ...rest, ...positionerProps },
@@ -269,7 +269,7 @@ export function MenuPopup(props: MenuPopupProps): VNode {
     }
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -348,7 +348,7 @@ export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
     event.currentTarget.focus();
   };
 
-  return useRender<{
+  return renderElement<{
     checked: boolean;
     disabled: boolean;
     highlighted: boolean;
@@ -400,7 +400,7 @@ export function MenuRadioGroup(props: MenuRadioGroupProps) {
     () => ({ value, setValue: (v: string) => setValue(v) }),
     [value, setValue]
   );
-  const node = useRender({
+  const node = renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, role: 'group' },
@@ -458,7 +458,7 @@ export function MenuRadioItem(props: MenuRadioItemProps): VNode {
     event.currentTarget.focus();
   };
 
-  return useRender<{
+  return renderElement<{
     checked: boolean;
     disabled: boolean;
     highlighted: boolean;
@@ -495,7 +495,7 @@ export type MenuGroupProps = {
 export function MenuGroup(props: MenuGroupProps) {
   const { render, children, ...rest } = props;
   const labelId = useId();
-  const node = useRender({
+  const node = renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, role: 'group', 'aria-labelledby': labelId },
@@ -514,7 +514,7 @@ export function MenuGroupLabel(props: MenuGroupLabelProps): VNode {
   const group = useContext(MenuGroupContext);
   // Presentational: not focusable, no item role. Wires its id to the Group's
   // aria-labelledby.
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, id: group?.labelId },
@@ -528,7 +528,7 @@ export type MenuSeparatorProps = {
 
 export function MenuSeparator(props: MenuSeparatorProps): VNode {
   const { render, ...rest } = props;
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, role: 'separator', 'aria-orientation': 'horizontal' },
@@ -544,7 +544,7 @@ export function MenuArrow(props: MenuArrowProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useMenuContext('Arrow');
   const { side, arrowX, arrowY } = ctx.position;
-  return useRender<{ side: Side }>({
+  return renderElement<{ side: Side }>({
     render,
     defaultTag: 'div',
     props: {

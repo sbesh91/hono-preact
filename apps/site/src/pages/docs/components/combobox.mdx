@@ -358,7 +358,7 @@ by default; pass `loop={false}` on `Combobox.Root` to disable.
 ## API reference
 
 Every part accepts a `render` prop for composition (see
-[useRender](/docs/components/use-render)) and forwards unknown props to the
+[renderElement](/docs/components/use-render)) and forwards unknown props to the
 element it renders. `Combobox.Option` passes `{ selected, disabled, highlighted
 }` to a render function; `Combobox.Status` passes `{ count, open }`;
 `Combobox.Value` exposes `{ selectedItems, remove }` via a required children
@@ -587,7 +587,7 @@ your own components. Several have their own page with examples:
 [useListNavigation](/docs/components/use-list-navigation),
 [usePosition](/docs/components/use-position),
 [useDismiss](/docs/components/use-dismiss),
-[useRender](/docs/components/use-render),
+[renderElement](/docs/components/use-render),
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).
 

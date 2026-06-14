@@ -10,7 +10,7 @@ import {
 } from 'preact/hooks';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { usePositioner } from '../use-positioner.js';
@@ -120,7 +120,7 @@ export function PopoverTrigger(props: PopoverTriggerProps): VNode {
     ctx.setOpen(!ctx.open);
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -152,7 +152,7 @@ export type PopoverAnchorProps = {
 export function PopoverAnchor(props: PopoverAnchorProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Anchor');
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'span',
     props: { ...rest, ref: ctx.anchorRef },
@@ -180,7 +180,7 @@ export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
     mount: 'unmount',
   });
   if (!isPresent) return null;
-  return useRender<{ side: Side; align: Align }>({
+  return renderElement<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: { ...rest, ...positionerProps },
@@ -207,7 +207,7 @@ export function PopoverPopup(props: PopoverPopupProps): VNode {
 
   useFocusReturn({ open: ctx.open, popupRef: ctx.popupRef });
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -235,7 +235,7 @@ export function PopoverArrow(props: PopoverArrowProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Arrow');
   const { side, arrowX, arrowY } = ctx.position;
-  return useRender<{ side: Side }>({
+  return renderElement<{ side: Side }>({
     render,
     defaultTag: 'div',
     props: {
@@ -261,7 +261,7 @@ export type PopoverTitleProps = {
 export function PopoverTitle(props: PopoverTitleProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Title');
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'h2',
     props: { ...rest, id: ctx.titleId },
@@ -278,7 +278,7 @@ export function PopoverDescription(props: PopoverDescriptionProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Description');
   useLayoutEffect(() => ctx.registerDescription(), [ctx.registerDescription]);
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'p',
     props: { ...rest, id: ctx.descriptionId },
@@ -298,7 +298,7 @@ export function PopoverClose(props: PopoverCloseProps): VNode {
     onClick?.(event);
     ctx.setOpen(false);
   };
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {

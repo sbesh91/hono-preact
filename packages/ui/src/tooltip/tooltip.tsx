@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import { type Side, type Align, type PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
@@ -159,7 +159,7 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
     ctx.setOpenImmediate(false);
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -198,7 +198,7 @@ export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
     mount: 'unmount',
   });
   if (!isPresent) return null;
-  return useRender<{ side: Side; align: Align }>({
+  return renderElement<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: { ...rest, ...positionerProps },
@@ -252,7 +252,7 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
 
   // No ref here: the Positioner holds floatingRef, and the dismiss layer's
   // "inside" check already covers this child Popup.
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -277,7 +277,7 @@ export function TooltipArrow(props: TooltipArrowProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useTooltipContext('Arrow');
   const { side, arrowX, arrowY } = ctx.position;
-  return useRender<{ side: Side }>({
+  return renderElement<{ side: Side }>({
     render,
     defaultTag: 'div',
     props: {

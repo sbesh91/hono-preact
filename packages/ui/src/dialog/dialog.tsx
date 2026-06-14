@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import { mergeRefs } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
@@ -88,7 +88,7 @@ export function DialogTrigger(props: DialogTriggerProps): VNode {
     ctx.setOpen(true);
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -114,7 +114,7 @@ export type DialogTitleProps = {
 export function DialogTitle(props: DialogTitleProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useDialogContext('Title');
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'h2',
     props: { ...rest, id: ctx.titleId },
@@ -195,7 +195,7 @@ export function DialogPopup(props: DialogPopupProps): VNode {
     }
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'dialog',
     props: {
@@ -224,7 +224,7 @@ export function DialogDescription(props: DialogDescriptionProps): VNode {
   // Register presence so the Popup wires aria-describedby; deregister on
   // unmount (registerDescription returns its own cleanup).
   useLayoutEffect(() => ctx.registerDescription(), [ctx.registerDescription]);
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'p',
     props: { ...rest, id: ctx.descriptionId },
@@ -246,7 +246,7 @@ export function DialogClose(props: DialogCloseProps): VNode {
     ctx.setOpen(false);
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {

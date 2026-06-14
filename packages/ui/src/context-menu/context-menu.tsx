@@ -1,6 +1,6 @@
 // packages/ui/src/context-menu/context-menu.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import type { Side, Align } from '../use-position.js';
 import { MenuContext, useMenuContext } from '../menu/context.js';
 import { useMenuCore } from '../menu/use-menu-core.js';
@@ -58,7 +58,7 @@ export function ContextMenuTrigger(props: ContextMenuTriggerProps): VNode {
     ctx.openAt?.(event.clientX, event.clientY);
   };
 
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: {

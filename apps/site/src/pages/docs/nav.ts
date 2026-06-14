@@ -132,7 +132,7 @@ export const nav: NavArea[] = [
         heading: 'Foundations',
         icon: Blocks,
         entries: [
-          { title: 'useRender', route: '/docs/components/use-render' },
+          { title: 'renderElement', route: '/docs/components/use-render' },
           {
             title: 'useControllableState',
             route: '/docs/components/use-controllable-state',

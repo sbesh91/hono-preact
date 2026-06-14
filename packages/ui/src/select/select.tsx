@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align, PositionState } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
@@ -242,7 +242,7 @@ export function SelectTrigger(props: SelectTriggerProps): VNode {
     }
   };
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'button',
     props: {
@@ -280,7 +280,7 @@ export function SelectValue(props: SelectValueProps): VNode {
   const labels = ctx.selectedLabels();
   const display = labels.length > 0 ? labels.join(', ') : (placeholder ?? '');
   const content = children ? children({ selectedLabels: labels }) : display;
-  return useRender<{ selectedLabels: string[] }>({
+  return renderElement<{ selectedLabels: string[] }>({
     render,
     defaultTag: 'span',
     props: {
@@ -314,7 +314,7 @@ export function SelectPositioner(props: SelectPositionerProps): VNode {
     setPosition: ctx.setPosition,
     mount: 'hidden',
   });
-  return useRender<{ side: Side; align: Align }>({
+  return renderElement<{ side: Side; align: Align }>({
     render,
     defaultTag: 'div',
     props: { ...rest, ...positionerProps },
@@ -341,7 +341,7 @@ export function SelectPopup(props: SelectPopupProps): VNode {
     onDismiss: () => ctx.setOpen(false),
   });
 
-  return useRender<{ open: boolean }>({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -410,7 +410,7 @@ export function SelectOption<Value = string>(
     ctx.setActiveId(id);
   };
 
-  return useRender<{
+  return renderElement<{
     selected: boolean;
     disabled: boolean;
     highlighted: boolean;
@@ -444,7 +444,7 @@ export type SelectOptionGroupProps = {
 export function SelectOptionGroup(props: SelectOptionGroupProps) {
   const { render, children, ...rest } = props;
   const labelId = useId();
-  const node = useRender({
+  const node = renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, role: 'group', 'aria-labelledby': labelId },
@@ -463,7 +463,7 @@ export function SelectOptionGroupLabel(
 ): VNode {
   const { render, children, ...rest } = props;
   const group = useContext(SelectOptionGroupContext);
-  return useRender({
+  return renderElement({
     render,
     defaultTag: 'div',
     props: { ...rest, id: group?.labelId },
@@ -480,7 +480,7 @@ export function SelectArrow(props: SelectArrowProps): VNode {
   const { render, children, ...rest } = props;
   const ctx = useSelectContext('Arrow');
   const { side, arrowX, arrowY } = ctx.position;
-  return useRender<{ side: Side }>({
+  return renderElement<{ side: Side }>({
     render,
     defaultTag: 'div',
     props: {

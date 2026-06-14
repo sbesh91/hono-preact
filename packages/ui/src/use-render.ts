@@ -18,7 +18,7 @@ export type RenderProp<State = Record<never, never>> =
   | ((props: Props, state: State) => VNode)
   | undefined;
 
-interface UseRenderOptions<State> {
+interface RenderElementOptions<State> {
   render?: RenderProp<State>;
   defaultTag: string;
   props: Props; // framework-controlled props (ref, aria-*, data-*, handlers)
@@ -56,8 +56,8 @@ function mergeProps(user: Props, framework: Props): Props {
   return out;
 }
 
-export function useRender<State = Record<never, never>>(
-  opts: UseRenderOptions<State>
+export function renderElement<State = Record<never, never>>(
+  opts: RenderElementOptions<State>
 ): VNode {
   const { render, defaultTag, props, state, children } = opts;
 

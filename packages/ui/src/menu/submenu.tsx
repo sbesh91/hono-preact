@@ -14,7 +14,7 @@ import {
   useMemo,
   useRef,
 } from 'preact/hooks';
-import { useRender, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../use-render.js';
 import { useSafeArea } from '../use-safe-area.js';
 import type { Side, Align } from '../use-position.js';
 import { useMenuCore } from './use-menu-core.js';
@@ -213,7 +213,7 @@ export function SubmenuTrigger(props: SubmenuTriggerProps): VNode {
     sub.setOpen(true);
   };
 
-  return useRender<{ open: boolean; highlighted: boolean }>({
+  return renderElement<{ open: boolean; highlighted: boolean }>({
     render,
     defaultTag: 'div',
     props: {
