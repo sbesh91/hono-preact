@@ -1,5 +1,6 @@
 // packages/ui/src/list-navigation.ts
 import type { RefObject } from 'preact';
+import { useLayoutEffect } from 'preact/hooks';
 import { useTypeahead } from './use-typeahead.js';
 
 // --- pure helpers (relocated from menu/navigation.ts) ---
@@ -172,4 +173,23 @@ export function useListNavigation(
     getItems: items,
     setActiveItem: (i) => activate(items(), i),
   };
+}
+
+// On open, move the active descendant to the selected option (or the first if
+// none). Shared by Select.Trigger and Combobox.Input. Deps are [open] only:
+// `nav` is recreated every render, so the effect captures it and re-runs only
+// when `open` toggles (getItems/setActiveItem read live refs at run time).
+export function useHighlightSelectedOnOpen(
+  nav: ListNavigation,
+  open: boolean
+): void {
+  useLayoutEffect(() => {
+    if (!open) return;
+    const list = nav.getItems();
+    if (list.length === 0) return;
+    const selectedIdx = list.findIndex(
+      (el) => el.getAttribute('aria-selected') === 'true'
+    );
+    nav.setActiveItem(selectedIdx >= 0 ? selectedIdx : 0);
+  }, [open]);
 }
