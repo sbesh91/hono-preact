@@ -12,8 +12,9 @@ import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
 import { usePositioner } from '../use-positioner.js';
+import { PositionerContext } from '../positioner-context.js';
 import { PopoverContext, usePopoverContext } from './context.js';
 
 export interface PopoverRootProps {
@@ -46,7 +47,6 @@ export function PopoverRoot(props: PopoverRootProps) {
   const anchorRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
   const popupRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
 
   const baseId = useId();
   const triggerId = `${baseId}-trigger`;
@@ -60,13 +60,6 @@ export function PopoverRoot(props: PopoverRootProps) {
     return () => setDescriptionCount((c) => c - 1);
   }, []);
 
-  const [position, setPosition] = useState<PositionState>({
-    side,
-    align,
-    arrowX: null,
-    arrowY: null,
-  });
-
   const ctx = useMemo(
     () => ({
       open,
@@ -74,7 +67,6 @@ export function PopoverRoot(props: PopoverRootProps) {
       anchorRef,
       floatingRef,
       popupRef,
-      arrowRef,
       triggerId,
       popupId,
       titleId,
@@ -84,8 +76,6 @@ export function PopoverRoot(props: PopoverRootProps) {
       side,
       align,
       offset,
-      position,
-      setPosition,
     }),
     [
       open,
@@ -99,7 +89,6 @@ export function PopoverRoot(props: PopoverRootProps) {
       side,
       align,
       offset,
-      position,
     ]
   );
 
@@ -165,28 +154,34 @@ export type PopoverPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function PopoverPositioner(props: PopoverPositionerProps): VNode | null {
+// Return type left inferred: h(PositionerContext.Provider, ...) yields a VNode
+// with more specific props than VNode<{}> (matches the MenuGroup/SelectOptionGroup precedent).
+export function PopoverPositioner(props: PopoverPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Positioner');
-  const { isPresent, positionerProps, state } = usePositioner({
-    open: ctx.open,
-    anchorRef: ctx.anchorRef,
-    floatingRef: ctx.floatingRef,
-    arrowRef: ctx.arrowRef,
-    side: ctx.side,
-    align: ctx.align,
-    offset: ctx.offset,
-    setPosition: ctx.setPosition,
-    mount: 'unmount',
-  });
+  const { isPresent, positionerProps, state, position, arrowRef } =
+    usePositioner({
+      open: ctx.open,
+      anchorRef: ctx.anchorRef,
+      floatingRef: ctx.floatingRef,
+      side: ctx.side,
+      align: ctx.align,
+      offset: ctx.offset,
+      mount: 'unmount',
+    });
+  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
   if (!isPresent) return null;
-  return renderElement<{ side: Side; align: Align }>({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, ...positionerProps },
-    state,
-    children,
-  });
+  return h(
+    PositionerContext.Provider,
+    { value: positionerValue },
+    renderElement<{ side: Side; align: Align }>({
+      render,
+      defaultTag: 'div',
+      props: { ...rest, ...positionerProps },
+      state,
+      children,
+    })
+  );
 }
 
 export type PopoverPopupProps = {
@@ -226,32 +221,10 @@ export function PopoverPopup(props: PopoverPopupProps): VNode {
   });
 }
 
-export type PopoverArrowProps = {
-  render?: RenderProp<{ side: Side }>;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function PopoverArrow(props: PopoverArrowProps): VNode {
-  const { render, children, ...rest } = props;
-  const ctx = usePopoverContext('Arrow');
-  const { side, arrowX, arrowY } = ctx.position;
-  return renderElement<{ side: Side }>({
-    render,
-    defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: ctx.arrowRef,
-      'data-side': side,
-      style: {
-        position: 'absolute',
-        left: arrowX != null ? `${arrowX}px` : undefined,
-        top: arrowY != null ? `${arrowY}px` : undefined,
-      },
-    },
-    state: { side },
-    children,
-  });
-}
+export {
+  Arrow as PopoverArrow,
+  type ArrowProps as PopoverArrowProps,
+} from '../arrow.js';
 
 export type PopoverTitleProps = {
   render?: RenderProp;
