@@ -7,7 +7,12 @@ import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
 import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
-import { copyTemplate, renameDotfiles, substituteName } from './template.mjs';
+import {
+  copyTemplate,
+  renameDotfiles,
+  substituteName,
+  copyAgentsFiles,
+} from './template.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const templatesRoot = resolve(here, '..', 'templates');
@@ -41,6 +46,24 @@ export async function run({
     );
     console.log(`create-hono-preact ${version}`);
     return 0;
+  }
+  if (parsed.kind === 'add-agents') {
+    const agentsDir = join(templatesRoot, 'agents');
+    const results = await copyAgentsFiles(agentsDir, cwd, {
+      force: parsed.force,
+    });
+    for (const { file, action } of results) {
+      if (action === 'skipped') {
+        console.error(
+          `skip: ${file} already exists (use --force to overwrite)`
+        );
+      } else {
+        console.log(
+          `${action === 'overwritten' ? 'overwrote' : 'created'} ${file}`
+        );
+      }
+    }
+    return results.every((r) => r.action === 'skipped') ? 1 : 0;
   }
   if (parsed.kind === 'error') {
     console.error(parsed.message);
@@ -79,6 +102,7 @@ export async function run({
   await copyTemplate(sourceTemplate, targetPath);
   await renameDotfiles(targetPath);
   await substituteName(targetPath, basename(targetPath));
+  await copyTemplate(join(templatesRoot, 'agents'), targetPath);
 
   const pm = detectPackageManager(env);
 
@@ -163,8 +187,12 @@ async function defaultPrompt(message) {
 
 function printHelp() {
   console.log(`Usage: create-hono-preact <target-dir> [options]
+       create-hono-preact add-agents [--force]
 
 Scaffold a new hono-preact app.
+
+Commands:
+  add-agents [--force]          Add AGENTS.md + CLAUDE.md to an existing project
 
 Options:
   --adapter=<cloudflare|node>   pick the deployment target (default: cloudflare)

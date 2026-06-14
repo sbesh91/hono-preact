@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../lib/cli.mjs';
@@ -34,6 +40,8 @@ describe('run() — node adapter', () => {
       true
     );
     expect(existsSync(join(target, 'src', 'pages', 'about.tsx'))).toBe(true);
+    expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
+    expect(existsSync(join(target, 'CLAUDE.md'))).toBe(true);
 
     const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
     expect(pkg.name).toBe('my-test-app');
@@ -392,5 +400,40 @@ describe('run() — next-steps output', () => {
     } finally {
       console.log = originalLog;
     }
+  });
+});
+
+describe('run() — add-agents', () => {
+  it('writes AGENTS.md and CLAUDE.md into the cwd', async () => {
+    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    expect(code).toBe(0);
+    expect(existsSync(join(workDir, 'AGENTS.md'))).toBe(true);
+    expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
+  });
+
+  it('does not overwrite an existing AGENTS.md without --force', async () => {
+    writeFileSync(join(workDir, 'AGENTS.md'), 'KEEP');
+    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    expect(code).toBe(0); // CLAUDE.md still created, so not all skipped
+    expect(readFileSync(join(workDir, 'AGENTS.md'), 'utf8')).toBe('KEEP');
+    expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
+  });
+
+  it('returns 1 when every target is skipped', async () => {
+    writeFileSync(join(workDir, 'AGENTS.md'), 'KEEP');
+    writeFileSync(join(workDir, 'CLAUDE.md'), 'KEEP');
+    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    expect(code).toBe(1);
+  });
+
+  it('overwrites with --force', async () => {
+    writeFileSync(join(workDir, 'AGENTS.md'), 'OLD');
+    const code = await run({
+      argv: ['add-agents', '--force'],
+      cwd: workDir,
+      env: {},
+    });
+    expect(code).toBe(0);
+    expect(readFileSync(join(workDir, 'AGENTS.md'), 'utf8')).not.toBe('OLD');
   });
 });
