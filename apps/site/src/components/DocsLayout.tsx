@@ -213,3 +213,5 @@ export function DocsLayout({ children }: Props) {
     </div>
   );
 }
+
+export default DocsLayout;

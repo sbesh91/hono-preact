@@ -13,7 +13,7 @@ Two files must be updated when adding a new docs page. The route is auto-registe
 - **Guide page:** `apps/site/src/pages/docs/<slug>.mdx` → route `/docs/<slug>`.
 - **Component / Components-area page:** `apps/site/src/pages/docs/components/<slug>.mdx` → route `/docs/components/<slug>`.
 
-The glob in `apps/site/src/components/DocsRoute.tsx` is recursive (`../pages/docs/**/*.mdx`), and `docsSlug` derives the route from the path (a nested `index.mdx` serves the directory root, e.g. `components/index.mdx` → `/docs/components`).
+The glob in `apps/site/src/routes.ts` is recursive (`./pages/docs/**/*.mdx`) and feeds `contentRoutes`, which derives the route from each path (a nested `index.mdx` serves the directory root, e.g. `components/index.mdx` -> `/docs/components`).
 
 Follow the style of existing docs pages:
 - Use `#` for the page title, `##` for sections

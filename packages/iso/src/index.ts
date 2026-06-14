@@ -19,6 +19,10 @@ export type {
   ViewProps,
 } from './define-routes.js';
 
+// Content-glob route helper.
+export { contentRoutes } from './content-routes.js';
+export type { ContentRoutesOptions } from './content-routes.js';
+
 // Typed route params.
 export type {
   RouteParams,

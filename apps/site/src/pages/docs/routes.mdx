@@ -85,12 +85,12 @@ Every `view`, `layout`, and `server` is `() => import('./path')`. The arrow shap
 When two leaves point at the same component (e.g. mounting one page at multiple paths), hoist the import thunk to a const so the framework's `lazy()` memoization sees the same identity and produces one shared component reference:
 
 ```ts
-const docsView = () => import('./components/DocsRoute.js');
+const sharedView = () => import('./pages/shared.js');
 
 defineRoutes([
   // ...
-  { path: '/docs', view: docsView },
-  { path: '/docs/*', view: docsView },
+  { path: '/a', view: sharedView },
+  { path: '/b', view: sharedView },
 ]);
 ```
 

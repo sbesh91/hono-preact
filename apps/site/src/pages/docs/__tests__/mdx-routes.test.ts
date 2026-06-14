@@ -6,18 +6,17 @@ import { nav } from '../nav.js';
 
 // Contract test for the docs routing pipeline.
 //
-// `apps/site/src/components/DocsRoute.tsx` auto-discovers MDX pages via
-// `import.meta.glob('../pages/docs/**/*.mdx')` and registers one Route per
-// file (recursively) under the outer `/docs` route. `apps/site/src/pages/docs/nav.ts`
-// declares the user-facing sidebar manually. If those two lists drift,
-// users see a "Docs page not found" fallback for an entry in the sidebar
-// (or worse, navigate to a docs page that the sidebar doesn't show).
+// `apps/site/src/routes.ts` feeds `import.meta.glob('./pages/docs/**/*.mdx')`
+// to `contentRoutes`, which registers one route per file (recursively) under
+// the `/docs` layout group. `apps/site/src/pages/docs/nav.ts` declares the
+// user-facing sidebar manually. If those two lists drift, users see a "Docs
+// page not found" fallback for a sidebar entry (or navigate to a docs page the
+// sidebar doesn't show).
 //
-// Vitest can't easily execute `import.meta.glob` outside Vite's bundler,
-// and importing MDX would require the @mdx-js/rollup plugin in
-// `vitest.config.ts`. Instead we walk the docs directory with `fs` and
-// derive the same route slugs DocsRoute would, then check both directions
-// against `nav.ts`.
+// Vitest can't easily execute `import.meta.glob` outside Vite's bundler, and
+// importing MDX would require the @mdx-js/rollup plugin in `vitest.config.ts`.
+// Instead we walk the docs directory with `fs` and derive the same route slugs
+// contentRoutes would, then check both directions against `nav.ts`.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const docsDir = resolve(__dirname, '..');
@@ -74,10 +73,10 @@ describe('docs route discovery', () => {
     ).toEqual([]);
   });
 
-  it('index.mdx becomes the /docs route (empty slug inside the inner Router)', () => {
-    // DocsRoute renders `<IsoRoute path="" component={...}>` for index.mdx
-    // so the URL `/docs` matches it. The nav.ts entry for the overview is
-    // therefore `/docs`, not `/docs/index`.
+  it('index.mdx becomes the /docs route (empty slug)', () => {
+    // contentRoutes maps index.mdx to the empty slug, so the URL `/docs`
+    // matches it. The nav.ts entry for the overview is therefore `/docs`,
+    // not `/docs/index`.
     const indexExists = readdirSync(docsDir).includes('index.mdx');
     expect(indexExists, 'expected index.mdx in apps/site/src/pages/docs/').toBe(
       true
