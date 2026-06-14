@@ -365,6 +365,26 @@ describe('Loader: parametric loader cache should key on location', () => {
   });
 });
 
+describe('Loader: no-location error message', () => {
+  it('throws with remediation naming the route server module when no location is provided', () => {
+    const ref = defineLoader(async () => ({ msg: 'hi' }));
+    // Suppress the expected React/Preact error console output from the throw.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => {
+      render(
+        <LocationProvider>
+          <Loader loader={ref}>
+            <span />
+          </Loader>
+        </LocationProvider>
+      );
+    }).toThrow(
+      "wrap the page in a route whose server module includes this loader's .server.ts file"
+    );
+    errorSpy.mockRestore();
+  });
+});
+
 describe('Loader: useError() on successful static load', () => {
   it('returns null while data is rendered', async () => {
     const ref = defineLoader(async () => ({ msg: 'hi' }));
