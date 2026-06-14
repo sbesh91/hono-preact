@@ -5,9 +5,11 @@ import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { nav } from './src/pages/docs/nav.js';
+import { generateLlmsFiles } from './src/llms/generate-llms.js';
 
 // `__dirname` is not defined in native ESM; Vite's esbuild loader silently
 // polyfills it today, but copying this config into a plain `.mjs` or running
@@ -110,6 +112,21 @@ export default defineConfig((env) => ({
   },
   plugins: [
     honoPreact({ adapter: cloudflareAdapter() }),
+    {
+      name: 'emit-llms-txt',
+      closeBundle() {
+        // Emit only during the client (static-assets) build. dist/client is the
+        // Cloudflare assets directory, so files written here serve at the site
+        // root (/llms.txt, /llms-full.txt). The worker build shares no asset root.
+        if (this.environment && this.environment.name !== 'client') return;
+        const docsDir = resolve(__dirname, 'src/pages/docs');
+        const { llmsTxt, llmsFullTxt } = generateLlmsFiles(nav, docsDir);
+        const outDir = resolve(__dirname, 'dist/client');
+        mkdirSync(outDir, { recursive: true });
+        writeFileSync(resolve(outDir, 'llms.txt'), llmsTxt);
+        writeFileSync(resolve(outDir, 'llms-full.txt'), llmsFullTxt);
+      },
+    },
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
     ...(visualize && env.mode === 'client'
       ? [
