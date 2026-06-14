@@ -66,9 +66,9 @@ export type ServerRoute = {
   /**
    * Lazy server-module loaders for every server-bearing ancestor in the
    * route tree, outermost first, NOT including this route's own server.
-   * Used by the page-action resolver (`makePageActionResolvers` via
-   * `makeRouteModuleResolvers`) to compose page-layer middleware along the
-   * actual tree of layouts rather than relying on URL-prefix matching
+   * Used by the page-action resolver (`makePageActionResolvers`) to compose
+   * page-layer middleware along the actual tree of layouts rather than
+   * relying on URL-prefix matching
    * (which conflates siblings that share a path prefix, e.g.
    * `/demo/projects` and `/demo/projects/:projectId/...`).
    */

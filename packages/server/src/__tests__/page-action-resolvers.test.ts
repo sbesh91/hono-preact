@@ -62,4 +62,111 @@ describe('makePageActionResolvers', () => {
     await byPath('/p');
     expect(calls).toBe(2);
   });
+
+  it('loads each distinct thunk exactly once per build (server + ancestor reuse)', async () => {
+    const calls = { n: 0 };
+    const layout = async () => {
+      calls.n++;
+      return { __moduleKey: 'l', serverActions: { a: async () => 'a' } };
+    };
+    const leaf = async () => {
+      calls.n++;
+      return { __moduleKey: 'p', serverActions: { b: async () => 'b' } };
+    };
+    const r: ServerRoute[] = [
+      { path: '/g', server: layout, ancestors: [] } as unknown as ServerRoute,
+      {
+        path: '/g/leaf',
+        server: leaf,
+        ancestors: [layout],
+      } as unknown as ServerRoute,
+    ];
+    const { byPath } = makePageActionResolvers(r, { dev: false });
+    const map = await byPath('/g/leaf');
+    expect([...map.keys()].sort()).toEqual(['a', 'b']);
+    expect(calls.n).toBe(2); // layout loaded once despite being self + ancestor
+  });
+
+  it('caches the build across calls when dev is false', async () => {
+    let calls = 0;
+    const thunk = async () => {
+      calls++;
+      return { __moduleKey: 'p', serverActions: { x: async () => 'ok' } };
+    };
+    const r: ServerRoute[] = [
+      { path: '/a', server: thunk, ancestors: [] } as unknown as ServerRoute,
+    ];
+    const { byPath } = makePageActionResolvers(r, { dev: false });
+    await byPath('/a');
+    await byPath('/a');
+    expect(calls).toBe(1);
+  });
+
+  it('does not cache a failed build: the next call retries and can succeed', async () => {
+    let failOnce = true;
+    let calls = 0;
+    const flaky = async () => {
+      calls++;
+      if (failOnce) {
+        failOnce = false;
+        throw new Error('transient import error');
+      }
+      return { __moduleKey: 'p', serverActions: { x: async () => 'ok' } };
+    };
+    const r: ServerRoute[] = [
+      { path: '/a', server: flaky, ancestors: [] } as unknown as ServerRoute,
+    ];
+    const { byPath } = makePageActionResolvers(r, { dev: false });
+    await expect(byPath('/a')).rejects.toThrow('transient import error');
+    const map = await byPath('/a');
+    expect([...map.keys()]).toEqual(['x']);
+    expect(calls).toBe(2);
+  });
+
+  it('byPath resolves through findBestPattern and returns an empty map on no match', async () => {
+    const r: ServerRoute[] = [
+      {
+        path: '/p/:id',
+        server: async () => ({
+          __moduleKey: 'param',
+          serverActions: { p: async () => 'param' },
+        }),
+        ancestors: [],
+      } as unknown as ServerRoute,
+      {
+        path: '/p/new',
+        server: async () => ({
+          __moduleKey: 'lit',
+          serverActions: { l: async () => 'lit' },
+        }),
+        ancestors: [],
+      } as unknown as ServerRoute,
+    ];
+    const { byPath } = makePageActionResolvers(r, { dev: false });
+    expect((await byPath('/p/new')).get('l')?.moduleKey).toBe('lit'); // literal beats param
+    expect((await byPath('/p/42')).get('p')?.moduleKey).toBe('param');
+    expect([...(await byPath('/nope')).keys()]).toEqual([]); // empty map, no match
+  });
+
+  it('concurrent first calls share one in-flight build', async () => {
+    let calls = 0;
+    let release!: (mod: unknown) => void;
+    const gated = () => {
+      calls++;
+      return new Promise<unknown>((resolve) => {
+        release = resolve;
+      });
+    };
+    const r: ServerRoute[] = [
+      { path: '/a', server: gated, ancestors: [] } as unknown as ServerRoute,
+    ];
+    const { byPath } = makePageActionResolvers(r, { dev: false });
+    const first = byPath('/a');
+    const second = byPath('/a');
+    await Promise.resolve();
+    release({ __moduleKey: 'p', serverActions: { x: async () => 'ok' } });
+    expect([...(await first).keys()]).toEqual(['x']);
+    expect([...(await second).keys()]).toEqual(['x']);
+    expect(calls).toBe(1);
+  });
 });
