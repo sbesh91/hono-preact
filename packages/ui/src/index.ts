@@ -16,7 +16,7 @@ export {
 export {
   usePositioner,
   type UsePositionerOptions,
-  type PositionerProps,
+  type PositionerElementProps,
   type UsePositionerResult,
 } from './use-positioner.js';
 export { useDismiss, type UseDismissOptions } from './use-dismiss.js';
