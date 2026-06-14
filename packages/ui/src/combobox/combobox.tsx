@@ -839,18 +839,31 @@ export function ComboboxEmpty(props: ComboboxEmptyProps): VNode | null {
   });
 }
 
-export interface ComboboxValueState {
-  selectedItems: OptionEntry[];
-  remove: (value: unknown) => void;
+export interface ComboboxValueState<Value = unknown> {
+  selectedItems: OptionEntry<Value>[];
+  remove: (value: Value) => void;
 }
 
-export type ComboboxValueProps = {
-  children: (state: ComboboxValueState) => ComponentChildren;
-};
+export type ComboboxValueProps<Value = unknown> = {
+  render?: RenderProp<ComboboxValueState<Value>>;
+  children?: (state: ComboboxValueState<Value>) => ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLSpanElement>, 'children'>;
 
-export function ComboboxValue(props: ComboboxValueProps): VNode {
+export function ComboboxValue<Value = unknown>(
+  props: ComboboxValueProps<Value>
+): VNode {
+  const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Value');
-  const selectedItems = ctx.selectedItems();
-  const remove = (value: unknown) => ctx.selectOption(value); // toggle off
-  return h(Fragment, null, props.children({ selectedItems, remove }));
+  // The module-level context erases Value to unknown; the Root owns the generic,
+  // so re-apply it here at the one confined seam (mirrors useListboxSelection).
+  const selectedItems = ctx.selectedItems() as OptionEntry<Value>[];
+  const remove = (value: Value) => ctx.selectOption(value);
+  const state: ComboboxValueState<Value> = { selectedItems, remove };
+  return renderElement<ComboboxValueState<Value>>({
+    render,
+    defaultTag: 'span',
+    props: rest,
+    state,
+    children: children ? children(state) : null,
+  });
 }
