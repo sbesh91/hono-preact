@@ -352,7 +352,10 @@ describe('run() — help and version', () => {
     try {
       const code = await run({ argv: ['--version'], cwd: workDir, env: {} });
       expect(code).toBe(0);
-      expect(lines.join(' ')).toMatch(/create-hono-preact\s+\d+\.\d+\.\d+/);
+      const { version } = JSON.parse(
+        readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+      );
+      expect(lines.join(' ')).toBe(`create-hono-preact ${version}`);
     } finally {
       console.log = originalLog;
     }
