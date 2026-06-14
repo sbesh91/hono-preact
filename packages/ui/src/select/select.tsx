@@ -6,19 +6,16 @@ import {
   type JSX,
   type VNode,
 } from 'preact';
-import {
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'preact/hooks';
+import { useId, useMemo, useRef, useState } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align, PositioningProps } from '../use-position.js';
 import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
-import { useListNavigation } from '../list-navigation.js';
+import {
+  useListNavigation,
+  useHighlightSelectedOnOpen,
+} from '../list-navigation.js';
 import {
   useListboxSelection,
   useRegisterOption,
@@ -177,16 +174,7 @@ export function SelectTrigger(props: SelectTriggerProps): VNode {
     typeahead: ctx.typeahead,
   });
 
-  // On open, set the active descendant to the selected option (or the first).
-  useLayoutEffect(() => {
-    if (!ctx.open) return;
-    const list = nav.getItems();
-    if (list.length === 0) return;
-    const selectedIdx = list.findIndex(
-      (el) => el.getAttribute('aria-selected') === 'true'
-    );
-    nav.setActiveItem(selectedIdx >= 0 ? selectedIdx : 0);
-  }, [ctx.open]);
+  useHighlightSelectedOnOpen(nav, ctx.open);
 
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);

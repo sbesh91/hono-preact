@@ -27,7 +27,10 @@ import {
   type SelectionProps,
 } from '../listbox/selection.js';
 import type { OptionEntry } from '../listbox/selection.js';
-import { useListNavigation } from '../list-navigation.js';
+import {
+  useListNavigation,
+  useHighlightSelectedOnOpen,
+} from '../list-navigation.js';
 import {
   ComboboxContext,
   useComboboxContext,
@@ -559,16 +562,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     }
   });
 
-  // On open, highlight the selected option (single) or the first option.
-  useLayoutEffect(() => {
-    if (!ctx.open) return;
-    const list = nav.getItems();
-    if (list.length === 0) return;
-    const selectedIdx = list.findIndex(
-      (el) => el.getAttribute('aria-selected') === 'true'
-    );
-    nav.setActiveItem(selectedIdx >= 0 ? selectedIdx : 0);
-  }, [ctx.open]);
+  useHighlightSelectedOnOpen(nav, ctx.open);
 
   // Auto-highlight the first option whenever the filtered set changes while
   // open, in list/both modes (so Enter commits the top match).
