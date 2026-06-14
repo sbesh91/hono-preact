@@ -40,9 +40,3 @@ export function useSelectContext(part: string): SelectContextValue {
   }
   return ctx;
 }
-
-export interface SelectOptionGroupContextValue {
-  labelId: string;
-}
-export const SelectOptionGroupContext =
-  createContext<SelectOptionGroupContextValue | null>(null);

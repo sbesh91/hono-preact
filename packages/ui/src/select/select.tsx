@@ -7,7 +7,6 @@ import {
   type VNode,
 } from 'preact';
 import {
-  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -22,11 +21,7 @@ import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
 import { useFormReset } from '../use-form-reset.js';
-import {
-  SelectContext,
-  useSelectContext,
-  SelectOptionGroupContext,
-} from './context.js';
+import { SelectContext, useSelectContext } from './context.js';
 
 export interface SelectRootProps<Value = string> {
   value?: Value | Value[];
@@ -417,42 +412,12 @@ export function SelectOption<Value = string>(
   });
 }
 
-export type SelectOptionGroupProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-// Return type left inferred: h(Context.Provider, ...) yields a VNode with more
-// specific props than VNode<{}> (matches the MenuGroup precedent).
-export function SelectOptionGroup(props: SelectOptionGroupProps) {
-  const { render, children, ...rest } = props;
-  const labelId = useId();
-  const node = renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
-    children,
-  });
-  return h(SelectOptionGroupContext.Provider, { value: { labelId } }, node);
-}
-
-export type SelectOptionGroupLabelProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function SelectOptionGroupLabel(
-  props: SelectOptionGroupLabelProps
-): VNode {
-  const { render, children, ...rest } = props;
-  const group = useContext(SelectOptionGroupContext);
-  return renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, id: group?.labelId },
-    children,
-  });
-}
+export {
+  OptionGroup as SelectOptionGroup,
+  OptionGroupLabel as SelectOptionGroupLabel,
+  type OptionGroupProps as SelectOptionGroupProps,
+  type OptionGroupLabelProps as SelectOptionGroupLabelProps,
+} from '../option-group.js';
 
 export {
   Arrow as SelectArrow,

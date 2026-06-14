@@ -62,9 +62,3 @@ export function useComboboxContext(part: string): ComboboxContextValue {
   }
   return ctx;
 }
-
-export interface ComboboxOptionGroupContextValue {
-  labelId: string;
-}
-export const ComboboxOptionGroupContext =
-  createContext<ComboboxOptionGroupContextValue | null>(null);

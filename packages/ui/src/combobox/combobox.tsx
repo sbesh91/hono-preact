@@ -8,7 +8,6 @@ import {
 } from 'preact';
 import {
   useCallback,
-  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -26,7 +25,6 @@ import type { OptionEntry } from '../listbox/selection.js';
 import { useListNavigation } from '../list-navigation.js';
 import {
   ComboboxContext,
-  ComboboxOptionGroupContext,
   useComboboxContext,
   type AutocompleteMode,
 } from './context.js';
@@ -433,40 +431,12 @@ export function ComboboxOption<Value = string>(
   });
 }
 
-export type ComboboxOptionGroupProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function ComboboxOptionGroup(props: ComboboxOptionGroupProps) {
-  const { render, children, ...rest } = props;
-  const labelId = useId();
-  const node = renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, role: 'group', 'aria-labelledby': labelId },
-    children,
-  });
-  return h(ComboboxOptionGroupContext.Provider, { value: { labelId } }, node);
-}
-
-export type ComboboxOptionGroupLabelProps = {
-  render?: RenderProp;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function ComboboxOptionGroupLabel(
-  props: ComboboxOptionGroupLabelProps
-): VNode {
-  const { render, children, ...rest } = props;
-  const group = useContext(ComboboxOptionGroupContext);
-  return renderElement({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, id: group?.labelId },
-    children,
-  });
-}
+export {
+  OptionGroup as ComboboxOptionGroup,
+  OptionGroupLabel as ComboboxOptionGroupLabel,
+  type OptionGroupProps as ComboboxOptionGroupProps,
+  type OptionGroupLabelProps as ComboboxOptionGroupLabelProps,
+} from '../option-group.js';
 
 const VISUALLY_HIDDEN: JSX.CSSProperties = {
   position: 'absolute',
