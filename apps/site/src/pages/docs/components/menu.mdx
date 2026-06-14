@@ -70,8 +70,8 @@ takes a controlled `checked`/`value` pair or an uncontrolled `defaultChecked`/
 
 ## Styling
 
-Parts expose `data-state` (`open`/`closed` on the popup and submenu trigger;
-`checked`/`unchecked` on checkbox and radio items). Items expose
+Parts expose `data-state` (`open`/`closed` on the popup and submenu trigger).
+Checkbox and radio items expose `data-checked` (present when checked). Items expose
 `data-highlighted` while active and `data-disabled` when disabled; the
 Positioner and Arrow expose `data-side` and `data-align`. The Positioner is the
 fixed-positioned wrapper, so size, z-index, and the entry animation go on the
@@ -205,7 +205,7 @@ Set `loop={false}` on `Menu.Root` to stop arrow navigation from wrapping, and
 | Attribute          | On                                            | Values                                            |
 | ------------------ | --------------------------------------------- | ------------------------------------------------- |
 | `data-state`       | Trigger, Popup, SubmenuTrigger                | `open` \| `closed`                                |
-| `data-state`       | CheckboxItem, RadioItem                       | `checked` \| `unchecked`                          |
+| `data-checked`     | CheckboxItem, RadioItem                       | present when checked                              |
 | `data-highlighted` | Item, CheckboxItem, RadioItem, SubmenuTrigger | present while the item is the active row          |
 | `data-disabled`    | Item, CheckboxItem, RadioItem                 | present when the item is disabled                 |
 | `data-side`        | Positioner, Arrow                             | `top` \| `right` \| `bottom` \| `left` (resolved) |
@@ -308,7 +308,7 @@ A toggle row that holds its own checked state. Default element `<div>` with
 | `children`        | `ComponentChildren`                                                         | -       | Item content (render your own check indicator).               |
 | `...props`        | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -       | Forwarded to the element.                                     |
 
-Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+Sets `aria-checked` and `data-checked` (present when checked).
 
 ### Menu.RadioGroup
 
@@ -338,7 +338,7 @@ A choice within a `Menu.RadioGroup`. Default element `<div>` with
 | `children` | `ComponentChildren`                                                         | -        | Item content (render your own selected indicator).            |
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -        | Forwarded to the element.                                     |
 
-Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+Sets `aria-checked` and `data-checked` (present when checked).
 
 ### Menu.Separator
 

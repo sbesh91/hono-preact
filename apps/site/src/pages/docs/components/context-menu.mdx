@@ -63,8 +63,8 @@ without a pointer that can right-click.
 
 ## Styling
 
-Parts expose `data-state` (`open`/`closed` on the trigger region and popup;
-`checked`/`unchecked` on checkbox and radio items). Items expose
+Parts expose `data-state` (`open`/`closed` on the trigger region and popup).
+Checkbox and radio items expose `data-checked` (present when checked). Items expose
 `data-highlighted` while active and `data-disabled` when disabled; the
 Positioner and Arrow expose `data-side` and `data-align`. The popup is styled
 exactly like a `Menu.Popup`; the demo above uses the styles below:
@@ -287,7 +287,7 @@ A toggle row that holds its own checked state. Default element `<div>` with
 | `children`        | `ComponentChildren`                                                         | -       | Item content (render your own check indicator).               |
 | `...props`        | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -       | Forwarded to the element.                                     |
 
-Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+Sets `aria-checked` and `data-checked` (present when checked).
 
 ### ContextMenu.RadioGroup
 
@@ -317,7 +317,7 @@ A choice within a `ContextMenu.RadioGroup`. Default element `<div>` with
 | `children` | `ComponentChildren`                                                         | -        | Item content (render your own selected indicator).            |
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                                        | -        | Forwarded to the element.                                     |
 
-Sets `aria-checked` and `data-state="checked" | "unchecked"`.
+Sets `aria-checked` and `data-checked` (present when checked).
 
 ### ContextMenu.Separator
 
