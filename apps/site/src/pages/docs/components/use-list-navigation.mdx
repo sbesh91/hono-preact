@@ -1,3 +1,6 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UseListNavigationDemo } from '../../../components/docs/UseListNavigationDemo.js';
+
 # useListNavigation
 
 `useListNavigation` is the keyboard navigation binding the [Menu](/docs/components/menu)
@@ -11,6 +14,12 @@ roving tabindex list, as in a menu). In `activedescendant` mode focus stays on a
 container element and you render `aria-activedescendant` pointing at the active
 item, scrolling it into view rather than focusing it (as in a listbox where the
 trigger keeps focus).
+
+## Demo
+
+<Example>
+  <UseListNavigationDemo />
+</Example>
 
 ## Signature
 
@@ -106,6 +115,6 @@ function Listbox({ open }: { open: boolean }) {
 `@hono-preact/ui` also exports `useTypeahead`, the type-to-select hook
 `useListNavigation` uses internally, for composing your own navigation:
 
-| Export         | Type                                                       | Description                                                                                             |
-| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `useTypeahead` | `(opts?: UseTypeaheadOptions) => (char: string) => string` | A hook returning a callback that accumulates printable chars into a query, resetting after an idle gap. |
+| Export                                           | Type                                                       | Description                                                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [`useTypeahead`](/docs/components/use-typeahead) | `(opts?: UseTypeaheadOptions) => (char: string) => string` | A hook returning a callback that accumulates printable chars into a query, resetting after an idle gap. |

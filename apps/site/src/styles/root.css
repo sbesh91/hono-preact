@@ -1705,3 +1705,374 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     animation: none;
   }
 }
+
+/* useControllableState demo */
+.docs-toggle {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-toggle[data-pressed] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* mergeRefs demo */
+.docs-mergerefs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.docs-mergerefs-input {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+}
+.docs-mergerefs-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-mergerefs-readout {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* renderElement demo */
+.docs-renderel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.docs-renderel-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.docs-renderel-btn[data-pressed] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* usePosition demo */
+.docs-useposition {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+.docs-useposition-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.docs-useposition-group {
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.docs-useposition-group legend {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.docs-useposition-anchor {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-useposition-box {
+  /* usePosition sets position:fixed + left/top; this is visual styling only. */
+  z-index: 50;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--foreground);
+  color: var(--surface);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+
+/* usePositioner demo */
+.docs-usepositioner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.docs-usepositioner-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-usepositioner-popup {
+  z-index: 50;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  max-width: 16rem;
+}
+
+/* useDismiss demo */
+.docs-dismiss {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.docs-dismiss-trigger,
+.docs-focusreturn-trigger,
+.docs-safearea-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-dismiss-panel,
+.docs-focusreturn-panel {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+}
+.docs-dismiss-readout,
+.docs-focusreturn-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* useFocusReturn demo */
+.docs-focusreturn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.docs-focusreturn-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-focusreturn-panel button {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+/* useSafeArea demo */
+.docs-safearea {
+  position: relative;
+  width: 100%;
+  min-height: 7rem;
+}
+.docs-safearea-trigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.docs-safearea-card {
+  position: absolute;
+  top: 3.5rem;
+  left: 6rem;
+  max-width: 16rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+}
+
+/* useListNavigation demo */
+.docs-listnav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-listnav-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-listnav-list {
+  width: 12rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: 0.25rem;
+  max-height: 9rem;
+  overflow: auto;
+}
+.docs-listnav-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  cursor: default;
+}
+.docs-listnav-option[data-active] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* useListboxSelection demo */
+.docs-listboxsel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-listboxsel-mode {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.docs-listboxsel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 11rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.docs-listboxsel-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--foreground);
+}
+.docs-listboxsel-option[data-selected] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-listboxsel-readout {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* useTypeahead demo */
+.docs-typeahead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-typeahead-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 11rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.docs-typeahead-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.docs-typeahead-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+.docs-typeahead-option[data-active] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-typeahead-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+.docs-typeahead-hint {
+  font-size: 0.72rem;
+}

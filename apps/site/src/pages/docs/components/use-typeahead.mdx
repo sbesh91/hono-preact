@@ -1,0 +1,71 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UseTypeaheadDemo } from '../../../components/docs/UseTypeaheadDemo.js';
+
+# useTypeahead
+
+`useTypeahead` is the type-to-select hook [useListNavigation](/docs/components/use-list-navigation) uses internally, exported for composing your own keyboard navigation. It returns an `onChar(char)` callback that accumulates printable characters into a query string and returns the current query; the buffer resets after a short idle gap. The caller matches the returned query against its item labels and moves the active item.
+
+## Demo
+
+<Example>
+  <UseTypeaheadDemo />
+</Example>
+
+## Signature
+
+```ts
+import { useTypeahead } from '@hono-preact/ui';
+
+function useTypeahead(opts?: UseTypeaheadOptions): (char: string) => string;
+
+interface UseTypeaheadOptions {
+  idleMs?: number; // reset the buffer after this idle gap, default 500
+}
+```
+
+Call the returned function with each printable character (for example from a `keydown` handler, skipping non-printable keys); it appends the character to the buffer, schedules a reset after `idleMs` of no input, and returns the current query.
+
+## Options
+
+| Option   | Type     | Default | Notes                                            |
+| -------- | -------- | ------- | ------------------------------------------------ |
+| `idleMs` | `number` | `500`   | Reset the accumulated query after this idle gap. |
+
+Returns `(char: string) => string`: a stable callback that accumulates `char` into the query and returns it.
+
+## Example
+
+```tsx
+import { useTypeahead } from '@hono-preact/ui';
+import { useState } from 'preact/hooks';
+
+const ITEMS = ['Argon', 'Boron', 'Calcium', 'Carbon'];
+
+function Typeahead() {
+  const onChar = useTypeahead();
+  const [active, setActive] = useState(0);
+
+  return (
+    <ul
+      tabIndex={0}
+      role="listbox"
+      onKeyDown={(e) => {
+        if (e.key.length !== 1) return; // printable characters only
+        const query = onChar(e.key);
+        const idx = ITEMS.findIndex((it) =>
+          it.toLowerCase().startsWith(query.toLowerCase())
+        );
+        if (idx >= 0) setActive(idx);
+      }}
+    >
+      {ITEMS.map((it, i) => (
+        <li key={it} role="option" aria-selected={i === active}>
+          {it}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+See also: [useListNavigation](/docs/components/use-list-navigation), which folds typeahead together with arrow-key and Home/End navigation.

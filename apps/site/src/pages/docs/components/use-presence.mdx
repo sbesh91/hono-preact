@@ -40,9 +40,12 @@ interface UsePresenceResult {
 
 ## Options
 
+`present` is the first positional argument (the desired visibility; flip it to
+false to start the exit animation). The optional second argument is the options
+object:
+
 | Option           | Type         | Default | Notes                                                                 |
 | ---------------- | ------------ | ------- | --------------------------------------------------------------------- |
-| `present`        | `boolean`    | none    | The desired visibility. Flip it to false to start the exit animation. |
 | `onExitComplete` | `() => void` | none    | Runs when the exit resolves, immediately before `isPresent` is false. |
 | `timeoutCap`     | `number`     | `3000`  | Safety cap (ms) so a stuck animation can never block teardown.        |
 

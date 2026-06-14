@@ -1,3 +1,6 @@
+import { Example } from '../../../components/docs/Example.js';
+import { MergeRefsDemo } from '../../../components/docs/MergeRefsDemo.js';
+
 # mergeRefs
 
 `mergeRefs` combines several refs into one callback ref. It is the small piece
@@ -5,6 +8,12 @@ that lets a component keep its own internal ref to a node while still handing
 that node to a ref the caller passed in. Function refs are invoked with the
 node, object refs have their `.current` assigned, and `null`/`undefined` are
 skipped.
+
+## Demo
+
+<Example>
+  <MergeRefsDemo />
+</Example>
 
 ## Signature
 

@@ -1,3 +1,6 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UseControllableStateDemo } from '../../../components/docs/UseControllableStateDemo.js';
+
 # useControllableState
 
 `useControllableState` lets a single component support both controlled and
@@ -5,6 +8,12 @@ uncontrolled use from one hook. When the caller passes a value, the component is
 controlled and the value is the single source of truth; when they pass only a
 default, the component manages its own state. Either way, the setter is stable
 across renders, so you can list it in effect dependencies without re-subscribing.
+
+## Demo
+
+<Example>
+  <UseControllableStateDemo />
+</Example>
 
 ## Signature
 

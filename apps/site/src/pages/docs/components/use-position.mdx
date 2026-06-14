@@ -1,8 +1,17 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UsePositionDemo } from '../../../components/docs/UsePositionDemo.js';
+
 # usePosition
 
 `usePosition` is the positioning binding [Popover](/docs/components/popover) and [Tooltip](/docs/components/tooltip) use. It wraps
 [Floating UI](https://floating-ui.com) and keeps a floating element anchored to
 a reference element, updating on scroll and resize.
+
+## Demo
+
+<Example>
+  <UsePositionDemo />
+</Example>
 
 ## Signature
 
@@ -16,6 +25,7 @@ interface UsePositionOptions {
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
   arrowRef?: RefObject<HTMLElement>;
+  getAnchorRect?: ClientRectGetter; // position against a point/virtual element
   side?: 'top' | 'right' | 'bottom' | 'left'; // default 'bottom'
   align?: 'start' | 'center' | 'end'; // default 'center'
   offset?: number; // gap in px, default 8
@@ -31,15 +41,16 @@ interface PositionState {
 
 ## Options
 
-| Option        | Type                                     | Default    | Notes                             |
-| ------------- | ---------------------------------------- | ---------- | --------------------------------- |
-| `open`        | `boolean`                                | none       | Positioning runs only while open. |
-| `anchorRef`   | `RefObject`                              | none       | The reference element.            |
-| `floatingRef` | `RefObject`                              | none       | The element being positioned.     |
-| `arrowRef`    | `RefObject`                              | optional   | Enables arrow positioning.        |
-| `side`        | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side.                   |
-| `align`       | `'start' \| 'center' \| 'end'`           | `'center'` | Alignment along the side.         |
-| `offset`      | `number`                                 | `8`        | Gap in pixels.                    |
+| Option          | Type                                     | Default    | Notes                                                                                         |
+| --------------- | ---------------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
+| `open`          | `boolean`                                | none       | Positioning runs only while open.                                                             |
+| `anchorRef`     | `RefObject`                              | none       | The reference element.                                                                        |
+| `floatingRef`   | `RefObject`                              | none       | The element being positioned.                                                                 |
+| `arrowRef`      | `RefObject`                              | optional   | Enables arrow positioning.                                                                    |
+| `getAnchorRect` | `ClientRectGetter`                       | optional   | Position against a point or virtual element instead of `anchorRef` (e.g. a pointer position). |
+| `side`          | `'top' \| 'right' \| 'bottom' \| 'left'` | `'bottom'` | Preferred side.                                                                               |
+| `align`         | `'start' \| 'center' \| 'end'`           | `'center'` | Alignment along the side.                                                                     |
+| `offset`        | `number`                                 | `8`        | Gap in pixels.                                                                                |
 
 ## Returns
 

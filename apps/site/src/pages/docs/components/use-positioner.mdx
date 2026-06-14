@@ -1,3 +1,6 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UsePositionerDemo } from '../../../components/docs/UsePositionerDemo.js';
+
 # usePositioner
 
 `usePositioner` is the complete anchored-overlay positioning hook the library's
@@ -9,6 +12,12 @@ platform quirks the library already handles.
 
 See also: [usePosition](/docs/components/use-position), [usePresence](/docs/components/use-presence), [useDismiss](/docs/components/use-dismiss).
 
+## Demo
+
+<Example>
+  <UsePositionerDemo />
+</Example>
+
 ## Signature
 
 ```ts
@@ -19,52 +28,43 @@ function usePositioner(opts: UsePositionerOptions): UsePositionerResult;
 
 ## Options
 
-| Option          | Type                         | Notes                                                                                                                              |
-| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `open`          | `boolean`                    | The overlay's open state; drives the presence lifecycle.                                                                           |
-| `anchorRef`     | `RefObject<HTMLElement>`     | The element the overlay is positioned against.                                                                                     |
-| `floatingRef`   | `RefObject<HTMLElement>`     | The positioned overlay element.                                                                                                    |
-| `arrowRef`      | `RefObject<HTMLElement>`     | The arrow element, positioned along the chosen side.                                                                               |
-| `side`          | `Side`                       | Preferred side: `top`, `right`, `bottom`, or `left`.                                                                               |
-| `align`         | `Align`                      | Alignment along the side: `start`, `center`, or `end`.                                                                             |
-| `offset`        | `number`                     | Gap in pixels between anchor and overlay.                                                                                          |
-| `getAnchorRect` | `ClientRectGetter`           | Optional. Position against a point or virtual element instead of `anchorRef` (e.g. a pointer position).                            |
-| `setPosition`   | `(p: PositionState) => void` | Publishes the resolved position so an arrow part can read it.                                                                      |
-| `mount`         | `'unmount' \| 'hidden'`      | `'unmount'`: branch on `isPresent` and return `null` while closed. `'hidden'`: keep the element mounted and `hidden` while closed. |
+| Option          | Type                     | Notes                                                                                                                              |
+| --------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `open`          | `boolean`                | The overlay's open state; drives the presence lifecycle.                                                                           |
+| `anchorRef`     | `RefObject<HTMLElement>` | The element the overlay is positioned against.                                                                                     |
+| `floatingRef`   | `RefObject<HTMLElement>` | The positioned overlay element.                                                                                                    |
+| `side`          | `Side`                   | Preferred side: `top`, `right`, `bottom`, or `left`.                                                                               |
+| `align`         | `Align`                  | Alignment along the side: `start`, `center`, or `end`.                                                                             |
+| `offset`        | `number`                 | Gap in pixels between anchor and overlay.                                                                                          |
+| `getAnchorRect` | `ClientRectGetter`       | Optional. Position against a point or virtual element instead of `anchorRef` (e.g. a pointer position).                            |
+| `mount`         | `'unmount' \| 'hidden'`  | `'unmount'`: branch on `isPresent` and return `null` while closed. `'hidden'`: keep the element mounted and `hidden` while closed. |
 
-`usePositioner` returns `{ isPresent, positionerProps, state }`: spread
-`positionerProps` onto your positioner element (it already carries the merged
-ref including `floatingRef`, Popover-API promotion, and UA style resets),
-branch on `isPresent` when `mount` is `'unmount'`, and read `state.side` /
-`state.align` for side-aware styling.
+`usePositioner` returns `{ isPresent, positionerProps, state, position, arrowRef }`:
+spread `positionerProps` onto your positioner element (it already carries the
+merged ref including `floatingRef`, Popover-API promotion, the UA `[popover]`
+style resets, and `data-side` / `data-align`), branch on `isPresent` when `mount`
+is `'unmount'`, and read `state.side` / `state.align` for side-aware styling. For
+a custom arrow, attach the returned `arrowRef` to your arrow element and read
+`position.arrowX` / `position.arrowY` for its offset (this is what the built-in
+`Arrow` part does).
 
 ## Example
 
 ```tsx
 import { usePositioner } from '@hono-preact/ui';
-import { useRef, useState } from 'preact/hooks';
-import type { PositionState } from '@hono-preact/ui';
+import { useRef } from 'preact/hooks';
 
 function Anchored({ open }: { open: boolean }) {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLDivElement>(null);
-  const [, setPosition] = useState<PositionState>({
-    side: 'bottom',
-    align: 'center',
-    arrowX: null,
-    arrowY: null,
-  });
 
-  const { isPresent, positionerProps } = usePositioner({
+  const { isPresent, positionerProps, state } = usePositioner({
     open,
     anchorRef,
     floatingRef,
-    arrowRef,
     side: 'bottom',
     align: 'center',
     offset: 8,
-    setPosition,
     mount: 'unmount',
   });
 
@@ -72,9 +72,8 @@ function Anchored({ open }: { open: boolean }) {
     <>
       <button ref={anchorRef}>anchor</button>
       {isPresent && (
-        <div {...positionerProps}>
+        <div {...positionerProps} data-side={state.side}>
           overlay contents
-          <div ref={arrowRef} />
         </div>
       )}
     </>
