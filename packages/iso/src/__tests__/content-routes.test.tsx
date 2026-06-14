@@ -7,10 +7,8 @@ import { contentRoutes } from '../content-routes.js';
 
 // Build a fake glob map. Each value is a lazy importer whose `default` is a
 // component rendering `label`, mirroring `import.meta.glob`'s shape.
-const mod =
-  (label: string) =>
-  (): Promise<unknown> =>
-    Promise.resolve({ default: () => h('p', null, label) });
+const mod = (label: string) => (): Promise<unknown> =>
+  Promise.resolve({ default: () => h('p', null, label) });
 
 async function renderView(route: {
   view?: () => Promise<{ default: unknown }>;

@@ -7,10 +7,8 @@ import { LocationProvider } from 'preact-iso';
 import { defineRoutes, Routes } from '../define-routes.js';
 import { contentRoutes } from '../content-routes.js';
 
-const page =
-  (text: string) =>
-  (): Promise<unknown> =>
-    Promise.resolve({ default: () => h('p', null, text) });
+const page = (text: string) => (): Promise<unknown> =>
+  Promise.resolve({ default: () => h('p', null, text) });
 
 const layout = () =>
   Promise.resolve({
