@@ -1,19 +1,13 @@
 // packages/ui/src/tooltip/tooltip.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'preact/hooks';
+import { useCallback, useEffect, useId, useMemo, useRef } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import { type Side, type Align, type PositionState } from '../use-position.js';
+import { type Side, type Align } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useSafeArea } from '../use-safe-area.js';
 import { usePositioner } from '../use-positioner.js';
+import { PositionerContext } from '../positioner-context.js';
 import { TooltipContext, useTooltipContext } from './context.js';
 
 export interface TooltipRootProps {
@@ -49,7 +43,6 @@ export function TooltipRoot(props: TooltipRootProps) {
 
   const anchorRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
   const popupId = useId();
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,13 +68,6 @@ export function TooltipRoot(props: TooltipRootProps) {
   // timer cannot fire setOpen after unmount.
   useEffect(() => cancelPending, [cancelPending]);
 
-  const [position, setPosition] = useState<PositionState>({
-    side,
-    align,
-    arrowX: null,
-    arrowY: null,
-  });
-
   const ctx = useMemo(
     () => ({
       open,
@@ -90,14 +76,11 @@ export function TooltipRoot(props: TooltipRootProps) {
       cancelPending,
       anchorRef,
       floatingRef,
-      arrowRef,
       popupId,
       side,
       align,
       offset,
       closeDelay,
-      position,
-      setPosition,
     }),
     [
       open,
@@ -109,7 +92,6 @@ export function TooltipRoot(props: TooltipRootProps) {
       align,
       offset,
       closeDelay,
-      position,
     ]
   );
 
@@ -183,28 +165,32 @@ export type TooltipPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function TooltipPositioner(props: TooltipPositionerProps): VNode | null {
+export function TooltipPositioner(props: TooltipPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useTooltipContext('Positioner');
-  const { isPresent, positionerProps, state } = usePositioner({
-    open: ctx.open,
-    anchorRef: ctx.anchorRef,
-    floatingRef: ctx.floatingRef,
-    arrowRef: ctx.arrowRef,
-    side: ctx.side,
-    align: ctx.align,
-    offset: ctx.offset,
-    setPosition: ctx.setPosition,
-    mount: 'unmount',
-  });
+  const { isPresent, positionerProps, state, position, arrowRef } =
+    usePositioner({
+      open: ctx.open,
+      anchorRef: ctx.anchorRef,
+      floatingRef: ctx.floatingRef,
+      side: ctx.side,
+      align: ctx.align,
+      offset: ctx.offset,
+      mount: 'unmount',
+    });
+  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
   if (!isPresent) return null;
-  return renderElement<{ side: Side; align: Align }>({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, ...positionerProps },
-    state,
-    children,
-  });
+  return h(
+    PositionerContext.Provider,
+    { value: positionerValue },
+    renderElement<{ side: Side; align: Align }>({
+      render,
+      defaultTag: 'div',
+      props: { ...rest, ...positionerProps },
+      state,
+      children,
+    })
+  );
 }
 
 export type TooltipPopupProps = {
@@ -268,29 +254,7 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
   });
 }
 
-export type TooltipArrowProps = {
-  render?: RenderProp<{ side: Side }>;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function TooltipArrow(props: TooltipArrowProps): VNode {
-  const { render, children, ...rest } = props;
-  const ctx = useTooltipContext('Arrow');
-  const { side, arrowX, arrowY } = ctx.position;
-  return renderElement<{ side: Side }>({
-    render,
-    defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: ctx.arrowRef,
-      'data-side': side,
-      style: {
-        position: 'absolute',
-        left: arrowX != null ? `${arrowX}px` : undefined,
-        top: arrowY != null ? `${arrowY}px` : undefined,
-      },
-    },
-    state: { side },
-    children,
-  });
-}
+export {
+  Arrow as TooltipArrow,
+  type ArrowProps as TooltipArrowProps,
+} from '../arrow.js';
