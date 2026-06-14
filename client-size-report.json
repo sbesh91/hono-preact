@@ -112,10 +112,10 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 66127,
+      "app": 63684,
       "actions": 17095,
       "core": 36375,
-      "components": 71126,
+      "components": 73569,
       "guards": 248,
       "middleware": 12473,
       "vendor": 8411,
@@ -125,7 +125,7 @@
       "transitions": 5092
     },
     "total": 243953,
-    "unmatched": 36,
+    "unmatched": 35,
     "fileCount": 84
   },
   "sectionC": {
