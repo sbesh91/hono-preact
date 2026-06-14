@@ -9,14 +9,14 @@ import { mergeRefs } from './merge-refs.js';
 
 type Props = Record<string, unknown>;
 
-export type UseRenderRender =
+export type RenderElementRender =
   | VNode
   | string
   | ((props: Props) => VNode)
   | undefined;
 
-interface UseRenderOptions {
-  render?: UseRenderRender;
+interface RenderElementOptions {
+  render?: RenderElementRender;
   defaultTag: string;
   props: Props;
   children?: ComponentChildren;
@@ -50,7 +50,7 @@ function mergeProps(user: Props, framework: Props): Props {
   return out;
 }
 
-export function useRender(opts: UseRenderOptions): VNode {
+export function renderElement(opts: RenderElementOptions): VNode {
   const { render, defaultTag, props, children } = opts;
 
   if (typeof render === 'function') {

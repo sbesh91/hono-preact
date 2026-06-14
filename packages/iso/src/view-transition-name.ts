@@ -1,7 +1,10 @@
 import type { ComponentChildren, VNode } from 'preact';
 import { useCallback, useLayoutEffect, useRef } from 'preact/hooks';
 import { mergeRefs } from './internal/merge-refs.js';
-import { useRender, type UseRenderRender } from './internal/use-render.js';
+import {
+  renderElement,
+  type RenderElementRender,
+} from './internal/use-render.js';
 
 type NodeRef = HTMLElement | SVGElement;
 
@@ -79,7 +82,7 @@ export function useViewTransitionClass(
 export interface ViewTransitionNameProps {
   name: string | null | undefined;
   groupClass?: string | string[];
-  render?: UseRenderRender;
+  render?: RenderElementRender;
   children?: ComponentChildren;
 }
 
@@ -87,7 +90,7 @@ export function ViewTransitionName(props: ViewTransitionNameProps): VNode {
   const nameRef = useViewTransitionName(props.name);
   const classRef = useViewTransitionClass(props.groupClass);
   const ref = mergeRefs<Element>(nameRef, classRef);
-  return useRender({
+  return renderElement({
     render: props.render,
     defaultTag: 'div',
     props: { ref },
@@ -97,13 +100,13 @@ export function ViewTransitionName(props: ViewTransitionNameProps): VNode {
 
 export interface ViewTransitionGroupProps {
   class: string | string[];
-  render?: UseRenderRender;
+  render?: RenderElementRender;
   children?: ComponentChildren;
 }
 
 export function ViewTransitionGroup(props: ViewTransitionGroupProps): VNode {
   const classRef = useViewTransitionClass(props.class);
-  return useRender({
+  return renderElement({
     render: props.render,
     defaultTag: 'div',
     props: { ref: classRef },
