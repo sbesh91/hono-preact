@@ -9,7 +9,7 @@ hono-preact/                    # monorepo root
 │       │   ├── Layout.tsx      # HTML shell with <Head>, <ClientScript />
 │       │   ├── routes.ts       # The route table (defineRoutes manifest)
 │       │   ├── pages/          # View components, paired .server.ts files, MDX content
-│       │   ├── components/     # Shared UI components (incl. DocsRoute for MDX)
+│       │   ├── components/     # Shared UI components (incl. MdxArticle for MDX)
 │       │   └── styles/         # Global CSS
 │       ├── vite.config.ts      # Two build configs: client bundle + Worker bundle
 │       └── wrangler.jsonc      # Cloudflare Workers deployment config
@@ -50,7 +50,7 @@ View components and their paired server modules. Files in this folder are refere
 
 `layout.server.ts` is also valid alongside any `layout.tsx`. A loader declared there is auto-scoped to the layout's matched location, not the deepest active child route. The auto-scoping is structural: the framework infers scope from which route entry owns the `.server.*` file, with no opt-in flag required.
 
-MDX content (`pages/docs/*.mdx`) is mounted via `apps/site/src/components/DocsRoute.tsx`, which is registered as the `view` for `/docs` and `/docs/*` in `routes.ts`. The DocsRoute component owns its own `import.meta.glob` and inner `<Router>` for sub-page discovery.
+MDX content (`pages/docs/**/*.mdx`) is mounted by `contentRoutes(import.meta.glob('./pages/docs/**/*.mdx'))` in `routes.ts`, which turns each file into a route node under the `/docs` layout group.
 
 ### `hono-preact` (workspace package)
 

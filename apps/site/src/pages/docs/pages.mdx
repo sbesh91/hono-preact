@@ -87,25 +87,45 @@ When several routes share a header, sidebar, or other wrapper, declare a layout 
 
 ## MDX content pages
 
-MDX is supported via the `@mdx-js/rollup` Vite plugin (configured in `vite.config.ts`) plus a small wrapper component that owns the per-file glob.
-
-The demo's `apps/site/src/components/DocsRoute.tsx` discovers every `.mdx` file in `src/pages/docs/` via `import.meta.glob` and registers each as an inner route. Mount it once in `routes.ts` for both the index URL and the wildcard:
+MDX is supported via the `@mdx-js/rollup` Vite plugin (configured in `vite.config.ts`). To mount a whole folder of MDX as routes, pass `import.meta.glob` to `contentRoutes`, which turns each file into a framework route node. Spread those nodes under a layout group so the pages share chrome:
 
 ```ts
-const docsView = () => import('./components/DocsRoute.js');
+import { defineRoutes, contentRoutes } from 'hono-preact';
+import { MdxArticle } from './components/MdxArticle.js';
 
 export default defineRoutes([
   // ...
-  { path: '/docs', view: docsView },
-  { path: '/docs/*', view: docsView },
+  {
+    path: '/docs',
+    layout: () => import('./components/DocsLayout.js'),
+    children: [
+      ...contentRoutes(import.meta.glob('./pages/docs/**/*.mdx'), {
+        wrapper: MdxArticle,
+      }),
+      { path: '*', view: () => import('./components/DocsNotFound.js') },
+    ],
+  },
 ]);
 ```
 
-Hoisting `docsView` to a const lets the framework share one component reference across both registrations, preserving the docs sidebar mount across navigations between docs pages.
+`import.meta.glob` must be written inline with a literal pattern (a Vite requirement); `contentRoutes` receives the resulting module map. Each MDX file becomes its own route: server-rendered, navigable, and code-split. The `*` child renders a docs-styled "not found" inside the layout for unmatched `/docs/...` URLs.
 
-**To add a new MDX page**, drop a file into `src/pages/docs/<slug>.mdx`. The DocsRoute component picks it up automatically via the glob; no `routes.ts` edit needed for individual MDX pages. (See `.claude/skills/add-docs-page.md` for the project-local skill.)
+### The wrapper
 
-**Note on `index.mdx`:** The DocsRoute glob handler maps `index.mdx` to the empty path inside the inner router so it serves at `/docs` (rather than `/docs/index`).
+`contentRoutes` wraps every page in a single-element root, here `MdxArticle` (an `<article class="mdx-content">`). The wrapper is required: MDX compiles to a multiple-sibling Fragment root, which does not hydrate stably on its own; the single wrapping element is what makes hydration correct. It is also the natural home for prose styling. The default wrapper, if you pass none, is a bare `<div>`.
+
+### `contentRoutes(modules, options?)`
+
+| Param             | Type                                     | Description                                                                                                                       |
+| ----------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `modules`         | `Record<string, () => Promise<unknown>>` | The map from `import.meta.glob`. Keys are file paths; each value is a lazy importer whose `default` export is the page component. |
+| `options.wrapper` | `ComponentType<{ children }>`            | Single-root wrapper around each page. Defaults to a bare `<div>`.                                                                 |
+| `options.slug`    | `(key: string) => string`                | Map a glob key to its route `path`, overriding the default rule.                                                                  |
+| `options.base`    | `string`                                 | Prefix stripped from each key before slug derivation. Defaults to the longest common directory of all keys.                       |
+
+The default slug rule strips the common directory prefix and the file extension and collapses a trailing `index` to the empty path: `index.mdx` serves the directory root (`/docs`), `quick-start.mdx` serves `/docs/quick-start`, and `components/dialog.mdx` serves `/docs/components/dialog`.
+
+**To add a new MDX page**, drop a file into `src/pages/docs/<slug>.mdx`; `contentRoutes` picks it up via the glob, with no `routes.ts` edit. (See `.claude/skills/add-docs-page.md` for the project-local skill.)
 
 ## View transitions
 
