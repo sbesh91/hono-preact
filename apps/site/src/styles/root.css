@@ -2033,3 +2033,46 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   color: var(--muted);
   margin: 0;
 }
+
+/* useTypeahead demo */
+.docs-typeahead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-typeahead-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 11rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.docs-typeahead-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.docs-typeahead-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+.docs-typeahead-option[data-active] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-typeahead-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+.docs-typeahead-hint {
+  font-size: 0.72rem;
+}

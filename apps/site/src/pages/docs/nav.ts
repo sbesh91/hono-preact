@@ -143,6 +143,10 @@ export const nav: NavArea[] = [
             route: '/docs/components/use-list-navigation',
           },
           {
+            title: 'useTypeahead',
+            route: '/docs/components/use-typeahead',
+          },
+          {
             title: 'useListboxSelection',
             route: '/docs/components/use-listbox-selection',
           },
