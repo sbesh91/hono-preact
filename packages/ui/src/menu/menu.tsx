@@ -21,6 +21,7 @@ import {
   MenuRadioGroupContext,
   useMenuRadioGroupContext,
 } from './context.js';
+import { PositionerContext } from '../positioner-context.js';
 
 export interface MenuRootProps {
   open?: boolean;
@@ -179,29 +180,33 @@ export type MenuPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function MenuPositioner(props: MenuPositionerProps): VNode | null {
+export function MenuPositioner(props: MenuPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useMenuContext('Positioner');
-  const { isPresent, positionerProps, state } = usePositioner({
-    open: ctx.open,
-    anchorRef: ctx.anchorRef,
-    floatingRef: ctx.floatingRef,
-    arrowRef: ctx.arrowRef,
-    side: ctx.side,
-    align: ctx.align,
-    offset: ctx.offset,
-    getAnchorRect: ctx.getAnchorRect,
-    setPosition: ctx.setPosition,
-    mount: 'unmount',
-  });
+  const { isPresent, positionerProps, state, position, arrowRef } =
+    usePositioner({
+      open: ctx.open,
+      anchorRef: ctx.anchorRef,
+      floatingRef: ctx.floatingRef,
+      side: ctx.side,
+      align: ctx.align,
+      offset: ctx.offset,
+      getAnchorRect: ctx.getAnchorRect,
+      mount: 'unmount',
+    });
+  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
   if (!isPresent) return null;
-  return renderElement<{ side: Side; align: Align }>({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, ...positionerProps },
-    state,
-    children,
-  });
+  return h(
+    PositionerContext.Provider,
+    { value: positionerValue },
+    renderElement<{ side: Side; align: Align }>({
+      render,
+      defaultTag: 'div',
+      props: { ...rest, ...positionerProps },
+      state,
+      children,
+    })
+  );
 }
 
 export type MenuPopupProps = {
@@ -535,29 +540,7 @@ export function MenuSeparator(props: MenuSeparatorProps): VNode {
   });
 }
 
-export type MenuArrowProps = {
-  render?: RenderProp<{ side: Side }>;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function MenuArrow(props: MenuArrowProps): VNode {
-  const { render, children, ...rest } = props;
-  const ctx = useMenuContext('Arrow');
-  const { side, arrowX, arrowY } = ctx.position;
-  return renderElement<{ side: Side }>({
-    render,
-    defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: ctx.arrowRef,
-      'data-side': side,
-      style: {
-        position: 'absolute',
-        left: arrowX != null ? `${arrowX}px` : undefined,
-        top: arrowY != null ? `${arrowY}px` : undefined,
-      },
-    },
-    state: { side },
-    children,
-  });
-}
+export {
+  Arrow as MenuArrow,
+  type ArrowProps as MenuArrowProps,
+} from '../arrow.js';

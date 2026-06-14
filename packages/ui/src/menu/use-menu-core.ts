@@ -1,7 +1,7 @@
 import type { RefObject } from 'preact';
 import { useCallback, useId, useMemo, useRef, useState } from 'preact/hooks';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
 import type { MenuContextValue } from './context.js';
 
 export interface UseMenuCoreOptions {
@@ -31,15 +31,12 @@ export interface MenuCore {
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
   popupRef: RefObject<HTMLElement>;
-  arrowRef: RefObject<HTMLElement>;
   pendingEdgeRef: RefObject<'first' | 'last'>;
   baseId: string;
   triggerId: string;
   popupId: string;
   activeId: string | null;
   setActiveId: (id: string | null) => void;
-  position: PositionState;
-  setPosition: (p: PositionState) => void;
 }
 
 export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
@@ -66,7 +63,6 @@ export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
   const anchorRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
   const popupRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
   const pendingEdgeRef = useRef<'first' | 'last'>('first');
 
   const baseId = useId();
@@ -74,12 +70,6 @@ export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
   const popupId = `${baseId}-popup`;
 
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [position, setPosition] = useState<PositionState>({
-    side,
-    align,
-    arrowX: null,
-    arrowY: null,
-  });
 
   // closeAll defaults to closing this menu; a parent's closeAll is injected for
   // submenus. ownCloseAll is always created (hooks can't be conditional).
@@ -113,7 +103,6 @@ export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
       anchorRef,
       floatingRef,
       popupRef,
-      arrowRef,
       triggerId,
       popupId,
       activeId,
@@ -124,8 +113,6 @@ export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
       offset,
       loop,
       typeahead,
-      position,
-      setPosition,
       getAnchorRect: pointerAnchored ? getAnchorRect : undefined,
       openAt: pointerAnchored ? openAt : undefined,
     }),
@@ -141,7 +128,6 @@ export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
       offset,
       loop,
       typeahead,
-      position,
       pointerAnchored,
       getAnchorRect,
       openAt,
@@ -155,14 +141,11 @@ export function useMenuCore(opts: UseMenuCoreOptions): MenuCore {
     anchorRef,
     floatingRef,
     popupRef,
-    arrowRef,
     pendingEdgeRef,
     baseId,
     triggerId,
     popupId,
     activeId,
     setActiveId,
-    position,
-    setPosition,
   };
 }

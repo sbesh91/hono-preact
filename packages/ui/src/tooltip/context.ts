@@ -1,7 +1,7 @@
 // packages/ui/src/tooltip/context.ts
 import { createContext, type RefObject } from 'preact';
 import { useContext } from 'preact/hooks';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
 
 export interface TooltipContextValue {
   open: boolean;
@@ -12,14 +12,11 @@ export interface TooltipContextValue {
   cancelPending: () => void;
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
-  arrowRef: RefObject<HTMLElement>;
   popupId: string;
   side: Side;
   align: Align;
   offset: number;
   closeDelay: number; // grace window for the safe corridor
-  position: PositionState;
-  setPosition: (p: PositionState) => void;
 }
 
 export const TooltipContext = createContext<TooltipContextValue | null>(null);

@@ -16,7 +16,8 @@ import {
 } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
+import { PositionerContext } from '../positioner-context.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
@@ -90,17 +91,10 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
   const anchorRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
   const listboxRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
   const baseId = useId();
   const triggerId = `${baseId}-trigger`;
   const listboxId = `${baseId}-listbox`;
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [position, setPosition] = useState<PositionState>({
-    side,
-    align,
-    arrowX: null,
-    arrowY: null,
-  });
 
   const sel = useListboxSelection<Value>({
     value,
@@ -129,7 +123,6 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
       anchorRef,
       floatingRef,
       listboxRef,
-      arrowRef,
       triggerId,
       listboxId,
       disabled,
@@ -139,8 +132,6 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
       offset,
       loop,
       typeahead,
-      position,
-      setPosition,
     }),
     [
       open,
@@ -159,7 +150,6 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
       offset,
       loop,
       typeahead,
-      position,
     ]
   );
 
@@ -297,30 +287,33 @@ export type SelectPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function SelectPositioner(props: SelectPositionerProps): VNode {
+export function SelectPositioner(props: SelectPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useSelectContext('Positioner');
   // Always rendered (mount: 'hidden') so options register their labels; the
   // hook drives `hidden` while not present, which composes with the top-layer
   // promotion (active only while present).
-  const { positionerProps, state } = usePositioner({
+  const { positionerProps, state, position, arrowRef } = usePositioner({
     open: ctx.open,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
-    arrowRef: ctx.arrowRef,
     side: ctx.side,
     align: ctx.align,
     offset: ctx.offset,
-    setPosition: ctx.setPosition,
     mount: 'hidden',
   });
-  return renderElement<{ side: Side; align: Align }>({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, ...positionerProps },
-    state,
-    children,
-  });
+  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
+  return h(
+    PositionerContext.Provider,
+    { value: positionerValue },
+    renderElement<{ side: Side; align: Align }>({
+      render,
+      defaultTag: 'div',
+      props: { ...rest, ...positionerProps },
+      state,
+      children,
+    })
+  );
 }
 
 export type SelectPopupProps = {
@@ -471,29 +464,7 @@ export function SelectOptionGroupLabel(
   });
 }
 
-export type SelectArrowProps = {
-  render?: RenderProp<{ side: Side }>;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function SelectArrow(props: SelectArrowProps): VNode {
-  const { render, children, ...rest } = props;
-  const ctx = useSelectContext('Arrow');
-  const { side, arrowX, arrowY } = ctx.position;
-  return renderElement<{ side: Side }>({
-    render,
-    defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: ctx.arrowRef,
-      'data-side': side,
-      style: {
-        position: 'absolute',
-        left: arrowX != null ? `${arrowX}px` : undefined,
-        top: arrowY != null ? `${arrowY}px` : undefined,
-      },
-    },
-    state: { side },
-    children,
-  });
-}
+export {
+  Arrow as SelectArrow,
+  type ArrowProps as SelectArrowProps,
+} from '../arrow.js';

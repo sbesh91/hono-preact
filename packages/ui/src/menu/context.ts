@@ -1,12 +1,7 @@
 // packages/ui/src/menu/context.ts
 import { createContext, type RefObject } from 'preact';
 import { useContext } from 'preact/hooks';
-import type {
-  Side,
-  Align,
-  PositionState,
-  ClientRectGetter,
-} from '../use-position.js';
+import type { Side, Align, ClientRectGetter } from '../use-position.js';
 
 export interface MenuContextValue {
   open: boolean;
@@ -23,7 +18,6 @@ export interface MenuContextValue {
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>; // Positioner element
   popupRef: RefObject<HTMLElement>; // Popup surface (focus + nav root)
-  arrowRef: RefObject<HTMLElement>;
   triggerId: string;
   popupId: string;
   // Roving tabindex: the id of the active item (null until open focuses one).
@@ -36,8 +30,6 @@ export interface MenuContextValue {
   offset: number;
   loop: boolean;
   typeahead: boolean;
-  position: PositionState;
-  setPosition: (p: PositionState) => void;
   // Context menu only: positions at the pointer. Undefined for Menu.
   getAnchorRect?: ClientRectGetter;
   // Context menu only: open the menu at the given pointer coordinates. Undefined
