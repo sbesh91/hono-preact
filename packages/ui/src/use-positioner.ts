@@ -30,18 +30,12 @@ export interface UsePositionerOptions {
   // The element the overlay is positioned against.
   anchorRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
-  // Optional during the migration to PositionerContext: when omitted the hook
-  // creates and owns the ref. Removed once every component stops passing it.
-  arrowRef?: RefObject<HTMLElement>;
   side: Side;
   align: Align;
   offset: number;
   // Position against a point or virtual element instead of anchorRef (e.g. a
   // pointer position). Undefined for the common anchor-element case.
   getAnchorRect?: ClientRectGetter;
-  // Optional legacy publish hook (pre-PositionerContext); removed once every
-  // component reads the position from the hook return instead.
-  setPosition?: (p: PositionState) => void;
   // 'unmount': the component returns null while closed (branch on isPresent).
   // 'hidden': the element stays mounted (so options can register their labels)
   // and is `hidden` while closed.
@@ -71,8 +65,7 @@ export interface UsePositionerResult {
 export function usePositioner(opts: UsePositionerOptions): UsePositionerResult {
   const presence = usePresence(opts.open);
 
-  const ownArrowRef = useRef<HTMLElement>(null);
-  const arrowRef = opts.arrowRef ?? ownArrowRef;
+  const arrowRef = useRef<HTMLElement>(null);
 
   const position = usePosition({
     open: presence.isPresent,
@@ -84,12 +77,6 @@ export function usePositioner(opts: UsePositionerOptions): UsePositionerResult {
     offset: opts.offset,
     getAnchorRect: opts.getAnchorRect,
   });
-
-  // Legacy publish to the Root (back-compat during migration). No-op once a
-  // component reads `position` from this hook's return instead.
-  useLayoutEffect(() => {
-    opts.setPosition?.(position);
-  }, [position.side, position.align, position.arrowX, position.arrowY]);
 
   // Promote to the native top layer. The Popover API is a hard dependency of
   // these components; on a browser without it showPopover() throws (no
