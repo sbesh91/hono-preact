@@ -4,10 +4,20 @@
  *   { kind: 'help' } |
  *   { kind: 'version' } |
  *   { kind: 'error', message: string } |
+ *   { kind: 'add-agents', force: boolean } |
  *   { kind: 'scaffold', targetDir: string | undefined, adapter: 'cloudflare' | 'node', install: boolean, git: boolean }
  * }
  */
 export function parseArgs(argv) {
+  if (argv[0] === 'add-agents') {
+    let force = false;
+    for (const arg of argv.slice(1)) {
+      if (arg === '--force') force = true;
+      else return { kind: 'error', message: `unknown flag: ${arg}` };
+    }
+    return { kind: 'add-agents', force };
+  }
+
   let targetDir;
   let adapter = 'cloudflare';
   let install = true;
