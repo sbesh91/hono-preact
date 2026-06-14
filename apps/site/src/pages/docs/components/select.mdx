@@ -100,8 +100,7 @@ to its default. A reset whose event is `preventDefault`ed is ignored.
 
 ## Styling
 
-Parts expose `data-state` (`open` / `closed` on the trigger, positioner, and
-popup). Options expose `data-highlighted` while active, `data-selected` when
+Parts expose `data-state` (`open` / `closed` on the trigger and popup). Options expose `data-highlighted` while active, `data-selected` when
 selected, and `data-disabled` when disabled; `Select.Value` exposes
 `data-placeholder` while empty; the Positioner and Arrow expose `data-side` and
 `data-align`. The Positioner is the fixed-positioned wrapper, so size, z-index,
@@ -264,15 +263,15 @@ type-to-activate.
 
 ## Data attributes
 
-| Attribute          | On                         | Values                                            |
-| ------------------ | -------------------------- | ------------------------------------------------- |
-| `data-state`       | Trigger, Positioner, Popup | `open` \| `closed`                                |
-| `data-highlighted` | Option                     | present while the option is the active descendant |
-| `data-selected`    | Option                     | present when the option is selected               |
-| `data-disabled`    | Option                     | present when the option is disabled               |
-| `data-placeholder` | Value                      | present while no option is selected               |
-| `data-side`        | Positioner, Arrow          | `top` \| `right` \| `bottom` \| `left` (resolved) |
-| `data-align`       | Positioner                 | `start` \| `center` \| `end` (resolved)           |
+| Attribute          | On                | Values                                            |
+| ------------------ | ----------------- | ------------------------------------------------- |
+| `data-state`       | Trigger, Popup    | `open` \| `closed`                                |
+| `data-highlighted` | Option            | present while the option is the active descendant |
+| `data-selected`    | Option            | present when the option is selected               |
+| `data-disabled`    | Option            | present when the option is disabled               |
+| `data-placeholder` | Value             | present while no option is selected               |
+| `data-side`        | Positioner, Arrow | `top` \| `right` \| `bottom` \| `left` (resolved) |
+| `data-align`       | Positioner        | `start` \| `center` \| `end` (resolved)           |
 
 The selected option also carries `aria-selected="true"`, so you can style the
 selection with either the data attribute or the ARIA state.

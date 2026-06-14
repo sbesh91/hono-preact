@@ -27,19 +27,23 @@ interface UseDismissOptions {
   refs: RefObject<HTMLElement>[]; // elements treated as inside (no outside-press)
   escape?: boolean; // default true
   outsidePress?: boolean; // default true
+  id?: string; // dismiss-tree node id (nested menus); omit for a single-node layer
+  parentId?: string | null; // parent node id for submenu coordination
   onDismiss: (reason: 'escape' | 'outside-press') => void;
 }
 ```
 
 ## Options
 
-| Option         | Type               | Default | Notes                                          |
-| -------------- | ------------------ | ------- | ---------------------------------------------- |
-| `enabled`      | `boolean`          | none    | Register only while open.                      |
-| `refs`         | `RefObject[]`      | none    | Elements treated as inside (no outside-press). |
-| `escape`       | `boolean`          | `true`  | Dismiss on Escape.                             |
-| `outsidePress` | `boolean`          | `true`  | Dismiss on an outside pointer press.           |
-| `onDismiss`    | `(reason) => void` | none    | Called with `'escape'` or `'outside-press'`.   |
+| Option         | Type               | Default  | Notes                                                                                    |
+| -------------- | ------------------ | -------- | ---------------------------------------------------------------------------------------- |
+| `enabled`      | `boolean`          | none     | Register only while open.                                                                |
+| `refs`         | `RefObject[]`      | none     | Elements treated as inside (no outside-press).                                           |
+| `escape`       | `boolean`          | `true`   | Dismiss on Escape.                                                                       |
+| `outsidePress` | `boolean`          | `true`   | Dismiss on an outside pointer press.                                                     |
+| `id`           | `string`           | optional | Dismiss-tree node id for nested menus; omit for a single-node layer (Popover / Tooltip). |
+| `parentId`     | `string \| null`   | optional | Parent node's id for submenu coordination; omit at the tree root.                        |
+| `onDismiss`    | `(reason) => void` | none     | Called with `'escape'` or `'outside-press'`.                                             |
 
 The listeners are document-level and capture-phase, attached once and shared
 across every registered layer, so adding overlays does not multiply listeners.
