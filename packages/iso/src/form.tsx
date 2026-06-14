@@ -154,7 +154,7 @@ export function Form<TPayload, TResult>({
             handle?.revert();
             setLastActionResult(moduleKey, actionName, {
               kind: 'error',
-              message: `Refused cross-origin redirect to ${decoded.to}`,
+              message: `Refused cross-origin redirect to ${decoded.to}. redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.`,
               submittedPayload: payload,
             });
             return;

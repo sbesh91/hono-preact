@@ -432,7 +432,7 @@ export function useAction<
               return await new Promise<MutateResult<TResult>>(() => {});
             }
             // Cross-origin: surface as an error so the caller can handle it.
-            throw new Error(`Refused cross-origin redirect to ${decoded.to}`);
+            throw new Error(`Refused cross-origin redirect to ${decoded.to}. redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.`);
           } else if (decoded.kind === 'deny') {
             recordOutcome(currentStub.__module, currentStub.__action, {
               kind: 'deny',
