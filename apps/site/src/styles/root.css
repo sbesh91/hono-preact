@@ -1865,3 +1865,91 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
   max-width: 16rem;
 }
+
+/* useDismiss demo */
+.docs-dismiss {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.docs-dismiss-trigger,
+.docs-focusreturn-trigger,
+.docs-safearea-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-dismiss-panel,
+.docs-focusreturn-panel {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+}
+.docs-dismiss-readout,
+.docs-focusreturn-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* useFocusReturn demo */
+.docs-focusreturn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.docs-focusreturn-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-focusreturn-panel button {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+/* useSafeArea demo */
+.docs-safearea {
+  position: relative;
+  width: 100%;
+  min-height: 7rem;
+}
+.docs-safearea-trigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.docs-safearea-card {
+  position: absolute;
+  top: 3.5rem;
+  left: 6rem;
+  max-width: 16rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+}

@@ -1,3 +1,6 @@
+import { Example } from '../../../components/docs/Example.js';
+import { UseDismissDemo } from '../../../components/docs/UseDismissDemo.js';
+
 # useDismiss
 
 `useDismiss` registers an open overlay with a shared dismissal stack. Pressing
@@ -5,6 +8,12 @@ Escape or pressing outside the overlay dismisses the topmost registered layer,
 so nested overlays close one at a time, innermost first.
 
 See also: [useFocusReturn](/docs/components/use-focus-return), [usePosition](/docs/components/use-position), [useSafeArea](/docs/components/use-safe-area).
+
+## Demo
+
+<Example>
+  <UseDismissDemo />
+</Example>
 
 ## Signature
 
