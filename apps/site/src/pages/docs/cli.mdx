@@ -1,0 +1,47 @@
+# CLI
+
+`create-hono-preact` scaffolds a new hono-preact app and can add agent guidance
+to an existing one. It is the same binary whether you run it through `npm`,
+`pnpm`, or `yarn`.
+
+## Create a new app
+
+```bash
+pnpm create hono-preact my-app
+```
+
+This scaffolds `my-app/`, installs dependencies, and initializes a git repo. Then:
+
+```bash
+cd my-app
+pnpm dev
+```
+
+### Options
+
+| Flag                           | Default       | Description                                                         |
+| ------------------------------ | ------------- | ------------------------------------------------------------------- |
+| `--adapter=<cloudflare\|node>` | `cloudflare`  | Target runtime. `cloudflare` for Workers, `node` for a Node server. |
+| `--no-install`                 | install runs  | Skip the dependency install step.                                   |
+| `--no-git`                     | git init runs | Skip initializing a git repository.                                 |
+| `--version`, `-v`              |               | Print the CLI version.                                              |
+| `--help`, `-h`                 |               | Print usage.                                                        |
+
+## Add agent guidance to an existing app
+
+If you added hono-preact to a project you did not scaffold (for example with
+`pnpm add hono-preact`), drop in the guidance an AI coding agent reads:
+
+```bash
+npx create-hono-preact add-agents
+```
+
+This writes `AGENTS.md` (framework conventions for any AI coding agent) and a
+one-line `CLAUDE.md` pointer into the current directory. Existing files are left
+untouched unless you pass `--force`.
+
+| Flag      | Default | Description                                                |
+| --------- | ------- | ---------------------------------------------------------- |
+| `--force` | off     | Overwrite `AGENTS.md` / `CLAUDE.md` if they already exist. |
+
+See [Quick Start](./quick-start) for the full walkthrough.
