@@ -14,14 +14,13 @@ import { useMenuCore } from './use-menu-core.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { useListNavigation } from '../list-navigation.js';
-import { usePositioner } from '../use-positioner.js';
+import { Positioner } from '../positioner.js';
 import {
   MenuContext,
   useMenuContext,
   MenuRadioGroupContext,
   useMenuRadioGroupContext,
 } from './context.js';
-import { PositionerContext } from '../positioner-context.js';
 
 export interface MenuRootProps {
   open?: boolean;
@@ -183,30 +182,19 @@ export type MenuPositionerProps = {
 export function MenuPositioner(props: MenuPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useMenuContext('Positioner');
-  const { isPresent, positionerProps, state, position, arrowRef } =
-    usePositioner({
-      open: ctx.open,
-      anchorRef: ctx.anchorRef,
-      floatingRef: ctx.floatingRef,
-      side: ctx.side,
-      align: ctx.align,
-      offset: ctx.offset,
-      getAnchorRect: ctx.getAnchorRect,
-      mount: 'unmount',
-    });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  if (!isPresent) return null;
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
+  return h(Positioner, {
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+    getAnchorRect: ctx.getAnchorRect,
+    mount: 'unmount',
+    render,
+    children,
+    ...rest,
+  });
 }
 
 export type MenuPopupProps = {

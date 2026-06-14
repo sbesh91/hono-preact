@@ -17,11 +17,10 @@ import {
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
-import { PositionerContext } from '../positioner-context.js';
+import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useListNavigation } from '../list-navigation.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
-import { usePositioner } from '../use-positioner.js';
 import { useFormReset } from '../use-form-reset.js';
 import {
   SelectContext,
@@ -293,7 +292,7 @@ export function SelectPositioner(props: SelectPositionerProps) {
   // Always rendered (mount: 'hidden') so options register their labels; the
   // hook drives `hidden` while not present, which composes with the top-layer
   // promotion (active only while present).
-  const { positionerProps, state, position, arrowRef } = usePositioner({
+  return h(Positioner, {
     open: ctx.open,
     anchorRef: ctx.anchorRef,
     floatingRef: ctx.floatingRef,
@@ -301,19 +300,10 @@ export function SelectPositioner(props: SelectPositionerProps) {
     align: ctx.align,
     offset: ctx.offset,
     mount: 'hidden',
+    render,
+    children,
+    ...rest,
   });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
 }
 
 export type SelectPopupProps = {

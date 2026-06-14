@@ -18,8 +18,7 @@ import {
 import { useControllableState } from '../use-controllable-state.js';
 import { useFormReset } from '../use-form-reset.js';
 import type { Side, Align } from '../use-position.js';
-import { usePositioner } from '../use-positioner.js';
-import { PositionerContext } from '../positioner-context.js';
+import { Positioner } from '../positioner.js';
 import { useDismiss } from '../use-dismiss.js';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
@@ -254,7 +253,6 @@ export function ComboboxPositioner(props: ComboboxPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Positioner');
   // Anchor to the <Combobox.Anchor> field if one is rendered, else the input.
-  // Both refs are stable, so the callback is stable (no autoUpdate churn).
   const getAnchorRect = useCallback(
     () =>
       (
@@ -262,7 +260,7 @@ export function ComboboxPositioner(props: ComboboxPositionerProps) {
       )?.getBoundingClientRect() ?? null,
     [ctx.anchorRef, ctx.inputRef]
   );
-  const { positionerProps, state, position, arrowRef } = usePositioner({
+  return h(Positioner, {
     open: ctx.open,
     anchorRef: ctx.inputRef,
     floatingRef: ctx.floatingRef,
@@ -271,19 +269,10 @@ export function ComboboxPositioner(props: ComboboxPositionerProps) {
     offset: ctx.offset,
     getAnchorRect,
     mount: 'hidden',
+    render,
+    children,
+    ...rest,
   });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
 }
 
 export type ComboboxPopupProps = {

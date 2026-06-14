@@ -13,8 +13,7 @@ import { useFocusReturn } from '../use-focus-return.js';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align } from '../use-position.js';
-import { usePositioner } from '../use-positioner.js';
-import { PositionerContext } from '../positioner-context.js';
+import { Positioner } from '../positioner.js';
 import { PopoverContext, usePopoverContext } from './context.js';
 
 export interface PopoverRootProps {
@@ -154,34 +153,21 @@ export type PopoverPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-// Return type left inferred: h(PositionerContext.Provider, ...) yields a VNode
-// with more specific props than VNode<{}> (matches the MenuGroup/SelectOptionGroup precedent).
 export function PopoverPositioner(props: PopoverPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = usePopoverContext('Positioner');
-  const { isPresent, positionerProps, state, position, arrowRef } =
-    usePositioner({
-      open: ctx.open,
-      anchorRef: ctx.anchorRef,
-      floatingRef: ctx.floatingRef,
-      side: ctx.side,
-      align: ctx.align,
-      offset: ctx.offset,
-      mount: 'unmount',
-    });
-  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
-  if (!isPresent) return null;
-  return h(
-    PositionerContext.Provider,
-    { value: positionerValue },
-    renderElement<{ side: Side; align: Align }>({
-      render,
-      defaultTag: 'div',
-      props: { ...rest, ...positionerProps },
-      state,
-      children,
-    })
-  );
+  return h(Positioner, {
+    open: ctx.open,
+    anchorRef: ctx.anchorRef,
+    floatingRef: ctx.floatingRef,
+    side: ctx.side,
+    align: ctx.align,
+    offset: ctx.offset,
+    mount: 'unmount',
+    render,
+    children,
+    ...rest,
+  });
 }
 
 export type PopoverPopupProps = {
