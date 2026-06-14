@@ -39,7 +39,7 @@ describe('bucketForChunk', () => {
 
   it('groups component-area docs pages into the components bucket', () => {
     expect(bucketForChunk('dialog-BSsm66RQ.js')).toBe('components');
-    expect(bucketForChunk('use-render-DMU4Us_-.js')).toBe('components');
+    expect(bucketForChunk('render-element-DMU4Us_-.js')).toBe('components');
     expect(bucketForChunk('use-controllable-state-BZJc3EUw.js')).toBe(
       'components'
     );

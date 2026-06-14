@@ -61,7 +61,7 @@ export const EXTERNAL = [
 // entry pulls in. Measured like Section A: total (isolated) plus marginal over
 // ui-core (= (ui-core + component) bundle - ui-core bundle).
 export const UI_CORE_MODULES = [
-  'use-render.js',
+  'render-element.js',
   'merge-refs.js',
   'use-controllable-state.js',
   'use-presence.js',
@@ -96,7 +96,7 @@ export const CHUNK_PREFIXES = [
   ['combobox', 'components'],
   ['use-position', 'components'],
   ['use-dismiss', 'components'],
-  ['use-render', 'components'],
+  ['render-element', 'components'],
   ['use-controllable-state', 'components'],
   ['use-presence', 'components'],
   ['merge-refs', 'components'],
