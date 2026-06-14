@@ -1705,3 +1705,82 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
     animation: none;
   }
 }
+
+/* useControllableState demo */
+.docs-toggle {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-toggle[data-pressed] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* mergeRefs demo */
+.docs-mergerefs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.docs-mergerefs-input {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+}
+.docs-mergerefs-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-mergerefs-readout {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* renderElement demo */
+.docs-renderel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.docs-renderel-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.docs-renderel-btn[data-pressed] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
