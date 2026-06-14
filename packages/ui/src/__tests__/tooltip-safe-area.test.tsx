@@ -35,7 +35,7 @@ function rect(
 
 function Example() {
   return (
-    <TooltipRoot delay={100} closeDelay={300}>
+    <TooltipRoot openDelay={100} closeDelay={300}>
       <TooltipTrigger>Help</TooltipTrigger>
       <TooltipPositioner>
         <TooltipPopup>More info</TooltipPopup>

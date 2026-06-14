@@ -16,7 +16,7 @@ afterEach(() => {
 
 function Example() {
   return (
-    <TooltipRoot delay={100} closeDelay={100}>
+    <TooltipRoot openDelay={100} closeDelay={100}>
       <TooltipTrigger>Help</TooltipTrigger>
       <TooltipPositioner>
         <TooltipPopup>More info</TooltipPopup>

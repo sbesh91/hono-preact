@@ -11,7 +11,7 @@ afterEach(() => {
 
 function Harness({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   return (
-    <TooltipRoot delay={100} closeDelay={100} onOpenChange={onOpenChange}>
+    <TooltipRoot openDelay={100} closeDelay={100} onOpenChange={onOpenChange}>
       <TooltipTrigger>Hover me</TooltipTrigger>
     </TooltipRoot>
   );

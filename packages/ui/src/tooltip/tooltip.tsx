@@ -13,7 +13,7 @@ export interface TooltipRootProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  delay?: number; // open delay (ms), default 600
+  openDelay?: number; // open delay (ms), default 600
   closeDelay?: number; // grace before close after leaving the safe corridor (ms), default 300
   side?: Side; // default 'top'
   align?: Align; // default 'center'
@@ -26,7 +26,7 @@ export function TooltipRoot(props: TooltipRootProps) {
     open: openProp,
     defaultOpen,
     onOpenChange,
-    delay = 600,
+    openDelay = 600,
     closeDelay = 300,
     side = 'top',
     align = 'center',
@@ -60,8 +60,8 @@ export function TooltipRoot(props: TooltipRootProps) {
   );
   const scheduleOpen = useCallback(() => {
     cancelPending();
-    timer.current = setTimeout(() => setOpen(true), delay);
-  }, [cancelPending, setOpen, delay]);
+    timer.current = setTimeout(() => setOpen(true), openDelay);
+  }, [cancelPending, setOpen, openDelay]);
 
   // Clear any pending open/close timer if the Root unmounts mid-delay, so the
   // timer cannot fire setOpen after unmount.
