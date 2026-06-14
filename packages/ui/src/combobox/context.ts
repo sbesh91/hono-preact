@@ -1,7 +1,7 @@
 // packages/ui/src/combobox/context.ts
 import { createContext, type RefObject } from 'preact';
 import { useContext } from 'preact/hooks';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
 import type { OptionEntry } from '../listbox/selection.js';
 
 export type AutocompleteMode = 'none' | 'list' | 'both';
@@ -41,7 +41,6 @@ export interface ComboboxContextValue {
   clearRef: RefObject<HTMLElement>;
   floatingRef: RefObject<HTMLElement>;
   listboxRef: RefObject<HTMLElement>;
-  arrowRef: RefObject<HTMLElement>;
   inputId: string;
   listboxId: string;
   // flags + positioning
@@ -52,8 +51,6 @@ export interface ComboboxContextValue {
   side: Side;
   align: Align;
   offset: number;
-  position: PositionState;
-  setPosition: (p: PositionState) => void;
 }
 
 export const ComboboxContext = createContext<ComboboxContextValue | null>(null);

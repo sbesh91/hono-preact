@@ -17,8 +17,9 @@ import {
 } from 'preact/hooks';
 import { useControllableState } from '../use-controllable-state.js';
 import { useFormReset } from '../use-form-reset.js';
-import type { Side, Align, PositionState } from '../use-position.js';
+import type { Side, Align } from '../use-position.js';
 import { usePositioner } from '../use-positioner.js';
+import { PositionerContext } from '../positioner-context.js';
 import { useDismiss } from '../use-dismiss.js';
 import { renderElement, type RenderProp } from '../use-render.js';
 import { useListboxSelection, OPTION_SELECTOR } from '../listbox/selection.js';
@@ -117,17 +118,10 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   const clearRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
   const listboxRef = useRef<HTMLElement>(null);
-  const arrowRef = useRef<HTMLElement>(null);
   const baseId = useId();
   const inputId = `${baseId}-input`;
   const listboxId = `${baseId}-listbox`;
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [position, setPosition] = useState<PositionState>({
-    side,
-    align,
-    arrowX: null,
-    arrowY: null,
-  });
 
   const sel = useListboxSelection<Value>({
     value,
@@ -205,7 +199,6 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       clearRef,
       floatingRef,
       listboxRef,
-      arrowRef,
       inputId,
       listboxId,
       disabled,
@@ -215,8 +208,6 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       side,
       align,
       offset,
-      position,
-      setPosition,
     }),
     [
       open,
@@ -244,7 +235,6 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
       side,
       align,
       offset,
-      position,
     ]
   );
 
@@ -260,7 +250,7 @@ export type ComboboxPositionerProps = {
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
 
-export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
+export function ComboboxPositioner(props: ComboboxPositionerProps) {
   const { render, children, ...rest } = props;
   const ctx = useComboboxContext('Positioner');
   // Anchor to the <Combobox.Anchor> field if one is rendered, else the input.
@@ -272,25 +262,28 @@ export function ComboboxPositioner(props: ComboboxPositionerProps): VNode {
       )?.getBoundingClientRect() ?? null,
     [ctx.anchorRef, ctx.inputRef]
   );
-  const { positionerProps, state } = usePositioner({
+  const { positionerProps, state, position, arrowRef } = usePositioner({
     open: ctx.open,
     anchorRef: ctx.inputRef,
     floatingRef: ctx.floatingRef,
-    arrowRef: ctx.arrowRef,
     side: ctx.side,
     align: ctx.align,
     offset: ctx.offset,
     getAnchorRect,
-    setPosition: ctx.setPosition,
     mount: 'hidden',
   });
-  return renderElement<{ side: Side; align: Align }>({
-    render,
-    defaultTag: 'div',
-    props: { ...rest, ...positionerProps },
-    state,
-    children,
-  });
+  const positionerValue = useMemo(() => ({ position, arrowRef }), [position]);
+  return h(
+    PositionerContext.Provider,
+    { value: positionerValue },
+    renderElement<{ side: Side; align: Align }>({
+      render,
+      defaultTag: 'div',
+      props: { ...rest, ...positionerProps },
+      state,
+      children,
+    })
+  );
 }
 
 export type ComboboxPopupProps = {
@@ -360,32 +353,10 @@ export function ComboboxAnchor(props: ComboboxAnchorProps): VNode {
   });
 }
 
-export type ComboboxArrowProps = {
-  render?: RenderProp<{ side: Side }>;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
-
-export function ComboboxArrow(props: ComboboxArrowProps): VNode {
-  const { render, children, ...rest } = props;
-  const ctx = useComboboxContext('Arrow');
-  const { side, arrowX, arrowY } = ctx.position;
-  return renderElement<{ side: Side }>({
-    render,
-    defaultTag: 'div',
-    props: {
-      ...rest,
-      ref: ctx.arrowRef,
-      'data-side': side,
-      style: {
-        position: 'absolute',
-        left: arrowX != null ? `${arrowX}px` : undefined,
-        top: arrowY != null ? `${arrowY}px` : undefined,
-      },
-    },
-    state: { side },
-    children,
-  });
-}
+export {
+  Arrow as ComboboxArrow,
+  type ArrowProps as ComboboxArrowProps,
+} from '../arrow.js';
 
 export type ComboboxOptionProps<Value = string> = {
   value: Value;
