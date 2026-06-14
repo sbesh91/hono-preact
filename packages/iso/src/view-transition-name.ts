@@ -4,7 +4,7 @@ import { mergeRefs } from './internal/merge-refs.js';
 import {
   renderElement,
   type RenderElementRender,
-} from './internal/use-render.js';
+} from './internal/render-element.js';
 
 type NodeRef = HTMLElement | SVGElement;
 

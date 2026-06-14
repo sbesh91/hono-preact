@@ -1,6 +1,6 @@
 // packages/ui/src/context-menu/context-menu.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 import type { Side, Align } from '../use-position.js';
 import { MenuContext, useMenuContext } from '../menu/context.js';
 import { useMenuCore } from '../menu/use-menu-core.js';

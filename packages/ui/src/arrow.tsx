@@ -1,5 +1,5 @@
 import { type ComponentChildren, type JSX, type VNode } from 'preact';
-import { renderElement, type RenderProp } from './use-render.js';
+import { renderElement, type RenderProp } from './render-element.js';
 import type { Side } from './use-position.js';
 import { usePositionerContext } from './positioner-context.js';
 

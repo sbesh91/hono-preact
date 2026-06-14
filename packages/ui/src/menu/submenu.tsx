@@ -14,7 +14,7 @@ import {
   useMemo,
   useRef,
 } from 'preact/hooks';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 import { useSafeArea } from '../use-safe-area.js';
 import type { Side, Align } from '../use-position.js';
 import { useMenuCore } from './use-menu-core.js';

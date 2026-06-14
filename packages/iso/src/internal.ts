@@ -58,7 +58,7 @@ export {
 export {
   renderElement,
   type RenderElementRender,
-} from './internal/use-render.js';
+} from './internal/render-element.js';
 export { mergeRefs } from './internal/merge-refs.js';
 
 export { subscribeToLoaderStream } from './internal/stream-registry.js';

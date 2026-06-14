@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/preact';
 import { h } from 'preact';
-import { renderElement } from '../internal/use-render.js';
+import { renderElement } from '../internal/render-element.js';
 
 function Wrap(props: {
   render?: Parameters<typeof renderElement>[0]['render'];

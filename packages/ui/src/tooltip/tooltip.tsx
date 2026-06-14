@@ -1,7 +1,7 @@
 // packages/ui/src/tooltip/tooltip.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
 import { useCallback, useEffect, useId, useMemo, useRef } from 'preact/hooks';
-import { renderElement, type RenderProp } from '../use-render.js';
+import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
 import { type Side, type Align } from '../use-position.js';
 import { useDismiss } from '../use-dismiss.js';

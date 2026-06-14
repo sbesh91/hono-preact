@@ -6,7 +6,7 @@ import {
   type VNode,
 } from 'preact';
 import { useContext, useId } from 'preact/hooks';
-import { renderElement, type RenderProp } from './use-render.js';
+import { renderElement, type RenderProp } from './render-element.js';
 
 export interface OptionGroupContextValue {
   labelId: string;
