@@ -1953,3 +1953,83 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   font-size: 0.85rem;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
 }
+
+/* useListNavigation demo */
+.docs-listnav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-listnav-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-listnav-list {
+  width: 12rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: 0.25rem;
+  max-height: 9rem;
+  overflow: auto;
+}
+.docs-listnav-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  cursor: default;
+}
+.docs-listnav-option[data-active] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* useListboxSelection demo */
+.docs-listboxsel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-listboxsel-mode {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.docs-listboxsel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 11rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.docs-listboxsel-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--foreground);
+}
+.docs-listboxsel-option[data-selected] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-listboxsel-readout {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
