@@ -32,7 +32,7 @@ A page is up to four files:
 - `src/routes.ts` - declares every URL and which view (and optional `.server`
   module) lives there.
 - `src/Layout.tsx` - the HTML document shell. It must render `<ClientScript />`
-  (hydration) and a `<Head />` (from `hoofd`).
+  (hydration) and a `<Head />` (both from `hono-preact`).
 
 ## Public entry points
 
