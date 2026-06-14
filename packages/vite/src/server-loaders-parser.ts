@@ -1,8 +1,4 @@
-import type {
-  Program,
-  CallExpression,
-  ObjectExpression,
-} from '@babel/types';
+import type { Program, CallExpression, ObjectExpression } from '@babel/types';
 
 export type ParsedLoaderEntry = {
   /** Loader name (the key in serverLoaders, e.g. "summary"). */

@@ -1,5 +1,9 @@
 import type { LayoutProps } from 'hono-preact';
-import { useParams, useViewTransitionLifecycle, ViewTransitionName } from 'hono-preact';
+import {
+  useParams,
+  useViewTransitionLifecycle,
+  ViewTransitionName,
+} from 'hono-preact';
 import { useTitle } from 'hoofd/preact';
 
 export default function ProjectLayout({ children }: LayoutProps) {
