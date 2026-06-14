@@ -1,13 +1,7 @@
 // packages/ui/src/popover/popover.tsx
 import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import {
-  useCallback,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'preact/hooks';
+import { useId, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
+import { useDescriptionRegistry } from '../use-description-registry.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
 import { renderElement, type RenderProp } from '../use-render.js';
@@ -53,11 +47,7 @@ export function PopoverRoot(props: PopoverRootProps) {
   const titleId = `${baseId}-title`;
   const descriptionId = `${baseId}-description`;
 
-  const [descriptionCount, setDescriptionCount] = useState(0);
-  const registerDescription = useCallback(() => {
-    setDescriptionCount((c) => c + 1);
-    return () => setDescriptionCount((c) => c - 1);
-  }, []);
+  const { hasDescription, registerDescription } = useDescriptionRegistry();
 
   const ctx = useMemo(
     () => ({
@@ -70,7 +60,7 @@ export function PopoverRoot(props: PopoverRootProps) {
       popupId,
       titleId,
       descriptionId,
-      hasDescription: descriptionCount > 0,
+      hasDescription,
       registerDescription,
       side,
       align,
@@ -83,7 +73,7 @@ export function PopoverRoot(props: PopoverRootProps) {
       popupId,
       titleId,
       descriptionId,
-      descriptionCount,
+      hasDescription,
       registerDescription,
       side,
       align,
