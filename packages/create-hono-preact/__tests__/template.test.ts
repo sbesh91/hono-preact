@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +13,7 @@ import {
   copyTemplate,
   renameDotfiles,
   substituteName,
+  copyAgentsFiles,
 } from '../lib/template.mjs';
 
 const here = resolve(fileURLToPath(import.meta.url), '..');
@@ -73,5 +80,34 @@ describe('substituteName', () => {
     await substituteName(target, 'my-app');
     const after = readFileSync(join(target, 'src', 'index.ts'), 'utf8');
     expect(after).toBe(before);
+  });
+});
+
+describe('copyAgentsFiles', () => {
+  it('creates AGENTS.md and CLAUDE.md when absent', async () => {
+    const agentsDir = resolve(here, '..', 'templates', 'agents');
+    const results = await copyAgentsFiles(agentsDir, target, { force: false });
+    expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
+    expect(existsSync(join(target, 'CLAUDE.md'))).toBe(true);
+    expect(results).toEqual([
+      { file: 'AGENTS.md', action: 'created' },
+      { file: 'CLAUDE.md', action: 'created' },
+    ]);
+  });
+
+  it('skips an existing file without force', async () => {
+    const agentsDir = resolve(here, '..', 'templates', 'agents');
+    writeFileSync(join(target, 'AGENTS.md'), 'KEEP');
+    const results = await copyAgentsFiles(agentsDir, target, { force: false });
+    expect(readFileSync(join(target, 'AGENTS.md'), 'utf8')).toBe('KEEP');
+    expect(results[0]).toEqual({ file: 'AGENTS.md', action: 'skipped' });
+  });
+
+  it('overwrites an existing file with force', async () => {
+    const agentsDir = resolve(here, '..', 'templates', 'agents');
+    writeFileSync(join(target, 'AGENTS.md'), 'OLD');
+    const results = await copyAgentsFiles(agentsDir, target, { force: true });
+    expect(readFileSync(join(target, 'AGENTS.md'), 'utf8')).not.toBe('OLD');
+    expect(results[0]).toEqual({ file: 'AGENTS.md', action: 'overwritten' });
   });
 });
