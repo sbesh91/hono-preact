@@ -1,11 +1,10 @@
-import { defineRoutes, type RoutePaths } from 'hono-preact';
+import { defineRoutes, contentRoutes, type RoutePaths } from 'hono-preact';
 // Registers the global `docs` view-transition type rule (enter/leave/within
 // /docs). Side-effect import: the generated client entry imports this module,
 // so the subscriber is installed once at startup.
 import './docs-transition.js';
 import { requireSession } from './demo/guard.js';
-
-const docsView = () => import('./components/DocsRoute.js');
+import { MdxArticle } from './components/MdxArticle.js';
 
 // The tree is its own `as const` binding (not just inlined into defineRoutes)
 // so the route registration below can reference `typeof routeTree`. Registering
@@ -14,8 +13,16 @@ const docsView = () => import('./components/DocsRoute.js');
 // is evaluated while resolving it. The tree is a plain literal, so it is safe.
 const routeTree = [
   { path: '/', view: () => import('./pages/home.js') },
-  { path: '/docs', view: docsView },
-  { path: '/docs/*', view: docsView },
+  {
+    path: '/docs',
+    layout: () => import('./components/DocsLayout.js'),
+    children: [
+      ...contentRoutes(import.meta.glob('./pages/docs/**/*.mdx'), {
+        wrapper: MdxArticle,
+      }),
+      { path: '*', view: () => import('./components/DocsNotFound.js') },
+    ],
+  },
   {
     path: '/demo',
     layout: () => import('./pages/demo/demo-layout.js'),
