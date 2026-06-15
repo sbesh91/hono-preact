@@ -46,4 +46,8 @@ describe('active-route detection exports', () => {
   it('exports NavLink', () => {
     expect(typeof iso.NavLink).toBe('function');
   });
+
+  it('exports buildPath', () => {
+    expect(typeof iso.buildPath).toBe('function');
+  });
 });
