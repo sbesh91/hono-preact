@@ -111,10 +111,12 @@ const findReleaseNotes = () => {
 const notes = findReleaseNotes();
 console.log('');
 console.log(`Released ${name}@${version}. Create the GitHub release:`);
-// No --latest: the framework (hono-preact) owns the repo's "latest" badge.
+// --latest=false is REQUIRED, not optional: `gh release create` defaults to
+// "automatic" latest (newest by date wins), so omitting the flag lets a ui
+// release steal the repo's "latest" badge from the framework. Force it off.
 if (notes) {
-  console.log(`  gh release create '${tagName}' -F ${notes} --title '${name}@${version}'`);
+  console.log(`  gh release create '${tagName}' -F ${notes} --title '${name}@${version}' --latest=false`);
 } else {
-  console.log(`  gh release create '${tagName}' -F <path-to-release-notes.md> --title '${name}@${version}'`);
+  console.log(`  gh release create '${tagName}' -F <path-to-release-notes.md> --title '${name}@${version}' --latest=false`);
   console.log(`  (no release notes file found in docs/superpowers/specs/ matching ui-v${major}.${minor})`);
 }
