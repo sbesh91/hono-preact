@@ -1,5 +1,5 @@
 {
-  "name": "@hono-preact/ui",
+  "name": "hono-preact-ui",
   "version": "0.1.0",
   "description": "Standalone, unstyled, accessible Preact UI primitives for hono-preact.",
   "keywords": [

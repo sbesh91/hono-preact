@@ -1,4 +1,4 @@
-import { Select } from '@hono-preact/ui';
+import { Select } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // A single-select listbox showing the common parts: a trigger with a

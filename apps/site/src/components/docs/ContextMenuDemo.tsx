@@ -1,4 +1,4 @@
-import { ContextMenu } from '@hono-preact/ui';
+import { ContextMenu } from 'hono-preact-ui';
 
 // A right-click (contextmenu) menu. The Trigger is the drop zone; right-click
 // inside it to open the menu at the pointer. The part set below is identical to

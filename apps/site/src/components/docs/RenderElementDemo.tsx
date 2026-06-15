@@ -1,4 +1,4 @@
-import { renderElement, type RenderProp } from '@hono-preact/ui';
+import { renderElement, type RenderProp } from 'hono-preact-ui';
 import type { ComponentChildren, JSX, VNode } from 'preact';
 import { useState } from 'preact/hooks';
 

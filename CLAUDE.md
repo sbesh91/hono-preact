@@ -27,7 +27,7 @@ Before `git push` (especially before opening a PR), run the same checks CI runs,
 
 The CI pipeline lives in `.github/workflows/ci.yml`. Mirror it locally:
 
-1. `pnpm --filter '@hono-preact/*' --filter hono-preact build` (framework dist must be current; `pnpm typecheck` and `apps/site` resolve cross-package types through the published `dist/`, so stale dist surfaces as fake "missing export" errors).
+1. `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build` (framework dist must be current; `pnpm typecheck` and `apps/site` resolve cross-package types through the published `dist/`, so stale dist surfaces as fake "missing export" errors).
 2. `pnpm format:check`
 3. `pnpm typecheck`
 4. `pnpm test:coverage` (or `pnpm test` if coverage isn't needed locally).

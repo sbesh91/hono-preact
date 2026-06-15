@@ -1,4 +1,4 @@
-import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { Combobox, matchSubstring } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // Creatable: when the query matches no existing option, a `create` option is

@@ -6,7 +6,7 @@ import { DialogDemo } from '../../../components/docs/DialogDemo.js';
 
 An accessible modal dialog built on the native `<dialog>` element. The browser
 supplies the focus trap, background `inert`, top layer, and Escape-to-close;
-`@hono-preact/ui` adds the ARIA wiring, open-state, and `render`-prop
+`hono-preact-ui` adds the ARIA wiring, open-state, and `render`-prop
 composition. It ships unstyled: style it through the `data-state` contract.
 
 ## Demo
@@ -18,7 +18,7 @@ composition. It ships unstyled: style it through the `data-state` contract.
 ## Usage
 
 ```tsx
-import { Dialog } from '@hono-preact/ui';
+import { Dialog } from 'hono-preact-ui';
 
 export function Subscribe() {
   return (
@@ -229,7 +229,7 @@ Closes the dialog on click. Default element `<button type="button">`.
 
 ### Primitives
 
-`@hono-preact/ui` also exports the building blocks the parts use, for composing
+`hono-preact-ui` also exports the building blocks the parts use, for composing
 your own components. Each has its own page with examples:
 [renderElement](/docs/components/render-element),
 [useControllableState](/docs/components/use-controllable-state), and

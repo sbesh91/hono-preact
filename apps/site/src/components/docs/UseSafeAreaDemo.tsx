@@ -1,4 +1,4 @@
-import { useSafeArea } from '@hono-preact/ui';
+import { useSafeArea } from 'hono-preact-ui';
 import { useRef, useState } from 'preact/hooks';
 
 // A hover-opened card sitting across a diagonal gap from its trigger. useSafeArea

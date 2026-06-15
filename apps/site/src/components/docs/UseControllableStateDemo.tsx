@@ -1,4 +1,4 @@
-import { useControllableState } from '@hono-preact/ui';
+import { useControllableState } from 'hono-preact-ui';
 
 // A live On/Off toggle built on useControllableState. Uncontrolled here: it owns
 // its own state from defaultValue and the setter is stable across renders.

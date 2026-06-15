@@ -1,4 +1,4 @@
-import { usePositioner } from '@hono-preact/ui';
+import { usePositioner } from 'hono-preact-ui';
 import { useRef, useState } from 'preact/hooks';
 
 // A complete custom anchored overlay built directly on usePositioner: it composes

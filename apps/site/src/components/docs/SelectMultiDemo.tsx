@@ -1,4 +1,4 @@
-import { Select } from '@hono-preact/ui';
+import { Select } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // A multiple-select listbox. Picking an option toggles it and keeps the popup

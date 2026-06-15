@@ -1,4 +1,4 @@
-import { Menu } from '@hono-preact/ui';
+import { Menu } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // A button-triggered command menu showing every part: plain items, a separator,

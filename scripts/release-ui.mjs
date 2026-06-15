@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Independent release driver for @hono-preact/ui.
+// Independent release driver for hono-preact-ui.
 //
 // ui is a standalone library that versions on its own line (it is NOT part of
 // the hono-preact umbrella and does not track the framework version), so it has
-// its own one-shot driver and its own tag namespace (`@hono-preact/ui@x.y.z`).
+// its own one-shot driver and its own tag namespace (`hono-preact-ui@x.y.z`).
 // Run this alongside `pnpm release` when both ship in the same cycle; keeping it
 // a separate command is deliberate, so the two version lines never re-couple.
 //

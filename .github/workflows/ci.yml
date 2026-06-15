@@ -42,7 +42,7 @@ jobs:
       # Build framework packages first so apps/site tsc resolves their
       # published dist/ types (workspace exports point at dist).
       - name: Build framework packages
-        run: pnpm --filter '@hono-preact/*' --filter hono-preact build
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
 
       - name: Format check
         run: pnpm format:check
@@ -89,7 +89,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build framework packages
-        run: pnpm --filter '@hono-preact/*' --filter hono-preact build
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
 
       - name: Build site
         run: pnpm --filter site build

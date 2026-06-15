@@ -1,4 +1,4 @@
-import { usePosition } from '@hono-preact/ui';
+import { usePosition } from 'hono-preact-ui';
 import { useRef, useState } from 'preact/hooks';
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const;

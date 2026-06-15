@@ -1,4 +1,4 @@
-import { useDismiss, type DismissReason } from '@hono-preact/ui';
+import { useDismiss, type DismissReason } from 'hono-preact-ui';
 import { useRef, useState } from 'preact/hooks';
 
 // A panel registered with the dismissal stack. Pressing Escape or clicking

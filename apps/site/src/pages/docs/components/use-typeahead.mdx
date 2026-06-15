@@ -14,7 +14,7 @@ import { UseTypeaheadDemo } from '../../../components/docs/UseTypeaheadDemo.js';
 ## Signature
 
 ```ts
-import { useTypeahead } from '@hono-preact/ui';
+import { useTypeahead } from 'hono-preact-ui';
 
 function useTypeahead(opts?: UseTypeaheadOptions): (char: string) => string;
 
@@ -36,7 +36,7 @@ Returns `(char: string) => string`: a stable callback that accumulates `char` in
 ## Example
 
 ```tsx
-import { useTypeahead } from '@hono-preact/ui';
+import { useTypeahead } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 const ITEMS = ['Argon', 'Boron', 'Calcium', 'Carbon'];

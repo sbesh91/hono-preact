@@ -1,4 +1,4 @@
-import { useDismiss, useFocusReturn } from '@hono-preact/ui';
+import { useDismiss, useFocusReturn } from 'hono-preact-ui';
 import { useRef, useState } from 'preact/hooks';
 
 // When the panel opens, useFocusReturn moves focus to its first button; when it
