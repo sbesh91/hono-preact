@@ -58,3 +58,36 @@ export async function substituteName(target, name) {
     }
   }
 }
+
+/** True if a path exists. */
+export async function fileExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copy the agent-guidance files into a target directory. Per-file: created if
+ * absent, overwritten when `force`, otherwise skipped.
+ * @param {string} agentsDir
+ * @param {string} targetDir
+ * @param {{ force: boolean }} options
+ * @returns {Promise<Array<{ file: string, action: 'created' | 'overwritten' | 'skipped' }>>}
+ */
+export async function copyAgentsFiles(agentsDir, targetDir, { force }) {
+  const results = [];
+  for (const file of ['AGENTS.md', 'CLAUDE.md']) {
+    const dest = join(targetDir, file);
+    const exists = await fileExists(dest);
+    if (exists && !force) {
+      results.push({ file, action: 'skipped' });
+      continue;
+    }
+    await cp(join(agentsDir, file), dest);
+    results.push({ file, action: exists ? 'overwritten' : 'created' });
+  }
+  return results;
+}

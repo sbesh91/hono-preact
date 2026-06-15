@@ -90,3 +90,24 @@ describe('parseArgs', () => {
     }
   });
 });
+
+describe('parseArgs — add-agents', () => {
+  it('parses add-agents with no flags', () => {
+    expect(parseArgs(['add-agents'])).toEqual({
+      kind: 'add-agents',
+      force: false,
+    });
+  });
+  it('parses add-agents --force', () => {
+    expect(parseArgs(['add-agents', '--force'])).toEqual({
+      kind: 'add-agents',
+      force: true,
+    });
+  });
+  it('rejects an unknown add-agents flag', () => {
+    expect(parseArgs(['add-agents', '--bogus'])).toEqual({
+      kind: 'error',
+      message: 'unknown flag: --bogus',
+    });
+  });
+});

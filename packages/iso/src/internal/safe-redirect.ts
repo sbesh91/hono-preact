@@ -18,7 +18,7 @@ export function assignSafeRedirect(target: string): boolean {
   if (typeof window === 'undefined') return false;
   if (!isSameOrigin(target)) {
     console.error(
-      `[hono-preact] refusing to navigate to cross-origin redirect target: ${target}`
+      `[hono-preact] refusing to navigate to cross-origin redirect target: ${target}. redirect() must return a same-origin path (e.g. "/dashboard").`
     );
     return false;
   }

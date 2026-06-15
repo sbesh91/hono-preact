@@ -90,6 +90,7 @@ export const nav: NavArea[] = [
         heading: 'Infrastructure',
         icon: Server,
         entries: [
+          { title: 'CLI', route: '/docs/cli' },
           { title: 'Vite Config', route: '/docs/vite-config' },
           { title: 'Project Structure', route: '/docs/structure' },
           {

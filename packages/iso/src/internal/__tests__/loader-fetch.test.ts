@@ -145,4 +145,24 @@ describe('fetchLoaderData: deny outcome envelope', () => {
       )
     ).rejects.toThrow('boom');
   });
+
+  it('uses the generic loader-failure message with remediation when the body has no error field', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    await expect(
+      fetchLoaderData(
+        'm',
+        'default',
+        loc,
+        new AbortController().signal,
+        noopCbs
+      )
+    ).rejects.toThrow(
+      "Loader failed with status 503. Check the loader's .server.ts for a thrown error, and the server logs for details."
+    );
+  });
 });

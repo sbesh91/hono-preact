@@ -42,7 +42,7 @@ export function LoaderHost<T>({
   if (!location) {
     throw new Error(
       `Loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' has no location: ` +
-        `wrap the page in a route that owns this server module, or pass location explicitly.`
+        `wrap the page in a route whose server module includes this loader's .server.ts file, or pass location explicitly.`
     );
   }
 

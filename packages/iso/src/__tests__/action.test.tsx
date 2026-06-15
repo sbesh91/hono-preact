@@ -734,6 +734,37 @@ describe('useAction — outcome envelope decoding', () => {
     }
   });
 
+  it('cross-origin redirect error names the same-origin fix', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            __outcome: 'redirect',
+            to: 'https://evil.example.com/steal',
+            status: 302,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(mutateResult!.ok).toBe(false);
+    if (!mutateResult!.ok) {
+      expect(mutateResult!.error.message).toContain(
+        'redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.'
+      );
+    }
+  });
+
   it('surfaces a non-envelope body as a malformed-envelope error', async () => {
     vi.stubGlobal(
       'fetch',

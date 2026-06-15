@@ -35,4 +35,15 @@ describe('assignSafeRedirect', () => {
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
+
+  it('cross-origin refusal message names the same-origin fix', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    assignSafeRedirect('https://evil.example.com/foo');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'redirect() must return a same-origin path (e.g. "/dashboard").'
+      )
+    );
+    errorSpy.mockRestore();
+  });
 });

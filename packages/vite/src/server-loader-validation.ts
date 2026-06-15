@@ -65,7 +65,7 @@ export function serverLoaderValidationPlugin(): Plugin {
       if (disallowedExports.length > 0) {
         errors.push(
           `${id}: .server files may only export ${ALLOWED_NAMED_EXPORTS_LIST} as named exports (found: ${disallowedExports.join(', ')}). ` +
-            `Export the server loader as the default export only.`
+            `Export loaders via \`serverLoaders\` and actions via \`serverActions\`.`
         );
       }
       if (hasDefault) {
