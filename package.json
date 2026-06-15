@@ -31,6 +31,8 @@
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,js,mjs,json}\" \"apps/**/src/**/*.{ts,tsx,mdx}\"",
     "release": "node scripts/release.mjs",
     "release:dry": "node scripts/release.mjs --dry-run",
+    "release:ui": "node scripts/release-ui.mjs",
+    "release:ui:dry": "node scripts/release-ui.mjs --dry-run",
     "wt:setup": "bash scripts/worktree-setup.sh"
   },
   "devDependencies": {

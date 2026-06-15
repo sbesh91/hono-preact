@@ -1,7 +1,6 @@
 {
   "name": "@hono-preact/ui",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Standalone, unstyled, accessible Preact UI primitives for hono-preact.",
   "keywords": [
     "preact",
@@ -26,6 +25,7 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "README.md"
   ],
   "type": "module",
