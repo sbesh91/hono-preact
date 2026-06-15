@@ -92,6 +92,14 @@ export type RegisteredPaths = RegisteredRoutes extends {
   : string;
 
 /**
+ * A registered route pattern, or any other path string. Autocompletes the
+ * registered patterns while still accepting content-glob and computed paths
+ * (which the pure-type engine cannot enumerate). Used by the active-state
+ * matching APIs, which must work for routes outside the typed union.
+ */
+export type RoutePattern = RegisteredPaths | (string & {});
+
+/**
  * The route-pattern union for an app. Accepts either the route tree array
  * (use `typeof routeTree` from `const routeTree = [...] as const`) or a manifest
  * produced by `defineRoutes`.

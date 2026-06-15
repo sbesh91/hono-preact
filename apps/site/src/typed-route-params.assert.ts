@@ -50,16 +50,6 @@ export type _TypedRouteParamAssertions = [
   Expect<
     Equal<ReturnType<typeof useRouteMatchReturn>, { projectId: string } | null>
   >,
-  // NavLink.match accepts a registered pattern...
-  Expect<
-    '/demo/projects/:projectId' extends NonNullable<NavLinkProps['match']>
-      ? true
-      : false
-  >,
-  // ...and rejects a bogus one.
-  Expect<
-    '/not/a/route' extends NonNullable<NavLinkProps['match']> ? false : true
-  >,
 ];
 
 // End-to-end: the `declare module` registration actually CONSTRAINS useParams
@@ -71,12 +61,13 @@ export function useRegistrationReachesIso() {
   return useParams('/not/a/route');
 }
 
-// Strict input: an unregistered route is a compile error on both hooks.
-export function routeActiveRejectsBogusRoutes() {
-  // @ts-expect-error '/not/a/route' is not a registered route
-  useRouteActive('/not/a/route');
-  // @ts-expect-error '/not/a/route' is not a registered route
-  useRouteMatch('/not/a/route');
+// Permissive matching: content-glob and arbitrary paths are accepted (they are
+// not in the typed union but must still work). These calls must compile.
+export function routeActiveAcceptsAnyPath() {
+  useRouteActive('/docs/components', { exact: false });
+  useRouteMatch('/anything/at/all');
+  const navMatch: NonNullable<NavLinkProps['match']> = '/docs/components';
+  void navMatch;
 }
 
 // buildPath: pattern autocompletes, params are enforced, param-less routes

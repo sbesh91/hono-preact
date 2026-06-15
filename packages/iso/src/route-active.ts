@@ -1,5 +1,5 @@
 import { useLocation, exec } from 'preact-iso';
-import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
+import type { RouteParams, RoutePattern } from './internal/typed-routes.js';
 
 export interface RouteMatchOptions {
   /** When false, also match descendant paths (segment-prefix). Default true. */
@@ -40,7 +40,7 @@ export function matchPath(
   return null;
 }
 
-export function useRouteMatch<R extends RegisteredPaths>(
+export function useRouteMatch<R extends RoutePattern>(
   route: R,
   options?: RouteMatchOptions
 ): RouteParams<R> | null {
@@ -53,7 +53,7 @@ export function useRouteMatch<R extends RegisteredPaths>(
 }
 
 export function useRouteActive(
-  route: RegisteredPaths,
+  route: RoutePattern,
   options?: RouteMatchOptions
 ): boolean {
   return useRouteMatch(route, options) !== null;

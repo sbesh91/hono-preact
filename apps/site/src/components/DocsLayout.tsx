@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { NavLink } from 'hono-preact';
+import { NavLink, useRouteActive } from 'hono-preact';
 import { ThemeToggle } from './ThemeToggle.js';
 import { nav, type NavArea } from '../pages/docs/nav.js';
 
@@ -35,9 +35,7 @@ export function DocsLayout({ children }: Props) {
     setMobileOpen(false);
   }, [path]);
 
-  // /docs/components is a content-generated prefix, not in the static route
-  // registry, so use a plain startsWith check rather than useRouteActive.
-  const activeAreaId = path.startsWith('/docs/components')
+  const activeAreaId = useRouteActive('/docs/components', { exact: false })
     ? 'components'
     : 'guide';
   const activeArea = nav.find((a) => a.id === activeAreaId) ?? nav[0];
