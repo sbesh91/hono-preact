@@ -24,7 +24,7 @@ trigger keeps focus).
 ## Signature
 
 ```ts
-import { useListNavigation } from '@hono-preact/ui';
+import { useListNavigation } from 'hono-preact-ui';
 
 function useListNavigation(opts: UseListNavigationOptions): ListNavigation;
 
@@ -81,7 +81,7 @@ A listbox where the trigger keeps focus and the active option is tracked with
 `aria-activedescendant`:
 
 ```tsx
-import { useListNavigation } from '@hono-preact/ui';
+import { useListNavigation } from 'hono-preact-ui';
 import { useRef, useState } from 'preact/hooks';
 
 function Listbox({ open }: { open: boolean }) {
@@ -112,7 +112,7 @@ function Listbox({ open }: { open: boolean }) {
 
 ## Companion exports
 
-`@hono-preact/ui` also exports `useTypeahead`, the type-to-select hook
+`hono-preact-ui` also exports `useTypeahead`, the type-to-select hook
 `useListNavigation` uses internally, for composing your own navigation:
 
 | Export                                           | Type                                                       | Description                                                                                             |

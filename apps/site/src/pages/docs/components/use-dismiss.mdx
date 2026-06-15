@@ -18,7 +18,7 @@ See also: [useFocusReturn](/docs/components/use-focus-return), [usePosition](/do
 ## Signature
 
 ```ts
-import { useDismiss } from '@hono-preact/ui';
+import { useDismiss } from 'hono-preact-ui';
 
 function useDismiss(opts: UseDismissOptions): void;
 
@@ -51,7 +51,7 @@ across every registered layer, so adding overlays does not multiply listeners.
 ## Example
 
 ```tsx
-import { useDismiss } from '@hono-preact/ui';
+import { useDismiss } from 'hono-preact-ui';
 import { useRef } from 'preact/hooks';
 
 function Panel({ open, onClose }: { open: boolean; onClose: () => void }) {

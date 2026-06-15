@@ -107,8 +107,15 @@ if (dryRun) {
 const findReleaseNotes = () => {
   const specsDir = join(ROOT, 'docs/superpowers/specs');
   try {
-    const versionMinor = `v${major}.${minor}-release-notes.md`;
-    const match = readdirSync(specsDir).find((f) => f.endsWith(versionMinor));
+    // Match only the umbrella's own notes: `<date>-vX.Y-release-notes.md`.
+    // Anchoring the version right after the date keeps this from grabbing a
+    // scoped package's file (e.g. `<date>-ui-vX.Y-release-notes.md`), which a
+    // bare `endsWith('vX.Y-release-notes.md')` would falsely match if the
+    // framework and that package ever shared a major.minor.
+    const notesRe = new RegExp(
+      `^\\d{4}-\\d{2}-\\d{2}-v${major}\\.${minor}-release-notes\\.md$`,
+    );
+    const match = readdirSync(specsDir).find((f) => notesRe.test(f));
     return match ? `docs/superpowers/specs/${match}` : null;
   } catch {
     return null;

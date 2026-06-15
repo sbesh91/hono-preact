@@ -75,7 +75,7 @@ export default defineConfig({
         __dirname,
         'packages/hono-preact/src/index.ts'
       ),
-      '@hono-preact/ui': path.resolve(__dirname, 'packages/ui/src/index.ts'),
+      'hono-preact-ui': path.resolve(__dirname, 'packages/ui/src/index.ts'),
       '@': path.resolve(__dirname, 'apps/site/src'),
     },
   },

@@ -1,4 +1,4 @@
-import { usePresence } from '@hono-preact/ui';
+import { usePresence } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // A box that mounts on open and animates out on close using usePresence. The

@@ -1,4 +1,4 @@
-import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { Combobox, matchSubstring } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon', 'Mango'];

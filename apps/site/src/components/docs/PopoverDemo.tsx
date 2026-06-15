@@ -1,4 +1,4 @@
-import { Popover } from '@hono-preact/ui';
+import { Popover } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const;

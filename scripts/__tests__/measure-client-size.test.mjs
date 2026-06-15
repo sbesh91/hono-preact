@@ -77,7 +77,8 @@ describe('historyRow', () => {
 describe('measureSectionC', () => {
   it('returns ui-core plus each component with a non-negative marginal', async () => {
     const c = await measureSectionC();
-    // packages/ui/dist must be built (CI builds @hono-preact/* before tests).
+    // packages/ui/dist must be built (CI builds the framework packages, incl.
+    // hono-preact-ui, before tests).
     expect(c['ui-core']).toBeDefined();
     expect(c['ui-core'].total.gzip).toBeGreaterThan(0);
     expect(c.dialog.total.gzip).toBeGreaterThan(0);

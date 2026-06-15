@@ -17,7 +17,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter site run dev",
-    "build": "pnpm --filter '@hono-preact/*' --filter hono-preact build && pnpm --filter site build",
+    "build": "pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter site build",
     "deploy": "pnpm --filter site run deploy",
     "deploy:upload": "pnpm --filter site run deploy:upload",
     "preview": "pnpm --filter site run preview",
@@ -31,6 +31,8 @@
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,js,mjs,json}\" \"apps/**/src/**/*.{ts,tsx,mdx}\"",
     "release": "node scripts/release.mjs",
     "release:dry": "node scripts/release.mjs --dry-run",
+    "release:ui": "node scripts/release-ui.mjs",
+    "release:ui:dry": "node scripts/release-ui.mjs --dry-run",
     "wt:setup": "bash scripts/worktree-setup.sh"
   },
   "devDependencies": {

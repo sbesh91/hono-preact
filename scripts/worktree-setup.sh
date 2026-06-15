@@ -47,7 +47,7 @@ pnpm install
 # 3) Build the framework dist. typecheck and apps/site resolve cross-package
 #    types through the built dist/, so a worktree without it surfaces fake
 #    "missing export" errors.
-pnpm --filter '@hono-preact/*' --filter hono-preact build
+pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
 
 # 4) Baseline. typecheck is the fast must-pass; unit tests are opt-in via --test
 #    since the full suite is the slow part.

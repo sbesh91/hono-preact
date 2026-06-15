@@ -1,4 +1,4 @@
-import { Dialog } from '@hono-preact/ui';
+import { Dialog } from 'hono-preact-ui';
 
 // A styled Dialog used as the live demo on the docs page. The styling lives in
 // apps/site/src/styles/root.css (.docs-dialog*) and mirrors the copyable CSS

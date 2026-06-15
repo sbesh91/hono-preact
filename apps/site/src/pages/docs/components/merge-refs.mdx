@@ -18,7 +18,7 @@ skipped.
 ## Signature
 
 ```tsx
-import { mergeRefs } from '@hono-preact/ui';
+import { mergeRefs } from 'hono-preact-ui';
 
 function mergeRefs<T>(
   ...refs: (Ref<T> | null | undefined)[]
@@ -43,7 +43,7 @@ A field that needs its own ref to the input (to measure or focus it) while also
 forwarding a ref to the caller:
 
 ```tsx
-import { mergeRefs } from '@hono-preact/ui';
+import { mergeRefs } from 'hono-preact-ui';
 import { useRef } from 'preact/hooks';
 import type { Ref } from 'preact';
 

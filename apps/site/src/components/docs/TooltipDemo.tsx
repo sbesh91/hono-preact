@@ -1,4 +1,4 @@
-import { Tooltip } from '@hono-preact/ui';
+import { Tooltip } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const;

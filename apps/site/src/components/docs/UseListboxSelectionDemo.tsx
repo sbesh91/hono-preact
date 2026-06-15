@@ -1,4 +1,4 @@
-import { useListboxSelection } from '@hono-preact/ui';
+import { useListboxSelection } from 'hono-preact-ui';
 import { useId, useLayoutEffect, useState } from 'preact/hooks';
 
 const FRUITS = ['Apple', 'Banana', 'Cherry', 'Date'];

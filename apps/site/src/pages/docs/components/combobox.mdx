@@ -64,7 +64,7 @@ or Tab accepts it, Backspace dismisses it and keeps typing.
 ## Usage
 
 ```tsx
-import { Combobox, matchSubstring } from '@hono-preact/ui';
+import { Combobox, matchSubstring } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon'];
@@ -587,7 +587,7 @@ type (`Combobox.Value<Value>`).
 
 ### Primitives
 
-`@hono-preact/ui` exports the building blocks the parts use, for composing
+`hono-preact-ui` exports the building blocks the parts use, for composing
 your own components. Several have their own page with examples:
 [useListNavigation](/docs/components/use-list-navigation),
 [usePosition](/docs/components/use-position),
@@ -596,7 +596,7 @@ your own components. Several have their own page with examples:
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).
 
-The `matchSubstring` helper is also exported from `@hono-preact/ui` for the
+The `matchSubstring` helper is also exported from `hono-preact-ui` for the
 common in-memory filter case:
 `matchSubstring(label: string, query: string): boolean`.
 

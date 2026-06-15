@@ -1,4 +1,4 @@
-import { mergeRefs } from '@hono-preact/ui';
+import { mergeRefs } from 'hono-preact-ui';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 // One input node feeds two refs at once via mergeRefs: an internal ref used to

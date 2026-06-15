@@ -1,4 +1,4 @@
-import { useListNavigation } from '@hono-preact/ui';
+import { useListNavigation } from 'hono-preact-ui';
 import { useId, useRef, useState } from 'preact/hooks';
 
 const OPTIONS = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet'];

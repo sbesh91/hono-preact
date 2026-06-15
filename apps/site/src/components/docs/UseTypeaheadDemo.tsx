@@ -1,4 +1,4 @@
-import { useTypeahead } from '@hono-preact/ui';
+import { useTypeahead } from 'hono-preact-ui';
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 

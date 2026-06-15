@@ -71,9 +71,6 @@ importers:
 
   apps/site:
     dependencies:
-      '@hono-preact/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@shikijs/rehype':
         specifier: ^4.0.2
         version: 4.0.2
@@ -83,6 +80,9 @@ importers:
       hono-preact:
         specifier: workspace:*
         version: link:../../packages/hono-preact
+      hono-preact-ui:
+        specifier: workspace:*
+        version: link:../../packages/ui
       hoofd:
         specifier: ^1.7.3
         version: 1.7.3(@preact/compat@18.3.2(preact@10.29.1))

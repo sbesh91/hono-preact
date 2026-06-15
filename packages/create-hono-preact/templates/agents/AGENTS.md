@@ -49,7 +49,7 @@ Import from these subpaths of the `hono-preact` package:
 - `hono-preact/adapter-cloudflare` - `cloudflareAdapter()` for Cloudflare Workers.
 - `hono-preact/adapter-node` - `nodeAdapter()` for Node.
 
-The UI component library is a separate package, `@hono-preact/ui` (Dialog,
+The UI component library is a separate package, `hono-preact-ui` (Dialog,
 Popover, Tooltip, Menu, Select, Combobox, plus headless hooks). It ships unstyled.
 
 ## Docs
