@@ -1,0 +1,192 @@
+# Typed routing: `route-active` autocomplete + a typed path builder
+
+**Date:** 2026-06-15
+**Status:** Design approved, pending implementation plan
+**Scope:** `packages/iso/src/route-active.ts`, `packages/iso/src/nav-link.tsx`, new `packages/iso/src/build-path.ts`, `packages/iso/src/index.ts`, type assertions in `apps/site`, one dogfood call site
+
+## Motivation
+
+The typed-route family (`useParams`, `defineLoader(routeId, …)`, `serverRoute(…)`) already constrains its route argument to `RegisteredPaths`, the type-level union of every registered route pattern (`packages/iso/src/internal/typed-routes.ts`), and projects each pattern's params via `RouteParams<P>`. Two related surfaces still take bare strings and miss out:
+
+1. **Active-state matching.** `useRouteMatch` / `useRouteActive` (and `<NavLink>`) take `route: string`: no autocomplete, no typo-catching, and a `Record<string, string>` return that discards the params the pattern already names. This is "does the current URL match pattern `/posts/:id`?"
+
+2. **Dynamic link construction.** The inverse: "given `/posts/:id` and `{ id: '123' }`, produce `/posts/123`." There is no builder today; dynamic hrefs are hand-written template literals (`apps/site/src/pages/demo/projects.tsx:74` does `href={`/demo/projects/${p.slug}`}`) with zero checking, so a prefix typo or a wrong segment count is silent.
+
+Both are powered by the same two types (`RegisteredPaths` + `RouteParams`). This spec covers both: Part A constrains the matching hooks (and `NavLink.match`), Part B adds a typed `buildPath` helper.
+
+## Goals
+
+- **Part A.** `useRouteMatch` / `useRouteActive` autocomplete `route` from `RegisteredPaths` and reject unregistered paths as a compile error. `useRouteMatch` returns `RouteParams<route> | null`. `<NavLink match>` autocompletes from the same union.
+- **Part B.** A `buildPath(pattern, params)` helper whose `pattern` autocompletes from `RegisteredPaths` and whose `params` argument is enforced by `RouteParams<pattern>` (and is omitted entirely for param-less routes). Returns the concrete path string, composing with every navigation surface that takes a string (`useNavigate`, `<a href>`, `<NavLink href>`, `usePrefetch`).
+- Zero runtime change to existing functions. Zero behavioral-test change. Zero impact on apps that have not registered a route tree.
+
+## Non-goals
+
+- No change to `matchPath`. It is internal (not in the public barrel) and is fed runtime strings; constraining it gains nothing and breaks internal callers.
+- No typing of `NavLink.href`. It is a concrete navigation destination (e.g. `/posts/123`), not a pattern (`/posts/:id`), so it stays `string`. Dynamic links use `<NavLink href={buildPath(...)}>`.
+- **No `to` + `params` component sugar (deferred).** A `<NavLink to="/posts/:id" params={{ id }}>` form where `to` doubles as the active-match pattern is an attractive follow-up, but it is sugar over `buildPath` and only helps links (not `useNavigate` / `usePrefetch`). Build the foundation first; the sugar can come later without rework.
+- **No template-literal "concrete href" type (rejected).** Narrowing `href`/`navigate` to a pattern-derived string type (turning `/posts/:id` into `` `/posts/${string}` ``) looks free but is loose (`${string}` matches across `/`, so over-long paths and bad values pass; it only catches prefix typos), can't build from data, and produces noisy union errors. `buildPath` gives real param-level safety instead.
+- No typing of the non-exact wildcard capture (see Edge cases).
+
+## Key mechanism: `RegisteredPaths` is augmentation-scoped
+
+`RegisteredPaths` resolves to the strict union only where the consumer's `declare module 'hono-preact' { interface RegisteredRoutes { paths: … } }` augmentation is visible. With no augmentation it falls back to `string`:
+
+```ts
+export type RegisteredPaths = RegisteredRoutes extends {
+  paths: infer P extends string;
+} ? P : string;
+```
+
+When the framework itself compiles (`packages/iso`), `RegisteredRoutes` is empty, so `RegisteredPaths` is `string`. This is what makes the change safe:
+
+- **Framework-internal callers keep compiling unchanged.** `nav-link.tsx:34` (`useRouteActive(match ?? href, …)`) and `use-prefetch.ts:54` (`matchPath(path, route.path, true)`) pass runtime strings; in the framework build a `string` satisfies `RegisteredPaths === string`.
+- **Behavioral tests keep compiling.** The `route-active.test.tsx` and `build-path.test.ts` harnesses pass plain string patterns; valid for the same reason (a string literal like `'/posts/:id'` is still inferred as the precise `P`, so `RouteParams<P>` is exact even in the framework build).
+- **Strictness turns on only downstream**, in `apps/site` and consumer apps that registered a tree.
+
+## Design — Part A: typed active-state matching
+
+### A1. `useRouteMatch` — strict input, typed output
+
+```ts
+export function useRouteMatch<R extends RegisteredPaths>(
+  route: R,
+  options?: RouteMatchOptions
+): RouteParams<R> | null {
+  const { path } = useLocation();
+  return matchPath(path, route, options?.exact ?? true) as RouteParams<R> | null;
+}
+```
+
+`RegisteredPaths` is always a subtype of `string` (`P extends string` in its definition), so `route: R` is assignable to `matchPath`'s `route: string`.
+
+The single `as RouteParams<R> | null` cast is at the `matchPath` boundary, casting its `Record<string, string>` result. This is the **same accepted cast boundary `useParams` already uses** (`return useRoute().pathParams as RouteParams<P>` in `use-params.ts`): preact-iso's `exec` returns untyped params, a structural read off an external library. It is the seam where the untyped runtime value acquires its compile-time shape, not a reshape-able smell.
+
+### A2. `useRouteActive` — strict input
+
+```ts
+export function useRouteActive(
+  route: RegisteredPaths,
+  options?: RouteMatchOptions
+): boolean {
+  return useRouteMatch(route, options) !== null;
+}
+```
+
+No generic: the return is `boolean` and does not depend on `route`.
+
+### A3. `matchPath` — unchanged
+
+Stays `matchPath(path: string, route: string, exact: boolean): Record<string, string> | null`. Two reasons it must not go generic:
+
+- It is internal (not exported from `index.ts`), so no app calls it and it needs no autocomplete.
+- It is fed runtime strings from the route manifest in `use-prefetch.ts`. If it returned `RouteParams<R>`, then with `R` inferred as `string` the return would be `RouteParams<string>`, which collapses to `{}` (the general `string` matches none of the `:param` template-literal branches). `{}` is not assignable to `use-prefetch`'s `bestParams: Record<string, string>`, so the framework build would break.
+
+### A4. `NavLink.match` — `RegisteredPaths`
+
+In `nav-link.tsx`, change the prop type:
+
+```ts
+export type NavLinkProps = … & {
+  href: string;
+  /** Pattern to test for active state. Defaults to `href`. */
+  match?: RegisteredPaths;
+  …
+};
+```
+
+`<NavLink>` is the dominant consumer of active-state matching, and `match` is literally a route pattern. The internal `useRouteActive(match ?? href, { exact })` still compiles: in the framework build `RegisteredPaths === string`, so `match ?? href` is `string`. `href` remains `string` because it is a concrete URL.
+
+## Design — Part B: typed path builder
+
+### B1. API
+
+New file `packages/iso/src/build-path.ts`:
+
+```ts
+import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
+
+// Param-less routes take no second argument; routes with params require the
+// matching params object.
+type BuildArgs<P extends string> =
+  keyof RouteParams<P> extends never ? [] : [params: RouteParams<P>];
+
+/**
+ * Build a concrete path from a registered route pattern and its params.
+ *
+ *   buildPath('/demo/projects/:projectId', { projectId: p.slug }) // '/demo/projects/abc'
+ *   buildPath('/docs/components')                                 // '/docs/components'
+ */
+// Public, type-safe overload: the pattern autocompletes from the route union
+// and the params are enforced by `RouteParams<P>`.
+export function buildPath<P extends RegisteredPaths>(
+  pattern: P,
+  ...args: BuildArgs<P>
+): string;
+// Implementation signature: the loose, internal view. The body typechecks
+// against this signature, so reading `params[name]` by dynamic key needs no
+// cast and there is no generic-conditional inference to fight.
+export function buildPath(
+  pattern: string,
+  params?: Record<string, string | undefined>
+): string {
+  const values = params ?? {};
+  return pattern
+    .split('/')
+    .map((seg) => {
+      const m = /^:([A-Za-z0-9_]+)[?*+]?$/.exec(seg);
+      if (!m) return seg; // static segment
+      const value = values[m[1]];
+      // Absent → drop the segment (the type already requires every non-optional
+      // param, so an absent value here is an optional one).
+      return value == null ? null : encodeURIComponent(value);
+    })
+    .filter((seg) => seg !== null)
+    .join('/');
+}
+```
+
+- **Type safety comes entirely from the existing types.** On the public overload, `pattern: P extends RegisteredPaths` autocompletes the pattern union and rejects bogus patterns; `RouteParams<P>` enforces the param keys and their string values; the conditional `BuildArgs<P>` removes the params slot for param-less routes (`keyof {} extends never` is `true`) and requires it otherwise. No new type-level machinery.
+- **No casts.** The overload pair is the standard TS idiom for conditional arguments: the typed overload is the only thing callers see, while the implementation body is checked against the loose `(pattern: string, params?: Record<…>)` signature, so the dynamic-key reads are well-typed without an `as`.
+- **Runtime is a per-segment substitution.** Splitting on `/` and filtering dropped segments collapses absent optional segments correctly (`/files/:id?` with `{}` → `/files`; with `{ id: 'x' }` → `/files/x`; root `/` → `/`). Each substituted value is `encodeURIComponent`-encoded (the generatePath-style safe default).
+- **Wildcard / catch-all params (`:rest*`, `:rest+`)** are typed as ordinary string keys by `RouteParams`, so they substitute like any param; a multi-segment value would be percent-encoded as a whole. This is a documented minimal behavior; richer catch-all handling is out of scope and can be added later if a real route needs it.
+
+### B2. Export
+
+Add to `packages/iso/src/index.ts`: `export { buildPath } from './build-path.js';`.
+
+## Testing
+
+- **Behavioral tests (`packages/iso/src/__tests__/route-active.test.tsx`): unchanged.** Runtime behavior is identical and the harness passes plain strings.
+- **New behavioral tests (`packages/iso/src/__tests__/build-path.test.ts`):** required-param substitution, multi-param, param-less route (no second arg), optional param present and absent, special-character encoding (`encodeURIComponent`), and the root path. These run in the framework build, where a string-literal pattern is still inferred as the precise `P`, so the typed `params` argument is exercised.
+- **Type-level assertions** added to `apps/site/src/typed-route-params.assert.ts` (the only place the augmentation is visible, hence the only place strictness is observable), following the existing `Expect<…>` / `@ts-expect-error` patterns:
+  - `useRouteMatch('/demo/projects/:projectId')` return is assignable to `{ projectId: string } | null`.
+  - A registered path is accepted by `useRouteActive` / `useRouteMatch`; an unregistered path (e.g. `'/not/a/route'`) is rejected.
+  - `<NavLink match="/demo/projects/:projectId">` accepts a registered pattern; a bogus pattern is rejected.
+  - `buildPath('/demo/projects/:projectId', { projectId })` accepts; a missing or extra param is rejected; `buildPath('/docs/components')` accepts with no second arg; a bogus pattern is rejected.
+
+## Dogfood
+
+Migrate the one existing hand-built dynamic href, `apps/site/src/pages/demo/projects.tsx:74`, from `href={`/demo/projects/${p.slug}`}` to `href={buildPath('/demo/projects/:projectId', { projectId: p.slug })}`. This proves the helper end-to-end in app code (where the augmentation is live) and gives the typed path a real consumer.
+
+## Migration
+
+Under strict mode, every `route`/`pattern` argument in `apps/site` must be a real registered view/layout path. Existing call site: `DocsLayout.tsx:38` `useRouteActive('/docs/components', { exact: false })`. If any existing argument is not a registered node, it surfaces as a compile error during `pnpm typecheck`, which is the feature working as intended; fix the path. The `.mdx` documentation samples are not typechecked by the site build, so they have no build impact (prose may be revised for accuracy but is not load-bearing).
+
+## Edge cases
+
+- **Non-exact wildcard capture (accepted gap, documented).** `useRouteMatch('/docs/components', { exact: false })` matching `/docs/components/dialog` returns, at runtime, an object that includes preact-iso's wildcard capture. The typed return `RouteParams<'/docs/components'>` is `{}` (named params only), so the wildcard rest is present at runtime but untyped. This matches `useParams` semantics; the extra runtime key is simply not described by the type.
+- **Root non-exact match.** `useRouteActive('/', { exact: false })` is active everywhere (every path descends from `/`). Unchanged behavior; already documented in `active-links.mdx`.
+- **`buildPath` with a missing required param** cannot happen through the types (`RouteParams<P>` requires it); at runtime an absent value drops the segment as best effort rather than emitting a literal `:param` token.
+
+## Files touched
+
+| File | Change |
+|------|--------|
+| `packages/iso/src/route-active.ts` | `useRouteMatch` generic + typed return + one boundary cast; `useRouteActive` strict input; type-only import |
+| `packages/iso/src/nav-link.tsx` | `match?: RegisteredPaths`; type-only import |
+| `packages/iso/src/build-path.ts` | New: `buildPath` helper + `BuildArgs` conditional-args type |
+| `packages/iso/src/index.ts` | Export `buildPath` |
+| `packages/iso/src/__tests__/build-path.test.ts` | New behavioral tests for `buildPath` |
+| `apps/site/src/typed-route-params.assert.ts` | Type-level assertions for the hooks, `NavLink.match`, and `buildPath` |
+| `apps/site/src/pages/demo/projects.tsx` | Dogfood: build the dynamic href via `buildPath` |
