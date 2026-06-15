@@ -4,6 +4,8 @@ A small full-stack framework. Hono on the edge, Preact in the browser, manifest 
 
 [**Docs**](https://framework.sbesh.com/docs) · [**Demo**](https://framework.sbesh.com/demo) · [**GitHub**](https://github.com/sbesh91/hono-preact)
 
+[![Lighthouse Performance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/sbesh91/hono-preact/main/lighthouse-badge.json)](https://framework.sbesh.com)
+
 ## What it is
 
 `hono-preact` is a single-package framework that pairs Hono (the runtime that handles requests on Cloudflare Workers) with Preact (the renderer in the browser). Routes are declared in code, not inferred from a folder tree, and loaders, actions, guards, and forms are typed end-to-end.

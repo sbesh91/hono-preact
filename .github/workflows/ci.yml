@@ -111,6 +111,70 @@ jobs:
           header: client-size
           path: /tmp/size-comment.md
 
+  lighthouse:
+    name: Lighthouse
+    needs: test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build framework packages
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
+
+      - name: Build site
+        run: pnpm --filter site build
+
+      # Serve the built SSR worker locally and run Lighthouse against it. The
+      # health-check polls the HTTP endpoint (not wrangler's stdout wording).
+      - name: Serve, collect, and upload
+        run: |
+          set -o pipefail
+          (cd apps/site && pnpm exec wrangler dev -c dist/hono_preact/wrangler.json --local --port 8788) > wrangler.log 2>&1 &
+          WRANGLER_PID=$!
+          ready=
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:8788/; then ready=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then echo "wrangler did not become ready"; cat wrangler.log; kill $WRANGLER_PID || true; exit 1; fi
+          pnpm exec lhci collect --config=.lighthouserc.json
+          # temporary-public-storage: hosted report links (non-blocking on storage outage)
+          pnpm exec lhci upload --config=.lighthouserc.json || true
+          # filesystem: writes .lighthouseci/manifest.json that measure-lighthouse parses (required)
+          pnpm exec lhci upload --config=.lighthouserc.json --upload.target=filesystem --upload.outputDir=.lighthouseci
+          kill $WRANGLER_PID || true
+
+      - name: Extract PR scores
+        run: node scripts/measure-lighthouse.mjs --in .lighthouseci --out /tmp/fresh-lh.json
+
+      - name: Render comment
+        env:
+          LH_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
+          LH_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/render-lighthouse-comment.mjs /tmp/fresh-lh.json lighthouse-report.json > /tmp/lh-comment.md
+
+      - name: Post sticky comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: lighthouse
+          path: /tmp/lh-comment.md
+
   build-and-tag:
     name: Build and tag next
     needs: test
@@ -139,17 +203,42 @@ jobs:
       - name: Build all packages and app
         run: pnpm build
 
-      - name: Update client size baseline + history
+      - name: Measure client size baseline
         run: |
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
           node scripts/measure-client-size.mjs \
             --append-history \
             --sha "$GITHUB_SHA" \
             --date "$(git show -s --format=%cI "$GITHUB_SHA")"
-          if ! git diff --quiet client-size-report.json client-size-history.jsonl; then
-            git add client-size-report.json client-size-history.jsonl
-            git commit -m "chore(size): update client size baseline + history [skip ci]"
+
+      - name: Measure Lighthouse baseline
+        # Soft: a wrangler/Chrome/LHCI hiccup must not block the client-size
+        # baseline commit or the `next` tag move below. The PR `lighthouse` job
+        # is the canary for genuine Lighthouse breakage.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          (cd apps/site && pnpm exec wrangler dev -c dist/hono_preact/wrangler.json --local --port 8788) > wrangler.log 2>&1 &
+          WRANGLER_PID=$!
+          ready=
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:8788/; then ready=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then echo "wrangler did not become ready"; cat wrangler.log; kill $WRANGLER_PID || true; exit 1; fi
+          pnpm exec lhci collect --config=.lighthouserc.json
+          pnpm exec lhci upload --config=.lighthouserc.json || true
+          pnpm exec lhci upload --config=.lighthouserc.json --upload.target=filesystem --upload.outputDir=.lighthouseci
+          kill $WRANGLER_PID || true
+          node scripts/measure-lighthouse.mjs --in .lighthouseci --append-history --badge \
+            --sha "$GITHUB_SHA" --date "$(git show -s --format=%cI "$GITHUB_SHA")"
+
+      - name: Commit baselines
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          if ! git diff --quiet client-size-report.json client-size-history.jsonl lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json; then
+            git add client-size-report.json client-size-history.jsonl lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
+            git commit -m "chore(metrics): update size + lighthouse baselines [skip ci]"
             git push origin HEAD:main
           fi
 
@@ -157,7 +246,7 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          # Anchor to the triggering commit, not local HEAD: the size step above
-          # may have advanced HEAD with a bookkeeping commit.
+          # Anchor to the triggering commit, not local HEAD: the 'Commit baselines'
+          # step above may have advanced HEAD with a bookkeeping commit.
           git tag -f next "$GITHUB_SHA"
           git push origin next --force

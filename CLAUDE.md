@@ -36,6 +36,8 @@ The CI pipeline lives in `.github/workflows/ci.yml`. Mirror it locally:
 
 If `format:check` fails, run `pnpm format` to fix and commit the result. Do not push commits that you have not personally seen pass these six steps. The single biggest miss is `format:check`, which is fast to run and trivially fixable, but reliably forgotten.
 
+Lighthouse runs in **CI only** and is deliberately **not** part of the six steps above (it builds, serves the worker with `wrangler dev`, and drives Chrome, far too slow for a pre-push gate). The PR-only `lighthouse` job posts a soft sticky comment; the `main` push job commits the `lighthouse-report.json` / `lighthouse-history.jsonl` / `lighthouse-badge.json` baselines alongside the client-size ones. Tooling: `@lhci/cli` (root devDependency); config in `.lighthouserc.json`; extraction and rendering in `scripts/measure-lighthouse.mjs` and `scripts/render-lighthouse-comment.mjs` (unit-tested under `scripts/__tests__/`). The LHCI flow needs two uploads: `temporary-public-storage` (hosted report links) and `filesystem` (writes the `.lighthouseci/manifest.json` the extractor parses).
+
 ## PR workflow
 
 Any time a PR is opened, immediately run a deep PR review as the first follow-up step (before any other post-open work).

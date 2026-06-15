@@ -39,6 +39,9 @@ lerna-debug.log*
 .claude/scheduled_tasks.lock
 .claude/worktrees/
 
+# lighthouse ci run output (regenerated on every `lhci collect`)
+.lighthouseci/
+
 # serena mcp (per-user runtime state; project.yml is tracked)
 .serena/cache/
 .serena/memories/
