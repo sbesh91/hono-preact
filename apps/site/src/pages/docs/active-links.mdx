@@ -46,7 +46,7 @@ The route accepts the full pattern grammar: `:param`, `*`, `+`, `:param?`.
 
 ## `buildPath`
 
-Build a typed URL from a route pattern and its params. TypeScript enforces that the pattern is registered and that the params object matches the pattern's dynamic segments.
+Build a typed URL from a route pattern and its params. TypeScript enforces that the pattern is registered and that the params object matches the pattern's dynamic segments. Param values must be strings; convert numbers or other types before passing them.
 
 ```tsx
 import { buildPath } from 'hono-preact';
