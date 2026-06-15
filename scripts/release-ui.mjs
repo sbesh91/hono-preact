@@ -95,8 +95,13 @@ if (dryRun) {
 const findReleaseNotes = () => {
   const specsDir = join(ROOT, 'docs/superpowers/specs');
   try {
-    const versionMinor = `ui-v${major}.${minor}-release-notes.md`;
-    const match = readdirSync(specsDir).find((f) => f.endsWith(versionMinor));
+    // Anchored to ui's own notes shape: `<date>-ui-vX.Y-release-notes.md`.
+    // Mirrors the umbrella's matcher in release.mjs so neither script can grab
+    // the other's notes file (see the note there).
+    const notesRe = new RegExp(
+      `^\\d{4}-\\d{2}-\\d{2}-ui-v${major}\\.${minor}-release-notes\\.md$`,
+    );
+    const match = readdirSync(specsDir).find((f) => notesRe.test(f));
     return match ? `docs/superpowers/specs/${match}` : null;
   } catch {
     return null;
