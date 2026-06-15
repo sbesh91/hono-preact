@@ -1,8 +1,13 @@
 // Compile-time assertions for the typed-route-params engine, exercised against
 // the real site route tree. Not imported anywhere; `pnpm typecheck` is the
 // oracle. If the type engine or the route registration regresses, tsc fails.
-import { useParams } from 'hono-preact';
-import type { RoutePaths, RouteParams } from 'hono-preact';
+import {
+  useParams,
+  useRouteMatch,
+  useRouteActive,
+  buildPath,
+} from 'hono-preact';
+import type { RoutePaths, RouteParams, NavLinkProps } from 'hono-preact';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -13,6 +18,11 @@ type Expect<T extends true> = T;
 // RoutePaths over the manifest produced by the site's defineRoutes call.
 type SiteManifest = typeof import('./routes.js').default;
 type SitePaths = RoutePaths<SiteManifest>;
+
+// useRouteMatch projects the route's typed params, not Record<string, string>.
+export function useRouteMatchReturn() {
+  return useRouteMatch('/demo/projects/:projectId');
+}
 
 // All checks collected into one exported tuple so `noUnusedLocals` does not flag
 // them; each `Expect<...>` still fails compilation if its condition is not true.
@@ -36,6 +46,10 @@ export type _TypedRouteParamAssertions = [
   Expect<Equal<RouteParams<'/demo/login'>, {}>>,
   // A bogus route id is NOT in the computed union.
   Expect<'/not/a/route' extends SitePaths ? false : true>,
+  // useRouteMatch returns the route's typed params (| null), not Record<...>.
+  Expect<
+    Equal<ReturnType<typeof useRouteMatchReturn>, { projectId: string } | null>
+  >,
 ];
 
 // End-to-end: the `declare module` registration actually CONSTRAINS useParams
@@ -45,4 +59,26 @@ export type _TypedRouteParamAssertions = [
 export function useRegistrationReachesIso() {
   // @ts-expect-error '/not/a/route' is not a registered route id
   return useParams('/not/a/route');
+}
+
+// Permissive matching: content-glob and arbitrary paths are accepted (they are
+// not in the typed union but must still work). These calls must compile.
+export function routeActiveAcceptsAnyPath() {
+  useRouteActive('/docs/components', { exact: false });
+  useRouteMatch('/anything/at/all');
+  const navMatch: NonNullable<NavLinkProps['match']> = '/docs/components';
+  void navMatch;
+}
+
+// buildPath: pattern autocompletes, params are enforced, param-less routes
+// take no second argument, and bogus patterns are rejected.
+export function buildPathAssertions() {
+  buildPath('/demo/projects/:projectId', { projectId: 'x' });
+  buildPath('/demo/login');
+  // @ts-expect-error required params object is missing
+  buildPath('/demo/projects/:projectId');
+  // @ts-expect-error wrong param key
+  buildPath('/demo/projects/:projectId', { nope: 'x' });
+  // @ts-expect-error not a registered pattern
+  buildPath('/not/a/route');
 }

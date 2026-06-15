@@ -1,4 +1,5 @@
 import {
+  buildPath,
   definePage,
   useAction,
   useNavigate,
@@ -71,7 +72,9 @@ const ProjectsPage: FunctionComponent = () => {
               name={`project-${p.slug}`}
               render={
                 <a
-                  href={`/demo/projects/${p.slug}`}
+                  href={buildPath('/demo/projects/:projectId', {
+                    projectId: p.slug,
+                  })}
                   class="font-medium underline"
                 />
               }
