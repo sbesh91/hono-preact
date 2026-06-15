@@ -1,6 +1,6 @@
 {
   "name": "hono-preact",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Hono on the edge, Preact in the browser, manifest driven routes, typed RPC, streaming everywhere.",
   "keywords": [
     "hono",
