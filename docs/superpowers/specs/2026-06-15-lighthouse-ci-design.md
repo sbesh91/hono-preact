@@ -194,14 +194,13 @@ git add lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
 
 ### `lighthouse-history.jsonl` (append one line per `main` commit)
 
-Flat per-commit row, like `client-size-history.jsonl`:
+One per-commit row, like `client-size-history.jsonl`. Per the user's "keep both"
+decision after spec review, each page carries **both** category scores **and**
+metrics (only the expiring `reportUrl` is dropped vs. the full report):
 
 ```json
-{"sha":"...","date":"2026-06-15T...","pages":{"/":{"performance":98,"accessibility":100,"bestPractices":100,"seo":100},"/docs/quick-start":{...},"/demo":{...}}}
+{"sha":"...","date":"2026-06-15T...","pages":{"/":{"scores":{"performance":98,"accessibility":100,"bestPractices":100,"seo":100},"metrics":{"lcp":1200,"tbt":0,"cls":0}},"/docs/quick-start":{...},"/demo":{...}}}
 ```
-
-(Metrics are kept in the full report; history tracks category scores to stay
-compact, mirroring the gzip-only size history.)
 
 ### `lighthouse-badge.json` (shields.io endpoint schema)
 
@@ -317,7 +316,5 @@ lighthouse:
 ## Open implementation details (resolved during the plan, not blocking)
 
 - Exact health-check loop (`curl --retry` vs `wait-on`) — pick the no-extra-dep form.
-- Whether `lighthouse-history.jsonl` should also carry LCP/TBT/CLS (start with
-  category scores only; widen later if the history proves useful for metrics).
 - Seed values for the initial committed baselines (from one local run on the spec
   author's machine; CI overwrites on first `main` merge).
