@@ -29,10 +29,6 @@ const INTENTIONALLY_UNDOCUMENTED = new Set<string>([
   'clientEntryPlugin',
   'VIRTUAL_CLIENT_ENTRY_ID',
   'guardStripPlugin',
-  // Kept undemoed/undocumented by design (see Section F notes):
-  'defineStreamObserver',
-  'Persist',
-  'PersistHost',
   // Advanced / escape-hatch exports (triaged 2026-06-14): the documented API is
   // the higher-level one noted on each line.
   'ActionResultContext', // low-level SSR context; useActionResult() is the documented API
