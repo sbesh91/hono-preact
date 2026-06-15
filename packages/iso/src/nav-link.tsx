@@ -1,5 +1,6 @@
 import type { JSX, VNode } from 'preact';
 import { useRouteActive } from './route-active.js';
+import type { RegisteredPaths } from './internal/typed-routes.js';
 
 export type NavLinkProps = Omit<
   JSX.HTMLAttributes<HTMLAnchorElement>,
@@ -7,7 +8,7 @@ export type NavLinkProps = Omit<
 > & {
   href: string;
   /** Pattern to test for active state. Defaults to `href`. */
-  match?: string;
+  match?: RegisteredPaths;
   /** Default true. */
   exact?: boolean;
   /** Always applied. */

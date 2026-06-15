@@ -1,4 +1,5 @@
 import { useLocation, exec } from 'preact-iso';
+import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 
 export interface RouteMatchOptions {
   /** When false, also match descendant paths (segment-prefix). Default true. */
@@ -39,16 +40,20 @@ export function matchPath(
   return null;
 }
 
-export function useRouteMatch(
-  route: string,
+export function useRouteMatch<R extends RegisteredPaths>(
+  route: R,
   options?: RouteMatchOptions
-): Record<string, string> | null {
+): RouteParams<R> | null {
   const { path } = useLocation();
-  return matchPath(path, route, options?.exact ?? true);
+  return matchPath(
+    path,
+    route,
+    options?.exact ?? true
+  ) as RouteParams<R> | null;
 }
 
 export function useRouteActive(
-  route: string,
+  route: RegisteredPaths,
   options?: RouteMatchOptions
 ): boolean {
   return useRouteMatch(route, options) !== null;
