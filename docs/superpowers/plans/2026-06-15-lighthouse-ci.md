@@ -745,10 +745,13 @@ In the second terminal, from the repo root:
 
 ```bash
 pnpm exec lhci collect --config=.lighthouserc.json
+# temporary-public-storage upload: writes .lighthouseci/links.json (hosted report URLs). Non-blocking.
 pnpm exec lhci upload --config=.lighthouserc.json || true
+# filesystem upload: writes .lighthouseci/manifest.json (representative-run selection + summaries). REQUIRED.
+pnpm exec lhci upload --config=.lighthouserc.json --upload.target=filesystem --upload.outputDir=.lighthouseci
 ```
 
-Expected: `.lighthouseci/manifest.json` plus `lhr-*.json` exist; upload prints hosted report URLs (and writes `.lighthouseci/links.json`). The `|| true` tolerates a storage outage.
+Expected: `lhci collect` writes `.lighthouseci/lhr-*.json`; the first upload writes `.lighthouseci/links.json` (hosted URLs, tolerant of a storage outage via `|| true`); the **filesystem** upload writes `.lighthouseci/manifest.json` (which `measure-lighthouse.mjs` parses for the representative run per URL). The filesystem upload is required, NOT `|| true`: `collect` and the temporary-public-storage target do not produce a manifest. Add `.lighthouseci/` to `.gitignore` (it is regenerated every run).
 
 - [ ] **Step 5: Write the three committed artifacts**
 
@@ -849,7 +852,10 @@ In `.github/workflows/ci.yml`, after the `client-size` job (before `build-and-ta
           done
           if [ -z "$ready" ]; then echo "wrangler did not become ready"; cat wrangler.log; kill $WRANGLER_PID || true; exit 1; fi
           pnpm exec lhci collect --config=.lighthouserc.json
+          # temporary-public-storage: hosted report links (non-blocking on storage outage)
           pnpm exec lhci upload --config=.lighthouserc.json || true
+          # filesystem: writes .lighthouseci/manifest.json that measure-lighthouse parses (REQUIRED)
+          pnpm exec lhci upload --config=.lighthouserc.json --upload.target=filesystem --upload.outputDir=.lighthouseci
           kill $WRANGLER_PID || true
 
       - name: Extract PR scores
@@ -892,7 +898,10 @@ In the `build-and-tag` job, the `Build all packages and app` step already runs `
           done
           if [ -z "$ready" ]; then echo "wrangler did not become ready"; cat wrangler.log; kill $WRANGLER_PID || true; exit 1; fi
           pnpm exec lhci collect --config=.lighthouserc.json
+          # temporary-public-storage: hosted report links (non-blocking on storage outage)
           pnpm exec lhci upload --config=.lighthouserc.json || true
+          # filesystem: writes .lighthouseci/manifest.json that measure-lighthouse parses (REQUIRED)
+          pnpm exec lhci upload --config=.lighthouserc.json --upload.target=filesystem --upload.outputDir=.lighthouseci
           kill $WRANGLER_PID || true
           node scripts/measure-lighthouse.mjs --in .lighthouseci --append-history --badge \
             --sha "$GITHUB_SHA" --date "$(git show -s --format=%cI "$GITHUB_SHA")"

@@ -52,9 +52,10 @@ collect → extract) and diverge only at the end (PR renders a comment; `main`
 commits the baseline + history + badge).
 
 ```
-build site ──► serve (wrangler dev --local, backgrounded) ──► lhci collect (3 URLs × 3 runs)
+build site ──► serve (wrangler dev --local, backgrounded) ──► lhci collect (3 URLs × 3 runs) ──► lhr-*.json
                                                                       │
-                                                          .lighthouseci/manifest.json + lhr-*.json
+                              lhci upload (temporary-public-storage → links.json) +
+                              lhci upload (filesystem → manifest.json)
                                                                       │
                                                    measure-lighthouse.mjs (extract median)
                                                                       │
@@ -123,9 +124,15 @@ LHCI server):
 }
 ```
 
-`lhci collect` writes `.lighthouseci/manifest.json` (one entry per run, each with
-`url`, `isRepresentativeRun`, a `summary` of category scores 0–1, and `jsonPath`
-to the full LHR) plus the `lhr-*.json` reports.
+`lhci collect` writes only the raw `.lighthouseci/lhr-*.json` reports; it does
+**not** produce a manifest. The `manifest.json` that extraction parses (one entry
+per run, each with `url`, `isRepresentativeRun`, a `summary` of category scores
+0–1, and `jsonPath` to the full LHR) is written by the **filesystem** upload
+target, so we run two uploads after collect: `lhci upload` (config target =
+`temporary-public-storage`, writes `.lighthouseci/links.json` with hosted report
+URLs, non-blocking) and `lhci upload --upload.target=filesystem
+--upload.outputDir=.lighthouseci` (writes `.lighthouseci/manifest.json`,
+required). `.lighthouseci/` is gitignored.
 
 ### 3. Extraction — `scripts/measure-lighthouse.mjs`
 
