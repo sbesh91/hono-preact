@@ -887,6 +887,10 @@ In the `build-and-tag` job, the `Build all packages and app` step already runs `
             --date "$(git show -s --format=%cI "$GITHUB_SHA")"
 
       - name: Measure Lighthouse baseline
+        # Soft: a wrangler/Chrome/LHCI hiccup must not block the client-size
+        # baseline commit or the `next` tag move. The PR `lighthouse` job is the
+        # canary for genuine breakage.
+        continue-on-error: true
         run: |
           set -o pipefail
           (cd apps/site && pnpm exec wrangler dev -c dist/hono_preact/wrangler.json --local --port 8788) > wrangler.log 2>&1 &

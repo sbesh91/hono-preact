@@ -211,6 +211,10 @@ jobs:
             --date "$(git show -s --format=%cI "$GITHUB_SHA")"
 
       - name: Measure Lighthouse baseline
+        # Soft: a wrangler/Chrome/LHCI hiccup must not block the client-size
+        # baseline commit or the `next` tag move below. The PR `lighthouse` job
+        # is the canary for genuine Lighthouse breakage.
+        continue-on-error: true
         run: |
           set -o pipefail
           (cd apps/site && pnpm exec wrangler dev -c dist/hono_preact/wrangler.json --local --port 8788) > wrangler.log 2>&1 &
@@ -242,7 +246,7 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          # Anchor to the triggering commit, not local HEAD: the size step above
-          # may have advanced HEAD with a bookkeeping commit.
+          # Anchor to the triggering commit, not local HEAD: the 'Commit baselines'
+          # step above may have advanced HEAD with a bookkeeping commit.
           git tag -f next "$GITHUB_SHA"
           git push origin next --force
