@@ -44,6 +44,22 @@ function Crumb() {
 
 The route accepts the full pattern grammar: `:param`, `*`, `+`, `:param?`.
 
+## `buildPath`
+
+Build a typed URL from a route pattern and its params. TypeScript enforces that the pattern is registered and that the params object matches the pattern's dynamic segments.
+
+```tsx
+import { buildPath } from 'hono-preact';
+
+// /posts/42
+const href = buildPath('/posts/:id', { id: '42' });
+
+// /dashboard  (no params needed; second argument is omitted)
+const dashHref = buildPath('/dashboard');
+```
+
+`buildPath` is the safe alternative to template literals: a wrong key or a missing param is a compile error, not a silent bug.
+
 ## `<NavLink>`
 
 A `<a>` that applies an active or inactive class for you (and sets `aria-current="page"` when active).
