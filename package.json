@@ -33,9 +33,11 @@
     "release:dry": "node scripts/release.mjs --dry-run",
     "release:ui": "node scripts/release-ui.mjs",
     "release:ui:dry": "node scripts/release-ui.mjs --dry-run",
+    "measure:lighthouse": "node scripts/measure-lighthouse.mjs",
     "wt:setup": "bash scripts/worktree-setup.sh"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/preact": "^3.2.4",
     "@vitest/coverage-v8": "^4.1.4",
