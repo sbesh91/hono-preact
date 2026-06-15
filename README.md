@@ -12,14 +12,36 @@ A small full-stack framework. Hono on the edge, Preact in the browser, manifest 
 
 Four files. That's the whole project shape.
 
-## Install
+## Quick start
+
+The fastest way to start is the scaffolder. It generates a complete, deploy-ready app and installs dependencies for you:
 
 ```bash
-pnpm add hono-preact hono preact preact-iso preact-render-to-string hoofd
-pnpm add -D vite
+npm create hono-preact my-app
+# or: pnpm create hono-preact my-app
+# or: yarn create hono-preact my-app
+# or: bun create hono-preact my-app
 ```
 
-## Quick start
+Then:
+
+```bash
+cd my-app
+pnpm dev
+```
+
+Options:
+
+- `--adapter=<cloudflare|node>` pick the deployment target (default: `cloudflare`)
+- `--no-install` skip the dependency install step
+- `--no-git` skip `git init`
+- `--help`, `--version`
+
+Full CLI reference: [Docs · CLI](https://framework.sbesh.com/docs/cli).
+
+## What a project looks like
+
+These are the four files the scaffolder writes:
 
 ```ts
 // vite.config.ts
@@ -59,6 +81,15 @@ export default function Layout({ children }) {
 ```
 
 Full walkthrough: [Docs · Quick start](https://framework.sbesh.com/docs/quick-start).
+
+## Manual install
+
+Adding hono-preact to an existing project instead of scaffolding a new one:
+
+```bash
+pnpm add hono-preact hono preact preact-iso preact-render-to-string hoofd
+pnpm add -D vite
+```
 
 ## Status
 
