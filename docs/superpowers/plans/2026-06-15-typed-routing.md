@@ -10,6 +10,8 @@
 
 **Branch:** `feat/typed-route-active` (already checked out; spec at `docs/superpowers/specs/2026-06-15-typed-route-active-design.md`).
 
+> **As-built amendment (2026-06-15):** the matching hooks shipped **permissive** rather than strict. A `RoutePattern = RegisteredPaths | (string & {})` type was added to `typed-routes.ts`, and `useRouteMatch`/`useRouteActive`/`NavLink.match` take `RoutePattern` (autocomplete registered routes, accept any string) because content-glob routes are not in `RegisteredPaths`. `DocsLayout.tsx` keeps `useRouteActive('/docs/components', …)` (no `startsWith` workaround). The "rejects bogus route" assertions in Task 3 were replaced with positive "accepts any path" assertions (`routeActiveAcceptsAnyPath`); the typed-return and strict-`buildPath` assertions are unchanged. See commit `cf1a283`.
+
 ---
 
 ## File Structure
