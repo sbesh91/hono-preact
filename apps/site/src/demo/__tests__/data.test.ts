@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   resetDemoData,
-  listProjects,
   getProjectBySlug,
   listTasksForProject,
   getTask,
@@ -14,7 +13,6 @@ import {
   listComments,
   upsertUser,
   activityForProject,
-  type Task,
 } from '../data.js';
 
 beforeEach(() => resetDemoData());

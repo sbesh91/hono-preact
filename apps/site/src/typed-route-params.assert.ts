@@ -29,15 +29,15 @@ export function useRouteMatchReturn() {
 export type _TypedRouteParamAssertions = [
   // The deep layout-group leaf is present (the `flat`-omission gotcha).
   Expect<
-    '/demo/projects/:projectId/issues/:issueId' extends SitePaths ? true : false
+    '/demo/projects/:projectId/tasks/:taskId' extends SitePaths ? true : false
   >,
   // The layout id is present.
   Expect<'/demo/projects/:projectId' extends SitePaths ? true : false>,
   // Param extraction: multi, single, none.
   Expect<
     Equal<
-      RouteParams<'/demo/projects/:projectId/issues/:issueId'>,
-      { projectId: string } & { issueId: string }
+      RouteParams<'/demo/projects/:projectId/tasks/:taskId'>,
+      { projectId: string } & { taskId: string }
     >
   >,
   Expect<
