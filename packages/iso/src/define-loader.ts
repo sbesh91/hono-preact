@@ -11,7 +11,7 @@ import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
-import { ReloadContext } from './reload-context.js';
+import { ViewRenderer } from './internal/view-renderer.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
@@ -132,22 +132,6 @@ function getSharedCaches(): SharedCacheMap {
     g[SHARED_CACHES_KEY] = map;
   }
   return map;
-}
-
-function ViewRenderer<T>({
-  loaderRef,
-  props,
-  render,
-}: {
-  loaderRef: LoaderRef<T>;
-  props: Record<string, unknown>;
-  render: (args: any) => ComponentChildren;
-}) {
-  const data = loaderRef.useData();
-  const error = loaderRef.useError();
-  const reloadCtx = useContext(ReloadContext);
-  const reload = reloadCtx?.reload ?? (() => {});
-  return render({ data, error, reload, ...props });
 }
 
 function validateTimeoutMs(
