@@ -138,3 +138,36 @@ describe('fetchLoaderData: deny outcome envelope', () => {
     );
   });
 });
+
+describe('fetchLoaderData: streaming pump', () => {
+  it('resolves first with chunk 0 and pumps later chunks to onChunk, then onEnd', async () => {
+    const body =
+      'event: message\ndata: "first"\n\n' +
+      'event: message\ndata: "second"\n\n';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const onChunk = vi.fn();
+    const onEnd = vi.fn();
+    const handle = fetchLoaderData<string>(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    );
+    handle.subscribe({ onChunk, onError: () => {}, onEnd });
+
+    const first = await handle.first;
+    expect(first).toBe('first');
+
+    // Let the background pump drain the remaining events.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('second');
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+});
