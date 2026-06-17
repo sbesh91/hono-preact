@@ -4,6 +4,7 @@ import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/runtime';
 import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
+import { routePreloadPlugin } from './route-preload.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
 import { serverOnlyPlugin } from './server-only.js';
 import { guardStripPlugin } from './guard-strip.js';
@@ -77,6 +78,10 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
         environments: {
           client: {
             build: {
+              // Emit the client manifest so the route-preload plugin can map
+              // each route's source module to its hashed output chunk(s) and
+              // emit <link rel="modulepreload"> hints at SSR time.
+              manifest: true,
               rollupOptions: {
                 input: [clientEntry],
                 output: {
@@ -106,6 +111,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       entryWrapperPath,
     }),
     serverLoaderValidationPlugin(),
+    routePreloadPlugin({ routes }),
     moduleKeyPlugin(),
     serverOnlyPlugin(),
     guardStripPlugin(),

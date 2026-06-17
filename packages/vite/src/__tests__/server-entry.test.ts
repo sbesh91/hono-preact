@@ -11,6 +11,7 @@ import {
   generatedEntryWrapperAbsPath,
   serverEntryPlugin,
 } from '../server-entry.js';
+import { ROUTE_PRELOAD_PLACEHOLDER } from '../route-preload.js';
 
 // Minimal adapter stub for plugin tests that only check file-writing behavior.
 const stubAdapter = {
@@ -71,7 +72,7 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain('resolvePageUseByPath: pageUseResolver.byPath');
     // renderPage receives appConfig as a third argument.
     expect(src).toContain(
-      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig, routePreload })`
     );
   });
 
@@ -140,6 +141,16 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain(`resolverByPath: pageActionResolvers.byPath`);
     expect(src).toContain(`resolvePageUseByPath: pageUseResolver.byPath`);
 
+    // Route-preload: the generated module declares the placeholder the
+    // route-preload plugin string-replaces in the built worker bundle, and
+    // forwards the map into both render paths. The placeholder text must stay
+    // in sync with ROUTE_PRELOAD_PLACEHOLDER or the build-time replacement
+    // silently no-ops.
+    expect(src).toContain(
+      `const routePreload = ${ROUTE_PRELOAD_PLACEHOLDER} || {};`
+    );
+    expect(src).toContain(`routePreload,`);
+
     // Hono pipeline in correct order: /__loaders POST, then wildcard POST (actions),
     // then wildcard GET (SSR).
     const loadersIdx = src.indexOf(`'/__loaders'`);
@@ -149,7 +160,7 @@ describe('generateCoreAppModule', () => {
     expect(actionPostIdx).toBeGreaterThan(loadersIdx);
     expect(catchallIdx).toBeGreaterThan(actionPostIdx);
     expect(src).toContain(
-      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
+      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig, routePreload })`
     );
     // defaultTitle is no longer threaded through renderPage by the framework.
     expect(src).not.toContain('defaultTitle');

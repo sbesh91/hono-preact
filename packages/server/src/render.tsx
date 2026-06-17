@@ -24,6 +24,10 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { speculationRulesTag } from './speculation-rules.js';
+import {
+  routePreloadTags,
+  type RoutePreloadMap,
+} from './route-preload-tags.js';
 import { translateRootOutcome } from './outcome-translation.js';
 
 function escapeHtml(str: string): string {
@@ -89,7 +93,11 @@ function buildActionResultContext(): ActionResultContextValue {
 export async function renderPage(
   c: Context,
   node: VNode,
-  options?: { defaultTitle?: string; appConfig?: AppConfig }
+  options?: {
+    defaultTitle?: string;
+    appConfig?: AppConfig;
+    routePreload?: RoutePreloadMap;
+  }
 ): Promise<Response> {
   const dispatcher = createDispatcher();
   const previousEnv = env.current;
@@ -206,6 +214,7 @@ export async function renderPage(
     titleSource != null ? `<title>${escapeHtml(titleSource)}</title>` : '',
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
+    routePreloadTags(options?.routePreload, new URL(c.req.url).pathname),
     speculationRulesTag(options?.appConfig ?? {}),
   ]
     .filter(Boolean)
