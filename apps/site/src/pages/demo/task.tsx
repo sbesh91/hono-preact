@@ -8,113 +8,140 @@ import {
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
-import { serverLoaders, serverActions } from './issue.server.js';
-import { serverLoaders as projectIssuesLoaders } from './project-issues.server.js';
+import { serverLoaders, serverActions } from './task.server.js';
+import { serverLoaders as boardLoaders } from './project-board.server.js';
 import CommentList from '../../components/demo/CommentList.js';
-import type { ActivityItem, Comment, Issue, User } from '../../demo/data.js';
+import type {
+  ActivityItem,
+  Comment,
+  Task,
+  TaskStatus,
+  User,
+} from '../../demo/data.js';
 
 const {
-  issue: issueLoader,
+  task: taskLoader,
   comments: commentsLoader,
   activity: activityLoader,
 } = serverLoaders;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
-type IssueData = WithAuthor<Issue>;
+type TaskData = WithAuthor<Task>;
 type CommentData = WithAuthor<Comment>;
 
-// ---- Section: issue header + body + status toggle ----
-// Lives inside issueLoader's View context. Owns the status-toggle action.
-// Sibling loaders in the invalidate list (activityLoader, project-issues
-// list loader) have their caches cleared but don't refetch from here; their
-// pages refetch on next mount, so the back-nav to the project issues list
-// sees the new status on the IssueRow badge. issueLoader IS the active
-// loader so its auto-reload runs and the header re-renders with the new
-// status.
+// The four task statuses in board order, with their display labels.
+const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: 'backlog', label: 'Backlog' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'in_review', label: 'In Review' },
+  { value: 'done', label: 'Done' },
+];
 
-const IssueHeaderAndActions: FunctionComponent<{
-  issue: IssueData;
-  reloadIssue: () => void;
-}> = ({ issue, reloadIssue }) => {
-  useTitle(`${issue.title} · demo`);
+const STATUS_LABEL: Record<TaskStatus, string> = {
+  backlog: 'Backlog',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  done: 'Done',
+};
+
+// ---- Section: task header + body + status control ----
+// Lives inside taskLoader's View context. Owns the status-change action.
+// Sibling loaders in the invalidate list (activityLoader, project-board
+// loader) have their caches cleared but don't refetch from here; their
+// pages refetch on next mount, so the back-nav to the project board sees
+// the new status on the card. taskLoader IS the active loader so its
+// auto-reload runs and the header re-renders with the new status.
+
+const TaskHeaderAndActions: FunctionComponent<{
+  task: TaskData;
+  reloadTask: () => void;
+}> = ({ task, reloadTask }) => {
+  useTitle(`${task.title} · demo`);
 
   // useOptimisticAction keeps the applied patch in place until the loader's
-  // base value (issue.status) actually reflects it. On error the framework
-  // reverts the patch automatically so the badge snaps back to issue.status;
+  // base value (task.status) actually reflects it. On error the framework
+  // reverts the patch automatically so the badge snaps back to task.status;
   // surface the error message inline so the user knows why (most likely:
-  // the action-guard 403 for non-authors closing someone else's issue).
+  // the action-guard 403 for a non-author/non-assignee moving a task to Done).
   const [error, setError] = useState<string | null>(null);
   const {
-    mutate: toggleStatus,
-    pending: toggling,
+    mutate,
+    pending,
     value: status,
   } = useOptimisticAction(serverActions.setStatus, {
-    base: issue.status,
+    base: task.status,
     apply: (_current, payload) => payload.status,
-    invalidate: [activityLoader, projectIssuesLoaders.default],
+    invalidate: [activityLoader, boardLoaders.default],
     onSuccess: () => {
       setError(null);
-      reloadIssue();
+      reloadTask();
     },
     onError: (err) => setError(err.message),
   });
-
-  const nextStatus = status === 'open' ? 'closed' : 'open';
 
   return (
     <>
       <header class="space-y-2">
         <div class="flex items-center gap-2">
           <ViewTransitionName
-            name={`issue-title-${issue.id}`}
-            groupClass="issue-card"
-            render={<h2 class="text-xl font-semibold" />}
+            name={`task-title-${task.id}`}
+            groupClass="task-card"
+            render={<h2 class="text-xl font-semibold text-foreground" />}
           >
-            {issue.title}
+            {task.title}
           </ViewTransitionName>
           <ViewTransitionName
-            name={`issue-status-${issue.id}`}
-            groupClass="issue-card"
+            name={`task-status-${task.id}`}
+            groupClass="task-card"
             render={
               <span
                 class={`text-xs px-2 py-0.5 ${
-                  status === 'open' ? 'badge-success' : 'badge-neutral'
+                  status === 'done' ? 'badge-success' : 'badge-neutral'
                 }`}
               />
             }
           >
-            {status}
+            {STATUS_LABEL[status]}
           </ViewTransitionName>
         </div>
         <p class="text-sm text-muted">
-          Opened by <strong>{issue.author?.name ?? 'someone'}</strong> on{' '}
-          {new Date(issue.createdAt).toLocaleDateString()}
+          Opened by <strong>{task.author?.name ?? 'someone'}</strong> on{' '}
+          {new Date(task.createdAt).toLocaleDateString()}
         </p>
       </header>
 
-      {issue.body && <p class="whitespace-pre-wrap">{issue.body}</p>}
+      {task.body && (
+        <p class="whitespace-pre-wrap text-foreground">{task.body}</p>
+      )}
 
       <div class="space-y-1">
-        <button
-          type="button"
-          class="bg-gray-700 text-white px-3 py-1 text-sm"
-          disabled={toggling}
-          onClick={() =>
-            toggleStatus({ issueId: issue.id, status: nextStatus })
-          }
-        >
-          {toggling
-            ? `${nextStatus === 'closed' ? 'Closing' : 'Reopening'}…`
-            : nextStatus === 'closed'
-              ? 'Close issue'
-              : 'Reopen issue'}
-        </button>
+        <label class="flex items-center gap-2 text-sm text-foreground">
+          <span class="font-medium">Status</span>
+          <select
+            class="border border-border px-2 py-1 text-sm bg-transparent"
+            value={status}
+            disabled={pending}
+            onChange={(e) =>
+              mutate({
+                taskId: task.id,
+                status: e.currentTarget.value as TaskStatus,
+              })
+            }
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {pending && <span class="text-xs text-muted">Saving…</span>}
+        </label>
         {error && <p class="text-sm text-danger">{error}</p>}
       </div>
     </>
   );
 };
-IssueHeaderAndActions.displayName = 'IssueHeaderAndActions';
+TaskHeaderAndActions.displayName = 'TaskHeaderAndActions';
 
 // ---- Section: comments list + new-comment form ----
 // Sibling of the activity view, so each comment chunk re-renders THIS
@@ -128,8 +155,8 @@ IssueHeaderAndActions.displayName = 'IssueHeaderAndActions';
 
 const CommentsSection: FunctionComponent<{
   comments: CommentData[];
-  issueId: string;
-}> = ({ comments, issueId }) => {
+  taskId: string;
+}> = ({ comments, taskId }) => {
   // Drive the optimistic list AND the form submit from the SAME action object.
   // Passing it to <Form> is what makes <Form> call addOptimistic on submit, so
   // the new comment paints immediately; a bare `serverActions.addComment` stub
@@ -143,7 +170,7 @@ const CommentsSection: FunctionComponent<{
       ...current,
       {
         id: `pending-${current.length}`,
-        issueId: payload.issueId,
+        taskId: payload.taskId,
         authorId: '',
         body: payload.body,
         createdAt: Date.now(),
@@ -155,7 +182,7 @@ const CommentsSection: FunctionComponent<{
 
   return (
     <section class="space-y-3">
-      <h3 class="font-semibold">Comments</h3>
+      <h3 class="font-semibold text-foreground">Comments</h3>
       <CommentList comments={addComment.value} />
       <Form
         action={addComment}
@@ -163,13 +190,13 @@ const CommentsSection: FunctionComponent<{
         invalidate={[commentsLoader]}
         class="space-y-2"
       >
-        <input type="hidden" name="issueId" value={issueId} />
+        <input type="hidden" name="taskId" value={taskId} />
         <textarea
           name="body"
           rows={3}
           required
           placeholder="Add a comment"
-          class="block w-full border px-2 py-1"
+          class="block w-full border border-border px-2 py-1"
         />
         <button
           type="submit"
@@ -183,9 +210,9 @@ const CommentsSection: FunctionComponent<{
 };
 CommentsSection.displayName = 'CommentsSection';
 
-const CommentsView = commentsLoader.View<{ issueId: string }>(
-  ({ data: comments, issueId }) => (
-    <CommentsSection comments={comments ?? []} issueId={issueId} />
+const CommentsView = commentsLoader.View<{ taskId: string }>(
+  ({ data: comments, taskId }) => (
+    <CommentsSection comments={comments ?? []} taskId={taskId} />
   ),
   { fallback: <p class="text-sm text-muted">Loading comments…</p> }
 );
@@ -196,24 +223,25 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
   activity,
 }) => (
   <aside class="border-t border-border pt-3 text-xs text-muted">
-    <h4 class="font-semibold mb-1">Project activity</h4>
+    <h4 class="font-semibold mb-1 text-foreground">Project activity</h4>
     <ul class="space-y-1">
       {activity.map((a, i) => (
         <li key={`${a.kind}-${a.at}-${i}`}>
           <time class="text-muted">{new Date(a.at).toLocaleTimeString()}</time>{' '}
-          {a.kind === 'issue-created' && (
+          {a.kind === 'task-created' && (
             <>
-              created <strong>{a.issue.title}</strong>
+              created <strong>{a.task.title}</strong>
             </>
           )}
-          {a.kind === 'issue-closed' && (
+          {a.kind === 'task-moved' && (
             <>
-              closed <strong>{a.issue.title}</strong>
+              moved <strong>{a.task.title}</strong> to{' '}
+              <strong>{STATUS_LABEL[a.to]}</strong>
             </>
           )}
           {a.kind === 'comment-added' && (
             <>
-              commented on <strong>{a.issue.title}</strong>
+              commented on <strong>{a.task.title}</strong>
             </>
           )}
         </li>
@@ -227,20 +255,20 @@ const ActivityView = activityLoader.View(
   { fallback: <p class="text-xs text-muted">Loading activity…</p> }
 );
 
-// ---- Page: issue loads first, then comments + activity in parallel ----
+// ---- Page: task loads first, then comments + activity in parallel ----
 
-const IssueView = issueLoader.View(
-  ({ data: issue, reload: reloadIssue }) => {
-    if (!issue) return <p>Issue not found.</p>;
+const TaskView = taskLoader.View(
+  ({ data: task, reload: reloadTask }) => {
+    if (!task) return <p>Task not found.</p>;
     return (
       <article class="space-y-6">
-        <IssueHeaderAndActions issue={issue} reloadIssue={reloadIssue} />
-        <CommentsView issueId={issue.id} />
+        <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
+        <CommentsView taskId={task.id} />
         <ActivityView />
       </article>
     );
   },
-  { fallback: <p>Loading issue…</p> }
+  { fallback: <p>Loading task…</p> }
 );
 
-export default definePage(IssueView);
+export default definePage(TaskView);
