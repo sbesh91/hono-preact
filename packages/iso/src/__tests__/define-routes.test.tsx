@@ -224,6 +224,32 @@ describe('defineRoutes validation', () => {
       ])
     ).not.toThrow();
   });
+
+  it('reports all route configuration errors at once', () => {
+    let message = '';
+    try {
+      defineRoutes([
+        { path: '/', view: noopView, layout: noopLayout },
+        {
+          path: '/about',
+          view: noopView,
+          children: [{ path: 'x', view: noopView }],
+        },
+      ]);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    // Both violations surface in a single throw.
+    expect(message).toMatch(/cannot declare both `view` and `layout`/);
+    expect(message).toMatch(/`view` route cannot have `children`/);
+    expect(message).toMatch(/2 route configuration errors/);
+  });
+
+  it('throws the bare single message when only one rule is violated', () => {
+    expect(() =>
+      defineRoutes([{ path: '/', view: noopView, layout: noopLayout }])
+    ).toThrow(/^Route \/: cannot declare both `view` and `layout`\.$/);
+  });
 });
 
 describe('serverImports collection', () => {

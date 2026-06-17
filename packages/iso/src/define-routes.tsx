@@ -132,43 +132,84 @@ function joinRoutePath(parentPath: string, childPath: string): string {
   return childPath === '' ? parentPath : parentPath + '/' + childPath;
 }
 
-function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
+type RouteRuleCtx = {
+  hasView: boolean;
+  hasLayout: boolean;
+  hasChildren: boolean;
+  isNested: boolean;
+};
+
+// Each rule is a predicate over a node's shape plus a message factory. The
+// table form lets `validate` collect every violation in one pass (better DX
+// than throw-on-first) and keeps the rule set independently testable. Messages
+// are byte-identical to the previous inline throws so single-violation configs
+// surface the same text.
+const ROUTE_RULES: ReadonlyArray<{
+  when: (r: RouteDef, ctx: RouteRuleCtx) => boolean;
+  message: (here: string) => string;
+}> = [
+  {
+    when: (_r, c) => c.hasView && c.hasLayout,
+    message: (here) =>
+      `Route ${here}: cannot declare both \`view\` and \`layout\`.`,
+  },
+  {
+    when: (_r, c) => c.hasView && c.hasChildren,
+    message: (here) =>
+      `Route ${here}: \`view\` route cannot have \`children\`.`,
+  },
+  {
+    when: (_r, c) => c.hasLayout && !c.hasChildren,
+    message: (here) => `Route ${here}: \`layout\` requires \`children\`.`,
+  },
+  {
+    when: (_r, c) => !c.hasView && !c.hasLayout && !c.hasChildren,
+    message: (here) =>
+      `Route ${here}: must declare \`view\`, \`layout\`+\`children\`, or \`children\`.`,
+  },
+  {
+    when: (r, c) => c.isNested && r.path.startsWith('/'),
+    message: (here) => `Route ${here}: child path must not start with \`/\`.`,
+  },
+];
+
+function collectRouteViolations(
+  routes: ReadonlyArray<RouteDef>,
+  parentPath: string,
+  errors: string[]
+): void {
   for (const r of routes) {
     const here = parentPath + (r.path.startsWith('/') ? r.path : '/' + r.path);
-    const hasView = !!r.view;
-    const hasLayout = !!r.layout;
-    const hasChildren = !!(r.children && r.children.length > 0);
-
-    if (hasView && hasLayout) {
-      throw new Error(
-        `Route ${here}: cannot declare both \`view\` and \`layout\`.`
-      );
+    const ctx: RouteRuleCtx = {
+      hasView: !!r.view,
+      hasLayout: !!r.layout,
+      hasChildren: !!(r.children && r.children.length > 0),
+      isNested: parentPath !== '',
+    };
+    // Rules are checked in order; at most one fires per node (matching the
+    // original if-throw semantics where the first failing check short-circuits).
+    // Collecting across nodes lets a multi-route config surface all problems.
+    for (const rule of ROUTE_RULES) {
+      if (rule.when(r, ctx)) {
+        errors.push(rule.message(here));
+        break;
+      }
     }
-
-    if (hasView && hasChildren) {
-      throw new Error(
-        `Route ${here}: \`view\` route cannot have \`children\`.`
-      );
-    }
-
-    if (hasLayout && !hasChildren) {
-      throw new Error(`Route ${here}: \`layout\` requires \`children\`.`);
-    }
-
-    if (!hasView && !hasLayout && !hasChildren) {
-      throw new Error(
-        `Route ${here}: must declare \`view\`, \`layout\`+\`children\`, or \`children\`.`
-      );
-    }
-
-    if (parentPath !== '' && r.path.startsWith('/')) {
-      throw new Error(`Route ${here}: child path must not start with \`/\`.`);
-    }
-
-    if (hasChildren) {
-      validate(r.children!, here === '/' ? '' : here);
+    if (ctx.hasChildren) {
+      collectRouteViolations(r.children!, here === '/' ? '' : here, errors);
     }
   }
+}
+
+function validate(routes: ReadonlyArray<RouteDef>): void {
+  const errors: string[] = [];
+  collectRouteViolations(routes, '', errors);
+  if (errors.length === 0) return;
+  if (errors.length === 1) throw new Error(errors[0]);
+  throw new Error(
+    `defineRoutes: ${errors.length} route configuration errors:\n` +
+      errors.map((e) => `  - ${e}`).join('\n')
+  );
 }
 
 function collectServerImports(
