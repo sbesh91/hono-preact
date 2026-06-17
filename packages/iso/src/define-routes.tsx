@@ -121,6 +121,17 @@ const asRouteComponent = (c: ComponentType<any>): AnyComponent<any> =>
 const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
   c as ComponentType<ViewProps>;
 
+// Join a parent route path with a child segment, mirroring the tree walk:
+// a root parent ('') yields the child as-is; an empty child segment (a
+// layout-group wildcard leaf) contributes nothing; otherwise the child is
+// appended under a single '/'. Shared by the tree walkers that need a node's
+// absolute path. `validate` and `buildInnerRoutes` intentionally keep their
+// own join rules (display-path with leading slash, and grandchild prefixing).
+function joinRoutePath(parentPath: string, childPath: string): string {
+  if (parentPath === '') return childPath;
+  return childPath === '' ? parentPath : parentPath + '/' + childPath;
+}
+
 function validate(routes: ReadonlyArray<RouteDef>, parentPath = ''): void {
   for (const r of routes) {
     const here = parentPath + (r.path.startsWith('/') ? r.path : '/' + r.path);
@@ -190,8 +201,7 @@ function collectServerRoutes(
     serverStack: LazyServerImport[]
   ) => {
     for (const r of rs) {
-      const here =
-        pp === '' ? r.path : pp + (r.path === '' ? '' : '/' + r.path);
+      const here = joinRoutePath(pp, r.path);
       if (r.server) {
         // Capture the stack BEFORE pushing self -- ancestors exclude self.
         out.push({
@@ -222,10 +232,7 @@ function collectRouteUse(
 ): Array<{ path: string; use: PageUse }> {
   const out: Array<{ path: string; use: PageUse }> = [];
   for (const r of routes) {
-    const here =
-      parentPath === ''
-        ? r.path
-        : parentPath + (r.path === '' ? '' : '/' + r.path);
+    const here = joinRoutePath(parentPath, r.path);
     const composed: PageUse = r.use ? [...inherited, ...r.use] : inherited;
     // Emit one entry per server-bearing node (same key set as
     // `collectServerRoutes`): those are the only RPC targets. Ancestor `use`
@@ -485,10 +492,7 @@ function flattenTree(
   };
   const out: FlatRoute[] = [];
   for (const r of routes) {
-    const here =
-      parentPath === ''
-        ? r.path
-        : parentPath + (r.path === '' ? '' : '/' + r.path);
+    const here = joinRoutePath(parentPath, r.path);
     const ownUse: PageUse = r.use ? [...pendingUse, ...r.use] : pendingUse;
 
     if (r.view) {
