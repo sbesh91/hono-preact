@@ -14,157 +14,193 @@ type SerializedLocation = {
   searchParams: Record<string, string>;
 };
 
+export type LoaderFetchHandle<T> = {
+  /**
+   * Resolves with the first (or only) loader value. Rejects on an error or
+   * timeout that occurs before the first chunk. For a redirect outcome the
+   * promise never settles (the page is navigating away).
+   */
+  first: Promise<T>;
+  /**
+   * Attach callbacks for a streaming loader: onChunk fires for each chunk
+   * after the first, onError for a mid-stream error/timeout, onEnd at stream
+   * end. No-op for non-streaming (JSON) responses. Returns an unsubscribe that
+   * stops the background pump. Call at most once.
+   */
+  subscribe(callbacks: LoaderFetchCallbacks<T>): () => void;
+};
+
+type SSEMessage = { event: string; data: string };
+
 /**
  * POST to /__loaders and consume the response.
  *
- * Static loaders return JSON; the parsed value resolves the returned promise.
- * Streaming loaders return SSE; the first chunk resolves the promise, and
- * subsequent chunks fire callbacks.onChunk. Stream errors after the first
- * chunk fire callbacks.onError. Stream end fires callbacks.onEnd.
+ * Static loaders return JSON; `handle.first` resolves with the parsed value.
+ * Streaming loaders return SSE; `handle.first` resolves with the first chunk
+ * and `handle.subscribe(callbacks)` drives the rest (onChunk per later chunk,
+ * onError mid-stream, onEnd at end). The pump starts only after `first`
+ * settles, so subscribing synchronously after the call loses no chunks.
  */
-export async function fetchLoaderData<T>(
+export function fetchLoaderData<T>(
   moduleKey: string,
   loaderName: string,
   location: SerializedLocation,
-  signal: AbortSignal,
-  callbacks: LoaderFetchCallbacks<T>
-): Promise<T> {
-  const res = await fetch(LOADERS_RPC_PATH, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
-    signal,
-  });
+  signal: AbortSignal
+): LoaderFetchHandle<T> {
+  // Populated only when the response is SSE and its first chunk has been read.
+  // `subscribe` pumps off this iterator; null means a non-streaming response
+  // (nothing to pump).
+  let streamIter: AsyncGenerator<SSEMessage> | null = null;
 
-  if (!res.ok) {
-    // Try to parse a deny outcome envelope first; it carries `message`
-    // rather than `error`. Fall back to the legacy `{ error }` shape.
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      __outcome?: string;
-      message?: string;
-      timeoutMs?: number;
-    };
-    if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
-      throw new TimeoutError(body.timeoutMs);
-    }
-    if (body.__outcome === 'deny') {
-      // The `deny()` constructor defaults `message` for first-party
-      // callers, but a hand-rolled envelope from custom server middleware
-      // might still arrive without one. Surface a deny-aware fallback
-      // instead of the generic "Loader failed" so the user sees a hint
-      // that the status came from an explicit deny.
-      const msg =
-        typeof body.message === 'string'
-          ? body.message
-          : `Request denied (${res.status})`;
-      throw new Error(msg);
-    }
-    throw new Error(
-      body.error ??
-        `Loader failed with status ${res.status}. Check the loader's .server.ts for a thrown error, and the server logs for details.`
-    );
-  }
+  const first = (async (): Promise<T> => {
+    const res = await fetch(LOADERS_RPC_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
+      signal,
+    });
 
-  const contentType = res.headers.get('Content-Type') ?? '';
-  if (!contentType.includes('text/event-stream')) {
-    const json = (await res.json()) as unknown;
-    // Collision risk note (deferred from middleware review C6): a loader
-    // that legitimately returns data shaped `{ __outcome: 'redirect', to:
-    // <string> }` would be misinterpreted here and navigate the browser.
-    // The probability is low (the magic key is namespaced and unusual) and
-    // a wire-version sentinel like `__envelope: 'hono-preact/redirect'` or
-    // a `X-Hono-Preact-Outcome: redirect` response header would close the
-    // gap. Deferred for v0.2: body-key sniffing is the documented contract
-    // for v0.1.
-    // Server-side middleware that throws `redirect(...)` comes back as a
-    // redirect outcome envelope. Hand off to the browser via
-    // `location.assign` and return a promise that never settles: the
-    // current document is being replaced, no caller will see a value.
-    //
-    // Trust boundary: `to` is taken straight from the JSON body and passed
-    // to `window.location.assign`. The framework's own handlers emit safe
-    // (typically same-origin) values, but a compromised or misconfigured
-    // server (or a proxy injecting JSON) could push the client anywhere.
-    // We don't validate origin here for v0.1; treat your own server as
-    // part of the trusted boundary. A same-origin check is a deferred
-    // enhancement (see C4 in the middleware review).
-    if (
-      json !== null &&
-      typeof json === 'object' &&
-      (json as { __outcome?: unknown }).__outcome === 'redirect' &&
-      typeof (json as { to?: unknown }).to === 'string'
-    ) {
-      const to = (json as { to: string }).to;
-      if (typeof window !== 'undefined') {
-        window.location.assign(to);
-      }
-      return new Promise<T>(() => {
-        /* never resolves; page is navigating */
-      });
-    }
-    return json as T;
-  }
+    if (!res.ok) throw await loaderHttpError(res);
+    if (!isEventStream(res)) return readJsonResult<T>(res);
+    if (!res.body) throw new Error('Streaming loader response has no body');
 
-  if (!res.body) {
-    throw new Error('Streaming loader response has no body');
-  }
-
-  // SSE: read the first message event synchronously (await first chunk),
-  // then kick off an async loop that pushes subsequent chunks to callbacks.
-  const iter = readSSE(res.body);
-  const firstChunk = await readFirstChunk<T>(iter);
-
-  // Continue consuming chunks in the background. Each subsequent message
-  // pushes a value via onChunk. Errors fire onError. End fires onEnd.
-  (async () => {
-    try {
-      while (true) {
-        const step = await iter.next();
-        if (step.done) {
-          callbacks.onEnd();
-          return;
-        }
-        const ev = step.value;
-        if (ev.event === 'message') {
-          try {
-            callbacks.onChunk(JSON.parse(ev.data) as T);
-          } catch {
-            // malformed mid-stream chunk: skip
-          }
-        } else if (ev.event === 'timeout') {
-          try {
-            const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
-            callbacks.onError(new TimeoutError(parsed.timeoutMs ?? 0));
-          } catch {
-            callbacks.onError(
-              new Error('Malformed timeout event in streaming loader')
-            );
-          }
-          return;
-        } else if (ev.event === 'error') {
-          try {
-            const parsed = JSON.parse(ev.data) as {
-              message?: string;
-              name?: string;
-            };
-            const err = new Error(parsed.message ?? 'Streamed error');
-            if (parsed.name) err.name = parsed.name;
-            callbacks.onError(err);
-          } catch {
-            callbacks.onError(new Error('Streamed error'));
-          }
-          return;
-        }
-        // Ignore other event types
-      }
-    } catch (err) {
-      if (signal.aborted) return;
-      callbacks.onError(err instanceof Error ? err : new Error(String(err)));
-    }
+    // SSE: read the first message event (await first chunk). Hand the iterator
+    // to `subscribe` so later chunks pump on demand.
+    const iter = readSSE(res.body);
+    const firstChunk = await readFirstChunk<T>(iter);
+    streamIter = iter;
+    return firstChunk;
   })();
 
-  return firstChunk;
+  function subscribe(callbacks: LoaderFetchCallbacks<T>): () => void {
+    let stopped = false;
+    // Start the pump only after `first` settles: a non-streaming response or a
+    // pre-first-chunk rejection leaves `streamIter` null (nothing to pump).
+    first.then(
+      () => {
+        if (stopped || streamIter === null) return;
+        void pumpStream<T>(streamIter, () => stopped, signal, callbacks);
+      },
+      () => {
+        /* first rejected before any chunk: no stream to pump */
+      }
+    );
+    return () => {
+      stopped = true;
+    };
+  }
+
+  return { first, subscribe };
+}
+
+function isEventStream(res: Response): boolean {
+  return (res.headers.get('Content-Type') ?? '').includes('text/event-stream');
+}
+
+/**
+ * Build the error to throw for a non-ok loader response. Prefers the structured
+ * outcome envelope (`timeout` / `deny`), then the legacy `{ error }` shape, then
+ * a generic status message with remediation.
+ */
+async function loaderHttpError(res: Response): Promise<Error> {
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    __outcome?: string;
+    message?: string;
+    timeoutMs?: number;
+  };
+  if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
+    return new TimeoutError(body.timeoutMs);
+  }
+  if (body.__outcome === 'deny') {
+    // `deny()` defaults `message` for first-party callers, but a hand-rolled
+    // envelope from custom server middleware might still arrive without one.
+    return new Error(
+      typeof body.message === 'string'
+        ? body.message
+        : `Request denied (${res.status})`
+    );
+  }
+  return new Error(
+    body.error ??
+      `Loader failed with status ${res.status}. Check the loader's .server.ts for a thrown error, and the server logs for details.`
+  );
+}
+
+function isRedirectOutcome(json: unknown): json is { to: string } {
+  return (
+    json !== null &&
+    typeof json === 'object' &&
+    (json as { __outcome?: unknown }).__outcome === 'redirect' &&
+    typeof (json as { to?: unknown }).to === 'string'
+  );
+}
+
+/**
+ * Parse a non-streaming (JSON) loader response. A loader that legitimately
+ * returns `{ __outcome: 'redirect', to }` is misinterpreted as a redirect
+ * (documented v0.1 contract; see C6/C4 in the middleware review): we hand off
+ * to the browser and return a never-settling promise because the current
+ * document is being replaced. Trust boundary: `to` comes straight from the body
+ * and is passed to `location.assign`; treat your own server as trusted.
+ */
+async function readJsonResult<T>(res: Response): Promise<T> {
+  const json = (await res.json()) as unknown;
+  if (isRedirectOutcome(json)) {
+    if (typeof window !== 'undefined') {
+      window.location.assign(json.to);
+    }
+    return new Promise<T>(() => {
+      /* never resolves; page is navigating */
+    });
+  }
+  return json as T;
+}
+
+type LoaderStreamEvent<T> =
+  | { kind: 'chunk'; value: T }
+  | { kind: 'timeout'; error: TimeoutError }
+  | { kind: 'error'; error: Error }
+  | { kind: 'malformed'; which: 'chunk' | 'timeout' | 'error'; cause: unknown }
+  | { kind: 'ignore' };
+
+/**
+ * Classify one SSE event from the loader RPC stream. Single source of truth for
+ * the wire protocol (message = chunk, timeout = TimeoutError, error = named
+ * Error) and the JSON parsing. Callers decide disposition (resolve/throw on the
+ * first chunk vs. fire callbacks while pumping) and how to surface a malformed
+ * event.
+ */
+function classifyLoaderEvent<T>(ev: SSEMessage): LoaderStreamEvent<T> {
+  if (ev.event === 'message') {
+    try {
+      return { kind: 'chunk', value: JSON.parse(ev.data) as T };
+    } catch (cause) {
+      return { kind: 'malformed', which: 'chunk', cause };
+    }
+  }
+  if (ev.event === 'timeout') {
+    try {
+      const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+      return {
+        kind: 'timeout',
+        error: new TimeoutError(parsed.timeoutMs ?? 0),
+      };
+    } catch (cause) {
+      return { kind: 'malformed', which: 'timeout', cause };
+    }
+  }
+  if (ev.event === 'error') {
+    try {
+      const parsed = JSON.parse(ev.data) as { message?: string; name?: string };
+      const error = new Error(parsed.message ?? 'Streamed error');
+      if (parsed.name) error.name = parsed.name;
+      return { kind: 'error', error };
+    } catch (cause) {
+      return { kind: 'malformed', which: 'error', cause };
+    }
+  }
+  return { kind: 'ignore' };
 }
 
 /**
@@ -172,53 +208,83 @@ export async function fetchLoaderData<T>(
  * `timeout` / `error` events before the first message reject with the
  * appropriate error. Other event types are ignored.
  */
-async function readFirstChunk<T>(
-  iter: AsyncGenerator<{ event: string; data: string }>
-): Promise<T> {
+async function readFirstChunk<T>(iter: AsyncGenerator<SSEMessage>): Promise<T> {
   while (true) {
     const step = await iter.next();
     if (step.done) {
       throw new Error('Streaming loader closed before emitting any data');
     }
-    const ev = step.value;
-    if (ev.event === 'message') {
-      try {
-        return JSON.parse(ev.data) as T;
-      } catch {
-        throw new Error('Malformed first chunk in streaming loader');
-      }
-    }
-    if (ev.event === 'timeout') {
-      let timeoutMs = 0;
-      try {
-        const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
-        timeoutMs = parsed.timeoutMs ?? 0;
-      } catch (e) {
-        throw new Error(
-          `Malformed timeout event in streaming loader: ${
-            e instanceof Error ? e.message : String(e)
-          }`
-        );
-      }
-      throw new TimeoutError(timeoutMs);
-    }
-    if (ev.event === 'error') {
-      let message = 'Streamed error';
-      let name: string | undefined;
-      try {
-        const parsed = JSON.parse(ev.data) as {
-          message?: string;
-          name?: string;
-        };
-        message = parsed.message ?? message;
-        name = parsed.name;
-      } catch {
+    const event = classifyLoaderEvent<T>(step.value);
+    switch (event.kind) {
+      case 'chunk':
+        return event.value;
+      case 'timeout':
+      case 'error':
+        throw event.error;
+      case 'malformed':
+        if (event.which === 'chunk') {
+          throw new Error('Malformed first chunk in streaming loader');
+        }
+        if (event.which === 'timeout') {
+          throw new Error(
+            `Malformed timeout event in streaming loader: ${
+              event.cause instanceof Error
+                ? event.cause.message
+                : String(event.cause)
+            }`
+          );
+        }
         throw new Error('Malformed error event in streaming loader');
-      }
-      const err = new Error(message);
-      if (name) err.name = name;
-      throw err;
+      case 'ignore':
+        break;
     }
-    // Other events (result, etc.): ignore for loaders
+  }
+}
+
+/**
+ * Pump SSE events after the first chunk to the subscriber's callbacks: onChunk
+ * per later message, onError on a mid-stream timeout/error, onEnd at stream end.
+ * Stops early when `isStopped()` flips (unsubscribe) or the request aborts.
+ */
+async function pumpStream<T>(
+  iter: AsyncGenerator<SSEMessage>,
+  isStopped: () => boolean,
+  signal: AbortSignal,
+  callbacks: LoaderFetchCallbacks<T>
+): Promise<void> {
+  try {
+    while (true) {
+      if (isStopped()) return;
+      const step = await iter.next();
+      if (step.done) {
+        callbacks.onEnd();
+        return;
+      }
+      const event = classifyLoaderEvent<T>(step.value);
+      switch (event.kind) {
+        case 'chunk':
+          callbacks.onChunk(event.value);
+          break;
+        case 'timeout':
+        case 'error':
+          callbacks.onError(event.error);
+          return;
+        case 'malformed':
+          // A malformed mid-stream chunk is skipped; a malformed terminal
+          // timeout/error event still ends the stream with a generic error.
+          if (event.which === 'chunk') break;
+          callbacks.onError(
+            event.which === 'timeout'
+              ? new Error('Malformed timeout event in streaming loader')
+              : new Error('Streamed error')
+          );
+          return;
+        case 'ignore':
+          break;
+      }
+    }
+  } catch (err) {
+    if (signal.aborted) return;
+    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
   }
 }

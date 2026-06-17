@@ -3,7 +3,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchLoaderData } from '../loader-fetch.js';
 
 const loc = { path: '/x', pathParams: {}, searchParams: {} };
-const noopCbs = { onChunk: () => {}, onError: () => {}, onEnd: () => {} };
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -22,9 +21,8 @@ describe('fetchLoaderData: separate module + loader args', () => {
       'pages/movie',
       'summary',
       { path: '/movies/1', pathParams: { id: '1' }, searchParams: {} },
-      new AbortController().signal,
-      noopCbs
-    );
+      new AbortController().signal
+    ).first;
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
     expect(body.module).toBe('pages/movie');
@@ -54,9 +52,8 @@ describe('fetchLoaderData: redirect outcome envelope', () => {
       'm',
       'default',
       loc,
-      new AbortController().signal,
-      noopCbs
-    );
+      new AbortController().signal
+    ).first;
     // Race against a short timeout to confirm the promise does NOT settle.
     const result = await Promise.race([
       p,
@@ -77,9 +74,8 @@ describe('fetchLoaderData: redirect outcome envelope', () => {
       'm',
       'default',
       loc,
-      new AbortController().signal,
-      noopCbs
-    );
+      new AbortController().signal
+    ).first;
     expect(result).toEqual({ movies: [1, 2, 3] });
   });
 });
@@ -96,13 +92,7 @@ describe('fetchLoaderData: deny outcome envelope', () => {
       )
     );
     await expect(
-      fetchLoaderData(
-        'm',
-        'default',
-        loc,
-        new AbortController().signal,
-        noopCbs
-      )
+      fetchLoaderData('m', 'default', loc, new AbortController().signal).first
     ).rejects.toThrow('Forbidden');
   });
 
@@ -118,13 +108,7 @@ describe('fetchLoaderData: deny outcome envelope', () => {
       })
     );
     await expect(
-      fetchLoaderData(
-        'm',
-        'default',
-        loc,
-        new AbortController().signal,
-        noopCbs
-      )
+      fetchLoaderData('m', 'default', loc, new AbortController().signal).first
     ).rejects.toThrow(/Request denied \(403\)/);
   });
 
@@ -136,13 +120,7 @@ describe('fetchLoaderData: deny outcome envelope', () => {
       })
     );
     await expect(
-      fetchLoaderData(
-        'm',
-        'default',
-        loc,
-        new AbortController().signal,
-        noopCbs
-      )
+      fetchLoaderData('m', 'default', loc, new AbortController().signal).first
     ).rejects.toThrow('boom');
   });
 
@@ -154,15 +132,83 @@ describe('fetchLoaderData: deny outcome envelope', () => {
       })
     );
     await expect(
-      fetchLoaderData(
-        'm',
-        'default',
-        loc,
-        new AbortController().signal,
-        noopCbs
-      )
+      fetchLoaderData('m', 'default', loc, new AbortController().signal).first
     ).rejects.toThrow(
       "Loader failed with status 503. Check the loader's .server.ts for a thrown error, and the server logs for details."
+    );
+  });
+});
+
+describe('fetchLoaderData: streaming pump', () => {
+  it('resolves first with chunk 0 and pumps later chunks to onChunk, then onEnd', async () => {
+    const body =
+      'event: message\ndata: "first"\n\n' +
+      'event: message\ndata: "second"\n\n';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const onChunk = vi.fn();
+    const onEnd = vi.fn();
+    const handle = fetchLoaderData<string>(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    );
+    handle.subscribe({ onChunk, onError: () => {}, onEnd });
+
+    const first = await handle.first;
+    expect(first).toBe('first');
+
+    // Let the background pump drain the remaining events.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('second');
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects first with a specific message when the first chunk is malformed JSON', async () => {
+    const body = 'event: message\ndata: {not json}\n\n';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+    await expect(
+      fetchLoaderData('m', 'default', loc, new AbortController().signal).first
+    ).rejects.toThrow('Malformed first chunk in streaming loader');
+  });
+
+  it('reports a generic error via onError when a mid-stream timeout event is malformed', async () => {
+    const body =
+      'event: message\ndata: "first"\n\n' +
+      'event: timeout\ndata: {not json}\n\n';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const onError = vi.fn();
+    const handle = fetchLoaderData<string>(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    );
+    handle.subscribe({ onChunk: () => {}, onError, onEnd: () => {} });
+
+    expect(await handle.first).toBe('first');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0].message).toBe(
+      'Malformed timeout event in streaming loader'
     );
   });
 });

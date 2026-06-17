@@ -5,11 +5,6 @@ import { TimeoutError } from '../../action.js';
 
 const originalFetch = global.fetch;
 const location = { path: '/', pathParams: {}, searchParams: {} };
-const noopCallbacks = {
-  onChunk: () => {},
-  onError: () => {},
-  onEnd: () => {},
-};
 
 describe('fetchLoaderData timeout handling', () => {
   beforeEach(() => {
@@ -29,13 +24,7 @@ describe('fetchLoaderData timeout handling', () => {
     const controller = new AbortController();
     let thrown: unknown;
     try {
-      await fetchLoaderData(
-        'm',
-        'l',
-        location,
-        controller.signal,
-        noopCallbacks
-      );
+      await fetchLoaderData('m', 'l', location, controller.signal).first;
     } catch (e) {
       thrown = e;
     }
@@ -58,13 +47,7 @@ describe('fetchLoaderData timeout handling', () => {
     const controller = new AbortController();
     let thrown: unknown;
     try {
-      await fetchLoaderData(
-        'm',
-        'l',
-        location,
-        controller.signal,
-        noopCallbacks
-      );
+      await fetchLoaderData('m', 'l', location, controller.signal).first;
     } catch (e) {
       thrown = e;
     }
@@ -88,13 +71,9 @@ describe('fetchLoaderData timeout handling', () => {
     const controller = new AbortController();
     const onError = vi.fn();
     const callbacks = { onChunk: () => {}, onError, onEnd: () => {} };
-    const first = await fetchLoaderData(
-      'm',
-      'l',
-      location,
-      controller.signal,
-      callbacks
-    );
+    const handle = fetchLoaderData('m', 'l', location, controller.signal);
+    handle.subscribe(callbacks);
+    const first = await handle.first;
     expect(first).toBe('first');
     // Wait a tick for the background consumer to drain.
     await new Promise((r) => setTimeout(r, 10));
