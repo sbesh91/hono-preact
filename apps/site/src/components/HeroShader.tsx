@@ -1,30 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-
-const VS = `#version 300 es
-in vec2 a_pos;
-void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }`;
-
-const FS = `#version 300 es
-precision highp float;
-uniform vec2 u_res;
-uniform float u_time;
-out vec4 outColor;
-void main() {
-  vec2 uv = (gl_FragCoord.xy / u_res.xy - 0.5);
-  uv.x *= u_res.x / u_res.y;
-  float t = u_time * 0.25;
-  float v = sin(uv.x * 3.0 + t)
-          + sin((uv.y + t) * 4.0)
-          + sin((uv.x + uv.y) * 3.0 + t * 1.2)
-          + sin(length(uv) * 6.0 - t * 1.5);
-  v *= 0.25;
-  vec3 A = vec3(1.00, 0.95, 0.93);
-  vec3 B = vec3(1.00, 0.62, 0.43);
-  vec3 C = vec3(0.79, 0.49, 1.00);
-  vec3 col = mix(A, B, 0.5 + 0.5 * v);
-  col = mix(col, C, 0.25 * sin(v * 3.1415));
-  outColor = vec4(col, 1.0);
-}`;
+import type { WorkerInMsg, WorkerOutMsg } from './shader-worker.ts';
 
 // Fade the shader into the themed page background so it dissolves into the page
 // in both light and dark mode (a hardcoded white fade left a seam in dark mode).
@@ -36,8 +11,10 @@ const FADE_GRADIENT =
   ' color-mix(in srgb, var(--background) 75%, transparent) 80%,' +
   ' var(--background) 100%)';
 
-// Always-on base layer matching the shader palette. Visible before the first
-// WebGL frame (so there's no white flash on load) and as the no-WebGL2 fallback.
+// Always-on base layer. Visible before the first WebGL frame (no white flash on
+// load) and as the static fallback when the OffscreenCanvas worker path is
+// unavailable. Its colors mirror the worker shader's A/B/C constants so the
+// opacity crossfade stays within one color family; keep them in sync.
 const BASE_GRADIENT =
   'linear-gradient(135deg, #FFF1ED 0%, #FF9F6E 50%, #C97DFF 100%)';
 
@@ -49,120 +26,68 @@ export function HeroShader() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const gl = canvas.getContext('webgl2', {
-      antialias: false,
-      premultipliedAlpha: false,
-    });
-    // No WebGL2: leave the canvas transparent so BASE_GRADIENT shows through.
-    if (!gl) return;
+    // Progressive enhancement: render the animation in a worker via
+    // OffscreenCanvas. Without that support, leave the canvas transparent so
+    // BASE_GRADIENT shows through (the static fallback).
+    if (
+      typeof OffscreenCanvas === 'undefined' ||
+      typeof canvas.transferControlToOffscreen !== 'function'
+    ) {
+      return;
+    }
 
-    const compile = (type: number, src: string): WebGLShader | null => {
-      const s = gl.createShader(type)!;
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.error('HeroShader compile error:', gl.getShaderInfoLog(s));
-        gl.deleteShader(s);
-        return null;
-      }
-      return s;
+    const dims = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      return {
+        width: Math.round(canvas.clientWidth * dpr),
+        height: Math.round(canvas.clientHeight * dpr),
+      };
     };
 
-    const vs = compile(gl.VERTEX_SHADER, VS);
-    const fs = compile(gl.FRAGMENT_SHADER, FS);
-    if (!vs || !fs) {
-      if (vs) gl.deleteShader(vs);
-      if (fs) gl.deleteShader(fs);
-      return;
-    }
-
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      console.error('HeroShader link error:', gl.getProgramInfoLog(prog));
-      gl.deleteProgram(prog);
-      gl.deleteShader(vs);
-      gl.deleteShader(fs);
-      return;
-    }
-    gl.useProgram(prog);
-
-    const buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
-      gl.STATIC_DRAW
-    );
-    const loc = gl.getAttribLocation(prog, 'a_pos');
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
-    const uRes = gl.getUniformLocation(prog, 'u_res');
-    const uTime = gl.getUniformLocation(prog, 'u_time');
-
-    const reduceMotion = window.matchMedia(
+    const reducedMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
     ).matches;
 
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = canvas.clientWidth * dpr;
-      const h = canvas.clientHeight * dpr;
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w;
-        canvas.height = h;
-        gl.viewport(0, 0, w, h);
-      }
+    const worker = new Worker(new URL('./shader-worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    const send = (msg: WorkerInMsg, transfer: Transferable[] = []) =>
+      worker.postMessage(msg, transfer);
+
+    let stopped = false;
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      worker.terminate();
     };
 
-    const t0 = performance.now();
-    let rafId = 0;
-    let paused = false;
-    let firstFrame = true;
-
-    const drawFrame = () => {
-      resize();
-      gl.uniform2f(uRes, canvas.width, canvas.height);
-      gl.uniform1f(uTime, (performance.now() - t0) / 1000);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      if (firstFrame) {
-        firstFrame = false;
-        setReady(true);
-      }
+    worker.onmessage = (e: MessageEvent) => {
+      const msg = e.data as WorkerOutMsg;
+      if (msg.type === 'ready') setReady(true);
+      else if (msg.type === 'error') stop();
     };
 
-    const loop = () => {
-      drawFrame();
-      rafId = requestAnimationFrame(loop);
-    };
+    const offscreen = canvas.transferControlToOffscreen();
+    send({ type: 'init', canvas: offscreen, ...dims(), reducedMotion }, [
+      offscreen,
+    ]);
 
-    if (reduceMotion) {
-      drawFrame();
-    } else {
-      rafId = requestAnimationFrame(loop);
-    }
+    // Observe the canvas (still laid out on the main thread after transfer) and
+    // forward device-pixel dimensions. Replaces a per-frame clientWidth read.
+    const observer = new ResizeObserver(() => {
+      if (!stopped) send({ type: 'resize', ...dims() });
+    });
+    observer.observe(canvas);
 
     const onVisibility = () => {
-      if (document.hidden) {
-        cancelAnimationFrame(rafId);
-        paused = true;
-      } else if (paused && !reduceMotion) {
-        paused = false;
-        rafId = requestAnimationFrame(loop);
-      }
+      if (!stopped) send({ type: 'visibility', hidden: document.hidden });
     };
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      cancelAnimationFrame(rafId);
+      observer.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
-      gl.deleteBuffer(buf);
-      gl.deleteProgram(prog);
-      gl.deleteShader(vs);
-      gl.deleteShader(fs);
+      stop();
     };
   }, []);
 

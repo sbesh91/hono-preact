@@ -89,8 +89,9 @@ idle. Responsibilities:
 
 Main → worker:
 
-- `init`: `{ type: 'init', canvas: OffscreenCanvas /* transferred */, width, height, dpr, reducedMotion }`
-  where `width`/`height` are device pixels (`clientWidth * dpr`).
+- `init`: `{ type: 'init', canvas: OffscreenCanvas /* transferred */, width, height, reducedMotion }`
+  where `width`/`height` are device pixels (`clientWidth * dpr`). The main thread
+  applies the device-pixel ratio before posting, so the worker needs no `dpr`.
 - `resize`: `{ type: 'resize', width, height }` (device pixels).
 - `visibility`: `{ type: 'visibility', hidden: boolean }`.
 
