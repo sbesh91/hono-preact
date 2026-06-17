@@ -23,6 +23,7 @@ export function useBoardDrag(
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
   const startedRef = useRef(false);
+  const suppressClickRef = useRef(false);
 
   const onPointerDown = useCallback(
     (taskId: string, e: PointerEvent) => {
@@ -51,6 +52,7 @@ export function useBoardDrag(
         if (startedRef.current) {
           const to = dropTargetFromPoint(getColumnRects(), ev.clientX);
           onDrop(taskId, to);
+          suppressClickRef.current = true;
         }
         setDraggingId(null);
         setOverStatus(null);
@@ -62,5 +64,5 @@ export function useBoardDrag(
     [getColumnRects, onDrop]
   );
 
-  return { draggingId, overStatus, onPointerDown };
+  return { draggingId, overStatus, onPointerDown, suppressClickRef };
 }

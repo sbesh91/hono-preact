@@ -18,6 +18,11 @@ type Props = {
   userById: Map<string, User>;
   onPatch: PatchFn;
   onRemove: RemoveFn;
+  registerEl: (el: HTMLElement | null) => void;
+  onPointerDownCard: (taskId: string, e: PointerEvent) => void;
+  draggingId: string | null;
+  isOver: boolean;
+  suppressClickRef: { current: boolean };
 };
 
 const Column: FunctionComponent<Props> = ({
@@ -26,8 +31,16 @@ const Column: FunctionComponent<Props> = ({
   userById,
   onPatch,
   onRemove,
+  registerEl,
+  onPointerDownCard,
+  draggingId,
+  isOver,
+  suppressClickRef,
 }) => (
-  <div class="rounded-xl bg-surface-subtle p-2.5">
+  <div
+    ref={registerEl}
+    class={`rounded-xl bg-surface-subtle p-2.5 transition-shadow${isOver ? ' ring-2 ring-accent/40' : ''}`}
+  >
     <div class="mb-2.5 flex items-center gap-2 text-[12.5px] font-semibold">
       <span
         class="h-2 w-2 rounded-full"
@@ -50,6 +63,9 @@ const Column: FunctionComponent<Props> = ({
           }
           onPatch={onPatch}
           onRemove={onRemove}
+          onPointerDownCard={onPointerDownCard}
+          draggingId={draggingId}
+          suppressClickRef={suppressClickRef}
         />
       ))}
     </div>
