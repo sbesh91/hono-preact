@@ -33,6 +33,7 @@ describe('HeroShader without OffscreenCanvas worker support', () => {
 describe('HeroShader with OffscreenCanvas worker support', () => {
   let workers: FakeWorker[];
   let resizeCallbacks: ResizeObserverCallback[];
+  let resizeObservers: FakeResizeObserver[];
 
   class FakeWorker {
     posted: unknown[] = [];
@@ -58,17 +59,22 @@ describe('HeroShader with OffscreenCanvas worker support', () => {
   }
 
   class FakeResizeObserver {
+    disconnected = false;
     constructor(public cb: ResizeObserverCallback) {
       resizeCallbacks.push(cb);
+      resizeObservers.push(this);
     }
     observe() {}
     unobserve() {}
-    disconnect() {}
+    disconnect() {
+      this.disconnected = true;
+    }
   }
 
   beforeEach(() => {
     workers = [];
     resizeCallbacks = [];
+    resizeObservers = [];
     vi.stubGlobal('OffscreenCanvas', class {});
     vi.stubGlobal('Worker', FakeWorker);
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
@@ -157,5 +163,51 @@ describe('HeroShader with OffscreenCanvas worker support', () => {
     const worker = workers[0];
     unmount();
     expect(worker.terminated).toBe(true);
+  });
+
+  it('disconnects the observer and removes the visibilitychange listener on unmount', () => {
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+    const { unmount } = render(<HeroShader />);
+    unmount();
+    expect(resizeObservers[0].disconnected).toBe(true);
+    expect(removeSpy).toHaveBeenCalledWith(
+      'visibilitychange',
+      expect.any(Function)
+    );
+    removeSpy.mockRestore();
+  });
+});
+
+describe('HeroShader with OffscreenCanvas but no transferControlToOffscreen', () => {
+  let workers: unknown[];
+
+  class FakeWorker {
+    constructor() {
+      workers.push(this);
+    }
+    postMessage() {}
+    terminate() {}
+  }
+
+  beforeEach(() => {
+    workers = [];
+    vi.stubGlobal('OffscreenCanvas', class {});
+    vi.stubGlobal('Worker', FakeWorker);
+    // Second bail condition: OffscreenCanvas exists but the canvas cannot be
+    // transferred, so the effect must not construct a worker.
+    delete (
+      HTMLCanvasElement.prototype as {
+        transferControlToOffscreen?: unknown;
+      }
+    ).transferControlToOffscreen;
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('does not create a worker and leaves the canvas transparent', () => {
+    const { container } = render(<HeroShader />);
+    expect(workers.length).toBe(0);
+    const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+    expect(canvas.style.opacity).toBe('0');
   });
 });
