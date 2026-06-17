@@ -72,6 +72,7 @@ function compile(type: number, src: string): WebGLShader | null {
   gl.shaderSource(shader, src);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error('HeroShader compile error:', gl.getShaderInfoLog(shader));
     gl.deleteShader(shader);
     return null;
   }
@@ -101,7 +102,10 @@ function setup(init: Extract<WorkerInMsg, { type: 'init' }>): boolean {
   gl.attachShader(prog, vs);
   gl.attachShader(prog, fs);
   gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error('HeroShader link error:', gl.getProgramInfoLog(prog));
+    return false;
+  }
   gl.useProgram(prog);
 
   const buf = gl.createBuffer();
@@ -157,6 +161,9 @@ self.onmessage = (e: MessageEvent): void => {
       rafId = requestAnimationFrame(loop);
     }
   } else if (msg.type === 'resize') {
+    // Skip unchanged dimensions: reassigning surface.width/height resets the
+    // drawing buffer, so a no-op resize would needlessly clear the canvas.
+    if (msg.width === width && msg.height === height) return;
     width = msg.width;
     height = msg.height;
     if (surface) {
