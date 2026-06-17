@@ -2,47 +2,50 @@ import { definePage } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 
 const DemoIndex: FunctionComponent = () => (
-  <section class="mx-auto max-w-2xl p-6 space-y-4">
-    <header>
-      <h1 class="text-2xl font-semibold">Demo: a mini issue tracker</h1>
-      <p class="text-sm text-muted mt-1">
-        Everything below is built with <code>hono-preact</code>. This is the
-        same framework, the same primitives, exercising every feature the
-        framework ships.
+  <div class="grid min-h-screen place-items-center bg-background px-4">
+    <div class="w-full max-w-sm rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm">
+      <div class="mb-6">
+        <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-magenta-500 to-brand-orange">
+          <span class="text-lg font-bold text-white">T</span>
+        </div>
+        <h1 class="text-xl font-bold text-foreground">Tasks demo</h1>
+        <p class="mt-1 text-sm text-muted">
+          Everything here is built with <code>hono-preact</code>, exercising
+          every feature the framework ships: loaders, actions, streaming,
+          guards, view transitions, and UI primitives.
+        </p>
+      </div>
+      <p class="mb-4 text-sm text-muted">
+        The data is in-memory and resets when the Worker restarts. Anything you
+        create here is temporary.
       </p>
-    </header>
-    <p>
-      The data is in-memory and resets when the Worker restarts. Anything you
-      create here is temporary.
-    </p>
-    <p>
       <a
         href="/demo/projects"
-        class="text-accent underline hover:text-accent-hover"
+        class="block w-full rounded-lg bg-accent px-4 py-2 text-center text-sm font-semibold text-accent-foreground hover:bg-accent-hover"
       >
-        Go to projects →
+        Go to projects
       </a>
-    </p>
-    <footer class="text-xs text-muted pt-6">
-      Behind the scenes: see{' '}
-      <a href="/docs/loaders" class="underline">
-        loaders
-      </a>
-      ,{' '}
-      <a href="/docs/actions" class="underline">
-        actions
-      </a>
-      ,{' '}
-      <a href="/docs/streaming" class="underline">
-        streaming
-      </a>
-      ,{' '}
-      <a href="/docs/guards" class="underline">
-        guards
-      </a>
-      .
-    </footer>
-  </section>
+      <footer class="mt-6 border-t border-border pt-4 text-xs text-muted">
+        Behind the scenes:{' '}
+        <a href="/docs/loaders" class="underline hover:text-foreground">
+          loaders
+        </a>
+        ,{' '}
+        <a href="/docs/actions" class="underline hover:text-foreground">
+          actions
+        </a>
+        ,{' '}
+        <a href="/docs/streaming" class="underline hover:text-foreground">
+          streaming
+        </a>
+        ,{' '}
+        <a href="/docs/guards" class="underline hover:text-foreground">
+          guards
+        </a>
+        .
+      </footer>
+    </div>
+  </div>
 );
 DemoIndex.displayName = 'DemoIndex';
 

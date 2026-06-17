@@ -6,6 +6,7 @@ import { serverLoaders as taskLoaders } from '../../pages/demo/task.server.js';
 import { MoreHorizontal } from 'lucide-preact';
 import { TaskMenu, TaskContextMenu } from './TaskActions.js';
 import type { PatchFn, RemoveFn } from './Board.js';
+import { Tooltip } from 'hono-preact-ui';
 
 const PRIORITY_LABEL: Record<Task['priority'], string> = {
   urgent: 'Urgent',
@@ -79,15 +80,37 @@ const TaskCard: FunctionComponent<Props> = ({
             </span>
           </ViewTransitionName>
           <div class="flex items-center gap-1.5">
-            <span
-              class={`rounded-full px-1.5 py-px text-[10px] font-bold badge-${task.priority}`}
-            >
-              {PRIORITY_LABEL[task.priority]}
-            </span>
+            <Tooltip.Root openDelay={300}>
+              <Tooltip.Trigger
+                render={
+                  <span
+                    class={`rounded-full px-1.5 py-px text-[10px] font-bold badge-${task.priority}`}
+                  />
+                }
+              >
+                {PRIORITY_LABEL[task.priority]}
+              </Tooltip.Trigger>
+              <Tooltip.Positioner>
+                <Tooltip.Popup class="rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow">
+                  {PRIORITY_LABEL[task.priority]} priority
+                </Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Root>
             {assignee && (
-              <span class="ml-auto grid h-[19px] w-[19px] place-items-center rounded-full bg-accent text-[9.5px] font-bold text-accent-foreground">
-                {assignee.name.charAt(0).toUpperCase()}
-              </span>
+              <Tooltip.Root openDelay={300}>
+                <Tooltip.Trigger
+                  render={
+                    <span class="ml-auto grid h-[19px] w-[19px] place-items-center rounded-full bg-accent text-[9.5px] font-bold text-accent-foreground" />
+                  }
+                >
+                  {assignee.name.charAt(0).toUpperCase()}
+                </Tooltip.Trigger>
+                <Tooltip.Positioner>
+                  <Tooltip.Popup class="rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow">
+                    {assignee.name}
+                  </Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Root>
             )}
           </div>
         </ViewTransitionName>

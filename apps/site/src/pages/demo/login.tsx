@@ -23,41 +23,59 @@ const LoginPage: FunctionComponent = () => {
   };
 
   return (
-    <section class="mx-auto max-w-md p-6 space-y-4">
-      <h1 class="text-2xl font-semibold">Sign in to the demo</h1>
-      <p class="text-sm text-muted">
-        This is a feature showcase. Enter any email; the demo will create that
-        user and sign you in. There is no real magic link.
-      </p>
-      <Form action={serverActions.login} class="space-y-3">
-        <label class="block">
-          <span class="text-sm">Email</span>
-          <input
-            name="email"
-            type="email"
-            required
-            class="block w-full border px-2 py-1 mt-1"
-            placeholder="you@example.com"
-          />
-        </label>
-        <label class="block">
-          <span class="text-sm">Display name (optional)</span>
-          <input
-            name="name"
-            type="text"
-            class="block w-full border px-2 py-1 mt-1"
-          />
-        </label>
-        <button
-          type="submit"
-          class="bg-accent text-accent-foreground px-3 py-1 hover:bg-accent-hover"
-          onClick={markAuthed}
-        >
-          {pending ? 'Signing in...' : 'Sign in'}
-        </button>
-        {error && <p class="text-sm text-danger">{error}</p>}
-      </Form>
-    </section>
+    <div class="grid min-h-screen place-items-center bg-background px-4">
+      <div class="w-full max-w-sm rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm">
+        <div class="mb-6">
+          <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-magenta-500 to-brand-orange">
+            <span class="text-lg font-bold text-white">T</span>
+          </div>
+          <h1 class="text-xl font-bold text-foreground">Sign in to Tasks</h1>
+          <p class="mt-1 text-sm text-muted">
+            This is a feature showcase. Enter any email; the demo will create
+            that user and sign you in. There is no real magic link.
+          </p>
+        </div>
+        <Form action={serverActions.login} class="space-y-4">
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-foreground">
+              Email
+            </span>
+            <input
+              name="email"
+              type="email"
+              required
+              class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+              placeholder="you@example.com"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-foreground">
+              Display name{' '}
+              <span class="font-normal text-muted">(optional)</span>
+            </span>
+            <input
+              name="name"
+              type="text"
+              class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+              placeholder="Alice"
+            />
+          </label>
+          {error && (
+            <p class="rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            class="w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
+            onClick={markAuthed}
+            disabled={pending}
+          >
+            {pending ? 'Signing in...' : 'Sign in'}
+          </button>
+        </Form>
+      </div>
+    </div>
   );
 };
 LoginPage.displayName = 'LoginPage';
