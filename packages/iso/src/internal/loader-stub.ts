@@ -11,9 +11,8 @@ export function __$createLoaderStub_hpiso<T = unknown>(
   opts: StubOpts
 ): LoaderRef<T> {
   // LoaderHost's useLoaderRunner is the actual driver in the browser; this fn
-  // is the SSR / direct-fn fallback path only. The callbacks are intentionally
-  // no-ops: the consumer awaits the returned Promise<T> for the final value and
-  // has no use for intermediate chunk or error notifications.
+  // is the SSR / direct-fn fallback path only; it awaits the first value and
+  // ignores any streamed chunks.
   const fn = async ({
     location,
     signal,
@@ -29,9 +28,8 @@ export function __$createLoaderStub_hpiso<T = unknown>(
         pathParams: location.pathParams,
         searchParams: location.searchParams,
       },
-      signal ?? new AbortController().signal,
-      { onChunk: () => {}, onError: () => {}, onEnd: () => {} }
-    );
+      signal ?? new AbortController().signal
+    ).first;
   // defineLoader does the cache + symbol + useData/useError plumbing.
   return defineLoader<T>(fn as any, {
     __moduleKey: opts.__moduleKey,

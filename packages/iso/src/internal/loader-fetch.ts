@@ -14,157 +14,177 @@ type SerializedLocation = {
   searchParams: Record<string, string>;
 };
 
+export type LoaderFetchHandle<T> = {
+  /**
+   * Resolves with the first (or only) loader value. Rejects on an error or
+   * timeout that occurs before the first chunk. For a redirect outcome the
+   * promise never settles (the page is navigating away).
+   */
+  first: Promise<T>;
+  /**
+   * Attach callbacks for a streaming loader: onChunk fires for each chunk
+   * after the first, onError for a mid-stream error/timeout, onEnd at stream
+   * end. No-op for non-streaming (JSON) responses. Returns an unsubscribe that
+   * stops the background pump. Call at most once.
+   */
+  subscribe(callbacks: LoaderFetchCallbacks<T>): () => void;
+};
+
 /**
  * POST to /__loaders and consume the response.
  *
- * Static loaders return JSON; the parsed value resolves the returned promise.
- * Streaming loaders return SSE; the first chunk resolves the promise, and
- * subsequent chunks fire callbacks.onChunk. Stream errors after the first
- * chunk fire callbacks.onError. Stream end fires callbacks.onEnd.
+ * Static loaders return JSON; `handle.first` resolves with the parsed value.
+ * Streaming loaders return SSE; `handle.first` resolves with the first chunk
+ * and `handle.subscribe(callbacks)` drives the rest (onChunk per later chunk,
+ * onError mid-stream, onEnd at end). The pump starts only after `first`
+ * settles, so subscribing synchronously after the call loses no chunks.
  */
-export async function fetchLoaderData<T>(
+export function fetchLoaderData<T>(
   moduleKey: string,
   loaderName: string,
   location: SerializedLocation,
-  signal: AbortSignal,
-  callbacks: LoaderFetchCallbacks<T>
-): Promise<T> {
-  const res = await fetch(LOADERS_RPC_PATH, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
-    signal,
-  });
+  signal: AbortSignal
+): LoaderFetchHandle<T> {
+  // Populated only when the response is SSE and its first chunk has been read.
+  // `subscribe` pumps off this iterator; null means a non-streaming response
+  // (nothing to pump).
+  let streamIter: AsyncGenerator<{ event: string; data: string }> | null = null;
 
-  if (!res.ok) {
-    // Try to parse a deny outcome envelope first; it carries `message`
-    // rather than `error`. Fall back to the legacy `{ error }` shape.
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      __outcome?: string;
-      message?: string;
-      timeoutMs?: number;
-    };
-    if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
-      throw new TimeoutError(body.timeoutMs);
-    }
-    if (body.__outcome === 'deny') {
-      // The `deny()` constructor defaults `message` for first-party
-      // callers, but a hand-rolled envelope from custom server middleware
-      // might still arrive without one. Surface a deny-aware fallback
-      // instead of the generic "Loader failed" so the user sees a hint
-      // that the status came from an explicit deny.
-      const msg =
-        typeof body.message === 'string'
-          ? body.message
-          : `Request denied (${res.status})`;
-      throw new Error(msg);
-    }
-    throw new Error(
-      body.error ??
-        `Loader failed with status ${res.status}. Check the loader's .server.ts for a thrown error, and the server logs for details.`
-    );
-  }
+  const first = (async (): Promise<T> => {
+    const res = await fetch(LOADERS_RPC_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
+      signal,
+    });
 
-  const contentType = res.headers.get('Content-Type') ?? '';
-  if (!contentType.includes('text/event-stream')) {
-    const json = (await res.json()) as unknown;
-    // Collision risk note (deferred from middleware review C6): a loader
-    // that legitimately returns data shaped `{ __outcome: 'redirect', to:
-    // <string> }` would be misinterpreted here and navigate the browser.
-    // The probability is low (the magic key is namespaced and unusual) and
-    // a wire-version sentinel like `__envelope: 'hono-preact/redirect'` or
-    // a `X-Hono-Preact-Outcome: redirect` response header would close the
-    // gap. Deferred for v0.2: body-key sniffing is the documented contract
-    // for v0.1.
-    // Server-side middleware that throws `redirect(...)` comes back as a
-    // redirect outcome envelope. Hand off to the browser via
-    // `location.assign` and return a promise that never settles: the
-    // current document is being replaced, no caller will see a value.
-    //
-    // Trust boundary: `to` is taken straight from the JSON body and passed
-    // to `window.location.assign`. The framework's own handlers emit safe
-    // (typically same-origin) values, but a compromised or misconfigured
-    // server (or a proxy injecting JSON) could push the client anywhere.
-    // We don't validate origin here for v0.1; treat your own server as
-    // part of the trusted boundary. A same-origin check is a deferred
-    // enhancement (see C4 in the middleware review).
-    if (
-      json !== null &&
-      typeof json === 'object' &&
-      (json as { __outcome?: unknown }).__outcome === 'redirect' &&
-      typeof (json as { to?: unknown }).to === 'string'
-    ) {
-      const to = (json as { to: string }).to;
-      if (typeof window !== 'undefined') {
-        window.location.assign(to);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        __outcome?: string;
+        message?: string;
+        timeoutMs?: number;
+      };
+      if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
+        throw new TimeoutError(body.timeoutMs);
       }
-      return new Promise<T>(() => {
-        /* never resolves; page is navigating */
-      });
-    }
-    return json as T;
-  }
-
-  if (!res.body) {
-    throw new Error('Streaming loader response has no body');
-  }
-
-  // SSE: read the first message event synchronously (await first chunk),
-  // then kick off an async loop that pushes subsequent chunks to callbacks.
-  const iter = readSSE(res.body);
-  const firstChunk = await readFirstChunk<T>(iter);
-
-  // Continue consuming chunks in the background. Each subsequent message
-  // pushes a value via onChunk. Errors fire onError. End fires onEnd.
-  (async () => {
-    try {
-      while (true) {
-        const step = await iter.next();
-        if (step.done) {
-          callbacks.onEnd();
-          return;
-        }
-        const ev = step.value;
-        if (ev.event === 'message') {
-          try {
-            callbacks.onChunk(JSON.parse(ev.data) as T);
-          } catch {
-            // malformed mid-stream chunk: skip
-          }
-        } else if (ev.event === 'timeout') {
-          try {
-            const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
-            callbacks.onError(new TimeoutError(parsed.timeoutMs ?? 0));
-          } catch {
-            callbacks.onError(
-              new Error('Malformed timeout event in streaming loader')
-            );
-          }
-          return;
-        } else if (ev.event === 'error') {
-          try {
-            const parsed = JSON.parse(ev.data) as {
-              message?: string;
-              name?: string;
-            };
-            const err = new Error(parsed.message ?? 'Streamed error');
-            if (parsed.name) err.name = parsed.name;
-            callbacks.onError(err);
-          } catch {
-            callbacks.onError(new Error('Streamed error'));
-          }
-          return;
-        }
-        // Ignore other event types
+      if (body.__outcome === 'deny') {
+        const msg =
+          typeof body.message === 'string'
+            ? body.message
+            : `Request denied (${res.status})`;
+        throw new Error(msg);
       }
-    } catch (err) {
-      if (signal.aborted) return;
-      callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+      throw new Error(
+        body.error ??
+          `Loader failed with status ${res.status}. Check the loader's .server.ts for a thrown error, and the server logs for details.`
+      );
     }
+
+    const contentType = res.headers.get('Content-Type') ?? '';
+    if (!contentType.includes('text/event-stream')) {
+      const json = (await res.json()) as unknown;
+      // A loader that legitimately returns `{ __outcome: 'redirect', to }` is
+      // misinterpreted here (documented v0.1 contract; see C6/C4 in the
+      // middleware review). `to` is taken from the body and passed to
+      // location.assign; treat your own server as trusted.
+      if (
+        json !== null &&
+        typeof json === 'object' &&
+        (json as { __outcome?: unknown }).__outcome === 'redirect' &&
+        typeof (json as { to?: unknown }).to === 'string'
+      ) {
+        const to = (json as { to: string }).to;
+        if (typeof window !== 'undefined') {
+          window.location.assign(to);
+        }
+        return new Promise<T>(() => {
+          /* never resolves; page is navigating */
+        });
+      }
+      return json as T;
+    }
+
+    if (!res.body) {
+      throw new Error('Streaming loader response has no body');
+    }
+
+    // SSE: read the first message event (await first chunk). Hand the iterator
+    // to `subscribe` so later chunks pump on demand.
+    const iter = readSSE(res.body);
+    const firstChunk = await readFirstChunk<T>(iter);
+    streamIter = iter;
+    return firstChunk;
   })();
 
-  return firstChunk;
+  function subscribe(callbacks: LoaderFetchCallbacks<T>): () => void {
+    let stopped = false;
+    // Start the pump only after `first` settles: a non-streaming response or a
+    // pre-first-chunk rejection leaves `streamIter` null (nothing to pump).
+    first.then(
+      () => {
+        if (stopped || streamIter === null) return;
+        const iter = streamIter;
+        void (async () => {
+          try {
+            while (true) {
+              if (stopped) return;
+              const step = await iter.next();
+              if (step.done) {
+                callbacks.onEnd();
+                return;
+              }
+              const ev = step.value;
+              if (ev.event === 'message') {
+                try {
+                  callbacks.onChunk(JSON.parse(ev.data) as T);
+                } catch {
+                  // malformed mid-stream chunk: skip
+                }
+              } else if (ev.event === 'timeout') {
+                try {
+                  const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+                  callbacks.onError(new TimeoutError(parsed.timeoutMs ?? 0));
+                } catch {
+                  callbacks.onError(
+                    new Error('Malformed timeout event in streaming loader')
+                  );
+                }
+                return;
+              } else if (ev.event === 'error') {
+                try {
+                  const parsed = JSON.parse(ev.data) as {
+                    message?: string;
+                    name?: string;
+                  };
+                  const err = new Error(parsed.message ?? 'Streamed error');
+                  if (parsed.name) err.name = parsed.name;
+                  callbacks.onError(err);
+                } catch {
+                  callbacks.onError(new Error('Streamed error'));
+                }
+                return;
+              }
+              // Ignore other event types
+            }
+          } catch (err) {
+            if (signal.aborted) return;
+            callbacks.onError(
+              err instanceof Error ? err : new Error(String(err))
+            );
+          }
+        })();
+      },
+      () => {
+        /* first rejected before any chunk: no stream to pump */
+      }
+    );
+    return () => {
+      stopped = true;
+    };
+  }
+
+  return { first, subscribe };
 }
 
 /**

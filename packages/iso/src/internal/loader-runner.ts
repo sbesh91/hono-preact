@@ -60,7 +60,7 @@ export function runLoader<T>(
   const loaderName = loaderRef.__loaderName ?? 'default';
 
   if (useFetchPath) {
-    return fetchLoaderData<T>(
+    const handle = fetchLoaderData<T>(
       loaderRef.__moduleKey!,
       loaderName,
       {
@@ -68,9 +68,13 @@ export function runLoader<T>(
         pathParams: (location.pathParams ?? {}) as Record<string, string>,
         searchParams: (location.searchParams ?? {}) as Record<string, string>,
       },
-      signal,
-      callbacks
+      signal
     );
+    // Stream subsequent chunks to the caller's callbacks. Teardown is driven by
+    // the request `signal` (abort stops the pump), so the unsubscribe handle is
+    // not retained here.
+    handle.subscribe(callbacks);
+    return handle.first;
   }
 
   // Direct-fn path. Result may be a Promise<T>, a
