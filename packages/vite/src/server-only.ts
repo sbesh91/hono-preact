@@ -1,19 +1,18 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse } from '@babel/parser';
-import type { ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
-import {
-  MODULE_KEY_EXPORT,
-  LOADER_NAME_OPTION,
-  FORM_MODULE_FIELD,
-  FORM_ACTION_FIELD,
-} from '@hono-preact/iso/internal/runtime';
+import { MODULE_KEY_EXPORT } from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
-import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import { RECOGNIZED_SERVER_EXPORTS } from './server-exports-contract.js';
+import {
+  findDynamicServerImports,
+  isServerImport,
+  type DynamicServerImport,
+} from './ast-walkers.js';
+import { extractServerLoadersMeta } from './source-extraction.js';
+import { loaderStubSource, actionStubSource } from './stub-templates.js';
 
 // The unknown-specifier rejection message lists every recognized server
 // export so a user can immediately see the valid set. The list is derived
@@ -26,101 +25,6 @@ const ALLOWED_SPECIFIERS_LIST = RECOGNIZED_SERVER_EXPORTS.join(', ');
 export const VITE_ROOT_ACCESSOR = Symbol.for(
   '@hono-preact/vite/server-only/viteRoot'
 );
-
-/**
- * Reads a .server.* file synchronously and extracts the `params` option from
- * each entry in the `serverLoaders` ObjectExpression. Returns a map of
- * { loaderName -> params } for loaders that declare non-default params.
- * Returns an empty object if the file cannot be parsed or has no serverLoaders.
- */
-function readSourceWithExtensionFallback(absServerPath: string): string | null {
-  // TypeScript NodeNext convention: source code imports `.server.js` even
-  // though the file on disk is `.server.ts` (or .tsx). Try the literal path
-  // first (handles plain `.js` cases), then the TS-extension swaps.
-  const tries = [
-    absServerPath,
-    absServerPath.replace(/\.js$/, '.ts'),
-    absServerPath.replace(/\.jsx$/, '.tsx'),
-  ];
-  for (const p of tries) {
-    try {
-      return fs.readFileSync(p, 'utf8');
-    } catch {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
-function extractServerLoadersMeta(
-  absServerPath: string
-): Record<string, string[] | '*'> {
-  const src = readSourceWithExtensionFallback(absServerPath);
-  if (src == null) return {};
-
-  let ast;
-  try {
-    ast = parse(src, {
-      sourceType: 'module',
-      plugins: BABEL_PARSER_PLUGINS,
-      errorRecovery: true,
-    });
-  } catch {
-    return {};
-  }
-
-  const entries = parseServerLoaders(ast.program);
-  const meta: Record<string, string[] | '*'> = {};
-  for (const entry of entries) {
-    if (!entry.optsArg) continue;
-    const params = readParamsOpt(entry.optsArg);
-    if (params !== undefined) meta[entry.name] = params;
-  }
-
-  return meta;
-}
-
-type DynamicServerImport = { start: number; end: number; source: string };
-
-function findDynamicServerImports(
-  node: unknown,
-  found: DynamicServerImport[]
-): void {
-  if (!node || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    for (const child of node) findDynamicServerImports(child, found);
-    return;
-  }
-  const n = node as {
-    type?: string;
-    callee?: { type?: string };
-    arguments?: Array<{ type?: string; value?: string }>;
-    start?: number;
-    end?: number;
-  };
-  if (
-    n.type === 'CallExpression' &&
-    n.callee?.type === 'Import' &&
-    n.arguments?.[0]?.type === 'StringLiteral' &&
-    typeof n.arguments[0].value === 'string' &&
-    /\.server(\.[jt]sx?)?$/.test(n.arguments[0].value)
-  ) {
-    found.push({
-      start: n.start!,
-      end: n.end!,
-      source: n.arguments[0].value,
-    });
-  }
-  for (const key of Object.keys(node as object)) {
-    if (
-      key === 'loc' ||
-      key === 'leadingComments' ||
-      key === 'trailingComments'
-    )
-      continue;
-    findDynamicServerImports((node as Record<string, unknown>)[key], found);
-  }
-}
 
 export function serverOnlyPlugin(): Plugin {
   let viteRoot: string | undefined;
@@ -157,10 +61,6 @@ export function serverOnlyPlugin(): Plugin {
           );
         }
       }
-
-      const isServerImport = (node: unknown): node is ImportDeclaration =>
-        (node as ImportDeclaration).type === 'ImportDeclaration' &&
-        /\.server(\.[jt]sx?)?$/.test((node as ImportDeclaration).source.value);
 
       const serverImports = ast.program.body.filter(isServerImport);
 
@@ -230,20 +130,8 @@ export function serverOnlyPlugin(): Plugin {
               serverImport.source.value
             );
             const loadersMeta = extractServerLoadersMeta(absServerPath);
-            const metaVar = `__$serverLoadersMeta_${specifier.local.name}`;
-            const metaJson = JSON.stringify(loadersMeta);
             stubs.push(
-              `const ${metaVar} = ${metaJson};\n` +
-                `const ${specifier.local.name} = new Proxy({}, {\n` +
-                `  get(_, name) {\n` +
-                `    const __meta = ${metaVar}[String(name)];\n` +
-                `    return __$createLoaderStub_hpiso({\n` +
-                `      ${MODULE_KEY_EXPORT}: ${JSON.stringify(moduleKey)},\n` +
-                `      ${LOADER_NAME_OPTION}: String(name),\n` +
-                `      params: __meta,\n` +
-                `    });\n` +
-                `  }\n` +
-                `});`
+              loaderStubSource(specifier.local.name, moduleKey, loadersMeta)
             );
           } else if (
             specifier.type === 'ImportSpecifier' &&
@@ -251,22 +139,7 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.name === 'serverActions'
           ) {
             needsUseActionImport = true;
-            // F9: each `serverActions.<name>` read constructs a fresh
-            // stub object, so `serverActions.create !== serverActions.create`
-            // across two reads. Not new in the middleware refactor, but
-            // worth flagging: callers that store the stub in a variable
-            // and treat it as a stable identity (e.g. `Map` keys) will
-            // surprise themselves. The contract is "stubs are descriptor
-            // records, not singletons."
-            stubs.push(
-              `const ${specifier.local.name} = new Proxy({}, {\n` +
-                `  get(_, action) {\n` +
-                `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_ACTION_FIELD}: String(action) };\n` +
-                `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
-                `    return stub;\n` +
-                `  }\n` +
-                `});`
-            );
+            stubs.push(actionStubSource(specifier.local.name, moduleKey));
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&
