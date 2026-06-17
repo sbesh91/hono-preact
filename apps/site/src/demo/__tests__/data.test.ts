@@ -1,67 +1,83 @@
+// apps/site/src/demo/__tests__/data.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   resetDemoData,
   listProjects,
   getProjectBySlug,
-  listIssuesForProject,
-  getIssue,
-  listComments,
-  createIssue,
+  listTasksForProject,
+  getTask,
+  createTask,
+  setTaskStatus,
+  setTaskPriority,
+  deleteTask,
   addComment,
-  setIssueStatus,
-  type User,
+  listComments,
+  upsertUser,
+  activityForProject,
+  type Task,
 } from '../data.js';
 
-const alice: User = { id: 'u-1', email: 'alice@example.com', name: 'Alice' };
+beforeEach(() => resetDemoData());
 
-describe('demo data', () => {
-  beforeEach(() => resetDemoData());
-
-  it('seeds three projects with stable slugs', () => {
-    const projects = listProjects();
-    expect(projects).toHaveLength(3);
-    expect(projects.map((p) => p.slug)).toEqual(['inf', 'api', 'web']);
+describe('tasks', () => {
+  it('seeds projects with tasks across statuses and priorities', () => {
+    const inf = getProjectBySlug('inf')!;
+    const tasks = listTasksForProject(inf.id);
+    expect(tasks.length).toBeGreaterThanOrEqual(4);
+    const statuses = new Set(tasks.map((t) => t.status));
+    expect(statuses.has('backlog')).toBe(true);
+    expect(statuses.has('done')).toBe(true);
+    for (const t of tasks) {
+      expect(['urgent', 'high', 'medium', 'low']).toContain(t.priority);
+    }
   });
 
-  it('seeds open issues per project', () => {
+  it('createTask adds a task with the given status/priority/assignee', () => {
     const inf = getProjectBySlug('inf')!;
-    const issues = listIssuesForProject(inf.id);
-    expect(issues.length).toBeGreaterThan(0);
-    expect(issues.every((i) => i.projectId === inf.id)).toBe(true);
-  });
-
-  it('createIssue adds a new open issue authored by the caller', () => {
-    const inf = getProjectBySlug('inf')!;
-    const created = createIssue(alice, {
+    const author = upsertUser('alice@example.com', 'Alice');
+    const t = createTask(author, {
       projectId: inf.id,
-      title: 'My issue',
-      body: 'A bug.',
+      title: 'New work',
+      body: 'details',
+      priority: 'high',
+      status: 'backlog',
+      assigneeId: 'u-2',
     });
-    expect(created.status).toBe('open');
-    expect(created.authorId).toBe(alice.id);
-    expect(listIssuesForProject(inf.id)).toContainEqual(created);
+    expect(getTask(t.id)).toMatchObject({
+      title: 'New work',
+      priority: 'high',
+      status: 'backlog',
+      assigneeId: 'u-2',
+      authorId: author.id,
+    });
   });
 
-  it('addComment appends to an issue and listComments returns in order', () => {
-    // 'web' has a single seeded issue (i-5) with no seeded comments, so the
-    // test isn't entangled with the i-1/i-2 streaming-demo seed thread.
-    const web = getProjectBySlug('web')!;
-    const issue = listIssuesForProject(web.id)[0];
-    expect(listComments(issue.id)).toEqual([]); // pre-condition
-    const c1 = addComment(alice, { issueId: issue.id, body: 'first' });
-    const c2 = addComment(alice, { issueId: issue.id, body: 'second' });
-    const comments = listComments(issue.id);
-    expect(comments.map((c) => c.id)).toEqual([c1.id, c2.id]);
-  });
-
-  it('setIssueStatus updates status', () => {
+  it('setTaskStatus and setTaskPriority mutate in place', () => {
     const inf = getProjectBySlug('inf')!;
-    const issue = listIssuesForProject(inf.id)[0];
-    setIssueStatus(issue.id, 'closed');
-    expect(getIssue(issue.id)?.status).toBe('closed');
+    const first = listTasksForProject(inf.id)[0];
+    setTaskStatus(first.id, 'done');
+    setTaskPriority(first.id, 'urgent');
+    expect(getTask(first.id)).toMatchObject({
+      status: 'done',
+      priority: 'urgent',
+    });
   });
 
-  it('getIssue returns null for unknown id', () => {
-    expect(getIssue('not-a-real-id')).toBe(null);
+  it('deleteTask removes the task and its comments', () => {
+    const inf = getProjectBySlug('inf')!;
+    const first = listTasksForProject(inf.id)[0];
+    const author = upsertUser('alice@example.com', 'Alice');
+    addComment(author, { taskId: first.id, body: 'hi' });
+    deleteTask(first.id);
+    expect(getTask(first.id)).toBeNull();
+    expect(listComments(first.id)).toEqual([]);
+  });
+
+  it('activity includes task-moved when a task is closed to done', () => {
+    const inf = getProjectBySlug('inf')!;
+    const open = listTasksForProject(inf.id).find((t) => t.status !== 'done')!;
+    setTaskStatus(open.id, 'done');
+    const feed = activityForProject(inf.id, 20);
+    expect(feed.some((a) => a.kind === 'task-moved')).toBe(true);
   });
 });
