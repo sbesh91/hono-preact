@@ -170,4 +170,45 @@ describe('fetchLoaderData: streaming pump', () => {
     expect(onChunk).toHaveBeenCalledWith('second');
     expect(onEnd).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects first with a specific message when the first chunk is malformed JSON', async () => {
+    const body = 'event: message\ndata: {not json}\n\n';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+    await expect(
+      fetchLoaderData('m', 'default', loc, new AbortController().signal).first
+    ).rejects.toThrow('Malformed first chunk in streaming loader');
+  });
+
+  it('reports a generic error via onError when a mid-stream timeout event is malformed', async () => {
+    const body =
+      'event: message\ndata: "first"\n\n' +
+      'event: timeout\ndata: {not json}\n\n';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const onError = vi.fn();
+    const handle = fetchLoaderData<string>(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    );
+    handle.subscribe({ onChunk: () => {}, onError, onEnd: () => {} });
+
+    expect(await handle.first).toBe('first');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0].message).toBe(
+      'Malformed timeout event in streaming loader'
+    );
+  });
 });
