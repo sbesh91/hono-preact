@@ -3,13 +3,16 @@ import {
   Form,
   useFormStatus,
   useOptimisticAction,
+  useParams,
   ViewTransitionName,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
+import { ArrowLeft } from 'lucide-preact';
 import { serverLoaders, serverActions } from './task.server.js';
 import { serverLoaders as boardLoaders } from './project-board.server.js';
+import { StatusSelect } from '../../components/demo/pickers.js';
 import CommentList from '../../components/demo/CommentList.js';
 import type {
   ActivityItem,
@@ -29,20 +32,15 @@ type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
 type TaskData = WithAuthor<Task>;
 type CommentData = WithAuthor<Comment>;
 
-// The four task statuses in board order, with their display labels.
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: 'backlog', label: 'Backlog' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'in_review', label: 'In Review' },
-  { value: 'done', label: 'Done' },
-];
-
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
   in_progress: 'In Progress',
   in_review: 'In Review',
   done: 'Done',
 };
+
+// Shared panel chrome, matching the board's card/column language.
+const PANEL = 'rounded-xl border border-border bg-background p-5';
 
 // ---- Section: task header + body + status control ----
 // Lives inside taskLoader's View context. Owns the status-change action.
@@ -57,6 +55,13 @@ const TaskHeaderAndActions: FunctionComponent<{
   reloadTask: () => void;
 }> = ({ task, reloadTask }) => {
   useTitle(`${task.title} · demo`);
+
+  // The route slug doubles as the project slug, so the back link can point at
+  // the board without touching any loader. (project-header.tsx reads the same
+  // param.)
+  const { projectId: projectSlug } = useParams(
+    '/demo/projects/:projectId/tasks/:taskId'
+  );
 
   // useOptimisticAction keeps the applied patch in place until the loader's
   // base value (task.status) actually reflects it. On error the framework
@@ -81,12 +86,21 @@ const TaskHeaderAndActions: FunctionComponent<{
 
   return (
     <>
-      <header class="space-y-2">
-        <div class="flex items-center gap-2">
+      <header class="space-y-3">
+        <a
+          href={`/demo/projects/${projectSlug}`}
+          class="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground"
+        >
+          <ArrowLeft size={15} aria-hidden />
+          Back to {projectSlug.toUpperCase()}
+        </a>
+        <div class="flex flex-wrap items-center gap-3">
           <ViewTransitionName
             name={`task-title-${task.id}`}
             groupClass="task-card"
-            render={<h2 class="text-xl font-semibold text-foreground" />}
+            render={
+              <h2 class="text-2xl font-semibold leading-tight text-foreground" />
+            }
           >
             {task.title}
           </ViewTransitionName>
@@ -95,7 +109,7 @@ const TaskHeaderAndActions: FunctionComponent<{
             groupClass="task-card"
             render={
               <span
-                class={`text-xs px-2 py-0.5 ${
+                class={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                   status === 'done' ? 'badge-success' : 'badge-neutral'
                 }`}
               />
@@ -111,31 +125,22 @@ const TaskHeaderAndActions: FunctionComponent<{
       </header>
 
       {task.body && (
-        <p class="whitespace-pre-wrap text-foreground">{task.body}</p>
+        <p class="whitespace-pre-wrap leading-relaxed text-foreground">
+          {task.body}
+        </p>
       )}
 
-      <div class="space-y-1">
-        <label class="flex items-center gap-2 text-sm text-foreground">
-          <span class="font-medium">Status</span>
-          <select
-            class="border border-border px-2 py-1 text-sm bg-transparent"
-            value={status}
-            disabled={pending}
-            onChange={(e) =>
-              mutate({
-                taskId: task.id,
-                status: e.currentTarget.value as TaskStatus,
-              })
-            }
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+      <div class="space-y-1.5">
+        <span class="block text-sm font-medium text-foreground">Status</span>
+        <div class="flex items-center gap-3">
+          <div class="w-48">
+            <StatusSelect
+              value={status}
+              onChange={(next) => mutate({ taskId: task.id, status: next })}
+            />
+          </div>
           {pending && <span class="text-xs text-muted">Saving…</span>}
-        </label>
+        </div>
         {error && <p class="text-sm text-danger">{error}</p>}
       </div>
     </>
@@ -181,14 +186,19 @@ const CommentsSection: FunctionComponent<{
   const { pending } = useFormStatus(serverActions.addComment);
 
   return (
-    <section class="space-y-3">
-      <h3 class="font-semibold text-foreground">Comments</h3>
+    <section class={`${PANEL} space-y-4`}>
+      <h3 class="text-base font-semibold text-foreground">
+        Comments
+        <span class="ml-2 text-sm font-normal text-muted">
+          {addComment.value.length}
+        </span>
+      </h3>
       <CommentList comments={addComment.value} />
       <Form
         action={addComment}
         reset
         invalidate={[commentsLoader]}
-        class="space-y-2"
+        class="space-y-2.5 border-t border-border pt-4"
       >
         <input type="hidden" name="taskId" value={taskId} />
         <textarea
@@ -196,14 +206,17 @@ const CommentsSection: FunctionComponent<{
           rows={3}
           required
           placeholder="Add a comment"
-          class="block w-full border border-border px-2 py-1"
+          class="block w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
         />
-        <button
-          type="submit"
-          class="bg-accent text-accent-foreground px-3 py-1 text-sm hover:bg-accent-hover"
-        >
-          {pending ? 'Posting…' : 'Comment'}
-        </button>
+        <div class="flex justify-end">
+          <button
+            type="submit"
+            class="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
+            disabled={pending}
+          >
+            {pending ? 'Posting…' : 'Comment'}
+          </button>
+        </div>
       </Form>
     </section>
   );
@@ -222,31 +235,39 @@ const CommentsView = commentsLoader.View<{ taskId: string }>(
 const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
   activity,
 }) => (
-  <aside class="border-t border-border pt-3 text-xs text-muted">
-    <h4 class="font-semibold mb-1 text-foreground">Project activity</h4>
-    <ul class="space-y-1">
-      {activity.map((a, i) => (
-        <li key={`${a.kind}-${a.at}-${i}`}>
-          <time class="text-muted">{new Date(a.at).toLocaleTimeString()}</time>{' '}
-          {a.kind === 'task-created' && (
-            <>
-              created <strong>{a.task.title}</strong>
-            </>
-          )}
-          {a.kind === 'task-moved' && (
-            <>
-              moved <strong>{a.task.title}</strong> to{' '}
-              <strong>{STATUS_LABEL[a.to]}</strong>
-            </>
-          )}
-          {a.kind === 'comment-added' && (
-            <>
-              commented on <strong>{a.task.title}</strong>
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+  <aside class={`${PANEL} space-y-3`}>
+    <h4 class="text-sm font-semibold text-foreground">Activity</h4>
+    {activity.length === 0 ? (
+      <p class="text-xs text-muted">No activity yet.</p>
+    ) : (
+      <ul class="space-y-3 text-sm text-foreground">
+        {activity.map((a, i) => (
+          <li key={`${a.kind}-${a.at}-${i}`} class="space-y-0.5">
+            <time class="block text-xs text-muted">
+              {new Date(a.at).toLocaleTimeString()}
+            </time>
+            <span class="leading-snug">
+              {a.kind === 'task-created' && (
+                <>
+                  created <strong>{a.task.title}</strong>
+                </>
+              )}
+              {a.kind === 'task-moved' && (
+                <>
+                  moved <strong>{a.task.title}</strong> to{' '}
+                  <strong>{STATUS_LABEL[a.to]}</strong>
+                </>
+              )}
+              {a.kind === 'comment-added' && (
+                <>
+                  commented on <strong>{a.task.title}</strong>
+                </>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
   </aside>
 );
 
@@ -259,16 +280,22 @@ const ActivityView = activityLoader.View(
 
 const TaskView = taskLoader.View(
   ({ data: task, reload: reloadTask }) => {
-    if (!task) return <p>Task not found.</p>;
+    if (!task) return <p class="p-6">Task not found.</p>;
     return (
-      <article class="space-y-6">
-        <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
-        <CommentsView taskId={task.id} />
-        <ActivityView />
-      </article>
+      <div class="mx-auto w-full max-w-5xl px-6 py-6">
+        <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
+          <main class="space-y-6">
+            <article class={`${PANEL} space-y-5`}>
+              <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
+            </article>
+            <CommentsView taskId={task.id} />
+          </main>
+          <ActivityView />
+        </div>
+      </div>
     );
   },
-  { fallback: <p>Loading task…</p> }
+  { fallback: <p class="p-6">Loading task…</p> }
 );
 
 export default definePage(TaskView);
