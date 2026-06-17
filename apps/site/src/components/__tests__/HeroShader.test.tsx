@@ -1,42 +1,161 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, it, expect } from 'vitest';
-import { cleanup, render } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { act, cleanup, render } from '@testing-library/preact';
 import { HeroShader } from '../HeroShader.js';
 
 afterEach(() => cleanup());
 
-describe('HeroShader', () => {
-  it('renders an aria-hidden background wrapper', () => {
-    const { container } = render(<HeroShader />);
-    const wrapper = container.querySelector('[aria-hidden="true"]');
-    expect(wrapper).not.toBeNull();
+describe('HeroShader without OffscreenCanvas worker support', () => {
+  beforeEach(() => {
+    // Force the unsupported branch: no OffscreenCanvas global.
+    vi.stubGlobal('OffscreenCanvas', undefined);
   });
+  afterEach(() => vi.unstubAllGlobals());
 
-  it('renders a canvas element on initial mount', () => {
-    const { container } = render(<HeroShader />);
-    expect(container.querySelector('canvas')).not.toBeNull();
-  });
-
-  it('layers a base gradient under the canvas for fade-in and fallback', () => {
-    // The wrapper always renders three children: a base-gradient div behind
-    // the canvas (visible pre-first-frame and as a no-WebGL2 backdrop), the
-    // canvas itself, and a fade overlay on top.
+  it('renders the three aria-hidden layers', () => {
     const { container } = render(<HeroShader />);
     const wrapper = container.querySelector('[aria-hidden="true"]')!;
     expect(wrapper.children.length).toBe(3);
   });
 
-  it('keeps the canvas transparent until the first frame is drawn', () => {
-    // happy-dom returns null from getContext('webgl2'), so the effect bails
-    // before any draw and the canvas opacity stays at 0 so the base gradient
-    // shows through.
+  it('keeps the canvas transparent so the base gradient shows', () => {
     const { container } = render(<HeroShader />);
     const canvas = container.querySelector('canvas') as HTMLCanvasElement;
     expect(canvas.style.opacity).toBe('0');
   });
 
-  it('unmounts cleanly without throwing', () => {
+  it('unmounts without throwing', () => {
     const { unmount } = render(<HeroShader />);
     expect(() => unmount()).not.toThrow();
+  });
+});
+
+describe('HeroShader with OffscreenCanvas worker support', () => {
+  let workers: FakeWorker[];
+  let resizeCallbacks: ResizeObserverCallback[];
+
+  class FakeWorker {
+    posted: unknown[] = [];
+    transfers: Transferable[][] = [];
+    terminated = false;
+    onmessage: ((e: MessageEvent) => void) | null = null;
+    constructor(
+      public url: URL | string,
+      public options?: WorkerOptions
+    ) {
+      workers.push(this);
+    }
+    postMessage(message: unknown, transfer: Transferable[] = []) {
+      this.posted.push(message);
+      this.transfers.push(transfer);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    emit(data: unknown) {
+      this.onmessage?.({ data } as MessageEvent);
+    }
+  }
+
+  class FakeResizeObserver {
+    constructor(public cb: ResizeObserverCallback) {
+      resizeCallbacks.push(cb);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  beforeEach(() => {
+    workers = [];
+    resizeCallbacks = [];
+    vi.stubGlobal('OffscreenCanvas', class {});
+    vi.stubGlobal('Worker', FakeWorker);
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }));
+    // happy-dom canvases lack transferControlToOffscreen; return a sentinel.
+    (
+      HTMLCanvasElement.prototype as unknown as {
+        transferControlToOffscreen: () => object;
+      }
+    ).transferControlToOffscreen = () => ({ __offscreen: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (
+      HTMLCanvasElement.prototype as {
+        transferControlToOffscreen?: unknown;
+      }
+    ).transferControlToOffscreen;
+  });
+
+  it('creates a module worker and posts init with the transferred canvas', () => {
+    render(<HeroShader />);
+    expect(workers.length).toBe(1);
+    const worker = workers[0];
+    expect(worker.options?.type).toBe('module');
+    const init = worker.posted[0] as { type: string; canvas: unknown };
+    expect(init.type).toBe('init');
+    expect(init.canvas).toEqual({ __offscreen: true });
+    expect(worker.transfers[0]).toContainEqual({ __offscreen: true });
+  });
+
+  it('fades the canvas in once the worker reports the first frame is ready', () => {
+    const { container } = render(<HeroShader />);
+    const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+    expect(canvas.style.opacity).toBe('0');
+    act(() => workers[0].emit({ type: 'ready' }));
+    expect(canvas.style.opacity).toBe('1');
+  });
+
+  it('forwards a resize message with numeric dimensions', () => {
+    render(<HeroShader />);
+    const worker = workers[0];
+    const before = worker.posted.length;
+    resizeCallbacks[0]([], {} as ResizeObserver);
+    const resize = worker.posted[before] as {
+      type: string;
+      width: number;
+      height: number;
+    };
+    expect(resize.type).toBe('resize');
+    expect(typeof resize.width).toBe('number');
+    expect(typeof resize.height).toBe('number');
+  });
+
+  it('forwards a visibility message on visibilitychange', () => {
+    render(<HeroShader />);
+    const worker = workers[0];
+    const before = worker.posted.length;
+    document.dispatchEvent(new Event('visibilitychange'));
+    const message = worker.posted[before] as { type: string };
+    expect(message.type).toBe('visibility');
+  });
+
+  it('terminates the worker when it reports an error', () => {
+    render(<HeroShader />);
+    const worker = workers[0];
+    expect(worker.terminated).toBe(false);
+    worker.emit({ type: 'error' });
+    expect(worker.terminated).toBe(true);
+  });
+
+  it('terminates the worker on unmount', () => {
+    const { unmount } = render(<HeroShader />);
+    const worker = workers[0];
+    unmount();
+    expect(worker.terminated).toBe(true);
   });
 });
