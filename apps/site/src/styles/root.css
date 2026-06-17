@@ -64,6 +64,10 @@
   --color-accent-hover: var(--accent-hover);
   --color-danger: var(--danger);
   --color-ring: var(--ring);
+  --color-priority-urgent: var(--priority-urgent);
+  --color-priority-high: var(--priority-high);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-low: var(--priority-low);
 }
 
 @utility shadow-card {
@@ -112,6 +116,26 @@
   color: var(--badge-neutral-foreground);
 }
 
+@utility badge-urgent {
+  background-color: var(--badge-urgent-surface);
+  color: var(--badge-urgent-foreground);
+}
+
+@utility badge-high {
+  background-color: var(--badge-high-surface);
+  color: var(--badge-high-foreground);
+}
+
+@utility badge-medium {
+  background-color: var(--badge-medium-surface);
+  color: var(--badge-medium-foreground);
+}
+
+@utility badge-low {
+  background-color: var(--badge-low-surface);
+  color: var(--badge-low-foreground);
+}
+
 :root {
   --spring-soft: linear(
     0,
@@ -146,6 +170,20 @@
   --badge-success-foreground: #166534; /* green-800: 5.7:1 on the surface */
   --badge-neutral-surface: #e5e7eb; /* gray-200 */
   --badge-neutral-foreground: #374151; /* gray-700: 8.4:1 on the surface */
+  --badge-urgent-surface: #fde8e8;
+  --badge-urgent-foreground: #b91c1c;
+  --badge-high-surface: #ffedd5;
+  --badge-high-foreground: #c2410c;
+  --badge-medium-surface: #fef3c7;
+  --badge-medium-foreground: #b45309;
+  --badge-low-surface: #d1fae5;
+  --badge-low-foreground: #047857;
+
+  /* Solid priority colors for card stripes / dots */
+  --priority-urgent: #dc2626;
+  --priority-high: #ea580c;
+  --priority-medium: #d97706;
+  --priority-low: #0d9488;
 
   /* Signature orange-to-magenta "orangenta" gradient (left to right) */
   --gradient-orangenta: linear-gradient(90deg, #fe5000 0%, #ec008c 100%);
@@ -176,6 +214,20 @@
     --badge-success-foreground: #bbf7d0; /* green-200: 8.6:1 on the surface */
     --badge-neutral-surface: #374151; /* gray-700 */
     --badge-neutral-foreground: #e5e7eb; /* gray-200: 8.4:1 on the surface */
+    --badge-urgent-surface: #450a0a;
+    --badge-urgent-foreground: #fecaca;
+    --badge-high-surface: #431407;
+    --badge-high-foreground: #fed7aa;
+    --badge-medium-surface: #451a03;
+    --badge-medium-foreground: #fde68a;
+    --badge-low-surface: #022c22;
+    --badge-low-foreground: #a7f3d0;
+
+    /* Solid priority colors for card stripes / dots */
+    --priority-urgent: #f87171;
+    --priority-high: #fb923c;
+    --priority-medium: #fbbf24;
+    --priority-low: #2dd4bf;
 
     /* Deeper, darker elevation so cards keep depth on the dark surface */
     --shadow-card:
@@ -207,6 +259,20 @@
   --badge-success-foreground: #bbf7d0; /* green-200: 8.6:1 on the surface */
   --badge-neutral-surface: #374151; /* gray-700 */
   --badge-neutral-foreground: #e5e7eb; /* gray-200: 8.4:1 on the surface */
+  --badge-urgent-surface: #450a0a;
+  --badge-urgent-foreground: #fecaca;
+  --badge-high-surface: #431407;
+  --badge-high-foreground: #fed7aa;
+  --badge-medium-surface: #451a03;
+  --badge-medium-foreground: #fde68a;
+  --badge-low-surface: #022c22;
+  --badge-low-foreground: #a7f3d0;
+
+  /* Solid priority colors for card stripes / dots */
+  --priority-urgent: #f87171;
+  --priority-high: #fb923c;
+  --priority-medium: #fbbf24;
+  --priority-low: #2dd4bf;
 
   /* Deeper, darker elevation so cards keep depth on the dark surface */
   --shadow-card:
