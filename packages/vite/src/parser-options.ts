@@ -10,6 +10,10 @@ import type { ParserOptions } from '@babel/parser';
  * should not get a silent code-walk failure where the framework expected to
  * find a `defineLoader(...)` call and ran past it.
  *
+ * Import attributes (`with { ... }`) and explicit resource management
+ * (`using` / `await using`) parse by default in Babel 8, so they no longer
+ * need dedicated plugins; the syntaxes above still round-trip without them.
+ *
  * Each call site adds `sourceType: 'module'` and `errorRecovery: true`
  * separately because both are universal at our call sites and the
  * `ParserOptions` shape carries them as top-level fields.
@@ -19,6 +23,4 @@ export const BABEL_PARSER_PLUGINS: ParserOptions['plugins'] = [
   'jsx',
   'decorators',
   'decoratorAutoAccessors',
-  'importAttributes',
-  'explicitResourceManagement',
 ];
