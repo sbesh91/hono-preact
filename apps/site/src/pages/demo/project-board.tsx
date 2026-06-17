@@ -3,6 +3,7 @@ import { definePage } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
+import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
 
 const boardLoader = serverLoaders.default;
 
@@ -15,7 +16,9 @@ const ProjectBoardPage: FunctionComponent = () => {
       <div class="flex items-center gap-3 border-b border-border px-4 py-3.5">
         <h1 class="text-[17px] font-bold">{project.name}</h1>
         <span class="text-[12px] text-muted">{tasks.length} tasks</span>
-        {/* New-task trigger added in Task 9 */}
+        <div class="ml-auto">
+          <NewTaskDialog projectId={project.id} users={users} />
+        </div>
       </div>
       <Board tasks={tasks} projectSlug={project.slug} users={users} />
     </>
