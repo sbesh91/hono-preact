@@ -22,7 +22,6 @@ type Props = {
   onPointerDownCard: (taskId: string, e: PointerEvent) => void;
   draggingId: string | null;
   isOver: boolean;
-  suppressClickRef: { current: boolean };
 };
 
 const Column: FunctionComponent<Props> = ({
@@ -35,7 +34,6 @@ const Column: FunctionComponent<Props> = ({
   onPointerDownCard,
   draggingId,
   isOver,
-  suppressClickRef,
 }) => (
   <div
     ref={registerEl}
@@ -65,7 +63,6 @@ const Column: FunctionComponent<Props> = ({
           onRemove={onRemove}
           onPointerDownCard={onPointerDownCard}
           draggingId={draggingId}
-          suppressClickRef={suppressClickRef}
         />
       ))}
     </div>

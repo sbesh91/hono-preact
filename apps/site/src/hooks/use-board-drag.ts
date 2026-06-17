@@ -14,6 +14,59 @@ export function dropTargetFromPoint(cols: ColumnRect[], x: number): TaskStatus {
   return x < cols[0].rect.left ? cols[0].status : cols[cols.length - 1].status;
 }
 
+const LIFT_SHADOW =
+  '0 12px 26px -8px rgba(37,40,42,.28), 0 4px 10px -6px rgba(37,40,42,.18)';
+
+// Build the drag avatar: a clone of the card promoted to the top layer via the
+// Popover API, so it floats above the board's `overflow-x-auto` clip (and any
+// ancestor stacking/containing-block trap) instead of being cut off as a plain
+// in-flow `translate` would be. The clone is inert (pointer-events: none) and
+// lives outside Preact's tree, so it cannot perturb the board's diff. Returns
+// the popover element for the caller to translate and tear down.
+function createGhost(card: HTMLElement, rect: DOMRect): HTMLDivElement {
+  const ghost = document.createElement('div');
+  ghost.setAttribute('popover', 'manual');
+
+  const clone = card.cloneNode(true) as HTMLElement;
+  // Drop view-transition-names (and ids) from the clone so it never collides
+  // with the real card's names if a navigation view transition fires mid-drag.
+  for (const node of [clone, ...clone.querySelectorAll<HTMLElement>('*')]) {
+    node.style.removeProperty('view-transition-name');
+    node.removeAttribute('id');
+  }
+  ghost.appendChild(clone);
+  document.body.appendChild(ghost);
+  ghost.showPopover();
+
+  // Pin to the card's current viewport box and strip the UA [popover] defaults
+  // (centering inset/margin, border, padding, the overflow:auto that would clip
+  // the lift shadow, the canvas background). inset:auto goes first so the
+  // explicit left/top win over the UA inset:0.
+  Object.assign(ghost.style, {
+    position: 'fixed',
+    inset: 'auto',
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    margin: '0',
+    border: '0',
+    padding: '0',
+    overflow: 'visible',
+    background: 'transparent',
+    pointerEvents: 'none',
+    willChange: 'translate',
+    transition: 'scale 140ms ease, box-shadow 140ms ease',
+  });
+  // Pop the lift in on the next frame so scale + shadow actually animate from
+  // rest (setting them inline at creation has no from-value to ease from).
+  requestAnimationFrame(() => {
+    ghost.style.scale = '1.03';
+    ghost.style.boxShadow = LIFT_SHADOW;
+  });
+  return ghost;
+}
+
 // Demo-only pointer-events drag. NOT a framework primitive. Tracks the
 // dragged task id + the hovered column; commits via onDrop on pointerup.
 export function useBoardDrag(
@@ -23,54 +76,92 @@ export function useBoardDrag(
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
   const startedRef = useRef(false);
-  const suppressClickRef = useRef(false);
 
   const onPointerDown = useCallback(
     (taskId: string, e: PointerEvent) => {
       if (e.button !== 0) return; // left only; right-click stays for ContextMenu
       const startX = e.clientX,
         startY = e.clientY;
-      const el = e.currentTarget as HTMLElement;
+      const el = e.currentTarget as HTMLElement; // the card wrapper
       startedRef.current = false;
+      let ghost: HTMLDivElement | null = null;
 
+      // Listen on window, not the card: the drag must cross into other columns,
+      // which moves the pointer off the card. setPointerCapture is unreliable
+      // here (it can silently fail), so window listeners are what guarantee we
+      // keep receiving pointermove/pointerup through the whole gesture.
       const move = (ev: PointerEvent) => {
         if (!startedRef.current) {
           if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
           startedRef.current = true;
           setDraggingId(taskId);
-          try {
-            el.setPointerCapture(ev.pointerId);
-          } catch {
-            /* ignore */
-          }
+          // Lift a clone into the top layer and dim the original in place, so
+          // its slot is held and the column never reflows.
+          ghost = createGhost(el, el.getBoundingClientRect());
+          el.style.opacity = '0.5';
         }
+        // Drive the ghost imperatively (no per-move re-render of the board).
+        // `translate` is kept out of the ghost's transition so it tracks 1:1.
+        if (ghost)
+          ghost.style.translate = `${ev.clientX - startX}px ${ev.clientY - startY}px`;
         setOverStatus(dropTargetFromPoint(getColumnRects(), ev.clientX));
       };
-      const up = (ev: PointerEvent) => {
-        el.removeEventListener('pointermove', move);
-        el.removeEventListener('pointerup', up);
-        if (startedRef.current) {
+      // Drop the lift. Called on every end (commit or abort) so the ghost never
+      // gets stuck floating and the source card is always un-dimmed.
+      const resetLift = () => {
+        el.style.opacity = '';
+        if (ghost) {
+          try {
+            ghost.hidePopover();
+          } catch {
+            /* already hidden */
+          }
+          ghost.remove();
+          ghost = null;
+        }
+      };
+      // finish always tears down all three listeners (so an aborted gesture
+      // never leaks listeners that stack onto the next drag). It only commits a
+      // drop on a real release (commit=true via pointerup), not on pointercancel
+      // (which fires if the browser hijacks the gesture, e.g. a native drag).
+      const finish = (commit: boolean, ev: PointerEvent) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
+        resetLift();
+        const dragged = startedRef.current;
+        if (commit && dragged) {
           const to = dropTargetFromPoint(getColumnRects(), ev.clientX);
           onDrop(taskId, to);
-          suppressClickRef.current = true;
-          // Self-clearing guard: the browser fires the synthetic click synchronously
-          // right after pointerup (before any setTimeout(0) callback), so a real
-          // click still consumes the flag first. If no click fires (e.g. pointer
-          // released over a different column), the timeout clears the flag so it
-          // cannot leak to a later unrelated click.
+        }
+        if (dragged) {
+          // After a drag the browser still fires a synthetic click on whatever
+          // is under the pointer (the card itself on a same-column drop). Swallow
+          // that one click in the capture phase so the card's link never
+          // navigates at the end of a drag. One-shot, with a timeout fallback in
+          // case no click follows (e.g. a cross-column drop re-parents the card).
+          const swallowClick = (ce: MouseEvent) => {
+            ce.preventDefault();
+            ce.stopPropagation();
+            window.removeEventListener('click', swallowClick, true);
+          };
+          window.addEventListener('click', swallowClick, true);
           setTimeout(() => {
-            suppressClickRef.current = false;
+            window.removeEventListener('click', swallowClick, true);
           }, 0);
         }
         setDraggingId(null);
         setOverStatus(null);
         startedRef.current = false;
       };
-      el.addEventListener('pointermove', move);
-      el.addEventListener('pointerup', up);
+      const up = (ev: PointerEvent) => finish(true, ev);
+      const cancel = (ev: PointerEvent) => finish(false, ev);
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
     },
     [getColumnRects, onDrop]
   );
 
-  return { draggingId, overStatus, onPointerDown, suppressClickRef };
+  return { draggingId, overStatus, onPointerDown };
 }

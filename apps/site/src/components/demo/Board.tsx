@@ -74,7 +74,6 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
           onPointerDownCard={drag.onPointerDown}
           draggingId={drag.draggingId}
           isOver={drag.overStatus === column.status}
-          suppressClickRef={drag.suppressClickRef}
         />
       ))}
     </div>

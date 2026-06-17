@@ -30,7 +30,6 @@ type Props = {
   onRemove: RemoveFn;
   onPointerDownCard: (taskId: string, e: PointerEvent) => void;
   draggingId: string | null;
-  suppressClickRef: { current: boolean };
 };
 
 const TaskCard: FunctionComponent<Props> = ({
@@ -41,7 +40,6 @@ const TaskCard: FunctionComponent<Props> = ({
   onRemove,
   onPointerDownCard,
   draggingId,
-  suppressClickRef,
 }) => {
   const href = `/demo/projects/${projectSlug}/tasks/${task.id}`;
   const prefetch = usePrefetch(href, taskLoaders.task);
@@ -51,7 +49,7 @@ const TaskCard: FunctionComponent<Props> = ({
   return (
     <TaskContextMenu task={task} onPatch={onPatch} onRemove={onRemove}>
       <div
-        class={`relative touch-none select-none${isDragging ? ' opacity-50' : ''}`}
+        class={`relative touch-none select-none rounded-lg ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={(e) => onPointerDownCard(task.id, e as PointerEvent)}
       >
         <ViewTransitionName
@@ -60,14 +58,10 @@ const TaskCard: FunctionComponent<Props> = ({
           render={
             <a
               href={href}
+              draggable={false}
               onMouseEnter={prefetch}
               onFocus={prefetch}
-              onClick={(e) => {
-                if (suppressClickRef.current) {
-                  e.preventDefault();
-                  suppressClickRef.current = false;
-                }
-              }}
+              onDragStart={(e) => e.preventDefault()}
               class="relative block rounded-lg border border-border bg-background p-2.5 pl-3 shadow-[0_1px_1px_rgba(37,40,42,.04)] hover:border-accent/40"
             />
           }
