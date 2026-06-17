@@ -24,7 +24,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
       <Dialog.Trigger class="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-foreground hover:bg-accent-hover">
         + New task
       </Dialog.Trigger>
-      <Dialog.Popup class="m-auto w-[380px] rounded-2xl border border-border bg-background p-5 shadow-2xl backdrop:bg-foreground/40">
+      <Dialog.Popup class="demo-dialog m-auto w-[380px] rounded-2xl border border-border bg-background p-5 shadow-2xl backdrop:bg-foreground/40">
         <Dialog.Title class="text-base font-bold">New task</Dialog.Title>
         <Dialog.Description class="mb-3.5 text-[12px] text-muted">
           Adds to this project.

@@ -803,6 +803,80 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   }
 }
 
+/* ----- Demo: popup surface enter/exit (Menu, ContextMenu, Tooltip, Select, Combobox) ----- */
+.demo-popup {
+  transition:
+    opacity 130ms ease,
+    transform 130ms ease;
+}
+@starting-style {
+  .demo-popup[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.demo-popup[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+
+/* ----- Demo: new-task Dialog enter/exit + backdrop ----- */
+/* The Dialog.Popup uses m-auto (margin: auto) for centering, which is the UA
+   centering mechanism. No centering transform is involved, so a standalone
+   translateY offset in the entry/exit is safe. */
+.demo-dialog {
+  opacity: 1;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+@starting-style {
+  .demo-dialog[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.demo-dialog[data-state='closed'] {
+  animation: demo-dialog-out 160ms ease-in forwards;
+}
+@keyframes demo-dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.demo-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+@starting-style {
+  .demo-dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+.demo-dialog[data-state='closed']::backdrop {
+  animation: demo-backdrop-out 160ms ease-in forwards;
+}
+@keyframes demo-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-popup,
+  .demo-popup[data-state='open'],
+  .demo-popup[data-state='closed'],
+  .demo-dialog,
+  .demo-dialog[data-state='closed'],
+  .demo-dialog::backdrop,
+  .demo-dialog[data-state='closed']::backdrop {
+    transition: none;
+    animation: none;
+  }
+}
+
 /* Tabbed, copyable code examples. The tab bar uses the docs theme; the code
    panel is a Shiki-highlighted fenced block (github-dark), so it matches every
    other code sample on the site. */

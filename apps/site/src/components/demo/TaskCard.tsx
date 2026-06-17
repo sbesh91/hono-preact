@@ -98,7 +98,7 @@ const TaskCard: FunctionComponent<Props> = ({
                 {PRIORITY_LABEL[task.priority]}
               </Tooltip.Trigger>
               <Tooltip.Positioner>
-                <Tooltip.Popup class="rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow">
+                <Tooltip.Popup class="demo-popup rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow">
                   {PRIORITY_LABEL[task.priority]} priority
                 </Tooltip.Popup>
               </Tooltip.Positioner>
@@ -113,7 +113,7 @@ const TaskCard: FunctionComponent<Props> = ({
                   {assignee.name.charAt(0).toUpperCase()}
                 </Tooltip.Trigger>
                 <Tooltip.Positioner>
-                  <Tooltip.Popup class="rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow">
+                  <Tooltip.Popup class="demo-popup rounded-md bg-foreground px-2 py-1 text-[11px] text-background shadow">
                     {assignee.name}
                   </Tooltip.Popup>
                 </Tooltip.Positioner>

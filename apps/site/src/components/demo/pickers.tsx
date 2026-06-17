@@ -18,7 +18,7 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
 const triggerCls =
   'flex w-full items-center rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12.5px]';
 const popupCls =
-  'z-50 min-w-[10rem] rounded-lg border border-border bg-background p-1 shadow-lg';
+  'demo-popup z-50 min-w-[10rem] rounded-lg border border-border bg-background p-1 shadow-lg';
 const optionCls =
   'cursor-pointer rounded-md px-2 py-1.5 text-[12.5px] data-[highlighted]:bg-accent/10';
 
