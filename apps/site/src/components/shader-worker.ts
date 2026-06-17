@@ -56,6 +56,9 @@ let uRes: WebGLUniformLocation | null = null;
 let uTime: WebGLUniformLocation | null = null;
 let uAmp: WebGLUniformLocation | null = null;
 let rafId = 0;
+// t0 is set on the first painted frame (not at construction), so u_time and the
+// amplitude ramp start from zero on the first visible frame regardless of worker
+// spawn latency. Do not initialize this to performance.now() here.
 let t0 = 0;
 let firstFrame = true;
 let reduceMotion = false;
