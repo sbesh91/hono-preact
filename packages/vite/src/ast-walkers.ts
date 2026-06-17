@@ -1,9 +1,9 @@
 import traverse from '@babel/traverse';
 import type { NodePath } from '@babel/traverse';
 import type {
-  CallExpression,
   File,
   ImportDeclaration,
+  ImportExpression,
   Node,
 } from '@babel/types';
 
@@ -13,24 +13,21 @@ export type DynamicServerImport = {
   source: string;
 };
 
-// @babel/traverse is CJS; under some Node ESM interop the callable lands on
-// `.default`. Normalize to the function. (Acceptable module-interop boundary.)
-const traverseFn =
-  (traverse as unknown as { default?: typeof traverse }).default ?? traverse;
-
-// Collect `import('...server...')` dynamic-import call sites. A dynamic import
-// is an `import(...)` CallExpression whose callee is the `Import` node; we keep
-// the ones whose first argument is a `.server[.jt]sx?` string literal so the
+// Collect `import('...server...')` dynamic-import call sites. Babel parses a
+// dynamic import as an `ImportExpression` whose `source` is the specifier; we
+// keep the ones whose source is a `.server[.jt]sx?` string literal so the
 // transform can replace the body with a resolved stub.
 export function findDynamicServerImports(
   ast: File | Node,
   found: DynamicServerImport[]
 ): void {
-  traverseFn(ast, {
-    CallExpression(path: NodePath<CallExpression>) {
+  traverse(ast, {
+    ImportExpression(path: NodePath<ImportExpression>) {
       const { node } = path;
-      if (node.callee.type !== 'Import') return;
-      const arg = node.arguments[0];
+      // `source` is typed non-null, but under `errorRecovery` a malformed
+      // `import()` (e.g. no argument) yields an ImportExpression with no
+      // source, so the optional chain guards before reading `.type`.
+      const arg = node.source;
       if (
         arg?.type === 'StringLiteral' &&
         /\.server(\.[jt]sx?)?$/.test(arg.value)

@@ -24,7 +24,7 @@
   "license": "MIT",
   "author": "Steven Beshensky",
   "engines": {
-    "node": ">=20"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist",
@@ -75,9 +75,9 @@
     "prepublishOnly": "tsc && node scripts/consolidate.mjs"
   },
   "dependencies": {
-    "@babel/parser": "^7.29.2",
-    "@babel/traverse": "^7.29.0",
-    "@babel/types": "^7.29.0",
+    "@babel/parser": "^8.0.0",
+    "@babel/traverse": "^8.0.0",
+    "@babel/types": "^8.0.0",
     "@preact/preset-vite": "^2.10.5",
     "magic-string": "^0.30.21"
   },

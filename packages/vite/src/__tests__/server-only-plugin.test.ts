@@ -286,6 +286,23 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     expect(result).toBeUndefined();
   });
 
+  it('does not crash on a malformed no-arg import() alongside a real .server import', () => {
+    // Under `errorRecovery`, a no-arg `import()` parses to an ImportExpression
+    // with no `source`. The walker must skip it rather than throw on
+    // `source.type`, while still rewriting the genuine .server import.
+    const code = [
+      `const broken = () => import();`,
+      `const lazy = () => import('./auth.server.js');`,
+    ].join('\n');
+    const result = transform(code, '/Users/me/repo/src/pages/page.tsx');
+    expect(result).toBeDefined();
+    expect(result?.code).toContain(
+      'Promise.resolve({ __moduleKey: "src/pages/auth" })'
+    );
+    // The malformed no-arg import has no .server source, so it is left as-is.
+    expect(result?.code).toContain('import()');
+  });
+
   it('leaves dynamic .server.* imports untouched in SSR builds', () => {
     const code = `const m = () => import('./foo.server.ts');`;
     const result = transform(code, '/Users/me/repo/src/routes.ts', {
