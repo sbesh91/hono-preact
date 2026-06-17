@@ -1,4 +1,11 @@
-import type { ImportDeclaration } from '@babel/types';
+import traverse from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
+import type {
+  CallExpression,
+  File,
+  ImportDeclaration,
+  Node,
+} from '@babel/types';
 
 export type DynamicServerImport = {
   start: number;
@@ -6,44 +13,32 @@ export type DynamicServerImport = {
   source: string;
 };
 
+// @babel/traverse is CJS; under some Node ESM interop the callable lands on
+// `.default`. Normalize to the function. (Acceptable module-interop boundary.)
+const traverseFn =
+  (traverse as unknown as { default?: typeof traverse }).default ?? traverse;
+
+// Collect `import('...server...')` dynamic-import call sites. A dynamic import
+// is an `import(...)` CallExpression whose callee is the `Import` node; we keep
+// the ones whose first argument is a `.server[.jt]sx?` string literal so the
+// transform can replace the body with a resolved stub.
 export function findDynamicServerImports(
-  node: unknown,
+  ast: File | Node,
   found: DynamicServerImport[]
 ): void {
-  if (!node || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    for (const child of node) findDynamicServerImports(child, found);
-    return;
-  }
-  const n = node as {
-    type?: string;
-    callee?: { type?: string };
-    arguments?: Array<{ type?: string; value?: string }>;
-    start?: number;
-    end?: number;
-  };
-  if (
-    n.type === 'CallExpression' &&
-    n.callee?.type === 'Import' &&
-    n.arguments?.[0]?.type === 'StringLiteral' &&
-    typeof n.arguments[0].value === 'string' &&
-    /\.server(\.[jt]sx?)?$/.test(n.arguments[0].value)
-  ) {
-    found.push({
-      start: n.start!,
-      end: n.end!,
-      source: n.arguments[0].value,
-    });
-  }
-  for (const key of Object.keys(node as object)) {
-    if (
-      key === 'loc' ||
-      key === 'leadingComments' ||
-      key === 'trailingComments'
-    )
-      continue;
-    findDynamicServerImports((node as Record<string, unknown>)[key], found);
-  }
+  traverseFn(ast, {
+    CallExpression(path: NodePath<CallExpression>) {
+      const { node } = path;
+      if (node.callee.type !== 'Import') return;
+      const arg = node.arguments[0];
+      if (
+        arg?.type === 'StringLiteral' &&
+        /\.server(\.[jt]sx?)?$/.test(arg.value)
+      ) {
+        found.push({ start: node.start!, end: node.end!, source: arg.value });
+      }
+    },
+  });
 }
 
 export const isServerImport = (node: unknown): node is ImportDeclaration =>

@@ -65,7 +65,7 @@ export function serverOnlyPlugin(): Plugin {
       const serverImports = ast.program.body.filter(isServerImport);
 
       const dynamicServerImports: DynamicServerImport[] = [];
-      findDynamicServerImports(ast.program, dynamicServerImports);
+      findDynamicServerImports(ast, dynamicServerImports);
 
       if (serverImports.length === 0 && dynamicServerImports.length === 0)
         return;
