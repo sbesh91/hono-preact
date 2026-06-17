@@ -102,6 +102,7 @@ function setup(init: Extract<WorkerInMsg, { type: 'init' }>): boolean {
   gl.useProgram(prog);
 
   const buf = gl.createBuffer();
+  if (!buf) return false;
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(
     gl.ARRAY_BUFFER,
