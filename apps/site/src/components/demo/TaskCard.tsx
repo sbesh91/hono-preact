@@ -15,6 +15,13 @@ const PRIORITY_LABEL: Record<Task['priority'], string> = {
   low: 'Low',
 };
 
+const PRIORITY_BADGE: Record<Task['priority'], string> = {
+  urgent: 'badge-urgent',
+  high: 'badge-high',
+  medium: 'badge-medium',
+  low: 'badge-low',
+};
+
 type Props = {
   task: Task;
   projectSlug: string;
@@ -84,7 +91,7 @@ const TaskCard: FunctionComponent<Props> = ({
               <Tooltip.Trigger
                 render={
                   <span
-                    class={`rounded-full px-1.5 py-px text-[10px] font-bold badge-${task.priority}`}
+                    class={`rounded-full px-1.5 py-px text-[10px] font-bold ${PRIORITY_BADGE[task.priority]}`}
                   />
                 }
               >

@@ -16,8 +16,13 @@ import { useViewTransitionTypes } from 'hono-preact';
 // on the just-mounted destination (which subscribes a tick too late) would miss
 // the event. Only a layout mounted across the whole navigation catches it.
 export default function DemoLayout({ children }: LayoutProps) {
-  useViewTransitionTypes((nav) =>
-    nav.from && nav.from.startsWith(nav.to + '/') ? ['nav-up'] : []
-  );
+  useViewTransitionTypes((nav) => {
+    const types: string[] = [];
+    if (nav.from && nav.from.startsWith(nav.to + '/')) types.push('nav-up');
+    const fromProjects = nav.from?.startsWith('/demo/projects') ?? false;
+    const toProjects = nav.to?.startsWith('/demo/projects') ?? false;
+    if (fromProjects && toProjects) types.push('demo-within');
+    return types;
+  });
   return <>{children}</>;
 }

@@ -589,6 +589,19 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   animation: none;
 }
 
+/* The demo sidebar is persistent UI: give it its own transition name so it is
+   lifted out of the root snapshot. */
+.demo-sidebar {
+  view-transition-name: demo-sidebar;
+}
+/* Within demo (sidebar present in both snapshots) freeze it: no fade, no zoom,
+   no morph, so only the page content transitions. */
+html:active-view-transition-type(demo-within)::view-transition-group(demo-sidebar),
+html:active-view-transition-type(demo-within)::view-transition-old(demo-sidebar),
+html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar) {
+  animation: none;
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
