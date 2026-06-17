@@ -614,8 +614,8 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   }
 }
 
-/* Shared-element morph timing for elements tagged groupClass="issue-card". */
-::view-transition-group(.issue-card) {
+/* Shared-element morph timing for elements tagged groupClass="task-card". */
+::view-transition-group(.task-card) {
   animation-duration: var(--spring-duration);
   animation-timing-function: var(--spring-soft);
 }
@@ -635,7 +635,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
   html:active-view-transition-type(docs)::view-transition-new(root) {
     animation: none;
   }
-  ::view-transition-group(.issue-card) {
+  ::view-transition-group(.task-card) {
     animation-duration: 0s;
   }
 }

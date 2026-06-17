@@ -53,6 +53,14 @@ export function useBoardDrag(
           const to = dropTargetFromPoint(getColumnRects(), ev.clientX);
           onDrop(taskId, to);
           suppressClickRef.current = true;
+          // Self-clearing guard: the browser fires the synthetic click synchronously
+          // right after pointerup (before any setTimeout(0) callback), so a real
+          // click still consumes the flag first. If no click fires (e.g. pointer
+          // released over a different column), the timeout clears the flag so it
+          // cannot leak to a later unrelated click.
+          setTimeout(() => {
+            suppressClickRef.current = false;
+          }, 0);
         }
         setDraggingId(null);
         setOverStatus(null);
