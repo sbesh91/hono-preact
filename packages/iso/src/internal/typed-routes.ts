@@ -74,30 +74,30 @@ type IsParamName<S extends string> = S extends ''
       : false
     : false;
 
-type ParamKey<Seg extends string> = Seg extends `${infer Name}?`
-  ? IsParamName<Name> extends true
-    ? { optional: true; name: Name }
-    : { literal: true }
+// Strip a single trailing `?`/`*`/`+` modifier (the runtime regex allows one),
+// recording optionality: `?` and `*` are optional, `+` and a bare name are
+// required. The name itself is validated separately by `IsParamName`.
+type StripModifier<Seg extends string> = Seg extends `${infer Name}?`
+  ? { name: Name; optional: true }
   : Seg extends `${infer Name}*`
-    ? IsParamName<Name> extends true
-      ? { optional: true; name: Name }
-      : { literal: true }
+    ? { name: Name; optional: true }
     : Seg extends `${infer Name}+`
-      ? IsParamName<Name> extends true
-        ? { optional: false; name: Name }
-        : { literal: true }
-      : IsParamName<Seg> extends true
-        ? { optional: false; name: Seg }
-        : { literal: true };
+      ? { name: Name; optional: false }
+      : { name: Seg; optional: false };
 
-// A segment that is not a valid param name resolves to `{ literal: true }`,
-// which fails the `{ name; optional }` match and contributes the empty object
-// (identity under the `&` in `RouteParams`).
+// Map a `:`-stripped segment to its param contribution. A name outside the
+// `[A-Za-z0-9_]` class is a literal: it contributes the empty object (the
+// identity under the `&` in `RouteParams`) rather than over-claiming a param.
 type ParamFrom<Seg extends string> =
-  ParamKey<Seg> extends { name: infer N extends string; optional: infer O }
-    ? O extends true
-      ? { [K in N]?: string }
-      : { [K in N]: string }
+  StripModifier<Seg> extends {
+    name: infer Name extends string;
+    optional: infer Optional;
+  }
+    ? IsParamName<Name> extends true
+      ? Optional extends true
+        ? { [K in Name]?: string }
+        : { [K in Name]: string }
+      : {}
     : {};
 
 /** Extract the path-params object type from an absolute route pattern. */
