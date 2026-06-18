@@ -2,15 +2,21 @@ import { findBestPattern } from './route-pattern.js';
 
 /**
  * Build-generated map from route pattern to the client chunk URLs the route
- * needs (its matched layout + view chunks and their transitive static
- * imports, with the client entry's own closure subtracted). Emitted by the
- * vite plugin's route-preload generator and threaded into `renderPage`.
+ * needs, split by fetch priority. Emitted by the vite plugin's route-preload
+ * generator and threaded into `renderPage`.
  *
  * Keys are route patterns (e.g. `/docs/:slug`, `/docs/quick-start`) matched
  * against the request path with `findBestPattern`. Values are absolute,
- * origin-relative hrefs (e.g. `/static/quick-start-BH8CGeNi.js`).
+ * origin-relative hrefs (e.g. `/static/quick-start-BH8CGeNi.js`):
+ * - `high`: layout-chain chunks, emitted at modulepreload's default priority.
+ * - `low`: leaf view/content chunks, emitted with `fetchpriority="low"` since
+ *   the content is already server-rendered and should not contend with
+ *   render-critical resources for bandwidth.
  */
-export type RoutePreloadMap = Record<string, readonly string[]>;
+export type RoutePreloadMap = Record<
+  string,
+  { high: readonly string[]; low: readonly string[] }
+>;
 
 // Minimal attribute escape. The hrefs are framework-generated chunk paths, not
 // user input, but escaping keeps the emitted tag well-formed if a chunk name
@@ -40,12 +46,19 @@ export function routePreloadTags(
   if (!map) return '';
   const pattern = findBestPattern(Object.keys(map), urlPath);
   if (!pattern) return '';
-  const hrefs = map[pattern];
-  if (!hrefs || hrefs.length === 0) return '';
-  return hrefs
-    .map(
+  const entry = map[pattern];
+  if (!entry) return '';
+  const { high = [], low = [] } = entry;
+  if (high.length === 0 && low.length === 0) return '';
+  const tags = [
+    ...high.map(
       (href) =>
         `<link rel="modulepreload" href="${escapeAttr(href)}" crossorigin />`
-    )
-    .join('\n        ');
+    ),
+    ...low.map(
+      (href) =>
+        `<link rel="modulepreload" href="${escapeAttr(href)}" crossorigin fetchpriority="low" />`
+    ),
+  ];
+  return tags.join('\n        ');
 }

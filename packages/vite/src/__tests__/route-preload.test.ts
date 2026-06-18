@@ -123,27 +123,26 @@ describe('resolvePreloadMap', () => {
   const chains = extractRouteChains(ROUTES_SRC, ROUTES_ABS, fakeGlob);
   const map = resolvePreloadMap(chains, manifest, { rootDir: '/proj' });
 
-  it('resolves the matched chain to its chunk hrefs, minus the client-entry closure', () => {
+  it('splits the matched chain into high (layout) and low (view), minus the entry closure', () => {
     // DocsLayout pulls jsxRuntime/hooks/route-active; quick-start pulls
-    // jsxRuntime. The entry already loads jsxRuntime + hooks, so only
-    // DocsLayout, route-active, and quick-start remain.
-    expect(map['/docs/quick-start']).toEqual([
-      '/static/DocsLayout.js',
-      '/static/route-active.js',
-      '/static/quick-start.js',
-    ]);
+    // jsxRuntime. The entry already loads jsxRuntime + hooks, so the layout
+    // contributes DocsLayout + route-active (high) and the view contributes
+    // quick-start (low).
+    expect(map['/docs/quick-start']).toEqual({
+      high: ['/static/DocsLayout.js', '/static/route-active.js'],
+      low: ['/static/quick-start.js'],
+    });
   });
 
-  it('subtracts the eager entry closure for a plain leaf', () => {
-    expect(map['/']).toEqual(['/static/home.js']);
+  it('puts a layout-less leaf entirely in low (its content is SSR-rendered)', () => {
+    expect(map['/']).toEqual({ high: [], low: ['/static/home.js'] });
   });
 
-  it('omits patterns whose chunks are entirely in the entry closure', () => {
-    // A pattern resolving only to eager chunks would have no hrefs and is
-    // dropped. (No such pattern here; assert the shape stays a string[].)
-    for (const hrefs of Object.values(map)) {
-      expect(Array.isArray(hrefs)).toBe(true);
-      expect(hrefs.length).toBeGreaterThan(0);
+  it('emits well-formed { high, low } shapes with at least one href', () => {
+    for (const entry of Object.values(map)) {
+      expect(Array.isArray(entry.high)).toBe(true);
+      expect(Array.isArray(entry.low)).toBe(true);
+      expect(entry.high.length + entry.low.length).toBeGreaterThan(0);
     }
   });
 
@@ -152,6 +151,6 @@ describe('resolvePreloadMap', () => {
       rootDir: '/proj',
       base: '/assets/',
     });
-    expect(based['/']).toEqual(['/assets/static/home.js']);
+    expect(based['/']).toEqual({ high: [], low: ['/assets/static/home.js'] });
   });
 });

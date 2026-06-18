@@ -26,19 +26,19 @@ async function renderAt(
 }
 
 const MAP: RoutePreloadMap = {
-  '/docs/quick-start': [
-    '/static/DocsLayout-abc.js',
-    '/static/quick-start-def.js',
-  ],
+  '/docs/quick-start': {
+    high: ['/static/DocsLayout-abc.js'],
+    low: ['/static/quick-start-def.js'],
+  },
 };
 
 describe('renderPage route modulepreload', () => {
-  it('injects modulepreload links for the matched route, inside <head>', async () => {
+  it('injects layout (high) and view (low-priority) modulepreload links inside <head>', async () => {
     const body = await renderAt('/docs/quick-start', MAP);
     const layoutTag =
       '<link rel="modulepreload" href="/static/DocsLayout-abc.js" crossorigin />';
     const viewTag =
-      '<link rel="modulepreload" href="/static/quick-start-def.js" crossorigin />';
+      '<link rel="modulepreload" href="/static/quick-start-def.js" crossorigin fetchpriority="low" />';
     expect(body).toContain(layoutTag);
     expect(body).toContain(viewTag);
 

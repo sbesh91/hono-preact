@@ -44,7 +44,16 @@ export type ClientManifest = Record<
   }
 >;
 
-export type RoutePreloadMap = Record<string, string[]>;
+/**
+ * Per-pattern preload hrefs split by fetch priority:
+ * - `high`: layout-chain chunks. They gate the hydration shell, so they keep
+ *   modulepreload's default (High) priority.
+ * - `low`: the leaf view/content chunk(s). The page content is already in the
+ *   SSR HTML, so these are emitted with `fetchpriority="low"` to avoid
+ *   contending with render-critical resources (CSS, fonts, the client entry)
+ *   for bandwidth during first paint.
+ */
+export type RoutePreloadMap = Record<string, { high: string[]; low: string[] }>;
 
 // ---------------------------------------------------------------------------
 // Route-path joining + content-route slug rules. Kept byte-compatible with
@@ -370,10 +379,15 @@ function entryClosure(manifest: ClientManifest): Set<string> {
 }
 
 /**
- * Resolve route module chains to a pattern -> preload-href map against the
- * client manifest. Each pattern's hrefs are the union of its modules' static
- * chunk closures, minus the client entry's own closure (those chunks are
- * already fetched via the entry script), prefixed with the build base.
+ * Resolve route module chains to a pattern -> { high, low } preload map against
+ * the client manifest.
+ *
+ * Each chain is `[...layouts, view]` (outer layout first, leaf view last). The
+ * layout chunks (and their static imports) go in `high`; the view chunk's
+ * own chunks go in `low`. Both sets subtract the client entry's closure (those
+ * chunks load eagerly via the entry script anyway), and `low` also subtracts
+ * `high` so a chunk shared by layout and view is preloaded once, at the higher
+ * priority. Hrefs are prefixed with the build base.
  */
 export function resolvePreloadMap(
   chains: readonly RouteModuleChain[],
@@ -386,20 +400,34 @@ export function resolvePreloadMap(
   const href = (file: string): string =>
     (base.endsWith('/') ? base : base + '/') + file;
 
+  const chunksOf = (sources: readonly string[]): Set<string> => {
+    const files = new Set<string>();
+    for (const src of sources) {
+      const manifestKey = bySource.get(stripExt(src));
+      if (manifestKey)
+        collectStaticChunks(manifestKey, manifest, files, new Set());
+    }
+    return files;
+  };
+
   const map: RoutePreloadMap = {};
   for (const chain of chains) {
-    const files = new Set<string>();
-    for (const src of chain.sources) {
-      const manifestKey = bySource.get(stripExt(src));
-      if (!manifestKey) continue;
-      collectStaticChunks(manifestKey, manifest, files, new Set());
+    const layoutSources = chain.sources.slice(0, -1);
+    const viewSource = chain.sources[chain.sources.length - 1];
+    const highFiles = chunksOf(layoutSources);
+    const viewFiles = viewSource ? chunksOf([viewSource]) : new Set<string>();
+
+    const high: string[] = [];
+    for (const file of highFiles) {
+      if (!eager.has(file)) high.push(href(file));
     }
-    const hrefs: string[] = [];
-    for (const file of files) {
-      if (eager.has(file)) continue;
-      hrefs.push(href(file));
+    const low: string[] = [];
+    for (const file of viewFiles) {
+      if (!eager.has(file) && !highFiles.has(file)) low.push(href(file));
     }
-    if (hrefs.length > 0) map[chain.pattern] = hrefs;
+    if (high.length > 0 || low.length > 0) {
+      map[chain.pattern] = { high, low };
+    }
   }
   return map;
 }
