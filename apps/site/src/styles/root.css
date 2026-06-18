@@ -2252,10 +2252,14 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   background: var(--accent);
   color: var(--accent-foreground);
   cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .docs-button {
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
 }
 .docs-button:hover {
   background: var(--accent-hover);
