@@ -227,14 +227,14 @@
     },
     "toast": {
       "total": {
-        "raw": 11279,
-        "gzip": 4537,
-        "brotli": 4118
+        "raw": 11589,
+        "gzip": 4617,
+        "brotli": 4186
       },
       "marginalOverUiCore": {
-        "raw": 8875,
-        "gzip": 3316,
-        "brotli": 3021
+        "raw": 9185,
+        "gzip": 3408,
+        "brotli": 3094
       }
     }
   }

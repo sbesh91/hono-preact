@@ -147,6 +147,9 @@ re-announces). Press the `hotkey` (default Alt+T) to move focus into the region.
 Hovering or focusing the region pauses auto-dismiss and expands the stack.
 Motion is driven entirely by your CSS, so guarding transitions behind
 `prefers-reduced-motion` yields an accessible, reduced-motion-correct result.
+For a toast to be spoken by a screen reader, its `title` and `description` must
+be plain strings; a VNode body renders visually but is not included in the
+spoken announcement.
 
 > Toast requires the browser Popover API to place its region in the top layer.
 > This is a deliberate, documented exception to the library's

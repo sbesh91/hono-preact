@@ -30,7 +30,17 @@ export type ToastRootProps = {
 // Return type is intentionally inferred: h(ToastItemContext.Provider, ...) yields
 // a VNode with more specific props than VNode<{}>, same pattern as OptionGroup.
 export function ToastRoot(props: ToastRootProps) {
-  const { toast: record, render, children, ref: userRef, ...rest } = props;
+  const {
+    toast: record,
+    render,
+    children,
+    ref: userRef,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
+    ...rest
+  } = props;
 
   const present = !record.dismissed;
   const { status, ref: presenceRef } = usePresence(present, {
@@ -96,7 +106,22 @@ export function ToastRoot(props: ToastRootProps) {
       defaultTag: 'li',
       props: {
         ...rest,
-        ...swipe.handlers,
+        onPointerDown: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+          onPointerDown?.(e);
+          swipe.handlers.onPointerDown?.(e);
+        },
+        onPointerMove: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+          onPointerMove?.(e);
+          swipe.handlers.onPointerMove?.(e);
+        },
+        onPointerUp: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+          onPointerUp?.(e);
+          swipe.handlers.onPointerUp?.(e);
+        },
+        onPointerCancel: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+          onPointerCancel?.(e);
+          swipe.handlers.onPointerCancel?.(e);
+        },
         ref: mergeRefs<Element>(
           presenceRef,
           elRef as Ref<Element>,

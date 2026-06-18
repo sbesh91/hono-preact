@@ -23,7 +23,7 @@ export interface ToasterProps {
   gap?: number;
   visibleToasts?: number;
   expand?: boolean;
-  hotkey?: string[]; // wired in Task 7
+  hotkey?: string[];
   children: (toast: ToastRecord) => VNode;
 }
 
@@ -108,17 +108,22 @@ export function Toaster(props: ToasterProps): VNode {
     }
   }, []);
 
-  // Announce each newly-added toast exactly once.
-  const announced = useRef(new Set<string | number>());
+  // Announce toasts when they are first shown or when their text changes (e.g.
+  // toast.promise updates the same id from loading to success/error). A Map
+  // keyed by id stores the last-announced text so content changes re-announce.
+  const announced = useRef(new Map<string | number, string>());
   useEffect(() => {
     for (const t of toasts) {
-      if (t.dismissed || announced.current.has(t.id)) continue;
-      announced.current.add(t.id);
-      announce(announcementText(t), t.important);
+      if (t.dismissed) continue;
+      const text = announcementText(t);
+      if (!text) continue;
+      if (announced.current.get(t.id) === text) continue;
+      announced.current.set(t.id, text);
+      announce(text, t.important);
     }
-    // Forget ids that have left so a reused id can re-announce.
+    // Prune ids that are no longer in the store so a recycled id re-announces.
     const live = new Set(toasts.map((t) => t.id));
-    for (const id of announced.current) {
+    for (const id of announced.current.keys()) {
       if (!live.has(id)) announced.current.delete(id);
     }
   }, [toasts, announce]);

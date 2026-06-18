@@ -11,7 +11,7 @@ export interface ToasterContextValue {
   // Ordered ids of currently-rendered toasts (newest first). Used by an item to
   // find how many toasts sit in front of it.
   orderedIds: (string | number)[];
-  // Measured heights keyed by id (px). Empty until Task 9 wires measurement.
+  // Measured heights keyed by id (px), populated by each Toast.Root on mount.
   heights: Map<string | number, number>;
   // Register or update a toast's measured height in px.
   registerHeight: (id: string | number, height: number) => void;
