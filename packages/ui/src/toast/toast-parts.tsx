@@ -10,7 +10,11 @@ import { renderElement, type RenderProp } from '../render-element.js';
 import { mergeRefs } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
 import { toastStore, type ToastRecord } from './toast-store.js';
-import { ToastItemContext, useToastItemContext, useToasterContext } from './context.js';
+import {
+  ToastItemContext,
+  useToastItemContext,
+  useToasterContext,
+} from './context.js';
 import { useToastTimer } from './use-toast-timer.js';
 import { useToastSwipe } from './use-toast-swipe.js';
 

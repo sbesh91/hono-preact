@@ -45,14 +45,11 @@ export default function ToastDemo() {
         <button
           class="docs-button"
           onClick={() =>
-            toast.promise(
-              new Promise((res) => setTimeout(res, 1500)),
-              {
-                loading: 'Saving...',
-                success: 'Saved!',
-                error: 'Could not save',
-              },
-            )
+            toast.promise(new Promise((res) => setTimeout(res, 1500)), {
+              loading: 'Saving...',
+              success: 'Saved!',
+              error: 'Could not save',
+            })
           }
         >
           Promise

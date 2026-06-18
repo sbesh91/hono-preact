@@ -46,7 +46,11 @@ Fire toasts imperatively:
 toast('Event saved');
 toast.success('Profile updated', { description: 'Your changes are live.' });
 toast.error('Upload failed');
-toast.promise(save(), { loading: 'Saving...', success: 'Saved!', error: 'Failed' });
+toast.promise(save(), {
+  loading: 'Saving...',
+  success: 'Saved!',
+  error: 'Failed',
+});
 const id = toast.loading('Working...');
 toast.dismiss(id);
 ```
@@ -67,7 +71,9 @@ those, and guard transitions behind `prefers-reduced-motion`.
 }
 @media (prefers-reduced-motion: no-preference) {
   .toast {
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    transition:
+      transform 0.3s ease,
+      opacity 0.3s ease;
   }
 }
 .toast[data-swiping='true'] {
@@ -97,35 +103,35 @@ those, and guard transitions behind `prefers-reduced-motion`.
 
 ### `toast`
 
-| Call | Returns | Description |
-| --- | --- | --- |
-| `toast(message, opts?)` | `id` | Default toast. |
-| `toast.success / error / info / warning / loading(message, opts?)` | `id` | Typed variants; `error` announces assertively. |
-| `toast.custom((id) => VNode, opts?)` | `id` | Render an arbitrary body. |
-| `toast.promise(promise, { loading, success, error })` | `id` | One toast tracks a promise. |
-| `toast.dismiss(id?)` | `void` | Dismiss one toast, or all when `id` is omitted. |
+| Call                                                               | Returns | Description                                     |
+| ------------------------------------------------------------------ | ------- | ----------------------------------------------- |
+| `toast(message, opts?)`                                            | `id`    | Default toast.                                  |
+| `toast.success / error / info / warning / loading(message, opts?)` | `id`    | Typed variants; `error` announces assertively.  |
+| `toast.custom((id) => VNode, opts?)`                               | `id`    | Render an arbitrary body.                       |
+| `toast.promise(promise, { loading, success, error })`              | `id`    | One toast tracks a promise.                     |
+| `toast.dismiss(id?)`                                               | `void`  | Dismiss one toast, or all when `id` is omitted. |
 
 `opts`: `id`, `description`, `duration` (ms; `Infinity` = sticky; default 4000),
 `important`, `action: { label, onClick }`, `onDismiss`, `onAutoClose`.
 
 ### `Toaster`
 
-| Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| `position` | `ToastPosition` | `'bottom-right'` | Corner; sets entry direction and swipe axis. |
-| `label` | `string` | `'Notifications'` | Accessible name of the region. |
-| `expand` | `boolean` | `false` | Always-expanded stack vs collapse-to-pile. |
-| `visibleToasts` | `number` | `3` | Toasts shown before older ones fade under. |
-| `gap` | `number` | `14` | Px gap between expanded toasts. |
-| `hotkey` | `string[]` | `['altKey','KeyT']` | Chord that focuses the region. |
-| `children` | `(t: ToastRecord) => VNode` | required | Render prop for each toast. |
+| Prop            | Type                        | Default             | Description                                  |
+| --------------- | --------------------------- | ------------------- | -------------------------------------------- |
+| `position`      | `ToastPosition`             | `'bottom-right'`    | Corner; sets entry direction and swipe axis. |
+| `label`         | `string`                    | `'Notifications'`   | Accessible name of the region.               |
+| `expand`        | `boolean`                   | `false`             | Always-expanded stack vs collapse-to-pile.   |
+| `visibleToasts` | `number`                    | `3`                 | Toasts shown before older ones fade under.   |
+| `gap`           | `number`                    | `14`                | Px gap between expanded toasts.              |
+| `hotkey`        | `string[]`                  | `['altKey','KeyT']` | Chord that focuses the region.               |
+| `children`      | `(t: ToastRecord) => VNode` | required            | Render prop for each toast.                  |
 
 ### `Toast.Root`
 
-| Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| `toast` | `ToastRecord` | required | The record from the render prop. |
-| `render` | `RenderProp` | undefined | Replace the rendered element. |
+| Prop     | Type          | Default   | Description                      |
+| -------- | ------------- | --------- | -------------------------------- |
+| `toast`  | `ToastRecord` | required  | The record from the render prop. |
+| `render` | `RenderProp`  | undefined | Replace the rendered element.    |
 
 `Toast.Title`, `Toast.Description`, `Toast.Action`, and `Toast.Close` each accept
 the standard `render` prop and read the active toast from context; `Description`

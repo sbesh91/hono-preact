@@ -112,10 +112,10 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 70815,
+      "app": 70900,
       "actions": 17154,
-      "core": 36764,
-      "components": 84452,
+      "core": 36803,
+      "components": 91357,
       "guards": 248,
       "middleware": 12473,
       "vendor": 8411,
@@ -124,9 +124,9 @@
       "streaming": 7323,
       "transitions": 5091
     },
-    "total": 262654,
+    "total": 269683,
     "unmatched": 47,
-    "fileCount": 106
+    "fileCount": 107
   },
   "sectionC": {
     "ui-core": {
@@ -223,6 +223,18 @@
         "raw": 34097,
         "gzip": 12562,
         "brotli": 11331
+      }
+    },
+    "toast": {
+      "total": {
+        "raw": 11279,
+        "gzip": 4537,
+        "brotli": 4118
+      },
+      "marginalOverUiCore": {
+        "raw": 8875,
+        "gzip": 3316,
+        "brotli": 3021
       }
     }
   }

@@ -31,9 +31,7 @@ export interface UseToastSwipeResult {
   >;
 }
 
-export function useToastSwipe(
-  opts: UseToastSwipeOptions
-): UseToastSwipeResult {
+export function useToastSwipe(opts: UseToastSwipeOptions): UseToastSwipeResult {
   const { position, onDismiss, disabled = false } = opts;
   const [swiping, setSwiping] = useState(false);
   const [amount, setAmount] = useState(0);

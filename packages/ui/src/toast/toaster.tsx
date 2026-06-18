@@ -12,11 +12,7 @@ import {
   type ToastRecord,
 } from './toast-store.js';
 import { ToasterContext } from './context.js';
-import {
-  ToastAnnouncer,
-  useAnnouncer,
-  announcementText,
-} from './announcer.js';
+import { ToastAnnouncer, useAnnouncer, announcementText } from './announcer.js';
 
 // Stable default hotkey to prevent useEffect re-runs on every render.
 const DEFAULT_HOTKEY = ['altKey', 'KeyT'];
@@ -55,9 +51,18 @@ export function Toaster(props: ToasterProps): VNode {
 
   // Pause auto-dismiss while the user is engaged with the region or the tab is
   // hidden. focusin/out are tracked on the region; visibility on the document.
-  const [hovered, setHovered] = useReducer((_: boolean, v: boolean) => v, false);
-  const [focused, setFocused] = useReducer((_: boolean, v: boolean) => v, false);
-  const [docHidden, setDocHidden] = useReducer((_: boolean, v: boolean) => v, false);
+  const [hovered, setHovered] = useReducer(
+    (_: boolean, v: boolean) => v,
+    false
+  );
+  const [focused, setFocused] = useReducer(
+    (_: boolean, v: boolean) => v,
+    false
+  );
+  const [docHidden, setDocHidden] = useReducer(
+    (_: boolean, v: boolean) => v,
+    false
+  );
   useEffect(() => {
     const onVis = () => setDocHidden(document.hidden);
     document.addEventListener('visibilitychange', onVis);
@@ -94,7 +99,11 @@ export function Toaster(props: ToasterProps): VNode {
   // which may not implement the Popover API; production browsers always do.
   useEffect(() => {
     const el = regionRef.current;
-    if (el && typeof el.showPopover === 'function' && !el.matches(':popover-open')) {
+    if (
+      el &&
+      typeof el.showPopover === 'function' &&
+      !el.matches(':popover-open')
+    ) {
       el.showPopover();
     }
   }, []);
@@ -137,7 +146,18 @@ export function Toaster(props: ToasterProps): VNode {
       heights,
       registerHeight,
     }),
-    [position, gap, visibleToasts, expand, hovered, focused, paused, orderedIds, heights, registerHeight]
+    [
+      position,
+      gap,
+      visibleToasts,
+      expand,
+      hovered,
+      focused,
+      paused,
+      orderedIds,
+      heights,
+      registerHeight,
+    ]
   );
 
   return (
@@ -155,9 +175,7 @@ export function Toaster(props: ToasterProps): VNode {
         onFocusOut={() => setFocused(false)}
       >
         <ToastAnnouncer politeRef={politeRef} assertiveRef={assertiveRef} />
-        <ol>
-          {toasts.map((t) => cloneElement(children(t), { key: t.id }))}
-        </ol>
+        <ol>{toasts.map((t) => cloneElement(children(t), { key: t.id }))}</ol>
       </section>
     </ToasterContext.Provider>
   );

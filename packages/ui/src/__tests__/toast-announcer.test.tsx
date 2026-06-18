@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, act, cleanup } from '@testing-library/preact';
-import { useAnnouncer, ToastAnnouncer, announcementText } from '../toast/announcer.js';
+import {
+  useAnnouncer,
+  ToastAnnouncer,
+  announcementText,
+} from '../toast/announcer.js';
 
 afterEach(cleanup);
 

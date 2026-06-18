@@ -30,10 +30,11 @@ function App() {
 // happy-dom does not implement setPointerCapture; stub it so the handlers run.
 function stubCapture(el: Element) {
   // eslint-disable-next-line no-param-reassign
-  (el as unknown as { setPointerCapture: () => void }).setPointerCapture =
-    () => undefined;
-  (el as unknown as { releasePointerCapture: () => void }).releasePointerCapture =
-    () => undefined;
+  (el as unknown as { setPointerCapture: () => void }).setPointerCapture = () =>
+    undefined;
+  (
+    el as unknown as { releasePointerCapture: () => void }
+  ).releasePointerCapture = () => undefined;
 }
 
 describe('toast swipe-to-dismiss', () => {
@@ -46,10 +47,16 @@ describe('toast swipe-to-dismiss', () => {
     });
     const root = getByTestId(`root-${id}`);
     stubCapture(root);
-    act(() => fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 }));
-    act(() => fireEvent.pointerMove(root, { clientX: 120, clientY: 0, pointerId: 1 }));
+    act(() =>
+      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
+    );
+    act(() =>
+      fireEvent.pointerMove(root, { clientX: 120, clientY: 0, pointerId: 1 })
+    );
     expect(root.getAttribute('data-swiping')).toBe('true');
-    act(() => fireEvent.pointerUp(root, { clientX: 120, clientY: 0, pointerId: 1 }));
+    act(() =>
+      fireEvent.pointerUp(root, { clientX: 120, clientY: 0, pointerId: 1 })
+    );
     expect(toastStore.toasts).toHaveLength(0);
   });
 
@@ -62,9 +69,15 @@ describe('toast swipe-to-dismiss', () => {
     });
     const root = getByTestId(`root-${id}`);
     stubCapture(root);
-    act(() => fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 }));
-    act(() => fireEvent.pointerMove(root, { clientX: 10, clientY: 0, pointerId: 1 }));
-    act(() => fireEvent.pointerUp(root, { clientX: 10, clientY: 0, pointerId: 1 }));
+    act(() =>
+      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
+    );
+    act(() =>
+      fireEvent.pointerMove(root, { clientX: 10, clientY: 0, pointerId: 1 })
+    );
+    act(() =>
+      fireEvent.pointerUp(root, { clientX: 10, clientY: 0, pointerId: 1 })
+    );
     expect(toastStore.toasts).toHaveLength(1);
     expect(root.getAttribute('data-swiping')).toBe('false');
     expect(root.style.getPropertyValue('--toast-swipe-amount')).toBe('0px');

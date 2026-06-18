@@ -17,7 +17,9 @@ interface PromiseMessages<T> {
   error: LazyMessage<unknown>;
 }
 
-function isMessageFn<T>(m: LazyMessage<T>): m is (value: T) => ComponentChildren {
+function isMessageFn<T>(
+  m: LazyMessage<T>
+): m is (value: T) => ComponentChildren {
   return typeof m === 'function';
 }
 
