@@ -46,8 +46,8 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # Type-level tests (`*.test-d.ts`) — tsc enforces the typed-routes /
-      # serialization type assertions that the package `tsconfig`s exclude.
+      # Type-level tests (`*.test-d.ts`) — tsc enforces the type assertions
+      # (typed-routes today) that the package `tsconfig`s exclude from typecheck.
       - name: Type tests
         run: pnpm test:types
 

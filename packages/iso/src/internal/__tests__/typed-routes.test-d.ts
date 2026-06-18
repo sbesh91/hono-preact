@@ -27,6 +27,13 @@ expectTypeOf<RouteParams<'/files/:rest*'>>().toEqualTypeOf<{ rest?: string }>();
 // Rest `:param+` is required (one-or-more).
 expectTypeOf<RouteParams<'/files/:rest+'>>().toEqualTypeOf<{ rest: string }>();
 
+// The full `[A-Za-z0-9_]` name class is accepted: underscores, digits, and
+// uppercase are all valid param-name characters. These guard `ParamNameChar`
+// against an accidental omission that would silently demote a real param to a
+// literal (the inverse of the #8 over-claim bug fixed below).
+expectTypeOf<RouteParams<'/u/:user_id'>>().toEqualTypeOf<{ user_id: string }>();
+expectTypeOf<RouteParams<'/v/:id2'>>().toEqualTypeOf<{ id2: string }>();
+
 // Multiple params compose. The engine builds the object by intersecting each
 // segment's contribution (`ParamFrom<P> & RouteParams<Rest>`), so the result
 // is the intersection form, not a single merged object literal.
@@ -138,5 +145,7 @@ expectTypeOf<RoutePaths<{ __tree: SampleTree }>>().toEqualTypeOf<
   AbsolutePaths<SampleTree>
 >();
 
-// A path outside the computed union is not a member.
-expectTypeOf<'/not/a/route'>().not.toEqualTypeOf<RoutePaths<SampleTree>>();
+// A path outside the computed union is not a member. `not.toExtend` is the
+// load-bearing form: if `RoutePaths` ever regressed to the bare `string`
+// fallback, '/not/a/route' WOULD extend it and this assertion would fail.
+expectTypeOf<'/not/a/route'>().not.toExtend<RoutePaths<SampleTree>>();
