@@ -24,6 +24,8 @@ describe('Tabs', () => {
     expect(getByRole('tab', { name: 'One' }).getAttribute('aria-selected')).toBe(
       'true'
     );
+    // Inactive tab must explicitly declare aria-selected="false" (not omitted).
+    expect(getByRole('tab', { name: 'Two' }).getAttribute('aria-selected')).toBe('false');
     // Both panels exist; the inactive one is hidden.
     expect(panelFor(getByText('first')).hidden).toBe(false);
     expect(panelFor(getByText('second')).hidden).toBe(true);

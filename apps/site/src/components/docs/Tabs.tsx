@@ -57,7 +57,7 @@ export function Tabs({ labels, children, accessory, class: className }: TabsProp
             type="button"
             role="tab"
             id={`${baseId}-tab-${i}`}
-            aria-selected={i === active}
+            aria-selected={i === active ? 'true' : 'false'}
             aria-controls={`${baseId}-panel-${i}`}
             tabIndex={i === active ? 0 : -1}
             class="docs-tabs__tab"
@@ -70,7 +70,7 @@ export function Tabs({ labels, children, accessory, class: className }: TabsProp
       </div>
       {panels.map((panel, i) => (
         <div
-          key={i}
+          key={labels[i]}
           ref={(el) => { panelRefs.current[i] = el; }}
           role="tabpanel"
           id={`${baseId}-panel-${i}`}
