@@ -49,6 +49,18 @@ export function Toaster(props: ToasterProps): VNode {
   const regionRef = useRef<HTMLElement | null>(null);
   const { politeRef, assertiveRef, announce } = useAnnouncer();
 
+  // Pause auto-dismiss while the user is engaged with the region or the tab is
+  // hidden. focusin/out are tracked on the region; visibility on the document.
+  const [hovered, setHovered] = useReducer((_: boolean, v: boolean) => v, false);
+  const [focused, setFocused] = useReducer((_: boolean, v: boolean) => v, false);
+  const [docHidden, setDocHidden] = useReducer((_: boolean, v: boolean) => v, false);
+  useEffect(() => {
+    const onVis = () => setDocHidden(document.hidden);
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+  const paused = hovered || focused || docHidden;
+
   // Promote the region to the top layer. Guarded for the happy-dom test env,
   // which may not implement the Popover API; production browsers always do.
   useEffect(() => {
@@ -88,12 +100,12 @@ export function Toaster(props: ToasterProps): VNode {
       gap,
       visibleToasts,
       expanded: expand,
-      paused: false,
+      paused,
       orderedIds,
       heights,
       registerHeight,
     }),
-    [position, gap, visibleToasts, expand, orderedIds, heights, registerHeight]
+    [position, gap, visibleToasts, expand, paused, orderedIds, heights, registerHeight]
   );
 
   return (
@@ -105,6 +117,10 @@ export function Toaster(props: ToasterProps): VNode {
         aria-label={label}
         data-position={position}
         tabIndex={-1}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        onFocusIn={() => setFocused(true)}
+        onFocusOut={() => setFocused(false)}
       >
         <ToastAnnouncer politeRef={politeRef} assertiveRef={assertiveRef} />
         <ol>

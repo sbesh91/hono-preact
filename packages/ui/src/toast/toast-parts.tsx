@@ -10,7 +10,8 @@ import { renderElement, type RenderProp } from '../render-element.js';
 import { mergeRefs } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
 import { toastStore, type ToastRecord } from './toast-store.js';
-import { ToastItemContext, useToastItemContext } from './context.js';
+import { ToastItemContext, useToastItemContext, useToasterContext } from './context.js';
+import { useToastTimer } from './use-toast-timer.js';
 
 export type ToastRootProps = {
   toast: ToastRecord;
@@ -28,6 +29,16 @@ export function ToastRoot(props: ToastRootProps) {
     onExitComplete: () => toastStore.remove(record.id),
   });
   const open = status === 'open';
+
+  const toaster = useToasterContext('Root');
+  // Pausing while already dismissed prevents a redundant timeout-dismiss during
+  // the exit animation.
+  useToastTimer({
+    id: record.id,
+    duration: record.duration,
+    paused: toaster.paused || record.dismissed,
+    onExpire: () => toastStore.dismiss(record.id, 'timeout'),
+  });
 
   const itemCtx = useMemo(() => ({ record }), [record]);
 
