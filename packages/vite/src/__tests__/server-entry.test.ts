@@ -26,56 +26,58 @@ const stubAdapter = {
 };
 
 describe('generateCoreAppModule', () => {
-  it('emits the Hono app with loaders, pageActionHandler, renderPage and a default export', () => {
+  it('emits a createServerEntry shim with a default export', () => {
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
     });
-    expect(src).toContain('loadersHandler');
-    expect(src).toContain('pageActionHandler');
-    expect(src).toContain('renderPage');
+    expect(src).toContain(
+      `import { createServerEntry } from 'hono-preact/server/internal/runtime';`
+    );
+    expect(src).toContain('createServerEntry({');
     expect(src).toContain('export default app;');
   });
 
-  it('mounts the user api app when apiAbsPath is provided', () => {
+  it('imports Layout and routes by absolute path', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/proj/src/Layout.tsx',
+      routesAbsPath: '/proj/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+    });
+    expect(src).toContain(`import Layout from '/proj/src/Layout.tsx';`);
+    expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
+    expect(src).toContain('routes,');
+    expect(src).toContain('layout: Layout,');
+    expect(src).toContain('dev: import.meta.env.DEV,');
+  });
+
+  it('passes the user api app via the api option when present', () => {
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: '/p/src/api.ts',
       appConfigAbsPath: undefined,
     });
-    expect(src).toContain("import userApp from '/p/src/api.ts'");
-    expect(src).toContain(".route('/', userApp)");
+    expect(src).toContain(`import userApp from '/p/src/api.ts';`);
+    expect(src).toContain('api: userApp,');
   });
 
-  it('falls back to an empty appConfig when no app-config file exists', () => {
+  it('omits the api import and option when no api file exists', () => {
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
     });
-    // No import; an inline empty config so the middleware chain still works.
-    expect(src).not.toContain('app-config');
-    expect(src).toContain('const appConfig = { use: [] };');
-    // The handler options still thread it through, plus the page-use resolver.
-    expect(src).toContain('makePageUseResolver(routes)');
-    expect(src).toContain('resolvePageUse: pageUseResolver.byPath');
-    // pageActionHandler uses its own resolver, not byModuleKey.
-    expect(src).toContain(
-      'makePageActionResolvers(routes.serverRoutes, { dev })'
-    );
-    expect(src).toContain('resolverByPath: pageActionResolvers.byPath');
-    expect(src).toContain('resolvePageUseByPath: pageUseResolver.byPath');
-    // renderPage receives appConfig as a third argument.
-    expect(src).toContain(
-      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
-    );
+    expect(src).not.toContain('api.ts');
+    expect(src).not.toContain('userApp');
+    expect(src).not.toContain('api:');
   });
 
-  it('imports the user appConfig when appConfigAbsPath is provided', () => {
+  it('imports the user appConfig when the file exists', () => {
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
@@ -84,107 +86,19 @@ describe('generateCoreAppModule', () => {
     });
     expect(src).toContain(`import appConfig from '/p/src/app-config.ts';`);
     expect(src).not.toContain('const appConfig = { use: [] };');
+    expect(src).toContain('appConfig,');
   });
 
-  it('emits the framework imports, mounts loaders/actions/catchall, omits api when not provided', () => {
+  it('falls back to an inline empty appConfig when no file exists', () => {
     const src = generateCoreAppModule({
-      layoutAbsPath: '/proj/src/Layout.tsx',
-      routesAbsPath: '/proj/src/routes.ts',
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
     });
-
-    // Framework imports
-    expect(src).toContain(`import { Hono } from 'hono';`);
-    expect(src).toContain(`import { Routes } from 'hono-preact';`);
-    expect(src).toContain(
-      `import { env } from 'hono-preact/internal/runtime';`
-    );
-    expect(src).toContain(
-      `import {\n  loadersHandler,\n  pageActionHandler,\n  renderPage,\n} from 'hono-preact/server';`
-    );
-    expect(src).toContain(
-      `import {\n  makePageActionResolvers,\n  makePageUseResolver,\n  routeServerModules,\n} from 'hono-preact/server/internal/runtime';`
-    );
-
-    // User imports (absolute paths)
-    expect(src).toContain(`import Layout from '/proj/src/Layout.tsx';`);
-    expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
-    expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
-
-    // No api import when not provided
-    expect(src).not.toContain('api.ts');
-    expect(src).not.toContain('userApp');
-
-    // The location middleware was removed; locationStub now runs synchronously
-    // inside renderPage so concurrent renders cannot race on globalThis.location.
-    expect(src).not.toContain('.use(location)');
-    expect(src).not.toMatch(/^\s*location,\s*$/m);
-
-    // env.current is set
-    expect(src).toContain(`env.current = 'server';`);
-
-    // Handler options thread dev mode through so the cache-vs-rebuild
-    // branch doesn't rely on a Vite-only build-time constant inside the
-    // library handlers themselves. They also carry appConfig + per-handler
-    // resolver closures so the framework's middleware chain composes correctly.
-    expect(src).toContain(`const dev = import.meta.env.DEV;`);
-    expect(src).toContain(`makePageUseResolver(routes)`);
-    expect(src).toContain(
-      `loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolver.byPath })`
-    );
-    expect(src).toContain(
-      `makePageActionResolvers(routes.serverRoutes, { dev })`
-    );
-    expect(src).toContain(`pageActionHandler({`);
-    expect(src).toContain(`resolverByPath: pageActionResolvers.byPath`);
-    expect(src).toContain(`resolvePageUseByPath: pageUseResolver.byPath`);
-
-    // Hono pipeline in correct order: /__loaders POST, then wildcard POST (actions),
-    // then wildcard GET (SSR).
-    const loadersIdx = src.indexOf(`'/__loaders'`);
-    const actionPostIdx = src.indexOf(`.post('*'`);
-    const catchallIdx = src.indexOf(`.get('*'`);
-    expect(loadersIdx).toBeGreaterThan(-1);
-    expect(actionPostIdx).toBeGreaterThan(loadersIdx);
-    expect(catchallIdx).toBeGreaterThan(actionPostIdx);
-    expect(src).toContain(
-      `(c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig })`
-    );
-    // defaultTitle is no longer threaded through renderPage by the framework.
-    expect(src).not.toContain('defaultTitle');
-
-    // Default export
-    expect(src.trimEnd().endsWith('export default app;')).toBe(true);
-
-    // Layout vnode constructed with h() (not JSX) so the virtual module
-    // compiles without a TSX loader hint.
-    expect(src).toContain(`import { h } from 'preact';`);
-    expect(src).not.toContain('<Layout');
-  });
-
-  it('emits the api import and mounts userApp before the reserved paths and catchall', () => {
-    const src = generateCoreAppModule({
-      layoutAbsPath: '/proj/src/Layout.tsx',
-      routesAbsPath: '/proj/src/routes.ts',
-      apiAbsPath: '/proj/src/api.ts',
-      appConfigAbsPath: undefined,
-    });
-
-    expect(src).toContain(`import userApp from '/proj/src/api.ts';`);
-    expect(src).toContain(`.route('/', userApp)`);
-
-    // The user's app must be mounted BEFORE the reserved paths so that
-    // middleware registered in api.ts composes ahead of loadersHandler and
-    // pageActionHandler. See docs/superpowers/specs/2026-05-17-reserved-path-middleware-design.md
-    const apiIdx = src.indexOf(`.route('/', userApp)`);
-    const loadersIdx = src.indexOf(`'/__loaders'`);
-    const actionPostIdx = src.indexOf(`.post('*'`);
-    const catchallIdx = src.indexOf(`.get('*'`);
-    expect(apiIdx).toBeGreaterThan(-1);
-    expect(loadersIdx).toBeGreaterThan(apiIdx);
-    expect(actionPostIdx).toBeGreaterThan(loadersIdx);
-    expect(catchallIdx).toBeGreaterThan(actionPostIdx);
+    expect(src).not.toContain('app-config');
+    expect(src).toContain('const appConfig = { use: [] };');
+    expect(src).toContain('appConfig,');
   });
 });
 
@@ -466,7 +380,7 @@ describe('serverEntryPlugin', () => {
     expect(code).toContain(
       `import userApp from '${path.join(tmp, 'src', 'api.ts')}';`
     );
-    expect(code).toContain(`.route('/', userApp)`);
+    expect(code).toContain('api: userApp,');
 
     fs.rmSync(tmp, { recursive: true, force: true });
   });

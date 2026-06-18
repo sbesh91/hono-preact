@@ -46,6 +46,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Type-level tests (`*.test-d.ts`) — tsc enforces the type assertions
+      # (typed-routes today) that the package `tsconfig`s exclude from typecheck.
+      - name: Type tests
+        run: pnpm test:types
+
       - name: Run tests with coverage
         shell: bash
         run: |

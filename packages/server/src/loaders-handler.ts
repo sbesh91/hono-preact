@@ -22,6 +22,10 @@ type GlobModule = {
 };
 type LazyGlob = Record<string, () => Promise<unknown>>;
 type EagerGlob = Record<string, GlobModule>;
+// routeServerModules returns the manifest's serverImports array directly;
+// buildLoadersMap only uses values (Object.entries discards the key), so
+// ReadonlyArray<() => Promise<unknown>> is an accepted shape at runtime.
+type LazyArray = ReadonlyArray<() => Promise<unknown>>;
 
 type SerializedLocation = {
   path: string;
@@ -42,7 +46,7 @@ type LoaderEntry = {
 };
 
 async function buildLoadersMap(
-  glob: LazyGlob | EagerGlob
+  glob: LazyGlob | EagerGlob | LazyArray
 ): Promise<Record<string, LoaderEntry>> {
   const result: Record<string, LoaderEntry> = {};
   for (const [, moduleOrLoader] of Object.entries(glob)) {
@@ -145,7 +149,7 @@ export interface LoadersHandlerOptions {
 }
 
 export function loadersHandler(
-  glob: LazyGlob | EagerGlob,
+  glob: LazyGlob | EagerGlob | LazyArray,
   opts: LoadersHandlerOptions
 ): MiddlewareHandler {
   if (typeof opts?.resolvePageUse !== 'function') {

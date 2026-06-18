@@ -30,13 +30,14 @@ The CI pipeline lives in `.github/workflows/ci.yml`. Mirror it locally:
 1. `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build` (framework dist must be current; `pnpm typecheck` and `apps/site` resolve cross-package types through the published `dist/`, so stale dist surfaces as fake "missing export" errors).
 2. `pnpm format:check`
 3. `pnpm typecheck`
-4. `pnpm test:coverage` (or `pnpm test` if coverage isn't needed locally).
-5. `pnpm test:integration`
-6. `pnpm --filter site build`
+4. `pnpm test:types` (vitest typecheck mode; runs the `*.test-d.ts` type-level assertions that the package `tsconfig`s exclude from `pnpm typecheck`).
+5. `pnpm test:coverage` (or `pnpm test` if coverage isn't needed locally).
+6. `pnpm test:integration`
+7. `pnpm --filter site build`
 
-If `format:check` fails, run `pnpm format` to fix and commit the result. Do not push commits that you have not personally seen pass these six steps. The single biggest miss is `format:check`, which is fast to run and trivially fixable, but reliably forgotten.
+If `format:check` fails, run `pnpm format` to fix and commit the result. Do not push commits that you have not personally seen pass these seven steps. The single biggest miss is `format:check`, which is fast to run and trivially fixable, but reliably forgotten.
 
-Lighthouse runs in **CI only** and is deliberately **not** part of the six steps above (it builds, serves the worker with `wrangler dev`, and drives Chrome, far too slow for a pre-push gate). The PR-only `lighthouse` job posts a soft sticky comment; the `main` push job commits the `lighthouse-report.json` / `lighthouse-history.jsonl` / `lighthouse-badge.json` baselines alongside the client-size ones. Tooling: `@lhci/cli` (root devDependency); config in `.lighthouserc.json`; extraction and rendering in `scripts/measure-lighthouse.mjs` and `scripts/render-lighthouse-comment.mjs` (unit-tested under `scripts/__tests__/`). The LHCI flow needs two uploads: `temporary-public-storage` (hosted report links) and `filesystem` (writes the `.lighthouseci/manifest.json` the extractor parses).
+Lighthouse runs in **CI only** and is deliberately **not** part of the seven steps above (it builds, serves the worker with `wrangler dev`, and drives Chrome, far too slow for a pre-push gate). The PR-only `lighthouse` job posts a soft sticky comment; the `main` push job commits the `lighthouse-report.json` / `lighthouse-history.jsonl` / `lighthouse-badge.json` baselines alongside the client-size ones. Tooling: `@lhci/cli` (root devDependency); config in `.lighthouserc.json`; extraction and rendering in `scripts/measure-lighthouse.mjs` and `scripts/render-lighthouse-comment.mjs` (unit-tested under `scripts/__tests__/`). The LHCI flow needs two uploads: `temporary-public-storage` (hosted report links) and `filesystem` (writes the `.lighthouseci/manifest.json` the extractor parses).
 
 ## PR workflow
 
