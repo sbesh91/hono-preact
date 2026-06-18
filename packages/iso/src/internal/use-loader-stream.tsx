@@ -45,6 +45,7 @@ export function useLoaderStream<T, Acc>(
   const onChunkRef = useRef(opts.onChunk);
   onChunkRef.current = opts.onChunk;
   const initialRef = useRef(opts.initial);
+  initialRef.current = opts.initial;
 
   const [data, setData] = useState<Acc>(opts.initial);
   const [status, setStatus] = useState<StreamStatus>('connecting');

@@ -68,6 +68,47 @@ describe('loader.useStream', () => {
     );
   });
 
+  it('calls onChunk once per streamed chunk in order', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        dripSseResponse([
+          'data: {"n":10}\n\n',
+          'data: {"n":20}\n\n',
+          'data: {"n":30}\n\n',
+        ])
+      )
+    );
+    const onChunk = vi.fn();
+    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
+      __moduleKey: 'test-onchunk',
+    });
+    function Probe() {
+      const { status } = ref.useStream<number[]>({
+        reduce: (acc, c) => [...acc, c.n],
+        initial: [],
+        onChunk,
+      });
+      return <p data-testid="out">{status}</p>;
+    }
+    render(
+      <LocationProvider>
+        <RouteLocationsProvider moduleKey="test-onchunk" location={LOC}>
+          <Probe />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('closed')
+    );
+    expect(onChunk).toHaveBeenCalledTimes(3);
+    expect(onChunk.mock.calls.map((c) => c[0])).toEqual([
+      { n: 10 },
+      { n: 20 },
+      { n: 30 },
+    ]);
+  });
+
   it('reports an error status when used with no resolvable location', async () => {
     const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
       __moduleKey: 'no-loc',
