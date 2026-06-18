@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
 import { LocationProvider } from 'preact-iso';
-import { pageActionHandler, renderPage } from '../index.js';
-import { makePageActionResolvers } from '../internal-runtime.js';
+import { renderPage } from '../render.js';
+import { pageActionHandler } from '../page-action-handler.js';
+import { makePageActionResolvers } from '../page-action-resolvers.js';
 import { deny, useActionResult, type ServerRoute } from '@hono-preact/iso';
 
 function Page() {
