@@ -3,6 +3,7 @@ import {
   getProjectBySlug,
   listTasksForProject,
   getUser,
+  getTask,
   createTask,
   setTaskStatus,
   setTaskPriority,
@@ -13,6 +14,11 @@ import {
   type TaskStatus,
   type TaskPriority,
 } from '../../demo/data.js';
+import {
+  publishActivity,
+  taskCreatedEvent,
+  taskMovedEvent,
+} from '../../demo/activity-stream.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
 
@@ -65,6 +71,7 @@ export const serverActions = {
       // the form sends '' for unassigned; coerce to null
       assigneeId: input.assigneeId || null,
     });
+    publishActivity(taskCreatedEvent(created, user.name));
     return { id: created.id };
   }),
 
@@ -81,6 +88,14 @@ export const serverActions = {
     if (input.status)
       setTaskStatus(input.taskId, input.status, user?.id ?? null);
     if (input.priority) setTaskPriority(input.taskId, input.priority);
+    if (input.status) {
+      const task = getTask(input.taskId);
+      if (task) {
+        publishActivity(
+          taskMovedEvent(task, input.status, user?.name ?? 'someone')
+        );
+      }
+    }
     return { ok: true };
   }),
 
