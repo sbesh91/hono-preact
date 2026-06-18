@@ -53,7 +53,7 @@ export function UseListboxSelectionExample({
   });
 
   return (
-    <div class="docs-listboxsel">
+    <>
       <ul
         role="listbox"
         aria-multiselectable={multiple}
@@ -73,6 +73,6 @@ export function UseListboxSelectionExample({
         selected: <strong>{sel.selectedLabels().join(', ') || '(none)'}</strong>
       </p>
       {sel.hiddenFields}
-    </div>
+    </>
   );
 }

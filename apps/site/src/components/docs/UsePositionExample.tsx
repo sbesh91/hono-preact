@@ -20,7 +20,7 @@ export function UsePositionExample({
   const pos = usePosition({ open, anchorRef, floatingRef, side, align });
 
   return (
-    <div class="docs-useposition">
+    <>
       <button
         ref={anchorRef}
         type="button"
@@ -39,6 +39,6 @@ export function UsePositionExample({
           resolved: {pos.side} / {pos.align}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
