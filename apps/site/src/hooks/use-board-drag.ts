@@ -32,11 +32,14 @@ function createGhost(
   ghost.setAttribute('popover', 'manual');
 
   const clone = card.cloneNode(true) as HTMLElement;
-  // Drop view-transition-names (and ids) from the clone so it never collides
-  // with the real card's names if a navigation view transition fires mid-drag.
+  // Strip view-transition-names, ids, and the data-task-id the settle step uses
+  // to find the real card, so the clone never collides with the real card (a
+  // navigation view transition mid-drag, or the settle query matching the clone
+  // instead of the dropped card).
   for (const node of [clone, ...clone.querySelectorAll<HTMLElement>('*')]) {
     node.style.removeProperty('view-transition-name');
     node.removeAttribute('id');
+    node.removeAttribute('data-task-id');
   }
   ghost.appendChild(clone);
   document.body.appendChild(ghost);
@@ -87,6 +90,9 @@ export function useBoardDrag(
 ) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
+  // The card currently gliding into place after a drop. The board excludes it
+  // from its FLIP reflow (the card's own ghost is settling separately).
+  const [settlingId, setSettlingId] = useState<string | null>(null);
   const startedRef = useRef(false);
 
   const onPointerDown = useCallback(
@@ -98,6 +104,7 @@ export function useBoardDrag(
       startedRef.current = false;
       let ghost: HTMLDivElement | null = null;
       let liftRaf = 0;
+      let startRect: DOMRect | null = null;
 
       // Listen on window, not the card: the drag must cross into other columns,
       // which moves the pointer off the card. setPointerCapture is unreliable
@@ -110,7 +117,8 @@ export function useBoardDrag(
           setDraggingId(taskId);
           // Lift a clone into the top layer and dim the original in place, so
           // its slot is held and the column never reflows.
-          const created = createGhost(el, el.getBoundingClientRect());
+          startRect = el.getBoundingClientRect();
+          const created = createGhost(el, startRect);
           ghost = created.ghost;
           liftRaf = created.raf;
           el.style.opacity = '0.5';
@@ -121,10 +129,9 @@ export function useBoardDrag(
           ghost.style.translate = `${ev.clientX - startX}px ${ev.clientY - startY}px`;
         setOverStatus(dropTargetFromPoint(getColumnRects(), ev.clientX));
       };
-      // Drop the lift. Called on every end (commit or abort) so the ghost never
-      // gets stuck floating and the source card is always un-dimmed.
-      const resetLift = () => {
-        el.style.opacity = '';
+      // Tear down the floating ghost (cancel the pending lift-pop, leave the top
+      // layer, remove the node). Does NOT touch the source card's opacity.
+      const removeGhost = () => {
         if (liftRaf) {
           cancelAnimationFrame(liftRaf);
           liftRaf = 0;
@@ -139,6 +146,72 @@ export function useBoardDrag(
           ghost = null;
         }
       };
+      // Abort / non-drag end: un-dim the source and drop the ghost immediately.
+      const resetLift = () => {
+        el.style.opacity = '';
+        removeGhost();
+      };
+      // Commit end: glide the ghost from its release point into the dropped
+      // card's settled slot, then swap it for the real card. onDrop has already
+      // re-rendered the card into its new column; we hide that card until the
+      // ghost lands so there are never two cards on screen at once.
+      const settleGhostInto = (id: string) => {
+        el.style.opacity = ''; // the source element is being removed by the patch
+        const g = ghost;
+        const origin = startRect;
+        if (
+          !g ||
+          !origin ||
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+          removeGhost();
+          return;
+        }
+        // Stop the lift-pop rAF so it can't fight the settle transition.
+        if (liftRaf) {
+          cancelAnimationFrame(liftRaf);
+          liftRaf = 0;
+        }
+        setSettlingId(id); // exclude this card from the board's FLIP reflow
+        let frames = 0;
+        const settle = () => {
+          const dest = document.querySelector<HTMLElement>(
+            `[data-task-id="${id}"]`
+          );
+          // The optimistic re-render may not have committed yet; retry briefly.
+          if (!dest) {
+            if (frames++ < 3) {
+              requestAnimationFrame(settle);
+              return;
+            }
+            removeGhost();
+            setSettlingId(null);
+            return;
+          }
+          const r = dest.getBoundingClientRect();
+          dest.style.opacity = '0'; // hide the real card until the ghost lands
+          let done = false;
+          const cleanup = () => {
+            if (done) return;
+            done = true;
+            g.removeEventListener('transitionend', onEnd);
+            dest.style.opacity = '';
+            removeGhost();
+            setSettlingId(null);
+          };
+          const onEnd = (ce: TransitionEvent) => {
+            if (ce.target === g) cleanup();
+          };
+          g.style.transition =
+            'translate 200ms cubic-bezier(.2,.8,.2,1), scale 200ms ease, box-shadow 200ms ease';
+          g.style.translate = `${r.left - origin.left}px ${r.top - origin.top}px`;
+          g.style.scale = '1';
+          g.style.boxShadow = 'none';
+          g.addEventListener('transitionend', onEnd);
+          setTimeout(cleanup, 260); // fallback if nothing actually transitions
+        };
+        requestAnimationFrame(settle);
+      };
       // finish always tears down all three listeners (so an aborted gesture
       // never leaks listeners that stack onto the next drag). It only commits a
       // drop on a real release (commit=true via pointerup), not on pointercancel
@@ -147,11 +220,13 @@ export function useBoardDrag(
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
         window.removeEventListener('pointercancel', cancel);
-        resetLift();
         const dragged = startedRef.current;
         if (commit && dragged) {
           const to = dropTargetFromPoint(getColumnRects(), ev.clientX);
           onDrop(taskId, to);
+          settleGhostInto(taskId); // keeps the ghost, glides it into the new slot
+        } else {
+          resetLift();
         }
         if (dragged) {
           // After a drag the browser still fires a synthetic click on whatever
@@ -187,5 +262,5 @@ export function useBoardDrag(
     [getColumnRects, onDrop]
   );
 
-  return { draggingId, overStatus, onPointerDown };
+  return { draggingId, overStatus, settlingId, onPointerDown };
 }
