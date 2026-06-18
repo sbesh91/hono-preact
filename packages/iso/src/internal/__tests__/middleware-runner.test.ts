@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import type { Context } from 'hono';
-import { defineServerMiddleware } from '../../define-middleware.js';
-import { dispatchServer, type DispatchResult } from '../middleware-runner.js';
+import {
+  defineServerMiddleware,
+  defineClientMiddleware,
+  type Next,
+} from '../../define-middleware.js';
+import {
+  dispatch,
+  dispatchServer,
+  dispatchClient,
+  type DispatchResult,
+} from '../middleware-runner.js';
 import { redirect, deny, isOutcome } from '../../outcomes.js';
 
 const fakeC = { req: { header: () => undefined } } as unknown as Context;
@@ -280,7 +289,82 @@ describe('dispatchServer — outcomes', () => {
       })
     ).rejects.toThrow('inner-boom');
   });
+});
 
+describe('dispatch — generic engine (Ctx-agnostic)', () => {
+  it('runs arbitrary {fn} middleware in order around inner and threads the value', async () => {
+    const calls: string[] = [];
+    const mk = (id: string) => ({
+      fn: async (_ctx: { n: number }, next: Next) => {
+        calls.push(`${id}:before`);
+        await next();
+        calls.push(`${id}:after`);
+      },
+    });
+    const result = await dispatch<{ n: number }, string>({
+      middleware: [mk('a'), mk('b')],
+      ctx: { n: 1 },
+      inner: async () => 'inner',
+    });
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') expect(result.value).toBe('inner');
+    expect(calls).toEqual(['a:before', 'b:before', 'b:after', 'a:after']);
+  });
+
+  it('short-circuits on a thrown outcome', async () => {
+    const result = await dispatch<{ n: number }, string>({
+      middleware: [
+        {
+          fn: async () => {
+            throw deny(403, 'no');
+          },
+        },
+      ],
+      ctx: { n: 1 },
+      inner: async () => 'unreached',
+    });
+    expect(result.kind).toBe('outcome');
+    if (result.kind === 'outcome') {
+      expect(result.outcome.__outcome).toBe('deny');
+    }
+  });
+});
+
+describe('dispatchClient — facade over dispatch', () => {
+  it('runs client middleware around inner and returns the value (closes the previously-untested client path)', async () => {
+    const calls: string[] = [];
+    const mw = defineClientMiddleware(async (_ctx, next) => {
+      calls.push('c:before');
+      await next();
+      calls.push('c:after');
+    });
+    const result: DispatchResult<string> = await dispatchClient({
+      middleware: [mw],
+      ctx: { scope: 'page', location: { path: '/' } as never },
+      inner: async () => 'client-value',
+    });
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') expect(result.value).toBe('client-value');
+    expect(calls).toEqual(['c:before', 'c:after']);
+  });
+
+  it('catches a thrown outcome from client middleware', async () => {
+    const mw = defineClientMiddleware(async () => {
+      throw redirect('/login');
+    });
+    const result = await dispatchClient({
+      middleware: [mw],
+      ctx: { scope: 'page', location: { path: '/' } as never },
+      inner: async () => 'unreached',
+    });
+    expect(result.kind).toBe('outcome');
+    if (result.kind === 'outcome') {
+      expect(result.outcome.__outcome).toBe('redirect');
+    }
+  });
+});
+
+describe('dispatchServer — signal', () => {
   it('AbortSignal aborted mid-chain does not short-circuit (by design)', async () => {
     // The dispatcher intentionally does not read ctx.signal: cancellation is
     // the inner function's responsibility (loaders/actions check signal in

@@ -18,12 +18,15 @@ describe('V3 - loader can set a response cookie', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler({
-        './x.server.ts': {
-          __moduleKey: 'x',
-          serverLoaders: { default: setRotated },
+      loadersHandler(
+        {
+          './x.server.ts': {
+            __moduleKey: 'x',
+            serverLoaders: { default: setRotated },
+          },
         },
-      })
+        { resolvePageUse: async () => [] }
+      )
     );
 
     const res = await app.request('http://localhost/__loaders', {

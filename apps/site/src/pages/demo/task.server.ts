@@ -14,6 +14,11 @@ import {
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
+import {
+  publishActivity,
+  commentAddedEvent,
+  taskMovedEvent,
+} from '../../demo/activity-stream.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (taskId/projectId) from the route's pattern.
@@ -73,6 +78,8 @@ export const serverActions = {
         taskId: input.taskId,
         body: input.body.trim(),
       });
+      const task = getTask(input.taskId);
+      if (task) publishActivity(commentAddedEvent(task, user.name));
       return { id: c.id };
     }
   ),
@@ -84,6 +91,12 @@ export const serverActions = {
         await assertCanMoveToDone(input.taskId, user?.id);
       }
       setTaskStatus(input.taskId, input.status, user?.id ?? null);
+      const task = getTask(input.taskId);
+      if (task) {
+        publishActivity(
+          taskMovedEvent(task, input.status, user?.name ?? 'someone')
+        );
+      }
       return { ok: true };
     }
   ),

@@ -3,19 +3,16 @@ import {
   isOutcome,
   timeoutOutcome,
   type AppConfig,
-  type ServerMiddleware,
   type ServerActionCtx,
-  type Middleware,
-  type StreamObserver,
 } from '@hono-preact/iso';
 import {
   runRequestScope,
   setActionResultSlot,
   dispatchServer,
-  partitionUse,
   serializeActionOutcome,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
+import { composeServerChain } from './compose-server-chain.js';
 import {
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
@@ -38,14 +35,17 @@ export interface PageActionHandlerOptions {
    */
   resolverByPath: (path: string) => Promise<Map<string, ActionEntry>>;
   /**
-   * Optional per-page middleware resolver, keyed by URL path. The handler
-   * composes the chain as [appConfig.use, resolvePageUseByPath(path), action.use].
-   * Pass `pageUseResolver.byPath` from makePageUseResolver (same resolver
-   * loadersHandler uses). Defaults to returning empty so the option is
-   * additive: handlers wired without it lose page-level middleware (matches
-   * the previous behavior of this handler, which dropped them entirely).
+   * Per-page middleware resolver, keyed by URL path. The handler composes the
+   * chain as [appConfig.use, resolvePageUseByPath(path), action.use]. Pass
+   * `pageUseResolver.byPath` from makePageUseResolver (the same resolver
+   * loadersHandler uses).
+   *
+   * REQUIRED: page-level `use` is where route/layout auth gates live, so an
+   * absent resolver would silently drop them on the action POST path (an
+   * auth-bypass footgun). The handler validates this at construction and
+   * throws rather than composing a guard-less chain.
    */
-  resolvePageUseByPath?: (
+  resolvePageUseByPath: (
     path: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
@@ -154,6 +154,18 @@ export function pageActionHandler(
     onError,
   } = opts;
 
+  if (typeof resolvePageUseByPath !== 'function') {
+    // page-level `use` carries route/layout auth gates; a missing resolver
+    // would silently drop them on the action POST path. Fail loudly at
+    // construction (the type also marks this required) instead of composing a
+    // guard-less chain.
+    throw new Error(
+      'pageActionHandler requires a resolvePageUseByPath function; without it ' +
+        'page-level middleware (including auth gates) is silently dropped on ' +
+        'the action POST path. Pass makePageUseResolver(routes).byPath.'
+    );
+  }
+
   return async (c) => {
     const accept = pickAccept(c.req.header('Accept'));
     const parsed = await parseBody(c);
@@ -173,32 +185,21 @@ export function pageActionHandler(
         : c.text(msg, 404);
     }
     const { fn, use: actionUse, timeoutMs } = entry;
-    const resolvedTimeoutMs: number | false =
-      timeoutMs !== undefined ? timeoutMs : defaultTimeoutMs;
-    const timeoutSignal =
-      resolvedTimeoutMs === false
-        ? undefined
-        : AbortSignal.timeout(resolvedTimeoutMs);
-    const signal = timeoutSignal
-      ? AbortSignal.any([c.req.raw.signal, timeoutSignal])
-      : c.req.raw.signal;
+    // Chain order is app (outermost) -> page (route-node `use`) -> action
+    // (defineAction's `use`); composeServerChain owns the ordering, timeout
+    // derivation, partitioning, and the structural-read cast (shared with the
+    // loader handler).
+    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
+      await composeServerChain<'action'>({
+        requestSignal: c.req.raw.signal,
+        unitTimeoutMs: timeoutMs,
+        defaultTimeoutMs,
+        appConfig,
+        resolvePageUse: resolvePageUseByPath,
+        path: urlPath,
+        unitUse: actionUse,
+      });
     const actionCtx = { c, signal };
-
-    // Chain order: app-level (outermost) -> page-level (route-node `use`
-    // composed along the tree, supplied by `resolvePageUseByPath`) ->
-    // action-level (from defineAction's `use` option). Outer middleware runs
-    // first on the way in, last on the way out, matching the convention every
-    // middleware system users have seen (Hono, Express, Koa).
-    const rootUse = appConfig?.use ?? [];
-    const pageUse = (await resolvePageUseByPath?.(urlPath)) ?? [];
-    const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
-      [...rootUse, ...pageUse, ...actionUse] as ReadonlyArray<
-        Middleware | StreamObserver<unknown, never>
-      >;
-    const { middleware: allMiddleware, observers } = partitionUse(fullUse);
-    const serverMw = allMiddleware.filter(
-      (m): m is ServerMiddleware<'action'> => m.runs === 'server'
-    );
     const ctx: ServerActionCtx = {
       scope: 'action',
       c,

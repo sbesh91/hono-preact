@@ -3,16 +3,10 @@ import {
   isOutcome,
   timeoutOutcome,
   type AppConfig,
-  type ServerMiddleware,
   type ServerLoaderCtx,
-  type Middleware,
-  type StreamObserver,
 } from '@hono-preact/iso';
-import {
-  runRequestScope,
-  dispatchServer,
-  partitionUse,
-} from '@hono-preact/iso/internal';
+import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
+import { composeServerChain } from './compose-server-chain.js';
 import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
   sseGeneratorResponse,
@@ -130,9 +124,15 @@ export interface LoadersHandlerOptions {
    * sourced from the route manifest's `routeUse` (which already folds in
    * ancestor `use` outer-first). The lookup may be sync (an in-memory map)
    * or async (loaded lazily on first request). The handler awaits the result
-   * either way. Default returns an empty array.
+   * either way.
+   *
+   * REQUIRED: page-level `use` is where route/layout auth gates live, so an
+   * absent resolver would silently drop them on the loader RPC path, exposing
+   * data the gate should protect. The handler validates this at construction
+   * and throws rather than fetching loaders through a guard-less chain. Pass
+   * `pageUseResolver.byPath` from makePageUseResolver.
    */
-  resolvePageUse?: (
+  resolvePageUse: (
     path: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
@@ -146,8 +146,19 @@ export interface LoadersHandlerOptions {
 
 export function loadersHandler(
   glob: LazyGlob | EagerGlob,
-  opts: LoadersHandlerOptions = {}
+  opts: LoadersHandlerOptions
 ): MiddlewareHandler {
+  if (typeof opts?.resolvePageUse !== 'function') {
+    // page-level `use` carries route/layout auth gates; a missing resolver
+    // would silently drop them on the loader RPC path, exposing data the gate
+    // should protect. Fail loudly at construction (the type also marks this
+    // required) instead of fetching loaders through a guard-less chain.
+    throw new Error(
+      'loadersHandler requires opts.resolvePageUse; without it page-level ' +
+        'middleware (including auth gates) is silently dropped on the loader ' +
+        'RPC path. Pass makePageUseResolver(routes).byPath.'
+    );
+  }
   const {
     dev = false,
     onError,
@@ -213,31 +224,20 @@ export function loadersHandler(
       );
     }
 
-    const resolvedTimeoutMs: number | false =
-      entry.timeoutMs !== undefined ? entry.timeoutMs : defaultTimeoutMs;
-    const timeoutSignal =
-      resolvedTimeoutMs === false
-        ? undefined
-        : AbortSignal.timeout(resolvedTimeoutMs);
-    const signal = timeoutSignal
-      ? AbortSignal.any([c.req.raw.signal, timeoutSignal])
-      : c.req.raw.signal;
-
-    // Chain ordering is outer -> inner: app-level middleware wraps every
-    // request, page-level wraps loaders owned by that page, and per-loader
-    // middleware wraps just this call. Outer middleware runs first on the
-    // way in and last on the way out, matching every middleware system
-    // users have seen (Hono, Express, Koa).
-    const rootUse = appConfig?.use ?? [];
-    const pageUse = (await resolvePageUse?.(validatedLocation.path)) ?? [];
-    const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
-      [...rootUse, ...pageUse, ...entry.use] as ReadonlyArray<
-        Middleware | StreamObserver<unknown, never>
-      >;
-    const { middleware: allMiddleware, observers } = partitionUse(fullUse);
-    const serverMw = allMiddleware.filter(
-      (m): m is ServerMiddleware<'loader'> => m.runs === 'server'
-    );
+    // Chain ordering is app (outermost) -> page (loaders owned by the route)
+    // -> per-loader (`use`); composeServerChain owns the ordering, timeout
+    // derivation, partitioning, and the structural-read cast (shared with the
+    // action handler).
+    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
+      await composeServerChain<'loader'>({
+        requestSignal: c.req.raw.signal,
+        unitTimeoutMs: entry.timeoutMs,
+        defaultTimeoutMs,
+        appConfig,
+        resolvePageUse,
+        path: validatedLocation.path,
+        unitUse: entry.use,
+      });
     const ctx: ServerLoaderCtx = {
       scope: 'loader',
       c,

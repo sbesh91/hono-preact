@@ -1,12 +1,12 @@
-import { Tooltip } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
+import { TooltipExample } from './TooltipExample.js';
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const;
 const ALIGNS = ['start', 'center', 'end'] as const;
 
-// Placement explorer: pick a side and alignment, then hover (or focus) the
-// trigger to see the tooltip appear there. Styling is in root.css
-// (.docs-tooltip* / .docs-placement*).
+// Placement explorer harness around the TooltipExample core. The controls exist
+// only here (the docs Code tab shows TooltipExample, the real usage). Styling is
+// in root.css (.docs-tooltip* / .docs-placement*).
 export function TooltipDemo() {
   const [side, setSide] = useState<(typeof SIDES)[number]>('top');
   const [align, setAlign] = useState<(typeof ALIGNS)[number]>('center');
@@ -41,17 +41,7 @@ export function TooltipDemo() {
         </div>
       </div>
       <div class="docs-placement__stage">
-        <Tooltip.Root side={side} align={align}>
-          <Tooltip.Trigger class="docs-tooltip-trigger">
-            Hover me
-          </Tooltip.Trigger>
-          <Tooltip.Positioner class="docs-tooltip-positioner">
-            <Tooltip.Popup class="docs-tooltip">
-              <Tooltip.Arrow class="docs-tooltip__arrow" />
-              Saved to your library
-            </Tooltip.Popup>
-          </Tooltip.Positioner>
-        </Tooltip.Root>
+        <TooltipExample side={side} align={align} />
       </div>
     </div>
   );

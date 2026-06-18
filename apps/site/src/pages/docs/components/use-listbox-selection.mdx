@@ -1,5 +1,6 @@
 import { Example } from '../../../components/docs/Example.js';
 import { UseListboxSelectionDemo } from '../../../components/docs/UseListboxSelectionDemo.js';
+import useListboxSelectionCode from '../../../components/docs/UseListboxSelectionExample.tsx?highlighted';
 
 # useListboxSelection
 
@@ -14,7 +15,7 @@ See also: [useListNavigation](/docs/components/use-list-navigation), [Select](/d
 
 ## Demo
 
-<Example>
+<Example code={useListboxSelectionCode}>
   <UseListboxSelectionDemo />
 </Example>
 
@@ -30,17 +31,17 @@ function useListboxSelection<Value = string>(
 
 ## Options
 
-| Option           | Type                               | Notes                                                                        |
-| ---------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `value`          | `Value \| Value[] \| undefined`    | The controlled selected value(s).                                            |
-| `setValue`       | `(next: Value \| Value[]) => void` | Called with the next selection.                                              |
-| `multiple`       | `boolean`                          | Whether multiple options can be selected.                                    |
-| `setOpen`        | `(open: boolean) => void`          | Called to close the control after a single-select choice.                    |
-| `isValueEqual`   | `(a: Value, b: Value) => boolean`  | Optional. Custom equality; defaults to `Object.is`.                          |
-| `serializeValue` | `(value: Value) => string`         | Optional. Serializes a value for the hidden form field.                      |
-| `itemToString`   | `(value: Value) => string`         | Optional. Resolves a display label when no option is registered for a value. |
-| `name`           | `string`                           | Optional. Hidden form-field name; enables native form submission.            |
-| `disabled`       | `boolean`                          | Optional. Disables selection.                                                |
+| Option           | Type                               | Notes                                                                                         |
+| ---------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| `value`          | `Value \| Value[] \| undefined`    | The controlled selected value(s).                                                             |
+| `setValue`       | `(next: Value \| Value[]) => void` | Called with the next selection: a bare `Value` in single-select, a `Value[]` in multi-select. |
+| `multiple`       | `boolean`                          | Whether multiple options can be selected.                                                     |
+| `setOpen`        | `(open: boolean) => void`          | Called to close the control after a single-select choice.                                     |
+| `isValueEqual`   | `(a: Value, b: Value) => boolean`  | Optional. Custom equality; defaults to `Object.is`.                                           |
+| `serializeValue` | `(value: Value) => string`         | Optional. Serializes a value for the hidden form field.                                       |
+| `itemToString`   | `(value: Value) => string`         | Optional. Resolves a display label when no option is registered for a value.                  |
+| `name`           | `string`                           | Optional. Hidden form-field name; enables native form submission.                             |
+| `disabled`       | `boolean`                          | Optional. Disables selection.                                                                 |
 
 ## Result
 
@@ -54,39 +55,3 @@ function useListboxSelection<Value = string>(
 | `labelFor`       | `(value: unknown) => string`        | Resolve a single value's display label.                            |
 | `optionCount`    | `number`                            | Number of currently-registered options.                            |
 | `hiddenFields`   | `ComponentChild[] \| null`          | Hidden `<input>`s for native form submission, or `null`.           |
-
-## Example
-
-```tsx
-import { useListboxSelection } from 'hono-preact-ui';
-import { useState } from 'preact/hooks';
-
-function CustomSelect() {
-  const [value, setValue] = useState<string | undefined>(undefined);
-  const [, setOpen] = useState(false);
-
-  const selection = useListboxSelection<string>({
-    value,
-    setValue: (next) => setValue(Array.isArray(next) ? next[0] : next),
-    multiple: false,
-    setOpen,
-    name: 'fruit',
-  });
-
-  return (
-    <ul role="listbox">
-      {['apple', 'pear'].map((v) => (
-        <li
-          key={v}
-          role="option"
-          aria-selected={selection.isSelected(v)}
-          onClick={() => selection.toggle(v)}
-        >
-          {v}
-        </li>
-      ))}
-      {selection.hiddenFields}
-    </ul>
-  );
-}
-```

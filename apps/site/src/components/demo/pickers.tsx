@@ -30,11 +30,9 @@ export function StatusSelect({
   onChange: (v: TaskStatus) => void;
 }) {
   return (
-    <Select.Root
+    <Select.Root<TaskStatus>
       value={value}
-      onValueChange={(v) =>
-        onChange((Array.isArray(v) ? (v[0] ?? value) : v) as TaskStatus)
-      }
+      onValueChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? value) : v)}
     >
       <Select.Trigger class={triggerCls}>
         <Select.Value />
@@ -63,11 +61,9 @@ export function PrioritySelect({
   onChange: (v: TaskPriority) => void;
 }) {
   return (
-    <Select.Root
+    <Select.Root<TaskPriority>
       value={value}
-      onValueChange={(v) =>
-        onChange((Array.isArray(v) ? (v[0] ?? value) : v) as TaskPriority)
-      }
+      onValueChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? value) : v)}
     >
       <Select.Trigger class={triggerCls}>
         <span
@@ -115,10 +111,10 @@ export function AssigneeCombobox({
   const filtered = options.filter((o) => matchSubstring(o.name, query));
 
   return (
-    <Combobox.Root
+    <Combobox.Root<string>
       value={value ?? ''}
       onValueChange={(v) => {
-        const id = (Array.isArray(v) ? (v[0] ?? '') : v) as string;
+        const id = Array.isArray(v) ? (v[0] ?? '') : v;
         onChange(id || null);
       }}
       inputValue={query}

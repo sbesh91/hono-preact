@@ -4,11 +4,19 @@ function segmentsOf(path: string): string[] {
 
 /**
  * True when `urlPath` (the concrete URL the user navigated to, with all
- * params substituted) matches `pattern` exactly: same segment count, and
- * each pattern segment either equals the URL segment, is a `:param`, or is
- * a `*` (which matches the entire remainder; pattern segments after it are ignored).
+ * params substituted) matches `pattern`. Mirrors preact-iso's `exec` route
+ * grammar so the server resolver agrees with the client router:
  *
- * Used at lookup time. Callers resolve the URL to the most specific
+ *   literal   segment must equal the URL segment
+ *   :param    required single segment (needs a value)
+ *   :param?   optional single segment (matches with or without a value)
+ *   :param*   rest, zero-or-more trailing segments (matches an empty remainder)
+ *   :param+   rest, one-or-more trailing segments (needs at least one)
+ *   *         matches the entire remainder, including none; later pattern
+ *             segments are ignored
+ *
+ * Absent a rest/optional/`*` segment, the segment counts must be equal. Used
+ * at lookup time; callers resolve the URL to the most specific matching
  * pattern in their map via `findBestPattern`.
  */
 export function urlPathMatchesPattern(
@@ -17,14 +25,33 @@ export function urlPathMatchesPattern(
 ): boolean {
   const ps = segmentsOf(pattern);
   const us = segmentsOf(urlPath);
-  for (let i = 0; i < ps.length; i++) {
+  const len = Math.max(ps.length, us.length);
+  for (let i = 0; i < len; i++) {
     const p = ps[i];
+    const u = us[i];
+    // More URL segments than the pattern accounts for (and no `*`/rest
+    // segment consumed the remainder): not a match.
+    if (p === undefined) return false;
+    // A bare `*` matches the entire remainder, including none.
     if (p === '*') return true;
-    if (i >= us.length) return false;
-    if (p.startsWith(':')) continue;
-    if (p !== us[i]) return false;
+    if (p.startsWith(':')) {
+      const flag = p[p.length - 1];
+      if (u === undefined) {
+        // No URL segment here. Optional (`?`) skips to the next segment;
+        // rest-zero-or-more (`*`) matches the (empty) remainder; a required
+        // `:param` or one-or-more `:param+` does not match.
+        if (flag === '?') continue;
+        if (flag === '*') return true;
+        return false;
+      }
+      // A URL segment is present; `*`/`+` consume the whole remainder.
+      if (flag === '*' || flag === '+') return true;
+      continue;
+    }
+    // Literal segment must equal the URL segment.
+    if (p !== u) return false;
   }
-  return ps.length === us.length;
+  return true;
 }
 
 /**

@@ -386,7 +386,7 @@
    it reads against the white page, with the 1px border), and the github-dark
    background in dark mode (matching the dark syntax colors). */
 .mdx-content pre,
-.docs-codetabs__panel pre {
+.docs-tabs__panel pre {
   background-color: var(--code-surface) !important;
 }
 
@@ -455,7 +455,7 @@
    desktop there is room to the right of the content column, so let them grow
    past it (capped so they never exceed the viewport). */
 @media (min-width: 768px) {
-  .docs-codetabs,
+  .docs-tabs,
   .mdx-content > pre,
   .mdx-content > table {
     width: min(calc(100% + 9rem), calc(100vw - 240px - 6rem));
@@ -611,6 +611,42 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   animation: none;
 }
 
+/* The demo activity bar is persistent, position:fixed UI. Give it its own
+   transition name so it is lifted out of the root snapshot (otherwise the root
+   slide/fade drags it on every navigation). The name lives on the fixed bar
+   element itself, not the Persist wrapper, which would collapse to zero height
+   and fail to capture an out-of-flow child. */
+.demo-activity-bar {
+  view-transition-name: demo-activity-bar;
+}
+/* Within the app (bar present in both snapshots) freeze it: only page content
+   transitions. Scoped to demo-within only; on enter/leave the bar is in one
+   snapshot and keeps the default fade. */
+html:active-view-transition-type(demo-within)::view-transition-group(demo-activity-bar),
+html:active-view-transition-type(demo-within)::view-transition-old(demo-activity-bar),
+html:active-view-transition-type(demo-within)::view-transition-new(demo-activity-bar) {
+  animation: none;
+}
+
+/* Live-connection pulse on the status dot (not a route transition). */
+@keyframes demo-activity-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.demo-activity-pulse {
+  animation: demo-activity-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-activity-pulse {
+    animation: none;
+  }
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -677,6 +713,23 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   margin: 1.25rem 0;
   border: 1px solid var(--border-color);
   border-radius: 0.75rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0) 0
+      0 / 16px 16px,
+    var(--surface);
+}
+
+/* Demo panel inside the Demo|Code tab strip: same dotted interactive surface
+   as .docs-example, but without the outer border/margin/radius (the .docs-tabs
+   card already provides those). */
+.docs-example-tabs__demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-height: 9rem;
+  padding: 2rem;
   background:
     radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0) 0
       0 / 16px 16px,
@@ -889,13 +942,13 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
 /* Tabbed, copyable code examples. The tab bar uses the docs theme; the code
    panel is a Shiki-highlighted fenced block (github-dark), so it matches every
    other code sample on the site. */
-.docs-codetabs {
+.docs-tabs {
   margin: 1.25rem 0;
   border: 1px solid var(--border-color);
   border-radius: 0.625rem;
   overflow: hidden;
 }
-.docs-codetabs__tablist {
+.docs-tabs__tablist {
   display: flex;
   align-items: stretch;
   gap: 0.25rem;
@@ -903,7 +956,7 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   background: var(--surface-subtle);
   border-bottom: 1px solid var(--border-color);
 }
-.docs-codetabs__tab {
+.docs-tabs__tab {
   appearance: none;
   font: inherit;
   font-size: 0.8125rem;
@@ -918,14 +971,14 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
     color 120ms ease,
     border-color 120ms ease;
 }
-.docs-codetabs__tab:hover {
+.docs-tabs__tab:hover {
   color: var(--foreground);
 }
-.docs-codetabs__tab[aria-selected='true'] {
+.docs-tabs__tab[aria-selected='true'] {
   color: var(--foreground);
   border-bottom-color: var(--accent);
 }
-.docs-codetabs__copy {
+.docs-tabs__copy {
   appearance: none;
   font: inherit;
   font-size: 0.75rem;
@@ -943,13 +996,13 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
     background-color 120ms ease,
     border-color 120ms ease;
 }
-.docs-codetabs__copy:hover {
+.docs-tabs__copy:hover {
   color: var(--foreground);
   background: var(--surface);
 }
 /* The panel holds a Shiki <pre>; sit it flush in the rounded card (the card's
    own border delineates it, so the pre needs none of its own). */
-.docs-codetabs__panel pre {
+.docs-tabs__panel pre {
   margin: 0;
   border: none;
   border-radius: 0;
