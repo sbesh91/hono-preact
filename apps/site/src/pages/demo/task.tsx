@@ -171,17 +171,17 @@ const CommentsSection: FunctionComponent<{
   // or nav; invalidate() below busts the cache so that refetch is fresh.
   const addComment = useOptimisticAction(serverActions.addComment, {
     base: comments,
-    apply: (current, payload) => [
-      ...current,
-      {
+    apply: (current, payload) => {
+      const optimistic: CommentData = {
         id: `pending-${current.length}`,
         taskId: payload.taskId,
         authorId: '',
         body: payload.body,
         createdAt: Date.now(),
         author: null,
-      } as CommentData,
-    ],
+      };
+      return [...current, optimistic];
+    },
   });
   const { pending } = useFormStatus(serverActions.addComment);
 
