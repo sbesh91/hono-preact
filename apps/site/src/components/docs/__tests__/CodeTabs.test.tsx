@@ -35,12 +35,17 @@ describe('CodeTabs', () => {
       value: { writeText: vi.fn() },
       configurable: true,
     });
-    const { getByRole, getByText, queryByText } = render(tabs());
-    expect(getByText('css-code')).toBeTruthy();
-    expect(queryByText('tailwind-code')).toBeNull();
+    const { getByRole, getByText } = render(tabs());
+    const cssPanel = getByText('css-code').closest('[role="tabpanel"]') as HTMLElement;
+    const twPanel = getByText('tailwind-code').closest(
+      '[role="tabpanel"]'
+    ) as HTMLElement;
+    expect(cssPanel.hidden).toBe(false);
+    expect(twPanel.hidden).toBe(true);
 
     fireEvent.click(getByRole('tab', { name: 'Tailwind' }));
-    expect(getByText('tailwind-code')).toBeTruthy();
+    expect(cssPanel.hidden).toBe(true);
+    expect(twPanel.hidden).toBe(false);
   });
 
   it('copies the active block text via the Copy button', () => {

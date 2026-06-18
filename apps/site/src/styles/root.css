@@ -386,7 +386,7 @@
    it reads against the white page, with the 1px border), and the github-dark
    background in dark mode (matching the dark syntax colors). */
 .mdx-content pre,
-.docs-codetabs__panel pre {
+.docs-tabs__panel pre {
   background-color: var(--code-surface) !important;
 }
 
@@ -455,7 +455,7 @@
    desktop there is room to the right of the content column, so let them grow
    past it (capped so they never exceed the viewport). */
 @media (min-width: 768px) {
-  .docs-codetabs,
+  .docs-tabs,
   .mdx-content > pre,
   .mdx-content > table {
     width: min(calc(100% + 9rem), calc(100vw - 240px - 6rem));
@@ -889,13 +889,13 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
 /* Tabbed, copyable code examples. The tab bar uses the docs theme; the code
    panel is a Shiki-highlighted fenced block (github-dark), so it matches every
    other code sample on the site. */
-.docs-codetabs {
+.docs-tabs {
   margin: 1.25rem 0;
   border: 1px solid var(--border-color);
   border-radius: 0.625rem;
   overflow: hidden;
 }
-.docs-codetabs__tablist {
+.docs-tabs__tablist {
   display: flex;
   align-items: stretch;
   gap: 0.25rem;
@@ -903,7 +903,7 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   background: var(--surface-subtle);
   border-bottom: 1px solid var(--border-color);
 }
-.docs-codetabs__tab {
+.docs-tabs__tab {
   appearance: none;
   font: inherit;
   font-size: 0.8125rem;
@@ -918,14 +918,14 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
     color 120ms ease,
     border-color 120ms ease;
 }
-.docs-codetabs__tab:hover {
+.docs-tabs__tab:hover {
   color: var(--foreground);
 }
-.docs-codetabs__tab[aria-selected='true'] {
+.docs-tabs__tab[aria-selected='true'] {
   color: var(--foreground);
   border-bottom-color: var(--accent);
 }
-.docs-codetabs__copy {
+.docs-tabs__copy {
   appearance: none;
   font: inherit;
   font-size: 0.75rem;
@@ -943,13 +943,13 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
     background-color 120ms ease,
     border-color 120ms ease;
 }
-.docs-codetabs__copy:hover {
+.docs-tabs__copy:hover {
   color: var(--foreground);
   background: var(--surface);
 }
 /* The panel holds a Shiki <pre>; sit it flush in the rounded card (the card's
    own border delineates it, so the pre needs none of its own). */
-.docs-codetabs__panel pre {
+.docs-tabs__panel pre {
   margin: 0;
   border: none;
   border-radius: 0;
