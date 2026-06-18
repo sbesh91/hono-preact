@@ -18,6 +18,9 @@ import {
   announcementText,
 } from './announcer.js';
 
+// Stable default hotkey to prevent useEffect re-runs on every render.
+const DEFAULT_HOTKEY = ['altKey', 'KeyT'];
+
 export interface ToasterProps {
   position?: ToastPosition;
   label?: string;
@@ -42,7 +45,7 @@ export function Toaster(props: ToasterProps): VNode {
     gap = 14,
     visibleToasts = 3,
     expand = false,
-    hotkey = ['altKey', 'KeyT'],
+    hotkey = DEFAULT_HOTKEY,
     children,
   } = props;
 
