@@ -34,7 +34,9 @@ export const serverLoaders = {
     if (!project) return null;
     return {
       project,
-      users: [getUser('u-1'), getUser('u-2')].filter(Boolean) as User[],
+      users: [getUser('u-1'), getUser('u-2')].filter(
+        (u): u is User => u !== null
+      ),
       tasks: listTasksForProject(project.id),
     };
   }),
