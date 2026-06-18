@@ -27,8 +27,11 @@ A page is up to four files:
 - `src/pages/home.server.ts` - loaders/actions for that page. Optional. Use
   `export const serverLoaders = { default: defineLoader(fn) }` and
   `export const serverActions = { ... }`. No default export; `serverLoaders` /
-  `serverActions` are the only allowed named exports. Never import a `.server`
-  symbol into client code.
+  `serverActions` are the only allowed named exports (plus erased `export
+  type`s). Client code imports `serverLoaders` / `serverActions` and reads data
+  through them; the Vite plugin rewrites those imports into client-safe RPC
+  handles. Never put secrets or server-only helpers where they would be inlined
+  into the client; keep that logic inside the loader and action bodies.
 - `src/routes.ts` - declares every URL and which view (and optional `.server`
   module) lives there.
 - `src/Layout.tsx` - the HTML document shell. It must render `<ClientScript />`
