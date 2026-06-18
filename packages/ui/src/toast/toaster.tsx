@@ -116,11 +116,14 @@ export function Toaster(props: ToasterProps): VNode {
 
   const orderedIds = useMemo(() => toasts.map((t) => t.id), [toasts]);
   const heights = useRef(new Map<string | number, number>()).current;
+  const [, bumpHeights] = useReducer((n: number, _: void) => n + 1, 0);
   const registerHeight = useCallback(
-    (_id: string | number, _height: number) => {
-      // No-op until Task 9.
+    (id: string | number, height: number) => {
+      if (heights.get(id) === height) return;
+      heights.set(id, height);
+      bumpHeights();
     },
-    []
+    [heights]
   );
 
   const ctx = useMemo(
@@ -128,13 +131,13 @@ export function Toaster(props: ToasterProps): VNode {
       position,
       gap,
       visibleToasts,
-      expanded: expand,
+      expanded: expand || hovered || focused,
       paused,
       orderedIds,
       heights,
       registerHeight,
     }),
-    [position, gap, visibleToasts, expand, paused, orderedIds, heights, registerHeight]
+    [position, gap, visibleToasts, expand, hovered, focused, paused, orderedIds, heights, registerHeight]
   );
 
   return (

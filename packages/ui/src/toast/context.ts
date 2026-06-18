@@ -13,7 +13,7 @@ export interface ToasterContextValue {
   orderedIds: (string | number)[];
   // Measured heights keyed by id (px). Empty until Task 9 wires measurement.
   heights: Map<string | number, number>;
-  // Register a toast's measured height; returns an unregister cleanup.
+  // Register or update a toast's measured height in px.
   registerHeight: (id: string | number, height: number) => void;
 }
 

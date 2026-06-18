@@ -5,7 +5,7 @@ import {
   type Ref,
   type VNode,
 } from 'preact';
-import { useMemo } from 'preact/hooks';
+import { useEffect, useMemo, useRef } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { mergeRefs } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
@@ -40,6 +40,35 @@ export function ToastRoot(props: ToastRootProps) {
     onExpire: () => toastStore.dismiss(record.id, 'timeout'),
   });
 
+  // Measure own height into the registry. ResizeObserver when available (handles
+  // content that grows); otherwise a single mount measurement via offsetHeight.
+  const elRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el) return;
+    const measure = () => toaster.registerHeight(record.id, el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [toaster, record.id]);
+
+  // Position among all rendered toasts (newest first). `before` is the count
+  // of toasts in front of this one (i.e., lower index = closer to the front).
+  const COLLAPSED_PEEK = 16;
+  const index = toaster.orderedIds.indexOf(record.id);
+  const before = index; // newest-first ordering: index 0 is the front toast
+  let offset = 0;
+  if (toaster.expanded) {
+    for (let i = 0; i < before; i += 1) {
+      offset += (toaster.heights.get(toaster.orderedIds[i]) ?? 0) + toaster.gap;
+    }
+  } else {
+    offset = before * COLLAPSED_PEEK;
+  }
+  const ownHeight = toaster.heights.get(record.id) ?? 0;
+
   const itemCtx = useMemo(() => ({ record }), [record]);
 
   const body = record.jsx ? record.jsx(record.id) : children;
@@ -52,9 +81,23 @@ export function ToastRoot(props: ToastRootProps) {
       defaultTag: 'li',
       props: {
         ...rest,
-        ref: mergeRefs<Element>(presenceRef, userRef as Ref<Element>),
+        ref: mergeRefs<Element>(
+          presenceRef,
+          elRef as Ref<Element>,
+          userRef as Ref<Element>
+        ),
         'data-type': record.type,
         'data-state': open ? 'open' : 'closed',
+        'data-expanded': toaster.expanded ? 'true' : 'false',
+        'data-front': before === 0 ? '' : undefined,
+        style: {
+          ...(rest.style as JSX.CSSProperties | undefined),
+          '--toast-index': String(index),
+          '--toasts-before': String(before),
+          '--toast-offset': `${offset}px`,
+          '--toast-height': `${ownHeight}px`,
+          '--toasts-visible': String(toaster.visibleToasts),
+        },
       },
       state: { type: record.type, open },
       children: body,
