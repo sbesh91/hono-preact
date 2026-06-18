@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { h } from 'preact';
+import { h, type ComponentChildren } from 'preact';
 import {
   defineServerMiddleware,
   defineLoader,
@@ -26,8 +26,8 @@ function manifest(
 
 // A trivial layout so createServerEntry's tree closure typechecks; the loader
 // RPC and api-mount tests never render it.
-const Layout = ({ children }: { children?: unknown }) =>
-  h('div', null, children as never);
+const Layout = ({ children }: { children?: ComponentChildren }) =>
+  h('div', null, children);
 
 describe('createServerEntry', () => {
   it('threads the manifest routeUse page guard onto the loader RPC path (issue #122 parity)', async () => {
