@@ -173,6 +173,7 @@ describe('stream observer fanout (E20)', () => {
       '*',
       pageActionHandler({
         resolverByPath: resolvers.byPath,
+        resolvePageUseByPath: async () => [], // streaming-observer fixture, no page-level middleware
         renderPage: noopRender as never,
         resolvePageNode: () => null,
       })
@@ -362,48 +363,31 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
     ]);
   });
 
-  it('skips page-level middleware when resolvePageUseByPath is not provided (backward compat)', async () => {
-    const order: string[] = [];
+  it('fails closed at construction when wired without a page-use resolver (auth-bypass regression)', () => {
+    // Previously resolvePageUseByPath was optional and the handler fell back to
+    // an empty page-use array, silently composing only [appUse, actionUse]. A
+    // page-level auth gate on a layout .server.ts was therefore bypassed on the
+    // action POST path. The resolver is now required and validated at
+    // construction, so a mis-wired handler fails loudly instead of running the
+    // action with its page-level (auth) middleware silently dropped.
+    const make = () =>
+      pageActionHandler({
+        resolverByPath: async () =>
+          new Map([
+            [
+              'submit',
+              {
+                fn: async () => ({ ok: true }),
+                use: [],
+                moduleKey: 'pages/test.server',
+              },
+            ],
+          ]),
+        // resolvePageUseByPath omitted to simulate a mis-wired (e.g. JS) caller
+        renderPage: async () => new Response('', { status: 200 }),
+        resolvePageNode: () => null,
+      } as unknown as Parameters<typeof pageActionHandler>[0]);
 
-    const handler = pageActionHandler({
-      resolverByPath: async () => {
-        const map = new Map<
-          string,
-          {
-            fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
-            use: ReadonlyArray<unknown>;
-            moduleKey: string;
-          }
-        >();
-        map.set('submit', {
-          fn: async () => {
-            order.push('action');
-            return { ok: true };
-          },
-          use: [],
-          moduleKey: 'pages/test.server',
-        });
-        return map;
-      },
-      // resolvePageUseByPath deliberately omitted
-      renderPage: async () => new Response('', { status: 200 }),
-      resolvePageNode: () => null,
-    });
-
-    const app = new Hono().post('*', handler);
-    const res = await app.request('/foo', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        module: 'pages/test.server',
-        action: 'submit',
-        payload: {},
-      }),
-    });
-    expect(res.status).toBe(200);
-    expect(order).toEqual(['action']);
+    expect(make).toThrow(/resolvePageUseByPath/);
   });
 });
