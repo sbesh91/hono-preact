@@ -194,7 +194,7 @@ export function ToastAction(props: ToastActionProps): VNode | null {
   const action = record.action;
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
-    action.onClick(event as MouseEvent);
+    action.onClick(event);
     toastStore.dismiss(record.id, 'user');
   };
   return renderElement({

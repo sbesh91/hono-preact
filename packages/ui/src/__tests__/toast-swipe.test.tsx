@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, act, cleanup, fireEvent } from '@testing-library/preact';
 import { Toaster } from '../toast/toaster.js';
 import { ToastRoot, ToastTitle } from '../toast/toast-parts.js';
@@ -81,5 +81,35 @@ describe('toast swipe-to-dismiss', () => {
     expect(toastStore.toasts).toHaveLength(1);
     expect(root.getAttribute('data-swiping')).toBe('false');
     expect(root.style.getPropertyValue('--toast-swipe-amount')).toBe('0px');
+  });
+
+  it('consumer onPointerDown fires alongside the swipe handler', () => {
+    const spy = vi.fn();
+    function AppWithSpy() {
+      return (
+        <Toaster position="bottom-right">
+          {(t) => (
+            <ToastRoot
+              toast={t}
+              data-testid={`root-${t.id}`}
+              onPointerDown={spy}
+            >
+              <ToastTitle />
+            </ToastRoot>
+          )}
+        </Toaster>
+      );
+    }
+    const { getByTestId } = render(<AppWithSpy />);
+    let id: string | number = '';
+    act(() => {
+      id = toast('Compose me');
+    });
+    const root = getByTestId(`root-${id}`);
+    stubCapture(root);
+    act(() =>
+      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
+    );
+    expect(spy).toHaveBeenCalledOnce();
   });
 });

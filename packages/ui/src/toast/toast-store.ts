@@ -1,4 +1,4 @@
-import type { ComponentChildren, VNode } from 'preact';
+import type { ComponentChildren, JSX, VNode } from 'preact';
 
 export type ToastType =
   | 'default'
@@ -21,7 +21,7 @@ export type DismissReason = 'user' | 'timeout';
 
 export interface ToastAction {
   label: ComponentChildren;
-  onClick: (event: MouseEvent) => void;
+  onClick: (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => void;
 }
 
 // Options accepted by the public `toast(...)` calls.
