@@ -1,9 +1,13 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { ComboboxDemo } from '../../../components/docs/ComboboxDemo.js';
+import comboboxCode from '../../../components/docs/ComboboxDemo.tsx?highlighted';
 import { ComboboxMultiDemo } from '../../../components/docs/ComboboxMultiDemo.js';
+import comboboxMultiCode from '../../../components/docs/ComboboxMultiDemo.tsx?highlighted';
 import { ComboboxCreatableDemo } from '../../../components/docs/ComboboxCreatableDemo.js';
+import comboboxCreatableCode from '../../../components/docs/ComboboxCreatableDemo.tsx?highlighted';
 import { ComboboxInlineDemo } from '../../../components/docs/ComboboxInlineDemo.js';
+import comboboxInlineCode from '../../../components/docs/ComboboxInlineDemo.tsx?highlighted';
 
 # Combobox
 
@@ -33,7 +37,7 @@ The minimal form is a single `Combobox.Input`. Focus it (or click it) to open,
 type to filter; the consumer renders the matching options while the component
 handles navigation and selection. A single select commits and closes on pick.
 
-<Example>
+<Example code={comboboxCode}>
   <ComboboxDemo />
 </Example>
 
@@ -43,54 +47,25 @@ are dismiss-safe), and `Combobox.Trigger` is the chevron toggle. Picking keeps
 the popup open; `Combobox.Value` renders the chips; Backspace on an empty input
 removes the last one.
 
-<Example>
+<Example code={comboboxMultiCode}>
   <ComboboxMultiDemo />
 </Example>
 
 Creatable: when nothing matches, a "Create …" option appears and adds the new
 value through `onCreate`.
 
-<Example>
+<Example code={comboboxCreatableCode}>
   <ComboboxCreatableDemo />
 </Example>
 
 With `autocomplete="both"`, the input inline-completes to the first match; Enter
 or Tab accepts it, Backspace dismisses it and keeps typing.
 
-<Example>
+<Example code={comboboxInlineCode}>
   <ComboboxInlineDemo />
 </Example>
 
 ## Usage
-
-```tsx
-import { Combobox, matchSubstring } from 'hono-preact-ui';
-import { useState } from 'preact/hooks';
-
-const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon'];
-
-export function FruitCombobox() {
-  const [query, setQuery] = useState('');
-  const filtered = FRUITS.filter((f) => matchSubstring(f, query));
-
-  return (
-    <Combobox.Root onInputChange={setQuery}>
-      <Combobox.Input placeholder="Search fruit…" aria-label="Fruit" />
-      <Combobox.Status />
-      <Combobox.Positioner>
-        <Combobox.Popup aria-label="Fruit">
-          {filtered.map((f) => (
-            <Combobox.Option key={f} value={f}>
-              {f}
-            </Combobox.Option>
-          ))}
-          <Combobox.Empty>No results</Combobox.Empty>
-        </Combobox.Popup>
-      </Combobox.Positioner>
-    </Combobox.Root>
-  );
-}
-```
 
 The only required part is `Combobox.Input` (it carries `role="combobox"`); it
 opens on focus by default and anchors the popup to itself. Everything else is an
