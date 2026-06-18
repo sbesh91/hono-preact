@@ -1,6 +1,7 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { PopoverDemo } from '../../../components/docs/PopoverDemo.js';
+import popoverCode from '../../../components/docs/PopoverExample.tsx?highlighted';
 
 # Popover
 
@@ -12,31 +13,9 @@ and `data-align` contract.
 
 ## Demo
 
-<Example>
+<Example code={popoverCode}>
   <PopoverDemo />
 </Example>
-
-## Usage
-
-```tsx
-import { Popover } from 'hono-preact-ui';
-
-export function Settings() {
-  return (
-    <Popover.Root>
-      <Popover.Trigger>Open popover</Popover.Trigger>
-      <Popover.Positioner>
-        <Popover.Popup>
-          <Popover.Arrow />
-          <Popover.Title>Settings</Popover.Title>
-          <Popover.Description>Adjust your preferences.</Popover.Description>
-          <Popover.Close>Done</Popover.Close>
-        </Popover.Popup>
-      </Popover.Positioner>
-    </Popover.Root>
-  );
-}
-```
 
 ## Styling
 
