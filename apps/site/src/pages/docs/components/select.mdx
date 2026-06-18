@@ -1,7 +1,9 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { SelectDemo } from '../../../components/docs/SelectDemo.js';
+import selectCode from '../../../components/docs/SelectDemo.tsx?highlighted';
 import { SelectMultiDemo } from '../../../components/docs/SelectMultiDemo.js';
+import selectMultiCode from '../../../components/docs/SelectMultiDemo.tsx?highlighted';
 
 # Select
 
@@ -25,46 +27,18 @@ your own data, which runs on the server too.
 A single select closes when you pick an option; the trigger shows the chosen
 label.
 
-<Example>
+<Example code={selectCode}>
   <SelectDemo />
 </Example>
 
 A multiple select toggles each option and stays open; the trigger joins the
 selected labels.
 
-<Example>
+<Example code={selectMultiCode}>
   <SelectMultiDemo />
 </Example>
 
 ## Usage
-
-```tsx
-import { Select } from 'hono-preact-ui';
-
-export function FruitPicker() {
-  return (
-    <Select.Root name="fruit">
-      <Select.Trigger>
-        <Select.Value placeholder="Pick a fruit" />
-      </Select.Trigger>
-      <Select.Positioner>
-        <Select.Popup aria-label="Fruit">
-          <Select.Option value="apple">Apple</Select.Option>
-          <Select.Option value="banana">Banana</Select.Option>
-          <Select.Option value="cherry" disabled>
-            Cherry
-          </Select.Option>
-          <Select.OptionGroup>
-            <Select.OptionGroupLabel>Citrus</Select.OptionGroupLabel>
-            <Select.Option value="orange">Orange</Select.Option>
-            <Select.Option value="lemon">Lemon</Select.Option>
-          </Select.OptionGroup>
-        </Select.Popup>
-      </Select.Positioner>
-    </Select.Root>
-  );
-}
-```
 
 Set `multiple` on `Select.Root` for multi-selection: picking an option toggles
 it and keeps the popup open, and the value becomes an array. Pass a `value` /
