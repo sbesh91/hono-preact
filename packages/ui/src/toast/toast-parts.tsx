@@ -13,6 +13,9 @@ import { toastStore, type ToastRecord } from './toast-store.js';
 import { ToastItemContext, useToastItemContext, useToasterContext } from './context.js';
 import { useToastTimer } from './use-toast-timer.js';
 
+// Pixels each back-stack toast peeks above the one in front when collapsed.
+const COLLAPSED_PEEK = 16;
+
 export type ToastRootProps = {
   toast: ToastRecord;
   render?: RenderProp<{ type: string; open: boolean }>;
@@ -52,11 +55,10 @@ export function ToastRoot(props: ToastRootProps) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [toaster, record.id]);
+  }, [toaster.registerHeight, record.id]);
 
   // Position among all rendered toasts (newest first). `before` is the count
   // of toasts in front of this one (i.e., lower index = closer to the front).
-  const COLLAPSED_PEEK = 16;
   const index = toaster.orderedIds.indexOf(record.id);
   const before = index; // newest-first ordering: index 0 is the front toast
   let offset = 0;
@@ -72,6 +74,8 @@ export function ToastRoot(props: ToastRootProps) {
   const itemCtx = useMemo(() => ({ record }), [record]);
 
   const body = record.jsx ? record.jsx(record.id) : children;
+
+  const userStyle = typeof rest.style === 'object' ? rest.style : undefined;
 
   return h(
     ToastItemContext.Provider,
@@ -91,7 +95,7 @@ export function ToastRoot(props: ToastRootProps) {
         'data-expanded': toaster.expanded ? 'true' : 'false',
         'data-front': before === 0 ? '' : undefined,
         style: {
-          ...(rest.style as JSX.CSSProperties | undefined),
+          ...userStyle,
           '--toast-index': String(index),
           '--toasts-before': String(before),
           '--toast-offset': `${offset}px`,
