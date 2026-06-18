@@ -42,6 +42,7 @@ export function Toaster(props: ToasterProps): VNode {
     gap = 14,
     visibleToasts = 3,
     expand = false,
+    hotkey = ['altKey', 'KeyT'],
     children,
   } = props;
 
@@ -60,6 +61,31 @@ export function Toaster(props: ToasterProps): VNode {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
   const paused = hovered || focused || docHidden;
+
+  // Focus the region when the configured hotkey chord is pressed.
+  useEffect(() => {
+    const want = {
+      altKey: hotkey.includes('altKey'),
+      ctrlKey: hotkey.includes('ctrlKey'),
+      metaKey: hotkey.includes('metaKey'),
+      shiftKey: hotkey.includes('shiftKey'),
+    };
+    const code = hotkey.find((k) => !k.endsWith('Key'));
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (code && event.code !== code) return;
+      if (
+        want.altKey !== event.altKey ||
+        want.ctrlKey !== event.ctrlKey ||
+        want.metaKey !== event.metaKey ||
+        want.shiftKey !== event.shiftKey
+      ) {
+        return;
+      }
+      regionRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [hotkey]);
 
   // Promote the region to the top layer. Guarded for the happy-dom test env,
   // which may not implement the Popover API; production browsers always do.
