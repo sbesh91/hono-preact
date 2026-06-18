@@ -19,6 +19,8 @@ A page is a file pair:
 2. **Hydration (first load):** the client reads that embedded data. No fetch is fired.
 3. **Client-side navigation:** the Vite plugin replaces the `serverLoaders` import with a Proxy stub. Accessing `serverLoaders.name` returns a `LoaderRef` whose RPC stub POSTs `{ module, loader, location }` to `POST /__loaders`. The server runs the real function and returns JSON.
 
+Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: `loader.useData()` and the `.View()` render argument are typed `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error. The same `Serialize<T>` applies to action results (`useAction().data`, `<Form onSuccess>`, `useActionResult()`).
+
 ## The `serverLoaders` container
 
 Loaders are exported in a named container symmetric with `serverActions`. Every `.server.*` file uses this shape, whether it has one loader or many:

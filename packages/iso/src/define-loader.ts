@@ -8,6 +8,7 @@ import { useContext } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
+import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
@@ -49,7 +50,12 @@ export interface LoaderRef<T> {
    * advertised at the consumer rather than hidden behind `unknown`.
    */
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
-  useData(): T;
+  /**
+   * The loader's data as the client receives it: `Serialize<T>`, the JSON
+   * round-trip of the server-side return `T` (e.g. a `Date` field arrives as a
+   * string). Typing this as `T` would be a lie on the client/hydration path.
+   */
+  useData(): Serialize<T>;
   useError(): Error | null;
   invalidate(): void;
   Boundary: ComponentType<{
@@ -61,7 +67,7 @@ export interface LoaderRef<T> {
   }>;
   View<P extends Record<string, unknown> = {}>(
     render: (
-      args: P & { data: T; error: Error | null; reload: () => void }
+      args: P & { data: Serialize<T>; error: Error | null; reload: () => void }
     ) => ComponentChildren,
     opts?: {
       fallback?: ComponentChildren;

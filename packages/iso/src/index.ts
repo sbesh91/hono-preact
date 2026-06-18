@@ -29,6 +29,7 @@ export type {
   RoutePaths,
   RegisteredRoutes,
 } from './internal/typed-routes.js';
+export type { Serialize } from './internal/serialize.js';
 
 // Server bindings.
 export { defineLoader } from './define-loader.js';

@@ -6,6 +6,7 @@ import {
 } from './action.js';
 import { useOptimistic, type OptimisticHandle } from './optimistic.js';
 import type { LoaderRef } from './define-loader.js';
+import type { Serialize } from './internal/serialize.js';
 
 export const OPTIMISTIC_BRAND: unique symbol = Symbol('hono-preact.optimistic');
 
@@ -26,7 +27,8 @@ export type UseOptimisticActionOptions<
   base: TBase;
   apply: (current: TBase, payload: TPayload) => TBase;
   invalidate?: 'auto' | ReadonlyArray<LoaderRef<unknown>>;
-  onSuccess?: (data: TResult) => void;
+  // The action result reaches the client JSON round-tripped (`Serialize`).
+  onSuccess?: (data: Serialize<TResult>) => void;
   onError?: (err: Error) => void;
   /** Forwarded to the internal `useOptimistic` call. */
   transition?: boolean;

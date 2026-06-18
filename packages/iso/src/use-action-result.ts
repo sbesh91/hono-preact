@@ -7,9 +7,10 @@ import {
 } from './internal/action-result-store.js';
 import { isBrowser } from './is-browser.js';
 import type { ActionStub } from './action.js';
+import type { Serialize } from './internal/serialize.js';
 
 export type ActionResult<TPayload, TResult> =
-  | { kind: 'success'; data: TResult; submittedPayload: TPayload }
+  | { kind: 'success'; data: Serialize<TResult>; submittedPayload: TPayload }
   | {
       kind: 'deny';
       status: number;
@@ -53,7 +54,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   if (source.kind === 'success') {
     return {
       kind: 'success',
-      data: source.data as TResult,
+      data: source.data as Serialize<TResult>,
       submittedPayload: source.submittedPayload as TPayload,
     };
   }
