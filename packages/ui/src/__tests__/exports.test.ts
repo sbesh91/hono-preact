@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest';
 import { Combobox, ComboboxRoot } from '../index.js';
 import * as ui from '../index.js';
-import * as ui2 from '../index.js';
 
 describe('hono-preact-ui exports', () => {
   it('exposes the new machinery primitives', () => {
@@ -56,7 +55,7 @@ describe('hono-preact-ui exports', () => {
 
 describe('Toast exports', () => {
   it('exposes the imperative toast fn with its variants', () => {
-    expect(typeof ui2.toast).toBe('function');
+    expect(typeof ui.toast).toBe('function');
     for (const k of [
       'success',
       'error',
@@ -67,14 +66,14 @@ describe('Toast exports', () => {
       'promise',
       'dismiss',
     ]) {
-      expect(typeof (ui2.toast as Record<string, unknown>)[k]).toBe('function');
+      expect(typeof (ui.toast as Record<string, unknown>)[k]).toBe('function');
     }
   });
 
   it('exposes Toaster and the Toast namespace', () => {
-    expect(typeof ui2.Toaster).toBe('function');
+    expect(typeof ui.Toaster).toBe('function');
     for (const part of ['Root', 'Title', 'Description', 'Action', 'Close']) {
-      expect(typeof (ui2.Toast as Record<string, unknown>)[part]).toBe(
+      expect(typeof (ui.Toast as Record<string, unknown>)[part]).toBe(
         'function'
       );
     }

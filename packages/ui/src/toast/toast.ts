@@ -17,10 +17,12 @@ interface PromiseMessages<T> {
   error: LazyMessage<unknown>;
 }
 
+function isMessageFn<T>(m: LazyMessage<T>): m is (value: T) => ComponentChildren {
+  return typeof m === 'function';
+}
+
 function resolveMessage<T>(m: LazyMessage<T>, value: T): ComponentChildren {
-  return typeof m === 'function'
-    ? (m as (value: T) => ComponentChildren)(value)
-    : m;
+  return isMessageFn(m) ? m(value) : m;
 }
 
 function create(type: ToastType, message: Message, opts: ToastOptions = {}) {
