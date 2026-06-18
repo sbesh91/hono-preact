@@ -1,4 +1,4 @@
-import type { ComponentChildren, VNode } from 'preact';
+import { cloneElement, type VNode } from 'preact';
 import {
   useCallback,
   useEffect,
@@ -25,7 +25,7 @@ export interface ToasterProps {
   visibleToasts?: number;
   expand?: boolean;
   hotkey?: string[]; // wired in Task 7
-  children: (toast: ToastRecord) => ComponentChildren;
+  children: (toast: ToastRecord) => VNode;
 }
 
 // Subscribe to the store with a force-update; no preact/compat.
@@ -108,9 +108,7 @@ export function Toaster(props: ToasterProps): VNode {
       >
         <ToastAnnouncer politeRef={politeRef} assertiveRef={assertiveRef} />
         <ol>
-          {toasts.map((t) => (
-            <li key={t.id}>{children(t)}</li>
-          ))}
+          {toasts.map((t) => cloneElement(children(t), { key: t.id }))}
         </ol>
       </section>
     </ToasterContext.Provider>

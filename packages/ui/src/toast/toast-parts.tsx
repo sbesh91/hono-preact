@@ -38,11 +38,10 @@ export function ToastRoot(props: ToastRootProps) {
     { value: itemCtx },
     renderElement<{ type: string; open: boolean }>({
       render,
-      defaultTag: 'div',
+      defaultTag: 'li',
       props: {
         ...rest,
         ref: mergeRefs<Element>(presenceRef, userRef as Ref<Element>),
-        role: 'listitem',
         'data-type': record.type,
         'data-state': open ? 'open' : 'closed',
       },
@@ -115,7 +114,7 @@ export type ToastCloseProps = {
 } & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function ToastClose(props: ToastCloseProps): VNode {
-  const { render, children, onClick, ...rest } = props;
+  const { render, children, onClick, 'aria-label': ariaLabel, ...rest } = props;
   const { record } = useToastItemContext('Close');
   const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
@@ -127,7 +126,7 @@ export function ToastClose(props: ToastCloseProps): VNode {
     props: {
       ...rest,
       type: 'button',
-      'aria-label': (rest['aria-label'] as string | undefined) ?? 'Close',
+      'aria-label': ariaLabel ?? 'Close',
       onClick: handleClick,
     },
     children: children ?? null,
