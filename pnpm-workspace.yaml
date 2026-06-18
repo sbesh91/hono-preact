@@ -1,3 +1,20 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# pnpm 11 no longer reads the `pnpm` field in package.json; build-script
+# allowlists and dependency overrides live here instead.
+# `allowBuilds` replaces v10's `onlyBuiltDependencies` (a map, not a list).
+allowBuilds:
+  esbuild: true
+  workerd: true
+  '@parcel/watcher': true
+  sharp: false
+
+overrides:
+  # The framework targets preact-iso v3 (searchParams/pathParams RouteHook
+  # shape), which is only published on the GitHub branch. Force every
+  # workspace resolution onto it so peer deps never fall back to npm 2.x.
+  preact-iso: github:preactjs/preact-iso#v3
+  typescript: ^6.0.3
+  vite: ^8.0.8

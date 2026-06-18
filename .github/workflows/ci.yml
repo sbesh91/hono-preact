@@ -24,12 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version derives from the `packageManager` field in package.json.
       - uses: pnpm/action-setup@v4
-        with:
-          # Pinned: pnpm 11 hit a workspace peer-dep override propagation bug
-          # against the preact-iso v3 GitHub override. Keep aligned with the
-          # `packageManager` field in package.json.
-          version: 10.18.3
 
       - uses: actions/setup-node@v4
         with:
@@ -76,9 +72,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version derives from the `packageManager` field in package.json.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.3
 
       - uses: actions/setup-node@v4
         with:
@@ -122,9 +117,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version derives from the `packageManager` field in package.json.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.3
 
       - uses: actions/setup-node@v4
         with:
@@ -185,12 +179,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version derives from the `packageManager` field in package.json.
       - uses: pnpm/action-setup@v4
-        with:
-          # Pinned: pnpm 11 hit a workspace peer-dep override propagation bug
-          # against the preact-iso v3 GitHub override. Keep aligned with the
-          # `packageManager` field in package.json.
-          version: 10.18.3
 
       - uses: actions/setup-node@v4
         with:
