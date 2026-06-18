@@ -24,12 +24,15 @@ describe('sse mid-stream timeout', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler({
-        './pages/streamy.server.ts': {
-          __moduleKey: 'streamy',
-          serverLoaders: { list: ref },
+      loadersHandler(
+        {
+          './pages/streamy.server.ts': {
+            __moduleKey: 'streamy',
+            serverLoaders: { list: ref },
+          },
         },
-      })
+        { resolvePageUse: async () => [] }
+      )
     );
 
     const res = await app.request('http://localhost/__loaders', {

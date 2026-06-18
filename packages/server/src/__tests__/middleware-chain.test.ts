@@ -108,7 +108,10 @@ describe('stream observer fanout (E20)', () => {
 
     const app = new Hono().post(
       '/__loaders',
-      loadersHandler(serverModules, { dev: true })
+      loadersHandler(serverModules, {
+        dev: true,
+        resolvePageUse: async () => [],
+      })
     );
     const res = await app.request('/__loaders', {
       method: 'POST',
@@ -218,7 +221,10 @@ describe('stream observer fanout (E20)', () => {
 
     const app = new Hono().post(
       '/__loaders',
-      loadersHandler(serverModules, { dev: true })
+      loadersHandler(serverModules, {
+        dev: true,
+        resolvePageUse: async () => [],
+      })
     );
     const res = await app.request('/__loaders', {
       method: 'POST',

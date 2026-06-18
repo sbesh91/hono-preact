@@ -5,7 +5,10 @@ import { loadersHandler } from '../loaders-handler.js';
 
 function makeApp(glob: Parameters<typeof loadersHandler>[0]) {
   const app = new Hono();
-  app.post('/__loaders', loadersHandler(glob));
+  app.post(
+    '/__loaders',
+    loadersHandler(glob, { resolvePageUse: async () => [] })
+  );
   return app;
 }
 
@@ -18,6 +21,17 @@ function post(app: Hono, body: unknown) {
 }
 
 const loc = { path: '/movies', pathParams: {}, searchParams: {} };
+
+describe('loadersHandler page-use resolver contract', () => {
+  it('fails closed at construction when wired without a page-use resolver (auth-bypass regression)', () => {
+    // Page-level `use` carries route/layout auth gates; on the loader RPC path
+    // a missing resolver would silently drop them, exposing data the gate
+    // should protect (a confidentiality bypass). resolvePageUse is required and
+    // validated at construction, mirroring pageActionHandler.
+    const callWithoutOpts = loadersHandler as (glob: unknown) => unknown;
+    expect(() => callWithoutOpts({})).toThrow(/resolvePageUse/);
+  });
+});
 
 describe('loadersHandler', () => {
   it('calls the matching serverLoader with location, signal, and the Hono Context', async () => {
@@ -114,7 +128,7 @@ describe('loadersHandler', () => {
             },
           },
         },
-        { dev: true }
+        { dev: true, resolvePageUse: async () => [] }
       )
     );
     const res = await post(app, {
@@ -144,7 +158,7 @@ describe('loadersHandler', () => {
             },
           },
         },
-        { onError }
+        { onError, resolvePageUse: async () => [] }
       )
     );
     await post(app, {
@@ -277,7 +291,12 @@ describe('loadersHandler dev / caching', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler({ './pages/movies.server.ts': lazy })
+      loadersHandler(
+        { './pages/movies.server.ts': lazy },
+        {
+          resolvePageUse: async () => [],
+        }
+      )
     );
 
     await post(app, {
@@ -305,7 +324,13 @@ describe('loadersHandler dev / caching', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler({ './pages/movies.server.ts': lazy }, { dev: true })
+      loadersHandler(
+        { './pages/movies.server.ts': lazy },
+        {
+          dev: true,
+          resolvePageUse: async () => [],
+        }
+      )
     );
 
     await post(app, {
