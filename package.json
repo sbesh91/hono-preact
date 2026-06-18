@@ -2,19 +2,7 @@
   "name": "hono-preact-monorepo",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.18.3",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "workerd",
-      "@parcel/watcher"
-    ],
-    "overrides": {
-      "preact-iso": "github:preactjs/preact-iso#v3",
-      "typescript": "^6.0.3",
-      "vite": "^8.0.8"
-    }
-  },
+  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "pnpm --filter site run dev",
     "build": "pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter site build",
