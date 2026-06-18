@@ -44,20 +44,61 @@ export type AbsolutePaths<
 
 // Param extraction. Handles required `:id`, optional `:id?`, and the preact-iso
 // modifier suffixes `*` / `+`. A pattern with no `:param` yields `{}`.
-type ParamKey<Seg extends string> = Seg extends `${infer Name}?`
-  ? { optional: true; name: Name }
-  : Seg extends `${infer Name}*`
-    ? { optional: true; name: Name }
-    : Seg extends `${infer Name}+`
-      ? { optional: false; name: Name }
-      : { optional: false; name: Seg };
+//
+// The runtime matcher (`build-path.ts`, and preact-iso's `exec`) only treats a
+// segment as a param when it is `:name` where `name` matches `[A-Za-z0-9_]+`,
+// optionally followed by a single `?`/`*`/`+` modifier and nothing else. A
+// segment like `:foo-bar` or `:a.b` does NOT match, so the runtime keeps it as
+// a literal and substitutes nothing. `ParamNameChar` / `IsParamName` mirror
+// that character class so the type grammar agrees: a name outside the class
+// makes the segment a literal that contributes no param, rather than
+// over-claiming a required `foo-bar` the runtime would silently ignore.
+// prettier-ignore
+type ParamNameChar =
+  | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm'
+  | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
+  | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M'
+  | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+  | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+  | '_';
 
+// True iff `S` is a non-empty string of `[A-Za-z0-9_]` (the `+` in the runtime
+// regex requires at least one character).
+type IsParamName<S extends string> = S extends ''
+  ? false
+  : S extends `${infer Char}${infer Rest}`
+    ? Char extends ParamNameChar
+      ? Rest extends ''
+        ? true
+        : IsParamName<Rest>
+      : false
+    : false;
+
+type ParamKey<Seg extends string> = Seg extends `${infer Name}?`
+  ? IsParamName<Name> extends true
+    ? { optional: true; name: Name }
+    : { literal: true }
+  : Seg extends `${infer Name}*`
+    ? IsParamName<Name> extends true
+      ? { optional: true; name: Name }
+      : { literal: true }
+    : Seg extends `${infer Name}+`
+      ? IsParamName<Name> extends true
+        ? { optional: false; name: Name }
+        : { literal: true }
+      : IsParamName<Seg> extends true
+        ? { optional: false; name: Seg }
+        : { literal: true };
+
+// A segment that is not a valid param name resolves to `{ literal: true }`,
+// which fails the `{ name; optional }` match and contributes the empty object
+// (identity under the `&` in `RouteParams`).
 type ParamFrom<Seg extends string> =
-  ParamKey<Seg> extends { optional: infer O; name: infer N extends string }
+  ParamKey<Seg> extends { name: infer N extends string; optional: infer O }
     ? O extends true
       ? { [K in N]?: string }
       : { [K in N]: string }
-    : never;
+    : {};
 
 /** Extract the path-params object type from an absolute route pattern. */
 export type RouteParams<Path extends string> =

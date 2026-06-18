@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:types": "vitest run --typecheck.only",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,mjs,json}\" \"apps/**/src/**/*.{ts,tsx,mdx}\"",
@@ -32,6 +33,7 @@
     "esbuild": "^0.27.0",
     "happy-dom": "^20.9.0",
     "prettier": "^3.8.3",
+    "typescript": "*",
     "vitest": "^4.1.4"
   }
 }
