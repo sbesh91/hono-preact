@@ -102,7 +102,7 @@
     "buckets": {
       "app": 83427,
       "actions": 17151,
-      "core": 36238,
+      "core": 36107,
       "components": 94167,
       "guards": 250,
       "middleware": 12470,
@@ -112,7 +112,7 @@
       "streaming": 7314,
       "transitions": 3863
     },
-    "total": 283553,
+    "total": 283422,
     "unmatched": 49,
     "fileCount": 107
   },
