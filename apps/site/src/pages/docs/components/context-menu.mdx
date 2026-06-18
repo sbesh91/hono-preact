@@ -1,6 +1,7 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { ContextMenuDemo } from '../../../components/docs/ContextMenuDemo.js';
+import contextMenuCode from '../../../components/docs/ContextMenuDemo.tsx?highlighted';
 
 # Context Menu
 
@@ -15,34 +16,11 @@ style it through the `data-state`, `data-highlighted`, `data-disabled`,
 
 ## Demo
 
-<Example>
+<Example code={contextMenuCode}>
   <ContextMenuDemo />
 </Example>
 
 ## Usage
-
-```tsx
-import { ContextMenu } from 'hono-preact-ui';
-
-export function Canvas() {
-  return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger>
-        <div class="canvas">Right-click anywhere on the canvas</div>
-      </ContextMenu.Trigger>
-      <ContextMenu.Positioner>
-        <ContextMenu.Popup aria-label="Canvas">
-          <ContextMenu.Item onSelect={() => cut()}>Cut</ContextMenu.Item>
-          <ContextMenu.Item onSelect={() => copy()}>Copy</ContextMenu.Item>
-          <ContextMenu.Item onSelect={() => paste()}>Paste</ContextMenu.Item>
-          <ContextMenu.Separator />
-          <ContextMenu.Item disabled>Undo</ContextMenu.Item>
-        </ContextMenu.Popup>
-      </ContextMenu.Positioner>
-    </ContextMenu.Root>
-  );
-}
-```
 
 `ContextMenu.Trigger` wraps the right-clickable region; it captures the pointer
 position and opens the menu there. The other parts (`Positioner`, `Popup`,
