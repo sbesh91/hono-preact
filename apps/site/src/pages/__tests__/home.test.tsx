@@ -33,7 +33,9 @@ describe('home (marketing landing)', () => {
       screen.getByText(/loaders and actions are typed functions/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/loaders, forms, sse/i)).toBeInTheDocument();
-    expect(screen.getByText(/nothing else to install/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/all of your tools in one place/i)
+    ).toBeInTheDocument();
   });
 
   it('mounts the hero shader background', () => {
