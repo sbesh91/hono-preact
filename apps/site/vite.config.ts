@@ -4,6 +4,7 @@ import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
 import { rehypeShikiOptions } from './src/shiki/shiki-config.js';
+import { highlightPlugin } from './src/shiki/vite-plugin-highlight.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -108,6 +109,7 @@ export default defineConfig((env) => ({
     sourcemap: visualize && env.mode === 'client',
   },
   plugins: [
+    highlightPlugin(),
     honoPreact({ adapter: cloudflareAdapter() }),
     {
       name: 'emit-llms-txt',
