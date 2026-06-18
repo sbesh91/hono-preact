@@ -15,6 +15,17 @@ import { ViewRenderer } from './internal/view-renderer.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
+import {
+  useLoaderStream,
+  type UseStreamOptions,
+  type UseStreamResult,
+} from './internal/use-loader-stream.js';
+
+export type {
+  StreamStatus,
+  UseStreamOptions,
+  UseStreamResult,
+} from './internal/use-loader-stream.js';
 
 export type LoaderCtx<TParams = Record<string, string>> = {
   c: Context;
@@ -51,6 +62,7 @@ export interface LoaderRef<T> {
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   useData(): T;
   useError(): Error | null;
+  useStream<Acc>(opts: UseStreamOptions<T, Acc>): UseStreamResult<Acc>;
   invalidate(): void;
   Boundary: ComponentType<{
     fallback?: ComponentChildren;
@@ -242,6 +254,9 @@ export function defineLoader(
     },
     useError() {
       return useContext(LoaderErrorContext);
+    },
+    useStream(opts) {
+      return useLoaderStream(ref, opts);
     },
     invalidate() {
       cache!.invalidate();
