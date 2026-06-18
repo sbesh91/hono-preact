@@ -35,26 +35,24 @@ const routeTree = [
       },
       {
         path: 'projects',
+        layout: () => import('./pages/demo/projects-shell.js'),
+        server: () => import('./pages/demo/projects-shell.server.js'),
         use: requireSession,
         children: [
-          {
-            path: '',
-            view: () => import('./pages/demo/projects.js'),
-            server: () => import('./pages/demo/projects.server.js'),
-          },
+          { path: '', view: () => import('./pages/demo/projects.js') },
           {
             path: ':projectId',
-            layout: () => import('./pages/demo/project-layout.js'),
+            layout: () => import('./pages/demo/project-header.js'),
             children: [
               {
                 path: '',
-                view: () => import('./pages/demo/project-issues.js'),
-                server: () => import('./pages/demo/project-issues.server.js'),
+                view: () => import('./pages/demo/project-board.js'),
+                server: () => import('./pages/demo/project-board.server.js'),
               },
               {
-                path: 'issues/:issueId',
-                view: () => import('./pages/demo/issue.js'),
-                server: () => import('./pages/demo/issue.server.js'),
+                path: 'tasks/:taskId',
+                view: () => import('./pages/demo/task.js'),
+                server: () => import('./pages/demo/task.server.js'),
               },
             ],
           },

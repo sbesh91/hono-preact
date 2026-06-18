@@ -12,12 +12,17 @@ import { useViewTransitionTypes } from 'hono-preact';
 //
 // This must live on a persistent parent: the route-change event dispatches
 // after the new route commits, so a hook on the unmounting source layout
-// (e.g. project-layout, which is gone when you reach /demo/projects) or on the
-// just-mounted destination (which subscribes a tick too late) would miss the
-// event. Only a layout mounted across the whole navigation catches it.
+// (e.g. project-header.tsx, which is gone when you navigate up to the board) or
+// on the just-mounted destination (which subscribes a tick too late) would miss
+// the event. Only a layout mounted across the whole navigation catches it.
 export default function DemoLayout({ children }: LayoutProps) {
-  useViewTransitionTypes((nav) =>
-    nav.from && nav.from.startsWith(nav.to + '/') ? ['nav-up'] : []
-  );
+  useViewTransitionTypes((nav) => {
+    const types: string[] = [];
+    if (nav.from && nav.from.startsWith(nav.to + '/')) types.push('nav-up');
+    const fromProjects = nav.from?.startsWith('/demo/projects') ?? false;
+    const toProjects = nav.to?.startsWith('/demo/projects') ?? false;
+    if (fromProjects && toProjects) types.push('demo-within');
+    return types;
+  });
   return <>{children}</>;
 }
