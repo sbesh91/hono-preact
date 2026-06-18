@@ -35,6 +35,17 @@ expectTypeOf<Serialize<() => void>>().toEqualTypeOf<never>();
 expectTypeOf<Serialize<undefined>>().toEqualTypeOf<never>();
 
 // ---------------------------------------------------------------------------
+// `any` passes through unchanged. Without the up-front `IsAny` guard these
+// would recurse forever ("Type instantiation is excessively deep") and turn a
+// loader/action returning `any` into a hard compile error at the consumer.
+// ---------------------------------------------------------------------------
+expectTypeOf<Serialize<any>>().toBeAny();
+expectTypeOf<Serialize<any[]>>().toEqualTypeOf<any[]>();
+expectTypeOf<Serialize<Record<string, any>>>().not.toBeNever();
+// A nested `any` field also terminates (it would otherwise recurse).
+expectTypeOf<Serialize<{ data: any }>>().toEqualTypeOf<{ data?: any }>();
+
+// ---------------------------------------------------------------------------
 // Objects recurse; Date members become strings; plain shapes are preserved.
 // ---------------------------------------------------------------------------
 expectTypeOf<Serialize<{ a: string; b: number }>>().toEqualTypeOf<{

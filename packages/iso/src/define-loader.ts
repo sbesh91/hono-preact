@@ -79,6 +79,18 @@ export interface LoaderRef<T> {
 }
 
 /**
+ * A loader reference with its data type erased: for APIs that operate ON a
+ * loader (invalidate, prefetch) without reading its data shape.
+ *
+ * Uses `LoaderRef<any>`, not `LoaderRef<unknown>`, deliberately. `LoaderRef<T>`
+ * is invariant in `T` (it surfaces `T` through `useData(): Serialize<T>`), so a
+ * concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
+ * `any` argument erases the data type so any loader is accepted; these call
+ * sites never inspect the data with a meaningful type.
+ */
+export type AnyLoaderRef = LoaderRef<any>;
+
+/**
  * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded
  * in by the `moduleKeyPlugin` Vite transform; user code does not set it.
  * `cache` is an opt-in for sharing a cache instance across multiple loaders;

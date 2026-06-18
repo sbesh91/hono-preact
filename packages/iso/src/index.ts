@@ -35,6 +35,7 @@ export type { Serialize } from './internal/serialize.js';
 export { defineLoader } from './define-loader.js';
 export type {
   LoaderRef,
+  AnyLoaderRef,
   LoaderCtx,
   Loader as LoaderFn,
 } from './define-loader.js';
