@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, act, cleanup, fireEvent } from '@testing-library/preact';
 import { Toaster } from '../toast/toaster.js';
-import { ToastRoot, ToastTitle } from '../toast/toast-parts.js';
+import { ToastRoot, ToastTitle, ToastClose } from '../toast/toast-parts.js';
 import { toast } from '../toast/toast.js';
 import { toastStore } from '../toast/toast-store.js';
 import { installReducedMotion } from './presence-helpers.js';
@@ -111,5 +111,38 @@ describe('toast swipe-to-dismiss', () => {
       fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
     );
     expect(spy).toHaveBeenCalledOnce();
+  });
+
+  it('does not start a swipe from an interactive control so its click survives', () => {
+    restore = installReducedMotion(true);
+    function AppWithClose() {
+      return (
+        <Toaster position="bottom-right">
+          {(t) => (
+            <ToastRoot toast={t} data-testid={`root-${t.id}`}>
+              <ToastTitle />
+              <ToastClose>x</ToastClose>
+            </ToastRoot>
+          )}
+        </Toaster>
+      );
+    }
+    const { getByTestId, getByText } = render(<AppWithClose />);
+    let id: string | number = '';
+    act(() => {
+      id = toast('Has close');
+    });
+    const root = getByTestId(`root-${id}`);
+    stubCapture(root);
+    const close = getByText('x');
+    // A press on the close button must not engage the swipe: capturing the
+    // pointer here would swallow the button's own click.
+    act(() =>
+      fireEvent.pointerDown(close, { clientX: 0, clientY: 0, pointerId: 1 })
+    );
+    expect(root.getAttribute('data-swiping')).toBe('false');
+    // And the close button's click still dismisses the toast.
+    act(() => fireEvent.click(close));
+    expect(toastStore.toasts).toHaveLength(0);
   });
 });

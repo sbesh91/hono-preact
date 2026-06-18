@@ -50,6 +50,19 @@ export function useToastSwipe(opts: UseToastSwipeOptions): UseToastSwipeResult {
 
   const onPointerDown = (event: JSX.TargetedPointerEvent<HTMLElement>) => {
     if (disabled || event.button !== 0) return;
+    // Do not start a swipe from an interactive control (the close/action
+    // buttons, links, or form fields). Pointer-capturing the toast here would
+    // swallow that control's own click. `[data-no-swipe]` is an explicit opt-out
+    // for any other element a consumer wants to keep interactive.
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        'button, a, input, select, textarea, label, [data-no-swipe]'
+      )
+    ) {
+      return;
+    }
     start.current = { x: event.clientX, y: event.clientY };
     setSwiping(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);

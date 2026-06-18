@@ -112,9 +112,9 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 79459,
+      "app": 79482,
       "actions": 17155,
-      "core": 36453,
+      "core": 36454,
       "components": 102203,
       "guards": 248,
       "middleware": 12473,
@@ -124,7 +124,7 @@
       "streaming": 7317,
       "transitions": 4788
     },
-    "total": 288416,
+    "total": 288440,
     "unmatched": 49,
     "fileCount": 109
   },
@@ -227,14 +227,14 @@
     },
     "toast": {
       "total": {
-        "raw": 11588,
-        "gzip": 4618,
-        "brotli": 4184
+        "raw": 11726,
+        "gzip": 4697,
+        "brotli": 4244
       },
       "marginalOverUiCore": {
-        "raw": 9184,
-        "gzip": 3407,
-        "brotli": 3096
+        "raw": 9322,
+        "gzip": 3481,
+        "brotli": 3142
       }
     }
   }

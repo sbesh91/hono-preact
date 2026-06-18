@@ -58,44 +58,126 @@ toast.dismiss(id);
 
 ## Styling
 
-The wrapper sets `data-state`, `data-type`, `data-position`, `data-expanded`,
-`data-front`, `data-swiping`, and the `--toast-offset` / `--toast-height` /
-`--toasts-before` / `--toast-swipe-amount` variables. Drive all motion from
-those, and guard transitions behind `prefers-reduced-motion`.
+Toast is headless: the recipe below is the full set of styles that drives the
+demo above, and you own all of it. `Toaster` renders a `popover` region (target
+it with `[popover]`); each `Toast.Root` carries `data-state`, `data-type`,
+`data-position`, `data-expanded`, `data-front`, `data-swiping`, and the
+`--toast-index` / `--toasts-before` / `--toast-offset` / `--toast-height` /
+`--toast-swipe-amount` variables. The stack is built from one composed
+`transform`: the front toast (`--toast-index` 0) sits on top via `z-index`,
+older toasts offset up by `--toast-offset` and scale down by depth, and the
+collapsed pile expands to full size on hover/focus (`data-expanded`). The
+`::after` bridges the gap between expanded toasts so the pointer never leaves
+the stack (no hover-collapse jitter), and a dismiss slides out to the side,
+continuing a swipe rather than snapping back. Guard every transition behind
+`prefers-reduced-motion`.
 
 <CodeTabs labels={['CSS', 'Tailwind']}>
 
 ```css
+/* Region: pinned to a corner; toasts are absolutely stacked inside it.
+   Pass class="toaster" to <Toaster> for this hook. */
+.toaster {
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  width: min(22rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.toaster ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each toast: front on top, one transform for swipe + stacking offset + depth
+   scale. Add your own padding / border / background / radius / shadow. */
 .toast {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: calc(1000 - var(--toast-index, 0));
+  box-sizing: border-box;
+  width: 100%;
+  transform-origin: bottom center;
   transform: translateX(var(--toast-swipe-amount, 0px))
-    translateY(var(--toast-offset, 0px));
+    translateY(calc(-1 * var(--toast-offset, 0px))) scale(var(--toast-scale, 1));
+  touch-action: pan-y;
+}
+/* Bridge the gap to the toast above so moving between expanded toasts never
+   leaves the region (prevents hover-collapse jitter). */
+.toast::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 100% 0;
+  height: 16px;
+}
+/* Collapsed pile: front three opaque and peeking; deeper toasts hide beneath. */
+.toast:not([data-expanded='true']) {
+  --toast-scale: calc(1 - 0.05 * min(var(--toasts-before, 0), 2));
+  opacity: calc(1 - max(0, var(--toasts-before, 0) - 2));
+}
+/* Expanded on hover/focus: full size and opacity, real heights. */
+.toast[data-expanded='true'] {
+  --toast-scale: 1;
+  opacity: 1;
 }
 @media (prefers-reduced-motion: no-preference) {
   .toast {
     transition:
-      transform 0.3s ease,
-      opacity 0.3s ease;
+      transform 0.4s,
+      opacity 0.4s;
   }
 }
+/* Enter from below + fade (transition origin on insert). */
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(100%) scale(0.9);
+  }
+}
+/* Track the pointer 1:1 while dragging. */
 .toast[data-swiping='true'] {
   transition: none;
 }
+/* Exit: slide out and fade. A swipe-dismiss keeps its offset, so this continues
+   the gesture outward instead of snapping back to center. */
 .toast[data-state='closed'] {
   opacity: 0;
+  transform: translateX(110%) translateY(calc(-1 * var(--toast-offset, 0px)));
 }
 ```
 
 ```tsx
-// Base Tailwind v4. Motion via the motion-safe: variant so reduced-motion
-// users get instant placement.
-<Toast.Root
-  toast={t}
-  class="motion-safe:transition-[transform,opacity] motion-safe:duration-300 data-[swiping=true]:transition-none data-[state=closed]:opacity-0"
-  style={{
-    transform:
-      'translateX(var(--toast-swipe-amount,0px)) translateY(var(--toast-offset,0px))',
-  }}
-/>
+// Base Tailwind v4. The starting:/after:/data-[]/motion-safe: variants map 1:1
+// to the CSS tab, so the two are feature-equivalent.
+
+<Toaster
+  class="fixed inset-[auto_1rem_1rem_auto] m-0 w-[min(22rem,calc(100vw-2rem))]
+    overflow-visible border-0 bg-transparent p-0 [&>ol]:m-0 [&>ol]:list-none [&>ol]:p-0"
+  position="bottom-right"
+>
+  {(t) => (
+    <Toast.Root
+      toast={t}
+      class="absolute right-0 bottom-0 box-border w-full origin-bottom touch-pan-y
+    z-[calc(1000-var(--toast-index,0))]
+    [transform:translateX(var(--toast-swipe-amount,0px))_translateY(calc(-1*var(--toast-offset,0px)))_scale(var(--toast-scale,1))]
+    after:content-[''] after:absolute after:inset-x-0 after:bottom-full after:h-4
+    not-data-[expanded=true]:[--toast-scale:calc(1-0.05*min(var(--toasts-before,0),2))]
+    not-data-[expanded=true]:[opacity:calc(1-max(0,var(--toasts-before,0)-2))]
+    data-[expanded=true]:[--toast-scale:1] data-[expanded=true]:opacity-100
+    motion-safe:transition-[transform,opacity] motion-safe:duration-[400ms]
+    starting:opacity-0 starting:[transform:translateY(100%)_scale(0.9)]
+    data-[swiping=true]:transition-none
+    data-[state=closed]:opacity-0
+    data-[state=closed]:[transform:translateX(110%)_translateY(calc(-1*var(--toast-offset,0px)))]"
+    />
+  )}
+</Toaster>
 ```
 
 </CodeTabs>

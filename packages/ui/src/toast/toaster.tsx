@@ -24,6 +24,8 @@ export interface ToasterProps {
   visibleToasts?: number;
   expand?: boolean;
   hotkey?: string[];
+  // Applied to the region element so the popover can be styled/positioned.
+  class?: string;
   children: (toast: ToastRecord) => VNode;
 }
 
@@ -42,6 +44,7 @@ export function Toaster(props: ToasterProps): VNode {
     visibleToasts = 3,
     expand = false,
     hotkey = DEFAULT_HOTKEY,
+    class: className,
     children,
   } = props;
 
@@ -173,6 +176,7 @@ export function Toaster(props: ToasterProps): VNode {
         role="region"
         aria-label={label}
         data-position={position}
+        class={className}
         tabIndex={-1}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}

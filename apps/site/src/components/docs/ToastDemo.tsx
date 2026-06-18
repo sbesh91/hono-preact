@@ -55,7 +55,9 @@ export function ToastDemo() {
           Promise
         </button>
       </div>
-      <Toaster position="bottom-right">{renderToast}</Toaster>
+      <Toaster class="toaster" position="bottom-right">
+        {renderToast}
+      </Toaster>
     </div>
   );
 }
