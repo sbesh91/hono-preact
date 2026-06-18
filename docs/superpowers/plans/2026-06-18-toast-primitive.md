@@ -21,7 +21,7 @@ These apply to every task implicitly.
 - **Headless:** the package ships zero styling. Behavior is exposed only through `data-*` attributes and CSS custom properties. All visuals live in the docs demo CSS or the consumer's CSS.
 - **Popover API is mandatory** for the rendered region (no `position: fixed` fallback). The single exception: guard the `showPopover()` *call* with a `typeof` check, because the happy-dom test environment may not implement the Popover API; the element still renders either way, so this is test-env safety, not a production fallback.
 - **Store ordering:** newest toast first (index 0 is the frontmost/newest).
-- **Testing:** `pnpm exec vitest run` from `packages/ui`. Pure/SSR tests use `// @vitest-environment node`; DOM tests use `// @vitest-environment happy-dom`. Use fake timers (`vi.useFakeTimers()`), `cleanup()` in `afterEach`, and wrap raw `document`/element event dispatch in `act(() => ...)`.
+- **Working directory / testing:** run every command in this plan from the **worktree root** (vitest resolves its `root` to the cwd, so running from `packages/ui` makes the root config's include globs miss and reports "No test files found"). Vitest paths are root-relative, e.g. `pnpm exec vitest run packages/ui/src/__tests__/toast-store.test.ts`. Pure/SSR tests use `// @vitest-environment node`; DOM tests use `// @vitest-environment happy-dom`. Use fake timers (`vi.useFakeTimers()`), `cleanup()` in `afterEach`, and wrap raw `document`/element event dispatch in `act(() => ...)`.
 - **Commit trailer:** every `git commit` in this plan must end its message with this exact trailer line:
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 - **Pre-push (after the final task):** run the 6-step CI mirror from the repo root in order: framework build, `pnpm format:check`, `pnpm typecheck`, `pnpm test:coverage`, `pnpm test:integration`, `pnpm --filter site build`. `pnpm format` fixes format failures (it skips `.css`, so verify CSS by eye).
@@ -135,7 +135,7 @@ describe('ToastStore', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-store.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-store.test.ts`
 Expected: FAIL (cannot find module `../toast/toast-store.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -291,7 +291,7 @@ export const toastStore = new ToastStore();
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-store.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-store.test.ts`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
@@ -377,7 +377,7 @@ describe('toast()', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-fn.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-fn.test.ts`
 Expected: FAIL (cannot find module `../toast/toast.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -427,7 +427,7 @@ export { toast };
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-fn.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-fn.test.ts`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
@@ -502,7 +502,7 @@ describe('toast.promise', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-promise.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-promise.test.ts`
 Expected: FAIL (`toast.promise is not a function`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -567,7 +567,7 @@ Note: the `error` callback parameter is typed `unknown` (a rejection is not type
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-promise.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-promise.test.ts`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
@@ -656,7 +656,7 @@ describe('ToastAnnouncer', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-announcer.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-announcer.test.tsx`
 Expected: FAIL (cannot find module `../toast/announcer.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -749,7 +749,7 @@ export function ToastAnnouncer(props: ToastAnnouncerProps): VNode {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-announcer.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-announcer.test.tsx`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -857,7 +857,7 @@ describe('<Toaster> SSR', () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toaster-region.test.tsx src/__tests__/toaster-ssr.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toaster-region.test.tsx packages/ui/src/__tests__/toaster-ssr.test.tsx`
 Expected: FAIL (cannot find module `../toast/toaster.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1040,7 +1040,7 @@ Note: `popover="manual"` and `tabIndex` are passed via `h`; the `'section' as st
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toaster-region.test.tsx src/__tests__/toaster-ssr.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toaster-region.test.tsx packages/ui/src/__tests__/toaster-ssr.test.tsx`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
@@ -1162,7 +1162,7 @@ Note: confirm `presence-helpers.js` exports `installReducedMotion`; the `usePres
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-parts.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-parts.test.tsx`
 Expected: FAIL (cannot find module `../toast/toast-parts.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1307,7 +1307,7 @@ Note on the one `as unknown as MouseEvent` in `ToastAction`: the action callback
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-parts.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-parts.test.tsx`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
@@ -1414,7 +1414,7 @@ describe('toast auto-dismiss timer', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-timer.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-timer.test.tsx`
 Expected: FAIL (cannot find module `../toast/use-toast-timer.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1541,7 +1541,7 @@ Inside `ToastRoot`, after computing `open`, add:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-timer.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-timer.test.tsx`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -1610,7 +1610,7 @@ describe('toast region hotkey', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-hotkey.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-hotkey.test.tsx`
 Expected: FAIL (active element is `<body>`, not the region).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1668,7 +1668,7 @@ Use the object form in the final code:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-hotkey.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-hotkey.test.tsx`
 Expected: PASS (1 test).
 
 - [ ] **Step 5: Commit**
@@ -1760,7 +1760,7 @@ describe('toast stacking attributes', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-stacking.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-stacking.test.tsx`
 Expected: FAIL (`--toasts-before` empty / `data-front` missing).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1859,7 +1859,7 @@ Confirm `mergeRefs` accepts three refs (it merges a variadic list; check `../mer
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-stacking.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-stacking.test.tsx`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
@@ -1966,7 +1966,7 @@ describe('toast swipe-to-dismiss', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-swipe.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-swipe.test.tsx`
 Expected: FAIL (cannot find module `../toast/use-toast-swipe.js`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -2100,7 +2100,7 @@ Add the swipe handlers, `data-swiping`, and `--toast-swipe-amount` to the `props
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/toast-swipe.test.tsx`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/toast-swipe.test.tsx`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
@@ -2165,7 +2165,7 @@ describe('Toast exports', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/exports.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/exports.test.ts`
 Expected: FAIL (`ui2.toast` undefined).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -2241,13 +2241,13 @@ export {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/ui && pnpm exec vitest run src/__tests__/exports.test.ts`
+Run: `pnpm exec vitest run packages/ui/src/__tests__/exports.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Build the package, then commit**
 
 ```bash
-cd packages/ui && pnpm build && cd ../..
+pnpm --filter hono-preact-ui build
 git add packages/ui/src/toast/index.ts packages/ui/src/index.ts packages/ui/src/__tests__/exports.test.ts
 git commit -m "$(cat <<'EOF'
 feat(ui): export toast surface (toast fn, Toaster, Toast namespace)
@@ -2639,7 +2639,7 @@ Read `apps/site/src/pages/docs/nav.ts`, find the `Overlays` section in the `comp
 
 - [ ] **Step 3: Run the route-nav parity test**
 
-Run: `cd apps/site && pnpm exec vitest run src/pages/docs/__tests__`
+Run: `pnpm exec vitest run apps/site/src/pages/docs/__tests__`
 Expected: PASS (every nav entry resolves to a real page and vice versa).
 
 - [ ] **Step 4: Commit**
@@ -2722,7 +2722,7 @@ EOF
 
 - [ ] **Step 5: Final verification statement**
 
-Confirm and report: all six CI-mirror steps passed, the full toast test suite is green (`cd packages/ui && pnpm exec vitest run src/__tests__/toast-*.test.ts src/__tests__/toaster-*.test.ts src/__tests__/exports.test.ts`), and `git status` is clean. Do not claim completion without pasting the passing output of the six steps.
+Confirm and report: all six CI-mirror steps passed, the full toast test suite is green (`pnpm exec vitest run packages/ui/src/__tests__/toast-*.test.ts packages/ui/src/__tests__/toaster-*.test.ts packages/ui/src/__tests__/exports.test.ts`), and `git status` is clean. Do not claim completion without pasting the passing output of the six steps.
 
 ---
 
