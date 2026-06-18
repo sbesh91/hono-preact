@@ -683,6 +683,23 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
     var(--surface);
 }
 
+/* Demo panel inside the Demo|Code tab strip: same dotted interactive surface
+   as .docs-example, but without the outer border/margin/radius (the .docs-tabs
+   card already provides those). */
+.docs-example-tabs__demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-height: 9rem;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0) 0
+      0 / 16px 16px,
+    var(--surface);
+}
+
 /* Demo buttons: a primary (trigger) and a secondary (close). */
 .docs-dialog-trigger,
 .docs-dialog-close {
