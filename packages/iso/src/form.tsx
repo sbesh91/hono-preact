@@ -12,6 +12,7 @@ import { setLastActionResult } from './internal/action-result-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
 import type { LoaderRef } from './define-loader.js';
+import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
 
 /**
@@ -31,7 +32,7 @@ export type FormProps<TPayload, TResult> = Omit<
   action: FormActionInput<TPayload, TResult>;
   children?: ComponentChildren;
   onSuccess?: (
-    data: TResult,
+    data: Serialize<TResult>,
     helpers: { reset: (fields?: string[]) => void }
   ) => void;
   onError?: (err: Error) => void;
@@ -166,7 +167,7 @@ export function Form<TPayload, TResult>({
               data: decoded.data,
               submittedPayload: payload,
             });
-            lifecycle.current.onSuccess?.(decoded.data as TResult, {
+            lifecycle.current.onSuccess?.(decoded.data as Serialize<TResult>, {
               reset: resetForm,
             });
             applyInvalidate(lifecycle.current.invalidate);
