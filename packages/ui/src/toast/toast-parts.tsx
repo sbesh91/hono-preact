@@ -12,6 +12,7 @@ import { usePresence } from '../use-presence.js';
 import { toastStore, type ToastRecord } from './toast-store.js';
 import { ToastItemContext, useToastItemContext, useToasterContext } from './context.js';
 import { useToastTimer } from './use-toast-timer.js';
+import { useToastSwipe } from './use-toast-swipe.js';
 
 // Pixels each back-stack toast peeks above the one in front when collapsed.
 const COLLAPSED_PEEK = 16;
@@ -34,12 +35,18 @@ export function ToastRoot(props: ToastRootProps) {
   const open = status === 'open';
 
   const toaster = useToasterContext('Root');
+  const swipe = useToastSwipe({
+    position: toaster.position,
+    onDismiss: () => toastStore.dismiss(record.id, 'user'),
+    disabled: record.dismissed,
+  });
+
   // Pausing while already dismissed prevents a redundant timeout-dismiss during
-  // the exit animation.
+  // the exit animation. Also pause while the user is actively swiping.
   useToastTimer({
     id: record.id,
     duration: record.duration,
-    paused: toaster.paused || record.dismissed,
+    paused: toaster.paused || record.dismissed || swipe.swiping,
     onExpire: () => toastStore.dismiss(record.id, 'timeout'),
   });
 
@@ -85,6 +92,7 @@ export function ToastRoot(props: ToastRootProps) {
       defaultTag: 'li',
       props: {
         ...rest,
+        ...swipe.handlers,
         ref: mergeRefs<Element>(
           presenceRef,
           elRef as Ref<Element>,
@@ -94,6 +102,7 @@ export function ToastRoot(props: ToastRootProps) {
         'data-state': open ? 'open' : 'closed',
         'data-expanded': toaster.expanded ? 'true' : 'false',
         'data-front': before === 0 ? '' : undefined,
+        'data-swiping': swipe.swiping ? 'true' : 'false',
         style: {
           ...userStyle,
           '--toast-index': String(index),
@@ -101,6 +110,7 @@ export function ToastRoot(props: ToastRootProps) {
           '--toast-offset': `${offset}px`,
           '--toast-height': `${ownHeight}px`,
           '--toasts-visible': String(toaster.visibleToasts),
+          '--toast-swipe-amount': `${swipe.amount}px`,
         },
       },
       state: { type: record.type, open },
