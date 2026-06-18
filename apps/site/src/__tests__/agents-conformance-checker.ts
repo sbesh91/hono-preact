@@ -69,16 +69,43 @@ export function collectCasts(
   tsx: boolean
 ): { expr: string }[] {
   const ast = parseSource(source, tsx);
-  const out: { expr: string }[] = [];
+
+  // Collect every cast node first, then build a Set of nodes that are the
+  // direct `.expression` child of another cast (i.e. the inner half of a chain
+  // like `x as unknown as Foo`). Those inner nodes are excluded so that a chain
+  // counts as one cast at the outermost level.
+  //
+  // NOTE: range-containment would be wrong here. `(x as T).foo as U` has two
+  // independent casts that happen to be range-nested; we must report both.
+  // Only direct `.expression` parentage is the correct predicate.
+  const castNodes: AnyNode[] = [];
   walk(ast.program, (n) => {
     if (n.type === 'TSAsExpression' || n.type === 'TSTypeAssertion') {
-      if (isAsConst(n.typeAnnotation as AnyNode | undefined)) return;
-      const text = source
-        .slice(n.start ?? 0, n.end ?? 0)
-        .replace(/\s+/g, ' ')
-        .trim();
-      out.push({ expr: text });
+      castNodes.push(n);
     }
   });
+
+  // Build the set of nodes that are the direct inner expression of some cast.
+  const innerNodes = new Set<AnyNode>();
+  for (const node of castNodes) {
+    const expr = node.expression as AnyNode | undefined;
+    if (
+      expr &&
+      (expr.type === 'TSAsExpression' || expr.type === 'TSTypeAssertion')
+    ) {
+      innerNodes.add(expr);
+    }
+  }
+
+  const out: { expr: string }[] = [];
+  for (const n of castNodes) {
+    if (innerNodes.has(n)) continue;
+    if (isAsConst(n.typeAnnotation as AnyNode | undefined)) continue;
+    const text = source
+      .slice(n.start ?? 0, n.end ?? 0)
+      .replace(/\s+/g, ' ')
+      .trim();
+    out.push({ expr: text });
+  }
   return out;
 }
