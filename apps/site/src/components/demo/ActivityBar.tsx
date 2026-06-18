@@ -1,4 +1,3 @@
-import { subscribeViewTransitionTypes } from 'hono-preact';
 import { useEffect, useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
@@ -31,15 +30,39 @@ export function ActivityBar() {
   const [expanded, setExpanded] = useState(false);
   const [connected, setConnected] = useState(false);
 
-  // Learn the current path from outside the router: window on mount, then every
-  // navigation via the global (non-hook) view-transition subscription. Returns
-  // undefined so it adds no transition types; used purely for nav.to.
+  // Track the current path from OUTSIDE the router (the bar renders in
+  // PersistHost, which has no router context). Observe history directly rather
+  // than the View-Transition phase: that phase only fires when
+  // document.startViewTransition runs, so on browsers without View Transitions
+  // it would never update and the bar would strand over non-/demo routes. popstate
+  // covers back/forward; pushState/replaceState cover in-app SPA navigations (which
+  // do not fire popstate). Baseline-safe on every browser; originals restored on
+  // cleanup.
   useEffect(() => {
-    setPath(window.location.pathname);
-    return subscribeViewTransitionTypes((nav) => {
-      setPath(nav.to);
-      return undefined;
-    });
+    const update = () => setPath(window.location.pathname);
+    update();
+    window.addEventListener('popstate', update);
+    const origPush = history.pushState;
+    const origReplace = history.replaceState;
+    history.pushState = function (
+      this: History,
+      ...args: Parameters<History['pushState']>
+    ) {
+      origPush.apply(this, args);
+      update();
+    };
+    history.replaceState = function (
+      this: History,
+      ...args: Parameters<History['replaceState']>
+    ) {
+      origReplace.apply(this, args);
+      update();
+    };
+    return () => {
+      window.removeEventListener('popstate', update);
+      history.pushState = origPush;
+      history.replaceState = origReplace;
+    };
   }, []);
 
   const isApp = path.startsWith('/demo/projects');

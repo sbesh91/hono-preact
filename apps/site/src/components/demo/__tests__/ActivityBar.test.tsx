@@ -81,4 +81,16 @@ describe('ActivityBar', () => {
     expect(container.innerHTML).toBe('');
     expect(MockEventSource.last).toBeNull(); // no stream opened off-app
   });
+
+  it('hides and is removed from the app when navigation leaves /demo/projects (no View Transitions API needed)', async () => {
+    const { container } = render(<ActivityBar />);
+    expect(MockEventSource.last).not.toBeNull(); // stream open on /demo/projects
+
+    await act(async () => {
+      window.history.pushState({}, '', '/docs/intro');
+    });
+
+    // The pushState wrapper updated the path with no startViewTransition involved.
+    expect(container.innerHTML).toBe('');
+  });
 });

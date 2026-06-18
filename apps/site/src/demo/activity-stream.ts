@@ -87,8 +87,16 @@ export function commentAddedEvent(
 const listeners = new Set<(e: ActivityEvent) => void>();
 
 export function publishActivity(e: ActivityEvent): void {
-  // Copy before iterating so an unsubscribe during dispatch is safe.
-  for (const l of [...listeners]) l(e);
+  // Copy before iterating so an unsubscribe during dispatch is safe. Isolate each
+  // subscriber: a throwing listener must not break the publishing action or starve
+  // other subscribers.
+  for (const l of [...listeners]) {
+    try {
+      l(e);
+    } catch {
+      // ignore a misbehaving subscriber
+    }
+  }
 }
 
 export function subscribeActivity(cb: (e: ActivityEvent) => void): () => void {

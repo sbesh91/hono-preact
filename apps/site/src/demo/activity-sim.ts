@@ -22,6 +22,8 @@ export function simulateActivity(): ActivityEvent | null {
   const task = pick(tasks);
   const actor = pick(SIM_ACTORS);
   if (Math.random() < 0.6) {
+    // STATUSES has 4 entries and we filter out exactly one (the current status),
+    // so the array passed to pick is always non-empty (>= 3 choices).
     const to = pick(STATUSES.filter((s) => s !== task.status));
     return taskMovedEvent(task, to, actor, true);
   }

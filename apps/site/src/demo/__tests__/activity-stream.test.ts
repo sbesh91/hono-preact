@@ -44,6 +44,19 @@ describe('activity bus', () => {
     expect(a.simulated).toBe(false);
     expect(b.simulated).toBe(true);
   });
+
+  it('isolates a throwing subscriber so others still receive the event', () => {
+    const seen: ActivityEvent[] = [];
+    subscribeActivity(() => {
+      throw new Error('boom');
+    });
+    subscribeActivity((e) => seen.push(e));
+    const task = getTask('t-1')!;
+    expect(() =>
+      publishActivity(taskMovedEvent(task, 'done', 'Alice'))
+    ).not.toThrow();
+    expect(seen).toHaveLength(1);
+  });
 });
 
 describe('recentActivityEvents', () => {
