@@ -66,7 +66,9 @@ describe('CodeTabs', () => {
       configurable: true,
     });
     const { getByRole, getByText } = render(tabs());
-    const cssPanel = getByText('css-code').closest('[role="tabpanel"]') as HTMLElement;
+    const cssPanel = getByText('css-code').closest(
+      '[role="tabpanel"]'
+    ) as HTMLElement;
     const twPanel = getByText('tailwind-code').closest(
       '[role="tabpanel"]'
     ) as HTMLElement;

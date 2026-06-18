@@ -23,7 +23,12 @@ interface TabsProps {
 // panels rendered with inactive ones hidden (so SSR content is present and the
 // active panel never remounts on switch). The shared primitive behind CodeTabs
 // and the Demo|Code tabs in Example.
-export function Tabs({ labels, children, accessory, class: className }: TabsProps) {
+export function Tabs({
+  labels,
+  children,
+  accessory,
+  class: className,
+}: TabsProps) {
   const panels = toChildArray(children).filter(
     (c): c is VNode => typeof c === 'object'
   );
@@ -53,7 +58,9 @@ export function Tabs({ labels, children, accessory, class: className }: TabsProp
         {labels.map((label, i) => (
           <button
             key={label}
-            ref={(el) => { tabRefs.current[i] = el; }}
+            ref={(el) => {
+              tabRefs.current[i] = el;
+            }}
             type="button"
             role="tab"
             id={`${baseId}-tab-${i}`}
@@ -71,7 +78,9 @@ export function Tabs({ labels, children, accessory, class: className }: TabsProp
       {panels.map((panel, i) => (
         <div
           key={labels[i]}
-          ref={(el) => { panelRefs.current[i] = el; }}
+          ref={(el) => {
+            panelRefs.current[i] = el;
+          }}
           role="tabpanel"
           id={`${baseId}-panel-${i}`}
           aria-labelledby={`${baseId}-tab-${i}`}

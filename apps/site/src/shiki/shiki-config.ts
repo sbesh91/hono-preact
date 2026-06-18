@@ -9,7 +9,14 @@ export const SHIKI_THEMES = {
 
 export const SHIKI_DEFAULT_COLOR = 'light';
 
-export const SHIKI_LANGS = ['ts', 'tsx', 'bash', 'jsonc', 'mdx', 'css'] as const;
+export const SHIKI_LANGS = [
+  'ts',
+  'tsx',
+  'bash',
+  'jsonc',
+  'mdx',
+  'css',
+] as const;
 
 // Options object in the exact shape `@shikijs/rehype` expects.
 export const rehypeShikiOptions = {

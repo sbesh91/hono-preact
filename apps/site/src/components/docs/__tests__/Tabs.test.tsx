@@ -21,11 +21,13 @@ describe('Tabs', () => {
 
   it('selects the first tab by default and renders all panels', () => {
     const { getByRole, getByText } = render(basic());
-    expect(getByRole('tab', { name: 'One' }).getAttribute('aria-selected')).toBe(
-      'true'
-    );
+    expect(
+      getByRole('tab', { name: 'One' }).getAttribute('aria-selected')
+    ).toBe('true');
     // Inactive tab must explicitly declare aria-selected="false" (not omitted).
-    expect(getByRole('tab', { name: 'Two' }).getAttribute('aria-selected')).toBe('false');
+    expect(
+      getByRole('tab', { name: 'Two' }).getAttribute('aria-selected')
+    ).toBe('false');
     // Both panels exist; the inactive one is hidden.
     expect(panelFor(getByText('first')).hidden).toBe(false);
     expect(panelFor(getByText('second')).hidden).toBe(true);
@@ -42,19 +44,21 @@ describe('Tabs', () => {
     const { getByRole } = render(basic());
     const tablist = getByRole('tablist');
     fireEvent.keyDown(tablist, { key: 'ArrowRight' });
-    expect(getByRole('tab', { name: 'Two' }).getAttribute('aria-selected')).toBe(
-      'true'
-    );
+    expect(
+      getByRole('tab', { name: 'Two' }).getAttribute('aria-selected')
+    ).toBe('true');
     fireEvent.keyDown(tablist, { key: 'ArrowRight' }); // wraps to first
-    expect(getByRole('tab', { name: 'One' }).getAttribute('aria-selected')).toBe(
-      'true'
-    );
+    expect(
+      getByRole('tab', { name: 'One' }).getAttribute('aria-selected')
+    ).toBe('true');
   });
 
   it('links each tab to its panel via aria-controls', () => {
     const { getByRole, getByText } = render(basic());
     const tab = getByRole('tab', { name: 'One' });
-    expect(tab.getAttribute('aria-controls')).toBe(panelFor(getByText('first')).id);
+    expect(tab.getAttribute('aria-controls')).toBe(
+      panelFor(getByText('first')).id
+    );
   });
 
   it('renders an accessory and passes it the active index', () => {
