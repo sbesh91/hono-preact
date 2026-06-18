@@ -1,6 +1,7 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { MenuDemo } from '../../../components/docs/MenuDemo.js';
+import menuCode from '../../../components/docs/MenuDemo.tsx?highlighted';
 
 # Menu
 
@@ -18,49 +19,11 @@ in the tab order; reserve Menu for commands.
 
 ## Demo
 
-<Example>
+<Example code={menuCode}>
   <MenuDemo />
 </Example>
 
 ## Usage
-
-```tsx
-import { Menu } from 'hono-preact-ui';
-
-export function Actions() {
-  return (
-    <Menu.Root>
-      <Menu.Trigger>Actions</Menu.Trigger>
-      <Menu.Positioner>
-        <Menu.Popup aria-label="Actions">
-          <Menu.Item onSelect={() => create()}>New file</Menu.Item>
-          <Menu.Item onSelect={() => open()}>Open</Menu.Item>
-          <Menu.Separator />
-          <Menu.CheckboxItem defaultChecked>Word wrap</Menu.CheckboxItem>
-          <Menu.Separator />
-          <Menu.Group>
-            <Menu.GroupLabel>Density</Menu.GroupLabel>
-            <Menu.RadioGroup defaultValue="comfortable">
-              <Menu.RadioItem value="comfortable">Comfortable</Menu.RadioItem>
-              <Menu.RadioItem value="compact">Compact</Menu.RadioItem>
-            </Menu.RadioGroup>
-          </Menu.Group>
-          <Menu.Separator />
-          <Menu.SubmenuRoot>
-            <Menu.SubmenuTrigger>Share</Menu.SubmenuTrigger>
-            <Menu.SubmenuPositioner>
-              <Menu.SubmenuPopup aria-label="Share">
-                <Menu.Item>Copy link</Menu.Item>
-                <Menu.Item>Email</Menu.Item>
-              </Menu.SubmenuPopup>
-            </Menu.SubmenuPositioner>
-          </Menu.SubmenuRoot>
-        </Menu.Popup>
-      </Menu.Positioner>
-    </Menu.Root>
-  );
-}
-```
 
 `Menu.Item` activates and closes the menu on click or Enter; call
 `event.preventDefault()` in its `onSelect` to keep the menu open after a choice.
