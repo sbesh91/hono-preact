@@ -22,8 +22,12 @@ const LIFT_SHADOW =
 // ancestor stacking/containing-block trap) instead of being cut off as a plain
 // in-flow `translate` would be. The clone is inert (pointer-events: none) and
 // lives outside Preact's tree, so it cannot perturb the board's diff. Returns
-// the popover element for the caller to translate and tear down.
-function createGhost(card: HTMLElement, rect: DOMRect): HTMLDivElement {
+// the popover element to translate + tear down, plus the lift-pop rAF id so the
+// caller can cancel it if the drag ends before the pop frame runs.
+function createGhost(
+  card: HTMLElement,
+  rect: DOMRect
+): { ghost: HTMLDivElement; raf: number } {
   const ghost = document.createElement('div');
   ghost.setAttribute('popover', 'manual');
 
@@ -58,15 +62,21 @@ function createGhost(card: HTMLElement, rect: DOMRect): HTMLDivElement {
     color: 'var(--foreground)',
     pointerEvents: 'none',
     willChange: 'translate',
-    transition: 'scale 140ms ease, box-shadow 140ms ease',
   });
-  // Pop the lift in on the next frame so scale + shadow actually animate from
+  // Under reduced motion, apply the lifted state instantly (no eased pop).
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    ghost.style.scale = '1.03';
+    ghost.style.boxShadow = LIFT_SHADOW;
+    return { ghost, raf: 0 };
+  }
+  // Otherwise pop the lift in on the next frame so scale + shadow animate from
   // rest (setting them inline at creation has no from-value to ease from).
-  requestAnimationFrame(() => {
+  ghost.style.transition = 'scale 140ms ease, box-shadow 140ms ease';
+  const raf = requestAnimationFrame(() => {
     ghost.style.scale = '1.03';
     ghost.style.boxShadow = LIFT_SHADOW;
   });
-  return ghost;
+  return { ghost, raf };
 }
 
 // Demo-only pointer-events drag. NOT a framework primitive. Tracks the
@@ -87,6 +97,7 @@ export function useBoardDrag(
       const el = e.currentTarget as HTMLElement; // the card wrapper
       startedRef.current = false;
       let ghost: HTMLDivElement | null = null;
+      let liftRaf = 0;
 
       // Listen on window, not the card: the drag must cross into other columns,
       // which moves the pointer off the card. setPointerCapture is unreliable
@@ -99,7 +110,9 @@ export function useBoardDrag(
           setDraggingId(taskId);
           // Lift a clone into the top layer and dim the original in place, so
           // its slot is held and the column never reflows.
-          ghost = createGhost(el, el.getBoundingClientRect());
+          const created = createGhost(el, el.getBoundingClientRect());
+          ghost = created.ghost;
+          liftRaf = created.raf;
           el.style.opacity = '0.5';
         }
         // Drive the ghost imperatively (no per-move re-render of the board).
@@ -112,6 +125,10 @@ export function useBoardDrag(
       // gets stuck floating and the source card is always un-dimmed.
       const resetLift = () => {
         el.style.opacity = '';
+        if (liftRaf) {
+          cancelAnimationFrame(liftRaf);
+          liftRaf = 0;
+        }
         if (ghost) {
           try {
             ghost.hidePopover();
@@ -143,6 +160,11 @@ export function useBoardDrag(
           // navigates at the end of a drag. One-shot, with a timeout fallback in
           // case no click follows (e.g. a cross-column drop re-parents the card).
           const swallowClick = (ce: MouseEvent) => {
+            // Only swallow the click that lands on the dragged card itself
+            // (same-column drop). A cross-column drop re-parents the card so no
+            // click targets it, and an unrelated fast click elsewhere within the
+            // macrotask window must not be eaten.
+            if (!(ce.target instanceof Node) || !el.contains(ce.target)) return;
             ce.preventDefault();
             ce.stopPropagation();
             window.removeEventListener('click', swallowClick, true);

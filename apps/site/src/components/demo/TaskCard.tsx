@@ -48,6 +48,8 @@ const TaskCard: FunctionComponent<Props> = ({
 
   return (
     <TaskContextMenu task={task} onPatch={onPatch} onRemove={onRemove}>
+      {/* Drag is pointer-only by design; the same status/priority moves are
+          keyboard-operable via the ••• Menu and the right-click ContextMenu. */}
       <div
         class={`relative touch-none select-none rounded-lg ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={(e) => onPointerDownCard(task.id, e as PointerEvent)}
