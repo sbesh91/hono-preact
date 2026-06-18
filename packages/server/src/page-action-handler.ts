@@ -3,19 +3,16 @@ import {
   isOutcome,
   timeoutOutcome,
   type AppConfig,
-  type ServerMiddleware,
   type ServerActionCtx,
-  type Middleware,
-  type StreamObserver,
 } from '@hono-preact/iso';
 import {
   runRequestScope,
   setActionResultSlot,
   dispatchServer,
-  partitionUse,
   serializeActionOutcome,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
+import { composeServerChain } from './compose-server-chain.js';
 import {
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
@@ -188,38 +185,21 @@ export function pageActionHandler(
         : c.text(msg, 404);
     }
     const { fn, use: actionUse, timeoutMs } = entry;
-    const resolvedTimeoutMs: number | false =
-      timeoutMs !== undefined ? timeoutMs : defaultTimeoutMs;
-    const timeoutSignal =
-      resolvedTimeoutMs === false
-        ? undefined
-        : AbortSignal.timeout(resolvedTimeoutMs);
-    const signal = timeoutSignal
-      ? AbortSignal.any([c.req.raw.signal, timeoutSignal])
-      : c.req.raw.signal;
+    // Chain order is app (outermost) -> page (route-node `use`) -> action
+    // (defineAction's `use`); composeServerChain owns the ordering, timeout
+    // derivation, partitioning, and the structural-read cast (shared with the
+    // loader handler).
+    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
+      await composeServerChain<'action'>({
+        requestSignal: c.req.raw.signal,
+        unitTimeoutMs: timeoutMs,
+        defaultTimeoutMs,
+        appConfig,
+        resolvePageUse: resolvePageUseByPath,
+        path: urlPath,
+        unitUse: actionUse,
+      });
     const actionCtx = { c, signal };
-
-    // Chain order: app-level (outermost) -> page-level (route-node `use`
-    // composed along the tree, supplied by `resolvePageUseByPath`) ->
-    // action-level (from defineAction's `use` option). Outer middleware runs
-    // first on the way in, last on the way out, matching the convention every
-    // middleware system users have seen (Hono, Express, Koa).
-    const rootUse = appConfig?.use ?? [];
-    const pageUse = await resolvePageUseByPath(urlPath);
-    // `pageUse` and `actionUse` arrive as ReadonlyArray<unknown>: page-level
-    // `use` and an action's `use` are read structurally off user-defined
-    // modules (the sanctioned deserialization boundary in makePageUseResolver
-    // and page-action-resolvers), so the concatenation infers unknown[].
-    // Assert the known element type here, the single point the chain re-enters
-    // typed land; loaders-handler carries the identical cast at the same boundary.
-    const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
-      [...rootUse, ...pageUse, ...actionUse] as ReadonlyArray<
-        Middleware | StreamObserver<unknown, never>
-      >;
-    const { middleware: allMiddleware, observers } = partitionUse(fullUse);
-    const serverMw = allMiddleware.filter(
-      (m): m is ServerMiddleware<'action'> => m.runs === 'server'
-    );
     const ctx: ServerActionCtx = {
       scope: 'action',
       c,
