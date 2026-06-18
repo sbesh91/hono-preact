@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/preact';
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+} from '@testing-library/preact';
 import type { ActivityEvent } from '../../../demo/activity-stream.js';
 
 type StreamState = {
@@ -65,8 +71,7 @@ describe('ActivityBar', () => {
     expect(log).toBeTruthy();
     // The text appears in both the feed log and the button summary line;
     // scope to the log element so the query is unambiguous.
-    const { getByText } = require('@testing-library/preact');
-    expect(getByText(log, /Alice created "Draft"/)).toBeTruthy();
+    expect(within(log).getByText(/Alice created "Draft"/)).toBeTruthy();
   });
 
   it('shows the listening placeholder before any event', () => {

@@ -28,6 +28,10 @@ export type UseStreamResult<Acc> = {
  * post-hydration. The loader's location is read from `RouteLocationsContext`
  * (a layout's stable location), so inside a layout it connects once and
  * survives intra-scope navigation.
+ *
+ * Intended for streaming or `live` loaders. A non-streaming loader delivers its
+ * single value (status transitions to `'open'`) but never fires `onEnd`, so
+ * status stays `'open'` indefinitely and never reaches `'closed'`.
  */
 export function useLoaderStream<T, Acc>(
   loaderRef: LoaderRef<T>,
