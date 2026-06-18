@@ -127,6 +127,12 @@ describe('AGENTS.md conformance (live apps/site)', () => {
       reason: 'parsing an untrusted cookie payload (acceptable boundary)',
     },
     {
+      file: 'components/demo/ActivityBar.tsx',
+      expr: 'JSON.parse(ev.data) as ActivityEvent',
+      reason:
+        'parsing a JSON SSE frame from the activity endpoint (acceptable boundary)',
+    },
+    {
       file: 'hooks/use-board-drag.ts',
       expr: 'card.cloneNode(true) as HTMLElement',
       reason: 'Node.cloneNode returns Node; the source is an HTMLElement',
