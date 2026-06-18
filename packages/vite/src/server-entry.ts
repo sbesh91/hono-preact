@@ -19,58 +19,35 @@ export function generateCoreAppModule(
   const { layoutAbsPath, routesAbsPath, apiAbsPath, appConfigAbsPath } = opts;
 
   const apiImport = apiAbsPath ? `import userApp from '${apiAbsPath}';\n` : '';
-  const apiMount = apiAbsPath ? `  .route('/', userApp)\n` : '';
+  const apiOption = apiAbsPath ? `  api: userApp,\n` : '';
 
-  // appConfig is optional: when no app-config.ts file exists, fall back to
-  // an empty config so the handler chain composition (root -> page -> unit)
-  // still works without the user authoring anything. The default-export
-  // shape mirrors the `import appConfig from './app-config'` convention so
-  // consumers can adopt the file later without other entry changes.
+  // appConfig is optional: when no app-config.ts file exists, fall back to an
+  // empty config so the middleware chain still composes without the user
+  // authoring anything. The default-export shape mirrors the
+  // `import appConfig from './app-config'` convention so consumers can adopt
+  // the file later without other entry changes.
   const appConfigImport = appConfigAbsPath
     ? `import appConfig from '${appConfigAbsPath}';\n`
     : `const appConfig = { use: [] };\n`;
 
-  // The generated source is loaded as a virtual module, which Vite/esbuild
-  // treats as plain JS by default. Use h() to construct vnodes rather than
-  // JSX so the source compiles without a TSX loader hint.
+  // The generated entry delegates all wiring to the framework-private
+  // createServerEntry factory (loaders RPC, action POST, SSR catch-all, and the
+  // optional api mount). The factory lives behind hono-preact/server/internal/
+  // runtime: a version-coupled contract this codegen emits, not a public API.
   return (
-    `import { Hono } from 'hono';\n` +
-    `import { h } from 'preact';\n` +
-    `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes } from 'hono-preact';\n` +
-    `import { env } from 'hono-preact/internal/runtime';\n` +
-    `import {\n` +
-    `  loadersHandler,\n` +
-    `  pageActionHandler,\n` +
-    `  renderPage,\n` +
-    `} from 'hono-preact/server';\n` +
-    `import {\n` +
-    `  makePageActionResolvers,\n` +
-    `  makePageUseResolver,\n` +
-    `  routeServerModules,\n` +
-    `} from 'hono-preact/server/internal/runtime';\n` +
+    `import { createServerEntry } from 'hono-preact/server/internal/runtime';\n` +
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +
     appConfigImport +
     `\n` +
-    `env.current = 'server';\n` +
-    `const dev = import.meta.env.DEV;\n` +
-    `const serverModules = routeServerModules(routes);\n` +
-    `const pageUseResolver = makePageUseResolver(routes);\n` +
-    `const pageActionResolvers = makePageActionResolvers(routes.serverRoutes, { dev });\n` +
-    `\n` +
-    `export const app = new Hono()\n` +
-    apiMount +
-    `  .post('${LOADERS_RPC_PATH}', loadersHandler(serverModules, { dev, appConfig, resolvePageUse: pageUseResolver.byPath }))\n` +
-    `  .post('*', pageActionHandler({\n` +
-    `    resolverByPath: pageActionResolvers.byPath,\n` +
-    `    resolvePageUseByPath: pageUseResolver.byPath,\n` +
-    `    renderPage,\n` +
-    `    resolvePageNode: () => h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),\n` +
-    `    appConfig,\n` +
-    `  }))\n` +
-    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig }));\n` +
+    `export const app = createServerEntry({\n` +
+    `  routes,\n` +
+    `  layout: Layout,\n` +
+    `  appConfig,\n` +
+    apiOption +
+    `  dev: import.meta.env.DEV,\n` +
+    `});\n` +
     `\n` +
     `export default app;\n`
   );
