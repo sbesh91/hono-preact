@@ -96,6 +96,15 @@ export type DefineLoaderOpts<T> = {
    * via defineLoader overloads can be added in a follow-up if needed.
    */
   use?: LoaderUse<T, boolean>;
+  /**
+   * Marks this loader as a long-lived client-only subscription. A `live`
+   * loader is consumed ONLY via `loader.useStream(...)`: it is never invoked
+   * during SSR (so an infinite generator cannot hang the document response),
+   * and its timeout defaults to `false` (no 30s cap) unless `timeoutMs` is set.
+   * `loader.View` / `loader.Boundary` / `loader.useData()` throw for live
+   * loaders.
+   */
+  live?: boolean;
 };
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -169,6 +178,8 @@ export function defineLoader(
     | DefineLoaderOpts<unknown>
     | undefined;
 
+  const live = opts?.live ?? false;
+
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   const idKey = opts?.__moduleKey
     ? opts.__loaderName
@@ -208,7 +219,7 @@ export function defineLoader(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
-    timeoutMs: opts?.timeoutMs,
+    timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
     // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
@@ -216,6 +227,11 @@ export function defineLoader(
       Middleware | StreamObserver<unknown, never>
     >,
     useData() {
+      if (live) {
+        throw new Error(
+          'This is a `live` loader: consume it with `loader.useStream(...)`, not `loader.useData()`.'
+        );
+      }
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {
         throw new Error(
@@ -233,14 +249,25 @@ export function defineLoader(
     // `Boundary` and `View` close over `ref`. The captures are by reference
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
-    Boundary: ({ fallback, errorFallback, children }) =>
-      h(LoaderHost<unknown>, {
+    Boundary: (props) => {
+      if (live) {
+        throw new Error(
+          'This is a `live` loader: consume it with `loader.useStream(...)`, not `loader.Boundary`.'
+        );
+      }
+      return h(LoaderHost<unknown>, {
         loader: ref,
-        fallback,
-        errorFallback,
-        children,
-      }),
+        fallback: props.fallback,
+        errorFallback: props.errorFallback,
+        children: props.children,
+      });
+    },
     View: (render, viewOpts) => {
+      if (live) {
+        throw new Error(
+          'This is a `live` loader: consume it with `loader.useStream(...)`, not `loader.View`.'
+        );
+      }
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           fallback: viewOpts?.fallback,
