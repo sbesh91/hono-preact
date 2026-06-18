@@ -49,8 +49,13 @@ const Home: FunctionComponent = () => {
           </h2>
           <div class="grid gap-3 md:grid-cols-2">
             <CodeBlock filename="vite.config.ts">
-              {`import { defineApp } from 'hono-preact/vite';
-export default defineApp();`}
+              {`import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [honoPreact({ adapter: cloudflareAdapter() })],
+});`}
             </CodeBlock>
             <CodeBlock filename="src/routes.ts">
               {`import { defineRoutes } from 'hono-preact';
@@ -94,7 +99,8 @@ export default function Layout({ children }) {
           </Card>
           <Card title="One package">
             <code>hono-preact</code>, <code>hono-preact/server</code>,{' '}
-            <code>hono-preact/vite</code>. Nothing else to install.
+            <code>hono-preact/vite</code>, <code>hono-preact/adapter-*</code>.
+            All of your tools in one place.
           </Card>
         </section>
 

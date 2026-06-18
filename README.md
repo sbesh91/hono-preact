@@ -45,8 +45,13 @@ These are the four files the scaffolder writes:
 
 ```ts
 // vite.config.ts
-import { defineApp } from 'hono-preact/vite';
-export default defineApp();
+import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [honoPreact({ adapter: cloudflareAdapter() })],
+});
 ```
 
 ```ts
