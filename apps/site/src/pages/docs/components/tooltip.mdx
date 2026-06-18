@@ -1,6 +1,7 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { TooltipDemo } from '../../../components/docs/TooltipDemo.js';
+import tooltipCode from '../../../components/docs/TooltipExample.tsx?highlighted';
 
 # Tooltip
 
@@ -13,29 +14,9 @@ only in a tooltip. It ships unstyled: style it through the `data-state`,
 
 ## Demo
 
-<Example>
+<Example code={tooltipCode}>
   <TooltipDemo />
 </Example>
-
-## Usage
-
-```tsx
-import { Tooltip } from 'hono-preact-ui';
-
-export function SaveHint() {
-  return (
-    <Tooltip.Root>
-      <Tooltip.Trigger>Hover me</Tooltip.Trigger>
-      <Tooltip.Positioner>
-        <Tooltip.Popup>
-          <Tooltip.Arrow />
-          Saved to your library
-        </Tooltip.Popup>
-      </Tooltip.Positioner>
-    </Tooltip.Root>
-  );
-}
-```
 
 The trigger opens after a short delay on hover and immediately on focus. Set
 `openDelay` and `closeDelay` on `Tooltip.Root` to tune the timing.
