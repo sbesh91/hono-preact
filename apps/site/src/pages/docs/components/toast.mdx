@@ -83,7 +83,7 @@ those, and guard transitions behind `prefers-reduced-motion`.
 // users get instant placement.
 <Toast.Root
   toast={t}
-  class="motion-safe:transition-transform motion-safe:duration-300 data-[state=closed]:opacity-0"
+  class="motion-safe:transition-[transform,opacity] motion-safe:duration-300 data-[swiping=true]:transition-none data-[state=closed]:opacity-0"
   style={{
     transform:
       'translateX(var(--toast-swipe-amount,0px)) translateY(var(--toast-offset,0px))',
