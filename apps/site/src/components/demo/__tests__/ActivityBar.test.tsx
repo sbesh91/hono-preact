@@ -3,7 +3,11 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/preact';
 import type { ActivityEvent } from '../../../demo/activity-stream.js';
 
-type StreamState = { data: ActivityEvent[]; status: string; error: Error | null };
+type StreamState = {
+  data: ActivityEvent[];
+  status: string;
+  error: Error | null;
+};
 let streamResult: StreamState;
 
 // ActivityBar reads serverLoaders.activity.useStream(...) at module scope, so
@@ -54,7 +58,9 @@ describe('ActivityBar', () => {
       error: null,
     };
     render(<ActivityBar />);
-    fireEvent.click(screen.getByRole('button', { name: /toggle activity feed/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /toggle activity feed/i })
+    );
     const log = screen.getByRole('log');
     expect(log).toBeTruthy();
     // The text appears in both the feed log and the button summary line;

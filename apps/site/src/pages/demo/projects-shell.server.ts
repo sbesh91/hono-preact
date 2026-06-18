@@ -48,7 +48,10 @@ async function* activityStream(
     while (!ctx.signal.aborted) {
       while (queue.length) yield queue.shift()!;
       const tick = 4000 + Math.floor(Math.random() * 4000);
-      await Promise.race([wakeP, new Promise<void>((r) => setTimeout(r, tick))]);
+      await Promise.race([
+        wakeP,
+        new Promise<void>((r) => setTimeout(r, tick)),
+      ]);
       wakeP = new Promise<void>((r) => (wake = r));
       if (ctx.signal.aborted) break;
       if (queue.length === 0) {

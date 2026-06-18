@@ -28,7 +28,7 @@ describe('measureSectionA', () => {
     const a = await measureSectionA();
     expect(Object.keys(a)).toContain('core');
     expect(a.core.total.gzip).toBeGreaterThan(0);
-    for (const bucket of ['loaders', 'actions', 'transitions', 'prefetch', 'streaming', 'head', 'persist', 'middleware']) {
+    for (const bucket of ['loaders', 'actions', 'transitions', 'prefetch', 'streaming', 'head', 'middleware']) {
       expect(a[bucket].total.gzip).toBeGreaterThan(0);
       expect(a[bucket].marginalOverCore.gzip).toBeGreaterThanOrEqual(0);
     }

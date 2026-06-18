@@ -1,0 +1,179 @@
+# Live Loaders & Persistent UI
+
+A live loader is a streaming loader that connects once and survives intra-scope navigation. It is the mechanism for building UI that persists visually across route changes: a notification bar, a sidebar feed, a presence indicator, or any widget that should keep running while the user navigates within a section of the app.
+
+## How it works
+
+Persistent UI is expressed as a child of a layout. A layout stays mounted across navigations between its child routes, so anything rendered inside the layout survives those navigations too. Attach a `live` loader to the layout's server module to connect a long-lived stream to that layout, and consume the stream with `loader.useStream(...)` inside a layout component. The stream connects once when the layout mounts and reconnects only when the user leaves the layout's scope entirely.
+
+Two options on the same API drive this pattern:
+
+- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. The `.View()` / `.Boundary()` / `.useData()` methods throw for live loaders: consume them with `useStream` instead.
+- `loader.useStream({ reduce, initial })` subscribes to the live loader and folds every chunk into accumulated state. It returns `{ data, status, error }`. During SSR and before hydration connects, `data` is the `initial` value and `status` is `'connecting'`.
+
+## Scoping the persistence
+
+Choose the layout based on the scope you want:
+
+| Scope           | Route table entry                                 | What persists         |
+| --------------- | ------------------------------------------------- | --------------------- |
+| App-wide        | Root route with `layout` and `path: '*'` children | Across the whole app  |
+| Section         | Prefix route group (e.g. `path: '/projects'`)     | Within `/projects/**` |
+| Single sub-tree | Any nested layout group                           | Within that sub-tree  |
+
+The stream is tied to the layout's lifecycle. It connects when the layout mounts and is aborted (via `ctx.signal`) when the layout unmounts, which happens when the user navigates outside the layout's scope.
+
+## Example: activity bar
+
+The demo at `/demo/projects` uses a live activity loader on the `projects-shell` layout to show a real-time event feed across all project pages.
+
+**Server module** (`projects-shell.server.ts`):
+
+```ts
+import { defineLoader, type LoaderCtx } from 'hono-preact';
+import {
+  subscribeActivity,
+  recentActivityEvents,
+  type ActivityEvent,
+} from './activity-stream.js';
+
+async function* activityStream(
+  ctx: LoaderCtx
+): AsyncGenerator<ActivityEvent, void, unknown> {
+  // Yield recent events first so the feed is not empty on connect.
+  for (const e of recentActivityEvents(5)) yield e;
+
+  const queue: ActivityEvent[] = [];
+  let wake!: () => void;
+  let wakeP = new Promise<void>((r) => (wake = r));
+  const unsub = subscribeActivity((e) => {
+    queue.push(e);
+    wake();
+  });
+  ctx.signal.addEventListener('abort', () => {
+    unsub();
+    wake();
+  });
+
+  while (!ctx.signal.aborted) {
+    while (queue.length) yield queue.shift()!;
+    await wakeP;
+    wakeP = new Promise<void>((r) => (wake = r));
+  }
+}
+
+export const serverLoaders = {
+  default: defineLoader(shellLoader),
+  activity: defineLoader(activityStream, { live: true }),
+};
+```
+
+**Layout component** (`projects-shell.tsx`):
+
+```tsx
+import { serverLoaders } from './projects-shell.server.js';
+import type { ActivityEvent } from './activity-stream.js';
+
+const activityLoader = serverLoaders.activity;
+const MAX = 50;
+
+function ActivityBar() {
+  const { data: events, status } = activityLoader.useStream<ActivityEvent[]>({
+    reduce: (acc, e) => [e, ...acc].slice(0, MAX),
+    initial: [],
+  });
+
+  const connected = status === 'open';
+
+  return (
+    <div role="log" aria-label="Recent activity">
+      <span aria-hidden class={connected ? 'dot dot--live' : 'dot dot--idle'} />
+      {events.length === 0 ? (
+        <p>Listening for activity...</p>
+      ) : (
+        <ul>
+          {events.map((e) => (
+            <li key={e.id}>
+              {e.actor}: {e.taskTitle}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default function ProjectsShell({
+  children,
+}: {
+  children: ComponentChildren;
+}) {
+  return (
+    <div class="projects-shell">
+      <main>{children}</main>
+      <ActivityBar />
+    </div>
+  );
+}
+```
+
+Navigating between `/demo/projects/alpha` and `/demo/projects/beta` does not remount `ProjectsShell`, so `ActivityBar` keeps its accumulated events and the stream stays open.
+
+## Known behavior: scope-exit blip
+
+When the user navigates out of the layout's scope, the layout unmounts and the stream closes. If the user navigates back in, the layout remounts and the stream reconnects from scratch, starting with `initial` again. This is the expected lifecycle: there is no cross-mount cache for live loaders.
+
+## API reference
+
+### `defineLoader(fn, { live })`
+
+| Option | Type      | Default | Description                                                                                                                                           |
+| ------ | --------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `live` | `boolean` | `false` | Marks this loader as a long-lived client subscription. Skipped on SSR; timeout defaults to `false`. Requires consumption via `loader.useStream(...)`. |
+
+All other `defineLoader` options (`params`, `cache`, `timeoutMs`, `use`) work the same for live loaders. See [Server Loaders](/docs/loaders) for the full option table.
+
+### `loader.useStream(opts)`
+
+```ts
+loader.useStream<Acc>(opts: UseStreamOptions<T, Acc>): UseStreamResult<Acc>
+```
+
+| Option    | Type                          | Description                                                                            |
+| --------- | ----------------------------- | -------------------------------------------------------------------------------------- |
+| `reduce`  | `(acc: Acc, chunk: T) => Acc` | Folds each incoming chunk into the accumulated value. Called for every chunk in order. |
+| `initial` | `Acc`                         | Seed value; also the value returned during SSR and before the first chunk arrives.     |
+| `onChunk` | `(chunk: T) => void`          | Optional per-chunk side effect (e.g. playing a sound). Called before `reduce`.         |
+
+Returns `UseStreamResult<Acc>`:
+
+| Field    | Type            | Description                                                               |
+| -------- | --------------- | ------------------------------------------------------------------------- |
+| `data`   | `Acc`           | Current accumulated value. Starts as `initial`, updated after each chunk. |
+| `status` | `StreamStatus`  | Connection state: `'connecting'`, `'open'`, `'closed'`, or `'error'`.     |
+| `error`  | `Error \| null` | Set when `status === 'error'`; the last good `data` is still available.   |
+
+`StreamStatus` values:
+
+| Value          | Meaning                                                       |
+| -------------- | ------------------------------------------------------------- |
+| `'connecting'` | SSR or pre-hydration; the RPC call has not been issued yet.   |
+| `'open'`       | At least one chunk has arrived; the stream is active.         |
+| `'closed'`     | The generator returned normally; no more chunks are expected. |
+| `'error'`      | The stream errored. `error` holds the cause.                  |
+
+### Type exports
+
+```ts
+import type {
+  StreamStatus,
+  UseStreamOptions,
+  UseStreamResult,
+} from 'hono-preact';
+```
+
+## See also
+
+- [Server Loaders](/docs/loaders): non-live loaders and the full `defineLoader` option table.
+- [Layouts & Nested Routes](/docs/layouts): how layout scoping and lifecycle work.
+- [Streaming](/docs/streaming): streaming loaders that use `.View()` instead of `useStream`.

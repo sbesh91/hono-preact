@@ -51,7 +51,6 @@ describe('generateClientEntrySource', () => {
     expect(streamIdx).toBeGreaterThan(-1);
     expect(shimIdx).toBeLessThan(streamIdx);
   });
-
 });
 
 describe('clientEntryPlugin', () => {

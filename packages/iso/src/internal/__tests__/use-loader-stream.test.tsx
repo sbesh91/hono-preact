@@ -34,13 +34,15 @@ describe('loader.useStream', () => {
   it('accumulates EVERY chunk (no coalescing loss) and ends closed', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        dripSseResponse([
-          'data: {"n":1}\n\n',
-          'data: {"n":2}\n\n',
-          'data: {"n":3}\n\n',
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          dripSseResponse([
+            'data: {"n":1}\n\n',
+            'data: {"n":2}\n\n',
+            'data: {"n":3}\n\n',
+          ])
+        )
     );
     const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
       __moduleKey: 'test-stream',
@@ -71,13 +73,15 @@ describe('loader.useStream', () => {
   it('calls onChunk once per streamed chunk in order', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        dripSseResponse([
-          'data: {"n":10}\n\n',
-          'data: {"n":20}\n\n',
-          'data: {"n":30}\n\n',
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          dripSseResponse([
+            'data: {"n":10}\n\n',
+            'data: {"n":20}\n\n',
+            'data: {"n":30}\n\n',
+          ])
+        )
     );
     const onChunk = vi.fn();
     const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {

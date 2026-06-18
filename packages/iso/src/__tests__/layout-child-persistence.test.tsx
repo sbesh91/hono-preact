@@ -45,7 +45,11 @@ const Bar: ComponentType = () => {
     'div',
     { 'data-testid': 'bar', 'data-seq': String(seq) },
     h('span', { 'data-testid': 'bar-count' }, String(count)),
-    h('button', { 'data-testid': 'bar-inc', onClick: () => setCount((c) => c + 1) }, 'inc')
+    h(
+      'button',
+      { 'data-testid': 'bar-inc', onClick: () => setCount((c) => c + 1) },
+      'inc'
+    )
   );
 };
 

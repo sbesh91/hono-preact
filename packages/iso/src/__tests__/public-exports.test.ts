@@ -27,7 +27,6 @@ describe('view transitions toolkit exports', () => {
     expect(typeof iso.useViewTransitionTypes).toBe('function');
     expect(typeof iso.subscribeViewTransitionTypes).toBe('function');
   });
-
 });
 
 describe('active-route detection exports', () => {
