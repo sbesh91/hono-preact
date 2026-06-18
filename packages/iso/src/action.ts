@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
-import type { LoaderRef } from './define-loader.js';
+import type { AnyLoaderRef } from './define-loader.js';
 import { useInvalidate } from './use-invalidate.js';
 import type { ActionUse } from './internal/use-types.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
@@ -136,7 +136,7 @@ type UseActionOptionsCommon<TChunk = never> = {
    *
    * See `/docs/reloading` for the full mental model.
    */
-  invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
+  invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
   // Chunks arrive over the wire as JSON, so the client sees `Serialize<TChunk>`.
   onChunk?: (chunk: Serialize<TChunk>) => void;
 };

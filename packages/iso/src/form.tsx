@@ -11,7 +11,7 @@ import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { setLastActionResult } from './internal/action-result-store.js';
 import { assignSafeRedirect } from './internal/safe-redirect.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
-import type { LoaderRef } from './define-loader.js';
+import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
 
@@ -36,7 +36,7 @@ export type FormProps<TPayload, TResult> = Omit<
     helpers: { reset: (fields?: string[]) => void }
   ) => void;
   onError?: (err: Error) => void;
-  invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
+  invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
   reset?: boolean;
 };
 

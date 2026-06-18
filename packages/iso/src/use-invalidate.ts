@@ -1,16 +1,13 @@
 import { useCallback, useContext } from 'preact/hooks';
 import { ReloadContext } from './reload-context.js';
 import { ActiveLoaderIdContext } from './internal/contexts.js';
-import type { LoaderRef } from './define-loader.js';
+import type { AnyLoaderRef } from './define-loader.js';
 
 /** How to update loader caches after an action commits. Same vocabulary as
  * `useAction`'s `invalidate` option: `'auto'` re-runs the active page's loader;
  * an array calls `.invalidate()` on each `LoaderRef` (and re-runs the active
  * loader if it is in the list); `false`/undefined does nothing. */
-export type InvalidateInput =
-  | 'auto'
-  | false
-  | ReadonlyArray<LoaderRef<unknown>>;
+export type InvalidateInput = 'auto' | false | ReadonlyArray<AnyLoaderRef>;
 
 /**
  * Reads the enclosing `ReloadContext` + `ActiveLoaderIdContext` and returns a

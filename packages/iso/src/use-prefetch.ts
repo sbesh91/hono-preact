@@ -1,6 +1,6 @@
 import { useCallback, useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
-import type { LoaderRef } from './define-loader.js';
+import type { AnyLoaderRef } from './define-loader.js';
 import { prefetch } from './prefetch.js';
 import { matchPath } from './route-active.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
@@ -43,7 +43,7 @@ function specificity(pattern: string): number {
  */
 export function usePrefetch(
   href: string,
-  refs: LoaderRef<unknown> | ReadonlyArray<LoaderRef<unknown>>
+  refs: AnyLoaderRef | ReadonlyArray<AnyLoaderRef>
 ): () => void {
   const routes = useContext(RouteManifestContext);
   return useCallback(() => {
