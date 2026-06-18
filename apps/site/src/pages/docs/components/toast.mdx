@@ -1,0 +1,147 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import ToastDemo from '../../../components/docs/ToastDemo.js';
+
+# Toast
+
+Imperative, accessible toast notifications. Fire one from anywhere with
+`toast(...)`; render them through the headless `Toast.*` parts. Ships unstyled:
+style everything through the `data-*` and CSS-variable contract.
+
+## Demo
+
+<Example>
+  <ToastDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { toast, Toaster, Toast, type ToastRecord } from 'hono-preact-ui';
+
+function renderToast(t: ToastRecord) {
+  return (
+    <Toast.Root toast={t}>
+      <Toast.Title />
+      <Toast.Description />
+      <Toast.Action />
+      <Toast.Close aria-label="Dismiss">x</Toast.Close>
+    </Toast.Root>
+  );
+}
+
+export function App() {
+  return (
+    <>
+      <button onClick={() => toast.success('Saved')}>Save</button>
+      <Toaster position="bottom-right">{renderToast}</Toaster>
+    </>
+  );
+}
+```
+
+Fire toasts imperatively:
+
+```ts
+toast('Event saved');
+toast.success('Profile updated', { description: 'Your changes are live.' });
+toast.error('Upload failed');
+toast.promise(save(), { loading: 'Saving...', success: 'Saved!', error: 'Failed' });
+const id = toast.loading('Working...');
+toast.dismiss(id);
+```
+
+## Styling
+
+The wrapper sets `data-state`, `data-type`, `data-position`, `data-expanded`,
+`data-front`, `data-swiping`, and the `--toast-offset` / `--toast-height` /
+`--toasts-before` / `--toast-swipe-amount` variables. Drive all motion from
+those, and guard transitions behind `prefers-reduced-motion`.
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+.toast {
+  transform: translateX(var(--toast-swipe-amount, 0px))
+    translateY(var(--toast-offset, 0px));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+}
+.toast[data-swiping='true'] {
+  transition: none;
+}
+.toast[data-state='closed'] {
+  opacity: 0;
+}
+```
+
+```tsx
+// Base Tailwind v4. Motion via the motion-safe: variant so reduced-motion
+// users get instant placement.
+<Toast.Root
+  toast={t}
+  class="motion-safe:transition-transform motion-safe:duration-300 data-[state=closed]:opacity-0"
+  style={{
+    transform:
+      'translateX(var(--toast-swipe-amount,0px)) translateY(var(--toast-offset,0px))',
+  }}
+/>
+```
+
+</CodeTabs>
+
+## API reference
+
+### `toast`
+
+| Call | Returns | Description |
+| --- | --- | --- |
+| `toast(message, opts?)` | `id` | Default toast. |
+| `toast.success / error / info / warning / loading(message, opts?)` | `id` | Typed variants; `error` announces assertively. |
+| `toast.custom((id) => VNode, opts?)` | `id` | Render an arbitrary body. |
+| `toast.promise(promise, { loading, success, error })` | `id` | One toast tracks a promise. |
+| `toast.dismiss(id?)` | `void` | Dismiss one toast, or all when `id` is omitted. |
+
+`opts`: `id`, `description`, `duration` (ms; `Infinity` = sticky; default 4000),
+`important`, `action: { label, onClick }`, `onDismiss`, `onAutoClose`.
+
+### `Toaster`
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `position` | `ToastPosition` | `'bottom-right'` | Corner; sets entry direction and swipe axis. |
+| `label` | `string` | `'Notifications'` | Accessible name of the region. |
+| `expand` | `boolean` | `false` | Always-expanded stack vs collapse-to-pile. |
+| `visibleToasts` | `number` | `3` | Toasts shown before older ones fade under. |
+| `gap` | `number` | `14` | Px gap between expanded toasts. |
+| `hotkey` | `string[]` | `['altKey','KeyT']` | Chord that focuses the region. |
+| `children` | `(t: ToastRecord) => VNode` | required | Render prop for each toast. |
+
+### `Toast.Root`
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `toast` | `ToastRecord` | required | The record from the render prop. |
+| `render` | `RenderProp` | undefined | Replace the rendered element. |
+
+`Toast.Title`, `Toast.Description`, `Toast.Action`, and `Toast.Close` each accept
+the standard `render` prop and read the active toast from context; `Description`
+and `Action` render nothing when the record has no description / action.
+
+## Accessibility
+
+`<Toaster>` mounts a separate, always-present visually-hidden announcer: polite
+(`role=status`) for normal toasts and assertive (`role=alert`) for `error` or
+`important` toasts. The visible list is a labeled `region` landmark of `<ol>`
+items and is intentionally not itself a live region (so reflow never
+re-announces). Press the `hotkey` (default Alt+T) to move focus into the region.
+Hovering or focusing the region pauses auto-dismiss and expands the stack.
+Motion is driven entirely by your CSS, so guarding transitions behind
+`prefers-reduced-motion` yields an accessible, reduced-motion-correct result.
+
+> Toast requires the browser Popover API to place its region in the top layer.
+> This is a deliberate, documented exception to the library's
+> progressive-enhancement baseline; all current browser versions support it.
