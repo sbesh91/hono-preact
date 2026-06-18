@@ -32,9 +32,7 @@ export function StatusSelect({
   return (
     <Select.Root<TaskStatus>
       value={value}
-      onValueChange={(v) =>
-        onChange(Array.isArray(v) ? (v[0] ?? value) : v)
-      }
+      onValueChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? value) : v)}
     >
       <Select.Trigger class={triggerCls}>
         <Select.Value />
@@ -65,9 +63,7 @@ export function PrioritySelect({
   return (
     <Select.Root<TaskPriority>
       value={value}
-      onValueChange={(v) =>
-        onChange(Array.isArray(v) ? (v[0] ?? value) : v)
-      }
+      onValueChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? value) : v)}
     >
       <Select.Trigger class={triggerCls}>
         <span

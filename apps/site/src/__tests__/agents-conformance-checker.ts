@@ -64,10 +64,7 @@ function isAsConst(typeAnnotation: AnyNode | undefined): boolean {
   return name?.type === 'Identifier' && name.name === 'const';
 }
 
-export function collectCasts(
-  source: string,
-  tsx: boolean
-): { expr: string }[] {
+export function collectCasts(source: string, tsx: boolean): { expr: string }[] {
   const ast = parseSource(source, tsx);
 
   // Collect every cast node first, then build a Set of nodes that are the

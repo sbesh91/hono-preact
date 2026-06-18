@@ -2,10 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import {
-  collectImports,
-  collectCasts,
-} from './agents-conformance-checker.js';
+import { collectImports, collectCasts } from './agents-conformance-checker.js';
 
 describe('conformance checker (self-test)', () => {
   it('collectImports finds static, re-export, and dynamic specifiers', () => {
@@ -152,7 +149,8 @@ describe('AGENTS.md conformance (live apps/site)', () => {
     {
       file: 'components/demo/TaskCard.tsx',
       expr: 'e as PointerEvent',
-      reason: 'bridging the Preact pointer-handler event to the DOM PointerEvent',
+      reason:
+        'bridging the Preact pointer-handler event to the DOM PointerEvent',
     },
     {
       file: 'components/demo/TaskActions.tsx',
@@ -192,14 +190,14 @@ describe('AGENTS.md conformance (live apps/site)', () => {
     expect(
       violations,
       `Reshape the type (predicate, typed binding, generic value) or add an ` +
-        `allowlist entry with a reason:\n${violations.join('\n')}`,
+        `allowlist entry with a reason:\n${violations.join('\n')}`
     ).toEqual([]);
 
     // Honesty: every allowlist entry must still correspond to a real cast.
     const stale = [...allowed].filter((k) => !seen.has(k));
     expect(
       stale,
-      `Remove stale allowlist entries:\n${stale.join('\n')}`,
+      `Remove stale allowlist entries:\n${stale.join('\n')}`
     ).toEqual([]);
   });
 });
