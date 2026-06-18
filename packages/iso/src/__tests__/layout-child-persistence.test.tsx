@@ -5,7 +5,7 @@
 // layout renders as a plain sibling of {children} persists (no remount, state
 // + a live resource survive) across intra-scope navigation, tears down cleanly
 // on scope exit, and remounts fresh on re-entry. This is the mechanism that
-// replaces <Persist>.
+// replaces the former persist-via-registry approach.
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ComponentType } from 'preact';
 import { h } from 'preact';

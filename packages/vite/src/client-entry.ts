@@ -13,23 +13,15 @@ export function generateClientEntrySource(
   opts: GenerateClientEntrySourceOptions
 ): string {
   return (
-    `import { h, hydrate, render as renderPreact } from 'preact';\n` +
+    `import { h, hydrate } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes, PersistHost } from 'hono-preact';\n` +
+    `import { Routes } from 'hono-preact';\n` +
     `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal/runtime';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
     `installHistoryShim();\n` +
     `installNavTransitionScheduler();\n` +
     `installStreamRegistry();\n` +
-    `\n` +
-    `let persistHost = document.getElementById('__hp_persist_root');\n` +
-    `if (!persistHost) {\n` +
-    `  persistHost = document.createElement('div');\n` +
-    `  persistHost.id = '__hp_persist_root';\n` +
-    `  document.body.appendChild(persistHost);\n` +
-    `}\n` +
-    `renderPreact(h(PersistHost, null), persistHost);\n` +
     `\n` +
     // View transitions are driven by installNavTransitionScheduler() above: it
     // overrides Preact's render scheduler so a navigation's re-render runs inside

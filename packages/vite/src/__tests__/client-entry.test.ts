@@ -18,11 +18,9 @@ describe('generateClientEntrySource', () => {
       routesAbsPath: '/proj/src/routes.ts',
     });
 
-    expect(src).toContain(
-      `import { h, hydrate, render as renderPreact } from 'preact';`
-    );
+    expect(src).toContain(`import { h, hydrate } from 'preact';`);
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
-    expect(src).toContain(`import { Routes, PersistHost } from 'hono-preact';`);
+    expect(src).toContain(`import { Routes } from 'hono-preact';`);
     expect(src).toContain(
       `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal/runtime';`
     );
@@ -54,11 +52,6 @@ describe('generateClientEntrySource', () => {
     expect(shimIdx).toBeLessThan(streamIdx);
   });
 
-  it('mounts PersistHost into a stable container appended to body', () => {
-    const src = generateClientEntrySource({ routesAbsPath: '/abs/routes.tsx' });
-    expect(src).toContain('PersistHost');
-    expect(src).toContain('__hp_persist_root');
-  });
 });
 
 describe('clientEntryPlugin', () => {

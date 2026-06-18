@@ -2,7 +2,7 @@
 
 The framework wraps every same-document route change in `document.startViewTransition` automatically. You don't opt in. Style the default root transition with `::view-transition-old(root)` and `::view-transition-new(root)`, and respect `prefers-reduced-motion`.
 
-On top of that, four primitives let you scale view transitions across many elements, hook into the navigation lifecycle, target CSS by direction, and persist live DOM across navigations.
+On top of that, three primitives let you scale view transitions across many elements, hook into the navigation lifecycle, and target CSS by direction.
 
 ## Named elements
 
@@ -141,22 +141,6 @@ subscribeViewTransitionTypes((nav) => {
 
 It returns an unsubscribe and is a no-op on the server, so it is safe to register
 as a module side effect.
-
-## Persistent elements
-
-`<Persist>` keeps an element's DOM and JS state alive across route changes. The framework auto-mounts a single `<PersistHost />` outside the SPA root; `<Persist id="...">` writes its children into a registry that the host renders. Same VNode reference plus stable host DOM means Preact's diff preserves the underlying nodes (audio playback continues, video position is retained, chat widgets stay initialized).
-
-```tsx
-import { Persist } from 'hono-preact';
-
-<Persist id="player" viewTransitionName="player-shell">
-  <AudioPlayer src={song.url} />
-</Persist>;
-```
-
-The optional `viewTransitionName` makes the persisted shell animate as a single unit across page transitions.
-
-SSR renders persisted children inline at their declared position; persistence kicks in after the first client-side navigation.
 
 ## See also
 

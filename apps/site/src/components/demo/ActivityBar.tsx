@@ -20,7 +20,7 @@ function describeEvent(e: ActivityEvent): string {
   return `${e.actor} commented on "${e.taskTitle}"`;
 }
 
-// Persistent live-activity bar: a plain child of the projects-shell layout,
+// Live-activity bar: a plain child of the projects-shell layout,
 // scoped to /demo/projects/**. `useStream` connects once (the layout's stable
 // location) and survives intra-scope navigation; on SSR it renders the
 // "connecting" state and upgrades after hydration. No EventSource, no URL, no

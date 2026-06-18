@@ -171,6 +171,3 @@ export {
   type ViewTransitionNameProps,
   type ViewTransitionGroupProps,
 } from './view-transition-name.js';
-
-// Persist components.
-export { Persist, PersistHost, type PersistProps } from './persist.js';
