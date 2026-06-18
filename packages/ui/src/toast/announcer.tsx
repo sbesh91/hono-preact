@@ -1,4 +1,4 @@
-import { h, type JSX, type VNode } from 'preact';
+import { h, type JSX } from 'preact';
 import { useCallback, useRef } from 'preact/hooks';
 import type { ToastRecord } from './toast-store.js';
 
@@ -62,7 +62,7 @@ export interface ToastAnnouncerProps {
   assertiveRef: { current: HTMLDivElement | null };
 }
 
-export function ToastAnnouncer(props: ToastAnnouncerProps): VNode {
+export function ToastAnnouncer(props: ToastAnnouncerProps) {
   return h('div', { style: SR_ONLY_STYLE }, [
     h('div', {
       key: 'polite',
