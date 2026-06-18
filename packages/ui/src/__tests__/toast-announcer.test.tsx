@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, act, cleanup } from '@testing-library/preact';
-import { useAnnouncer, ToastAnnouncer } from '../toast/announcer.js';
+import { useAnnouncer, ToastAnnouncer, announcementText } from '../toast/announcer.js';
 
 afterEach(cleanup);
 
@@ -47,5 +47,47 @@ describe('ToastAnnouncer', () => {
     act(() => vi.advanceTimersByTime(1000));
     expect(getByRole('status').textContent).toBe('');
     vi.useRealTimers();
+  });
+});
+
+describe('announcementText', () => {
+  it('returns title only when description is missing', () => {
+    const result = announcementText({
+      id: '1',
+      type: 'default',
+      title: 'Saved',
+      duration: 4000,
+      important: false,
+      dismissed: false,
+      createdAt: 0,
+    });
+    expect(result).toBe('Saved');
+  });
+
+  it('space-joins title and description when both are strings', () => {
+    const result = announcementText({
+      id: '1',
+      type: 'default',
+      title: 'Saved',
+      description: 'All good',
+      duration: 4000,
+      important: false,
+      dismissed: false,
+      createdAt: 0,
+    });
+    expect(result).toBe('Saved All good');
+  });
+
+  it('skips non-text VNode title and returns empty string', () => {
+    const result = announcementText({
+      id: '2',
+      type: 'default',
+      title: <strong>Hi</strong>,
+      duration: 4000,
+      important: false,
+      dismissed: false,
+      createdAt: 0,
+    });
+    expect(result).toBe('');
   });
 });
