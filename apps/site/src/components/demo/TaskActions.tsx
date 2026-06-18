@@ -81,7 +81,7 @@ function MenuBody({
 }
 
 const popupCls =
-  'demo-popup z-50 min-w-[11rem] rounded-lg border border-border bg-background p-1 shadow-lg';
+  'demo-popup z-50 min-w-[11rem] rounded-lg border border-border bg-background p-1 text-foreground shadow-lg';
 
 export function TaskMenu({
   task,

@@ -40,8 +40,9 @@ function createGhost(card: HTMLElement, rect: DOMRect): HTMLDivElement {
 
   // Pin to the card's current viewport box and strip the UA [popover] defaults
   // (centering inset/margin, border, padding, the overflow:auto that would clip
-  // the lift shadow, the canvas background). inset:auto goes first so the
-  // explicit left/top win over the UA inset:0.
+  // the lift shadow, the canvas background, and the CanvasText color that would
+  // otherwise ignore the app foreground). inset:auto goes first so the explicit
+  // left/top win over the UA inset:0.
   Object.assign(ghost.style, {
     position: 'fixed',
     inset: 'auto',
@@ -54,6 +55,7 @@ function createGhost(card: HTMLElement, rect: DOMRect): HTMLDivElement {
     padding: '0',
     overflow: 'visible',
     background: 'transparent',
+    color: 'var(--foreground)',
     pointerEvents: 'none',
     willChange: 'translate',
     transition: 'scale 140ms ease, box-shadow 140ms ease',

@@ -151,6 +151,13 @@
   );
   --spring-duration: 380ms;
 
+  /* Tell the UA which system-color palette to render, so CanvasText/fieldtext
+     and native controls (form fields, scrollbars) follow the active theme.
+     Without this, [popover]/dialog text (UA `color: CanvasText`) stays black in
+     the dark theme even though the surface background flips. Set to dark in
+     both dark blocks below. */
+  color-scheme: light;
+
   /* Semantic theme tokens (light) - flipped in the dark media query below */
   --background: #ffffff;
   --foreground: #25282a;
@@ -196,6 +203,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
+    color-scheme: dark;
     --background: #1b1d1e;
     --foreground: #e9eae8;
     --muted: #bbbcbc; /* Cool Gray 4C */
@@ -241,6 +249,7 @@
    setting any data-theme disables the media default, so the base :root (light)
    applies. */
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --background: #1b1d1e;
   --foreground: #e9eae8;
   --muted: #bbbcbc; /* Cool Gray 4C */
