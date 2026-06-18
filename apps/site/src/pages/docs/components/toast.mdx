@@ -1,0 +1,239 @@
+import { Example } from '../../../components/docs/Example.js';
+import { CodeTabs } from '../../../components/docs/CodeTabs.js';
+import { ToastDemo } from '../../../components/docs/ToastDemo.js';
+import toastCode from '../../../components/docs/ToastDemo.tsx?highlighted';
+
+# Toast
+
+Imperative, accessible toast notifications. Fire one from anywhere with
+`toast(...)`; render them through the headless `Toast.*` parts. Ships unstyled:
+style everything through the `data-*` and CSS-variable contract.
+
+## Demo
+
+<Example code={toastCode}>
+  <ToastDemo />
+</Example>
+
+## Usage
+
+```tsx
+import { toast, Toaster, Toast, type ToastRecord } from 'hono-preact-ui';
+
+function renderToast(t: ToastRecord) {
+  return (
+    <Toast.Root toast={t}>
+      <Toast.Title />
+      <Toast.Description />
+      <Toast.Action />
+      <Toast.Close aria-label="Dismiss">x</Toast.Close>
+    </Toast.Root>
+  );
+}
+
+export function App() {
+  return (
+    <>
+      <button onClick={() => toast.success('Saved')}>Save</button>
+      <Toaster position="bottom-right">{renderToast}</Toaster>
+    </>
+  );
+}
+```
+
+Fire toasts imperatively:
+
+```ts
+toast('Event saved');
+toast.success('Profile updated', { description: 'Your changes are live.' });
+toast.error('Upload failed');
+toast.promise(save(), {
+  loading: 'Saving...',
+  success: 'Saved!',
+  error: 'Failed',
+});
+const id = toast.loading('Working...');
+toast.dismiss(id);
+```
+
+## Styling
+
+Toast is headless: the recipe below is the full set of styles that drives the
+demo above, and you own all of it. `Toaster` renders a `popover` region (target
+it with `[popover]`); each `Toast.Root` carries `data-state`, `data-type`,
+`data-position`, `data-expanded`, `data-front`, `data-swiping`, and the
+`--toast-index` / `--toasts-before` / `--toast-offset` / `--toast-height` /
+`--toast-swipe-amount` variables. The stack is built from one composed
+`transform`: the front toast (`--toast-index` 0) sits on top via `z-index`,
+older toasts offset up by `--toast-offset` and scale down by depth, and the
+collapsed pile expands to full size on hover/focus (`data-expanded`). The
+`::after` bridges the gap between expanded toasts so the pointer never leaves
+the stack (no hover-collapse jitter), and a dismiss slides out to the side,
+continuing a swipe rather than snapping back. Guard every transition behind
+`prefers-reduced-motion`.
+
+<CodeTabs labels={['CSS', 'Tailwind']}>
+
+```css
+/* Region: pinned to a corner; toasts are absolutely stacked inside it.
+   Pass class="toaster" to <Toaster> for this hook. */
+.toaster {
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  width: min(22rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.toaster ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each toast: front on top, one transform for swipe + stacking offset + depth
+   scale. Add your own padding / border / background / radius / shadow. */
+.toast {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: calc(1000 - var(--toast-index, 0));
+  box-sizing: border-box;
+  width: 100%;
+  transform-origin: bottom center;
+  transform: translateX(var(--toast-swipe-amount, 0px))
+    translateY(calc(-1 * var(--toast-offset, 0px))) scale(var(--toast-scale, 1));
+  touch-action: pan-y;
+}
+/* Bridge the gap to the toast above so moving between expanded toasts never
+   leaves the region (prevents hover-collapse jitter). */
+.toast::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 100% 0;
+  height: 16px;
+}
+/* Collapsed pile: front three opaque and peeking; deeper toasts hide beneath. */
+.toast:not([data-expanded='true']) {
+  --toast-scale: calc(1 - 0.05 * min(var(--toasts-before, 0), 2));
+  opacity: calc(1 - max(0, var(--toasts-before, 0) - 2));
+}
+/* Expanded on hover/focus: full size and opacity, real heights. */
+.toast[data-expanded='true'] {
+  --toast-scale: 1;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    transition:
+      transform 0.4s,
+      opacity 0.4s;
+  }
+}
+/* Enter from below + fade (transition origin on insert). */
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(100%) scale(0.9);
+  }
+}
+/* Track the pointer 1:1 while dragging. */
+.toast[data-swiping='true'] {
+  transition: none;
+}
+/* Exit: slide out and fade. A swipe-dismiss keeps its offset, so this continues
+   the gesture outward instead of snapping back to center. */
+.toast[data-state='closed'] {
+  opacity: 0;
+  transform: translateX(110%) translateY(calc(-1 * var(--toast-offset, 0px)));
+}
+```
+
+```tsx
+// Base Tailwind v4. The starting:/after:/data-[]/motion-safe: variants map 1:1
+// to the CSS tab, so the two are feature-equivalent.
+
+<Toaster
+  class="fixed inset-[auto_1rem_1rem_auto] m-0 w-[min(22rem,calc(100vw-2rem))]
+    overflow-visible border-0 bg-transparent p-0 [&>ol]:m-0 [&>ol]:list-none [&>ol]:p-0"
+  position="bottom-right"
+>
+  {(t) => (
+    <Toast.Root
+      toast={t}
+      class="absolute right-0 bottom-0 box-border w-full origin-bottom touch-pan-y
+    z-[calc(1000-var(--toast-index,0))]
+    [transform:translateX(var(--toast-swipe-amount,0px))_translateY(calc(-1*var(--toast-offset,0px)))_scale(var(--toast-scale,1))]
+    after:content-[''] after:absolute after:inset-x-0 after:bottom-full after:h-4
+    not-data-[expanded=true]:[--toast-scale:calc(1-0.05*min(var(--toasts-before,0),2))]
+    not-data-[expanded=true]:[opacity:calc(1-max(0,var(--toasts-before,0)-2))]
+    data-[expanded=true]:[--toast-scale:1] data-[expanded=true]:opacity-100
+    motion-safe:transition-[transform,opacity] motion-safe:duration-[400ms]
+    starting:opacity-0 starting:[transform:translateY(100%)_scale(0.9)]
+    data-[swiping=true]:transition-none
+    data-[state=closed]:opacity-0
+    data-[state=closed]:[transform:translateX(110%)_translateY(calc(-1*var(--toast-offset,0px)))]"
+    />
+  )}
+</Toaster>
+```
+
+</CodeTabs>
+
+## API reference
+
+### `toast`
+
+| Call                                                               | Returns | Description                                     |
+| ------------------------------------------------------------------ | ------- | ----------------------------------------------- |
+| `toast(message, opts?)`                                            | `id`    | Default toast.                                  |
+| `toast.success / error / info / warning / loading(message, opts?)` | `id`    | Typed variants; `error` announces assertively.  |
+| `toast.custom((id) => VNode, opts?)`                               | `id`    | Render an arbitrary body.                       |
+| `toast.promise(promise, { loading, success, error })`              | `id`    | One toast tracks a promise.                     |
+| `toast.dismiss(id?)`                                               | `void`  | Dismiss one toast, or all when `id` is omitted. |
+
+`opts`: `id`, `description`, `duration` (ms; `Infinity` = sticky; default 4000),
+`important`, `action: { label, onClick }`, `onDismiss`, `onAutoClose`.
+
+### `Toaster`
+
+| Prop            | Type                        | Default             | Description                                  |
+| --------------- | --------------------------- | ------------------- | -------------------------------------------- |
+| `position`      | `ToastPosition`             | `'bottom-right'`    | Corner; sets entry direction and swipe axis. |
+| `label`         | `string`                    | `'Notifications'`   | Accessible name of the region.               |
+| `expand`        | `boolean`                   | `false`             | Always-expanded stack vs collapse-to-pile.   |
+| `visibleToasts` | `number`                    | `3`                 | Toasts shown before older ones fade under.   |
+| `gap`           | `number`                    | `14`                | Px gap between expanded toasts.              |
+| `hotkey`        | `string[]`                  | `['altKey','KeyT']` | Chord that focuses the region.               |
+| `children`      | `(t: ToastRecord) => VNode` | required            | Render prop for each toast.                  |
+
+### `Toast.Root`
+
+| Prop     | Type          | Default   | Description                      |
+| -------- | ------------- | --------- | -------------------------------- |
+| `toast`  | `ToastRecord` | required  | The record from the render prop. |
+| `render` | `RenderProp`  | undefined | Replace the rendered element.    |
+
+`Toast.Title`, `Toast.Description`, `Toast.Action`, and `Toast.Close` each accept
+the standard `render` prop and read the active toast from context; `Description`
+and `Action` render nothing when the record has no description / action.
+
+## Accessibility
+
+`<Toaster>` mounts a separate, always-present visually-hidden announcer: polite
+(`role=status`) for normal toasts and assertive (`role=alert`) for `error` or
+`important` toasts. The visible list is a labeled `region` landmark of `<ol>`
+items and is intentionally not itself a live region (so reflow never
+re-announces). Press the `hotkey` (default Alt+T) to move focus into the region.
+Hovering or focusing the region pauses auto-dismiss and expands the stack.
+Motion is driven entirely by your CSS, so guarding transitions behind
+`prefers-reduced-motion` yields an accessible, reduced-motion-correct result.
+For a toast to be spoken by a screen reader, its `title` and `description` must
+be plain strings; a VNode body renders visually but is not included in the
+spoken announcement.
+
+> Toast requires the browser Popover API to place its region in the top layer.
+> This is a deliberate, documented exception to the library's
+> progressive-enhancement baseline; all current browser versions support it.
