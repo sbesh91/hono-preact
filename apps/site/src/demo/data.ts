@@ -274,6 +274,8 @@ export const listTasksForProject = (projectId: string): Task[] =>
     .filter((t) => t.projectId === projectId)
     .sort((a, b) => a.createdAt - b.createdAt);
 
+export const listAllTasks = (): Task[] => store.tasks.slice();
+
 export const getTask = (id: string): Task | null =>
   store.tasks.find((t) => t.id === id) ?? null;
 
