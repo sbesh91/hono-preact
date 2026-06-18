@@ -101,7 +101,7 @@ function Sidebar({
           </div>
         )}
       </aside>
-      <main class="min-w-0">{children}</main>
+      <main class="min-w-0 pb-14">{children}</main>
     </div>
   );
 }

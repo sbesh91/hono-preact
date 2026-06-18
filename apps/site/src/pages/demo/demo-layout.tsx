@@ -1,5 +1,6 @@
 import type { LayoutProps } from 'hono-preact';
-import { useViewTransitionTypes } from 'hono-preact';
+import { Persist, useViewTransitionTypes } from 'hono-preact';
+import { ActivityBar } from '../../components/demo/ActivityBar.js';
 
 // Thin layout wrapping every /demo route. Its only job is to host the
 // view-transition direction hook on a node that stays mounted across all demo
@@ -24,5 +25,15 @@ export default function DemoLayout({ children }: LayoutProps) {
     if (fromProjects && toProjects) types.push('demo-within');
     return types;
   });
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {/* Persistent live-activity bar. No `viewTransitionName` on Persist: the
+          bar is position:fixed, so its VT name lives on the bar element itself
+          (the .demo-activity-bar class) to lift it out of the root snapshot. */}
+      <Persist id="demo-activity-bar">
+        <ActivityBar />
+      </Persist>
+    </>
+  );
 }

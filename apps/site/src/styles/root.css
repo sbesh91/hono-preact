@@ -611,6 +611,42 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   animation: none;
 }
 
+/* The demo activity bar is persistent, position:fixed UI. Give it its own
+   transition name so it is lifted out of the root snapshot (otherwise the root
+   slide/fade drags it on every navigation). The name lives on the fixed bar
+   element itself, not the Persist wrapper, which would collapse to zero height
+   and fail to capture an out-of-flow child. */
+.demo-activity-bar {
+  view-transition-name: demo-activity-bar;
+}
+/* Within the app (bar present in both snapshots) freeze it: only page content
+   transitions. Scoped to demo-within only; on enter/leave the bar is in one
+   snapshot and keeps the default fade. */
+html:active-view-transition-type(demo-within)::view-transition-group(demo-activity-bar),
+html:active-view-transition-type(demo-within)::view-transition-old(demo-activity-bar),
+html:active-view-transition-type(demo-within)::view-transition-new(demo-activity-bar) {
+  animation: none;
+}
+
+/* Live-connection pulse on the status dot (not a route transition). */
+@keyframes demo-activity-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.demo-activity-pulse {
+  animation: demo-activity-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-activity-pulse {
+    animation: none;
+  }
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
