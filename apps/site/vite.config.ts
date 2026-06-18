@@ -3,6 +3,7 @@ import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeShiki from '@shikijs/rehype';
+import { rehypeShikiOptions } from './src/shiki/shiki-config.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -23,13 +24,9 @@ const mdxOptions = {
   rehypePlugins: [
     [
       rehypeShiki,
-      {
-        // Dual theme: the light theme is the inline default; CSS in root.css
-        // switches to the dark theme's colors when the docs are in dark mode.
-        themes: { light: 'github-light', dark: 'github-dark' },
-        defaultColor: 'light',
-        langs: ['ts', 'tsx', 'bash', 'jsonc', 'mdx', 'css'],
-      },
+      // Dual theme: light is the inline default; root.css switches to the dark
+      // theme's colors in dark mode. Shared with the demo-source highlighter.
+      rehypeShikiOptions,
     ],
   ],
 } satisfies MdxOptions;
