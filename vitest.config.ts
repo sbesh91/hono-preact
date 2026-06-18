@@ -35,6 +35,10 @@ export default defineConfig({
         'packages/iso/src/page-only.ts'
       ),
       '@hono-preact/iso': path.resolve(__dirname, 'packages/iso/src/index.ts'),
+      '@hono-preact/server/internal/runtime': path.resolve(
+        __dirname,
+        'packages/server/src/internal-runtime.ts'
+      ),
       '@hono-preact/server': path.resolve(
         __dirname,
         'packages/server/src/index.ts'
@@ -42,6 +46,10 @@ export default defineConfig({
       '@hono-preact/vite': path.resolve(
         __dirname,
         'packages/vite/src/index.ts'
+      ),
+      'hono-preact/server/internal/runtime': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/server-internal-runtime.ts'
       ),
       'hono-preact/server': path.resolve(
         __dirname,

@@ -69,15 +69,38 @@ describe('hono-preact/page export (page-scope kitchen sink)', () => {
 });
 
 describe('hono-preact/server export', () => {
-  it('surfaces the SSR + handlers public API', async () => {
+  it('surfaces the SSR + context public API', async () => {
     const m = await import('hono-preact/server');
     expect(typeof m.renderPage).toBe('function');
-    expect(typeof m.loadersHandler).toBe('function');
-    expect(typeof m.pageActionHandler).toBe('function');
+    expect(typeof m.HonoContext).toBe('function');
+    expect(typeof m.useHonoContext).toBe('function');
   });
 
-  it('no longer surfaces the framework-emitted resolver factories (moved to /internal/runtime)', async () => {
+  it('no longer surfaces the low-level handlers (moved to /server/internal/runtime wiring)', async () => {
+    // The value-bearing handlers are checked here; the type-only removals (ActionEntry, LoadersHandlerOptions, PageActionHandlerOptions) are erased at runtime and are enforced by pnpm typecheck instead.
     const m = await import('hono-preact/server');
+    expect('loadersHandler' in m).toBe(false);
+    expect('pageActionHandler' in m).toBe(false);
+  });
+
+  it('no longer surfaces the framework-emitted resolver factories', async () => {
+    const m = await import('hono-preact/server');
+    expect('routeServerModules' in m).toBe(false);
+    expect('makePageUseResolver' in m).toBe(false);
+    expect('makePageActionResolvers' in m).toBe(false);
+  });
+});
+
+describe('hono-preact/server/internal/runtime export', () => {
+  it('surfaces the framework-emitted createServerEntry factory', async () => {
+    const m = await import('hono-preact/server/internal/runtime');
+    expect(typeof m.createServerEntry).toBe('function');
+  });
+
+  it('does not re-surface the low-level handlers or resolver factories', async () => {
+    const m = await import('hono-preact/server/internal/runtime');
+    expect('loadersHandler' in m).toBe(false);
+    expect('pageActionHandler' in m).toBe(false);
     expect('routeServerModules' in m).toBe(false);
     expect('makePageUseResolver' in m).toBe(false);
     expect('makePageActionResolvers' in m).toBe(false);

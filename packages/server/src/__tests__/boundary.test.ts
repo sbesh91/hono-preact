@@ -1,37 +1,41 @@
 import { describe, expect, it } from 'vitest';
 import * as publicEntry from '../index.js';
 import * as runtime from '../internal-runtime.js';
-// Type-surface check: this import + usage fails `tsc` if the re-export is
-// missing. Vitest strips types, so the real enforcement is `pnpm typecheck`.
-import type { LoadersHandlerOptions } from '../index.js';
 
-const _loadersHandlerOptions: LoadersHandlerOptions = {};
-void _loadersHandlerOptions;
-
-const FACTORIES = [
+const INTERNALIZED_FACTORIES = [
   'routeServerModules',
   'makePageUseResolver',
   'makePageActionResolvers',
 ] as const;
 
+const INTERNALIZED_HANDLERS = ['loadersHandler', 'pageActionHandler'] as const;
+
 describe('server boundary', () => {
-  it('exposes the framework-emitted factories on /internal/runtime as functions', () => {
-    for (const name of FACTORIES) {
-      expect(typeof (runtime as Record<string, unknown>)[name]).toBe(
-        'function'
-      );
+  it('exposes createServerEntry on /internal/runtime', () => {
+    expect(typeof runtime.createServerEntry).toBe('function');
+  });
+
+  it('does not re-surface the resolver factories from /internal/runtime', () => {
+    for (const name of INTERNALIZED_FACTORIES) {
+      expect(name in runtime).toBe(false);
     }
   });
 
-  it('does not re-export the factories from the public entry', () => {
-    for (const name of FACTORIES) {
+  it('surfaces the SSR + context public API on the public entry', () => {
+    expect(typeof publicEntry.renderPage).toBe('function');
+    expect(typeof publicEntry.HonoContext).toBe('function');
+    expect(typeof publicEntry.useHonoContext).toBe('function');
+  });
+
+  it('does not surface the internalized handlers from the public entry', () => {
+    for (const name of INTERNALIZED_HANDLERS) {
       expect(name in publicEntry).toBe(false);
     }
   });
 
-  it('keeps the public handler surface available', () => {
-    expect(typeof publicEntry.renderPage).toBe('function');
-    expect(typeof publicEntry.loadersHandler).toBe('function');
-    expect(typeof publicEntry.pageActionHandler).toBe('function');
+  it('does not surface the internalized factories from the public entry', () => {
+    for (const name of INTERNALIZED_FACTORIES) {
+      expect(name in publicEntry).toBe(false);
+    }
   });
 });

@@ -87,8 +87,6 @@ Server-only utilities (`packages/server/`):
 - **`renderPage`**: SSR entry that prerenders to HTML, injects head tags via hoofd, and turns middleware-thrown redirect / deny / render outcomes into the appropriate HTTP response.
 - **`HonoContext`** / **`useHonoContext`**: access the Hono `Context` from Preact components during SSR.
 - **`location`**: middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`.
-- **`pageActionHandler`**, **`loadersHandler`**: page POST action handler and `POST /__loaders` middleware. Accept either a Vite `import.meta.glob` result or the record produced by `routeServerModules`.
-- **`routeServerModules`**: adapter that converts a `RoutesManifest` into the lazy-glob shape the handlers consume.
 
 ### `hono-preact/vite` (workspace package)
 
