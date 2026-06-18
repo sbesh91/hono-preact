@@ -40,6 +40,27 @@ describe('urlPathMatchesPattern', () => {
   it('treats the empty pattern like the root pattern', () => {
     expect(urlPathMatchesPattern('/', '')).toBe(true);
   });
+
+  it('matches a trailing optional :param? whether or not the URL supplies it', () => {
+    // Regression: the server matcher must agree with preact-iso's exec, which
+    // treats a trailing optional param as matchable when omitted. Disagreeing
+    // here resolves a param-absent URL to no pattern, dropping server guards.
+    expect(urlPathMatchesPattern('/files', '/files/:id?')).toBe(true);
+    expect(urlPathMatchesPattern('/files/42', '/files/:id?')).toBe(true);
+    // an extra segment beyond the optional param still does not match
+    expect(urlPathMatchesPattern('/files/42/extra', '/files/:id?')).toBe(false);
+  });
+
+  it('matches :param* (rest, zero-or-more) including an empty remainder', () => {
+    expect(urlPathMatchesPattern('/docs', '/docs/:rest*')).toBe(true);
+    expect(urlPathMatchesPattern('/docs/a/b', '/docs/:rest*')).toBe(true);
+  });
+
+  it('matches :param+ (rest, one-or-more) only with at least one segment', () => {
+    expect(urlPathMatchesPattern('/docs/a', '/docs/:rest+')).toBe(true);
+    expect(urlPathMatchesPattern('/docs/a/b', '/docs/:rest+')).toBe(true);
+    expect(urlPathMatchesPattern('/docs', '/docs/:rest+')).toBe(false);
+  });
 });
 
 describe('patternScore', () => {
@@ -88,6 +109,13 @@ describe('findBestPattern', () => {
   it('score is primary across different depths', () => {
     // '/a/b' (score 4, depth 2) beats '/a/:x/*' (score 3, depth 3).
     expect(findBestPattern(['/a/b', '/a/:x/*'], '/a/b')).toBe('/a/b');
+  });
+
+  it('resolves a param-absent URL to a trailing-optional route (guard-bypass regression)', () => {
+    // /files/:id? must resolve for /files, not fall through to null (which the
+    // action/use resolvers translate into an empty guard set).
+    expect(findBestPattern(['/files/:id?'], '/files')).toBe('/files/:id?');
+    expect(findBestPattern(['/files/:id?'], '/files/42')).toBe('/files/:id?');
   });
 
   it('the catch-all outranks the root pattern at the root URL', () => {

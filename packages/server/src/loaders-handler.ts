@@ -130,9 +130,15 @@ export interface LoadersHandlerOptions {
    * sourced from the route manifest's `routeUse` (which already folds in
    * ancestor `use` outer-first). The lookup may be sync (an in-memory map)
    * or async (loaded lazily on first request). The handler awaits the result
-   * either way. Default returns an empty array.
+   * either way.
+   *
+   * REQUIRED: page-level `use` is where route/layout auth gates live, so an
+   * absent resolver would silently drop them on the loader RPC path, exposing
+   * data the gate should protect. The handler validates this at construction
+   * and throws rather than fetching loaders through a guard-less chain. Pass
+   * `pageUseResolver.byPath` from makePageUseResolver.
    */
-  resolvePageUse?: (
+  resolvePageUse: (
     path: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
@@ -146,8 +152,19 @@ export interface LoadersHandlerOptions {
 
 export function loadersHandler(
   glob: LazyGlob | EagerGlob,
-  opts: LoadersHandlerOptions = {}
+  opts: LoadersHandlerOptions
 ): MiddlewareHandler {
+  if (typeof opts?.resolvePageUse !== 'function') {
+    // page-level `use` carries route/layout auth gates; a missing resolver
+    // would silently drop them on the loader RPC path, exposing data the gate
+    // should protect. Fail loudly at construction (the type also marks this
+    // required) instead of fetching loaders through a guard-less chain.
+    throw new Error(
+      'loadersHandler requires opts.resolvePageUse; without it page-level ' +
+        'middleware (including auth gates) is silently dropped on the loader ' +
+        'RPC path. Pass makePageUseResolver(routes).byPath.'
+    );
+  }
   const {
     dev = false,
     onError,
@@ -229,7 +246,12 @@ export function loadersHandler(
     // way in and last on the way out, matching every middleware system
     // users have seen (Hono, Express, Koa).
     const rootUse = appConfig?.use ?? [];
-    const pageUse = (await resolvePageUse?.(validatedLocation.path)) ?? [];
+    const pageUse = await resolvePageUse(validatedLocation.path);
+    // `pageUse` and `entry.use` arrive as ReadonlyArray<unknown>: page-level
+    // `use` and a loader's `use` are read structurally off user-defined modules
+    // (the sanctioned deserialization boundary), so the concatenation infers
+    // unknown[]. Assert the known element type here, the single point the chain
+    // re-enters typed land; page-action-handler carries the identical cast.
     const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> =
       [...rootUse, ...pageUse, ...entry.use] as ReadonlyArray<
         Middleware | StreamObserver<unknown, never>

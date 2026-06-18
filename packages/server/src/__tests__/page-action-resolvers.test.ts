@@ -148,6 +148,29 @@ describe('makePageActionResolvers', () => {
     expect([...(await byPath('/nope')).keys()]).toEqual([]); // empty map, no match
   });
 
+  it('byPath returns guards for a param-absent URL on a trailing-optional route', async () => {
+    // Regression: /files/:id? must resolve for /files so the action's `use`
+    // guards survive. Before the matcher fix this returned an empty map,
+    // silently dropping server-side guards (an edge-case guard bypass).
+    const guard = async () => {};
+    const remove = Object.assign(async () => 'ok', { use: [guard] });
+    const r: ServerRoute[] = [
+      {
+        path: '/files/:id?',
+        server: async () => ({
+          __moduleKey: 'files',
+          serverActions: { remove },
+        }),
+        ancestors: [],
+      } as unknown as ServerRoute,
+    ];
+    const { byPath } = makePageActionResolvers(r, { dev: false });
+    const absent = await byPath('/files');
+    expect(absent.get('remove')?.use).toEqual([guard]); // guards survive, not dropped
+    const present = await byPath('/files/42');
+    expect(present.get('remove')?.use).toEqual([guard]);
+  });
+
   it('concurrent first calls share one in-flight build', async () => {
     let calls = 0;
     let release!: (mod: unknown) => void;

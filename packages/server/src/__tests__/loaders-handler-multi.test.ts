@@ -22,7 +22,10 @@ describe('loadersHandler: serverLoaders dispatch', () => {
 
   it('dispatches to summary by composite key', async () => {
     const app = new Hono();
-    app.post('/__loaders', loadersHandler(glob as any));
+    app.post(
+      '/__loaders',
+      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+    );
 
     const res = await app.request('/__loaders', {
       method: 'POST',
@@ -45,7 +48,10 @@ describe('loadersHandler: serverLoaders dispatch', () => {
 
   it('dispatches to cast by composite key', async () => {
     const app = new Hono();
-    app.post('/__loaders', loadersHandler(glob as any));
+    app.post(
+      '/__loaders',
+      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+    );
 
     const res = await app.request('/__loaders', {
       method: 'POST',
@@ -68,7 +74,10 @@ describe('loadersHandler: serverLoaders dispatch', () => {
 
   it('returns 404 for unknown loader name', async () => {
     const app = new Hono();
-    app.post('/__loaders', loadersHandler(glob as any));
+    app.post(
+      '/__loaders',
+      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+    );
 
     const res = await app.request('/__loaders', {
       method: 'POST',
@@ -89,7 +98,10 @@ describe('loadersHandler: serverLoaders dispatch', () => {
 
   it('returns 400 when loader field is missing', async () => {
     const app = new Hono();
-    app.post('/__loaders', loadersHandler(glob as any));
+    app.post(
+      '/__loaders',
+      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+    );
 
     const res = await app.request('/__loaders', {
       method: 'POST',
@@ -124,7 +136,9 @@ describe('loadersHandler: serverLoaders dispatch', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler({ './pages/watched.server.ts': module } as any)
+      loadersHandler({ './pages/watched.server.ts': module } as any, {
+        resolvePageUse: async () => [],
+      })
     );
 
     const res = await app.request('/__loaders', {

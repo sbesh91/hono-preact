@@ -5,7 +5,10 @@ import { defineLoader, isTimeout } from '@hono-preact/iso';
 
 function makeApp(glob: Parameters<typeof loadersHandler>[0]) {
   const app = new Hono();
-  app.post('/__loaders', loadersHandler(glob));
+  app.post(
+    '/__loaders',
+    loadersHandler(glob, { resolvePageUse: async () => [] })
+  );
   return app;
 }
 
@@ -70,7 +73,7 @@ describe('loadersHandler timeouts', () => {
             serverLoaders: { list: ref },
           },
         },
-        { defaultTimeoutMs: 50 }
+        { defaultTimeoutMs: 50, resolvePageUse: async () => [] }
       )
     );
 
@@ -113,7 +116,7 @@ describe('loadersHandler timeouts', () => {
             serverLoaders: { list: ref },
           },
         },
-        { defaultTimeoutMs: 25 }
+        { defaultTimeoutMs: 25, resolvePageUse: async () => [] }
       )
     );
 

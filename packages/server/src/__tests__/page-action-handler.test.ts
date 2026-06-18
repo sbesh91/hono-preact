@@ -20,6 +20,7 @@ function buildHandler(
   );
   return pageActionHandler({
     resolverByPath,
+    resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
     renderPage: renderPage as never,
     resolvePageNode: () => h('div', null),
     appConfig: { use: [] },
@@ -204,6 +205,7 @@ function buildTimedApp(
   const noopRender = async () => new Response('', { status: 200 });
   const handler = pageActionHandler({
     resolverByPath,
+    resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
     renderPage: noopRender as never,
     resolvePageNode: () => null,
     ...(opts.defaultTimeoutMs !== undefined

@@ -48,45 +48,21 @@ export default function MoviesPage() {
 
 If a [middleware](/docs/middleware) throws `redirect('/path')` during SSR, `renderPage` catches the outcome and turns it into an HTTP redirect via `c.redirect()`, so you don't need to handle it in the route handler. Deny outcomes thrown during SSR map to an HTTP response at the deny's status; render outcomes substitute an alternative component into the prerender tree.
 
-## Example: custom server entry (advanced)
+## Custom server routes
 
-Most apps use the framework's generated server entry and never write this file. The block below is the manual escape hatch for projects that need to compose the Hono app themselves (alternate runtimes, non-default middleware ordering, custom layout injection). For everything else, just author `src/api.ts` for your REST routes and let the plugin generate the entry.
+Most apps never write the server entry. The framework's Vite plugin generates it, mounting `loadersHandler` on `POST /__loaders`, the page POST action handler, your optional `src/api.ts`, and the `renderPage` SSR catch-all on one Hono app exported as the worker's default.
 
-```tsx
+For your own server-side routes, author `src/api.ts`; the generated entry mounts it alongside the framework routes, so you get custom endpoints without owning the entry:
+
+```ts
+// src/api.ts
 import { Hono } from 'hono';
-import { h } from 'preact';
-import { LocationProvider } from 'preact-iso';
-import { Routes } from 'hono-preact';
-import {
-  pageActionHandler,
-  loadersHandler,
-  renderPage,
-  routeServerModules,
-} from 'hono-preact/server';
-import Layout from './Layout.js';
-import routes from './routes.js';
-import appConfig from './app-config.js';
 
-export const app = new Hono();
+const api = new Hono().get('/api/movies', async (c) => {
+  return c.json(await getMovies());
+});
 
-const serverModules = routeServerModules(routes);
-
-app
-  .post('/__loaders', loadersHandler(serverModules))
-  .on(['POST'], '*', pageActionHandler(serverModules))
-  .get('/api/movies', async (c) => {
-    const movies = await getMovies();
-    return c.json(movies);
-  })
-  .get('*', (c) =>
-    renderPage(
-      c,
-      h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),
-      { defaultTitle: 'My App', appConfig }
-    )
-  );
+export default api;
 ```
 
-If your project has no `src/app-config.ts`, omit the import and the `appConfig` field; `renderPage` treats a missing config as empty (no middleware, no speculation). Add the file when you adopt features that read it.
-
-`routeServerModules(routes)` is built once at module scope so every request reuses the same record. `renderPage` synchronously primes `globalThis.location` immediately before prerender, so no `location` middleware is needed: concurrent SSR renders cannot trample each other's URL.
+`renderPage` is public (see [Usage](#usage) above), so a custom catch-all can call it directly when you need bespoke layout injection or a `defaultTitle`. The loader and page-action handlers are not a public hand-wiring surface, though: they need the route-resolver factories (`makePageUseResolver`, `makePageActionResolvers`) that live behind `hono-preact/server/internal/runtime`, a private, version-coupled contract the codegen emits. Those resolvers carry your page-level `use` guards (including auth gates), so the handlers require one and refuse to construct without it, rather than composing a chain that silently drops your guards. Hand-assembling a full entry therefore depends on that internal door: pin your framework version and expect it to change in any non-major release. Short of an alternate runtime, prefer `api.ts` plus the generated entry.
