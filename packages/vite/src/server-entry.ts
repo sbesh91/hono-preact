@@ -59,6 +59,12 @@ export function generateCoreAppModule(
     `const serverModules = routeServerModules(routes);\n` +
     `const pageUseResolver = makePageUseResolver(routes);\n` +
     `const pageActionResolvers = makePageActionResolvers(routes.serverRoutes, { dev });\n` +
+    // Route-preload map: the route-preload plugin string-replaces this
+    // placeholder in the built worker bundle with the generated
+    // pattern -> chunk-hrefs map (the client manifest it needs does not exist
+    // until after this worker build, so it is inlined post-build). Falls back
+    // to {} in dev and if the replacement never runs.
+    `const routePreload = globalThis.__HP_ROUTE_PRELOAD__ || {};\n` +
     `\n` +
     `export const app = new Hono()\n` +
     apiMount +
@@ -69,8 +75,9 @@ export function generateCoreAppModule(
     `    renderPage,\n` +
     `    resolvePageNode: () => h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))),\n` +
     `    appConfig,\n` +
+    `    routePreload,\n` +
     `  }))\n` +
-    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig }));\n` +
+    `  .get('*', (c) => renderPage(c, h(Layout, null, h(LocationProvider, null, h(Routes, { routes }))), { appConfig, routePreload }));\n` +
     `\n` +
     `export default app;\n`
   );

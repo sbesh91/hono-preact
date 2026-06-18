@@ -28,6 +28,7 @@ import {
 } from './sse.js';
 import type { ActionEntry } from './page-action-resolvers.js';
 import { pickAccept } from './accept.js';
+import type { RoutePreloadMap } from './route-preload-tags.js';
 import type { VNode } from 'preact';
 
 export interface PageActionHandlerOptions {
@@ -56,7 +57,7 @@ export interface PageActionHandlerOptions {
   renderPage: (
     c: Context,
     node: VNode,
-    opts: { appConfig?: AppConfig }
+    opts: { appConfig?: AppConfig; routePreload?: RoutePreloadMap }
   ) => Promise<Response>;
   /**
    * Resolves the VNode to render for the given URL path. Returns null when
@@ -66,6 +67,8 @@ export interface PageActionHandlerOptions {
   resolvePageNode: (path: string) => VNode | null;
   /** App-level middleware/observer array from defineApp({ use }). */
   appConfig?: AppConfig;
+  /** Build-generated route-preload map, forwarded to renderPage. */
+  routePreload?: RoutePreloadMap;
   /**
    * Default timeout in milliseconds for actions that don't declare their
    * own timeoutMs. Defaults to 30000. Pass false to disable the default.
@@ -150,6 +153,7 @@ export function pageActionHandler(
     renderPage,
     resolvePageNode,
     appConfig,
+    routePreload,
     defaultTimeoutMs = 30_000,
     onError,
   } = opts;
@@ -337,7 +341,7 @@ export function pageActionHandler(
         }
         return c.text('Action failed', 500);
       }
-      const rendered = await renderPage(c, node, { appConfig });
+      const rendered = await renderPage(c, node, { appConfig, routePreload });
       if (
         resolution.kind === 'outcome' &&
         resolution.outcome.__outcome === 'deny'
