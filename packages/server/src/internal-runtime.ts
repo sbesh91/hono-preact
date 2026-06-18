@@ -7,6 +7,10 @@
 // undocumented and may change in any non-major release in lockstep with the
 // codegen that emits it.
 export {
+  createServerEntry,
+  type CreateServerEntryOptions,
+} from './create-server-entry.js';
+export {
   routeServerModules,
   makePageUseResolver,
 } from './route-server-modules.js';
