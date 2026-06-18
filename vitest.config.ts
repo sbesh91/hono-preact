@@ -90,6 +90,16 @@ export default defineConfig({
       'apps/site/src/**/__tests__/**/*.test.{ts,tsx}',
       'scripts/__tests__/**/*.test.mjs',
     ],
+    // Type-level tests (`*.test-d.ts`) assert on conditional/template-literal
+    // types via `expectTypeOf`/`@ts-expect-error`. They run ONLY under
+    // `pnpm test:types` (`vitest --typecheck.only`), never on the hot `pnpm
+    // test` path, and tsc enforces the assertions so a type regression fails
+    // the build. They live beside runtime tests under `__tests__/` (which the
+    // package `tsconfig`s exclude from emit), so nothing leaks into `dist/`.
+    typecheck: {
+      include: ['packages/**/src/**/__tests__/**/*.test-d.{ts,tsx}'],
+      tsconfig: './tsconfig.typecheck.json',
+    },
     // websocket-dev.test.ts boots real Vite dev servers (and workerd); it is
     // CPU-heavy and starves the parallel pool. It runs separately via
     // `pnpm test:integration` (vitest.integration.config.ts).

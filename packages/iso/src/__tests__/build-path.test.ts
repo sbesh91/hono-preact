@@ -38,4 +38,17 @@ describe('buildPath', () => {
   it('returns the root path unchanged', () => {
     expect(buildPath('/')).toBe('/');
   });
+
+  // A `:name` whose name falls outside `[A-Za-z0-9_]` (e.g. a hyphen) is not a
+  // param: the matcher keeps the segment verbatim. The type agrees
+  // (`RouteParams<'/x/:foo-bar'>` is `{}`), so no params object is required —
+  // before that alignment this call would not have compiled. See typed-routes
+  // `IsParamName` and typed-routes.test-d.ts.
+  it('keeps a hyphenated :param segment verbatim (it is a literal, not a param)', () => {
+    expect(buildPath('/x/:foo-bar')).toBe('/x/:foo-bar');
+  });
+
+  it('substitutes a valid sibling param while keeping a hyphenated literal', () => {
+    expect(buildPath('/x/:foo-bar/y/:id', { id: '7' })).toBe('/x/:foo-bar/y/7');
+  });
 });
