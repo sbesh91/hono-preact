@@ -65,9 +65,15 @@ export function useToastSwipe(opts: UseToastSwipeOptions): UseToastSwipeResult {
     const moved = delta(event);
     start.current = null;
     setSwiping(false);
-    setAmount(0);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-    if (moved >= SWIPE_THRESHOLD) onDismiss();
+    if (moved >= SWIPE_THRESHOLD) {
+      // Dismiss: keep the swipe offset so the exit transition continues outward
+      // from where the pointer left, instead of snapping back to center first.
+      onDismiss();
+    } else {
+      // Below threshold: snap back to rest.
+      setAmount(0);
+    }
   };
 
   return {

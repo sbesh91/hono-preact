@@ -1,6 +1,7 @@
 import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
-import ToastDemo from '../../../components/docs/ToastDemo.js';
+import { ToastDemo } from '../../../components/docs/ToastDemo.js';
+import toastCode from '../../../components/docs/ToastDemo.tsx?highlighted';
 
 # Toast
 
@@ -10,7 +11,7 @@ style everything through the `data-*` and CSS-variable contract.
 
 ## Demo
 
-<Example>
+<Example code={toastCode}>
   <ToastDemo />
 </Example>
 

@@ -15,7 +15,7 @@ function renderToast(t: ToastRecord) {
   );
 }
 
-export default function ToastDemo() {
+export function ToastDemo() {
   return (
     <div class="docs-toast-demo">
       <div class="docs-toast-controls">
