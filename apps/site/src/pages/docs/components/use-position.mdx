@@ -1,5 +1,6 @@
 import { Example } from '../../../components/docs/Example.js';
 import { UsePositionDemo } from '../../../components/docs/UsePositionDemo.js';
+import usePositionCode from '../../../components/docs/UsePositionExample.tsx?highlighted';
 
 # usePosition
 
@@ -9,7 +10,7 @@ a reference element, updating on scroll and resize.
 
 ## Demo
 
-<Example>
+<Example code={usePositionCode}>
   <UsePositionDemo />
 </Example>
 
@@ -60,33 +61,3 @@ interface PositionState {
 | `align`  | `'start' \| 'center' \| 'end'`           | Resolved alignment.                     |
 | `arrowX` | `number \| null`                         | Arrow x offset in px, or null.          |
 | `arrowY` | `number \| null`                         | Arrow y offset in px, or null.          |
-
-## Example
-
-```tsx
-import { usePosition } from 'hono-preact-ui';
-import { useRef } from 'preact/hooks';
-
-function Anchored({ open }: { open: boolean }) {
-  const anchorRef = useRef<HTMLButtonElement>(null);
-  const floatingRef = useRef<HTMLDivElement>(null);
-  const { side, align } = usePosition({
-    open,
-    anchorRef,
-    floatingRef,
-    side: 'bottom',
-    align: 'center',
-    offset: 8,
-  });
-  return (
-    <>
-      <button ref={anchorRef}>Anchor</button>
-      {open ? (
-        <div ref={floatingRef} data-side={side} data-align={align}>
-          floating
-        </div>
-      ) : null}
-    </>
-  );
-}
-```

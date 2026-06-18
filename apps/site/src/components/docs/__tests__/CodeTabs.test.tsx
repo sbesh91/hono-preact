@@ -16,6 +16,36 @@ describe('Example', () => {
     expect(getByText('demo')).toBeTruthy();
     expect(container.querySelector('.docs-example')).toBeTruthy();
   });
+
+  it('renders Demo|Code tabs when code is provided', () => {
+    const { getByRole, getByText } = render(
+      <Example code={'<pre class="shiki">const a = 1;</pre>'}>
+        <span>live-demo</span>
+      </Example>
+    );
+    expect(getByRole('tab', { name: 'Demo' })).toBeTruthy();
+    expect(getByRole('tab', { name: 'Code' })).toBeTruthy();
+    // Demo active by default.
+    const demoPanel = getByText('live-demo').closest(
+      '[role="tabpanel"]'
+    ) as HTMLElement;
+    expect(demoPanel.hidden).toBe(false);
+  });
+
+  it('shows the Copy button only on the Code tab', () => {
+    const { getByRole, queryByRole } = render(
+      <Example code={'<pre class="shiki">const a = 1;</pre>'}>
+        <span>live-demo</span>
+      </Example>
+    );
+    expect(
+      queryByRole('button', { name: 'Copy code to clipboard' })
+    ).toBeNull();
+    fireEvent.click(getByRole('tab', { name: 'Code' }));
+    expect(
+      getByRole('button', { name: 'Copy code to clipboard' })
+    ).toBeTruthy();
+  });
 });
 
 describe('CodeTabs', () => {
@@ -35,12 +65,19 @@ describe('CodeTabs', () => {
       value: { writeText: vi.fn() },
       configurable: true,
     });
-    const { getByRole, getByText, queryByText } = render(tabs());
-    expect(getByText('css-code')).toBeTruthy();
-    expect(queryByText('tailwind-code')).toBeNull();
+    const { getByRole, getByText } = render(tabs());
+    const cssPanel = getByText('css-code').closest(
+      '[role="tabpanel"]'
+    ) as HTMLElement;
+    const twPanel = getByText('tailwind-code').closest(
+      '[role="tabpanel"]'
+    ) as HTMLElement;
+    expect(cssPanel.hidden).toBe(false);
+    expect(twPanel.hidden).toBe(true);
 
     fireEvent.click(getByRole('tab', { name: 'Tailwind' }));
-    expect(getByText('tailwind-code')).toBeTruthy();
+    expect(cssPanel.hidden).toBe(true);
+    expect(twPanel.hidden).toBe(false);
   });
 
   it('copies the active block text via the Copy button', () => {
