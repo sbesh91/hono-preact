@@ -93,7 +93,7 @@ export function ActivityBar() {
 
   const latest = events[0];
   return (
-    <div class="demo-activity-bar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface-subtle/95 backdrop-blur">
+    <div class="demo-activity-bar fixed bottom-6 right-6 z-40 w-[22rem] max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface-subtle/95 shadow-lg backdrop-blur">
       {expanded && (
         <div
           role="log"
