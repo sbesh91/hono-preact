@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
 import type { TaskStatus } from '../../demo/data.js';
+import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
 
+const activityLoader = serverLoaders.activity;
 const MAX = 50;
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
@@ -14,83 +16,23 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 function describeEvent(e: ActivityEvent): string {
   if (e.kind === 'task-created') return `${e.actor} created "${e.taskTitle}"`;
   if (e.kind === 'task-moved')
-    return `${e.actor} moved "${e.taskTitle}" → ${STATUS_LABEL[e.to]}`;
+    return `${e.actor} moved "${e.taskTitle}" to ${STATUS_LABEL[e.to]}`;
   return `${e.actor} commented on "${e.taskTitle}"`;
 }
 
-// Persistent live-activity bar. Mounted via <Persist> (see demo-layout), so it
-// renders inside PersistHost OUTSIDE the router: no router hooks. It owns its
-// own EventSource; the connection and accumulated feed survive intra-app
-// navigation because the component instance persists.
+// Persistent live-activity bar: a plain child of the projects-shell layout,
+// scoped to /demo/projects/**. `useStream` connects once (the layout's stable
+// location) and survives intra-scope navigation; on SSR it renders the
+// "connecting" state and upgrades after hydration. No EventSource, no URL, no
+// JSON.parse cast: chunks are typed ActivityEvent.
 export function ActivityBar() {
-  const [path, setPath] = useState(
-    typeof window === 'undefined' ? '' : window.location.pathname
-  );
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const { data: events, status } = activityLoader.useStream<ActivityEvent[]>({
+    reduce: (acc, e) => (acc[0]?.id === e.id ? acc : [e, ...acc].slice(0, MAX)),
+    initial: [],
+  });
   const [expanded, setExpanded] = useState(false);
-  const [connected, setConnected] = useState(false);
 
-  // Track the current path from OUTSIDE the router (the bar renders in
-  // PersistHost, which has no router context). Observe history directly rather
-  // than the View-Transition phase: that phase only fires when
-  // document.startViewTransition runs, so on browsers without View Transitions
-  // it would never update and the bar would strand over non-/demo routes. popstate
-  // covers back/forward; pushState/replaceState cover in-app SPA navigations (which
-  // do not fire popstate). Baseline-safe on every browser; originals restored on
-  // cleanup.
-  useEffect(() => {
-    const update = () => setPath(window.location.pathname);
-    update();
-    window.addEventListener('popstate', update);
-    const origPush = history.pushState;
-    const origReplace = history.replaceState;
-    history.pushState = function (
-      this: History,
-      ...args: Parameters<History['pushState']>
-    ) {
-      origPush.apply(this, args);
-      update();
-    };
-    history.replaceState = function (
-      this: History,
-      ...args: Parameters<History['replaceState']>
-    ) {
-      origReplace.apply(this, args);
-      update();
-    };
-    return () => {
-      window.removeEventListener('popstate', update);
-      history.pushState = origPush;
-      history.replaceState = origReplace;
-    };
-  }, []);
-
-  const isApp = path.startsWith('/demo/projects');
-
-  // Open the stream only inside the app area. Keyed on `isApp` so it stays open
-  // across intra-app navigation (dep unchanged -> no re-run) and closes on exit.
-  useEffect(() => {
-    if (!isApp || typeof EventSource === 'undefined') return;
-    const es = new EventSource('/api/demo/activity');
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-    es.onmessage = (ev) => {
-      try {
-        // Trust boundary: our own endpoint. JSON parse cast is acceptable.
-        const e = JSON.parse(ev.data) as ActivityEvent;
-        setEvents((prev) => [e, ...prev].slice(0, MAX));
-      } catch {
-        // ignore a malformed frame
-      }
-    };
-    return () => {
-      es.close();
-      setConnected(false);
-    };
-  }, [isApp]);
-
-  if (typeof window === 'undefined' || !isApp) return null;
-
+  const connected = status === 'open';
   const latest = events[0];
   return (
     <div class="demo-activity-bar fixed bottom-6 right-6 z-40 w-[22rem] max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface-subtle/95 shadow-lg backdrop-blur">

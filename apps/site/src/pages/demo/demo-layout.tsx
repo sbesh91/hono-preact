@@ -1,13 +1,12 @@
 import type { LayoutProps } from 'hono-preact';
-import { Persist, useViewTransitionTypes } from 'hono-preact';
-import { ActivityBar } from '../../components/demo/ActivityBar.js';
+import { useViewTransitionTypes } from 'hono-preact';
 
 // Thin layout wrapping every /demo route. Its only job is to host the
 // view-transition direction hook on a node that stays mounted across all demo
 // navigations.
 //
-// In-app up-links (e.g. the project layout's "← all projects") are pushState
-// navigations, so the history shim classifies them as forward `nav-push`. We
+// In-app up-links (e.g. the project layout's "back to all projects") are pushState
+// navigations, so the history shim classifies them as forward nav-push. We
 // emit `nav-up` when the destination is an ancestor of the current path so the
 // CSS plays the reverse (left-to-right) slide instead.
 //
@@ -25,15 +24,5 @@ export default function DemoLayout({ children }: LayoutProps) {
     if (fromProjects && toProjects) types.push('demo-within');
     return types;
   });
-  return (
-    <>
-      {children}
-      {/* Persistent live-activity bar. No `viewTransitionName` on Persist: the
-          bar is position:fixed, so its VT name lives on the bar element itself
-          (the .demo-activity-bar class) to lift it out of the root snapshot. */}
-      <Persist id="demo-activity-bar">
-        <ActivityBar />
-      </Persist>
-    </>
-  );
+  return <>{children}</>;
 }
