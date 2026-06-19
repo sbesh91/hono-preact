@@ -246,8 +246,11 @@ describe('v3 <Loader> stability', () => {
 
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
 
+    // The fallback is now wrapped in DelayedFallback (100ms default). Wait for
+    // it to appear, then click the button inside it.
+    const earlyReload = await screen.findByTestId('early-reload');
     await act(async () => {
-      screen.getByTestId('early-reload').click();
+      earlyReload.click();
     });
 
     // The reload should not have fired yet because the initial fetch is
