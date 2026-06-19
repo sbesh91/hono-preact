@@ -579,9 +579,7 @@ export const movie = defineLoader(
 );
 ```
 
-Pass `fallbackDelay: 0` to show the fallback immediately (the pre-100ms
-behavior). The delay applies in the browser only; server-rendered output is
-unchanged. Both `loader.Boundary` and `loader.View` inherit it.
+Pass `fallbackDelay: 0` to show the fallback immediately. The delay applies in the browser only; server-rendered output is unchanged. Both `loader.Boundary` and `loader.View` inherit it.
 
 ## The server/client boundary
 
