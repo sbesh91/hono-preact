@@ -14,7 +14,10 @@ import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
 import { useLoaderRunner } from './use-loader-runner.js';
-import { DelayedFallback, DEFAULT_FALLBACK_DELAY_MS } from './delayed-fallback.js';
+import {
+  DelayedFallback,
+  DEFAULT_FALLBACK_DELAY_MS,
+} from './delayed-fallback.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 type LoaderHostProps<T> = {
