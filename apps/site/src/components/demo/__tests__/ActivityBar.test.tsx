@@ -16,12 +16,21 @@ type StreamState = {
 };
 let streamResult: StreamState;
 
-// ActivityBar reads serverLoaders.activity.useStream(...) at module scope, so
-// mock the server module to feed the bar canned stream state. The streaming
-// transport itself is covered by packages/iso's useStream hook test.
+// ActivityBar is `serverLoaders.activity.View(render, opts)` at module scope, so
+// mock the loader's `.View` to a passthrough that feeds the bar's render fn
+// canned stream state. The streaming transport + accumulation are covered by
+// packages/iso's define-loader-view-stream test.
 vi.mock('../../../pages/demo/projects-shell.server.js', () => ({
   serverLoaders: {
-    activity: { useStream: () => streamResult },
+    activity: {
+      View: (render: (args: unknown) => unknown) => () =>
+        render({
+          data: streamResult.data,
+          status: streamResult.status,
+          error: streamResult.error,
+          reload: () => {},
+        }),
+    },
   },
 }));
 

@@ -19,17 +19,7 @@ import type {
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
-import {
-  useLoaderStream,
-  type UseStreamOptions,
-  type UseStreamResult,
-} from './internal/use-loader-stream.js';
-
-export type {
-  StreamStatus,
-  UseStreamOptions,
-  UseStreamResult,
-} from './internal/use-loader-stream.js';
+export type { StreamStatus } from './internal/use-loader-runner.js';
 
 export type LoaderCtx<TParams = Record<string, string>> = {
   c: Context;
@@ -68,7 +58,6 @@ export interface LoaderRef<T> {
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   useData(): T;
   useError(): Error | null;
-  useStream<Acc>(opts: UseStreamOptions<T, Acc>): UseStreamResult<Acc>;
   invalidate(): void;
   Boundary: ComponentType<{
     fallback?: ComponentChildren;
@@ -138,7 +127,7 @@ export type DefineLoaderOpts<T> = {
   use?: LoaderUse<T, boolean>;
   /**
    * Marks this loader as a long-lived client-only subscription. A `live`
-   * loader is consumed ONLY via `loader.useStream(...)`: it is never invoked
+   * loader is consumed ONLY via `loader.View(render, { initial, reduce })`: it is never invoked
    * during SSR (so an infinite generator cannot hang the document response),
    * and its timeout defaults to `false` (no 30s cap) unless `timeoutMs` is set.
    * `loader.View` / `loader.Boundary` / `loader.useData()` throw for live
@@ -270,7 +259,7 @@ export function defineLoader(
     useData() {
       if (live) {
         throw new Error(
-          'This is a `live` loader: consume it with `loader.useStream(...)`, not `loader.useData()`.'
+          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.useData()`.'
         );
       }
       const ctx = useContext(LoaderDataContext);
@@ -283,9 +272,6 @@ export function defineLoader(
     },
     useError() {
       return useContext(LoaderErrorContext);
-    },
-    useStream(opts) {
-      return useLoaderStream(ref, opts);
     },
     invalidate() {
       cache!.invalidate();

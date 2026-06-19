@@ -22,10 +22,15 @@ describe('defineLoader({ live })', () => {
     expect(ref.timeoutMs).toBeUndefined();
   });
 
-  it('throws from View/Boundary/useData on a live loader', () => {
+  it('requires the accumulating View form for a live loader', () => {
     const ref = defineLoader<number>(gen, { live: true });
-    expect(() => ref.View(() => null)).toThrow(/useStream/);
-    expect(() => ref.Boundary({ children: null })).toThrow(/useStream/);
-    expect(() => ref.useData()).toThrow(/useStream/);
+    // The single-value View form throws; a live loader has no single value.
+    expect(() => ref.View(() => null)).toThrow(/initial, reduce/);
+    // The accumulating form hosts it.
+    expect(() =>
+      ref.View(() => null, { initial: [] as number[], reduce: (acc) => acc })
+    ).not.toThrow();
+    // useData has no single value for a live loader either.
+    expect(() => ref.useData()).toThrow(/useData/);
   });
 });
