@@ -11,5 +11,5 @@ export default function ProjectHeader({ children }: LayoutProps) {
       if (typeof window !== 'undefined') window.scrollTo(0, 0);
     },
   });
-  return <div class="flex h-screen flex-col">{children}</div>;
+  return <>{children}</>;
 }

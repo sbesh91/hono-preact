@@ -12,7 +12,7 @@ const ProjectBoardPage: FunctionComponent = () => {
   if (!data) return <p class="p-6">Unknown project.</p>;
   const { project, tasks, users } = data;
   return (
-    <>
+    <div class="flex h-screen flex-col">
       <div class="flex items-center gap-3 border-b border-border px-4 py-3.5">
         <h1 class="text-[17px] font-bold">{project.name}</h1>
         <span class="text-[12px] text-muted">{tasks.length} tasks</span>
@@ -21,7 +21,7 @@ const ProjectBoardPage: FunctionComponent = () => {
         </div>
       </div>
       <Board tasks={tasks} projectSlug={project.slug} users={users} />
-    </>
+    </div>
   );
 };
 ProjectBoardPage.displayName = 'ProjectBoardPage';
