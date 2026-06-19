@@ -15,14 +15,14 @@
     },
     "loaders": {
       "total": {
-        "raw": 15899,
-        "gzip": 6038,
-        "brotli": 5440
+        "raw": 17833,
+        "gzip": 6555,
+        "brotli": 5924
       },
       "marginalOverCore": {
-        "raw": 13636,
-        "gzip": 4681,
-        "brotli": 4202
+        "raw": 15577,
+        "gzip": 5209,
+        "brotli": 4670
       }
     },
     "actions": {
@@ -85,18 +85,6 @@
         "brotli": 106
       }
     },
-    "persist": {
-      "total": {
-        "raw": 1599,
-        "gzip": 775,
-        "brotli": 715
-      },
-      "marginalOverCore": {
-        "raw": 1484,
-        "gzip": 525,
-        "brotli": 491
-      }
-    },
     "middleware": {
       "total": {
         "raw": 615,
@@ -112,21 +100,21 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 79472,
-      "actions": 17155,
-      "core": 36323,
-      "components": 104117,
-      "guards": 248,
-      "middleware": 12473,
-      "vendor": 8379,
-      "prefetch": 4998,
-      "loaders": 15773,
-      "streaming": 7317,
-      "transitions": 4788
+      "app": 84903,
+      "actions": 17151,
+      "core": 36154,
+      "components": 104101,
+      "guards": 250,
+      "middleware": 12470,
+      "vendor": 8401,
+      "prefetch": 4996,
+      "loaders": 16254,
+      "streaming": 7314,
+      "transitions": 3863
     },
-    "total": 291043,
+    "total": 295857,
     "unmatched": 49,
-    "fileCount": 109
+    "fileCount": 108
   },
   "sectionC": {
     "ui-core": {
