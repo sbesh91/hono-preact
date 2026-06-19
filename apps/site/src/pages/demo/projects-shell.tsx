@@ -48,7 +48,7 @@ function Sidebar({
 
   return (
     <div class="grid min-h-screen grid-cols-[208px_1fr] bg-background text-foreground">
-      <aside class="demo-sidebar flex flex-col border-r border-border bg-surface-subtle p-3">
+      <aside class="demo-sidebar sticky top-0 flex h-screen flex-col self-start border-r border-border bg-surface-subtle p-3">
         <a
           href="/demo/projects"
           class="mb-4 flex items-center gap-2 px-1.5 py-1"
