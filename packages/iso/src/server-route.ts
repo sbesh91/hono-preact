@@ -11,11 +11,15 @@ export interface RouteServer<RouteId extends string> {
    * Define a loader for this server module's route. `ctx.location.pathParams`
    * is typed from the route's pattern, so no per-loader route id and no
    * `LoaderCtx<...>` annotation are needed.
+   *
+   * Returns a non-live `LoaderRef<T, false>` (single-value `.View` / `useData`).
+   * A `live` layout subscription is route-agnostic, so author it with
+   * `defineLoader(fn, { live: true })` rather than through a route binding.
    */
   loader<T>(
     fn: Loader<T, RouteParams<RouteId>>,
     opts?: DefineLoaderOpts<T>
-  ): LoaderRef<T>;
+  ): LoaderRef<T, false>;
 }
 
 /**

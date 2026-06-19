@@ -36,17 +36,17 @@ describe('defineLoader({ live })', () => {
 
   it('throws when a live loader is consumed via the Boundary escape hatch', () => {
     const ref = defineLoader<number>(gen, { live: true });
-    // A bare .Boundary (no accumulate) on a live loader would suspend forever;
-    // it throws instead, consistent with the View/useData guards. (View's own
-    // delegation passes `accumulate`, so it is unaffected.)
+    // A bare .Boundary (no accumulate) on a live loader would suspend forever; it
+    // throws instead (runtime defense-in-depth; the type makes `.Boundary` itself
+    // `never` on a live loader). View's own delegation passes `accumulate`, so it
+    // is unaffected.
     expect(() => ref.Boundary({ children: null })).toThrow(/View/);
   });
 
-  it('throws when the accumulating View form is used on a non-live loader', () => {
-    const ref = defineLoader<number>(gen);
-    // The accumulating form is hydration-safe only for live loaders.
-    expect(() =>
-      ref.View(() => null, { initial: [] as number[], reduce: (acc) => acc })
-    ).toThrow(/requires a `live` loader/);
-  });
+  // Note: non-live + accumulate is prevented at the TYPE level (a non-live
+  // LoaderRef's `.View` is the single-value form only, so the accumulating form
+  // is a compile error). See define-loader-live.test-d.ts. There is no runtime
+  // guard for it: the client `serverLoaders` stub does not carry `live`, so a
+  // `!live` runtime check could not distinguish a live loader from a non-live one
+  // in the browser. The discriminant lives in the types instead.
 });
