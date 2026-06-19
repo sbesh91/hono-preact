@@ -43,12 +43,13 @@ A single-loader page conventionally uses the key `default`. Multi-loader pages g
 
 Pass a second argument to `defineLoader` to configure a loader:
 
-| Option      | Type              | Default | Description                                               |
-| ----------- | ----------------- | ------- | --------------------------------------------------------- |
-| `params`    | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any. |
-| `cache`     | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.           |
-| `timeoutMs` | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                 |
-| `use`       | `LoaderUse`       | none    | Per-loader middleware and stream observers.               |
+| Option          | Type              | Default | Description                                                                              |
+| --------------- | ----------------- | ------- | ---------------------------------------------------------------------------------------- |
+| `params`        | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any.                                |
+| `cache`         | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.                                          |
+| `timeoutMs`     | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                                                |
+| `fallbackDelay` | `number`          | `100`   | Delay (ms) before the loading fallback mounts on a client nav; `0` shows it immediately. |
+| `use`           | `LoaderUse`       | none    | Per-loader middleware and stream observers.                                              |
 
 Each option has a fuller section below; this table is the at-a-glance summary.
 
@@ -560,6 +561,27 @@ surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
 
 The framework default is configurable per handler via
 `loadersHandler(glob, { defaultTimeoutMs })`.
+
+### Delaying the loading fallback
+
+On a fast connection a loader's `fallback` can flash on screen for a few
+milliseconds before the data lands, which reads as a flicker. The framework
+waits `fallbackDelay` milliseconds (default `100`) before mounting the fallback
+on a client navigation; if the response arrives first, the fallback never
+paints. Set it per loader:
+
+```ts
+import { defineLoader } from 'hono-preact';
+
+export const movie = defineLoader(
+  async ({ location }) => fetchMovie(location.pathParams.id),
+  { fallbackDelay: 200 }
+);
+```
+
+Pass `fallbackDelay: 0` to show the fallback immediately (the pre-100ms
+behavior). The delay applies in the browser only; server-rendered output is
+unchanged. Both `loader.Boundary` and `loader.View` inherit it.
 
 ## The server/client boundary
 
