@@ -34,7 +34,12 @@ vi.mock('../../../pages/demo/projects-shell.server.js', () => ({
   },
 }));
 
-import { ActivityBar } from '../ActivityBar.js';
+import {
+  ActivityBar,
+  ConnectingBar,
+  accumulateActivity,
+  ACTIVITY_MAX,
+} from '../ActivityBar.js';
 
 function ev(id: string, actor: string, title: string): ActivityEvent {
   return {
@@ -87,5 +92,40 @@ describe('ActivityBar', () => {
     streamResult = { data: [], status: 'connecting', error: null };
     render(<ActivityBar />);
     expect(screen.getByText(/Listening for activity/)).toBeTruthy();
+  });
+});
+
+describe('accumulateActivity (feed reducer)', () => {
+  it('prepends new events newest-first', () => {
+    const a = accumulateActivity([], ev('1', 'Alice', 'Draft'));
+    const b = accumulateActivity(a, ev('2', 'Bob', 'Ship it'));
+    expect(b.map((e) => e.id)).toEqual(['2', '1']);
+  });
+
+  it('de-dupes a re-yielded head event (same ref, no growth)', () => {
+    const a = accumulateActivity([], ev('1', 'Alice', 'Draft'));
+    const b = accumulateActivity(a, ev('1', 'Alice', 'Draft'));
+    expect(b).toBe(a);
+    expect(b.length).toBe(1);
+  });
+
+  it('caps the feed at ACTIVITY_MAX, keeping the newest', () => {
+    let acc: ActivityEvent[] = [];
+    for (let i = 0; i < ACTIVITY_MAX + 5; i++) {
+      acc = accumulateActivity(acc, ev(String(i), 'A', `t${i}`));
+    }
+    expect(acc.length).toBe(ACTIVITY_MAX);
+    expect(acc[0].id).toBe(String(ACTIVITY_MAX + 4));
+    expect(acc[acc.length - 1].id).toBe(String(5));
+  });
+});
+
+describe('ConnectingBar (Suspense fallback)', () => {
+  it('renders the connecting placeholder with no toggle button', () => {
+    render(<ConnectingBar />);
+    expect(screen.getByText(/Listening for activity/)).toBeTruthy();
+    // Distinguishes the fallback markup from the Feed empty-state, which always
+    // renders the expand/collapse toggle button.
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

@@ -6,7 +6,20 @@ import type { TaskStatus } from '../../demo/data.js';
 import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
 
 const activityLoader = serverLoaders.activity;
-const MAX = 50;
+
+/** Most recent events kept in the feed. */
+export const ACTIVITY_MAX = 50;
+
+// The feed reducer: newest-first, de-duped against the current head (the stream
+// backfills then tails, so a re-yielded head is a dup, not a new event), capped
+// at ACTIVITY_MAX. Exported so it can be unit-tested directly.
+export function accumulateActivity(
+  acc: ActivityEvent[],
+  e: ActivityEvent
+): ActivityEvent[] {
+  return acc[0]?.id === e.id ? acc : [e, ...acc].slice(0, ACTIVITY_MAX);
+}
+
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
   in_progress: 'In Progress',
@@ -26,8 +39,8 @@ const SHELL =
 
 // Suspense fallback (connecting state). The same markup the server renders for
 // the live loader and the client shows until the first chunk, so hydration
-// adopts it.
-function ConnectingBar() {
+// adopts it. Exported for the fallback render test.
+export function ConnectingBar() {
   return (
     <div class={SHELL}>
       <div class="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13px]">
@@ -115,7 +128,7 @@ export const ActivityBar = activityLoader.View<ActivityEvent[]>(
   ({ data, status }) => <Feed events={data} status={status} />,
   {
     initial: [],
-    reduce: (acc, e) => (acc[0]?.id === e.id ? acc : [e, ...acc].slice(0, MAX)),
+    reduce: accumulateActivity,
     fallback: <ConnectingBar />,
   }
 );
