@@ -133,9 +133,19 @@ export default function ProjectsShell({
 
 Navigating between `/demo/projects/alpha` and `/demo/projects/beta` does not remount `ProjectsShell`, so `ActivityBar` keeps its accumulated events and the stream stays open.
 
-## Known behavior: scope-exit blip
+## Known behavior
+
+### Scope-exit blip
 
 When the user navigates out of the layout's scope, the layout unmounts and the stream closes. If the user navigates back in, the layout remounts and the stream reconnects from scratch, starting with `initial` again. This is the expected lifecycle: there is no cross-mount cache for live loaders.
+
+### No automatic reconnect on drop
+
+A live loader opens the stream once and does not auto-reconnect. If the connection drops mid-session (a network blip, a server restart, an idle proxy timeout), `status` becomes `'error'` or `'closed'` and stays there until the layout unmounts and remounts (scope exit and re-entry). To recover in place, branch on `status` and call `reload()` (for example, a "Reconnect" button shown when `status === 'error'`); `reload()` resets `data` to `initial` and re-opens the stream.
+
+### Failure or close before the first chunk
+
+The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. A stream that fails, times out, or closes with zero chunks _before_ its first chunk is delivered through the loader's error boundary instead: the `errorFallback` renders (or the error propagates to the nearest boundary), and the render function's `status` is not updated. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
 
 ## API reference
 
@@ -176,11 +186,12 @@ loader.View<Acc>(
 
 The `render` function receives:
 
-| Field    | Type            | Description                                                               |
-| -------- | --------------- | ------------------------------------------------------------------------- |
-| `data`   | `Acc`           | Current accumulated value. Starts as `initial`, updated after each chunk. |
-| `status` | `StreamStatus`  | Connection state: `'connecting'`, `'open'`, `'closed'`, or `'error'`.     |
-| `error`  | `Error \| null` | Set when `status === 'error'`.                                            |
+| Field    | Type            | Description                                                                                       |
+| -------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| `data`   | `Acc`           | Current accumulated value. Starts as `initial`, updated after each chunk.                         |
+| `status` | `StreamStatus`  | Connection state: `'connecting'`, `'open'`, `'closed'`, or `'error'`.                             |
+| `error`  | `Error \| null` | Set when `status === 'error'`.                                                                    |
+| `reload` | `() => void`    | Resubscribe: aborts the current stream, resets `data` to `initial`, reconnects, and folds afresh. |
 
 `StreamStatus` values:
 

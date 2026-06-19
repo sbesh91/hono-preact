@@ -20,7 +20,7 @@ export function ViewRenderer<T>({
   props: Record<string, unknown>;
   render: (args: any) => ComponentChildren;
 }) {
-  const dataCtx = useContext(LoaderDataContext) as { data: unknown } | null;
+  const dataCtx = useContext(LoaderDataContext);
   const data = dataCtx?.data;
   const error = loaderRef.useError();
   const status = useContext(LoaderStatusContext);

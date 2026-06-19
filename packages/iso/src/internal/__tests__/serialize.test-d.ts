@@ -121,6 +121,33 @@ expectTypeOf<ReturnType<LoaderRef<{ at: Date }>['useData']>>().toEqualTypeOf<{
   at: string;
 }>();
 
+// `View` applies Serialize on BOTH overloads: the single-value form's `data`
+// and the accumulating form's `reduce` chunk are the wire shape, while `data`/
+// `acc` in the accumulating form stay the caller's `Acc`. A revert of either
+// seam to raw `T` fails here. Never invoked: the `.View` calls only typecheck
+// (the trailing `void` reference keeps tsc's noUnusedLocals satisfied).
+function _viewSerializeProbes(loader: LoaderRef<{ at: Date }>) {
+  loader.View((args) => {
+    expectTypeOf(args.data).toEqualTypeOf<{ at: string }>();
+    return null;
+  });
+  loader.View<number[]>(
+    (args) => {
+      expectTypeOf(args.data).toEqualTypeOf<number[]>();
+      return null;
+    },
+    {
+      initial: [],
+      reduce: (acc, chunk) => {
+        expectTypeOf(acc).toEqualTypeOf<number[]>();
+        expectTypeOf(chunk).toEqualTypeOf<{ at: string }>();
+        return acc;
+      },
+    }
+  );
+}
+void _viewSerializeProbes;
+
 // Action hook: `useAction().data` is `Serialize<TResult> | null`.
 expectTypeOf<UseActionResult<unknown, { at: Date }>['data']>().toEqualTypeOf<{
   at: string;
