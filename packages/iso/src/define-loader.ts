@@ -12,6 +12,10 @@ import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
+import type {
+  AccumulateOptions,
+  StreamStatus,
+} from './internal/use-loader-runner.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
@@ -45,6 +49,8 @@ export interface LoaderRef<T> {
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
+  /** True for a `live` loader (client-only subscription, never runs on SSR). */
+  readonly live: boolean;
   /**
    * Raw value as authored on `defineLoader({ timeoutMs })`. `undefined`
    * means "use the handler's configured default"; `false` means "no
@@ -69,8 +75,30 @@ export interface LoaderRef<T> {
     errorFallback?:
       | ComponentChildren
       | ((err: Error, reset: () => void) => ComponentChildren);
+    accumulate?: AccumulateOptions;
     children: ComponentChildren;
   }>;
+  // Accumulating (streaming/live) form: selected by passing `initial` + `reduce`.
+  // `data` is the folded accumulator; `status` reflects the connection.
+  View<Acc, P extends Record<string, unknown> = {}>(
+    render: (
+      args: P & {
+        data: Acc;
+        status: StreamStatus;
+        error: Error | null;
+        reload: () => void;
+      }
+    ) => ComponentChildren,
+    opts: {
+      initial: Acc;
+      reduce: (acc: Acc, chunk: T) => Acc;
+      fallback?: ComponentChildren;
+      errorFallback?:
+        | ComponentChildren
+        | ((err: Error, reset: () => void) => ComponentChildren);
+    }
+  ): FunctionComponent<P>;
+  // Single-value form.
   View<P extends Record<string, unknown> = {}>(
     render: (
       args: P & { data: T; error: Error | null; reload: () => void }
@@ -231,6 +259,7 @@ export function defineLoader(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
+    live,
     timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
@@ -265,28 +294,31 @@ export function defineLoader(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
-      if (live) {
-        throw new Error(
-          'This is a `live` loader: consume it with `loader.useStream(...)`, not `loader.Boundary`.'
-        );
-      }
       return h(LoaderHost<unknown>, {
         loader: ref,
         fallback: props.fallback,
         errorFallback: props.errorFallback,
+        accumulate: props.accumulate,
         children: props.children,
       });
     },
-    View: (render, viewOpts) => {
-      if (live) {
+    View: (render: any, viewOpts: any) => {
+      // The accumulating (streaming) form is selected by `initial` + `reduce`.
+      // A live loader has no single value, so it must use the accumulating form.
+      const accumulate =
+        viewOpts && 'reduce' in viewOpts && 'initial' in viewOpts
+          ? { initial: viewOpts.initial, reduce: viewOpts.reduce }
+          : undefined;
+      if (live && !accumulate) {
         throw new Error(
-          'This is a `live` loader: consume it with `loader.useStream(...)`, not `loader.View`.'
+          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`.'
         );
       }
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           fallback: viewOpts?.fallback,
           errorFallback: viewOpts?.errorFallback,
+          accumulate,
           children: h(ViewRenderer<unknown>, {
             loaderRef: ref,
             props,

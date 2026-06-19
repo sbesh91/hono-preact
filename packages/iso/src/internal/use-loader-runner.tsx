@@ -8,22 +8,35 @@ import { subscribeToLoaderStream } from './stream-registry.js';
 import { runLoader } from './loader-runner.js';
 import { serializeLocationForCache } from './cache-key.js';
 
+export type StreamStatus = 'connecting' | 'open' | 'closed' | 'error';
+
+/** Streaming consumption: fold every chunk into accumulated state. */
+export type AccumulateOptions = {
+  initial: unknown;
+  reduce: (acc: unknown, chunk: unknown) => unknown;
+};
+
 export type LoaderRunnerState<T> = {
   reader: { read: () => T };
   overrideData: T | undefined;
   error: Error | null;
   reload: () => void;
   reloading: boolean;
+  status: StreamStatus;
 };
 
 export function useLoaderRunner<T>(
   loaderRef: LoaderRef<T>,
   location: RouteHook,
-  id: string
+  id: string,
+  accumulate?: AccumulateOptions
 ): LoaderRunnerState<T> {
   const [reloading, setReloading] = useState(false);
   const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
   const [loadError, setLoadError] = useState<Error | null>(null);
+  const [status, setStatus] = useState<StreamStatus>('connecting');
+  // Accumulated value for the streaming path; reset on each (re)subscribe.
+  const accRef = useRef<unknown>(accumulate ? accumulate.initial : undefined);
 
   const locationRef = useRef(location);
   locationRef.current = location;
@@ -149,76 +162,123 @@ export function useLoaderRunner<T>(
     prevLoaderId.current = loaderRef.__id;
     if (locationChanged || loaderChanged) setOverrideData(undefined);
 
-    const preloaded = getPreloadedData<T>(id);
-    const isFirstRender = readerRef.current === null;
-    if (preloaded !== null) {
-      // Record that we consumed the SSR preload payload so the useEffect
-      // below can clear the DOM attribute AFTER commit instead of mutating
-      // the DOM during render.
-      preloadConsumedRef.current = true;
-      loaderRef.cache.set(preloaded, locKey);
-      readerRef.current = { read: () => preloaded };
-      if (isBrowser()) {
-        const unsub = subscribeToLoaderStream(id, {
-          push: (value) => {
-            setOverrideData(value as T);
-            loaderRef.cache.set(value as T, locKey);
-          },
-          end: () => {
-            /* nothing to do */
-          },
-          error: (err) => setLoadError(err),
-        });
-        // Unsubscribe on unmount: attach to the abortRef signal.
-        if (abortRef.current) {
-          abortRef.current.signal.addEventListener('abort', unsub);
-        } else {
-          abortRef.current = new AbortController();
-          abortRef.current.signal.addEventListener('abort', unsub);
-        }
+    if (accumulate) {
+      // Streaming consumption: fold every chunk into accumulated state. A live
+      // loader never runs on the server (its infinite generator would hang
+      // renderToStringAsync); LoaderHost renders the fallback for live+server,
+      // so this reader is not consumed there.
+      accRef.current = accumulate.initial;
+      if (loaderRef.live && !isBrowser()) {
+        readerRef.current = { read: () => undefined as unknown as T };
+      } else {
+        inFlightRef.current = true;
+        const settleAcc = () => {
+          inFlightRef.current = false;
+        };
+        const apply = (chunk: unknown) => {
+          accRef.current = accumulate.reduce(accRef.current, chunk);
+          setOverrideData(accRef.current as T);
+          setStatus('open');
+        };
+        const accFetch: Promise<T> = runLoader<T>(
+          loaderRef,
+          location,
+          id,
+          newAbortSignal(),
+          {
+            onChunk: (value) => apply(value),
+            onError: (err) => {
+              setLoadError(err);
+              setStatus('error');
+            },
+            onEnd: () => setStatus('closed'),
+          }
+        );
+        readerRef.current = wrapPromise(
+          accFetch
+            .then((firstChunk) => {
+              apply(firstChunk);
+              settleAcc();
+              return accRef.current as T;
+            })
+            .catch((err: unknown) => {
+              settleAcc();
+              throw err;
+            })
+        );
       }
-    } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
-      const cached = loaderRef.cache.get(locKey)!;
-      readerRef.current = { read: () => cached };
     } else {
-      inFlightRef.current = true;
-      const settle = () => {
-        inFlightRef.current = false;
-        if (queuedReloadRef.current) {
-          queuedReloadRef.current = false;
-          runReloadRef.current();
+      const preloaded = getPreloadedData<T>(id);
+      const isFirstRender = readerRef.current === null;
+      if (preloaded !== null) {
+        // Record that we consumed the SSR preload payload so the useEffect
+        // below can clear the DOM attribute AFTER commit instead of mutating
+        // the DOM during render.
+        preloadConsumedRef.current = true;
+        loaderRef.cache.set(preloaded, locKey);
+        readerRef.current = { read: () => preloaded };
+        if (isBrowser()) {
+          const unsub = subscribeToLoaderStream(id, {
+            push: (value) => {
+              setOverrideData(value as T);
+              loaderRef.cache.set(value as T, locKey);
+            },
+            end: () => {
+              /* nothing to do */
+            },
+            error: (err) => setLoadError(err),
+          });
+          // Unsubscribe on unmount: attach to the abortRef signal.
+          if (abortRef.current) {
+            abortRef.current.signal.addEventListener('abort', unsub);
+          } else {
+            abortRef.current = new AbortController();
+            abortRef.current.signal.addEventListener('abort', unsub);
+          }
         }
-      };
+      } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
+        const cached = loaderRef.cache.get(locKey)!;
+        readerRef.current = { read: () => cached };
+      } else {
+        inFlightRef.current = true;
+        const settle = () => {
+          inFlightRef.current = false;
+          if (queuedReloadRef.current) {
+            queuedReloadRef.current = false;
+            runReloadRef.current();
+          }
+        };
 
-      const fetchPromise: Promise<T> = runLoader<T>(
-        loaderRef,
-        location,
-        id,
-        newAbortSignal(),
-        {
-          onChunk: (value) => {
-            setOverrideData(value);
-            if (isBrowser()) loaderRef.cache.set(value, locKey);
-          },
-          onError: (err) => setLoadError(err),
-          onEnd: () => {
-            /* nothing to do */
-          },
-        }
-      );
+        const fetchPromise: Promise<T> = runLoader<T>(
+          loaderRef,
+          location,
+          id,
+          newAbortSignal(),
+          {
+            onChunk: (value) => {
+              setOverrideData(value);
+              if (isBrowser()) loaderRef.cache.set(value, locKey);
+            },
+            onError: (err) => setLoadError(err),
+            onEnd: () => {
+              /* nothing to do */
+            },
+          }
+        );
 
-      readerRef.current = wrapPromise(
-        fetchPromise
-          .then((r) => {
-            if (isBrowser()) loaderRef.cache.set(r, locKey);
-            settle();
-            return r;
-          })
-          .catch((err: unknown) => {
-            settle();
-            throw err;
-          })
-      );
+        readerRef.current = wrapPromise(
+          fetchPromise
+            .then((r) => {
+              if (isBrowser()) loaderRef.cache.set(r, locKey);
+              settle();
+              return r;
+            })
+            .catch((err: unknown) => {
+              settle();
+              throw err;
+            })
+        );
+      }
     }
   }
 
@@ -228,5 +288,6 @@ export function useLoaderRunner<T>(
     error: loadError,
     reload,
     reloading,
+    status,
   };
 }

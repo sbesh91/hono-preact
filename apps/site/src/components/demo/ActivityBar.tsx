@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
+import type { StreamStatus } from 'hono-preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
 import type { TaskStatus } from '../../demo/data.js';
 import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
@@ -20,22 +21,37 @@ function describeEvent(e: ActivityEvent): string {
   return `${e.actor} commented on "${e.taskTitle}"`;
 }
 
-// Live-activity bar: a plain child of the projects-shell layout,
-// scoped to /demo/projects/**. `useStream` connects once (the layout's stable
-// location) and survives intra-scope navigation; on SSR it renders the
-// "connecting" state and upgrades after hydration. No EventSource, no URL, no
-// JSON.parse cast: chunks are typed ActivityEvent.
-export function ActivityBar() {
-  const { data: events, status } = activityLoader.useStream<ActivityEvent[]>({
-    reduce: (acc, e) => (acc[0]?.id === e.id ? acc : [e, ...acc].slice(0, MAX)),
-    initial: [],
-  });
-  const [expanded, setExpanded] = useState(false);
+const SHELL =
+  'demo-activity-bar fixed bottom-6 right-6 z-40 w-[22rem] max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface-subtle/95 shadow-lg backdrop-blur';
 
+// Suspense fallback (connecting state). The same markup the server renders for
+// the live loader and the client shows until the first chunk, so hydration
+// adopts it.
+function ConnectingBar() {
+  return (
+    <div class={SHELL}>
+      <div class="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13px]">
+        <span class="h-2 w-2 shrink-0 rounded-full bg-muted" aria-hidden />
+        <span class="min-w-0 flex-1 truncate text-muted">
+          Listening for activity…
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Feed({
+  events,
+  status,
+}: {
+  events: ActivityEvent[];
+  status: StreamStatus;
+}) {
+  const [expanded, setExpanded] = useState(false);
   const connected = status === 'open';
   const latest = events[0];
   return (
-    <div class="demo-activity-bar fixed bottom-6 right-6 z-40 w-[22rem] max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface-subtle/95 shadow-lg backdrop-blur">
+    <div class={SHELL}>
       {expanded && (
         <div
           role="log"
@@ -89,4 +105,18 @@ export function ActivityBar() {
     </div>
   );
 }
+
+// Live-activity bar consumed via the framework's `.View` convention: an
+// accumulating stream folded into a capped feed. `.View` renders through
+// LoaderHost (Suspense + useId), so the bar hydrates cleanly inside the lazy
+// projects-shell layout (no orphan, no isBrowser guard). On SSR the loader
+// never runs and the fallback renders; the client connects and folds chunks.
+export const ActivityBar = activityLoader.View<ActivityEvent[]>(
+  ({ data, status }) => <Feed events={data} status={status} />,
+  {
+    initial: [],
+    reduce: (acc, e) => (acc[0]?.id === e.id ? acc : [e, ...acc].slice(0, MAX)),
+    fallback: <ConnectingBar />,
+  }
+);
 ActivityBar.displayName = 'ActivityBar';
