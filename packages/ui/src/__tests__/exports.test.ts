@@ -53,6 +53,33 @@ describe('hono-preact-ui exports', () => {
   });
 });
 
+describe('Toast exports', () => {
+  it('exposes the imperative toast fn with its variants', () => {
+    expect(typeof ui.toast).toBe('function');
+    for (const k of [
+      'success',
+      'error',
+      'info',
+      'warning',
+      'loading',
+      'custom',
+      'promise',
+      'dismiss',
+    ]) {
+      expect(typeof (ui.toast as Record<string, unknown>)[k]).toBe('function');
+    }
+  });
+
+  it('exposes Toaster and the Toast namespace', () => {
+    expect(typeof ui.Toaster).toBe('function');
+    for (const part of ['Root', 'Title', 'Description', 'Action', 'Close']) {
+      expect(typeof (ui.Toast as Record<string, unknown>)[part]).toBe(
+        'function'
+      );
+    }
+  });
+});
+
 describe('Combobox exports', () => {
   it('exposes the Combobox namespace with all parts', () => {
     expect(typeof ComboboxRoot).toBe('function');

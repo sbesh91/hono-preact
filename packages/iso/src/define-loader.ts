@@ -8,6 +8,7 @@ import { useContext } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
+import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
@@ -56,7 +57,12 @@ export interface LoaderRef<T> {
    * advertised at the consumer rather than hidden behind `unknown`.
    */
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
-  useData(): T;
+  /**
+   * The loader's data as the client receives it: `Serialize<T>`, the JSON
+   * round-trip of the server-side return `T` (e.g. a `Date` field arrives as a
+   * string). Typing this as `T` would be a lie on the client/hydration path.
+   */
+  useData(): Serialize<T>;
   useError(): Error | null;
   invalidate(): void;
   Boundary: ComponentType<{
@@ -80,7 +86,9 @@ export interface LoaderRef<T> {
     ) => ComponentChildren,
     opts: {
       initial: Acc;
-      reduce: (acc: Acc, chunk: T) => Acc;
+      // The client folds the JSON-round-tripped chunk (`Serialize<T>`), the same
+      // wire shape `useData()` / the single-value `.View` form surface.
+      reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
       fallback?: ComponentChildren;
       errorFallback?:
         | ComponentChildren
@@ -90,7 +98,7 @@ export interface LoaderRef<T> {
   // Single-value form.
   View<P extends Record<string, unknown> = {}>(
     render: (
-      args: P & { data: T; error: Error | null; reload: () => void }
+      args: P & { data: Serialize<T>; error: Error | null; reload: () => void }
     ) => ComponentChildren,
     opts?: {
       fallback?: ComponentChildren;
@@ -100,6 +108,18 @@ export interface LoaderRef<T> {
     }
   ): FunctionComponent<P>;
 }
+
+/**
+ * A loader reference with its data type erased: for APIs that operate ON a
+ * loader (invalidate, prefetch) without reading its data shape.
+ *
+ * Uses `LoaderRef<any>`, not `LoaderRef<unknown>`, deliberately. `LoaderRef<T>`
+ * is invariant in `T` (it surfaces `T` through `useData(): Serialize<T>`), so a
+ * concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
+ * `any` argument erases the data type so any loader is accepted; these call
+ * sites never inspect the data with a meaningful type.
+ */
+export type AnyLoaderRef = LoaderRef<any>;
 
 /**
  * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded

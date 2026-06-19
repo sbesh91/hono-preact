@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
-import type { LoaderRef } from './define-loader.js';
+import type { AnyLoaderRef } from './define-loader.js';
 import { useInvalidate } from './use-invalidate.js';
 import type { ActionUse } from './internal/use-types.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
@@ -10,6 +10,7 @@ import {
   type StoredActionResult,
 } from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
+import type { Serialize } from './internal/serialize.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 
 export type ActionStub<TPayload, TResult, TChunk = never> = {
@@ -135,8 +136,9 @@ type UseActionOptionsCommon<TChunk = never> = {
    *
    * See `/docs/reloading` for the full mental model.
    */
-  invalidate?: 'auto' | false | ReadonlyArray<LoaderRef<unknown>>;
-  onChunk?: (chunk: TChunk) => void;
+  invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
+  // Chunks arrive over the wire as JSON, so the client sees `Serialize<TChunk>`.
+  onChunk?: (chunk: Serialize<TChunk>) => void;
 };
 
 /**
@@ -148,7 +150,7 @@ type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
   UseActionOptionsCommon<TChunk> & {
     onMutate: (payload: TPayload) => TSnapshot;
     onError?: (err: Error, snapshot: TSnapshot) => void;
-    onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+    onSuccess?: (data: Serialize<TResult>, snapshot: TSnapshot) => void;
   };
 
 /**
@@ -159,7 +161,7 @@ type UseActionWithoutMutate<TResult, TChunk> =
   UseActionOptionsCommon<TChunk> & {
     onMutate?: undefined;
     onError?: (err: Error) => void;
-    onSuccess?: (data: TResult) => void;
+    onSuccess?: (data: Serialize<TResult>) => void;
   };
 
 /**
@@ -188,14 +190,14 @@ export type UseActionOptions<
  *   written to the hook's `error` state and passed to `onError`.
  */
 export type MutateResult<TResult> =
-  | { ok: true; data: TResult | undefined }
+  | { ok: true; data: Serialize<TResult> | undefined }
   | { ok: false; error: Error };
 
 export type UseActionResult<TPayload, TResult> = {
   mutate: (payload: TPayload) => Promise<MutateResult<TResult>>;
   pending: boolean;
   error: Error | null;
-  data: TResult | null;
+  data: Serialize<TResult> | null;
 };
 
 function recordOutcome(
@@ -225,7 +227,9 @@ export function useAction<
 ): UseActionResult<TPayload, TResult> {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [data, setData] = useState<TResult | null>(null);
+  // The hook surfaces the wire value (`Serialize<TResult>`), not the
+  // server-side `TResult`: the result was JSON round-tripped to reach here.
+  const [data, setData] = useState<Serialize<TResult> | null>(null);
   const applyInvalidate = useInvalidate();
 
   const stubRef = useRef(stub);
@@ -249,12 +253,12 @@ export function useAction<
         | {
             kind: 'with-mutate';
             snapshot: TSnapshot;
-            onSuccess?: (data: TResult, snapshot: TSnapshot) => void;
+            onSuccess?: (data: Serialize<TResult>, snapshot: TSnapshot) => void;
             onError?: (err: Error, snapshot: TSnapshot) => void;
           }
         | {
             kind: 'without-mutate';
-            onSuccess?: (data: TResult) => void;
+            onSuccess?: (data: Serialize<TResult>) => void;
             onError?: (err: Error) => void;
           };
 
@@ -271,7 +275,7 @@ export function useAction<
             onError: currentOptions?.onError,
           };
 
-      const invokeSuccess = (data: TResult) => {
+      const invokeSuccess = (data: Serialize<TResult>) => {
         if (callbacks.kind === 'with-mutate') {
           callbacks.onSuccess?.(data, callbacks.snapshot);
         } else {
@@ -291,7 +295,7 @@ export function useAction<
           ? window.location.pathname + window.location.search
           : '/';
 
-      let finalResult: TResult | undefined;
+      let finalResult: Serialize<TResult> | undefined;
       // Tracks whether a branch has already written to the action-result store.
       // The outer catch writes for unclassified errors (network failures, parse
       // errors) only when no branch has already recorded the outcome.
@@ -339,18 +343,20 @@ export function useAction<
         const contentType = response.headers.get('Content-Type') ?? '';
         if (contentType.includes('text/event-stream') && response.body) {
           const { readSSE } = await import('./internal/sse-decoder.js');
-          let resultValue: TResult | undefined;
+          let resultValue: Serialize<TResult> | undefined;
           let streamError: Error | null = null;
           for await (const ev of readSSE(response.body)) {
             if (ev.event === 'message') {
               try {
-                currentOptions?.onChunk?.(JSON.parse(ev.data) as TChunk);
+                currentOptions?.onChunk?.(
+                  JSON.parse(ev.data) as Serialize<TChunk>
+                );
               } catch {
                 // malformed JSON in stream: skip
               }
             } else if (ev.event === 'result') {
               try {
-                resultValue = JSON.parse(ev.data) as TResult;
+                resultValue = JSON.parse(ev.data) as Serialize<TResult>;
               } catch (e) {
                 streamError = new Error(
                   `Malformed result event in stream: ${e instanceof Error ? e.message : String(e)}`
@@ -416,7 +422,7 @@ export function useAction<
             throw new Error(`Malformed envelope (HTTP ${decoded.httpStatus})`);
           }
           if (decoded.kind === 'success') {
-            const data = decoded.data as TResult;
+            const data = decoded.data as Serialize<TResult>;
             setData(data);
             invokeSuccess(data);
             finalResult = data;

@@ -100,21 +100,21 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 84007,
+      "app": 84017,
       "actions": 17151,
-      "core": 36108,
-      "components": 94167,
+      "core": 36152,
+      "components": 104101,
       "guards": 250,
       "middleware": 12470,
       "vendor": 8401,
       "prefetch": 4996,
-      "loaders": 15277,
+      "loaders": 15572,
       "streaming": 7314,
       "transitions": 3863
     },
-    "total": 284004,
+    "total": 294287,
     "unmatched": 49,
-    "fileCount": 107
+    "fileCount": 108
   },
   "sectionC": {
     "ui-core": {
@@ -211,6 +211,18 @@
         "raw": 34097,
         "gzip": 12562,
         "brotli": 11331
+      }
+    },
+    "toast": {
+      "total": {
+        "raw": 11726,
+        "gzip": 4697,
+        "brotli": 4244
+      },
+      "marginalOverUiCore": {
+        "raw": 9322,
+        "gzip": 3481,
+        "brotli": 3142
       }
     }
   }
