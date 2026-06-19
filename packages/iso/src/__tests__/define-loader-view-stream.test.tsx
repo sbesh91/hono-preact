@@ -1,9 +1,19 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, act } from '@testing-library/preact';
+import { useEffect, useRef } from 'preact/hooks';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
+import { useReload } from '../reload-context.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
 
 // Drip each SSE frame in its own microtask so Preact flushes between chunks.
 function dripSseResponse(chunks: string[]): Response {
@@ -26,6 +36,9 @@ function dripSseResponse(chunks: string[]): Response {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // restoreAllMocks does NOT undo vi.stubGlobal('fetch', ...); unstub explicitly
+  // so a stale fetch stub cannot bleed into other files under a concurrent run.
+  vi.unstubAllGlobals();
 });
 
 const LOC = { path: '/', pathParams: {}, searchParams: {} } as never;
@@ -138,5 +151,74 @@ describe('loader.View (accumulating / streaming form)', () => {
     );
     expect(screen.getByTestId('out').textContent).not.toContain('NOT-ARRAY');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('drains a reload() queued during the initial pre-first-chunk window', async () => {
+    // The first subscribe stays pending while the fallback fires reload(); that
+    // reload is queued (the initial fetch is in flight). When the first chunk
+    // finally settles, the queued reload must drain and resubscribe.
+    const first = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce(dripSseResponse(['data: {"n":7}\n\n']));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
+      __moduleKey: 'test-view-queued-reload',
+      live: true,
+    });
+
+    // A useReload() consumer in the fallback subtree (mounted outside Suspense)
+    // fires reload() once while the bar is still connecting.
+    function Fallback() {
+      const { reload } = useReload();
+      const fired = useRef(false);
+      useEffect(() => {
+        if (!fired.current) {
+          fired.current = true;
+          reload();
+        }
+      }, [reload]);
+      return <p data-testid="out">connecting</p>;
+    }
+
+    const Feed = ref.View<number[]>(
+      ({ data, status }) => (
+        <p data-testid="out">
+          {data.join(',')}|{status}
+        </p>
+      ),
+      {
+        initial: [],
+        reduce: (acc, chunk) => [...acc, chunk.n],
+        fallback: <Fallback />,
+      }
+    );
+
+    render(
+      <LocationProvider>
+        <RouteLocationsProvider
+          moduleKey="test-view-queued-reload"
+          location={LOC}
+        >
+          <Feed />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    // Fallback mounted and queued a reload; only the initial fetch has fired.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    // Settle the initial subscribe: settleAcc must drain the queued reload.
+    await act(async () => {
+      first.resolve(dripSseResponse(['data: {"n":1}\n\n']));
+    });
+
+    // The queued reload fired a second subscribe; the re-folded stream wins.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('7|closed')
+    );
   });
 });

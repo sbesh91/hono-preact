@@ -31,15 +31,21 @@ const originalEnv = env.current;
 afterEach(() => {
   env.current = originalEnv;
   vi.restoreAllMocks();
+  // restoreAllMocks does NOT undo vi.stubGlobal('fetch', ...); unstub explicitly.
+  vi.unstubAllGlobals();
 });
 
-// Guards the headline fix of this PR: a live `.View` SSR'd inside a layout must
-// (a) never run its (infinite) generator on the server (no renderToStringAsync
-// hang) and (b) emit a `useId`-anchored `<section data-loader="null">` fallback
-// that hydration ADOPTS rather than orphaning (the two-overlapping-bars
-// regression, same class as PR #63 / preactjs/preact#4442). A refactor of the
-// `liveServer` short-circuit or the anchor shape breaks one of these assertions.
-describe('live loader.View: SSR no-hang + hydration adoption', () => {
+// Guards the load-bearing pieces of the headline fix: a live `.View` SSR'd in a
+// layout must (a) never run its (infinite) generator on the server (no
+// renderToStringAsync hang) and (b) emit a `useId`-anchored
+// `<section data-loader="null">` fallback that the client hydrates onto the SAME
+// DOM node (adoption, not re-creation). The full two-overlapping-bars orphan
+// (PR #63 / preactjs/preact#4442) only reproduces with the lazy-layout + Suspense
+// timing of a real route tree and is verified manually at /demo; these unit tests
+// pin the SSR no-hang + anchor shape + single-node hydration that the orphan fix
+// depends on. A refactor of the `liveServer` short-circuit or the anchor shape
+// breaks one of these assertions.
+describe('live loader.View: SSR no-hang + single-node hydration', () => {
   it('renders the anchored fallback on the server without invoking the loader', () => {
     let invoked = 0;
     async function* live() {
@@ -85,7 +91,7 @@ describe('live loader.View: SSR no-hang + hydration adoption', () => {
     render(null, container);
   });
 
-  it('hydrates the SSR fallback markup as a single element (no orphaned duplicate)', async () => {
+  it('hydrates the SSR fallback onto the same DOM node (adoption, not re-creation)', async () => {
     let invoked = 0;
     async function* live() {
       invoked++;
@@ -123,25 +129,29 @@ describe('live loader.View: SSR no-hang + hydration adoption', () => {
     render(null, ssr);
     expect(ssr.querySelectorAll('section').length).toBe(0); // unmounted clean
 
-    // Hydrate that exact markup in the browser. The client suspends on the first
-    // RPC chunk and shows the SAME anchored fallback, which Preact must adopt.
+    // Hydrate that exact markup in the browser. fetch stays pending so the
+    // component stays suspended on the anchored fallback (we assert adoption in
+    // the suspended state, before any chunk swaps it for the resolved Envelope).
     env.current = 'browser';
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(dripSseResponse(['data: {"n":1}\n\n']))
+      vi.fn(() => new Promise<Response>(() => {}))
     );
     const host = document.createElement('div');
     host.innerHTML = ssrHtml;
     document.body.appendChild(host);
+    const ssrNode = host.querySelector('section');
+    expect(ssrNode).not.toBeNull();
 
     await act(async () => {
       hydrate(<App />, host);
     });
 
-    // Adoption, not orphaning: still exactly one section (a second would be the
-    // two-overlapping-bars bug). The live loader's fn is never invoked on the
-    // client either (it streams over RPC, not by calling the fn).
+    // Adoption: still exactly one section, and it is the SAME DOM node the server
+    // emitted (a re-created node, or a second node, is the orphan failure mode).
+    // The live loader's fn is never invoked on the client either (RPC, not fn).
     expect(host.querySelectorAll('section').length).toBe(1);
+    expect(host.querySelector('section')).toBe(ssrNode);
     expect(invoked).toBe(0);
 
     host.remove();

@@ -26,7 +26,7 @@ export type LoaderRunnerState<T> = {
 };
 
 export function useLoaderRunner<T>(
-  loaderRef: LoaderRef<T>,
+  loaderRef: LoaderRef<T, boolean>,
   location: RouteHook,
   id: string,
   accumulate?: AccumulateOptions
@@ -236,6 +236,14 @@ export function useLoaderRunner<T>(
         inFlightRef.current = true;
         const settleAcc = () => {
           inFlightRef.current = false;
+          // Drain a reload() queued during the initial suspended window (e.g. a
+          // useReload() consumer in the fallback subtree fired it before the
+          // first chunk arrived). Mirrors the non-accumulate `settle()` below;
+          // without it the queued resubscribe is lost.
+          if (queuedReloadRef.current) {
+            queuedReloadRef.current = false;
+            runReloadRef.current();
+          }
         };
         readerRef.current = wrapPromise(
           subscribeAccumulate(newAbortSignal())

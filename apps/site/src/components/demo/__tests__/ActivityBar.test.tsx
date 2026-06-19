@@ -102,7 +102,9 @@ describe('accumulateActivity (feed reducer)', () => {
     expect(b.map((e) => e.id)).toEqual(['2', '1']);
   });
 
-  it('de-dupes a re-yielded head event (same ref, no growth)', () => {
+  it('de-dupes a re-yielded head event by id (accumulator returned unchanged)', () => {
+    // Two distinct objects with the same id (the stream re-yields the head on
+    // reconnect); dedup is by id, and the SAME accumulator array is returned.
     const a = accumulateActivity([], ev('1', 'Alice', 'Draft'));
     const b = accumulateActivity(a, ev('1', 'Alice', 'Draft'));
     expect(b).toBe(a);

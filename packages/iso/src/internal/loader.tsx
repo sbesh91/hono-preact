@@ -26,7 +26,7 @@ export { serializeLocationForCache } from './cache-key.js';
 export const LoaderStatusContext = createContext<StreamStatus>('connecting');
 
 type LoaderHostProps<T> = {
-  loader: LoaderRef<T>;
+  loader: LoaderRef<T, boolean>;
   location?: RouteHook;
   fallback?: ComponentChildren;
   errorFallback?:

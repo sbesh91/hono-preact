@@ -6,7 +6,7 @@
 // runtime guard for the non-live + accumulate case (the client `serverLoaders`
 // stub does not carry `live`, so a runtime `!live` check is impossible there).
 import { expectTypeOf } from 'vitest';
-import { defineLoader } from '../define-loader.js';
+import { defineLoader, type LoaderRef } from '../define-loader.js';
 
 async function* gen(): AsyncGenerator<number, void, unknown> {
   yield 1;
@@ -53,5 +53,17 @@ function _staticProbes() {
   expectTypeOf(stat.useData()).toEqualTypeOf<{ at: string }>();
 }
 
+// A bare `LoaderRef<T>` defaults to the non-live (single-value) form, so its
+// `.View` is callable directly (the common case, and what quick-start documents).
+// Code that must accept either liveness uses `LoaderRef<T, boolean>` instead.
+function _defaultRefProbes(loader: LoaderRef<{ n: number }>) {
+  loader.View((args) => {
+    expectTypeOf(args.data).toEqualTypeOf<{ n: number }>();
+    return null;
+  });
+  expectTypeOf(loader.useData()).toEqualTypeOf<{ n: number }>();
+}
+
 void _liveProbes;
 void _staticProbes;
+void _defaultRefProbes;

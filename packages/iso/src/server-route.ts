@@ -18,7 +18,7 @@ export interface RouteServer<RouteId extends string> {
    */
   loader<T>(
     fn: Loader<T, RouteParams<RouteId>>,
-    opts?: DefineLoaderOpts<T>
+    opts?: Omit<DefineLoaderOpts<T>, 'live'>
   ): LoaderRef<T, false>;
 }
 

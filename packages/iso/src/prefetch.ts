@@ -57,7 +57,7 @@ let prefetchSeq = 0;
  * chunks update the cache as they arrive.
  */
 export async function prefetch<T>(
-  ref: LoaderRef<T>,
+  ref: LoaderRef<T, boolean>,
   opts: PrefetchOptions<T> = {}
 ): Promise<T> {
   const location =

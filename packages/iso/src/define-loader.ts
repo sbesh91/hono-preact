@@ -13,6 +13,7 @@ import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
+import { isBrowser } from './is-browser.js';
 import type {
   AccumulateOptions,
   StreamStatus,
@@ -80,10 +81,13 @@ type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
  *   plus `useData()` and `Boundary`.
  *
  * Using the wrong form is therefore a compile error rather than a runtime throw.
- * The default `Live = boolean` is the erased form used by internals and
- * `AnyLoaderRef`; its `View` is the union of both shapes.
+ * `Live` defaults to `false` (the common, non-live case) so a bare `LoaderRef<T>`
+ * has a callable single-value `.View`. Code that must accept either liveness
+ * (internals, `AnyLoaderRef`) parameterizes it as `LoaderRef<T, boolean>`, whose
+ * `View` is the union of both shapes (not directly callable; such code never
+ * calls `.View`, it only holds/forwards the ref).
  */
-export interface LoaderRef<T, Live extends boolean = boolean> {
+export interface LoaderRef<T, Live extends boolean = false> {
   readonly __id: symbol;
   readonly __moduleKey?: string;
   readonly __loaderName?: string;
@@ -146,9 +150,10 @@ export interface LoaderRef<T, Live extends boolean = boolean> {
  * is invariant in `T` (it surfaces `T` through `useData(): Serialize<T>`), so a
  * concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
- * sites never inspect the data with a meaningful type.
+ * sites never inspect the data with a meaningful type. `boolean` (not the default
+ * `false`) erases liveness so a live `LoaderRef<T, true>` is also accepted.
  */
-export type AnyLoaderRef = LoaderRef<any>;
+export type AnyLoaderRef = LoaderRef<any, boolean>;
 
 /**
  * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded
@@ -259,7 +264,7 @@ export function defineLoader(
   fnOrRoute: Loader<unknown> | string,
   fnOrOpts?: Loader<unknown> | DefineLoaderOpts<unknown>,
   maybeOpts?: DefineLoaderOpts<unknown>
-): LoaderRef<unknown> {
+): LoaderRef<unknown, boolean> {
   // Normalize the two overload forms. The route id is type-level only (it
   // selects the param shape for the loader fn); it is not stored on the ref
   // and does not affect cache/`params` behavior.
@@ -356,6 +361,18 @@ export function defineLoader(
           'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
         );
       }
+      if (!isBrowser() && props.accumulate && !live) {
+        // The accumulating form is hydration-safe only for live loaders (which
+        // skip SSR). A non-live loader rendered through it runs during SSR and
+        // re-fetches on hydration (a content flash), or hangs renderToStringAsync
+        // if its generator is infinite. `LoaderRef<T, false>.View` already makes
+        // this a type error; the `.Boundary accumulate` escape hatch does not, so
+        // guard it server-side. Keyed on `!isBrowser()` so it never fires on the
+        // client stub (always browser, always `live: false`).
+        throw new Error(
+          'The accumulating `{ initial, reduce }` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
+        );
+      }
       return h(LoaderHost<unknown>, {
         loader: ref,
         fallback: props.fallback,
@@ -395,6 +412,16 @@ export function defineLoader(
         // never fires in the browser where the discriminant is type-level.
         throw new Error(
           'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`.'
+        );
+      }
+      if (!isBrowser() && accumulate && !live) {
+        // Non-live + accumulate runs the loader during SSR (content flash on
+        // hydration, or a hang for an infinite generator). A type error for TS
+        // callers (`LoaderRef<T, false>.View` is single-value only); guarded
+        // server-side here for JS callers. `!isBrowser()` keeps it off the
+        // client stub (always browser, always `live: false`).
+        throw new Error(
+          'The accumulating `loader.View(render, { initial, reduce })` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
         );
       }
       const Wrapped: FunctionComponent<any> = (props) =>

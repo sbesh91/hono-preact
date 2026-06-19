@@ -16,7 +16,7 @@ export function ViewRenderer<T>({
   props,
   render,
 }: {
-  loaderRef: LoaderRef<T>;
+  loaderRef: LoaderRef<T, boolean>;
   props: Record<string, unknown>;
   render: (args: any) => ComponentChildren;
 }) {
