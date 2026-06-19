@@ -14,6 +14,7 @@ import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
 import { useLoaderRunner } from './use-loader-runner.js';
+import { DelayedFallback, DEFAULT_FALLBACK_DELAY_MS } from './delayed-fallback.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 type LoaderHostProps<T> = {
@@ -52,8 +53,16 @@ export function LoaderHost<T>({
     id
   );
 
+  const fallbackDelay = loaderRef.fallbackDelay ?? DEFAULT_FALLBACK_DELAY_MS;
+  const wrappedFallback =
+    fallback == null ? (
+      fallback
+    ) : (
+      <DelayedFallback delay={fallbackDelay}>{fallback}</DelayedFallback>
+    );
+
   const suspenseContent = (
-    <Suspense fallback={fallback}>
+    <Suspense fallback={wrappedFallback}>
       <DataReader reader={reader} overrideData={overrideData}>
         <Envelope>{children}</Envelope>
       </DataReader>
