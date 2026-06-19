@@ -300,6 +300,24 @@ export function defineLoader(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
+      // The same `accumulate` <-> `live` invariant `View` enforces, applied to
+      // the lower-level escape hatch (`View` delegates here, so these guards
+      // must allow live+accumulate, which is exactly what `View` passes).
+      if (live && !props.accumulate) {
+        // A live loader has no single value; a bare `.Boundary` would suspend
+        // forever on the infinite generator.
+        throw new Error(
+          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
+        );
+      }
+      if (props.accumulate && !live) {
+        // The accumulating form is hydration-safe only for live loaders (which
+        // skip SSR). A non-live loader rendered through it would SSR resolved
+        // content and then re-fetch on hydration (a content flash).
+        throw new Error(
+          'The accumulating `{ initial, reduce }` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
+        );
+      }
       return h(LoaderHost<unknown>, {
         loader: ref,
         fallback: props.fallback,
@@ -308,16 +326,38 @@ export function defineLoader(
         children: props.children,
       });
     },
-    View: (render: any, viewOpts: any) => {
+    // `render: (args: any)` (not `any`) keeps the call shape while satisfying
+    // both public overloads; `any` survives only on `reduce` (the unavoidable
+    // variance seam between the two opts shapes). The public contract is the
+    // two `View` overloads above; this implementation signature is internal.
+    View: (
+      render: (args: any) => ComponentChildren,
+      viewOpts?: {
+        initial?: unknown;
+        reduce?: (acc: any, chunk: any) => any;
+        fallback?: ComponentChildren;
+        errorFallback?:
+          | ComponentChildren
+          | ((err: Error, reset: () => void) => ComponentChildren);
+      }
+    ) => {
       // The accumulating (streaming) form is selected by `initial` + `reduce`.
-      // A live loader has no single value, so it must use the accumulating form.
+      // A live loader has no single value, so it must use the accumulating form;
+      // conversely the accumulating form is hydration-safe only for live loaders.
       const accumulate =
-        viewOpts && 'reduce' in viewOpts && 'initial' in viewOpts
+        viewOpts &&
+        typeof viewOpts.reduce === 'function' &&
+        'initial' in viewOpts
           ? { initial: viewOpts.initial, reduce: viewOpts.reduce }
           : undefined;
       if (live && !accumulate) {
         throw new Error(
           'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`.'
+        );
+      }
+      if (accumulate && !live) {
+        throw new Error(
+          'The accumulating `loader.View(render, { initial, reduce })` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
         );
       }
       const Wrapped: FunctionComponent<any> = (props) =>

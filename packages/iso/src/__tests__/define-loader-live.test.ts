@@ -33,4 +33,20 @@ describe('defineLoader({ live })', () => {
     // useData has no single value for a live loader either.
     expect(() => ref.useData()).toThrow(/useData/);
   });
+
+  it('throws when a live loader is consumed via the Boundary escape hatch', () => {
+    const ref = defineLoader<number>(gen, { live: true });
+    // A bare .Boundary (no accumulate) on a live loader would suspend forever;
+    // it throws instead, consistent with the View/useData guards. (View's own
+    // delegation passes `accumulate`, so it is unaffected.)
+    expect(() => ref.Boundary({ children: null })).toThrow(/View/);
+  });
+
+  it('throws when the accumulating View form is used on a non-live loader', () => {
+    const ref = defineLoader<number>(gen);
+    // The accumulating form is hydration-safe only for live loaders.
+    expect(() =>
+      ref.View(() => null, { initial: [] as number[], reduce: (acc) => acc })
+    ).toThrow(/requires a `live` loader/);
+  });
 });

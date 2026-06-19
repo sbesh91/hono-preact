@@ -81,10 +81,71 @@ export function useLoaderRunner<T>(
   const queuedReloadRef = useRef(false);
   const runReloadRef = useRef<() => void>(() => {});
 
+  // Fold one chunk into the accumulator and surface it. Shared by the initial
+  // subscribe and reload() so a streaming reload re-folds through `reduce`
+  // rather than overwriting the accumulator with a raw chunk.
+  const applyChunk = useCallback(
+    (chunk: unknown) => {
+      if (!accumulate) return;
+      accRef.current = accumulate.reduce(accRef.current, chunk);
+      setOverrideData(accRef.current as T);
+      setStatus('open');
+    },
+    [accumulate]
+  );
+
+  // (Re)subscribe a streaming/live loader: reset the accumulator to `initial`
+  // and open a fresh stream that folds every chunk through `applyChunk`. Returns
+  // the first-chunk promise (the Suspense reader on first mount; reload awaits it
+  // to clear in-flight tracking). It does not `setStatus('connecting')` itself:
+  // the initial subscribe runs during render (where setState is unsafe) and
+  // relies on the 'connecting' default, while reload sets it explicitly first.
+  const subscribeAccumulate = useCallback(
+    (signal: AbortSignal): Promise<T> => {
+      accRef.current = accumulate!.initial;
+      return runLoader<T>(loaderRef, locationRef.current, id, signal, {
+        onChunk: (value) => applyChunk(value),
+        onError: (err) => {
+          setLoadError(err);
+          setStatus('error');
+        },
+        onEnd: () => setStatus('closed'),
+      });
+    },
+    [accumulate, applyChunk, loaderRef, id]
+  );
+
   const runReload = useCallback(() => {
     inFlightRef.current = true;
     setReloading(true);
     setLoadError(null);
+
+    if (accumulate) {
+      // Streaming/live reload = resubscribe: `subscribeAccumulate` aborts the
+      // current stream (via newAbortSignal), resets to `initial`, reopens, and
+      // folds chunks through `reduce`. Reset the surfaced data to `initial` and
+      // drive status connecting -> open/closed/error, mirroring a fresh mount.
+      setOverrideData(accumulate.initial as T);
+      setStatus('connecting');
+      subscribeAccumulate(newAbortSignal())
+        .then((firstChunk) => {
+          applyChunk(firstChunk);
+          setReloading(false);
+          inFlightRef.current = false;
+          if (queuedReloadRef.current) {
+            queuedReloadRef.current = false;
+            runReloadRef.current();
+          }
+        })
+        .catch((err: unknown) => {
+          setLoadError(err instanceof Error ? err : new Error(String(err)));
+          setStatus('error');
+          setReloading(false);
+          inFlightRef.current = false;
+          queuedReloadRef.current = false;
+        });
+      return;
+    }
 
     const promise: Promise<T> = runLoader<T>(
       loaderRef,
@@ -129,7 +190,7 @@ export function useLoaderRunner<T>(
         inFlightRef.current = false;
         queuedReloadRef.current = false;
       });
-  }, [loaderRef]);
+  }, [loaderRef, accumulate, applyChunk, subscribeAccumulate]);
   runReloadRef.current = runReload;
 
   const reload = useCallback(() => {
@@ -163,41 +224,23 @@ export function useLoaderRunner<T>(
     if (locationChanged || loaderChanged) setOverrideData(undefined);
 
     if (accumulate) {
-      // Streaming consumption: fold every chunk into accumulated state. A live
-      // loader never runs on the server (its infinite generator would hang
-      // renderToStringAsync); LoaderHost renders the fallback for live+server,
-      // so this reader is not consumed there.
-      accRef.current = accumulate.initial;
+      // Streaming consumption: fold every chunk into accumulated state via the
+      // shared `subscribeAccumulate`/`applyChunk` helpers (also used by reload).
+      // A live loader never runs on the server (its infinite generator would
+      // hang renderToStringAsync); LoaderHost renders the fallback for
+      // live+server, so this reader is not consumed there.
       if (loaderRef.live && !isBrowser()) {
+        accRef.current = accumulate.initial;
         readerRef.current = { read: () => undefined as unknown as T };
       } else {
         inFlightRef.current = true;
         const settleAcc = () => {
           inFlightRef.current = false;
         };
-        const apply = (chunk: unknown) => {
-          accRef.current = accumulate.reduce(accRef.current, chunk);
-          setOverrideData(accRef.current as T);
-          setStatus('open');
-        };
-        const accFetch: Promise<T> = runLoader<T>(
-          loaderRef,
-          location,
-          id,
-          newAbortSignal(),
-          {
-            onChunk: (value) => apply(value),
-            onError: (err) => {
-              setLoadError(err);
-              setStatus('error');
-            },
-            onEnd: () => setStatus('closed'),
-          }
-        );
         readerRef.current = wrapPromise(
-          accFetch
+          subscribeAccumulate(newAbortSignal())
             .then((firstChunk) => {
-              apply(firstChunk);
+              applyChunk(firstChunk);
               settleAcc();
               return accRef.current as T;
             })

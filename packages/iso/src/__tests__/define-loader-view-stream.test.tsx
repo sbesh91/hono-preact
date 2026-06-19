@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/preact';
+import { render, screen, waitFor, cleanup, act } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
@@ -44,9 +44,11 @@ describe('loader.View (accumulating / streaming form)', () => {
           ])
         )
     );
-    // __moduleKey so the runner takes the client fetch path.
+    // `live` + `__moduleKey` so the runner takes the client fetch path (the
+    // accumulating form requires a live loader; on the client `live` is inert).
     const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
       __moduleKey: 'test-view-stream',
+      live: true,
     });
     const Feed = ref.View<number[]>(
       ({ data, status }) => (
@@ -73,5 +75,68 @@ describe('loader.View (accumulating / streaming form)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('out')).toHaveTextContent('1,2,3|closed')
     );
+  });
+
+  it('reload() resubscribes and re-folds from initial (never overwrites Acc with a raw chunk)', async () => {
+    const fetchMock = vi
+      .fn()
+      // First subscribe: folds to [1,2].
+      .mockResolvedValueOnce(
+        dripSseResponse(['data: {"n":1}\n\n', 'data: {"n":2}\n\n'])
+      )
+      // After reload: a fresh stream that folds to [9].
+      .mockResolvedValueOnce(dripSseResponse(['data: {"n":9}\n\n']));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
+      __moduleKey: 'test-view-reload',
+      live: true,
+    });
+    const Feed = ref.View<number[]>(
+      ({ data, status, reload }) => (
+        <div>
+          <p data-testid="out">
+            {/* If reload overwrote Acc with a raw chunk, `data` is an object,
+                not an array, and this surfaces it instead of crashing. */}
+            {Array.isArray(data)
+              ? data.join(',')
+              : `NOT-ARRAY:${JSON.stringify(data)}`}
+            |{status}
+          </p>
+          <button data-testid="reload" onClick={reload}>
+            reload
+          </button>
+        </div>
+      ),
+      {
+        initial: [],
+        reduce: (acc, chunk) => [...acc, chunk.n],
+        fallback: <p data-testid="out">connecting</p>,
+      }
+    );
+
+    render(
+      <LocationProvider>
+        <RouteLocationsProvider moduleKey="test-view-reload" location={LOC}>
+          <Feed />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('1,2|closed')
+    );
+
+    await act(async () => {
+      screen.getByTestId('reload').click();
+    });
+
+    // The accumulator reset to `initial` and re-folded the new stream; `data`
+    // stayed an array throughout.
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('9|closed')
+    );
+    expect(screen.getByTestId('out').textContent).not.toContain('NOT-ARRAY');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
