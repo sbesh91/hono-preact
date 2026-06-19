@@ -1,9 +1,25 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
+import type { StreamStatus } from 'hono-preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
 import type { TaskStatus } from '../../demo/data.js';
+import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
 
-const MAX = 50;
+const activityLoader = serverLoaders.activity;
+
+/** Most recent events kept in the feed. */
+export const ACTIVITY_MAX = 50;
+
+// The feed reducer: newest-first, de-duped against the current head (the stream
+// backfills then tails, so a re-yielded head is a dup, not a new event), capped
+// at ACTIVITY_MAX. Exported so it can be unit-tested directly.
+export function accumulateActivity(
+  acc: ActivityEvent[],
+  e: ActivityEvent
+): ActivityEvent[] {
+  return acc[0]?.id === e.id ? acc : [e, ...acc].slice(0, ACTIVITY_MAX);
+}
+
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
   in_progress: 'In Progress',
@@ -14,86 +30,41 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 function describeEvent(e: ActivityEvent): string {
   if (e.kind === 'task-created') return `${e.actor} created "${e.taskTitle}"`;
   if (e.kind === 'task-moved')
-    return `${e.actor} moved "${e.taskTitle}" → ${STATUS_LABEL[e.to]}`;
+    return `${e.actor} moved "${e.taskTitle}" to ${STATUS_LABEL[e.to]}`;
   return `${e.actor} commented on "${e.taskTitle}"`;
 }
 
-// Persistent live-activity bar. Mounted via <Persist> (see demo-layout), so it
-// renders inside PersistHost OUTSIDE the router: no router hooks. It owns its
-// own EventSource; the connection and accumulated feed survive intra-app
-// navigation because the component instance persists.
-export function ActivityBar() {
-  const [path, setPath] = useState(
-    typeof window === 'undefined' ? '' : window.location.pathname
+const SHELL =
+  'demo-activity-bar fixed bottom-6 right-6 z-40 w-[22rem] max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface-subtle/95 shadow-lg backdrop-blur';
+
+// Suspense fallback (connecting state). The same markup the server renders for
+// the live loader and the client shows until the first chunk, so hydration
+// adopts it. Exported for the fallback render test.
+export function ConnectingBar() {
+  return (
+    <div class={SHELL}>
+      <div class="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13px]">
+        <span class="h-2 w-2 shrink-0 rounded-full bg-muted" aria-hidden />
+        <span class="min-w-0 flex-1 truncate text-muted">
+          Listening for activity…
+        </span>
+      </div>
+    </div>
   );
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
+}
+
+function Feed({
+  events,
+  status,
+}: {
+  events: ActivityEvent[];
+  status: StreamStatus;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const [connected, setConnected] = useState(false);
-
-  // Track the current path from OUTSIDE the router (the bar renders in
-  // PersistHost, which has no router context). Observe history directly rather
-  // than the View-Transition phase: that phase only fires when
-  // document.startViewTransition runs, so on browsers without View Transitions
-  // it would never update and the bar would strand over non-/demo routes. popstate
-  // covers back/forward; pushState/replaceState cover in-app SPA navigations (which
-  // do not fire popstate). Baseline-safe on every browser; originals restored on
-  // cleanup.
-  useEffect(() => {
-    const update = () => setPath(window.location.pathname);
-    update();
-    window.addEventListener('popstate', update);
-    const origPush = history.pushState;
-    const origReplace = history.replaceState;
-    history.pushState = function (
-      this: History,
-      ...args: Parameters<History['pushState']>
-    ) {
-      origPush.apply(this, args);
-      update();
-    };
-    history.replaceState = function (
-      this: History,
-      ...args: Parameters<History['replaceState']>
-    ) {
-      origReplace.apply(this, args);
-      update();
-    };
-    return () => {
-      window.removeEventListener('popstate', update);
-      history.pushState = origPush;
-      history.replaceState = origReplace;
-    };
-  }, []);
-
-  const isApp = path.startsWith('/demo/projects');
-
-  // Open the stream only inside the app area. Keyed on `isApp` so it stays open
-  // across intra-app navigation (dep unchanged -> no re-run) and closes on exit.
-  useEffect(() => {
-    if (!isApp || typeof EventSource === 'undefined') return;
-    const es = new EventSource('/api/demo/activity');
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-    es.onmessage = (ev) => {
-      try {
-        // Trust boundary: our own endpoint. JSON parse cast is acceptable.
-        const e = JSON.parse(ev.data) as ActivityEvent;
-        setEvents((prev) => [e, ...prev].slice(0, MAX));
-      } catch {
-        // ignore a malformed frame
-      }
-    };
-    return () => {
-      es.close();
-      setConnected(false);
-    };
-  }, [isApp]);
-
-  if (typeof window === 'undefined' || !isApp) return null;
-
+  const connected = status === 'open';
   const latest = events[0];
   return (
-    <div class="demo-activity-bar fixed bottom-6 right-6 z-40 w-[22rem] max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface-subtle/95 shadow-lg backdrop-blur">
+    <div class={SHELL}>
       {expanded && (
         <div
           role="log"
@@ -147,4 +118,18 @@ export function ActivityBar() {
     </div>
   );
 }
+
+// Live-activity bar consumed via the framework's `.View` convention: an
+// accumulating stream folded into a capped feed. `.View` renders through
+// LoaderHost (Suspense + useId), so the bar hydrates cleanly inside the lazy
+// projects-shell layout (no orphan, no isBrowser guard). On SSR the loader
+// never runs and the fallback renders; the client connects and folds chunks.
+export const ActivityBar = activityLoader.View<ActivityEvent[]>(
+  ({ data, status }) => <Feed events={data} status={status} />,
+  {
+    initial: [],
+    reduce: accumulateActivity,
+    fallback: <ConnectingBar />,
+  }
+);
 ActivityBar.displayName = 'ActivityBar';

@@ -61,6 +61,7 @@ export const nav: NavArea[] = [
           { title: 'Reloading Data', route: '/docs/reloading' },
           { title: 'Prefetching', route: '/docs/prefetch' },
           { title: 'Streaming', route: '/docs/streaming' },
+          { title: 'Live Loaders', route: '/docs/live-loaders' },
         ],
       },
       {

@@ -13,9 +13,15 @@ import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
+import { isBrowser } from './is-browser.js';
+import type {
+  AccumulateOptions,
+  StreamStatus,
+} from './internal/use-loader-runner.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
+export type { StreamStatus } from './internal/use-loader-runner.js';
 
 export type LoaderCtx<TParams = Record<string, string>> = {
   c: Context;
@@ -28,13 +34,68 @@ export type Loader<T, TParams = Record<string, string>> =
   | ((ctx: LoaderCtx<TParams>) => Promise<ReadableStream<T>>)
   | ((ctx: LoaderCtx<TParams>) => AsyncGenerator<T, void, unknown>);
 
-export interface LoaderRef<T> {
+// The accumulating (streaming) `.View` form: live loaders only. `data` is the
+// folded accumulator and `status` reflects the connection; the chunk handed to
+// `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`).
+type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
+  render: (
+    args: P & {
+      data: Acc;
+      status: StreamStatus;
+      error: Error | null;
+      reload: () => void;
+    }
+  ) => ComponentChildren,
+  opts: {
+    initial: Acc;
+    reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
+    fallback?: ComponentChildren;
+    errorFallback?:
+      | ComponentChildren
+      | ((err: Error, reset: () => void) => ComponentChildren);
+  }
+) => FunctionComponent<P>;
+
+// The single-value `.View` form: non-live loaders. `data` is the loader's value
+// as the client receives it (`Serialize<T>`).
+type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
+  render: (
+    args: P & { data: Serialize<T>; error: Error | null; reload: () => void }
+  ) => ComponentChildren,
+  opts?: {
+    fallback?: ComponentChildren;
+    errorFallback?:
+      | ComponentChildren
+      | ((err: Error, reset: () => void) => ComponentChildren);
+  }
+) => FunctionComponent<P>;
+
+/**
+ * A reference to a defined loader. `Live` (the liveness discriminant, fixed by
+ * `defineLoader({ live })`) selects the consumption surface at the type level:
+ *
+ * - `LoaderRef<T, true>` (a `live` loader) exposes ONLY the accumulating
+ *   `View(render, { initial, reduce })` form; `useData` and `Boundary` are
+ *   `never` (a live loader has no single value).
+ * - `LoaderRef<T, false>` exposes ONLY the single-value `View(render)` form,
+ *   plus `useData()` and `Boundary`.
+ *
+ * Using the wrong form is therefore a compile error rather than a runtime throw.
+ * `Live` defaults to `false` (the common, non-live case) so a bare `LoaderRef<T>`
+ * has a callable single-value `.View`. Code that must accept either liveness
+ * (internals, `AnyLoaderRef`) parameterizes it as `LoaderRef<T, boolean>`, whose
+ * `View` is the union of both shapes (not directly callable; such code never
+ * calls `.View`, it only holds/forwards the ref).
+ */
+export interface LoaderRef<T, Live extends boolean = false> {
   readonly __id: symbol;
   readonly __moduleKey?: string;
   readonly __loaderName?: string;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
+  /** True for a `live` loader (client-only subscription, never runs on SSR). */
+  readonly live: boolean;
   /**
    * Raw value as authored on `defineLoader({ timeoutMs })`. `undefined`
    * means "use the handler's configured default"; `false` means "no
@@ -60,29 +121,32 @@ export interface LoaderRef<T> {
   /**
    * The loader's data as the client receives it: `Serialize<T>`, the JSON
    * round-trip of the server-side return `T` (e.g. a `Date` field arrives as a
-   * string). Typing this as `T` would be a lie on the client/hydration path.
+   * string). `never` on a `live` loader (it has no single value).
    */
-  useData(): Serialize<T>;
+  useData: Live extends true ? never : () => Serialize<T>;
   useError(): Error | null;
   invalidate(): void;
-  Boundary: ComponentType<{
-    fallback?: ComponentChildren;
-    errorFallback?:
-      | ComponentChildren
-      | ((err: Error, reset: () => void) => ComponentChildren);
-    children: ComponentChildren;
-  }>;
-  View<P extends Record<string, unknown> = {}>(
-    render: (
-      args: P & { data: Serialize<T>; error: Error | null; reload: () => void }
-    ) => ComponentChildren,
-    opts?: {
-      fallback?: ComponentChildren;
-      errorFallback?:
-        | ComponentChildren
-        | ((err: Error, reset: () => void) => ComponentChildren);
-    }
-  ): FunctionComponent<P>;
+  /**
+   * The lower-level Suspense boundary (single-value loaders). `never` on a
+   * `live` loader: consume it via the accumulating `.View` form instead.
+   */
+  Boundary: Live extends true
+    ? never
+    : ComponentType<{
+        fallback?: ComponentChildren;
+        errorFallback?:
+          | ComponentChildren
+          | ((err: Error, reset: () => void) => ComponentChildren);
+        accumulate?: AccumulateOptions;
+        children: ComponentChildren;
+      }>;
+  /**
+   * Consume the loader through the framework's `.View` convention. The form is
+   * fixed by liveness: a `live` loader exposes only the accumulating
+   * `View(render, { initial, reduce })` form; a non-live loader exposes only the
+   * single-value `View(render)` form. The other form is a compile error.
+   */
+  View: Live extends true ? AccumulatingView<T> : SingleValueView<T>;
 }
 
 /**
@@ -93,9 +157,10 @@ export interface LoaderRef<T> {
  * is invariant in `T` (it surfaces `T` through `useData(): Serialize<T>`), so a
  * concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
- * sites never inspect the data with a meaningful type.
+ * sites never inspect the data with a meaningful type. `boolean` (not the default
+ * `false`) erases liveness so a live `LoaderRef<T, true>` is also accepted.
  */
-export type AnyLoaderRef = LoaderRef<any>;
+export type AnyLoaderRef = LoaderRef<any, boolean>;
 
 /**
  * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded
@@ -128,6 +193,15 @@ export type DefineLoaderOpts<T> = {
    * via defineLoader overloads can be added in a follow-up if needed.
    */
   use?: LoaderUse<T, boolean>;
+  /**
+   * Marks this loader as a long-lived client-only subscription. A `live`
+   * loader is consumed ONLY via `loader.View(render, { initial, reduce })`: it is never invoked
+   * during SSR (so an infinite generator cannot hang the document response),
+   * and its timeout defaults to `false` (no 30s cap) unless `timeoutMs` is set.
+   * `loader.View` / `loader.Boundary` / `loader.useData()` throw for live
+   * loaders.
+   */
+  live?: boolean;
 };
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -190,20 +264,33 @@ function validateFallbackDelay(
   }
 }
 
+// `{ live: true }` selects the accumulating-only `LoaderRef<T, true>`; these
+// overloads are listed first so the literal `live: true` matches before the
+// general (non-live) form. Omitting `live` (or `live: false`) yields the
+// single-value `LoaderRef<T, false>`.
+export function defineLoader<T>(
+  fn: Loader<T>,
+  opts: DefineLoaderOpts<T> & { live: true }
+): LoaderRef<T, true>;
+export function defineLoader<RouteId extends RegisteredPaths, T>(
+  route: RouteId,
+  fn: Loader<T, RouteParams<RouteId>>,
+  opts: DefineLoaderOpts<T> & { live: true }
+): LoaderRef<T, true>;
 export function defineLoader<T>(
   fn: Loader<T>,
   opts?: DefineLoaderOpts<T>
-): LoaderRef<T>;
+): LoaderRef<T, false>;
 export function defineLoader<RouteId extends RegisteredPaths, T>(
   route: RouteId,
   fn: Loader<T, RouteParams<RouteId>>,
   opts?: DefineLoaderOpts<T>
-): LoaderRef<T>;
+): LoaderRef<T, false>;
 export function defineLoader(
   fnOrRoute: Loader<unknown> | string,
   fnOrOpts?: Loader<unknown> | DefineLoaderOpts<unknown>,
   maybeOpts?: DefineLoaderOpts<unknown>
-): LoaderRef<unknown> {
+): LoaderRef<unknown, boolean> {
   // Normalize the two overload forms. The route id is type-level only (it
   // selects the param shape for the loader fn); it is not stored on the ref
   // and does not affect cache/`params` behavior.
@@ -212,6 +299,8 @@ export function defineLoader(
   const opts = (isRouteForm ? maybeOpts : fnOrOpts) as
     | DefineLoaderOpts<unknown>
     | undefined;
+
+  const live = opts?.live ?? false;
 
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   validateFallbackDelay(opts?.fallbackDelay, 'defineLoader');
@@ -253,7 +342,8 @@ export function defineLoader(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
-    timeoutMs: opts?.timeoutMs,
+    live,
+    timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
     fallbackDelay: opts?.fallbackDelay,
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
@@ -262,6 +352,11 @@ export function defineLoader(
       Middleware | StreamObserver<unknown, never>
     >,
     useData() {
+      if (live) {
+        throw new Error(
+          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.useData()`.'
+        );
+      }
       const ctx = useContext(LoaderDataContext);
       if (!ctx) {
         throw new Error(
@@ -279,18 +374,89 @@ export function defineLoader(
     // `Boundary` and `View` close over `ref`. The captures are by reference
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
-    Boundary: ({ fallback, errorFallback, children }) =>
-      h(LoaderHost<unknown>, {
+    Boundary: (props) => {
+      // The same `accumulate` <-> `live` invariant `View` enforces, applied to
+      // the lower-level escape hatch (`View` delegates here, so these guards
+      // must allow live+accumulate, which is exactly what `View` passes).
+      if (live && !props.accumulate) {
+        // A live loader has no single value; a bare `.Boundary` would suspend
+        // forever on the infinite generator. Defense-in-depth for JS callers:
+        // the discriminated `LoaderRef<T, true>` already makes this a type error
+        // (and `Boundary` is `never` on a live loader). Keyed on `live === true`,
+        // which is only ever true on the server (the client `serverLoaders` stub
+        // does not carry `live`), so it never fires spuriously in the browser.
+        throw new Error(
+          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
+        );
+      }
+      if (!isBrowser() && props.accumulate && !live) {
+        // The accumulating form is hydration-safe only for live loaders (which
+        // skip SSR). A non-live loader rendered through it runs during SSR and
+        // re-fetches on hydration (a content flash), or hangs renderToStringAsync
+        // if its generator is infinite. `LoaderRef<T, false>.View` already makes
+        // this a type error; the `.Boundary accumulate` escape hatch does not, so
+        // guard it server-side. Keyed on `!isBrowser()` so it never fires on the
+        // client stub (always browser, always `live: false`).
+        throw new Error(
+          'The accumulating `{ initial, reduce }` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
+        );
+      }
+      return h(LoaderHost<unknown>, {
         loader: ref,
-        fallback,
-        errorFallback,
-        children,
-      }),
-    View: (render, viewOpts) => {
+        fallback: props.fallback,
+        errorFallback: props.errorFallback,
+        accumulate: props.accumulate,
+        children: props.children,
+      });
+    },
+    // `render: (args: any)` (not `any`) keeps the call shape while satisfying
+    // both public overloads; `any` survives only on `reduce` (the unavoidable
+    // variance seam between the two opts shapes). The public contract is the
+    // two `View` overloads above; this implementation signature is internal.
+    View: (
+      render: (args: any) => ComponentChildren,
+      viewOpts?: {
+        initial?: unknown;
+        reduce?: (acc: any, chunk: any) => any;
+        fallback?: ComponentChildren;
+        errorFallback?:
+          | ComponentChildren
+          | ((err: Error, reset: () => void) => ComponentChildren);
+      }
+    ) => {
+      // The accumulating (streaming) form is selected by `initial` + `reduce`.
+      // A live loader has no single value, so it must use the accumulating form;
+      // conversely the accumulating form is hydration-safe only for live loaders.
+      const accumulate =
+        viewOpts &&
+        typeof viewOpts.reduce === 'function' &&
+        'initial' in viewOpts
+          ? { initial: viewOpts.initial, reduce: viewOpts.reduce }
+          : undefined;
+      if (live && !accumulate) {
+        // Defense-in-depth for JS callers; `LoaderRef<T, true>.View` is the
+        // accumulating form only, so this is already a type error in TS. Keyed
+        // on `live === true` (server-only; the client stub omits `live`), so it
+        // never fires in the browser where the discriminant is type-level.
+        throw new Error(
+          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`.'
+        );
+      }
+      if (!isBrowser() && accumulate && !live) {
+        // Non-live + accumulate runs the loader during SSR (content flash on
+        // hydration, or a hang for an infinite generator). A type error for TS
+        // callers (`LoaderRef<T, false>.View` is single-value only); guarded
+        // server-side here for JS callers. `!isBrowser()` keeps it off the
+        // client stub (always browser, always `live: false`).
+        throw new Error(
+          'The accumulating `loader.View(render, { initial, reduce })` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
+        );
+      }
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           fallback: viewOpts?.fallback,
           errorFallback: viewOpts?.errorFallback,
+          accumulate,
           children: h(ViewRenderer<unknown>, {
             loaderRef: ref,
             props,

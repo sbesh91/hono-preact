@@ -121,6 +121,38 @@ expectTypeOf<ReturnType<LoaderRef<{ at: Date }>['useData']>>().toEqualTypeOf<{
   at: string;
 }>();
 
+// `View` applies Serialize on both forms: the non-live single-value form's
+// `data` and the live accumulating form's `reduce` chunk are the wire shape,
+// while `data`/`acc` in the accumulating form stay the caller's `Acc`. A revert
+// of either seam to raw `T` fails here. Liveness is the type discriminant, so
+// the two forms live on the two `LoaderRef<T, Live>` variants. Never invoked:
+// the `.View` calls only typecheck (the trailing `void` keeps noUnusedLocals
+// satisfied).
+function _viewSerializeProbes(
+  staticLoader: LoaderRef<{ at: Date }, false>,
+  liveLoader: LoaderRef<{ at: Date }, true>
+) {
+  staticLoader.View((args) => {
+    expectTypeOf(args.data).toEqualTypeOf<{ at: string }>();
+    return null;
+  });
+  liveLoader.View<number[]>(
+    (args) => {
+      expectTypeOf(args.data).toEqualTypeOf<number[]>();
+      return null;
+    },
+    {
+      initial: [],
+      reduce: (acc, chunk) => {
+        expectTypeOf(acc).toEqualTypeOf<number[]>();
+        expectTypeOf(chunk).toEqualTypeOf<{ at: string }>();
+        return acc;
+      },
+    }
+  );
+}
+void _viewSerializeProbes;
+
 // Action hook: `useAction().data` is `Serialize<TResult> | null`.
 expectTypeOf<UseActionResult<unknown, { at: Date }>['data']>().toEqualTypeOf<{
   at: string;

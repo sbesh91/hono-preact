@@ -611,11 +611,9 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
   animation: none;
 }
 
-/* The demo activity bar is persistent, position:fixed UI. Give it its own
-   transition name so it is lifted out of the root snapshot (otherwise the root
-   slide/fade drags it on every navigation). The name lives on the fixed bar
-   element itself, not the Persist wrapper, which would collapse to zero height
-   and fail to capture an out-of-flow child. */
+/* The demo activity bar is position:fixed UI. Give it its own transition name
+   so it is lifted out of the root snapshot (otherwise the root slide/fade drags
+   it on every navigation). The name lives directly on the fixed bar element. */
 .demo-activity-bar {
   view-transition-name: demo-activity-bar;
 }

@@ -14,11 +14,8 @@ import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
 } from '../internal/history-shim.js';
-import { __persistRegistryResetForTesting } from '../internal/persist-registry.js';
 import {
   ViewTransitionName,
-  Persist,
-  PersistHost,
   useViewTransitionLifecycle,
   useViewTransitionTypes,
 } from '../index.js';
@@ -139,14 +136,13 @@ describe('toolkit integration', () => {
     vi.unstubAllGlobals();
     resetHistoryShimForTesting();
     resetDefaultTypesForTesting();
-    __persistRegistryResetForTesting();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('A+B+C+D fire together across a single navigation', async () => {
+  it('A+B+C fire together across a single navigation', async () => {
     const typeAdds: string[] = [];
     let resolveFinished!: () => void;
     const finished = new Promise<void>((resolve) => {
@@ -187,10 +183,6 @@ describe('toolkit integration', () => {
           <ViewTransitionName name="hero">
             <h1>title</h1>
           </ViewTransitionName>
-          <Persist id="player">
-            <span data-id="audio">audio</span>
-          </Persist>
-          <PersistHost />
         </div>
       );
     }
@@ -212,10 +204,6 @@ describe('toolkit integration', () => {
     expect(typeAdds).toEqual(
       expect.arrayContaining(['nav-back', 'nav-same-origin', 'custom-type'])
     );
-
-    // D: PersistHost rendered the registry entry
-    const slot = document.querySelector('[data-hp-persist-slot="player"]');
-    expect(slot?.textContent).toBe('audio');
 
     unmount();
     // Restore the original (may be undefined in happy-dom).

@@ -1,0 +1,219 @@
+# Live Loaders & Persistent UI
+
+A live loader is a streaming loader that connects once and survives intra-scope navigation. It is the mechanism for building UI that persists visually across route changes: a notification bar, a sidebar feed, a presence indicator, or any widget that should keep running while the user navigates within a section of the app.
+
+## How it works
+
+Persistent UI is expressed as a child of a layout. A layout stays mounted across navigations between its child routes, so anything rendered inside the layout survives those navigations too. Attach a `live` loader to the layout's server module to connect a long-lived stream to that layout, and consume the stream with `loader.View(render, { initial, reduce })` inside a layout component. The stream connects once when the layout mounts and reconnects only when the user leaves the layout's scope entirely.
+
+Two pieces of the same loader API drive this pattern:
+
+- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
+- `loader.View(render, { initial, reduce, fallback })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and renders through the loader's Suspense boundary, so a live widget hydrates cleanly inside a lazy layout: `fallback` renders during SSR and until the first chunk arrives, then `render` receives the accumulated `data` plus a `status`.
+
+## Scoping the persistence
+
+Choose the layout based on the scope you want:
+
+| Scope           | Route table entry                                 | What persists         |
+| --------------- | ------------------------------------------------- | --------------------- |
+| App-wide        | Root route with `layout` and `path: '*'` children | Across the whole app  |
+| Section         | Prefix route group (e.g. `path: '/projects'`)     | Within `/projects/**` |
+| Single sub-tree | Any nested layout group                           | Within that sub-tree  |
+
+The stream is tied to the layout's lifecycle. It connects when the layout mounts and is aborted (via `ctx.signal`) when the layout unmounts, which happens when the user navigates outside the layout's scope.
+
+## Example: activity bar
+
+The demo at `/demo/projects` uses a live activity loader on the `projects-shell` layout to show a real-time event feed across all project pages.
+
+**Server module** (`projects-shell.server.ts`):
+
+```ts
+import { defineLoader, type LoaderCtx } from 'hono-preact';
+import {
+  subscribeActivity,
+  recentActivityEvents,
+  type ActivityEvent,
+} from './activity-stream.js';
+
+async function* activityStream(
+  ctx: LoaderCtx
+): AsyncGenerator<ActivityEvent, void, unknown> {
+  // Yield recent events first so the feed is not empty on connect.
+  for (const e of recentActivityEvents(5)) yield e;
+
+  const queue: ActivityEvent[] = [];
+  let wake!: () => void;
+  let wakeP = new Promise<void>((r) => (wake = r));
+  const unsub = subscribeActivity((e) => {
+    queue.push(e);
+    wake();
+  });
+  ctx.signal.addEventListener('abort', () => {
+    unsub();
+    wake();
+  });
+
+  while (!ctx.signal.aborted) {
+    while (queue.length) yield queue.shift()!;
+    await wakeP;
+    wakeP = new Promise<void>((r) => (wake = r));
+  }
+}
+
+export const serverLoaders = {
+  default: defineLoader(shellLoader),
+  activity: defineLoader(activityStream, { live: true }),
+};
+```
+
+**Layout component** (`projects-shell.tsx`):
+
+```tsx
+import type { StreamStatus } from 'hono-preact';
+import { serverLoaders } from './projects-shell.server.js';
+import type { ActivityEvent } from './activity-stream.js';
+
+const activityLoader = serverLoaders.activity;
+const MAX = 50;
+
+function Feed({
+  events,
+  status,
+}: {
+  events: ActivityEvent[];
+  status: StreamStatus;
+}) {
+  const connected = status === 'open';
+  return (
+    <div role="log" aria-label="Recent activity">
+      <span aria-hidden class={connected ? 'dot dot--live' : 'dot dot--idle'} />
+      {events.length === 0 ? (
+        <p>Listening for activity...</p>
+      ) : (
+        <ul>
+          {events.map((e) => (
+            <li key={e.id}>
+              {e.actor}: {e.taskTitle}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// The accumulating `.View` form (selected by `initial` + `reduce`) renders
+// through the loader's Suspense boundary, so the bar hydrates cleanly inside the
+// layout. `fallback` shows on SSR and until the first chunk; then `render`
+// receives the folded `data` and the connection `status`.
+const ActivityBar = activityLoader.View<ActivityEvent[]>(
+  ({ data, status }) => <Feed events={data} status={status} />,
+  {
+    initial: [],
+    reduce: (acc, e) => [e, ...acc].slice(0, MAX),
+    fallback: <p>Connecting to activity...</p>,
+  }
+);
+
+export default function ProjectsShell({
+  children,
+}: {
+  children: ComponentChildren;
+}) {
+  return (
+    <div class="projects-shell">
+      <main>{children}</main>
+      <ActivityBar />
+    </div>
+  );
+}
+```
+
+Navigating between `/demo/projects/alpha` and `/demo/projects/beta` does not remount `ProjectsShell`, so `ActivityBar` keeps its accumulated events and the stream stays open.
+
+## Known behavior
+
+### Scope-exit blip
+
+When the user navigates out of the layout's scope, the layout unmounts and the stream closes. If the user navigates back in, the layout remounts and the stream reconnects from scratch, starting with `initial` again. This is the expected lifecycle: there is no cross-mount cache for live loaders.
+
+### No automatic reconnect on drop
+
+A live loader opens the stream once and does not auto-reconnect. If the connection drops mid-session (a network blip, a server restart, an idle proxy timeout), `status` becomes `'error'` or `'closed'` and stays there until the layout unmounts and remounts (scope exit and re-entry). To recover in place, branch on `status` and call `reload()` (for example, a "Reconnect" button shown when `status === 'error'`); `reload()` resets `data` to `initial` and re-opens the stream.
+
+### Failure or close before the first chunk
+
+The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. On the **initial** connect, a stream that fails, times out, or closes with zero chunks _before_ its first chunk is delivered through the loader's error boundary instead: the `errorFallback` renders (or the error propagates to the nearest boundary), and the render function's `status` is not updated. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
+
+A failed `reload()` behaves differently and more conveniently: because the component is already mounted, a reconnect that fails (at any point, including before its first chunk) surfaces as `status === 'error'` in the render function, not through the error boundary. That is exactly what makes the reconnect-on-error pattern above work in place.
+
+## API reference
+
+### `defineLoader(fn, { live })`
+
+| Option | Type      | Default | Description                                                                                                                                          |
+| ------ | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `live` | `boolean` | `false` | Marks this loader as a long-lived client subscription. Skipped on SSR; timeout defaults to `false`. Consume via the accumulating `loader.View` form. |
+
+All other `defineLoader` options (`params`, `cache`, `timeoutMs`, `use`) work the same for live loaders. See [Server Loaders](/docs/loaders) for the full option table.
+
+### `loader.View(render, { initial, reduce })` (accumulating form)
+
+Passing `initial` and `reduce` selects the accumulating form of `.View`. `data` becomes the folded accumulator and the render args carry a `status`.
+
+```ts
+loader.View<Acc>(
+  render: (args: {
+    data: Acc;
+    status: StreamStatus;
+    error: Error | null;
+    reload: () => void;
+  }) => ComponentChildren,
+  opts: {
+    initial: Acc;
+    reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
+    fallback?: ComponentChildren;
+    errorFallback?: ComponentChildren;
+  }
+): FunctionComponent
+```
+
+`chunk` is `Serialize<T>`: the JSON round-trip of the server-side chunk, the same wire shape `useData()` and the single-value `.View` surface (a `Date` field arrives as a string).
+
+| Option     | Type                                     | Description                                                                                                  |
+| ---------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `initial`  | `Acc`                                    | Seed value; also the value rendered on SSR and before the first chunk arrives.                               |
+| `reduce`   | `(acc: Acc, chunk: Serialize<T>) => Acc` | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order. |
+| `fallback` | `ComponentChildren`                      | Rendered on SSR and while the stream is connecting (before the first chunk).                                 |
+
+The `render` function receives:
+
+| Field    | Type            | Description                                                                                       |
+| -------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| `data`   | `Acc`           | Current accumulated value. Starts as `initial`, updated after each chunk.                         |
+| `status` | `StreamStatus`  | Connection state: `'connecting'`, `'open'`, `'closed'`, or `'error'`.                             |
+| `error`  | `Error \| null` | Set when `status === 'error'`.                                                                    |
+| `reload` | `() => void`    | Resubscribe: aborts the current stream, resets `data` to `initial`, reconnects, and folds afresh. |
+
+`StreamStatus` values:
+
+| Value          | Meaning                                                       |
+| -------------- | ------------------------------------------------------------- |
+| `'connecting'` | SSR or pre-hydration; the first chunk has not arrived yet.    |
+| `'open'`       | At least one chunk has arrived; the stream is active.         |
+| `'closed'`     | The generator returned normally; no more chunks are expected. |
+| `'error'`      | The stream errored. `error` holds the cause.                  |
+
+### Type exports
+
+```ts
+import type { StreamStatus } from 'hono-preact';
+```
+
+## See also
+
+- [Server Loaders](/docs/loaders): non-live loaders and the full `defineLoader` option table.
+- [Layouts & Nested Routes](/docs/layouts): how layout scoping and lifecycle work.
+- [Streaming](/docs/streaming): finite streaming loaders consumed with the single-value `.View()` form.

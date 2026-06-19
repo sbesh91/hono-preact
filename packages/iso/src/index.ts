@@ -38,6 +38,7 @@ export type {
   AnyLoaderRef,
   LoaderCtx,
   Loader as LoaderFn,
+  StreamStatus,
 } from './define-loader.js';
 export { serverRoute } from './server-route.js';
 export type { RouteServer } from './server-route.js';
@@ -170,6 +171,3 @@ export {
   type ViewTransitionNameProps,
   type ViewTransitionGroupProps,
 } from './view-transition-name.js';
-
-// Persist components.
-export { Persist, PersistHost, type PersistProps } from './persist.js';

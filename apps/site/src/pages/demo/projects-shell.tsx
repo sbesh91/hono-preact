@@ -1,5 +1,6 @@
 import type { LayoutProps } from 'hono-preact';
 import { buildPath, useAction, useNavigate, useRoute } from 'hono-preact';
+import { ActivityBar } from '../../components/demo/ActivityBar.js';
 import { useEffect } from 'preact/hooks';
 import { serverLoaders } from './projects-shell.server.js';
 import { serverActions as loginActions } from './login.server.js';
@@ -112,5 +113,10 @@ const ShellView = shellLoader.View<{ children: LayoutProps['children'] }>(
 );
 
 export default function ProjectsShell({ children }: LayoutProps) {
-  return <ShellView children={children} />;
+  return (
+    <>
+      <ShellView children={children} />
+      <ActivityBar />
+    </>
+  );
 }

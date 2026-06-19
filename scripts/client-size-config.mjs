@@ -39,7 +39,6 @@ export const FEATURE_MODULES = {
   // Section B `guard` chunk prefix below is kept only in case the site still
   // emits a guard-named chunk.
   head: ['head.js'],
-  persist: ['persist.js'],
   middleware: ['define-middleware.js', 'reload-context.js'],
 };
 

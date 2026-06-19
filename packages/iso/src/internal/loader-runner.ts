@@ -46,7 +46,7 @@ function isAsyncGenerator(
  * the per-id streaming-SSR registry.
  */
 export function runLoader<T>(
-  loaderRef: LoaderRef<T>,
+  loaderRef: LoaderRef<T, boolean>,
   location: RouteHook,
   id: string,
   signal: AbortSignal,
