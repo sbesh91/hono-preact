@@ -20,6 +20,10 @@ import {
   type StreamStatus,
 } from './use-loader-runner.js';
 import { isBrowser } from '../is-browser.js';
+import {
+  DelayedFallback,
+  DEFAULT_FALLBACK_DELAY_MS,
+} from './delayed-fallback.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 /** Streaming status for a `.View` consuming a streaming/`live` loader. */
@@ -82,10 +86,25 @@ export function LoaderHost<T>({
     fallback
   );
 
+  // The non-accumulate fallback is delayed (it only mounts after `fallbackDelay`
+  // ms) so a fast client navigation never flashes it. The accumulate (live)
+  // fallback is the `useId`-anchored <section> the SSR DOM is adopted from on
+  // hydration, so it must render IMMEDIATELY: a delay would render null first
+  // and orphan the SSR node (the two-overlapping-bars regression). `liveServer`
+  // renders the anchored fallback directly (the loader never runs on SSR).
+  const fallbackDelay = loaderRef.fallbackDelay ?? DEFAULT_FALLBACK_DELAY_MS;
+  const suspenseFallback = accumulate ? (
+    fallbackContent
+  ) : fallback == null ? (
+    fallback
+  ) : (
+    <DelayedFallback delay={fallbackDelay}>{fallback}</DelayedFallback>
+  );
+
   const suspenseContent = liveServer ? (
     <Suspense fallback={fallbackContent}>{fallbackContent}</Suspense>
   ) : (
-    <Suspense fallback={fallbackContent}>
+    <Suspense fallback={suspenseFallback}>
       <DataReader reader={reader} overrideData={overrideData}>
         <Envelope>{children}</Envelope>
       </DataReader>
