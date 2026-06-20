@@ -15,14 +15,14 @@
     },
     "loaders": {
       "total": {
-        "raw": 17861,
-        "gzip": 6558,
-        "brotli": 5923
+        "raw": 18088,
+        "gzip": 6681,
+        "brotli": 6026
       },
       "marginalOverCore": {
-        "raw": 15604,
-        "gzip": 5226,
-        "brotli": 4691
+        "raw": 15831,
+        "gzip": 5348,
+        "brotli": 4796
       }
     },
     "actions": {
@@ -100,19 +100,19 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 85077,
+      "app": 85075,
       "actions": 17022,
-      "core": 36151,
+      "core": 36153,
       "components": 104101,
       "guards": 250,
       "middleware": 12470,
       "vendor": 8401,
       "prefetch": 4996,
-      "loaders": 16225,
-      "streaming": 7314,
+      "loaders": 16226,
+      "streaming": 7419,
       "transitions": 3863
     },
-    "total": 295870,
+    "total": 295976,
     "unmatched": 49,
     "fileCount": 108
   },
