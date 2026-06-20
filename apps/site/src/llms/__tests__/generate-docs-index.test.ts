@@ -84,7 +84,11 @@ describe('generateDocsIndex', () => {
     const page = pages.find((p) => p.route === '/docs/live-loaders')!;
     const h = page.headings.find((x) => x.text.includes('loader.View'))!;
     expect(h).toBeTruthy();
-    expect(h.id).toBe(new GithubSlugger().slug(h.text));
+    // headingText must strip the backticks/markdown from the real doc heading:
+    const expectedText = 'loader.View(render, { initial, reduce }) (accumulating form)';
+    expect(h.text).toBe(expectedText);
+    // and the slug must equal github-slugger on that known visible text (real parity):
+    expect(h.id).toBe(new GithubSlugger().slug(expectedText));
   });
 });
 
