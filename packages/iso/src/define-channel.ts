@@ -2,10 +2,13 @@ import type { RouteParams } from './internal/typed-routes.js';
 import { interpolatePattern } from './internal/interpolate-pattern.js';
 
 // A topic string branded with its payload type. The brand is phantom (a
-// `unique symbol` optional key, never present at runtime); it lets the later
-// publish/subscribe layer infer the payload from a topic and reject a raw,
-// unbranded string. The string-to-topic relationship mirrors how `buildPath`
-// produces a path from a typed pattern, but the value also carries the payload.
+// `unique symbol` optional key, never present at runtime), so it carries the
+// payload for inference: the later publish/subscribe layer recovers `P` from a
+// `Topic<P>` argument. Because the key is optional, the brand is permissive-in
+// (a plain `string` is still assignable to `Topic<P>`); it is an inference
+// carrier, not a nominal type, so it does not by itself reject an unbranded
+// string. The string-to-topic relationship mirrors how `buildPath` produces a
+// path from a typed pattern, but the value also carries the payload.
 declare const TopicPayload: unique symbol;
 export type Topic<Payload> = string & { readonly [TopicPayload]?: Payload };
 
