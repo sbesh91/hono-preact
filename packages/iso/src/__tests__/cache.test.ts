@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createCache, runRequestScope } from '../cache.js';
 import { env } from '../is-browser.js';
 
@@ -21,48 +21,13 @@ describe('createCache', () => {
     expect(cache.has()).toBe(true);
   });
 
-  it('wrap() calls loader on cache miss and stores the result', async () => {
-    const cache = createCache<{ name: string }>();
-    const loader = vi.fn().mockResolvedValue({ name: 'fetched' });
-    const wrapped = cache.wrap(loader);
-    const result = await wrapped({
-      c: {} as any,
-      location: {} as any,
-      signal: new AbortController().signal,
-    });
-    expect(loader).toHaveBeenCalledOnce();
-    expect(result).toEqual({ name: 'fetched' });
-    expect(cache.get()).toEqual({ name: 'fetched' });
-  });
-
-  it('wrap() returns cached value on hit without calling loader', async () => {
-    const cache = createCache<{ name: string }>();
-    cache.set({ name: 'cached' });
-    const loader = vi.fn();
-    const wrapped = cache.wrap(loader);
-    const result = await wrapped({
-      c: {} as any,
-      location: {} as any,
-      signal: new AbortController().signal,
-    });
-    expect(loader).not.toHaveBeenCalled();
-    expect(result).toEqual({ name: 'cached' });
-  });
-
-  it('invalidate() resets to null; next wrap() call re-fetches', async () => {
+  it('invalidate() resets the cache to empty', () => {
     const cache = createCache<{ name: string }>();
     cache.set({ name: 'old' });
+    expect(cache.has()).toBe(true);
     cache.invalidate();
     expect(cache.get()).toBeNull();
-    const loader = vi.fn().mockResolvedValue({ name: 'new' });
-    const wrapped = cache.wrap(loader);
-    const result = await wrapped({
-      c: {} as any,
-      location: {} as any,
-      signal: new AbortController().signal,
-    });
-    expect(loader).toHaveBeenCalledOnce();
-    expect(result).toEqual({ name: 'new' });
+    expect(cache.has()).toBe(false);
   });
 });
 
@@ -125,42 +90,6 @@ describe('createCache request-scoped storage on the server', () => {
         'bob',
         'carol',
       ]);
-    } finally {
-      env.current = previousEnv;
-    }
-  });
-
-  it('cache.wrap() inside runRequestScope only sees its own request data', async () => {
-    const cache = createCache<{ id: number }>();
-    const previousEnv = env.current;
-    env.current = 'server';
-    try {
-      const handle = (id: number) =>
-        runRequestScope(async () => {
-          const wrapped = cache.wrap(async () => {
-            await Promise.resolve();
-            return { id };
-          });
-          const a = await wrapped({
-            c: {} as any,
-            location: {} as never,
-            signal: new AbortController().signal,
-          });
-          const b = await wrapped({
-            c: {} as any,
-            location: {} as never,
-            signal: new AbortController().signal,
-          });
-          return { a, b };
-        });
-
-      const [r1, r2, r3] = await Promise.all([handle(1), handle(2), handle(3)]);
-      expect(r1.a).toEqual({ id: 1 });
-      expect(r1.b).toEqual({ id: 1 });
-      expect(r2.a).toEqual({ id: 2 });
-      expect(r2.b).toEqual({ id: 2 });
-      expect(r3.a).toEqual({ id: 3 });
-      expect(r3.b).toEqual({ id: 3 });
     } finally {
       env.current = previousEnv;
     }

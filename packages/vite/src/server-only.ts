@@ -85,10 +85,9 @@ export function serverOnlyPlugin(): Plugin {
       let needsUseActionImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
-        if (
-          (serverImport as unknown as { importKind?: string }).importKind ===
-          'type'
-        ) {
+        // `import type { … } from './x.server'` is erased entirely. @babel/types
+        // declares `importKind` on ImportDeclaration, so read it directly.
+        if (serverImport.importKind === 'type') {
           s.overwrite(serverImport.start!, serverImport.end!, '');
           continue;
         }
@@ -112,9 +111,11 @@ export function serverOnlyPlugin(): Plugin {
         let hasValueSpecifier = false;
 
         for (const specifier of serverImport.specifiers) {
+          // Skip inline type-only specifiers (`import { type Foo }`). Only
+          // ImportSpecifier carries `importKind`; narrow before reading it.
           if (
-            (specifier as unknown as { importKind?: string }).importKind ===
-            'type'
+            specifier.type === 'ImportSpecifier' &&
+            specifier.importKind === 'type'
           ) {
             continue;
           }
