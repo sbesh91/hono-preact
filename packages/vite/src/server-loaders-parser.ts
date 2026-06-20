@@ -7,6 +7,8 @@ export type ParsedLoaderEntry = {
   call: CallExpression;
   /** The opts ObjectExpression if the call has an opts arg; otherwise null. */
   optsArg: ObjectExpression | null;
+  /** Whether this is a live loader (route.liveLoader) or a regular loader. */
+  kind: 'loader' | 'liveLoader';
 };
 
 /**
@@ -26,6 +28,17 @@ export function isLoaderCall(call: CallExpression): boolean {
     !callee.computed &&
     callee.property.type === 'Identifier' &&
     callee.property.name === 'loader'
+  );
+}
+
+/** A `route.liveLoader({...})` / `serverRoute(...).liveLoader({...})` call. */
+export function isLiveLoaderCall(call: CallExpression): boolean {
+  const callee = call.callee;
+  return (
+    callee.type === 'MemberExpression' &&
+    !callee.computed &&
+    callee.property.type === 'Identifier' &&
+    callee.property.name === 'liveLoader'
   );
 }
 
@@ -63,20 +76,34 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
           continue;
 
         const call = prop.value as CallExpression;
-        if (!isLoaderCall(call)) continue;
+        const live = isLiveLoaderCall(call);
+        if (!isLoaderCall(call) && !live) continue;
 
-        // The route-id overload `defineLoader('/r/:id', fn, opts?)` shifts the
-        // opts object to the third argument; the fn-first form keeps it second.
-        const isRouteForm = call.arguments[0]?.type === 'StringLiteral';
-        const optsCandidate = isRouteForm
-          ? call.arguments[2]
-          : call.arguments[1];
-        const optsArg =
-          optsCandidate?.type === 'ObjectExpression'
-            ? (optsCandidate as ObjectExpression)
-            : null;
+        // route.liveLoader takes a single options object; loaders take (fn, opts) or
+        // ('/r/:id', fn, opts).
+        let optsArg: ObjectExpression | null = null;
+        if (live) {
+          optsArg =
+            call.arguments[0]?.type === 'ObjectExpression'
+              ? (call.arguments[0] as ObjectExpression)
+              : null;
+        } else {
+          const isRouteForm = call.arguments[0]?.type === 'StringLiteral';
+          const optsCandidate = isRouteForm
+            ? call.arguments[2]
+            : call.arguments[1];
+          optsArg =
+            optsCandidate?.type === 'ObjectExpression'
+              ? (optsCandidate as ObjectExpression)
+              : null;
+        }
 
-        entries.push({ name: prop.key.name, call, optsArg });
+        entries.push({
+          name: prop.key.name,
+          call,
+          optsArg,
+          kind: live ? 'liveLoader' : 'loader',
+        });
       }
     }
   }
