@@ -1,7 +1,7 @@
 import type { AppConfig } from '@hono-preact/iso';
 import { speculationRulesTag } from './speculation-rules.js';
 
-export function escapeHtml(str: string): string {
+function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
