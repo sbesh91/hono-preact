@@ -4,12 +4,13 @@ import type { AnyLoaderRef } from './define-loader.js';
 import { useInvalidate } from './use-invalidate.js';
 import type { ActionUse } from './internal/use-types.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
-import { assignSafeRedirect } from './internal/safe-redirect.js';
 import {
   setLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
+import { applyDecodedOutcome } from './internal/decoded-outcome.js';
+import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 
@@ -64,21 +65,9 @@ export class TimeoutError extends Error {
   readonly kind = 'timeout' as const;
   readonly timeoutMs: number;
   constructor(timeoutMs: number) {
-    super(`Request timed out after ${timeoutMs}ms`);
+    super(timeoutMessage(timeoutMs));
     this.name = 'TimeoutError';
     this.timeoutMs = timeoutMs;
-  }
-}
-
-function validateTimeoutMs(
-  value: number | false | undefined,
-  context: string
-): void {
-  if (value === undefined || value === false) return;
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(
-      `${context}: timeoutMs must be a non-negative finite number or false, got ${String(value)}`
-    );
   }
 }
 
@@ -417,61 +406,66 @@ export function useAction<
         } else {
           // Uniform envelope path. All non-streaming responses carry a JSON
           // body shaped as { __outcome, ... } regardless of HTTP status.
+          // Failures throw to the surrounding catch (which sets `error`/`data`
+          // and returns `{ ok: false }`); success falls through to
+          // `applyInvalidate` below; a same-origin redirect parks forever.
           const decoded = await decodeActionResponse(response);
-          if (decoded.kind === 'malformed') {
-            throw new Error(`Malformed envelope (HTTP ${decoded.httpStatus})`);
-          }
-          if (decoded.kind === 'success') {
-            const data = decoded.data as Serialize<TResult>;
-            setData(data);
-            invokeSuccess(data);
-            finalResult = data;
-            recordOutcome(currentStub.__module, currentStub.__action, {
-              kind: 'success',
-              data,
-              submittedPayload: payload,
-            });
-            outcomeRecorded = true;
-          } else if (decoded.kind === 'redirect') {
-            if (assignSafeRedirect(decoded.to)) {
-              // Navigation issued; this promise never settles.
-              return await new Promise<MutateResult<TResult>>(() => {});
-            }
-            // Cross-origin: surface as an error so the caller can handle it.
-            throw new Error(
-              `Refused cross-origin redirect to ${decoded.to}. redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.`
-            );
-          } else if (decoded.kind === 'deny') {
-            recordOutcome(currentStub.__module, currentStub.__action, {
-              kind: 'deny',
-              status: decoded.status,
-              message: decoded.message,
-              data: decoded.data,
-              submittedPayload: payload,
-            });
-            outcomeRecorded = true;
-            throw new Error(decoded.message);
-          } else if (decoded.kind === 'timeout') {
-            recordOutcome(currentStub.__module, currentStub.__action, {
-              kind: 'error',
-              message: `Request timed out after ${decoded.timeoutMs}ms`,
-              submittedPayload: payload,
-            });
-            outcomeRecorded = true;
-            throw new TimeoutError(decoded.timeoutMs);
-          } else if (decoded.kind === 'error') {
-            recordOutcome(currentStub.__module, currentStub.__action, {
-              kind: 'error',
-              message: decoded.message,
-              submittedPayload: payload,
-            });
-            outcomeRecorded = true;
-            throw new Error(decoded.message);
-          } else if (decoded.kind === 'unknown') {
-            throw new Error(`Unknown action outcome: ${decoded.outcome}`);
-          } else {
-            decoded satisfies never;
-            throw new Error('Unreachable: unhandled decoded envelope kind');
+          const navigated = applyDecodedOutcome(decoded, {
+            success: (data) => {
+              const result = data as Serialize<TResult>;
+              setData(result);
+              invokeSuccess(result);
+              finalResult = result;
+              recordOutcome(currentStub.__module, currentStub.__action, {
+                kind: 'success',
+                data: result,
+                submittedPayload: payload,
+              });
+              outcomeRecorded = true;
+            },
+            navigated: () => {},
+            crossOriginRedirect: (message) => {
+              throw new Error(message);
+            },
+            deny: (status, message, data) => {
+              recordOutcome(currentStub.__module, currentStub.__action, {
+                kind: 'deny',
+                status,
+                message,
+                data,
+                submittedPayload: payload,
+              });
+              outcomeRecorded = true;
+              throw new Error(message);
+            },
+            error: (message) => {
+              recordOutcome(currentStub.__module, currentStub.__action, {
+                kind: 'error',
+                message,
+                submittedPayload: payload,
+              });
+              outcomeRecorded = true;
+              throw new Error(message);
+            },
+            timeout: (timeoutMs, message) => {
+              recordOutcome(currentStub.__module, currentStub.__action, {
+                kind: 'error',
+                message,
+                submittedPayload: payload,
+              });
+              outcomeRecorded = true;
+              throw new TimeoutError(timeoutMs);
+            },
+            unknown: (outcome) => {
+              throw new Error(`Unknown action outcome: ${outcome}`);
+            },
+            malformed: (httpStatus) => {
+              throw new Error(`Malformed envelope (HTTP ${httpStatus})`);
+            },
+          });
+          if (navigated) {
+            // Same-origin redirect issued; this promise never settles.
+            return await new Promise<MutateResult<TResult>>(() => {});
           }
         }
 
