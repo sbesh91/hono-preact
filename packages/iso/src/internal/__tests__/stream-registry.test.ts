@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   installStreamRegistry,
   subscribeToLoaderStream,
@@ -162,5 +162,53 @@ describe('stream-registry', () => {
     await Promise.resolve(); // flush microtask drain
     expect(observed).toEqual([]);
     expect(reobserved).toEqual([1]);
+  });
+
+  it('warns when the SSR bootstrap buffer was capped before install', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      (window as { __HP_STREAM__?: unknown }).__HP_STREAM__ = {
+        queue: [],
+        capped: true,
+      } as unknown as Window['__HP_STREAM__'];
+
+      installStreamRegistry();
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain('capped');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does NOT warn when the bootstrap buffer was not capped', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      (window as { __HP_STREAM__?: unknown }).__HP_STREAM__ = {
+        queue: [],
+        capped: false,
+      } as unknown as Window['__HP_STREAM__'];
+
+      installStreamRegistry();
+
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('dev-warns on a duplicate subscribe for the same loaderId (render-once violation)', () => {
+    installStreamRegistry();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const sink = { push: () => {}, end: () => {}, error: () => {} };
+      subscribeToLoaderStream('DUP', sink);
+      expect(warn).not.toHaveBeenCalled(); // first subscribe is clean
+      subscribeToLoaderStream('DUP', sink); // second collides
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain('DUP');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

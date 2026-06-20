@@ -21,6 +21,7 @@ import type {
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
+import { validateTimeoutMs } from './internal/timeout.js';
 export type { StreamStatus } from './internal/use-loader-runner.js';
 
 export type LoaderCtx<TParams = Record<string, string>> = {
@@ -238,18 +239,6 @@ function getSharedCaches(): SharedCacheMap {
     g[SHARED_CACHES_KEY] = map;
   }
   return map;
-}
-
-function validateTimeoutMs(
-  value: number | false | undefined,
-  context: string
-): void {
-  if (value === undefined || value === false) return;
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(
-      `${context}: timeoutMs must be a non-negative finite number or false, got ${String(value)}`
-    );
-  }
 }
 
 function validateFallbackDelay(

@@ -9,8 +9,8 @@ import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { setLastActionResult } from './internal/action-result-store.js';
-import { assignSafeRedirect } from './internal/safe-redirect.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
+import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
@@ -136,92 +136,84 @@ export function Form<TPayload, TResult>({
           headers: { Accept: 'application/json' },
         });
         const decoded = await decodeActionResponse(res);
-        switch (decoded.kind) {
-          case 'malformed':
+        // Every outcome records a result (or reloads) and returns; `<Form>`
+        // never throws a classified outcome (unlike useAction). The shared
+        // dispatcher owns the kind switch and redirect attempt; the sink owns
+        // the optimistic settle/revert, the result store, and the callbacks.
+        applyDecodedOutcome(decoded, {
+          success: (data) => {
+            handle?.settle();
+            setLastActionResult(moduleKey, actionName, {
+              kind: 'success',
+              data,
+              submittedPayload: payload,
+            });
+            lifecycle.current.onSuccess?.(data as Serialize<TResult>, {
+              reset: resetForm,
+            });
+            applyInvalidate(lifecycle.current.invalidate);
+            if (lifecycle.current.reset) resetForm();
+          },
+          navigated: () => {
+            handle?.settle();
+          },
+          crossOriginRedirect: (message) => {
+            // Revert optimistic, surface as an error result so
+            // useActionResult sees it.
+            handle?.revert();
+            setLastActionResult(moduleKey, actionName, {
+              kind: 'error',
+              message,
+              submittedPayload: payload,
+            });
+          },
+          deny: (status, message, data) => {
+            handle?.revert();
+            setLastActionResult(moduleKey, actionName, {
+              kind: 'deny',
+              status,
+              message,
+              data,
+              submittedPayload: payload,
+            });
+          },
+          error: (message) => {
+            handle?.revert();
+            setLastActionResult(moduleKey, actionName, {
+              kind: 'error',
+              message,
+              submittedPayload: payload,
+            });
+            lifecycle.current.onError?.(new Error(message));
+          },
+          timeout: (_timeoutMs, message) => {
+            handle?.revert();
+            setLastActionResult(moduleKey, actionName, {
+              kind: 'error',
+              message,
+              submittedPayload: payload,
+            });
+            lifecycle.current.onError?.(new Error(message));
+          },
+          unknown: (outcome, message) => {
+            handle?.revert();
+            const text =
+              message ?? `Unexpected outcome: ${outcome ?? 'unknown'}`;
+            setLastActionResult(moduleKey, actionName, {
+              kind: 'error',
+              message: text,
+              submittedPayload: payload,
+            });
+            lifecycle.current.onError?.(new Error(text));
+          },
+          malformed: () => {
             // PE fallback policy: a non-envelope body means the POST landed
             // somewhere that didn't speak the action protocol; reload so the
             // server-rendered state wins.
             handle?.revert();
             if (typeof window !== 'undefined') window.location.reload();
-            return;
-          case 'redirect': {
-            const navigated = assignSafeRedirect(decoded.to);
-            if (navigated) {
-              handle?.settle();
-              return;
-            }
-            // Cross-origin: revert optimistic, surface as error result so
-            // useActionResult sees it.
-            handle?.revert();
-            setLastActionResult(moduleKey, actionName, {
-              kind: 'error',
-              message: `Refused cross-origin redirect to ${decoded.to}. redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.`,
-              submittedPayload: payload,
-            });
-            return;
-          }
-          case 'success':
-            handle?.settle();
-            setLastActionResult(moduleKey, actionName, {
-              kind: 'success',
-              data: decoded.data,
-              submittedPayload: payload,
-            });
-            lifecycle.current.onSuccess?.(decoded.data as Serialize<TResult>, {
-              reset: resetForm,
-            });
-            applyInvalidate(lifecycle.current.invalidate);
-            if (lifecycle.current.reset) resetForm();
-            return;
-          case 'deny':
-            handle?.revert();
-            setLastActionResult(moduleKey, actionName, {
-              kind: 'deny',
-              status: decoded.status,
-              message: decoded.message,
-              data: decoded.data,
-              submittedPayload: payload,
-            });
-            return;
-          case 'error':
-            handle?.revert();
-            setLastActionResult(moduleKey, actionName, {
-              kind: 'error',
-              message: decoded.message,
-              submittedPayload: payload,
-            });
-            lifecycle.current.onError?.(new Error(decoded.message));
-            return;
-          case 'timeout':
-            handle?.revert();
-            setLastActionResult(moduleKey, actionName, {
-              kind: 'error',
-              message: `Request timed out after ${decoded.timeoutMs}ms`,
-              submittedPayload: payload,
-            });
-            lifecycle.current.onError?.(
-              new Error(`Request timed out after ${decoded.timeoutMs}ms`)
-            );
-            return;
-          case 'unknown':
-            handle?.revert();
-            setLastActionResult(moduleKey, actionName, {
-              kind: 'error',
-              message:
-                decoded.message ??
-                `Unexpected outcome: ${decoded.outcome ?? 'unknown'}`,
-              submittedPayload: payload,
-            });
-            lifecycle.current.onError?.(
-              new Error(
-                decoded.message ??
-                  `Unexpected outcome: ${decoded.outcome ?? 'unknown'}`
-              )
-            );
-            return;
-          default:
-            decoded satisfies never;
-        }
+          },
+        });
       } catch (err) {
         handle?.revert();
         setLastActionResult(moduleKey, actionName, {
