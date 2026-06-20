@@ -4,12 +4,15 @@ import { useLocation } from 'preact-iso';
 import { NavLink, useRouteActive } from 'hono-preact';
 import { ThemeToggle } from './ThemeToggle.js';
 import { nav, type NavArea } from '../pages/docs/nav.js';
+import docsPages from 'virtual:docs-index';
+import { headingsForRoute } from '../llms/generate-docs-index.js';
+import { TableOfContents } from './docs/TableOfContents.js';
+import { CommandPalette } from './CommandPalette.js';
+import { useHashScroll } from '../hooks/use-hash-scroll.js';
 
 interface Props {
   children: ComponentChildren;
 }
-
-const SIDEBAR_W = 240;
 
 // lucide-preact removed brand marks, so the GitHub glyph is inline SVG.
 function GithubMark({ size = 18 }: { size?: number }) {
@@ -29,6 +32,9 @@ function GithubMark({ size = 18 }: { size?: number }) {
 export function DocsLayout({ children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { path } = useLocation();
+
+  useHashScroll(path);
+  const headings = headingsForRoute(docsPages, path);
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -118,6 +124,7 @@ export function DocsLayout({ children }: Props) {
           })}
         </nav>
         <span class="flex-1" />
+        <CommandPalette pages={docsPages} />
         <span class="hidden sm:inline text-xs text-muted whitespace-nowrap">
           v{__HONO_PREACT_VERSION__}
         </span>
@@ -133,10 +140,7 @@ export function DocsLayout({ children }: Props) {
         <ThemeToggle />
       </header>
 
-      <div
-        class="flex-1 grid"
-        style={{ gridTemplateColumns: `${SIDEBAR_W}px 1fr` }}
-      >
+      <div class="flex-1 grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_15rem]">
         {/* Desktop rail (pinned open) */}
         <aside
           aria-label="Docs navigation"
@@ -209,6 +213,13 @@ export function DocsLayout({ children }: Props) {
             </span>
           </nav>
         </main>
+        {/* On-this-page rail (wide screens only) */}
+        <aside
+          aria-label="On this page"
+          class="hidden xl:block xl:sticky xl:top-12 xl:h-[calc(100vh-3rem)] overflow-y-auto py-8 px-4"
+        >
+          <TableOfContents headings={headings} />
+        </aside>
       </div>
     </div>
   );
