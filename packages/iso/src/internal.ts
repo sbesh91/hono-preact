@@ -62,6 +62,7 @@ export {
 export { mergeRefs } from './internal/merge-refs.js';
 
 export { subscribeToLoaderStream } from './internal/stream-registry.js';
+export type { StreamEvent } from './internal/stream-registry.js';
 
 export {
   registerServerStreamingLoader,
