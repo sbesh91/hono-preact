@@ -296,11 +296,20 @@ function _probes() {
   // @ts-expect-error a param object is required
   board.key();
 
-  // Multiple params are all required and typed.
+  // Multiple params: each is required and typed. RouteParams yields an
+  // intersection (`{roomId} & {userId}`), so the params shape is pinned
+  // behaviorally (omitting either param is an error) rather than by a strict
+  // toEqualTypeOf against a merged object, which the intersection would fail.
+  // The missing-param errors also catch a regression that widened the params to
+  // a looser type such as Record<string, string>.
   const room = defineChannel('room/:roomId/user/:userId')<number>();
-  expectTypeOf(room.key)
-    .parameter(0)
-    .toEqualTypeOf<{ roomId: string; userId: string }>();
+  expectTypeOf(room.key({ roomId: 'r1', userId: 'u9' })).toEqualTypeOf<
+    Topic<number>
+  >();
+  // @ts-expect-error missing userId
+  room.key({ roomId: 'r1' });
+  // @ts-expect-error missing roomId
+  room.key({ userId: 'u9' });
 
   // A param-less channel: key() takes no argument.
   const activity = defineChannel('activity')<string>();
@@ -312,12 +321,16 @@ function _probes() {
   const ping = defineChannel('ping/:id')();
   expectTypeOf(ping.key({ id: '1' })).toEqualTypeOf<Topic<void>>();
 }
+
+// Mark the type-only probe as used (the repo convention; a bare unused function
+// trips noUnusedLocals under the type-test tsconfig). Mirrors define-loader-live.
+void _probes;
 ```
 
 - [ ] **Step 6: Run the type tests to verify they pass**
 
-Run: `pnpm --filter @hono-preact/iso exec vitest run --typecheck.only src/__tests__/define-channel.test-d.ts`
-Expected: PASS. If a `@ts-expect-error` is reported "unused", the corresponding misuse is wrongly accepted, fix the type in `define-channel.ts` (do not delete the assertion). If a positive `expectTypeOf` fails, the params/payload typing is wrong.
+Run (from the worktree ROOT with the full path; the `--filter`-package form finds no files because the vitest config globs are root-relative): `pnpm exec vitest run --typecheck.only packages/iso/src/__tests__/define-channel.test-d.ts`
+Expected: `Test Files 1 passed`, `Type Errors no errors`. If a `@ts-expect-error` is reported "unused", the corresponding misuse is wrongly accepted, fix the type in `define-channel.ts` (do not delete the assertion). If a positive `expectTypeOf` fails, the params/payload typing is wrong.
 
 - [ ] **Step 7: Format, then commit**
 
