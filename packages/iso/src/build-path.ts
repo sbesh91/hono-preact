@@ -1,4 +1,5 @@
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
+import { interpolatePattern } from './internal/interpolate-pattern.js';
 
 // Param-less routes take no second argument; routes with params require the
 // matching params object. `keyof {} extends never` is true, so param-less
@@ -28,18 +29,5 @@ export function buildPath(
   pattern: string,
   params?: Record<string, string | undefined>
 ): string {
-  const values = params ?? {};
-  return pattern
-    .split('/')
-    .map((seg) => {
-      const m = /^:([A-Za-z0-9_]+)[?*+]?$/.exec(seg);
-      if (!m) return seg; // static segment, kept verbatim
-      const value = values[m[1]];
-      // Absent or empty -> drop the segment. The type requires every
-      // non-optional param, so a missing value here can only be an optional
-      // one; an empty string is treated the same to avoid emitting `//`.
-      return !value ? null : encodeURIComponent(value);
-    })
-    .filter((seg): seg is string => seg !== null)
-    .join('/');
+  return interpolatePattern(pattern, params ?? {});
 }
