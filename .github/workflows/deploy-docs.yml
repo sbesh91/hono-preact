@@ -1,0 +1,58 @@
+name: Deploy docs
+
+# The docs site (framework.sbesh.com) deploys ONLY from release tags, so the
+# live site always matches the latest published version, never unreleased main.
+# Cloudflare Workers Builds auto-deploy is disabled (see the deploy spec), so
+# this workflow is the sole deploy path.
+on:
+  push:
+    tags:
+      - 'v*.*.*' # hono-preact / create-hono-preact releases
+      - 'hono-preact-ui@*' # independent UI library releases
+  workflow_dispatch: {} # manual escape hatch for urgent docs/infra fixes
+
+# Never interrupt an in-flight wrangler deploy; queue overlapping releases
+# (a framework tag and a UI tag pushed close together) instead of cancelling.
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    name: Build and deploy docs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version derives from the `packageManager` field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Build framework packages first so the site build resolves their
+      # published dist/ types and exports (workspace exports point at dist).
+      - name: Build framework packages
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
+
+      - name: Build site
+        run: pnpm --filter site build
+
+      # wrangler reads CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID from env and
+      # deploys dist/hono_preact/wrangler.json produced by the site build.
+      - name: Deploy to Cloudflare
+        run: pnpm --filter site deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
