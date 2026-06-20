@@ -62,6 +62,7 @@ export const nav: NavArea[] = [
           { title: 'Prefetching', route: '/docs/prefetch' },
           { title: 'Streaming', route: '/docs/streaming' },
           { title: 'Live Loaders', route: '/docs/live-loaders' },
+          { title: 'Realtime Channels', route: '/docs/realtime' },
         ],
       },
       {

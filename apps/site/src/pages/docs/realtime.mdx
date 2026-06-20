@@ -1,0 +1,195 @@
+# Realtime Channels
+
+Realtime channels let you push live data from the server to the client without polling. A `Channel` is a typed address; `publish(topic, message)` fires from a server action after a mutation; `route.liveLoader({ topic, load })` subscribes any connected client to that topic and pushes a fresh data snapshot on every publish.
+
+## How it works
+
+Three pieces cooperate to wire up a live shared counter (or any data that changes on server events):
+
+1. **Define a channel** with `defineChannel`. The name uses the same `/:param` grammar as route paths; `channel.key(params)` builds a branded `Topic<Payload>` that ties publish and subscribe together at the type level.
+2. **Subscribe** from a `serverLoaders` entry using `route.liveLoader({ topic, load })`. The loader runs `load` once on connect and again on every publish to `topic`. The framework streams the results to the client over SSE so you consume them with the accumulating `loader.View(render, { initial, reduce })` form.
+3. **Publish** from a server action by calling `publish(channel.key(params), message)`. Every connected live loader subscribed to that topic re-runs `load` and pushes the new value.
+
+## Example: live shared counter
+
+A single-instance signal channel (no route params, no payload) that signals all live loaders to refetch the current count.
+
+**`counter-channel.ts`** (shared between server and action):
+
+```ts
+import { defineChannel } from 'hono-preact';
+
+// A signal channel: defineChannel('name')<void>(). No payload; the subscriber
+// calls load() for the fresh value. Published with no message argument.
+export const counterChannel = defineChannel('counter')<void>();
+```
+
+**`counter.server.ts`** (server module for the `/counter` route):
+
+```ts
+import { serverRoute } from 'hono-preact';
+import { counterChannel } from './counter-channel.js';
+import { getCount } from './counter-db.js';
+
+const route = serverRoute('/counter');
+
+export const serverLoaders = {
+  count: route.liveLoader({
+    // topic(ctx) returns the Topic this loader subscribes to.
+    topic: (_ctx) => counterChannel.key(),
+    // load(ctx) is called on connect and on every publish to the topic.
+    load: async (_ctx) => getCount(),
+  }),
+};
+```
+
+**`counter.tsx`** (page component):
+
+```tsx
+import type { StreamStatus } from 'hono-preact';
+import { serverLoaders } from './counter.server.js';
+
+const countLoader = serverLoaders.count;
+
+// The accumulating .View form folds every pushed chunk into `data`.
+// `initial` seeds the value before the first chunk arrives;
+// `reduce` folds each chunk. For a simple replace-on-every-push pattern,
+// reduce just returns the latest chunk.
+const CountDisplay = countLoader.View<number>(
+  ({ data, status }) => (
+    <div>
+      <p>Count: {data}</p>
+      <p>Status: {status}</p>
+    </div>
+  ),
+  {
+    initial: 0,
+    reduce: (_acc, chunk) => chunk,
+    fallback: <p>Connecting...</p>,
+  }
+);
+
+export default function CounterPage() {
+  return (
+    <main>
+      <CountDisplay />
+    </main>
+  );
+}
+```
+
+**`counter.action.ts`** (server action that mutates and publishes):
+
+```ts
+import { defineAction } from 'hono-preact';
+import { publish } from 'hono-preact';
+import { counterChannel } from './counter-channel.js';
+import { incrementCount } from './counter-db.js';
+
+export const increment = defineAction(async () => {
+  await incrementCount();
+  // Signal channel: no message argument.
+  publish(counterChannel.key());
+});
+```
+
+Every client with the counter page open receives the new count within milliseconds of the action completing, without polling.
+
+## Parameterized channels
+
+When the same data shape is segmented per resource, include the resource id in the channel name:
+
+```ts
+import { defineChannel, type Channel, type Topic } from 'hono-preact';
+
+// Type is Channel<'board/:boardId', { taskId: string; to: string }>
+export const boardChannel = defineChannel('board/:boardId')<{
+  taskId: string;
+  to: string;
+}>();
+
+// In a server action: boardChannel.key({ boardId }) is a Topic<{ taskId, to }>
+import { publish } from 'hono-preact';
+publish(boardChannel.key({ boardId: 'b1' }), { taskId: 't7', to: 'done' });
+```
+
+The `topic` function in `liveLoader` receives the same `ctx` as `load`, so it can read `ctx.location.pathParams` to key the subscription to the route:
+
+```ts
+const route = serverRoute('/board/:boardId');
+
+export const serverLoaders = {
+  tasks: route.liveLoader({
+    topic: (ctx) =>
+      boardChannel.key({ boardId: ctx.location.pathParams.boardId }),
+    load: async (ctx) => getTasks(ctx.location.pathParams.boardId),
+  }),
+};
+```
+
+## Cross-connection fan-out
+
+Live loaders are server-to-client over SSE. Publishing to a topic fans out to every live loader subscribed to that topic within the same server process. On Node, that covers all connections on the same instance. On Cloudflare Workers, each request runs in an isolated Worker instance, so in-process pub/sub only reaches the publishing connection. Cross-connection fan-out on Cloudflare requires a shared backend such as a Durable Object that holds the bus; support for this will be added in a later release.
+
+## API reference
+
+### `defineChannel(name)<Payload>()`
+
+Defines a typed channel. The name uses the `/:param` grammar. The `Payload` type parameter sets the message type. A `void` payload (the default) is a signal channel that publishes with no message.
+
+```ts
+const c = defineChannel('board/:boardId')<{ taskId: string }>();
+```
+
+|           | Type       | Description                                                          |
+| --------- | ---------- | -------------------------------------------------------------------- |
+| `name`    | `string`   | Channel address, e.g. `'board/:boardId'`. Params use `:name` syntax. |
+| `Payload` | type param | Message type. Defaults to `void` (signal channel, no message).       |
+
+Returns a `Channel<Name, Payload>` with one method:
+
+| Method                 | Signature                     | Description                                                                                                                                         |
+| ---------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `channel.key(params?)` | `(...args) => Topic<Payload>` | Builds a branded `Topic<Payload>`. For a param-less name the argument is omitted; for a name with params the argument is `{ [paramName]: string }`. |
+
+### `publish(topic, message?)`
+
+Publishes to a typed topic from a server action or server agent. Every live loader subscribed to `topic` re-runs its `load` and pushes the result to connected clients.
+
+```ts
+import { publish } from 'hono-preact';
+
+publish(boardChannel.key({ boardId }), { taskId, to }); // payload channel
+publish(counterChannel.key()); // signal channel
+```
+
+| Argument  | Type       | Description                                                          |
+| --------- | ---------- | -------------------------------------------------------------------- |
+| `topic`   | `Topic<P>` | The topic to publish to. Built with `channel.key(params)`.           |
+| `message` | `P`        | Required for payload channels; omitted for `void` (signal) channels. |
+
+### `route.liveLoader({ topic, load })`
+
+Defines a channel-driven live loader inside a `serverLoaders` object. Yields the result of `load` once on connect, then re-runs and pushes on every publish to `topic`.
+
+| Option      | Type                                 | Description                                                                          |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `topic`     | `(ctx: LoaderCtx) => Topic<unknown>` | Returns the topic this loader subscribes to. Called with the same context as `load`. |
+| `load`      | `(ctx: LoaderCtx) => Promise<T>`     | Produces the data snapshot. Called on connect and on every publish.                  |
+| `cache`     | `LoaderCache<T>`                     | Optional cache shared across `load` calls.                                           |
+| `timeoutMs` | `number \| false`                    | Timeout per `load` call. Defaults to `false` (no cap).                               |
+
+Returns a `LoaderRef<T, true>`. Consume it with the accumulating form `ref.View(render, { initial, reduce })`. The `StreamStatus` and `.View` option table are described on the [Live Loaders](/docs/live-loaders) page.
+
+### Type exports
+
+```ts
+import type { Channel, Topic, LiveLoaderOpts } from 'hono-preact';
+import type { StreamStatus } from 'hono-preact';
+```
+
+## See also
+
+- [Live Loaders](/docs/live-loaders): the persistent-layout streaming pattern, `.View` accumulating form, and `StreamStatus` reference.
+- [Server Loaders](/docs/loaders): non-live loaders and the full `defineLoader` option table.
+- [Server Actions](/docs/actions): where `publish` is typically called.

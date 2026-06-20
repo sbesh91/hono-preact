@@ -29,6 +29,13 @@ describe('view transitions toolkit exports', () => {
   });
 });
 
+describe('realtime channel exports', () => {
+  it('exports defineChannel and publish', () => {
+    expect(typeof iso.defineChannel).toBe('function');
+    expect(typeof iso.publish).toBe('function');
+  });
+});
+
 describe('active-route detection exports', () => {
   it('exports useRouteMatch', () => {
     expect(typeof iso.useRouteMatch).toBe('function');
