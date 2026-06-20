@@ -1,4 +1,12 @@
-type StreamEvent =
+/**
+ * The streaming wire event shape: the CONSUMER half of the producer/consumer
+ * contract. The PRODUCER half is the bootstrap + per-chunk script builders in
+ * `@hono-preact/server`'s `stream-pump.ts`. They are exported (here and via
+ * `internal.ts`) so `stream-wire-contract.test.ts` can assert the events the
+ * bootstrap emits `satisfies StreamEvent`, failing the build on a field rename
+ * that would otherwise desync the two halves silently.
+ */
+export type StreamEvent =
   | { type: 'push'; loaderId: string; value: unknown }
   | { type: 'end'; loaderId: string }
   | {
@@ -24,6 +32,12 @@ type StreamRegistry = {
    * subscriber hasn't mounted yet (the common case during streaming SSR).
    */
   queue?: StreamEvent[];
+  /**
+   * Set by the SSR bootstrap when the queue hit its cap before the client
+   * bundle loaded (events were then dropped). `installStreamRegistry` reads it
+   * to warn. Declared here so the read needs no cast.
+   */
+  capped?: boolean;
 };
 
 declare global {
@@ -32,6 +46,12 @@ declare global {
   }
 }
 
+// One subscriber per loaderId. `loaderId` is a `useId()` (see loader.tsx),
+// which is unique per mounted loader element and stable across the prerender +
+// hydrate passes, so each id is subscribed exactly once. Two live subscribers
+// for one id would mean two mounts collided on a useId (a bug), not a supported
+// fan-out; `subscribeToLoaderStream` dev-warns rather than silently dropping
+// the first. Keeping the Map single-valued matches that invariant.
 const subscribers = new Map<string, Subscriber>();
 const buffered = new Map<string, StreamEvent[]>();
 
@@ -70,6 +90,17 @@ export function subscribeToLoaderStream(
   loaderId: string,
   sub: Subscriber
 ): () => void {
+  if (subscribers.has(loaderId)) {
+    // A duplicate id is a render-once violation (see the `subscribers` Map
+    // note): the new mount wins, the prior subscriber stops receiving events
+    // and its unsubscribe becomes a no-op. Surface it so the collision is
+    // debuggable rather than silently lossy.
+    console.warn(
+      `[hono-preact] a streaming loader was subscribed twice for id "${loaderId}". ` +
+        'Each loader mount has a unique id, so this indicates two mounts collided; ' +
+        'the earlier subscriber will stop receiving stream events.'
+    );
+  }
   subscribers.set(loaderId, sub);
 
   const bucket = buffered.get(loaderId);
@@ -101,8 +132,7 @@ export function installStreamRegistry(): void {
   if (typeof window === 'undefined') return;
   const existing = window.__HP_STREAM__;
   const initialQueue = existing?.queue ?? [];
-  const wasCapped =
-    (existing as { capped?: boolean } | undefined)?.capped === true;
+  const wasCapped = existing?.capped === true;
 
   window.__HP_STREAM__ = {
     push(loaderId: string, value: unknown) {
