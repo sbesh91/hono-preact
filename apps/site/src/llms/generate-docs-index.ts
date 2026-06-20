@@ -18,10 +18,9 @@ export { headingsForRoute } from './docs-index.js';
 /** Reduce a markdown heading to the visible text rehype-slug would slug. */
 export function headingText(raw: string): string {
   return raw
-    .replace(/`([^`]+)`/g, '$1') // inline code -> its text
+    .replace(/`([^`]+)`/g, '$1') // inline code -> its text (preserves <...> inside)
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) -> text
     .replace(/[*_~]+/g, '') // emphasis markers
-    .replace(/<[^>]+>/g, '') // stray inline HTML
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import GithubSlugger from 'github-slugger';
+import { compile } from '@mdx-js/mdx';
+import remarkGfm from 'remark-gfm';
+import rehypeSlug from 'rehype-slug';
 import {
   headingText,
   parseHeadings,
@@ -10,6 +14,7 @@ import {
   headingsForRoute,
 } from '../generate-docs-index.js';
 import { nav } from '../../pages/docs/nav.js';
+import { routeToFile } from '../generate-llms.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const docsDir = resolve(here, '../../pages/docs');
@@ -101,4 +106,31 @@ describe('headingsForRoute', () => {
     expect(headingsForRoute(pages, '/docs/loaders').length).toBeGreaterThan(0);
     expect(headingsForRoute(pages, '/docs/nope')).toEqual([]);
   });
+});
+
+describe('slug parity with rehype-slug (whole corpus)', () => {
+  const routes = nav.flatMap((a) =>
+    a.sections.flatMap((s) => s.entries.map((e) => e.route))
+  );
+  it.each(routes)(
+    'every index id for %s exists as a rendered anchor',
+    async (route) => {
+      const file = routeToFile(docsDir, route)!;
+      const source = readFileSync(file, 'utf8');
+      const out = String(
+        await compile(source, {
+          jsxImportSource: 'preact',
+          remarkPlugins: [remarkGfm],
+          rehypePlugins: [rehypeSlug],
+        })
+      );
+      const renderedIds = new Set(
+        [...out.matchAll(/id:\s*"([^"]+)"/g)].map((m) => m[1])
+      );
+      const buildIds = headingsForPage(source).map((h) => h.id);
+      for (const id of buildIds) {
+        expect(renderedIds, `route ${route} id "${id}"`).toContain(id);
+      }
+    }
+  );
 });
