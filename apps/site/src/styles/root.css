@@ -2489,3 +2489,63 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-activity
 .mdx-content .heading-anchor:focus-visible {
   opacity: 1;
 }
+
+/* Cmd+K command palette. Reuses the combobox demo styles for the field and
+   listbox; this block is the dialog shell, the topbar trigger, and result rows. */
+.docs-cmdk-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.docs-cmdk-trigger:hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.docs-cmdk-kbd {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  color: var(--muted);
+}
+.docs-cmdk {
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: 40rem;
+  margin: 12vh auto auto;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-subtle, var(--background));
+}
+.docs-cmdk-input {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+.docs-cmdk-list {
+  position: static;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: none;
+}
+.docs-cmdk-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.docs-cmdk-option__title {
+  font-weight: 500;
+}
+.docs-cmdk-option__section {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
