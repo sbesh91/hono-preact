@@ -83,4 +83,3 @@ export function generateDocsIndex(nav: NavArea[], docsDir: string): DocPage[] {
   }
   return pages;
 }
-
