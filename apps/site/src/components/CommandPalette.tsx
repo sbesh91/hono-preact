@@ -53,7 +53,10 @@ export function CommandPalette({ pages }: { pages: DocPage[] }) {
               aria-label="Search documentation"
             />
             <Combobox.Status />
-            <Combobox.Popup class="docs-cb docs-cmdk-list" aria-label="Search results">
+            <Combobox.Popup
+              class="docs-cb docs-cmdk-list"
+              aria-label="Search results"
+            >
               {results.map((r) => (
                 <Combobox.Option
                   class="docs-cb__option docs-cmdk-option"

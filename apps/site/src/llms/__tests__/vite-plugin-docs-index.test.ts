@@ -20,7 +20,10 @@ describe('docsIndexPlugin', () => {
   });
 
   it('loads an es module exporting the page index', () => {
-    const code = (plugin.load as Function).call({}, '\0virtual:docs-index') as string;
+    const code = (plugin.load as Function).call(
+      {},
+      '\0virtual:docs-index'
+    ) as string;
     expect(code.startsWith('export default ')).toBe(true);
     expect(code).toContain('/docs/loaders');
   });

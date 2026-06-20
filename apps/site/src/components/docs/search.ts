@@ -47,7 +47,9 @@ export function searchDocs(
 ): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) {
-    return pages.slice(0, limit).map((p) => ({ href: p.route, title: p.title }));
+    return pages
+      .slice(0, limit)
+      .map((p) => ({ href: p.route, title: p.title }));
   }
   const scored: { r: SearchResult; score: number; isTitle: boolean }[] = [];
   for (const p of pages) {

@@ -17,7 +17,9 @@ const docsDir = resolve(here, '../../pages/docs');
 describe('headingText', () => {
   it('strips inline code backticks, links, and emphasis to visible text', () => {
     expect(headingText('`loader.View()` (form)')).toBe('loader.View() (form)');
-    expect(headingText('See [Streaming](/docs/streaming)')).toBe('See Streaming');
+    expect(headingText('See [Streaming](/docs/streaming)')).toBe(
+      'See Streaming'
+    );
     expect(headingText('**Bold** and _italic_')).toBe('Bold and italic');
   });
 });
@@ -85,7 +87,8 @@ describe('generateDocsIndex', () => {
     const h = page.headings.find((x) => x.text.includes('loader.View'))!;
     expect(h).toBeTruthy();
     // headingText must strip the backticks/markdown from the real doc heading:
-    const expectedText = 'loader.View(render, { initial, reduce }) (accumulating form)';
+    const expectedText =
+      'loader.View(render, { initial, reduce }) (accumulating form)';
     expect(h.text).toBe(expectedText);
     // and the slug must equal github-slugger on that known visible text (real parity):
     expect(h.id).toBe(new GithubSlugger().slug(expectedText));

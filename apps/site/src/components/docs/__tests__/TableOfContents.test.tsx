@@ -6,11 +6,12 @@ import type { DocHeading } from '../../../llms/generate-docs-index.js';
 
 beforeAll(() => {
   // happy-dom lacks IntersectionObserver; stub a no-op.
-  (globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver =
-    class {
-      observe() {}
-      disconnect() {}
-    };
+  (
+    globalThis as unknown as { IntersectionObserver: unknown }
+  ).IntersectionObserver = class {
+    observe() {}
+    disconnect() {}
+  };
 });
 afterEach(cleanup);
 
@@ -27,9 +28,7 @@ describe('TableOfContents', () => {
   });
 
   it('renders nothing when there are fewer than two headings', () => {
-    const { container } = render(
-      <TableOfContents headings={[headings[0]]} />
-    );
+    const { container } = render(<TableOfContents headings={[headings[0]]} />);
     expect(container.querySelector('nav')).toBeNull();
   });
 });
