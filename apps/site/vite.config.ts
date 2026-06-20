@@ -1,9 +1,7 @@
 import { honoPreact } from 'hono-preact/vite';
 import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
-import remarkGfm from 'remark-gfm';
-import rehypeShiki from '@shikijs/rehype';
-import { rehypeShikiOptions } from './src/shiki/shiki-config.js';
+import { remarkPlugins, rehypePlugins } from './src/mdx-plugins.js';
 import { highlightPlugin } from './src/shiki/vite-plugin-highlight.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,15 +19,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const mdxOptions = {
   jsxImportSource: 'preact',
-  remarkPlugins: [remarkGfm],
-  rehypePlugins: [
-    [
-      rehypeShiki,
-      // Dual theme: light is the inline default; root.css switches to the dark
-      // theme's colors in dark mode. Shared with the demo-source highlighter.
-      rehypeShikiOptions,
-    ],
-  ],
+  remarkPlugins,
+  rehypePlugins,
 } satisfies MdxOptions;
 
 const visualize = process.env.VISUALIZE === '1';

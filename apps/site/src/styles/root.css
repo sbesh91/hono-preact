@@ -2472,3 +2472,20 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-activity
 .docs-toast[data-type='error'] {
   border-color: color-mix(in oklab, #ef4444 60%, var(--border-color));
 }
+
+/* rehype-autolink-headings appends this anchor to every heading. Hidden until
+   the heading is hovered/focused, so it does not clutter the prose. */
+.mdx-content :is(h2, h3, h4) {
+  position: relative;
+}
+.mdx-content .heading-anchor {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.mdx-content :is(h2, h3, h4):hover .heading-anchor,
+.mdx-content .heading-anchor:focus-visible {
+  opacity: 1;
+}
