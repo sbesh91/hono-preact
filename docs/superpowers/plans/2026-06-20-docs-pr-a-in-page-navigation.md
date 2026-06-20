@@ -673,12 +673,12 @@ export function fuzzyScore(text: string, query: string): number | null {
   return score;
 }
 
-const TITLE_BOOST = 1000;
-
 /**
  * Search page titles and section headings. Empty query lists every page (title
- * only) so the palette doubles as a page browser. Results are ranked, titles
- * above headings, and capped at `limit`.
+ * only) so the palette doubles as a page browser. Results are ranked by fuzzy
+ * match quality; a page (title) result wins over a section (heading) result only
+ * on an equal score, so an incidental title subsequence cannot bury a strong
+ * heading match. Capped at `limit`.
  */
 export function searchDocs(
   pages: DocPage[],
@@ -689,11 +689,15 @@ export function searchDocs(
   if (!q) {
     return pages.slice(0, limit).map((p) => ({ href: p.route, title: p.title }));
   }
-  const scored: { r: SearchResult; score: number }[] = [];
+  const scored: { r: SearchResult; score: number; isTitle: boolean }[] = [];
   for (const p of pages) {
     const ts = fuzzyScore(p.title.toLowerCase(), q);
     if (ts != null) {
-      scored.push({ r: { href: p.route, title: p.title }, score: ts + TITLE_BOOST });
+      scored.push({
+        r: { href: p.route, title: p.title },
+        score: ts,
+        isTitle: true,
+      });
     }
     for (const h of p.headings) {
       const hs = fuzzyScore(h.text.toLowerCase(), q);
@@ -701,11 +705,15 @@ export function searchDocs(
         scored.push({
           r: { href: `${p.route}#${h.id}`, title: p.title, section: h.text },
           score: hs,
+          isTitle: false,
         });
       }
     }
   }
-  scored.sort((a, b) => b.score - a.score);
+  // Best fuzzy match first; on a tie, prefer the page (title) over a section.
+  scored.sort(
+    (a, b) => b.score - a.score || Number(b.isTitle) - Number(a.isTitle)
+  );
   return scored.slice(0, limit).map((s) => s.r);
 }
 ```
