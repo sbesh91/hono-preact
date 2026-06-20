@@ -10,9 +10,10 @@ import { readFileSync } from 'node:fs';
 import GithubSlugger from 'github-slugger';
 import type { NavArea } from '../pages/docs/nav.js';
 import { routeToFile } from './generate-llms.js';
+import type { DocHeading, DocPage } from './docs-index.js';
 
-export type DocHeading = { text: string; id: string; depth: 2 | 3 };
-export type DocPage = { title: string; route: string; headings: DocHeading[] };
+export type { DocHeading, DocPage } from './docs-index.js';
+export { headingsForRoute } from './docs-index.js';
 
 /** Reduce a markdown heading to the visible text rehype-slug would slug. */
 export function headingText(raw: string): string {
@@ -83,10 +84,3 @@ export function generateDocsIndex(nav: NavArea[], docsDir: string): DocPage[] {
   return pages;
 }
 
-/** The headings for the page at `route`, or `[]` if none. */
-export function headingsForRoute(
-  pages: DocPage[],
-  route: string
-): DocHeading[] {
-  return pages.find((p) => p.route === route)?.headings ?? [];
-}

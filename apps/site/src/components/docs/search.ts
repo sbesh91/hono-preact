@@ -1,4 +1,4 @@
-import type { DocPage } from '../../llms/generate-docs-index.js';
+import type { DocPage } from '../../llms/docs-index.js';
 
 export type SearchResult = { href: string; title: string; section?: string };
 

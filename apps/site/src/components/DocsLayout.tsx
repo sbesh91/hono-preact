@@ -5,7 +5,7 @@ import { NavLink, useRouteActive } from 'hono-preact';
 import { ThemeToggle } from './ThemeToggle.js';
 import { nav, type NavArea } from '../pages/docs/nav.js';
 import docsPages from 'virtual:docs-index';
-import { headingsForRoute } from '../llms/generate-docs-index.js';
+import { headingsForRoute } from '../llms/docs-index.js';
 import { TableOfContents } from './docs/TableOfContents.js';
 import { CommandPalette } from './CommandPalette.js';
 import { useHashScroll } from '../hooks/use-hash-scroll.js';

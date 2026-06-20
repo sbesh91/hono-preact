@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { DocHeading } from '../../llms/generate-docs-index.js';
+import type { DocHeading } from '../../llms/docs-index.js';
 
 // Right-rail "On this page" nav. Reads the current route's headings (passed in
 // from the build-time index) and scroll-spies the active section.

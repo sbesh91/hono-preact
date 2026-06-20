@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Dialog, Combobox } from 'hono-preact-ui';
 import { useNavigate } from 'hono-preact';
 import { Search } from 'lucide-preact';
-import type { DocPage } from '../llms/generate-docs-index.js';
+import type { DocPage } from '../llms/docs-index.js';
 import { searchDocs } from './docs/search.js';
 
 // Cmd+K command palette over the docs heading index. Built on hono-preact-ui's
