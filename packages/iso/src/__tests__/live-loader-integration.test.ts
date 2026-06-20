@@ -15,9 +15,7 @@ function makeCtx(signal: AbortSignal): LoaderCtx<Record<string, string>> {
     // c is unused by this loader; cast-free minimal stub is not possible for Context,
     // so the loader's load/topic must not touch ctx.c (they do not).
     c: undefined as never,
-    location: { pathParams: {} } as LoaderCtx<
-      Record<string, string>
-    >['location'],
+    location: { path: '/', searchParams: {}, pathParams: {} },
     signal,
   };
 }

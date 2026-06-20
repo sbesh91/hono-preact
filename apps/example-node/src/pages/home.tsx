@@ -42,6 +42,7 @@ const LiveCounter = countLoader.View<number>(
     fallback: <p>Live count: connecting...</p>,
   }
 );
+LiveCounter.displayName = 'LiveCounter';
 
 const HomeView = homeLoader.View(() => <HomePage />, {
   fallback: <p>Loading...</p>,

@@ -82,6 +82,9 @@ export function serverRoute<const RouteId extends RegisteredPaths>(
       ): AsyncGenerator<T, void, unknown> {
         yield await load(ctx);
         const t = topic(ctx);
+        // Coarse re-run: the subscription starts here, after the initial load.
+        // A publish that races the initial load is not separately replayed; the
+        // next publish re-runs load and reads current state.
         for await (const _ of subscribeTopic(t, ctx.signal)) {
           yield await load(ctx);
         }

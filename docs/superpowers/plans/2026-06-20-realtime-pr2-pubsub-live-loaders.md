@@ -4,7 +4,7 @@
 
 **Goal:** Give the existing `live` loaders (shipped in #133) a typed, fan-out-capable source: a server-side pub/sub backend, a typed `publish(topic)`, and `route.liveLoader({ topic, load })` that re-runs `load` whenever an action publishes the channel. Dogfood a visible live counter in the Node example app.
 
-**Architecture:** A process-global in-process `PubSubBackend` lives in iso with a runtime `installPubSubBackend` seam (PR 5 swaps in a Durable-Object backend through it; the Vite adapter is build-time only and is NOT touched). `route.liveLoader` desugars to `defineLoader(route, async function*(){ yield load(); for await (const _ of subscribeTopic(topic, signal)) yield load(); }, { live: true })` — reusing the entire shipped live-loader consumption path (`loader.View` accumulating form, the `/__loaders` SSE transport, SSR-skips-live). PR 2 also promotes PR 1's `defineChannel` to the public surface (it was deferred) and documents the trio. This is the second of a 5-PR program (spec: `docs/superpowers/specs/2026-06-20-first-class-realtime-design.md`).
+**Architecture:** A process-global in-process `PubSubBackend` lives in iso with a runtime `installPubSubBackend` seam (PR 5 swaps in a Durable-Object backend through it; the Vite adapter is build-time only and is NOT touched). `route.liveLoader` desugars to `defineLoader(route, async function*(){ yield load(); for await (const _ of subscribeTopic(topic, signal)) yield load(); }, { live: true })`, reusing the entire shipped live-loader consumption path (`loader.View` accumulating form, the `/__loaders` SSE transport, SSR-skips-live). PR 2 also promotes PR 1's `defineChannel` to the public surface (it was deferred) and documents the trio. This is the second of a 5-PR program (spec: `docs/superpowers/specs/2026-06-20-first-class-realtime-design.md`).
 
 **Tech Stack:** TypeScript, Babel AST (Vite plugins), Vitest (`vitest run`, `--typecheck.only`), Preact, `@hono/node-server` (example-node).
 
@@ -628,7 +628,7 @@ export function serverRoute<const RouteId extends RegisteredPaths>(
 }
 ```
 
-(Confirm `DefineLoaderOpts` already declares `__moduleKey?`/`__loaderName?` and `use?` — it does, per `define-loader.ts:172-205`. If `timeoutMs`/`cache`/`use` are `undefined`, `defineLoader` applies its defaults; `live: true` already forces no-timeout by default.)
+(Confirm `DefineLoaderOpts` already declares `__moduleKey?`/`__loaderName?` and `use?`: it does, per `define-loader.ts:172-205`. If `timeoutMs`/`cache`/`use` are `undefined`, `defineLoader` applies its defaults; `live: true` already forces no-timeout by default.)
 
 - [ ] **Step 6: Write the type contract for `route.liveLoader`**
 
