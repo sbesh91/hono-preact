@@ -1,6 +1,9 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
+import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
 import { LOADERS_RPC_PATH } from '@hono-preact/iso/internal/runtime';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
@@ -89,17 +92,6 @@ const HONO_METHODS = new Set([
 
 const WILDCARD_PATTERNS = new Set(['*', '/*']);
 
-// Walk treats these as opaque: their bodies are user handlers, not route
-// registrations. Skipping the body keeps `c.notFound()` inside a handler
-// from being mistaken for `app.notFound(...)` at registration time.
-const FUNCTION_BODY_PARENTS = new Set([
-  'FunctionDeclaration',
-  'FunctionExpression',
-  'ArrowFunctionExpression',
-  'ObjectMethod',
-  'ClassMethod',
-]);
-
 export function findApiShadowingRoutes(source: string): ApiShadowingRoute[] {
   const found: ApiShadowingRoute[] = [];
 
@@ -124,80 +116,57 @@ export function findApiShadowingRoutes(source: string): ApiShadowingRoute[] {
     return found;
   }
 
-  walk(ast.program, found);
-  return found;
-}
-
-function walk(node: unknown, found: ApiShadowingRoute[]): void {
-  if (!node || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    for (const child of node) walk(child, found);
-    return;
-  }
-
-  const n = node as {
-    type?: string;
-    callee?: {
-      type?: string;
-      property?: { type?: string; name?: string };
-    };
-    arguments?: Array<{ type?: string; value?: unknown }>;
-    loc?: { start?: { line?: number } };
-  };
-
-  if (
-    n.type === 'CallExpression' &&
-    n.callee?.type === 'MemberExpression' &&
-    n.callee.property?.type === 'Identifier' &&
-    typeof n.callee.property.name === 'string'
-  ) {
-    const method = n.callee.property.name;
-    const line = n.loc?.start?.line;
-
-    if (method === 'notFound') {
-      found.push({ kind: 'notFound', line, severity: 'warning' });
-    } else if (HONO_METHODS.has(method)) {
-      // `app.on(method, path, ...)` puts the path at argument index 1;
-      // every other Hono routing method takes the path as argument 0.
-      const pathArg = n.arguments?.[method === 'on' ? 1 : 0];
+  traverse(ast, {
+    // Handler bodies are opaque: their contents are user code, not route
+    // registrations, so skip every function subtree. This keeps e.g.
+    // `c.notFound()` inside a handler from being read as `app.notFound(...)`.
+    // (The original walker skipped only a function's `body`; pruning the whole
+    // function additionally ignores the absurd case of a route registration in
+    // a param default / decorator, which is the safe direction.)
+    Function(path) {
+      path.skip();
+    },
+    CallExpression(path: NodePath<CallExpression>) {
+      const { node } = path;
       if (
-        pathArg?.type === 'StringLiteral' &&
-        typeof pathArg.value === 'string'
+        node.callee.type !== 'MemberExpression' ||
+        node.callee.property.type !== 'Identifier'
       ) {
-        if (WILDCARD_PATTERNS.has(pathArg.value)) {
-          found.push({
-            kind: 'wildcard',
-            method,
-            pattern: pathArg.value,
-            line,
-            severity: 'error',
-          });
-        } else if (RESERVED_PATHS.has(pathArg.value)) {
-          found.push({
-            kind: 'reserved',
-            method,
-            pattern: pathArg.value,
-            line,
-            severity: 'error',
-          });
-        }
+        return;
       }
-    }
-  }
+      const method = node.callee.property.name;
+      const line = node.loc?.start.line;
 
-  const isFunctionParent =
-    typeof n.type === 'string' && FUNCTION_BODY_PARENTS.has(n.type);
+      if (method === 'notFound') {
+        found.push({ kind: 'notFound', line, severity: 'warning' });
+        return;
+      }
+      if (!HONO_METHODS.has(method)) return;
 
-  for (const key of Object.keys(node as object)) {
-    if (
-      key === 'loc' ||
-      key === 'leadingComments' ||
-      key === 'trailingComments'
-    )
-      continue;
-    if (isFunctionParent && key === 'body') continue;
-    walk((node as Record<string, unknown>)[key], found);
-  }
+      // `app.on(method, path, ...)` puts the path at argument index 1; every
+      // other Hono routing method takes the path as argument 0.
+      const pathArg = node.arguments[method === 'on' ? 1 : 0];
+      if (pathArg?.type !== 'StringLiteral') return;
+      if (WILDCARD_PATTERNS.has(pathArg.value)) {
+        found.push({
+          kind: 'wildcard',
+          method,
+          pattern: pathArg.value,
+          line,
+          severity: 'error',
+        });
+      } else if (RESERVED_PATHS.has(pathArg.value)) {
+        found.push({
+          kind: 'reserved',
+          method,
+          pattern: pathArg.value,
+          line,
+          severity: 'error',
+        });
+      }
+    },
+  });
+  return found;
 }
 
 // Both generated files live in the Vite cache dir. The wrapper keeps the

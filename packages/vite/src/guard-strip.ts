@@ -1,9 +1,7 @@
 import { parse } from '@babel/parser';
-import type {
-  CallExpression,
-  Identifier,
-  ImportDeclaration,
-} from '@babel/types';
+import traverse from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
+import type { CallExpression, File, ImportDeclaration } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
@@ -71,49 +69,20 @@ type Hit = {
 };
 
 function findCallsByLocalName(
-  node: unknown,
+  ast: File,
   bindings: Map<string, StripStrategy>,
   hits: Hit[]
 ): void {
-  if (!node || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    for (const child of node) findCallsByLocalName(child, bindings, hits);
-    return;
-  }
-  const n = node as {
-    type?: string;
-    callee?: Identifier & { type?: string; name?: string };
-    arguments?: CallExpression['arguments'];
-    start?: number;
-    end?: number;
-  };
-  if (
-    n.type === 'CallExpression' &&
-    n.callee?.type === 'Identifier' &&
-    n.callee.name
-  ) {
-    const strategy = bindings.get(n.callee.name);
-    if (strategy && n.start !== undefined && n.end !== undefined) {
-      hits.push({
-        strategy,
-        start: n.start,
-        end: n.end,
-      });
-    }
-  }
-  for (const key of Object.keys(node as object)) {
-    if (
-      key === 'loc' ||
-      key === 'leadingComments' ||
-      key === 'trailingComments'
-    )
-      continue;
-    findCallsByLocalName(
-      (node as Record<string, unknown>)[key],
-      bindings,
-      hits
-    );
-  }
+  traverse(ast, {
+    CallExpression(path: NodePath<CallExpression>) {
+      const { node } = path;
+      if (node.callee.type !== 'Identifier') return;
+      const strategy = bindings.get(node.callee.name);
+      if (strategy && node.start != null && node.end != null) {
+        hits.push({ strategy, start: node.start, end: node.end });
+      }
+    },
+  });
 }
 
 export function guardStripPlugin(): Plugin {
@@ -147,7 +116,7 @@ export function guardStripPlugin(): Plugin {
       if (bindings.size === 0) return;
 
       const hits: Hit[] = [];
-      findCallsByLocalName(ast.program, bindings, hits);
+      findCallsByLocalName(ast, bindings, hits);
       if (hits.length === 0) return;
 
       const s = new MagicString(code);
