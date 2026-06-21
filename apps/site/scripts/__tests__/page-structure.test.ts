@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzePageStructure } from '../../../../scripts/docs-structure.mjs';
+import { analyzePageStructure } from '../docs-structure.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const docsDir = resolve(here, '..');
+const docsDir = resolve(here, '../../src/pages/docs');
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

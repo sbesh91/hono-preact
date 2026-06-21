@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyHeading, analyzePageStructure } from '../docs-structure.mjs';
+import { classifyHeading, analyzePageStructure } from '../docs-structure.ts';
 
 describe('classifyHeading', () => {
   it('buckets headings', () => {

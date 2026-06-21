@@ -118,12 +118,15 @@ fi
 
 # --- Ordering nudge (R1/R2/R3) ------------------------------------------
 # Delegate to the shared classifier so the hook and the CI gate can never
-# drift. Soft-warn only; never blocks.
+# drift. node runs the .ts directly via native type-stripping (the project's
+# engines floor, ^22.18.0 || >=24.11.0, supports it). --disable-warning keeps
+# stderr clean on versions that still print the type-stripping ExperimentalWarning.
+# Soft-warn only; never blocks.
 if command -v node >/dev/null 2>&1; then
   repo_root="${file_path%%/apps/site/*}"
-  cli="${repo_root}/apps/site/scripts/docs-structure.mjs"
+  cli="${repo_root}/apps/site/scripts/docs-structure.ts"
   if [ -f "$cli" ]; then
-    order_out=$(node "$cli" "$file_path" 2>&1)
+    order_out=$(node --disable-warning=ExperimentalWarning "$cli" "$file_path" 2>&1)
     if [ -n "$order_out" ]; then
       echo "docs-template-check: canonical order (see add-docs-page skill):" >&2
       echo "$order_out" | sed 's/^/    /' >&2

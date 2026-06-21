@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Refinement (post-plan):** the classifier shipped as `apps/site/scripts/docs-structure.ts` (TypeScript), not `.mjs`, and the `.d.mts` declaration file was dropped. Node runs `.ts` directly via native type-stripping (the project's `engines` floor `^22.18.0 || >=24.11.0` supports it unflagged), so the authoring hook shells out with `node --disable-warning=ExperimentalWarning docs-structure.ts <file>`. Both the gate and the classifier unit test live under `apps/site/scripts/__tests__/` (outside the browser app's composite tsconfig), so a real `.ts` classifier needs no hand-written declarations. Where this plan says `.mjs`/`.d.mts` below, read `.ts`.
+
 **Goal:** Establish one canonical docs page order (benefit lead → examples → nuances → API reference), codify it in three enforcement layers (skill template, authoring hook, CI gate) backed by a single shared classifier, and bring all 45 docs pages to that order.
 
 **Architecture:** A single deterministic, dependency-free classifier module (`apps/site/scripts/docs-structure.mjs`) is the one source of truth for the structure rules R1/R2/R3. The new CI vitest gate imports it and asserts every page. The existing `docs-template-check.sh` authoring hook shells out to the same module (CLI mode) for its soft-warn ordering nudge, so the hook and the gate can never drift. The `add-docs-page` / `keep-docs-fresh` skills document the canonical order so authors target it. Then every page is rewritten to conform (reorder sections + sharpen the lead), each verified against the classifier.

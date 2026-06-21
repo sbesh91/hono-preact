@@ -1,9 +1,13 @@
-// apps/site/scripts/docs-structure.mjs
+// apps/site/scripts/docs-structure.ts
 // Canonical docs page-structure classifier. Single source of truth for the
 // R1/R2/R3 rules, shared by the CI gate (page-structure.test.ts) and the
-// authoring hook (docs-template-check.sh). No dependencies; runnable by node
-// directly so the bash hook can shell out to it.
+// authoring hook (docs-template-check.sh). No third-party deps; node runs it
+// directly via native TypeScript type-stripping, so the bash hook can shell
+// out to it (`node docs-structure.ts <file>`).
 import { fileURLToPath } from 'node:url';
+
+export type HeadingKind = 'reference' | 'nuance' | 'example' | 'neutral';
+export type StructureProblem = { rule: 'R1' | 'R2' | 'R3'; message: string };
 
 const REFERENCE =
   /^(api reference|api|options|signature|parameters|props|properties|returns)$/;
@@ -12,7 +16,7 @@ const NUANCE =
 const EXAMPLE =
   /^(example|demo|usage|basic usage|worked examples|a complete example|recipes|common patterns)$/;
 
-export function classifyHeading(text) {
+export function classifyHeading(text: string): HeadingKind {
   const h = text.trim().toLowerCase();
   if (REFERENCE.test(h) || h.includes('options reference')) return 'reference';
   if (NUANCE.test(h)) return 'nuance';
@@ -21,14 +25,14 @@ export function classifyHeading(text) {
   return 'neutral';
 }
 
-export function analyzePageStructure(source) {
+export function analyzePageStructure(source: string): StructureProblem[] {
   const lines = source.split('\n');
   let inFence = false;
-  let firstExample = null,
-    firstNuance = null,
-    firstRef = null;
-  let lastExampleHeading = null,
-    lastNuance = null;
+  let firstExample: number | null = null,
+    firstNuance: number | null = null,
+    firstRef: number | null = null;
+  let lastExampleHeading: number | null = null,
+    lastNuance: number | null = null;
   let seenH1 = false,
     seenH2 = false,
     hasLead = false;
@@ -74,7 +78,7 @@ export function analyzePageStructure(source) {
     }
   }
 
-  const problems = [];
+  const problems: StructureProblem[] = [];
   if (!seenH1 || !hasLead)
     problems.push({
       rule: 'R3',
@@ -114,7 +118,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { readFileSync } = await import('node:fs');
   for (const file of process.argv.slice(2)) {
     if (file.endsWith('index.mdx')) continue;
-    let src;
+    let src: string;
     try {
       src = readFileSync(file, 'utf8');
     } catch {
