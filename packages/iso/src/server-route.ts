@@ -51,11 +51,14 @@ export interface RouteServer<RouteId extends string> {
   ): LoaderRef<T, true>;
 
   /**
-   * Define a duplex WebSocket bound to this route. `ctx.params` is typed from
-   * the route's pattern. Consume with `useSocket(serverSockets.x)`.
+   * Define a duplex WebSocket bound to this route. Consume with
+   * `useSocket(serverSockets.x)`. The handler receives `ctx.c` (the Hono
+   * Context for the upgrade request); there is no `ctx.params` field because
+   * the socket endpoint is query-string-only at runtime. Typed route params
+   * for sockets are reserved for a later release (rooms).
    */
   socket<Incoming, Outgoing, Data = undefined>(
-    handler: SocketHandler<Incoming, Outgoing, Data, RouteParams<RouteId>>
+    handler: SocketHandler<Incoming, Outgoing, Data>
   ): SocketRef<Incoming, Outgoing>;
 }
 

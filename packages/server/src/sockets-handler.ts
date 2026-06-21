@@ -53,7 +53,7 @@ export async function buildSocketRegistry(
 export interface SocketsHandlerOptions {
   registry: Map<string, AnySocketDef>;
   appConfig?: AppConfig;
-  dev?: boolean;
+  // `dev` (registry freshness) is the caller's responsibility; not read here.
 }
 
 /**
@@ -147,10 +147,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
-          const result = await def.open?.(makeSocket(ws), {
-            c: ctx,
-            params: ctx.req.param(),
-          });
+          const result = await def.open?.(makeSocket(ws), { c: ctx });
           teardown = typeof result === 'function' ? result : undefined;
         },
         async onMessage(ev, ws) {
@@ -171,8 +168,12 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             reason: ev.reason,
           });
         },
-        onError(_e, ws) {
-          def.error?.(makeSocket(ws), new Error('websocket error'));
+        onError(ev, ws) {
+          // Unwrap the real error if the event carries one (ErrorEvent shape);
+          // fall back to the event itself so no information is discarded.
+          const err =
+            ev && 'error' in ev ? (ev as { error: unknown }).error : ev;
+          def.error?.(makeSocket(ws), err);
         },
       };
     };

@@ -107,6 +107,10 @@ export default function Chat() {
 | `'closing'`      | `close()` called; handshake in progress   |
 | `'closed'`       | Connection closed and will not reconnect  |
 
+### Guard model
+
+A socket's guard chain consists of its own `use` array combined with any app-level `use` from `defineApp({ use })`. A `use` placed on a route node (the page-guard mechanism, via `serverRoute`) does **not** inherit onto a colocated socket. Put socket authorization in the socket's own `use` array.
+
 ### Reconnect behavior
 
 `useSocket` reconnects automatically after unexpected drops. The default policy skips reconnect for close code `1000` (normal closure) and all `4000-4999` codes (application-defined). Code `4403` is issued by the framework when a socket's `use` guard rejects the upgrade, signaling that reconnecting would hit the same rejection.
@@ -210,13 +214,13 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 
 `handler` fields:
 
-| Field     | Type                                                              | Description                                                                |
-| --------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `use`     | `ReadonlyArray<Middleware>`                                       | Guard chain run before the upgrade. A failing guard closes with code 4403. |
-| `open`    | `(socket, { c, params }) => void \| (() => void) \| Promise<...>` | Runs once per connection. Returning a function registers it as a teardown. |
-| `message` | `(socket, msg: Incoming) => void \| Promise<void>`                | Called for every incoming message.                                         |
-| `close`   | `(socket, { code, reason }) => void`                              | Called when the connection closes.                                         |
-| `error`   | `(socket, err) => void`                                           | Called on a socket error.                                                  |
+| Field     | Type                                                      | Description                                                                                                                 |
+| --------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `use`     | `ReadonlyArray<Middleware>`                               | Guard chain run before the upgrade. A failing guard closes with code 4403.                                                  |
+| `open`    | `(socket, { c }) => void \| (() => void) \| Promise<...>` | Runs once per connection. Returning a function registers it as a teardown. `c` is the Hono Context for the upgrade request. |
+| `message` | `(socket, msg: Incoming) => void \| Promise<void>`        | Called for every incoming message.                                                                                          |
+| `close`   | `(socket, { code, reason }) => void`                      | Called when the connection closes.                                                                                          |
+| `error`   | `(socket, err) => void`                                   | Called on a socket error.                                                                                                   |
 
 `socket` fields:
 

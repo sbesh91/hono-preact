@@ -11,13 +11,21 @@ export interface ServerSocket<Outgoing, Data> {
   readonly raw: unknown;
 }
 
-export interface SocketHandler<Incoming, Outgoing, Data, Params> {
+export interface SocketHandler<Incoming, Outgoing, Data> {
   /** Guard/middleware chain run before the upgrade; a deny closes 4403. */
   use?: ReadonlyArray<Middleware>;
-  /** Per-connection setup. May return a teardown fn called on close. */
+  /**
+   * Per-connection setup. May return a teardown fn called on close.
+   *
+   * `ctx.c` is the Hono Context for the upgrade request; use it to read
+   * cookies, headers, query params, and values set by middleware.
+   * There is no `ctx.params` field: the `/__sockets` endpoint is flat
+   * (query-string only), so path params are always empty at runtime.
+   * Typed route params for sockets are reserved for a later release (rooms).
+   */
   open?(
     socket: ServerSocket<Outgoing, Data>,
-    ctx: { c: Context; params: Params }
+    ctx: { c: Context }
   ): void | (() => void) | Promise<void | (() => void)>;
   message?(
     socket: ServerSocket<Outgoing, Data>,
@@ -37,8 +45,7 @@ export interface SocketHandler<Incoming, Outgoing, Data, Params> {
 export interface SocketDef<Incoming, Outgoing, Data> extends SocketHandler<
   Incoming,
   Outgoing,
-  Data,
-  Record<string, string>
+  Data
 > {
   readonly __incoming?: Incoming;
   readonly __outgoing?: Outgoing;
@@ -64,7 +71,7 @@ export interface SocketRef<Incoming, Outgoing> {
  * state lives on `socket.data`. `open` may return a teardown fn.
  */
 export function defineSocket<Incoming, Outgoing, Data = undefined>(
-  handler: SocketHandler<Incoming, Outgoing, Data, Record<string, string>>
+  handler: SocketHandler<Incoming, Outgoing, Data>
 ): SocketRef<Incoming, Outgoing> {
   // The handler IS the runtime def on the server; the type presents as a
   // client SocketRef. The build strips the body on the client and replaces it

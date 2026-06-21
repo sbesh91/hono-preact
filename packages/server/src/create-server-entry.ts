@@ -97,7 +97,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     // registry lazily per request (same caching policy as loadersHandler).
     .get(SOCKETS_RPC_PATH, async (c, next) => {
       const registry = await socketRegistryPromise();
-      return socketsHandler({ registry, appConfig, dev })(c, next);
+      return socketsHandler({ registry, appConfig })(c, next);
     })
     .post(
       '*',

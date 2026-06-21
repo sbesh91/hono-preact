@@ -24,12 +24,15 @@ function _probes() {
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
 }
 
-// route.socket types ctx.params from the route pattern (the headline guarantee).
+// route.socket ctx has `c` (Hono Context) but no `params` field in this release.
 function _routeSocketProbe() {
   const route = serverRoute('/movies/:id');
   const ref = route.socket<In, Out, undefined>({
     open(_socket, ctx) {
-      expectTypeOf(ctx.params).toEqualTypeOf<{ id: string }>();
+      // ctx.c is the Hono Context for the upgrade request.
+      expectTypeOf(ctx.c).not.toBeNever();
+      // @ts-expect-error sockets have no typed params in this release
+      void ctx.params;
     },
   });
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
