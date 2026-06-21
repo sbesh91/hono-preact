@@ -87,10 +87,11 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   send: (msg: Incoming<R>) => void;
   /** Publish this client's presence state to the roster. */
   setPresence: (state: State<R>) => void;
-  /** The presence roster, reactive. */
-  members: ReadonlyArray<PresenceMember<State<R>>>;
+  /** The presence roster, reactive. State may be undefined for rooms with no
+   * presence() seed (void-state rooms). */
+  members: ReadonlyArray<PresenceMember<State<R> | undefined>>;
   /** This client's own roster entry, derived from the snapshot `self` id. */
-  self?: PresenceMember<State<R>>;
+  self?: PresenceMember<State<R> | undefined>;
   status: SocketStatus;
   close: (code?: number, reason?: string) => void;
   closeInfo?: SocketCloseInfo;
@@ -108,7 +109,7 @@ export function useRoom<R extends AnyRoomRefShape>(
   opts?: UseRoomOpts<R>
 ): UseRoomResult<R> {
   const [members, setMembers] = useState<
-    ReadonlyArray<PresenceMember<State<R>>>
+    ReadonlyArray<PresenceMember<State<R> | undefined>>
   >([]);
   // The self id from the latest snapshot; `self` is derived from `members`.
   const [selfId, setSelfId] = useState<string | undefined>(undefined);
@@ -162,12 +163,12 @@ export function useRoom<R extends AnyRoomRefShape>(
       if (env.t === 'presence') {
         if (env.op === 'leave') {
           setMembers((prev) => prev.filter((m) => m.id !== env.from));
-        } else if (env.state !== undefined) {
-          // join | update: upsert by id. The wire protocol always carries
-          // `state` for join/update, so `state !== undefined` narrows it.
-          const state = env.state;
-          const from = env.from;
-          setMembers((prev) => upsertMember(prev, from, state));
+        } else {
+          // join | update: upsert by id. State may be undefined for a room
+          // with no presence() seed (a void-state room); the snapshot path
+          // and the presence registry both treat undefined as a valid member
+          // state, so we must not skip the upsert when env.state is absent.
+          setMembers((prev) => upsertMember(prev, env.from, env.state));
         }
         return;
       }

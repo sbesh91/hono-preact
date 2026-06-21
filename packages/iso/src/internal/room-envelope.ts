@@ -21,12 +21,11 @@ export type PresenceMember<State> = { id: string; state: State };
  */
 export type RoomEnvelope<Msg, State> =
   | { from: string; t: 'msg'; msg: Msg }
-  | {
-      from: string;
-      t: 'presence';
-      op: 'join' | 'update' | 'leave';
-      state?: State;
-    }
+  // join and update always carry state (which may be absent on the wire for a
+  // void-state room, since JSON.stringify drops undefined-valued keys).
+  | { from: string; t: 'presence'; op: 'join' | 'update'; state?: State }
+  // leave never carries state.
+  | { from: string; t: 'presence'; op: 'leave' }
   | {
       t: 'snapshot';
       /** The joining client's own server-assigned connId, so it can locate

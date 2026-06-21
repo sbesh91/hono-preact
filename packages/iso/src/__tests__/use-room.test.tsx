@@ -553,4 +553,39 @@ describe('useRoom', () => {
     expect(lastWS).toBeNull();
     expect(result.status).toBe('connecting');
   });
+
+  it('presence join with no state field adds member with state:undefined (void-state room)', async () => {
+    // Regression: when a room has no presence() seed, JSON.stringify drops the
+    // undefined `state` key, so the client receives {from, t:'presence',
+    // op:'join'} with no `state` field. The old guard (env.state !== undefined)
+    // skipped the upsert. The fix removes that guard so undefined-state members
+    // are correctly added to the roster.
+    let result!: Result;
+    await act(async () => {
+      render(
+        <Harness
+          opts={{ key: { roomId: 'r1' } }}
+          onResult={(r) => (result = r)}
+        />
+      );
+    });
+    await act(async () => {
+      lastWS!._open();
+    });
+    await act(async () => {
+      const snap: TestEnvelope = { t: 'snapshot', self: 'me', members: [] };
+      lastWS!._message(snap);
+    });
+
+    // Send a join envelope with no `state` field, matching the wire format a
+    // void-state room produces.
+    const joinNoState = { from: 'u2', t: 'presence', op: 'join' };
+    await act(async () => {
+      lastWS!._message(joinNoState);
+    });
+
+    expect(result.members).toHaveLength(1);
+    expect(result.members[0]!.id).toBe('u2');
+    expect(result.members[0]!.state).toBeUndefined();
+  });
 });
