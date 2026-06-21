@@ -2,7 +2,11 @@ import { Hono } from 'hono';
 import { h, type ComponentType, type ComponentChildren } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { Routes, type AppConfig, type RoutesManifest } from '@hono-preact/iso';
-import { env, LOADERS_RPC_PATH } from '@hono-preact/iso/internal/runtime';
+import {
+  env,
+  LOADERS_RPC_PATH,
+  SOCKETS_RPC_PATH,
+} from '@hono-preact/iso/internal/runtime';
 import { loadersHandler } from './loaders-handler.js';
 import { pageActionHandler } from './page-action-handler.js';
 import { renderPage } from './render.js';
@@ -11,6 +15,7 @@ import {
   makePageUseResolver,
 } from './route-server-modules.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
+import { buildSocketRegistry, socketsHandler } from './sockets-handler.js';
 
 export interface CreateServerEntryOptions {
   /** The manifest produced by defineRoutes(...) in the user's routes file. */
@@ -57,6 +62,17 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     dev,
   });
 
+  // Build socket registry from the same server imports that build the loaders
+  // map. Cached as a promise so the async glob walk runs once per boot (or per
+  // request when dev: true for hot-reload parity with loadersHandler).
+  let cachedSocketRegistryPromise: ReturnType<
+    typeof buildSocketRegistry
+  > | null = null;
+  const socketRegistryPromise = () =>
+    dev
+      ? buildSocketRegistry(serverModules)
+      : (cachedSocketRegistryPromise ??= buildSocketRegistry(serverModules));
+
   // Build the routed tree lazily: only the SSR (GET) and action-rerender paths
   // need it, and constructing per call keeps the two call sites from sharing a
   // mutable vnode.
@@ -76,6 +92,13 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         resolvePageUse: pageUseResolver.byPath,
       })
     )
+    // The WebSocket upgrade endpoint must be registered before the SSR GET *
+    // catch-all so it is not swallowed. The handler resolves the socket
+    // registry lazily per request (same caching policy as loadersHandler).
+    .get(SOCKETS_RPC_PATH, async (c, next) => {
+      const registry = await socketRegistryPromise();
+      return socketsHandler({ registry, appConfig })(c, next);
+    })
     .post(
       '*',
       pageActionHandler({

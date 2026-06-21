@@ -24,18 +24,33 @@ describe('nodeAdapter', () => {
     expect(typeof nodeAdapter().vitePlugins).toBe('function');
   });
 
-  it('wrapEntry re-exports injectWebSocket when an api module is present', () => {
+  it('wrapEntry uses createNodeWebSocket and installWebSocketUpgrader', () => {
+    const tail = nodeAdapter().wrapEntry(ctx);
+    expect(tail).toContain("from '@hono/node-ws'");
+    expect(tail).toContain('createNodeWebSocket');
+    expect(tail).toContain('installWebSocketUpgrader');
+    expect(tail).toContain("from 'hono-preact/internal/runtime'");
+  });
+
+  it('wrapEntry always exports app and injectWebSocket from the framework', () => {
+    const tail = nodeAdapter().wrapEntry(ctx);
+    expect(tail).toContain('export { app, injectWebSocket }');
+    expect(tail).toContain('injectWebSocket(server)');
+  });
+
+  it('wrapEntry is api-agnostic: does not import api module', () => {
     const tail = nodeAdapter().wrapEntry({
       ...ctx,
       apiModuleId: '/p/src/api.ts',
     });
-    expect(tail).toContain('/p/src/api.ts');
-    expect(tail).toContain('injectWebSocket');
+    // api module is mounted inside createServerEntry, not in the wrapper
+    expect(tail).not.toContain('/p/src/api.ts');
+    expect(tail).not.toContain('__api');
   });
 
   it('wrapEntry omits the api import when there is no api module', () => {
     const tail = nodeAdapter().wrapEntry(ctx);
-    expect(tail).not.toContain('injectWebSocket');
+    expect(tail).not.toContain('__api');
   });
 
   it('guards serve() so dev module-runner loads do not start a server', () => {

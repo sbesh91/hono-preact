@@ -7,6 +7,9 @@ const PLUMBING = [
   'installNavTransitionScheduler',
   'installPubSubBackend',
   'installStreamRegistry',
+  'installWebSocketUpgrader',
+  'getWebSocketUpgrader',
+  '__resetWebSocketUpgraderForTesting',
   '__$createLoaderStub_hpiso',
 ] as const;
 
