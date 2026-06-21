@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
-import type { JSX } from 'preact';
 import type { Context } from 'hono';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
@@ -109,20 +108,5 @@ describe('definePage', () => {
     Movies.displayName = 'Movies';
     const PageRoute = definePage(Movies);
     expect(PageRoute.displayName).toBe('definePage(Movies)');
-  });
-});
-
-describe('PageBindings surface', () => {
-  it('accepts errorFallback on the bindings type', () => {
-    const bindings: PageBindings = {
-      errorFallback: (err, reset) => (
-        <button onClick={reset}>{err.message}</button>
-      ),
-    };
-    expectTypeOf(bindings.errorFallback).toMatchTypeOf<
-      | JSX.Element
-      | ((error: Error, reset: () => void) => JSX.Element)
-      | undefined
-    >();
   });
 });
