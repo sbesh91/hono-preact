@@ -23,6 +23,27 @@ See also: [usePosition](/docs/components/use-position), [useDismiss](/docs/compo
   <UseSafeAreaDemo />
 </Example>
 
+## Example
+
+```tsx
+import { useSafeArea } from 'hono-preact-ui';
+import { useRef } from 'preact/hooks';
+
+function HoverCard({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const floatingRef = useRef<HTMLDivElement>(null);
+
+  useSafeArea({ enabled: open, anchorRef, floatingRef, onClose });
+
+  return (
+    <>
+      <button ref={anchorRef}>Profile</button>
+      {open && <div ref={floatingRef}>card content</div>}
+    </>
+  );
+}
+```
+
 ## How it works
 
 <SafeAreaDiagram />
@@ -72,24 +93,3 @@ opened by keyboard focus is not closed by unrelated mouse movement (the consumer
 closes it on blur or Escape instead). If the pointer leaves the document while a
 session is active, the same grace timer starts, so the element does not hang open
 when the cursor exits the window. Touch pointers are ignored.
-
-## Example
-
-```tsx
-import { useSafeArea } from 'hono-preact-ui';
-import { useRef } from 'preact/hooks';
-
-function HoverCard({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const anchorRef = useRef<HTMLButtonElement>(null);
-  const floatingRef = useRef<HTMLDivElement>(null);
-
-  useSafeArea({ enabled: open, anchorRef, floatingRef, onClose });
-
-  return (
-    <>
-      <button ref={anchorRef}>Profile</button>
-      {open && <div ref={floatingRef}>card content</div>}
-    </>
-  );
-}
-```

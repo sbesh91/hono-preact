@@ -22,6 +22,41 @@ trigger keeps focus).
   <UseListNavigationDemo />
 </Example>
 
+## Example
+
+A listbox where the trigger keeps focus and the active option is tracked with
+`aria-activedescendant`:
+
+```tsx
+import { useListNavigation } from 'hono-preact-ui';
+import { useRef, useState } from 'preact/hooks';
+
+function Listbox({ open }: { open: boolean }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const nav = useListNavigation({
+    enabled: open,
+    containerRef: listRef,
+    itemSelector: '[role="option"]:not([aria-disabled="true"])',
+    activeId,
+    setActiveId,
+    mode: 'activedescendant',
+  });
+  return (
+    <button
+      role="combobox"
+      aria-expanded={open}
+      aria-activedescendant={open ? (activeId ?? undefined) : undefined}
+      onKeyDown={nav.onKeyDown}
+    >
+      <div ref={listRef} role="listbox">
+        {/* role="option" rows */}
+      </div>
+    </button>
+  );
+}
+```
+
 ## Signature
 
 ```ts
@@ -75,41 +110,6 @@ interface ListNavigation {
 `onKeyDown` calls `event.preventDefault()` on the keys it handles, so a caller
 that adds its own keys (Enter to select, Escape to close) can early-return on
 `event.defaultPrevented` after delegating.
-
-## Example
-
-A listbox where the trigger keeps focus and the active option is tracked with
-`aria-activedescendant`:
-
-```tsx
-import { useListNavigation } from 'hono-preact-ui';
-import { useRef, useState } from 'preact/hooks';
-
-function Listbox({ open }: { open: boolean }) {
-  const listRef = useRef<HTMLDivElement>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const nav = useListNavigation({
-    enabled: open,
-    containerRef: listRef,
-    itemSelector: '[role="option"]:not([aria-disabled="true"])',
-    activeId,
-    setActiveId,
-    mode: 'activedescendant',
-  });
-  return (
-    <button
-      role="combobox"
-      aria-expanded={open}
-      aria-activedescendant={open ? (activeId ?? undefined) : undefined}
-      onKeyDown={nav.onKeyDown}
-    >
-      <div ref={listRef} role="listbox">
-        {/* role="option" rows */}
-      </div>
-    </button>
-  );
-}
-```
 
 ## Companion exports
 

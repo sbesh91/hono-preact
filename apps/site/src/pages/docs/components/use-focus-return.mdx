@@ -15,6 +15,24 @@ of the page, which is what a non-modal overlay wants.
   <UseFocusReturnDemo />
 </Example>
 
+## Example
+
+```tsx
+import { useFocusReturn } from 'hono-preact-ui';
+import { useRef } from 'preact/hooks';
+
+function Panel({ open }: { open: boolean }) {
+  const popupRef = useRef<HTMLDivElement>(null);
+  useFocusReturn({ open, popupRef });
+  return open ? (
+    <div ref={popupRef}>
+      <button>First</button>
+      <button>Second</button>
+    </div>
+  ) : null;
+}
+```
+
 ## Signature
 
 ```ts
@@ -41,21 +59,3 @@ On open it focuses `initialFocusRef`, else the first focusable element in the
 popup, else the popup itself. On close it returns focus to the element that was
 focused when the overlay opened (usually the trigger). It does not trap focus,
 so pair it with a dismissal mechanism such as [useDismiss](/docs/components/use-dismiss).
-
-## Example
-
-```tsx
-import { useFocusReturn } from 'hono-preact-ui';
-import { useRef } from 'preact/hooks';
-
-function Panel({ open }: { open: boolean }) {
-  const popupRef = useRef<HTMLDivElement>(null);
-  useFocusReturn({ open, popupRef });
-  return open ? (
-    <div ref={popupRef}>
-      <button>First</button>
-      <button>Second</button>
-    </div>
-  ) : null;
-}
-```

@@ -2,27 +2,6 @@
 
 A live loader is a streaming loader that connects once and survives intra-scope navigation. It is the mechanism for building UI that persists visually across route changes: a notification bar, a sidebar feed, a presence indicator, or any widget that should keep running while the user navigates within a section of the app.
 
-## How it works
-
-Persistent UI is expressed as a child of a layout. A layout stays mounted across navigations between its child routes, so anything rendered inside the layout survives those navigations too. Attach a `live` loader to the layout's server module to connect a long-lived stream to that layout, and consume the stream with `loader.View(render, { initial, reduce })` inside a layout component. The stream connects once when the layout mounts and reconnects only when the user leaves the layout's scope entirely.
-
-Two pieces of the same loader API drive this pattern:
-
-- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
-- `loader.View(render, { initial, reduce, fallback })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and renders through the loader's Suspense boundary, so a live widget hydrates cleanly inside a lazy layout: `fallback` renders during SSR and until the first chunk arrives, then `render` receives the accumulated `data` plus a `status`.
-
-## Scoping the persistence
-
-Choose the layout based on the scope you want:
-
-| Scope           | Route table entry                                 | What persists         |
-| --------------- | ------------------------------------------------- | --------------------- |
-| App-wide        | Root route with `layout` and `path: '*'` children | Across the whole app  |
-| Section         | Prefix route group (e.g. `path: '/projects'`)     | Within `/projects/**` |
-| Single sub-tree | Any nested layout group                           | Within that sub-tree  |
-
-The stream is tied to the layout's lifecycle. It connects when the layout mounts and is aborted (via `ctx.signal`) when the layout unmounts, which happens when the user navigates outside the layout's scope.
-
 ## Example: activity bar
 
 The demo at `/demo/projects` uses a live activity loader on the `projects-shell` layout to show a real-time event feed across all project pages.
@@ -132,6 +111,27 @@ export default function ProjectsShell({
 ```
 
 Navigating between `/demo/projects/alpha` and `/demo/projects/beta` does not remount `ProjectsShell`, so `ActivityBar` keeps its accumulated events and the stream stays open.
+
+## How it works
+
+Persistent UI is expressed as a child of a layout. A layout stays mounted across navigations between its child routes, so anything rendered inside the layout survives those navigations too. Attach a `live` loader to the layout's server module to connect a long-lived stream to that layout, and consume the stream with `loader.View(render, { initial, reduce })` inside a layout component. The stream connects once when the layout mounts and reconnects only when the user leaves the layout's scope entirely.
+
+Two pieces of the same loader API drive this pattern:
+
+- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
+- `loader.View(render, { initial, reduce, fallback })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and renders through the loader's Suspense boundary, so a live widget hydrates cleanly inside a lazy layout: `fallback` renders during SSR and until the first chunk arrives, then `render` receives the accumulated `data` plus a `status`.
+
+## Scoping the persistence
+
+Choose the layout based on the scope you want:
+
+| Scope           | Route table entry                                 | What persists         |
+| --------------- | ------------------------------------------------- | --------------------- |
+| App-wide        | Root route with `layout` and `path: '*'` children | Across the whole app  |
+| Section         | Prefix route group (e.g. `path: '/projects'`)     | Within `/projects/**` |
+| Single sub-tree | Any nested layout group                           | Within that sub-tree  |
+
+The stream is tied to the layout's lifecycle. It connects when the layout mounts and is aborted (via `ctx.signal`) when the layout unmounts, which happens when the user navigates outside the layout's scope.
 
 ## Known behavior
 

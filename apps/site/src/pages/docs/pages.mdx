@@ -1,6 +1,6 @@
 # Adding Pages
 
-A page is two things: a view component (and optionally a sibling `.server.ts` for loader and actions), plus an entry in `routes.ts` that wires the URL to those files. The framework does not auto-discover pages; the route table is the source of truth.
+Add a page by creating a view component and registering it in the route table. The framework handles code-splitting and server wiring automatically; the route table is the single source of truth for every URL in the app.
 
 ## Standard pages
 

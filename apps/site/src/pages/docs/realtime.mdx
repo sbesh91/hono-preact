@@ -2,14 +2,6 @@
 
 Realtime channels let you push live data from the server to the client without polling. A `Channel` is a typed address; `publish(topic, message)` fires from a server action after a mutation; `route.liveLoader({ topic, load })` subscribes any connected client to that topic and pushes a fresh data snapshot on every publish.
 
-## How it works
-
-Three pieces cooperate to wire up a live shared counter (or any data that changes on server events):
-
-1. **Define a channel** with `defineChannel`. The name uses the same `/:param` grammar as route paths; `channel.key(params)` builds a branded `Topic<Payload>` that ties publish and subscribe together at the type level.
-2. **Subscribe** from a `serverLoaders` entry using `route.liveLoader({ topic, load })`. The loader runs `load` once on connect and again on every publish to `topic`. The framework streams the results to the client over SSE so you consume them with the accumulating `loader.View(render, { initial, reduce })` form.
-3. **Publish** from a server action by calling `publish(channel.key(params), message)`. Every connected live loader subscribed to that topic re-runs `load` and pushes the new value.
-
 ## Example: live shared counter
 
 A single-instance signal channel (no route params, no payload) that signals all live loaders to refetch the current count.
@@ -94,6 +86,14 @@ export const increment = defineAction(async () => {
 ```
 
 Every client with the counter page open receives the new count within milliseconds of the action completing, without polling.
+
+## How it works
+
+Three pieces cooperate to wire up a live shared counter (or any data that changes on server events):
+
+1. **Define a channel** with `defineChannel`. The name uses the same `/:param` grammar as route paths; `channel.key(params)` builds a branded `Topic<Payload>` that ties publish and subscribe together at the type level.
+2. **Subscribe** from a `serverLoaders` entry using `route.liveLoader({ topic, load })`. The loader runs `load` once on connect and again on every publish to `topic`. The framework streams the results to the client over SSE so you consume them with the accumulating `loader.View(render, { initial, reduce })` form.
+3. **Publish** from a server action by calling `publish(channel.key(params), message)`. Every connected live loader subscribed to that topic re-runs `load` and pushes the new value.
 
 ## Parameterized channels
 
