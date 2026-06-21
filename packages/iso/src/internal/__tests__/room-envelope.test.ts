@@ -55,6 +55,7 @@ describe('room-envelope encode/decode', () => {
     ];
     const e: RoomEnvelope<TestMsg, TestState> = {
       t: 'snapshot',
+      self: 'user-1',
       members,
     };
     const decoded = decodeEnvelope<TestMsg, TestState>(encodeEnvelope(e));
@@ -64,6 +65,7 @@ describe('room-envelope encode/decode', () => {
   it('snapshot with empty members array', () => {
     const e: RoomEnvelope<TestMsg, TestState> = {
       t: 'snapshot',
+      self: 'user-1',
       members: [],
     };
     const decoded = decodeEnvelope<TestMsg, TestState>(encodeEnvelope(e));

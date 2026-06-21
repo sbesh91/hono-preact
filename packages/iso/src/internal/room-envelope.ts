@@ -27,7 +27,13 @@ export type RoomEnvelope<Msg, State> =
       op: 'join' | 'update' | 'leave';
       state?: State;
     }
-  | { t: 'snapshot'; members: Array<PresenceMember<State>> };
+  | {
+      t: 'snapshot';
+      /** The joining client's own server-assigned connId, so it can locate
+       * itself in `members` (every member id is a server-assigned connId). */
+      self: string;
+      members: Array<PresenceMember<State>>;
+    };
 
 /**
  * A command frame sent client->server over a room WebSocket. The server->client

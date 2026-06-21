@@ -111,6 +111,9 @@ export { upgradeWebSocket } from './upgrade-websocket.js';
 // Broadcasting rooms (a duplex socket bound to a typed channel + presence).
 export { defineRoom } from './define-room.js';
 export type { RoomRef, RoomHandler, RoomConnection } from './define-room.js';
+export { useRoom } from './use-room.js';
+export type { UseRoomOpts, UseRoomResult } from './use-room.js';
+export type { PresenceMember } from './internal/room-envelope.js';
 
 // Middleware + outcomes (the new system).
 export {

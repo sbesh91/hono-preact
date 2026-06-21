@@ -200,6 +200,7 @@ export function createRoomWsEvents(
       //    publish: other members must not re-receive the whole roster).
       const snapshot: AnyEnvelope = {
         t: 'snapshot',
+        self: connId,
         members: roomMembers(topic),
       };
       ws.send(snapshot);

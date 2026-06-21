@@ -3,6 +3,7 @@ import type { Middleware } from './define-middleware.js';
 import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
+import type { UseRoomOpts, UseRoomResult } from './use-room.js';
 
 /**
  * The per-connection handle handed to a room's server handlers.
@@ -96,9 +97,9 @@ export interface RoomDef<
  * presence state), and `__params` (the channel-name params, so `useRoom`'s
  * `opts.key` is typed from the channel).
  *
- * The `useRoom` ref-method is added in the rooms client-hook change (mirrors
- * `SocketRef.useSocket`); it is intentionally absent here to keep this
- * definition self-contained.
+ * The `useRoom` ref-method mirrors `SocketRef.useSocket`: it is the type for the
+ * codegen-attached `.useRoom` runtime method, so a room can be consumed as
+ * `serverRooms.board.useRoom({ key })`.
  */
 export interface RoomRef<Incoming, Outgoing, State, Params> {
   readonly [FORM_MODULE_FIELD]?: string;
@@ -107,6 +108,14 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
   readonly __outgoing?: Outgoing;
   readonly __state?: State;
   readonly __params?: Params;
+  /**
+   * Idiomatic ref-method form of `useRoom`. Equivalent to
+   * `useRoom(ref, opts)` but called directly on the ref:
+   * `serverRooms.board.useRoom({ key: { roomId } })`.
+   */
+  useRoom(
+    opts?: UseRoomOpts<RoomRef<Incoming, Outgoing, State, Params>>
+  ): UseRoomResult<RoomRef<Incoming, Outgoing, State, Params>>;
 }
 
 /**

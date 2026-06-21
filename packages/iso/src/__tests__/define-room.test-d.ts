@@ -12,6 +12,8 @@ import { expectTypeOf } from 'vitest';
 import { defineRoom } from '../define-room.js';
 import { defineChannel } from '../define-channel.js';
 import { serverRoute } from '../server-route.js';
+import type { Serialize } from '../internal/serialize.js';
+import type { PresenceMember } from '../internal/room-envelope.js';
 
 type ChatMsg = { kind: 'chat'; text: string } | { kind: 'typing' };
 type ChatState = { name: string; color: string };
@@ -98,7 +100,59 @@ function _negativeProbes() {
   });
 }
 
+// Probe: ref.useRoom() method form. `key` is typed from the channel params,
+// `onMessage` infers `(Serialize<Outgoing>, from)`, and the result exposes
+// `send`/`setPresence`/`members`/`self` (no client `broadcast`).
+function _useRoomMethodProbe() {
+  const ref = defineRoom(roomChannel, { presence: () => initialState });
+
+  const result = ref.useRoom({
+    // key is required (the channel has a `:roomId` param) and typed.
+    key: { roomId: 'r1' },
+    presence: initialState,
+    onMessage(msg, from) {
+      expectTypeOf(msg).toEqualTypeOf<Serialize<ChatMsg>>();
+      expectTypeOf(from).toEqualTypeOf<string>();
+    },
+  });
+
+  // send accepts the Incoming type; setPresence accepts State.
+  expectTypeOf(result.send).toEqualTypeOf<(msg: ChatMsg) => void>();
+  expectTypeOf(result.setPresence).toEqualTypeOf<(state: ChatState) => void>();
+  // members is a readonly roster of PresenceMember<State>; self is optional.
+  expectTypeOf(result.members).toEqualTypeOf<
+    ReadonlyArray<PresenceMember<ChatState>>
+  >();
+  expectTypeOf(result.self).toEqualTypeOf<
+    PresenceMember<ChatState> | undefined
+  >();
+  // No client broadcast on the result (fan-out is server-mediated).
+  // @ts-expect-error useRoom result has no `broadcast`
+  void result.broadcast;
+}
+
+// Negative: a `:param` channel makes `key` required.
+function _keyRequiredProbe() {
+  const ref = defineRoom(roomChannel, {});
+  // @ts-expect-error `key` is required for a channel with a `:roomId` param
+  ref.useRoom({});
+  // @ts-expect-error `key` must match the channel params (missing roomId)
+  ref.useRoom({ key: {} });
+}
+
+// A param-less channel makes `key` optional.
+function _keyOptionalProbe() {
+  const signalChannel = defineChannel('lobby')<ChatMsg>();
+  const ref = defineRoom(signalChannel, {});
+  // No key needed; opts is fully optional.
+  ref.useRoom();
+  ref.useRoom({ onMessage: () => undefined });
+}
+
 void _routeRoomProbes;
 void _bareRoomProbes;
 void _multiParamProbes;
 void _negativeProbes;
+void _useRoomMethodProbe;
+void _keyRequiredProbe;
+void _keyOptionalProbe;
