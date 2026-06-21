@@ -55,47 +55,6 @@ export function urlPathMatchesPattern(
 }
 
 /**
- * Recover the `:param` values from a concrete path given the pattern that
- * produced it. The boolean `urlPathMatchesPattern` answers "does this match";
- * this answers "with what params", which the room runtime needs: a room key
- * rides the wire as the interpolated `channel.key(params)` string, and
- * `onJoin` wants the params back (`room/:roomId` + `room/demo` -> `{roomId:
- * 'demo'}`). Mirrors `urlPathMatchesPattern`'s segment walk but captures the
- * value at each `:param` slot.
- *
- * Channel keys use only literal and required `:param` segments, so this
- * targets that case. It does not implement the `?`/`*`/`+` rest grammar (room
- * keys never use it); it strips any such trailing flag from the param name and
- * captures the segment as-is rather than crashing, so an exotic pattern
- * degrades to a best-effort plain capture instead of throwing.
- */
-export function extractParams(
-  pattern: string,
-  urlPath: string
-): Record<string, string> {
-  const ps = segmentsOf(pattern);
-  const us = segmentsOf(urlPath);
-  const params: Record<string, string> = {};
-  const len = Math.min(ps.length, us.length);
-  for (let i = 0; i < len; i++) {
-    const p = ps[i]!;
-    const u = us[i]!;
-    if (p.startsWith(':')) {
-      // Strip a trailing rest/optional flag (?/*/+) from the param name; room
-      // keys do not use it, but do not let one corrupt the captured key.
-      const last = p[p.length - 1];
-      const name =
-        last === '?' || last === '*' || last === '+'
-          ? p.slice(1, -1)
-          : p.slice(1);
-      params[name] = u;
-    }
-    // Literal and bare `*` segments contribute no params; ignore them.
-  }
-  return params;
-}
-
-/**
  * Score a route pattern's specificity; findBestPattern uses this as the primary
  * ranking when multiple patterns match the URL. Mirrors preact-iso's runtime
  * preference for literal segments: literal=2, param=1, wildcard=0. Within

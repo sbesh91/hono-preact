@@ -15,7 +15,6 @@ import type {
   RoomClientFrame,
 } from '@hono-preact/iso/internal';
 import type { RoomConnection } from '@hono-preact/iso';
-import { extractParams } from './route-pattern.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -117,19 +116,58 @@ export function createRoomWsEvents(
         return;
       }
 
-      // 1. The room key rides the wire as `r=channel.key(params)`. The guard
-      //    chain already authorized; this validates the key is present.
-      topic = ctx.req.query(SOCKET_ROOM_PARAM) || undefined;
-      if (!topic) {
-        ws.close(WS_DENY_CODE, 'missing room key');
+      // 1. The client sends key params as `r=<JSON>` (or omits `r` for a
+      //    param-less channel). Parse the params from the untrusted wire boundary.
+      const rawR = ctx.req.query(SOCKET_ROOM_PARAM);
+      let params: Record<string, string> = {};
+      if (rawR !== undefined && rawR !== '') {
+        try {
+          // Sanctioned untrusted-wire JSON.parse: the client sends the channel
+          // key params as a JSON object; values are strings (channel param slots).
+          params = JSON.parse(rawR) as Record<string, string>; // sanctioned: untrusted wire JSON boundary
+        } catch {
+          ws.close(WS_DENY_CODE, 'invalid room params');
+          return;
+        }
+      }
+
+      // 2. Compute the topic SERVER-SIDE by interpolating the channel name with
+      //    the client-supplied params. The client can only vary param VALUES, not
+      //    the namespace. This prevents cross-topic injection.
+      //    The erased Channel<string,unknown> type resolves key() to zero args,
+      //    but the runtime impl is interpolatePattern(name, params ?? {}), which
+      //    accepts a params record. The cast reads the concrete runtime signature.
+      topic = (roomDef.channel.key as (p?: Record<string, string>) => string)(
+        params
+      );
+
+      // 3. Validate that all required `:param` segments in the channel name have
+      //    a non-empty value in params. interpolatePattern drops missing segments
+      //    rather than leaving `:name` in place, so we check the params object
+      //    directly: every required (non-optional) param name from the channel
+      //    name pattern must appear as a non-empty string in the parsed params.
+      const missingRequired = roomDef.channel.name
+        .split('/')
+        .filter((seg) => {
+          if (!seg.startsWith(':')) return false;
+          const flag = seg[seg.length - 1];
+          // Optional (?), rest-zero-or-more (*), and rest-one-or-more (+) are
+          // not required to be present. Only plain `:name` is required.
+          return flag !== '?' && flag !== '*' && flag !== '+';
+        })
+        .some((seg) => {
+          const name = seg.slice(1);
+          return !params[name];
+        });
+      if (!topic || missingRequired) {
+        ws.close(WS_DENY_CODE, 'missing required room param');
         return;
       }
 
-      // 2-3. Stable member id + the channel-name params recovered from the key.
+      // 4. Stable member id.
       connId = crypto.randomUUID();
-      const params = extractParams(roomDef.channel.name, topic);
 
-      // 4. Subscribe to the topic. The bus delivers the envelope OBJECT by
+      // 5. Subscribe to the topic. The bus delivers the envelope OBJECT by
       //    reference; narrowing `unknown` -> RoomEnvelope here is sanctioned:
       //    the room layer is the sole publisher/subscriber on its own topics,
       //    so we read our own object back through the unknown-typed seam (no
@@ -144,11 +182,11 @@ export function createRoomWsEvents(
         mySocket.send(env);
       });
 
-      // 5. Seed presence with the server default (may be undefined) and join.
+      // 6. Seed presence with the server default (may be undefined) and join.
       const initialState = roomDef.presence?.();
       joinRoom(topic, connId, initialState);
 
-      // 6. Send the joining socket the full roster snapshot DIRECTLY (not via
+      // 7. Send the joining socket the full roster snapshot DIRECTLY (not via
       //    publish: other members must not re-receive the whole roster).
       const snapshot: AnyEnvelope = {
         t: 'snapshot',
@@ -156,12 +194,12 @@ export function createRoomWsEvents(
       };
       ws.send(snapshot);
 
-      // 7. Announce the join to the topic. The sender's own callback also
+      // 8. Announce the join to the topic. The sender's own callback also
       //    forwards this (presence is always forwarded); the client dedupes by
       //    member id, so a self-echoed join is harmless.
       publishPresence(topic, connId, 'join', initialState);
 
-      // 8. Build the RoomConnection handed to the user handlers.
+      // 9. Build the RoomConnection handed to the user handlers.
       conn = {
         id: connId,
         data: {},
@@ -181,7 +219,7 @@ export function createRoomWsEvents(
         },
       };
 
-      // 9. Run the user's join hook; capture any teardown it returns.
+      // 10. Run the user's join hook; capture any teardown it returns.
       joinTeardown = await roomDef.onJoin?.(conn, { c: ctx, params });
     },
 

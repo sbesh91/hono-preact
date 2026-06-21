@@ -80,7 +80,9 @@ export const SOCKETS_RPC_PATH = '/__sockets';
 export const SOCKET_MODULE_PARAM = 'm';
 export const SOCKET_NAME_PARAM = 's';
 
-/** Query param carrying the interpolated room key (channel.key(params)) for a room connection. */
+/** Query param carrying the JSON-encoded channel key params for a room
+ * connection. The server interpolates the topic from these params; the client
+ * never sends a pre-built topic string. */
 export const SOCKET_ROOM_PARAM = 'r';
 
 /**
@@ -89,7 +91,9 @@ export const SOCKET_ROOM_PARAM = 'r';
  */
 export const FORM_SOCKET_FIELD = '__socket';
 
-/** Client room-stub descriptor field (the channel name pattern). */
+/** Client room-stub descriptor field carrying the room's export name (the
+ * descriptor name used for the `m::name` registry lookup, identical to the
+ * `s` query param for sockets). */
 export const FORM_ROOM_FIELD = '__room';
 
 /**

@@ -94,12 +94,16 @@ function makeApp(
   return app;
 }
 
+// The room param carries the JSON-encoded channel key params. The server
+// interpolates the topic server-side from these params.
+const ROOM_PARAMS = JSON.stringify({ roomId: 'demo' });
+
 function connect(app: Hono): Promise<Response> {
   return app.request(
     `http://localhost${SOCKETS_RPC_PATH}` +
       `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
       `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-      `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(TOPIC)}`
+      `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(ROOM_PARAMS)}`
   );
 }
 
@@ -433,7 +437,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(roomMembers(TOPIC)).toHaveLength(0);
   });
 
-  it('onJoin receives params derived from the topic via extractParams', async () => {
+  it('onJoin receives params interpolated server-side from client-sent key params', async () => {
     const { upgrader, conns } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
@@ -458,7 +462,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     installWebSocketUpgrader(upgrader);
     const app = makeApp(makeRoomRegistry({}));
 
-    // No `r` param.
+    // No `r` param at all: a required param is absent.
     await app.request(
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
@@ -468,5 +472,84 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     await a.events.onOpen?.(new Event('open'), a.ws as never);
 
     expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('an empty params object (r="{}") closes WS_DENY_CODE for a :param channel', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const app = makeApp(makeRoomRegistry({}));
+
+    // The client sends valid JSON but omits the required `roomId` param.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({}))}`
+    );
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('invalid JSON in r closes WS_DENY_CODE', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const app = makeApp(makeRoomRegistry({}));
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent('not-json')}`
+    );
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('(security) client key params are constrained to the channel namespace', async () => {
+    // A client for the `room/:roomId` channel sends params for `roomId=demo`.
+    // The server interpolates the topic as `room/demo`, bound to the channel's
+    // namespace. The client cannot reach an unrelated topic by injecting a
+    // pre-built topic string: even if the client sends `r={"roomId":"demo"}`
+    // the resulting topic is always `room/demo`, never e.g. `board/p1`.
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let seenTopic: string | undefined;
+    const app = makeApp(
+      makeRoomRegistry({
+        onJoin(_conn, { c }) {
+          // Capture the computed topic from the server context via the pub/sub
+          // backend: the connection is subscribed to the server-computed topic.
+          // We assert it via the roomMembers roster, which is keyed by topic.
+          seenTopic = c.req.query(SOCKET_ROOM_PARAM) ?? undefined;
+        },
+      })
+    );
+
+    // Attempt: send params that, if trusted literally as a topic, would land
+    // on `board/p1` (a different channel entirely). The server must instead
+    // interpolate `room/:roomId` with `{roomId: "p1"}`, landing on `room/p1`.
+    const params = JSON.stringify({ roomId: 'p1' });
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(params)}`
+    );
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    // The connection must join `room/p1`, not `board/p1` or any other topic.
+    // The roster confirms which topic the server used.
+    expect(roomMembers('room/p1')).toHaveLength(1);
+    // An unrelated topic (`board/p1`) must be empty: the params never escape
+    // the channel's namespace.
+    expect(roomMembers('board/p1')).toHaveLength(0);
+    // The raw `r` param the server received was the params JSON, not a topic.
+    expect(seenTopic).toBe(params);
   });
 });
