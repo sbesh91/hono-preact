@@ -1,5 +1,6 @@
 import type { JSX, ComponentChildren } from 'preact';
 import { useState, useCallback, useMemo, useRef } from 'preact/hooks';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ActionStub } from './action.js';
 import {
   OPTIMISTIC_BRAND,
@@ -14,6 +15,13 @@ import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
+import { validateWithSchema, mapIssuesToFields } from './validate.js';
+import { getValidationIssues } from './get-validation-issues.js';
+import { useActionResult } from './use-action-result.js';
+import {
+  FieldErrorsContext,
+  type FieldErrorsMap,
+} from './internal/field-errors-context.js';
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value
@@ -38,6 +46,14 @@ export type FormProps<TPayload, TResult> = Omit<
   onError?: (err: Error) => void;
   invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
   reset?: boolean;
+  /**
+   * Opt-in client-side pre-validation. Pass the SAME Standard Schema the action
+   * declares as its `input` (author it in a shared, non-`.server` module so the
+   * browser can import it). Typed to the action's payload so a mismatched schema
+   * is a compile error. On submit the form runs it and blocks the POST on
+   * failure; the server still re-validates authoritatively.
+   */
+  schema?: StandardSchemaV1<unknown, TPayload>;
 };
 
 function resetFormFields(formEl: HTMLFormElement, fields?: string[]): void {
@@ -93,9 +109,16 @@ export function Form<TPayload, TResult>({
   onError,
   invalidate,
   reset,
+  schema,
   ...rest
 }: FormProps<TPayload, TResult>) {
   const [pending, setPending] = useState(false);
+  const [clientErrors, setClientErrors] = useState<FieldErrorsMap>({});
+  const clientErrorsRef = useRef(clientErrors);
+  clientErrorsRef.current = clientErrors;
+  const schemaRef = useRef(schema);
+  schemaRef.current = schema;
+
   const moduleKey = action.__module;
   const actionName = action.__action;
   const applyInvalidate = useInvalidate();
@@ -106,6 +129,15 @@ export function Form<TPayload, TResult>({
     () => (hasOptimisticBrand(action) ? action[OPTIMISTIC_BRAND] : undefined),
     [action]
   );
+
+  // Server-returned validation issues (deny 422) for this action, if any.
+  const plainStub = hasOptimisticBrand(action) ? undefined : action;
+  const serverResult = useActionResult(plainStub);
+  const fieldErrors = useMemo<FieldErrorsMap>(() => {
+    const server = mapIssuesToFields(getValidationIssues(serverResult));
+    // Client pre-validation reflects the most recent interaction, so it wins.
+    return { ...server, ...clientErrors };
+  }, [serverResult, clientErrors]);
 
   const handleSubmit = useCallback(
     async (e: Event) => {
@@ -124,6 +156,17 @@ export function Form<TPayload, TResult>({
       fd.set(FORM_MODULE_FIELD, moduleKey);
       fd.set(FORM_ACTION_FIELD, actionName);
       const payload = collectFormData(fd) as TPayload;
+
+      if (schemaRef.current) {
+        const result = await validateWithSchema(schemaRef.current, payload);
+        if (!result.ok) {
+          setClientErrors(mapIssuesToFields(result.issues));
+          return; // block the POST; server never sees an invalid payload
+        }
+        // Valid: clear any prior client errors and fall through to POST.
+        setClientErrors({});
+      }
+
       let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);
 
@@ -232,18 +275,40 @@ export function Form<TPayload, TResult>({
     [moduleKey, actionName, optimistic, applyInvalidate]
   );
 
+  const handleInput = useCallback(async (e: Event) => {
+    const target = e.target as { name?: string } | null;
+    const name = target?.name;
+    if (!name || !schemaRef.current) return;
+    // Only react once a field has shown an error; quiet fields stay quiet.
+    if (!clientErrorsRef.current[name]) return;
+    const formEl = e.currentTarget as HTMLFormElement; // capture before await
+    const record = collectFormData(new FormData(formEl));
+    const result = await validateWithSchema(schemaRef.current, record);
+    const fresh = result.ok ? {} : mapIssuesToFields(result.issues);
+    setClientErrors((prev) => {
+      if (!prev[name]) return prev; // field already cleared (e.g. by a submit); don't revive it
+      const next = { ...prev };
+      if (fresh[name]) next[name] = fresh[name];
+      else delete next[name];
+      return next;
+    });
+  }, []);
+
   return (
     <form
       {...rest}
       method="post"
       enctype="multipart/form-data"
       onSubmit={handleSubmit}
+      onInput={handleInput}
     >
       <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
       <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />
-      <fieldset disabled={pending} class="hp-form-fieldset">
-        {children}
-      </fieldset>
+      <FieldErrorsContext.Provider value={fieldErrors}>
+        <fieldset disabled={pending} class="hp-form-fieldset">
+          {children}
+        </fieldset>
+      </FieldErrorsContext.Provider>
     </form>
   );
 }

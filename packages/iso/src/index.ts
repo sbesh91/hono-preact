@@ -84,6 +84,8 @@ export {
   type ActionResultContextValue,
 } from './action-result-context.js';
 export { useFormStatus, type FormStatus } from './use-form-status.js';
+export { useFieldErrors, FieldError } from './use-field-errors.js';
+export type { FieldErrorsMap } from './internal/field-errors-context.js';
 
 // Cache + invalidation.
 export { createCache } from './cache.js';
