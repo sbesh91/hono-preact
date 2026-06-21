@@ -24,7 +24,12 @@ export function useHashScroll(path: string): void {
       stopWaiting();
       const hash = window.location.hash.slice(1);
       if (!hash) return;
-      const id = decodeURIComponent(hash);
+      let id: string;
+      try {
+        id = decodeURIComponent(hash);
+      } catch {
+        return; // malformed %-escape in the hash
+      }
 
       const tryScroll = (): boolean => {
         const el = document.getElementById(id);

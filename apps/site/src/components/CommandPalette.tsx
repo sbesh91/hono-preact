@@ -96,7 +96,7 @@ export function CommandPalette({ pages }: { pages: DocPage[] }) {
             placeholder="Search docs…"
             aria-label="Search documentation"
             role="combobox"
-            aria-expanded={results.length > 0}
+            aria-expanded={open}
             aria-controls={listId}
             aria-activedescendant={activeId ?? undefined}
             autocomplete="off"
@@ -106,11 +106,19 @@ export function CommandPalette({ pages }: { pages: DocPage[] }) {
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={onInputKeyDown}
           />
+          {/* Empty while closed so OPENING the palette is a real text change
+              ("" -> "N results") that screen readers announce; aria-atomic reads
+              the whole region. Mirrors the old Combobox.Status behavior. */}
           <div
             role="status"
             aria-live="polite"
+            aria-atomic="true"
             class="sr-only"
-          >{`${results.length} result${results.length === 1 ? '' : 's'}`}</div>
+          >
+            {open
+              ? `${results.length} result${results.length === 1 ? '' : 's'}`
+              : ''}
+          </div>
           <div
             ref={listRef}
             id={listId}

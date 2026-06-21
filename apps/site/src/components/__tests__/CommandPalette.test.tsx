@@ -75,4 +75,27 @@ describe('CommandPalette', () => {
     const notPrevented = fireEvent.keyDown(input, { key: 's' });
     expect(notPrevented).toBe(true);
   });
+
+  it('moves the highlight with ArrowDown and selects it with Enter', async () => {
+    const { getByLabelText, getByText } = setup();
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const input = await waitFor(() => getByLabelText('Search documentation'));
+    // Empty query lists [Server Loaders, Streaming]; the first is active.
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const streamingOption = getByText('Streaming').closest('[role="option"]')!;
+    await waitFor(() =>
+      expect(streamingOption.getAttribute('aria-selected')).toBe('true')
+    );
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(dialogState()).toBe('closed'));
+  });
+
+  it('shows the empty state for a query with no matches', async () => {
+    const { getByRole, getByLabelText, findByText } = setup();
+    fireEvent.click(getByRole('button', { name: /search/i }));
+    const input = getByLabelText('Search documentation') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'zzzzz' } });
+    expect(await findByText('No results')).toBeTruthy();
+    expect(dialogState()).toBe('open');
+  });
 });
