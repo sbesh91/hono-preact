@@ -12,6 +12,7 @@ import type {
 } from '../define-middleware.js';
 import { dispatchServer } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
+import { coerceLoaderLocation } from './loader-schema.js';
 import {
   fanStart,
   fanChunk,
@@ -167,7 +168,45 @@ export function runLoader<T>(
     }
 
     const runInner = async (): Promise<unknown> => {
-      const result = await loaderRef.fn(ctx);
+      let result: unknown;
+      if (loaderRef.searchSchema || loaderRef.paramsSchema) {
+        const coerced = await coerceLoaderLocation(
+          {
+            searchSchema: loaderRef.searchSchema,
+            paramsSchema: loaderRef.paramsSchema,
+          },
+          location.pathParams ?? {},
+          location.searchParams ?? {}
+        );
+        // Post-coercion location params are `unknown` (schema output type erased
+        // at the ref); the loader author's typed param shape came from the
+        // defineLoader generic. Forward through a loose-location view of fn,
+        // the same boundary loaders-handler uses on the RPC path.
+        const invoke = loaderRef.fn as (c: {
+          location: {
+            path: string;
+            pathParams: unknown;
+            searchParams: unknown;
+          };
+          signal: AbortSignal;
+          c: Context;
+        }) => ReturnType<typeof loaderRef.fn>;
+        // Construct the arg explicitly rather than spreading `ctx` to avoid
+        // triggering the lazy `c` getter during object spread.
+        result = await invoke({
+          signal: ctx.signal,
+          get c() {
+            return ctx.c;
+          },
+          location: {
+            ...location,
+            pathParams: coerced.pathParams,
+            searchParams: coerced.searchParams,
+          },
+        });
+      } else {
+        result = await loaderRef.fn(ctx);
+      }
       if (isAsyncGenerator(result)) {
         if (observers.length > 0) {
           fanStart(observers, serverCtx);

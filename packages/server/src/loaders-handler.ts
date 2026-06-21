@@ -2,13 +2,12 @@ import type { Context, MiddlewareHandler } from 'hono';
 import {
   isOutcome,
   timeoutOutcome,
-  deny,
   type AppConfig,
   type ServerLoaderCtx,
   type StandardSchemaV1,
 } from '@hono-preact/iso';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
-import { validateWithSchema } from '@hono-preact/iso/internal/runtime';
+import { coerceLoaderLocation } from '@hono-preact/iso/internal/runtime';
 import { composeServerChain } from './compose-server-chain.js';
 import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
@@ -271,26 +270,14 @@ export function loadersHandler(
             middleware: serverMw,
             ctx,
             inner: async () => {
-              let pathParams: unknown = validatedLocation.pathParams;
-              let searchParams: unknown = validatedLocation.searchParams;
-              if (entry.paramsSchema) {
-                const r = await validateWithSchema(
-                  entry.paramsSchema,
-                  validatedLocation.pathParams
-                );
-                // Bad route param: the URL does not name a valid resource.
-                if (!r.ok) throw deny(404, 'Invalid route parameters');
-                pathParams = r.value;
-              }
-              if (entry.searchSchema) {
-                const r = await validateWithSchema(
-                  entry.searchSchema,
-                  validatedLocation.searchParams
-                );
-                // Bad query string.
-                if (!r.ok) throw deny(400, 'Invalid search parameters');
-                searchParams = r.value;
-              }
+              const { pathParams, searchParams } = await coerceLoaderLocation(
+                {
+                  searchSchema: entry.searchSchema,
+                  paramsSchema: entry.paramsSchema,
+                },
+                validatedLocation.pathParams,
+                validatedLocation.searchParams
+              );
               const inner = await entry.fn({
                 c,
                 location: {
