@@ -50,4 +50,30 @@ describe('getValidationIssues', () => {
       })
     ).toBeNull();
   });
+
+  // Fix 2: path element types must be string | number.
+  it('returns null when a path element is not a string or number (e.g. an object)', () => {
+    const result = {
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: {
+        [VALIDATION_ISSUES_KEY]: [{ message: 'x', path: [{}] }],
+      },
+      submittedPayload: {},
+    };
+    expect(getValidationIssues(result)).toBeNull();
+  });
+
+  it('accepts a well-formed path with string and number segments', () => {
+    const issues = [{ path: ['a', 0, 'b'], message: 'nested error' }];
+    const result = {
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: { [VALIDATION_ISSUES_KEY]: issues },
+      submittedPayload: {},
+    };
+    expect(getValidationIssues(result)).toEqual(issues);
+  });
 });

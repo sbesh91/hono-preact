@@ -14,11 +14,12 @@ import { VALIDATION_ISSUES_KEY } from './internal/contract.js';
  * ```
  */
 function isValidationIssue(x: unknown): x is ValidationIssue {
+  if (typeof x !== 'object' || x === null) return false;
+  const { path, message } = x as { path?: unknown; message?: unknown };
   return (
-    typeof x === 'object' &&
-    x !== null &&
-    Array.isArray((x as { path?: unknown }).path) &&
-    typeof (x as { message?: unknown }).message === 'string'
+    Array.isArray(path) &&
+    path.every((seg) => typeof seg === 'string' || typeof seg === 'number') &&
+    typeof message === 'string'
   );
 }
 

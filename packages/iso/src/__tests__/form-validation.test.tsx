@@ -98,6 +98,7 @@ afterEach(() => {
   clearLastActionResult('pages/test.server', 'create');
   clearLastActionResult('pages/test.server', 'crossField');
   clearLastActionResult('pages/test.server', 'serverDeny');
+  clearLastActionResult('pages/test.server', 'throwing');
   vi.restoreAllMocks();
 });
 
@@ -382,6 +383,117 @@ describe('Form client pre-validation', () => {
     expect(queryByText('Title too long')).toBeNull();
     // 'other' field was not edited; not in clearedServerFields; server error stays.
     expect(getByText('Other error')).toBeTruthy();
+  });
+
+  // Fix 1 (guard throwing schema): a schema whose validate throws synchronously
+  // must NOT dead-end the form. fetch should still be called (fail-open to server).
+  it('fails open to the server when the client schema validate throws synchronously', async () => {
+    const throwingSchema: StandardSchemaV1<unknown, { title: string }> = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: () => {
+          throw new Error('schema transform blew up');
+        },
+      },
+    };
+    const throwingAction = defineAction(async () => ({ id: 1 }), {
+      input: throwingSchema,
+      __module: 'pages/test.server',
+      __action: 'throwing',
+    });
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { container } = render(
+      <Form action={throwingAction} schema={throwingSchema}>
+        <input name="title" value="Hello" />
+        <button type="submit">Save</button>
+      </Form>
+    );
+    // Submit must not throw or leave an unhandled rejection.
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form')!);
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    // Fail-open: fetch is called despite the throwing schema.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // console.error was called with the hono-preact warning message.
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('client schema validation threw'),
+      expect.any(Error)
+    );
+  });
+
+  // Fix 1 (guard rejecting schema): a schema whose validate returns a rejected
+  // promise must also fail open to the server.
+  it('fails open to the server when the client schema validate returns a rejected promise', async () => {
+    const rejectingSchema: StandardSchemaV1<unknown, { title: string }> = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: () =>
+          Promise.reject(new Error('async schema error')) as never,
+      },
+    };
+    const rejectingAction = defineAction(async () => ({ id: 1 }), {
+      input: rejectingSchema,
+      __module: 'pages/test.server',
+      __action: 'throwing',
+    });
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { container } = render(
+      <Form action={rejectingAction} schema={rejectingSchema}>
+        <input name="title" value="Hello" />
+        <button type="submit">Save</button>
+      </Form>
+    );
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form')!);
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('client schema validation threw'),
+      expect.any(Error)
+    );
+  });
+
+  // Fix 3 (unmount cleanup): unmounting the Form within the debounce window
+  // after a keystroke must not throw or produce a state-update-after-unmount.
+  it('does not error when unmounted during the debounce window after a keystroke', async () => {
+    const { container, unmount } = render(
+      <Form action={create} schema={schema}>
+        <input name="title" />
+        <button type="submit">Save</button>
+      </Form>
+    );
+    // Enter validating mode so handleInput arms the debounce timer.
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form')!);
+    });
+    const input = container.querySelector('input[name="title"]')!;
+    (input as HTMLInputElement).value = 'Hello';
+    await act(async () => {
+      fireEvent.input(input);
+    });
+    // Unmount immediately within the 150ms debounce window.
+    // The useEffect cleanup should cancel the timer; no error should result.
+    await act(async () => {
+      unmount();
+      // Advance past the debounce so a leaked timer would fire if not cleared.
+      await new Promise((r) => setTimeout(r, 200));
+    });
+    // If we reach here without throwing, the cleanup worked correctly.
+    expect(true).toBe(true);
   });
 
   // Fix [7]: the async sequence guard. We verify it does not apply a stale

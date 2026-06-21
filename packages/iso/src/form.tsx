@@ -1,5 +1,11 @@
 import type { JSX, ComponentChildren } from 'preact';
-import { useState, useCallback, useMemo, useRef } from 'preact/hooks';
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+} from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ActionStub } from './action.js';
 import {
@@ -115,6 +121,15 @@ export function Form<TPayload, TResult>({
   // Sequence guard so a stale async revalidation cannot overwrite a newer one.
   const inputSeq = useRef(0);
 
+  // Clear the debounce timer on unmount so a pending revalidation cannot call
+  // setClientErrors after the component has been torn down.
+  useEffect(
+    () => () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    },
+    []
+  );
+
   const moduleKey = action.__module;
   const actionName = action.__action;
   const applyInvalidate = useInvalidate();
@@ -204,13 +219,23 @@ export function Form<TPayload, TResult>({
       const payload = collectFormData(fd) as TPayload;
 
       if (schemaRef.current) {
-        const result = await validateWithSchema(schemaRef.current, payload);
-        if (!result.ok) {
-          setClientErrors(mapIssuesToFields(result.issues));
-          return; // block the POST; server never sees an invalid payload
+        try {
+          const result = await validateWithSchema(schemaRef.current, payload);
+          if (!result.ok) {
+            setClientErrors(mapIssuesToFields(result.issues));
+            return; // block the POST; server never sees an invalid payload
+          }
+          // Valid: clear any prior client errors and fall through to POST.
+          setClientErrors({});
+        } catch (err) {
+          // The schema's validate function threw or rejected. Fail open: let the
+          // server validate authoritatively rather than dead-ending the form.
+          console.error(
+            'hono-preact: client schema validation threw; proceeding to server-side validation.',
+            err
+          );
+          // Fall through to POST below.
         }
-        // Valid: clear any prior client errors and fall through to POST.
-        setClientErrors({});
       }
 
       let handle: OptimisticHandle | undefined;
@@ -354,10 +379,19 @@ export function Form<TPayload, TResult>({
       debounceTimerRef.current = null;
       const seq = (inputSeq.current += 1);
       const record = collectFormData(new FormData(formEl));
-      void validateWithSchema(schema, record).then((result) => {
-        if (seq !== inputSeq.current) return; // superseded by a newer keystroke
-        setClientErrors(result.ok ? {} : mapIssuesToFields(result.issues));
-      });
+      void validateWithSchema(schema, record)
+        .then((result) => {
+          if (seq !== inputSeq.current) return; // superseded by a newer keystroke
+          setClientErrors(result.ok ? {} : mapIssuesToFields(result.issues));
+        })
+        .catch((err) => {
+          // The schema threw or rejected during live revalidation. Log and bail;
+          // do not update clientErrors so the user can keep typing.
+          console.error(
+            'hono-preact: client schema validation threw; proceeding to server-side validation.',
+            err
+          );
+        });
     }, 150);
   }, []);
 
