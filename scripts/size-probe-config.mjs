@@ -1,11 +1,10 @@
-// Module manifests that define each size probe. The emitter
-// (emit-size-probes.mjs) bundles each entry in isolation so
-// compressed-size-action can gzip and diff it per PR. Peers in EXTERNAL are
-// excluded so a probe reflects only the framework's own code on top of a
-// runtime the consumer already ships.
+// Module manifests that define each measured unit. measure-framework-size.mjs
+// bundles each entry in isolation (esbuild, peers external) and gzips it, so a
+// row reflects only the framework's own code on top of a runtime the consumer
+// already ships.
 
-// Framework base. Every feature probe is measured on its own; subtract the
-// `core` probe in the PR comment to read a feature's marginal cost.
+// Framework base. Each feature's marginal cost over `core` is computed
+// directly by the measure script as gzip(core+feature) - gzip(core).
 export const CORE_MODULES = [
   'define-app.js',
   'define-routes.js',
