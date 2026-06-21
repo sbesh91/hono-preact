@@ -49,6 +49,8 @@ The docs site (`framework.sbesh.com`, a Cloudflare Worker) deploys **only on rel
 
 So a normal merge to `main` does **not** update the live site; the docs ship with the next version cut. Two prerequisites are operator-managed outside the repo: the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repo secrets, and Cloudflare Workers Builds auto-deploy being **disabled** (if it is ever re-enabled, every `main` push deploys again and defeats the gate).
 
+Pull requests get an isolated **preview deploy** via the `preview` job in `.github/workflows/ci.yml`. It runs `wrangler versions upload` (a non-active version of the same Worker, served at a `*.workers.dev` preview URL) and posts the URL as a sticky `preview-docs` PR comment that updates on every push. Previews never touch the live `framework.sbesh.com` deployment or its route, and reuse the existing `CLOUDFLARE_API_TOKEN` (the upload needs only Workers Scripts: Edit, not the zone Workers Routes permission the production deploy needs).
+
 ## PR workflow
 
 Any time a PR is opened, immediately run a deep PR review as the first follow-up step (before any other post-open work).
