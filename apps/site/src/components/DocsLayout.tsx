@@ -130,7 +130,7 @@ export function DocsLayout({ children }: Props) {
         </span>
         <a
           href="/llms.txt"
-          class="hidden sm:inline text-xs text-muted hover:text-foreground whitespace-nowrap no-underline"
+          class="text-xs text-muted hover:text-foreground whitespace-nowrap no-underline"
           title="Plain-text docs for LLMs (llms.txt)"
         >
           For LLMs
