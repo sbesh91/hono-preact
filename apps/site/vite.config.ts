@@ -1,9 +1,7 @@
 import { honoPreact } from 'hono-preact/vite';
 import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
 import mdx, { type Options as MdxOptions } from '@mdx-js/rollup';
-import remarkGfm from 'remark-gfm';
-import rehypeShiki from '@shikijs/rehype';
-import { rehypeShikiOptions } from './src/shiki/shiki-config.js';
+import { remarkPlugins, rehypePlugins } from './src/mdx-plugins.js';
 import { highlightPlugin } from './src/shiki/vite-plugin-highlight.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +10,7 @@ import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { nav } from './src/pages/docs/nav.js';
 import { generateLlmsFiles } from './src/llms/generate-llms.js';
+import { docsIndexPlugin } from './src/llms/vite-plugin-docs-index.js';
 
 // `__dirname` is not defined in native ESM; Vite's esbuild loader silently
 // polyfills it today, but copying this config into a plain `.mjs` or running
@@ -21,15 +20,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const mdxOptions = {
   jsxImportSource: 'preact',
-  remarkPlugins: [remarkGfm],
-  rehypePlugins: [
-    [
-      rehypeShiki,
-      // Dual theme: light is the inline default; root.css switches to the dark
-      // theme's colors in dark mode. Shared with the demo-source highlighter.
-      rehypeShikiOptions,
-    ],
-  ],
+  remarkPlugins,
+  rehypePlugins,
 } satisfies MdxOptions;
 
 const visualize = process.env.VISUALIZE === '1';
@@ -38,6 +30,8 @@ const visualize = process.env.VISUALIZE === '1';
 // the framework's own package.json at build time so a release bump propagates
 // to the site automatically and the badge can't drift (it sat at v0.2 from
 // 0.2 through 0.5 when hardcoded).
+const docsDir = resolve(__dirname, 'src/pages/docs');
+
 const frameworkVersion = JSON.parse(
   readFileSync(
     resolve(__dirname, '../../packages/hono-preact/package.json'),
@@ -111,6 +105,7 @@ export default defineConfig((env) => ({
   plugins: [
     highlightPlugin(),
     honoPreact({ adapter: cloudflareAdapter() }),
+    docsIndexPlugin(nav, docsDir),
     {
       name: 'emit-llms-txt',
       closeBundle() {
@@ -118,7 +113,6 @@ export default defineConfig((env) => ({
         // Cloudflare assets directory, so files written here serve at the site
         // root (/llms.txt, /llms-full.txt). The worker build shares no asset root.
         if (this.environment && this.environment.name !== 'client') return;
-        const docsDir = resolve(__dirname, 'src/pages/docs');
         const { llmsTxt, llmsFullTxt } = generateLlmsFiles(nav, docsDir);
         const outDir = resolve(__dirname, 'dist/client');
         mkdirSync(outDir, { recursive: true });
