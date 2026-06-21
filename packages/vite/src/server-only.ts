@@ -12,7 +12,11 @@ import {
   type DynamicServerImport,
 } from './ast-walkers.js';
 import { extractServerLoadersMeta } from './source-extraction.js';
-import { loaderStubSource, actionStubSource } from './stub-templates.js';
+import {
+  loaderStubSource,
+  actionStubSource,
+  socketStubSource,
+} from './stub-templates.js';
 
 // The unknown-specifier rejection message lists every recognized server
 // export so a user can immediately see the valid set. The list is derived
@@ -141,6 +145,12 @@ export function serverOnlyPlugin(): Plugin {
           ) {
             needsUseActionImport = true;
             stubs.push(actionStubSource(specifier.local.name, moduleKey));
+          } else if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverSockets'
+          ) {
+            stubs.push(socketStubSource(specifier.local.name, moduleKey));
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&

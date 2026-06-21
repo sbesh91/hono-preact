@@ -3,6 +3,7 @@ import {
   LOADER_NAME_OPTION,
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
+  FORM_SOCKET_FIELD,
 } from '@hono-preact/iso/internal/runtime';
 
 // Source for the `serverLoaders` client stub: a Proxy whose every property read
@@ -41,6 +42,20 @@ export function actionStubSource(localName: string, moduleKey: string): string {
     `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_ACTION_FIELD}: String(action) };\n` +
     `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
     `    return stub;\n` +
+    `  }\n` +
+    `});`
+  );
+}
+
+// Source for the `serverSockets` client stub. Each `serverSockets.<name>` read
+// returns a descriptor record (module + socket name) that `useSocket` reads to
+// build the /__sockets URL. Like actions, the stub is a descriptor, not a
+// singleton.
+export function socketStubSource(localName: string, moduleKey: string): string {
+  return (
+    `const ${localName} = new Proxy({}, {\n` +
+    `  get(_, name) {\n` +
+    `    return { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_SOCKET_FIELD}: String(name) };\n` +
     `  }\n` +
     `});`
   );
