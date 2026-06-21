@@ -8,7 +8,7 @@ on:
 
 # Collapse superseded runs per ref. Cancel-in-progress only for PRs: a fast
 # series of pushes to a PR branch should drop stale runs (and the stale size
-# comment they'd post). On main, build-and-tag commits the size baseline and
+# comment they'd post). On main, build-and-tag commits the lighthouse baselines and
 # force-pushes the `next` tag, so never interrupt it mid-flight.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,7 +46,7 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # Type-level tests (`*.test-d.ts`) — tsc enforces the type assertions
+      # Type-level tests (`*.test-d.ts`): tsc enforces the type assertions
       # (typed-routes today) that the package `tsconfig`s exclude from typecheck.
       - name: Type tests
         run: pnpm test:types
@@ -67,7 +67,7 @@ jobs:
         run: pnpm --filter site build
 
   client-size:
-    name: Client JS size
+    name: Framework JS size
     needs: test
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -79,7 +79,6 @@ jobs:
 
       # Version derives from the `packageManager` field in package.json.
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -88,28 +87,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build framework packages
+      - name: Build framework (PR head)
         run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
 
-      - name: Build site
-        run: pnpm --filter site build
-
       - name: Measure PR head
-        run: node scripts/measure-client-size.mjs --out /tmp/fresh-size.json
+        run: node scripts/measure-framework-size.mjs --out /tmp/head.json
+
+      # Build-both delta: measure the base ref in a worktree using THIS head's
+      # measure script (so the base never needs to carry the script), then diff.
+      # No committed baseline, so no metrics-commit merge conflicts.
+      - name: Build framework (base ref) and measure
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE"
+          git worktree add /tmp/base "origin/$BASE"
+          (cd /tmp/base && pnpm install --frozen-lockfile && pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build)
+          node scripts/measure-framework-size.mjs \
+            --iso-dist /tmp/base/packages/iso/dist \
+            --ui-dist /tmp/base/packages/ui/dist \
+            --out /tmp/base.json
 
       - name: Render comment
         env:
-          # Pins the comment to the commit it measured, so a re-measured sticky
-          # comment is distinguishable from the original at-open one.
           SIZE_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
           SIZE_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/render-size-comment.mjs /tmp/fresh-size.json client-size-report.json > /tmp/size-comment.md
+        run: node scripts/render-framework-size-comment.mjs /tmp/head.json /tmp/base.json > /tmp/comment.md
 
       - name: Post sticky comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: client-size
-          path: /tmp/size-comment.md
+          header: framework-size
+          path: /tmp/comment.md
 
   lighthouse:
     name: Lighthouse
@@ -273,17 +282,10 @@ jobs:
       - name: Build all packages and app
         run: pnpm build
 
-      - name: Measure client size baseline
-        run: |
-          node scripts/measure-client-size.mjs \
-            --append-history \
-            --sha "$GITHUB_SHA" \
-            --date "$(git show -s --format=%cI "$GITHUB_SHA")"
-
       - name: Measure Lighthouse baseline
-        # Soft: a wrangler/Chrome/LHCI hiccup must not block the client-size
-        # baseline commit or the `next` tag move below. The PR `lighthouse` job
-        # is the canary for genuine Lighthouse breakage.
+        # Soft: a wrangler/Chrome/LHCI hiccup must not block the `next` tag
+        # move below. The PR `lighthouse` job is the canary for genuine
+        # Lighthouse breakage.
         continue-on-error: true
         run: |
           set -o pipefail
@@ -306,9 +308,9 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          if ! git diff --quiet client-size-report.json client-size-history.jsonl lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json; then
-            git add client-size-report.json client-size-history.jsonl lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
-            git commit -m "chore(metrics): update size + lighthouse baselines [skip ci]"
+          if ! git diff --quiet lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json; then
+            git add lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
+            git commit -m "chore(metrics): update lighthouse baselines [skip ci]"
             git push origin HEAD:main
           fi
 

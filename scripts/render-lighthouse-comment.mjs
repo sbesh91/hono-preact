@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Pure renderer: turns (freshReport, baselineReport) into the Lighthouse sticky
-// PR comment markdown. CLI form reads two JSON files and prints the markdown.
-// Mirrors render-size-comment.mjs.
+// Pure renderer: turns (fresh, baseline) reports into the sticky PR comment markdown.
+// CLI form reads two JSON files and prints the markdown.
 
 import { readFileSync } from 'node:fs';
 
