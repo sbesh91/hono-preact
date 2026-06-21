@@ -5,7 +5,10 @@ import traverse from '@babel/traverse';
 import type { NodePath } from '@babel/traverse';
 import type { CallExpression } from '@babel/types';
 import type { Plugin } from 'vite';
-import { LOADERS_RPC_PATH } from '@hono-preact/iso/internal/runtime';
+import {
+  LOADERS_RPC_PATH,
+  SOCKETS_RPC_PATH,
+} from '@hono-preact/iso/internal/runtime';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import type { HonoPreactAdapter } from './adapter.js';
 
@@ -73,10 +76,10 @@ export type ApiShadowingRoute =
     }
   | { kind: 'notFound'; line: number | undefined; severity: 'warning' };
 
-// Framework-reserved request paths. A literal registration of either in
-// api.ts shadows the framework's RPC handler now that the user app mounts
+// Framework-reserved request paths. A literal registration of any of these in
+// api.ts shadows the framework's RPC handlers now that the user app mounts
 // ahead of them.
-const RESERVED_PATHS = new Set([LOADERS_RPC_PATH]);
+const RESERVED_PATHS = new Set([LOADERS_RPC_PATH, SOCKETS_RPC_PATH]);
 
 const HONO_METHODS = new Set([
   'get',

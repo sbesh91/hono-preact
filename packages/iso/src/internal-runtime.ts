@@ -10,7 +10,11 @@ export { installNavTransitionScheduler } from './internal/route-change.js';
 export { installStreamRegistry } from './internal/stream-registry.js';
 export { installPubSubBackend } from './internal/pubsub.js';
 export type { PubSubBackend } from './internal/pubsub.js';
-export { installWebSocketUpgrader } from './internal/ws-upgrader.js';
+export {
+  installWebSocketUpgrader,
+  getWebSocketUpgrader,
+  __resetWebSocketUpgraderForTesting,
+} from './internal/ws-upgrader.js';
 export type { WebSocketUpgrader } from './internal/ws-upgrader.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export * from './internal/contract.js';

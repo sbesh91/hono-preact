@@ -91,6 +91,15 @@ export type { Channel, Topic } from './define-channel.js';
 export { publish } from './pubsub.js';
 export type { LiveLoaderOpts } from './server-route.js';
 
+// Duplex WebSocket sockets.
+export { defineSocket } from './define-socket.js';
+export type {
+  SocketDef,
+  SocketRef,
+  SocketHandler,
+  ServerSocket,
+} from './define-socket.js';
+
 // Middleware + outcomes (the new system).
 export {
   defineServerMiddleware,
