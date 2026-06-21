@@ -48,6 +48,11 @@ export function CommandPalette({ pages }: { pages: DocPage[] }) {
     activeId,
     setActiveId,
     mode: 'activedescendant',
+    // The input is the text field: list-typeahead must not capture printable
+    // keys (it would preventDefault them and steal typing), and Home/End must
+    // move the caret, not jump the list. Same config as Combobox.Input.
+    typeahead: false,
+    homeEnd: false,
   });
 
   function go(href: string) {

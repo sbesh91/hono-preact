@@ -64,4 +64,15 @@ describe('CommandPalette', () => {
     fireEvent.click(getByText('Server Loaders'));
     await waitFor(() => expect(dialogState()).toBe('closed'));
   });
+
+  it('does not let list-typeahead capture printable keys from the input', async () => {
+    const { getByLabelText } = setup();
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const input = await waitFor(() => getByLabelText('Search documentation'));
+    // 's' matches the list rows ("Server Loaders"/"Streaming"); with
+    // list-typeahead enabled the nav handler would preventDefault it and steal
+    // the keystroke from the input. fireEvent returns false if defaultPrevented.
+    const notPrevented = fireEvent.keyDown(input, { key: 's' });
+    expect(notPrevented).toBe(true);
+  });
 });
