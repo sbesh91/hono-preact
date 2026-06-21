@@ -3,14 +3,14 @@
   "sectionA": {
     "core": {
       "total": {
-        "raw": 9998,
-        "gzip": 3963,
-        "brotli": 3587
+        "raw": 10015,
+        "gzip": 3972,
+        "brotli": 3598
       },
       "marginalOverCore": {
-        "raw": 9998,
-        "gzip": 3963,
-        "brotli": 3587
+        "raw": 10015,
+        "gzip": 3972,
+        "brotli": 3598
       }
     },
     "loaders": {
@@ -20,9 +20,9 @@
         "brotli": 5991
       },
       "marginalOverCore": {
-        "raw": 15716,
-        "gzip": 5306,
-        "brotli": 4758
+        "raw": 15717,
+        "gzip": 5317,
+        "brotli": 4760
       }
     },
     "actions": {
@@ -32,9 +32,9 @@
         "brotli": 4511
       },
       "marginalOverCore": {
-        "raw": 13359,
+        "raw": 13360,
         "gzip": 4449,
-        "brotli": 3998
+        "brotli": 3990
       }
     },
     "transitions": {
@@ -44,9 +44,9 @@
         "brotli": 1133
       },
       "marginalOverCore": {
-        "raw": 3088,
-        "gzip": 1004,
-        "brotli": 915
+        "raw": 3087,
+        "gzip": 1015,
+        "brotli": 923
       }
     },
     "prefetch": {
@@ -56,9 +56,9 @@
         "brotli": 3239
       },
       "marginalOverCore": {
-        "raw": 7205,
-        "gzip": 2681,
-        "brotli": 2405
+        "raw": 7204,
+        "gzip": 2690,
+        "brotli": 2402
       }
     },
     "streaming": {
@@ -69,8 +69,8 @@
       },
       "marginalOverCore": {
         "raw": 101,
-        "gzip": 39,
-        "brotli": 31
+        "gzip": 45,
+        "brotli": 43
       }
     },
     "head": {
@@ -81,8 +81,8 @@
       },
       "marginalOverCore": {
         "raw": 299,
-        "gzip": 129,
-        "brotli": 106
+        "gzip": 128,
+        "brotli": 112
       }
     },
     "middleware": {
@@ -93,8 +93,8 @@
       },
       "marginalOverCore": {
         "raw": 535,
-        "gzip": 179,
-        "brotli": 165
+        "gzip": 183,
+        "brotli": 176
       }
     }
   },
@@ -102,7 +102,7 @@
     "buckets": {
       "app": 85080,
       "actions": 17022,
-      "core": 36154,
+      "core": 36158,
       "components": 104101,
       "guards": 250,
       "middleware": 12470,
@@ -112,7 +112,7 @@
       "streaming": 7419,
       "transitions": 3863
     },
-    "total": 295941,
+    "total": 295945,
     "unmatched": 49,
     "fileCount": 108
   },
