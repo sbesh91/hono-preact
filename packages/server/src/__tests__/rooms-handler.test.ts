@@ -11,6 +11,7 @@ import {
   __resetWebSocketUpgraderForTesting,
   __resetPubSubForTesting,
   __resetPresenceForTesting,
+  getPubSubBackend,
   roomMembers,
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
@@ -379,17 +380,28 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     // A is gone from the roster.
     expect(roomMembers(TOPIC)).toHaveLength(1);
 
-    // A's subscription was torn down: a fresh broadcast from B does not reach A.
+    // A's subscription was torn down: a direct publish to the topic reaches B
+    // (still subscribed) but NOT A (unsubscribed). The publish is done via the
+    // backend directly so the test does not rely on onMessage dispatching; the
+    // asymmetry between B receiving it and A not is what proves unsub() ran.
     const aBefore = a.ws.sends.length;
-    // B broadcasts (via a publish on the topic); A must not receive it.
-    // Drive it through B's own onMessage 'msg' frame, which the runtime
-    // publishes; the only remaining subscriber is B, who is excluded as sender.
-    await b.events.onMessage?.(
-      {
-        data: JSON.stringify({ t: 'msg', msg: { text: 'after-leave' } }),
-      } as MessageEvent,
-      b.ws as never
-    );
+    const bAfterClose = b.ws.sends.length;
+    const sentinel = {
+      from: 'test-sentinel',
+      t: 'msg' as const,
+      msg: { text: 'after-leave' },
+    };
+    getPubSubBackend().publish(TOPIC, sentinel);
+    // B is still subscribed and must receive the sentinel.
+    const bGotSentinel = b
+      .received()
+      .slice(bAfterClose)
+      .some(
+        (e) =>
+          e.t === 'msg' && (e as typeof sentinel).msg?.text === 'after-leave'
+      );
+    expect(bGotSentinel).toBe(true);
+    // A is unsubscribed and must not receive anything new.
     const aAfter = a.ws.sends.slice(aBefore);
     expect(aAfter).toHaveLength(0);
   });
