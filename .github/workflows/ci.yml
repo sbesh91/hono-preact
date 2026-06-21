@@ -67,7 +67,7 @@ jobs:
         run: pnpm --filter site build
 
   client-size:
-    name: Client JS size
+    name: Framework JS size
     needs: test
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -77,35 +77,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # pnpm and node must be on PATH; compressed-size-action runs install and
-      # the build-script itself for both the PR head and the base ref, then
-      # gzips the matches and posts a single sticky comparison comment.
+      # Version derives from the `packageManager` field in package.json.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: pnpm
 
-      # No strip-hash here on purpose. Site chunks are content-hashed, but 17
-      # hono-preact-ui component chunks (dialog, menu, combobox, the use-*
-      # primitives, etc.) share a base name with their docs-page chunk, so
-      # stripping the hash would merge each pair and report wrong sizes. With
-      # exact filenames a changed chunk shows as removed + added; the
-      # stable-named probes under size-probes/ carry the clean per-feature and
-      # per-component deltas.
-      - uses: preactjs/compressed-size-action@v2
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build framework (PR head)
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
+
+      - name: Measure PR head
+        run: node scripts/measure-framework-size.mjs --out /tmp/head.json
+
+      # Build-both delta: measure the base ref in a worktree using THIS head's
+      # measure script (so the base never needs to carry the script), then diff.
+      # No committed baseline, so no metrics-commit merge conflicts.
+      - name: Build framework (base ref) and measure
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE"
+          git worktree add /tmp/base "origin/$BASE"
+          (cd /tmp/base && pnpm install --frozen-lockfile && pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build)
+          node scripts/measure-framework-size.mjs \
+            --iso-dist /tmp/base/packages/iso/dist \
+            --ui-dist /tmp/base/packages/ui/dist \
+            --out /tmp/base.json
+
+      - name: Render comment
+        env:
+          SIZE_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
+          SIZE_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/render-framework-size-comment.mjs /tmp/head.json /tmp/base.json > /tmp/comment.md
+
+      - name: Post sticky comment
+        uses: marocchino/sticky-pull-request-comment@v2
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          # build-script must be `build` (which exists on both refs), NOT a
-          # probe-only script: the action also runs it on the base ref, and a
-          # script that exists only on this branch (e.g. a dedicated size:build)
-          # fails the base build with ERR_PNPM_NO_SCRIPT. `build` builds the app
-          # and emits the framework/ui size probes; the action gzips every match
-          # and diffs head vs base. On the introducing PR the base lacks the
-          # probe emit, so probes show as added; deltas are clean once merged.
-          build-script: build
-          pattern: 'apps/site/dist/{client,size-probes}/**/*.js'
-          compression: gzip
+          header: framework-size
+          path: /tmp/comment.md
 
   lighthouse:
     name: Lighthouse
