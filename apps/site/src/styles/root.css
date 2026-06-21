@@ -2472,3 +2472,138 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-activity
 .docs-toast[data-type='error'] {
   border-color: color-mix(in oklab, #ef4444 60%, var(--border-color));
 }
+
+/* rehype-autolink-headings appends this anchor to every heading. Hidden until
+   the heading is hovered/focused, so it does not clutter the prose. */
+.mdx-content :is(h1, h2, h3, h4) {
+  /* Land below the 3rem sticky top bar when scrolled to via an anchor (TOC,
+     permalink, deep link) instead of hiding under it. */
+  scroll-margin-top: 4.5rem;
+}
+.mdx-content :is(h2, h3, h4) {
+  position: relative;
+}
+.mdx-content .heading-anchor {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.mdx-content :is(h2, h3, h4):hover .heading-anchor,
+.mdx-content .heading-anchor:focus-visible {
+  opacity: 1;
+}
+
+/* Cmd+K command palette. Reuses the combobox demo styles for the field and
+   listbox; this block is the dialog shell, the topbar trigger, and result rows. */
+.docs-cmdk-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.docs-cmdk-trigger:hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.docs-cmdk-kbd {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  color: var(--muted);
+}
+.docs-cmdk {
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: 40rem;
+  margin: 12vh auto auto;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-subtle, var(--background));
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+/* Enter: animate from the starting style when the <dialog> gains `open`.
+   @starting-style is progressive enhancement (older engines just appear). */
+@starting-style {
+  .docs-cmdk[open] {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+.docs-cmdk::backdrop {
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+@starting-style {
+  .docs-cmdk[open]::backdrop {
+    opacity: 0;
+  }
+}
+/* Exit: data-state flips to 'closed' before the Dialog's usePresence calls
+   close(), so this keyframe plays out and defers the actual close. */
+.docs-cmdk[data-state='closed'] {
+  animation: docs-cmdk-out 160ms ease-in forwards;
+}
+@keyframes docs-cmdk-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+.docs-cmdk[data-state='closed']::backdrop {
+  animation: docs-backdrop-out 160ms ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-cmdk,
+  .docs-cmdk[data-state='closed'],
+  .docs-cmdk::backdrop,
+  .docs-cmdk[data-state='closed']::backdrop {
+    transition: none;
+    animation: none;
+  }
+}
+.docs-cmdk-input {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+.docs-cmdk-list {
+  position: static;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: none;
+}
+.docs-cmdk-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.docs-cmdk-option__title {
+  font-weight: 500;
+}
+.docs-cmdk-option__section {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+/* On the highlighted (accent-background) row, --muted has poor contrast. Use a
+   slightly dimmed on-accent foreground so the subtext stays readable in both
+   light and dark modes. */
+.docs-cmdk-option[data-highlighted] .docs-cmdk-option__section {
+  color: color-mix(in oklab, var(--accent-foreground) 80%, var(--accent));
+}
