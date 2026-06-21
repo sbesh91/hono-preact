@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { DocHeading } from '../../llms/docs-index.js';
 
 // Right-rail "On this page" nav. Reads the current route's headings (passed in
@@ -9,6 +9,13 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
   const [activeId, setActiveId] = useState<string | null>(
     headings[0]?.id ?? null
   );
+  // While a click-initiated smooth scroll is animating, hold the highlight on
+  // the clicked target so the scroll-spy doesn't flicker it through the
+  // intermediate sections the scroll passes over.
+  const scrollLock = useRef(false);
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
 
   useEffect(() => {
     if (headings.length === 0) return;
@@ -17,6 +24,7 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     const OFFSET = 96;
 
     const computeActive = () => {
+      if (scrollLock.current) return; // hold the clicked target mid-scroll
       let current = ids[0] ?? null;
       for (const id of ids) {
         const el = document.getElementById(id);
@@ -49,6 +57,7 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      if (lockTimer.current !== undefined) clearTimeout(lockTimer.current);
     };
   }, [headings]);
 
@@ -71,11 +80,25 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     const el = document.getElementById(id);
     if (!el) return;
     event.preventDefault();
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveId(id);
+    // Lock the highlight to the clicked target until the smooth scroll settles.
+    scrollLock.current = true;
+    if (lockTimer.current !== undefined) clearTimeout(lockTimer.current);
+    lockTimer.current = setTimeout(() => {
+      scrollLock.current = false;
+    }, 700);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   if (headings.length < 2) return null;
+
+  // Fall back to the first heading if the stored active id is not on this page.
+  // On a cross-page navigation the same TOC instance keeps the previous page's
+  // activeId until the effect recomputes; this keeps a valid item highlighted
+  // for that paint instead of flashing no/!stale selection.
+  const activeOnPage = headings.some((h) => h.id === activeId)
+    ? activeId
+    : (headings[0]?.id ?? null);
 
   return (
     <nav aria-label="On this page" class="text-sm">
@@ -84,7 +107,7 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
       </div>
       <ul class="flex flex-col gap-1 list-none m-0 p-0">
         {headings.map((h) => {
-          const active = activeId === h.id;
+          const active = activeOnPage === h.id;
           return (
             <li key={h.id}>
               <a

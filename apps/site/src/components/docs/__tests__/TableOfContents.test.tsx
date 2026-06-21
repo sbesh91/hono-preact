@@ -4,7 +4,10 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/preact';
 import { TableOfContents } from '../TableOfContents.js';
 import type { DocHeading } from '../../../llms/generate-docs-index.js';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const headings: DocHeading[] = [
   { text: 'How it works', id: 'how-it-works', depth: 2 },
@@ -51,5 +54,32 @@ describe('TableOfContents', () => {
       block: 'start',
     });
     target.remove();
+  });
+
+  it('holds the highlight on the clicked target during the smooth scroll', () => {
+    // Run the scroll-spy's rAF callback synchronously so a scroll tick resolves
+    // within the test.
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    const a = document.createElement('h2');
+    a.id = 'how-it-works';
+    a.scrollIntoView = vi.fn();
+    document.body.appendChild(a);
+    const b = document.createElement('h3');
+    b.id = 'options';
+    document.body.appendChild(b);
+
+    const { getByRole } = render(<TableOfContents headings={headings} />);
+    // Click the first heading, then fire a scroll tick: while the click-scroll
+    // is locked, the scroll-spy must not move the highlight off it.
+    fireEvent.click(getByRole('link', { name: 'How it works' }));
+    fireEvent.scroll(window);
+    expect(
+      getByRole('link', { name: 'How it works' }).getAttribute('aria-current')
+    ).toBe('true');
+    a.remove();
+    b.remove();
   });
 });
