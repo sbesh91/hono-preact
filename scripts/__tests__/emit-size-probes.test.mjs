@@ -3,6 +3,11 @@ import { emitProbe, emitAllProbes } from '../emit-size-probes.mjs';
 import { mkdtempSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const uiDistPresent = existsSync(
+  fileURLToPath(new URL('../../packages/ui/dist', import.meta.url))
+);
 
 describe('emitProbe', () => {
   it('writes a non-empty minified bundle for a real iso module', async () => {
@@ -26,16 +31,29 @@ describe('emitProbe', () => {
 });
 
 describe('emitAllProbes', () => {
-  it('emits a framework probe per core+feature entry and a ui probe per component', async () => {
+  it('emits one framework probe per core+feature entry (always)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'probes-'));
     const written = await emitAllProbes(dir);
     expect(existsSync(join(dir, 'framework', 'core.js'))).toBe(true);
     expect(existsSync(join(dir, 'framework', 'loaders.js'))).toBe(true);
     expect(existsSync(join(dir, 'framework', 'actions.js'))).toBe(true);
-    // packages/ui/dist is built in CI before tests, so ui probes are emitted.
-    expect(existsSync(join(dir, 'ui', 'core.js'))).toBe(true);
-    expect(existsSync(join(dir, 'ui', 'dialog.js'))).toBe(true);
-    expect(written.length).toBeGreaterThan(10);
-    for (const p of written) expect(statSync(p).size).toBeGreaterThan(0);
+    // core + 7 feature entries = 8 framework probes
+    const frameworkProbes = written.filter((p) => p.includes('/framework/'));
+    expect(frameworkProbes).toHaveLength(8);
+    for (const p of frameworkProbes) expect(statSync(p).size).toBeGreaterThan(0);
   });
+
+  it.skipIf(!uiDistPresent)(
+    'emits ui probes per component when packages/ui/dist is present',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'probes-ui-'));
+      const written = await emitAllProbes(dir);
+      expect(existsSync(join(dir, 'ui', 'core.js'))).toBe(true);
+      expect(existsSync(join(dir, 'ui', 'dialog.js'))).toBe(true);
+      // framework (8) + at least a few ui probes
+      expect(written.length).toBeGreaterThan(10);
+      const uiProbes = written.filter((p) => p.includes('/ui/'));
+      for (const p of uiProbes) expect(statSync(p).size).toBeGreaterThan(0);
+    }
+  );
 });
