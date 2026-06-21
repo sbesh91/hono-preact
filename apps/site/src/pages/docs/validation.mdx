@@ -161,7 +161,7 @@ const TitleField = () => {
 };
 ```
 
-Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues and server-returned `deny(422)` issues into the same field-error surface, so client-skipped and server-caught errors render identically.
+Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues and server-returned `deny(422)` issues into the same field-error surface, so client-skipped and server-caught errors render identically. Client pre-validation errors clear as you type once a field has been shown an error; server-returned field errors (from a `deny(422)` response) clear on the next submit rather than on input.
 
 ## Loader validation
 
