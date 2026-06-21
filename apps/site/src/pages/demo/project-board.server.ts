@@ -21,6 +21,7 @@ import {
 } from '../../demo/activity-stream.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
+import { NewTaskSchema } from './task-schema.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (projectId) from the route's pattern.
@@ -49,31 +50,17 @@ export const serverLoaders = {
 };
 
 export const serverActions = {
-  createTask: defineAction<
-    {
-      projectId: string;
-      title: string;
-      body: string;
-      priority: TaskPriority;
-      status: TaskStatus;
-      assigneeId: string | null;
+  createTask: defineAction(
+    async (ctx, input) => {
+      const user = await currentUser(ctx.c);
+      if (!user) throw new Error('not signed in');
+      // Schema coerces and trims; values are already clean.
+      const created = createTask(user, input);
+      publishActivity(taskCreatedEvent(created, user.name));
+      return { id: created.id };
     },
-    { id: string }
-  >(async (ctx, input) => {
-    const user = await currentUser(ctx.c);
-    if (!user) throw new Error('not signed in');
-    const created = createTask(user, {
-      projectId: input.projectId,
-      title: input.title.trim(),
-      body: input.body.trim(),
-      priority: input.priority,
-      status: input.status,
-      // the form sends '' for unassigned; coerce to null
-      assigneeId: input.assigneeId || null,
-    });
-    publishActivity(taskCreatedEvent(created, user.name));
-    return { id: created.id };
-  }),
+    { input: NewTaskSchema }
+  ),
 
   // One action drives both moves and priority changes so a single
   // useOptimisticAction can cover drag + menu interactions.

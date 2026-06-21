@@ -70,6 +70,7 @@ export const nav: NavArea[] = [
         icon: Send,
         entries: [
           { title: 'Server Actions', route: '/docs/actions' },
+          { title: 'Validation', route: '/docs/validation' },
           { title: 'Optimistic UI', route: '/docs/optimistic-ui' },
         ],
       },
