@@ -13,6 +13,7 @@ import { renderPage } from './render.js';
 import {
   routeServerModules,
   makePageUseResolver,
+  makeSocketRoutePathResolver,
 } from './route-server-modules.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import { buildSocketRegistry, socketsHandler } from './sockets-handler.js';
@@ -73,6 +74,21 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       ? buildSocketRegistry(serverModules)
       : (cachedSocketRegistryPromise ??= buildSocketRegistry(serverModules));
 
+  // Build the moduleKey -> route path resolver for sockets. Cached for the
+  // same reasons as the socket registry (one async walk at boot; per-request
+  // in dev for hot-reload parity). Used by socketsHandler to derive the owning
+  // route path server-side so resolvePageUse receives the correct path for
+  // route-node use inheritance.
+  let cachedSocketRoutePathResolverPromise: ReturnType<
+    typeof makeSocketRoutePathResolver
+  > | null = null;
+  const socketRoutePathResolverPromise = () =>
+    dev
+      ? makeSocketRoutePathResolver(routes.serverRoutes)
+      : (cachedSocketRoutePathResolverPromise ??= makeSocketRoutePathResolver(
+          routes.serverRoutes
+        ));
+
   // Build the routed tree lazily: only the SSR (GET) and action-rerender paths
   // need it, and constructing per call keeps the two call sites from sharing a
   // mutable vnode.
@@ -94,10 +110,21 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     )
     // The WebSocket upgrade endpoint must be registered before the SSR GET *
     // catch-all so it is not swallowed. The handler resolves the socket
-    // registry lazily per request (same caching policy as loadersHandler).
+    // registry and the moduleKey -> route path resolver lazily per request
+    // (same caching policy as loadersHandler). resolvePageUse and
+    // resolveRoutePath together give socketsHandler the route-node use chain
+    // for the socket's owning route, which is where auth gates live.
     .get(SOCKETS_RPC_PATH, async (c, next) => {
-      const registry = await socketRegistryPromise();
-      return socketsHandler({ registry, appConfig })(c, next);
+      const [registry, routePathResolver] = await Promise.all([
+        socketRegistryPromise(),
+        socketRoutePathResolverPromise(),
+      ]);
+      return socketsHandler({
+        registry,
+        appConfig,
+        resolvePageUse: pageUseResolver.byPath,
+        resolveRoutePath: routePathResolver.byModuleKey,
+      })(c, next);
     })
     .post(
       '*',

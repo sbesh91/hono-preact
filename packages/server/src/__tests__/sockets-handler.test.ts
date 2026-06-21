@@ -83,10 +83,15 @@ function makeFakeUpgrader(): {
 
 function makeApp(
   registry: Map<string, SocketDef<unknown, unknown, unknown>>,
-  appConfig?: Parameters<typeof socketsHandler>[0]['appConfig']
+  appConfig?: Parameters<typeof socketsHandler>[0]['appConfig'],
+  resolvePageUse?: Parameters<typeof socketsHandler>[0]['resolvePageUse'],
+  resolveRoutePath?: Parameters<typeof socketsHandler>[0]['resolveRoutePath']
 ) {
   const app = new Hono();
-  app.get(SOCKETS_RPC_PATH, socketsHandler({ registry, appConfig }));
+  app.get(
+    SOCKETS_RPC_PATH,
+    socketsHandler({ registry, appConfig, resolvePageUse, resolveRoutePath })
+  );
   return app;
 }
 
@@ -260,6 +265,114 @@ describe('socketsHandler: guard denial closes WS_DENY_CODE without calling def.o
     expect(ws.closes).toHaveLength(1);
     expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
     expect(openSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('socketsHandler: route-node use inheritance via resolvePageUse', () => {
+  it('a denying route-node use closes WS_DENY_CODE without calling def.open', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const moduleKey = 'pages/chat';
+    const routePath = '/chat';
+    const registry = new Map([[`${moduleKey}::chatSocket`, def]]);
+
+    // Route-node use: denies all connections on /chat.
+    const denyMiddleware = defineServerMiddleware(async (_ctx) => {
+      const { deny } = await import('@hono-preact/iso');
+      throw deny('forbidden', 403);
+    });
+    const resolvePageUse = (path: string) =>
+      path === routePath ? [denyMiddleware] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === moduleKey ? routePath : undefined;
+
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+    await getRequest(moduleKey, 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('an allowing route-node use lets def.open run', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const moduleKey = 'pages/chat';
+    const routePath = '/chat';
+    const registry = new Map([[`${moduleKey}::chatSocket`, def]]);
+
+    // Route-node use: allows all connections (pass-through middleware).
+    const allowMiddleware = defineServerMiddleware(async (_ctx, next) => {
+      await next();
+    });
+    const resolvePageUse = (path: string) =>
+      path === routePath ? [allowMiddleware] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === moduleKey ? routePath : undefined;
+
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+    await getRequest(moduleKey, 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(openSpy).toHaveBeenCalledOnce();
+  });
+
+  it('a socket with unknown moduleKey gets no route-node use (app-use + def-use only)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const moduleKey = 'pages/chat';
+    const registry = new Map([[`${moduleKey}::chatSocket`, def]]);
+
+    // resolveRoutePath does not know this moduleKey; falls back to SOCKETS_RPC_PATH.
+    // resolvePageUse only guards a different path; bare socket path has no guards.
+    const resolvePageUse = (path: string) =>
+      path === '/chat'
+        ? [
+            defineServerMiddleware(async (_ctx) => {
+              const { deny } = await import('@hono-preact/iso');
+              throw deny('no', 403);
+            }),
+          ]
+        : [];
+    const resolveRoutePath = (_mk: string): string | undefined => undefined;
+
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+    await getRequest(moduleKey, 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    // No route-node deny guard applied because resolveRoutePath returned undefined;
+    // the fallback SOCKETS_RPC_PATH matches no route pattern.
+    expect(ws.closes).toHaveLength(0);
+    expect(openSpy).toHaveBeenCalledOnce();
   });
 });
 

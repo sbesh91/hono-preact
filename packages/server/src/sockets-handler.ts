@@ -54,6 +54,24 @@ export interface SocketsHandlerOptions {
   registry: Map<string, AnySocketDef>;
   appConfig?: AppConfig;
   // `dev` (registry freshness) is the caller's responsibility; not read here.
+  /**
+   * Page-layer `use` resolver. When provided, the route-node `use` chain is
+   * composed as the middle layer (outer -> inner: app-use, page-use, def.use),
+   * which is where route/layout auth gates live. Defaults to returning `[]`
+   * (no page-layer guards) when omitted.
+   */
+  resolvePageUse?: (
+    path: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  /**
+   * Resolve a socket's moduleKey to its owning route path so that
+   * `resolvePageUse` receives the correct path. When the moduleKey is not
+   * found in the route tree (a bare `defineSocket` not attached to a route
+   * node) the resolver returns `undefined` and the handler falls back to
+   * `SOCKETS_RPC_PATH`, which matches no route pattern, so `resolvePageUse`
+   * returns `[]` and the socket gets app-use + def-use only.
+   */
+  resolveRoutePath?: (moduleKey: string) => string | undefined;
 }
 
 /**
@@ -86,18 +104,29 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         };
       }
 
-      // Run the guard chain (app use + socket's use) before the connection
-      // goes live. Mirrors loaders-handler.ts's composeServerChain usage.
-      // Guards run as 'loader' scope since the socket upgrade is an HTTP GET
-      // request carrying a Hono Context; the scope tag is unused by the
-      // middleware engine itself (which only reads `fn`).
+      // Resolve the owning route path from the moduleKey (server-derived, not
+      // client-supplied). A socket whose moduleKey is not in the route tree
+      // (a bare defineSocket not attached to a route node) falls back to
+      // SOCKETS_RPC_PATH, which matches no route pattern, so resolvePageUse
+      // returns [] and the socket gets app-use + def-use only.
+      const routePath =
+        moduleKey && opts.resolveRoutePath
+          ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
+          : SOCKETS_RPC_PATH;
+
+      // Run the guard chain (app use + page/route-node use + socket's use)
+      // before the connection goes live. Mirrors loaders-handler.ts's
+      // composeServerChain usage. Chain order: app-use (outermost), page-use
+      // (route-node use gates), def.use (innermost). Guards run as 'loader'
+      // scope since the socket upgrade is an HTTP GET request carrying a Hono
+      // Context; the scope tag is unused by the middleware engine itself.
       const { serverMw, signal } = await composeServerChain<'loader'>({
         requestSignal: ctx.req.raw.signal,
         unitTimeoutMs: undefined,
         defaultTimeoutMs: false,
         appConfig,
-        resolvePageUse: () => [],
-        path: SOCKETS_RPC_PATH,
+        resolvePageUse: opts.resolvePageUse ?? (() => []),
+        path: routePath,
         unitUse: def.use ?? [],
       });
 
@@ -108,7 +137,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         scope: 'loader',
         c: ctx,
         signal,
-        location: { path: SOCKETS_RPC_PATH, pathParams: {}, searchParams: {} },
+        location: { path: routePath, pathParams: {}, searchParams: {} },
         module: moduleKey ?? '',
         loader: name ?? '',
       };
