@@ -15,6 +15,7 @@ import { extractServerLoadersMeta } from './source-extraction.js';
 import {
   loaderStubSource,
   actionStubSource,
+  roomStubSource,
   socketStubSource,
 } from './stub-templates.js';
 
@@ -87,6 +88,7 @@ export function serverOnlyPlugin(): Plugin {
       const s = new MagicString(code);
       let needsCreateLoaderStubImport = false;
       let needsUseActionImport = false;
+      let needsUseRoomImport = false;
       let needsUseSocketImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
@@ -153,6 +155,13 @@ export function serverOnlyPlugin(): Plugin {
           ) {
             needsUseSocketImport = true;
             stubs.push(socketStubSource(specifier.local.name, moduleKey));
+          } else if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverRooms'
+          ) {
+            needsUseRoomImport = true;
+            stubs.push(roomStubSource(specifier.local.name, moduleKey));
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&
@@ -204,6 +213,11 @@ export function serverOnlyPlugin(): Plugin {
       if (needsUseSocketImport) {
         s.prepend(
           `import { useSocket as __$useSocket_hpiso } from 'hono-preact';\n`
+        );
+      }
+      if (needsUseRoomImport) {
+        s.prepend(
+          `import { useRoom as __$useRoom_hpiso } from 'hono-preact';\n`
         );
       }
 

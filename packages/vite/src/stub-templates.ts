@@ -3,6 +3,7 @@ import {
   LOADER_NAME_OPTION,
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
+  FORM_ROOM_FIELD,
   FORM_SOCKET_FIELD,
 } from '@hono-preact/iso/internal/runtime';
 
@@ -58,6 +59,23 @@ export function socketStubSource(localName: string, moduleKey: string): string {
     `  get(_, name) {\n` +
     `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_SOCKET_FIELD}: String(name) };\n` +
     `    stub.useSocket = (opts) => __$useSocket_hpiso(stub, opts);\n` +
+    `    return stub;\n` +
+    `  }\n` +
+    `});`
+  );
+}
+
+// Source for the `serverRooms` client stub. Each `serverRooms.<name>` read
+// constructs a descriptor record (module + room name) and attaches a
+// `.useRoom` method that delegates to `__$useRoom_hpiso`, mirroring the
+// pattern used by `socketStubSource` for `.useSocket`. Like sockets, the stub
+// is a descriptor, not a singleton.
+export function roomStubSource(localName: string, moduleKey: string): string {
+  return (
+    `const ${localName} = new Proxy({}, {\n` +
+    `  get(_, name) {\n` +
+    `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_ROOM_FIELD}: String(name) };\n` +
+    `    stub.useRoom = (opts) => __$useRoom_hpiso(stub, opts);\n` +
     `    return stub;\n` +
     `  }\n` +
     `});`

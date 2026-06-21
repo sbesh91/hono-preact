@@ -14,9 +14,11 @@
 // - `serverLoaders`: the loader map the server handler reads at runtime.
 // - `serverActions`: the action map the server handler reads at runtime.
 // - `serverSockets`: the socket map the WS upgrade handler reads at runtime.
+// - `serverRooms`: the room map the WS upgrade handler reads at runtime.
 export const RECOGNIZED_SERVER_EXPORTS = [
   'serverActions',
   'serverLoaders',
+  'serverRooms',
   'serverSockets',
 ] as const;
 
