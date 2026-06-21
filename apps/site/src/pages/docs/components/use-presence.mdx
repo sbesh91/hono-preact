@@ -17,49 +17,6 @@ exactly as before.
   <UsePresenceDemo />
 </Example>
 
-## Signature
-
-```ts
-import { usePresence } from 'hono-preact-ui';
-
-function usePresence(
-  present: boolean,
-  options?: UsePresenceOptions
-): UsePresenceResult;
-
-interface UsePresenceOptions {
-  onExitComplete?: () => void; // fires when the exit resolves, before unmount
-  timeoutCap?: number; // ms cap on the exit wait (default 3000)
-}
-
-interface UsePresenceResult {
-  isPresent: boolean; // render the element while true (open or animating out)
-  status: 'open' | 'closing' | 'closed'; // map to data-state (closing -> "closed")
-  ref: (node: Element | null) => void; // attach to the animated element
-}
-```
-
-## Options
-
-`present` is the first positional argument (the desired visibility; flip it to
-false to start the exit animation). The optional second argument is the options
-object:
-
-| Option           | Type         | Default | Notes                                                                 |
-| ---------------- | ------------ | ------- | --------------------------------------------------------------------- |
-| `onExitComplete` | `() => void` | none    | Runs when the exit resolves, immediately before `isPresent` is false. |
-| `timeoutCap`     | `number`     | `3000`  | Safety cap (ms) so a stuck animation can never block teardown.        |
-
-Gate rendering on `isPresent` and attach `ref` to the element that carries the
-exit animation — or an ancestor of it, but never a sibling — merged with your
-own ref via [mergeRefs](/docs/components/merge-refs). Drive `data-state` from
-`status` (both `closing` and `closed` map to `"closed"`, so one
-`[data-state="closed"]` rule styles the exit), or equivalently from your own
-open flag — the library's own components do the latter. It reads
-`Element.getAnimations({ subtree: true })` after a forced reflow, waits for every
-exit animation to finish (with a `timeoutCap` safety net), and short-circuits
-under `prefers-reduced-motion`. There is no exit on first mount or during SSR.
-
 ## Example
 
 ```tsx
@@ -111,6 +68,49 @@ function Panel() {
   }
 }
 ```
+
+## Signature
+
+```ts
+import { usePresence } from 'hono-preact-ui';
+
+function usePresence(
+  present: boolean,
+  options?: UsePresenceOptions
+): UsePresenceResult;
+
+interface UsePresenceOptions {
+  onExitComplete?: () => void; // fires when the exit resolves, before unmount
+  timeoutCap?: number; // ms cap on the exit wait (default 3000)
+}
+
+interface UsePresenceResult {
+  isPresent: boolean; // render the element while true (open or animating out)
+  status: 'open' | 'closing' | 'closed'; // map to data-state (closing -> "closed")
+  ref: (node: Element | null) => void; // attach to the animated element
+}
+```
+
+## Options
+
+`present` is the first positional argument (the desired visibility; flip it to
+false to start the exit animation). The optional second argument is the options
+object:
+
+| Option           | Type         | Default | Notes                                                                 |
+| ---------------- | ------------ | ------- | --------------------------------------------------------------------- |
+| `onExitComplete` | `() => void` | none    | Runs when the exit resolves, immediately before `isPresent` is false. |
+| `timeoutCap`     | `number`     | `3000`  | Safety cap (ms) so a stuck animation can never block teardown.        |
+
+Gate rendering on `isPresent` and attach `ref` to the element that carries the
+exit animation — or an ancestor of it, but never a sibling — merged with your
+own ref via [mergeRefs](/docs/components/merge-refs). Drive `data-state` from
+`status` (both `closing` and `closed` map to `"closed"`, so one
+`[data-state="closed"]` rule styles the exit), or equivalently from your own
+open flag — the library's own components do the latter. It reads
+`Element.getAnimations({ subtree: true })` after a forced reflow, waits for every
+exit animation to finish (with a `timeoutCap` safety net), and short-circuits
+under `prefers-reduced-motion`. There is no exit on first mount or during SSR.
 
 ## Transition or keyframes
 
