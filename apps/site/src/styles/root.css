@@ -2525,6 +2525,53 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-activity
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   background: var(--surface-subtle, var(--background));
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+/* Enter: animate from the starting style when the <dialog> gains `open`.
+   @starting-style is progressive enhancement (older engines just appear). */
+@starting-style {
+  .docs-cmdk[open] {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+.docs-cmdk::backdrop {
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+@starting-style {
+  .docs-cmdk[open]::backdrop {
+    opacity: 0;
+  }
+}
+/* Exit: data-state flips to 'closed' before the Dialog's usePresence calls
+   close(), so this keyframe plays out and defers the actual close. */
+.docs-cmdk[data-state='closed'] {
+  animation: docs-cmdk-out 160ms ease-in forwards;
+}
+@keyframes docs-cmdk-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+.docs-cmdk[data-state='closed']::backdrop {
+  animation: docs-backdrop-out 160ms ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-cmdk,
+  .docs-cmdk[data-state='closed'],
+  .docs-cmdk::backdrop,
+  .docs-cmdk[data-state='closed']::backdrop {
+    transition: none;
+    animation: none;
+  }
 }
 .docs-cmdk-input {
   width: 100%;
