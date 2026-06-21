@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter site run dev",
     "build": "pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter site build",
+    "size:build": "pnpm build && node scripts/emit-size-probes.mjs",
     "deploy": "pnpm --filter site run deploy",
     "deploy:upload": "pnpm --filter site run deploy:upload",
     "preview": "pnpm --filter site run preview",
