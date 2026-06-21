@@ -42,12 +42,22 @@ export async function validateWithSchema<S extends StandardSchemaV1>(
   schema: S,
   input: unknown
 ): Promise<ValidationResult<StandardSchemaV1.InferOutput<S>>> {
-  let result = schema['~standard'].validate(input);
-  if (result instanceof Promise) result = await result;
-  if (result.issues) {
-    return { ok: false, issues: normalizeIssues(result.issues) };
+  const raw = schema['~standard'].validate(input);
+  const resolved = raw instanceof Promise ? await raw : raw;
+  if (resolved.issues && resolved.issues.length > 0) {
+    return { ok: false, issues: normalizeIssues(resolved.issues) };
   }
-  return { ok: true, value: result.value };
+  // `resolved.issues` is absent or empty: treat as success. A schema returning
+  // `{ issues: [] }` violates the spec but must not be misclassified as failure.
+  if (!resolved.issues) {
+    return { ok: true, value: resolved.value };
+  }
+  // Empty-issues case: spec violation; extract value without narrowing gap.
+  return {
+    ok: true,
+    value: (resolved as unknown as { value: StandardSchemaV1.InferOutput<S> })
+      .value,
+  };
 }
 
 /**

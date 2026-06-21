@@ -13,6 +13,15 @@ import { VALIDATION_ISSUES_KEY } from './internal/contract.js';
  * const issues = getValidationIssues(result); // ValidationIssue[] | null
  * ```
  */
+function isValidationIssue(x: unknown): x is ValidationIssue {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    Array.isArray((x as { path?: unknown }).path) &&
+    typeof (x as { message?: unknown }).message === 'string'
+  );
+}
+
 export function getValidationIssues(
   result: ActionResult<unknown, unknown>
 ): ValidationIssue[] | null {
@@ -21,7 +30,8 @@ export function getValidationIssues(
   if (typeof data !== 'object' || data === null) return null;
   const raw = (data as Record<string, unknown>)[VALIDATION_ISSUES_KEY];
   // `data` is untrusted wire JSON: this read is the sanctioned cast boundary
-  // (same class as decodeActionResponse). We assert only that it is an array.
+  // (same class as decodeActionResponse).
   if (!Array.isArray(raw)) return null;
-  return raw as ValidationIssue[];
+  if (!raw.every(isValidationIssue)) return null;
+  return raw as ValidationIssue[]; // sound: every element guarded above
 }

@@ -36,6 +36,16 @@ describe('validateWithSchema', () => {
     expect(res).toEqual({ ok: true, value: 'x' });
   });
 
+  it('treats an empty issues array as success (spec-violating schema, defensive case)', async () => {
+    // A schema that returns { value, issues: [] } violates the spec but must not be
+    // misclassified as a failure; the empty array should be ignored.
+    const schema = make<unknown, string>(
+      () => ({ value: 'ok', issues: [] }) as unknown as { value: string }
+    );
+    const res = await validateWithSchema(schema, 'anything');
+    expect(res).toEqual({ ok: true, value: 'ok' });
+  });
+
   it('returns ok:false with normalized issues on failure', async () => {
     const schema = make<unknown, never>(() => ({
       issues: [
