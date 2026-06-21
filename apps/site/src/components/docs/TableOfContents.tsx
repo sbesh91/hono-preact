@@ -52,10 +52,12 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     };
   }, [headings]);
 
-  // Smooth-scroll in-page instead of letting the anchor do a hard jump (and to
-  // sidestep the router/view-transition entirely). Honors modifier-clicks so
-  // "open in new tab" still works. Updates the hash without a history entry so
-  // it stays shareable without a popstate round-trip.
+  // Smooth-scroll in-page instead of letting the anchor do a hard jump. We
+  // deliberately do NOT update the URL hash: the framework's nav-transition
+  // scheduler starts a view transition on the next render whenever location.href
+  // changes (history.pushState/replaceState and direct hash writes all qualify),
+  // which would flash the whole page on a TOC click. Honors modifier-clicks so
+  // "open in new tab" still works.
   const onLinkClick = (event: MouseEvent, id: string) => {
     if (
       event.metaKey ||
@@ -70,7 +72,6 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     if (!el) return;
     event.preventDefault();
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    history.replaceState(null, '', `#${id}`);
     setActiveId(id);
   };
 
