@@ -245,12 +245,13 @@ Returns the enclosing `<Form>`'s merged field errors, keyed by field name. The p
 
 ### `<FieldError name>`
 
-| Prop    | Type     | Description                                               |
-| ------- | -------- | --------------------------------------------------------- |
-| `name`  | `string` | The field key to render. Pass `""` for form-level errors. |
-| `class` | `string` | Optional CSS class on the wrapping `<span>`.              |
+| Prop     | Type                  | Description                                                                 |
+| -------- | --------------------- | --------------------------------------------------------------------------- |
+| `name`   | `string`              | The field key to render. Pass `""` for form-level errors.                   |
+| `class`  | `string`              | Optional CSS class, merged onto a custom `render` element.                  |
+| `render` | `RenderElementRender` | Customize the rendered element (a tag name, a VNode, or a render function). |
 
-Renders the first error message for `name` inside a `<span data-field-error={name} role="alert">`, or nothing when there are no errors. Use `useFieldErrors()` directly for custom rendering.
+Renders the first error message for `name` inside a `<span data-field-error={name} role="alert">`, or nothing when there are no errors. The `render` prop follows the framework render-element convention, pass a tag name (`render="p"`), a VNode to merge the framework props into (`render={<MyError />}`), or a function `(props) => VNode`; `data-field-error` and `role="alert"` are always applied. Use `useFieldErrors()` directly for fully custom rendering.
 
 ### Types
 
