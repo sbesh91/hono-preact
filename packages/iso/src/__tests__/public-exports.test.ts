@@ -50,6 +50,16 @@ describe('duplex WebSocket exports', () => {
   });
 });
 
+describe('rooms and presence exports', () => {
+  it('exports defineRoom', () => {
+    expect(typeof iso.defineRoom).toBe('function');
+  });
+
+  it('exports useRoom', () => {
+    expect(typeof iso.useRoom).toBe('function');
+  });
+});
+
 describe('active-route detection exports', () => {
   it('exports useRouteMatch', () => {
     expect(typeof iso.useRouteMatch).toBe('function');

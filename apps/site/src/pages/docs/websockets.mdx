@@ -110,7 +110,7 @@ The free `useSocket(ref, opts)` export also works and is equivalent; the method 
 
 ### Guard model
 
-A socket's guard chain consists of its own `use` array combined with any app-level `use` from `defineApp({ use })`. A `use` placed on a route node (the page-guard mechanism, via `serverRoute`) does **not** inherit onto a colocated socket. Put socket authorization in the socket's own `use` array.
+A socket's guard chain is composed in order: app-level `use` from `defineApp({ use })`, then any `use` on the enclosing route node (via `serverRoute`), then the socket's own `use` array. Route-node and layout `use` guards are inherited, so a guard that protects a route also covers its sockets and rooms without having to be repeated. Add socket-specific authorization in the socket's own `use` array for concerns that only apply to the socket.
 
 ### Reconnect behavior
 

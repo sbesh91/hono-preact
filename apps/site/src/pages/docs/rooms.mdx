@@ -1,0 +1,239 @@
+# Rooms & Presence
+
+Rooms give you multi-connection fan-out over WebSockets with a built-in presence roster. A room is a `Channel`-keyed group: every connection that joins the same channel key sees each other's messages (via server-mediated broadcast) and each other's presence state. The roster (`members`) is reactive on the client and updates whenever anyone joins, leaves, or changes their presence.
+
+Rooms are the right tool when you need multiple clients to talk to each other and you want to track who is connected. For server-to-client-only data streams, use [Realtime Channels](/docs/realtime) or [Live Loaders](/docs/live-loaders). For a private duplex channel to one client, use [WebSockets](/docs/websockets).
+
+## How it works
+
+Three pieces cooperate:
+
+1. **Define a channel** with `defineChannel`. The channel name pattern (e.g. `room/:roomId`) sets the room key and types the params that flow into the server handler.
+2. **Define a room** with `defineRoom(channel, handler)` inside a `serverRooms` export in a `.server` module. The handler receives a `RoomConnection` that can send to one client, broadcast to others, and update presence.
+3. **Join from the client** with `serverRooms.<name>.useRoom({ key })` or the free `useRoom(ref, opts)` form. The hook returns a reactive `members` roster, a `send` function, and `setPresence` for updating this client's state.
+
+Rooms ride the same `/__sockets` WebSocket transport as typed sockets and inherit the same guard composition: app `use`, then route-node `use`, then the room's own `use`. Fan-out is server-mediated: the client `send`s a message and the room's `onMessage` decides whether to call `conn.broadcast`.
+
+## Example: live cursor board
+
+### Channel definition
+
+Define the channel in a shared file (not a `.server` module) so both server and client can import it:
+
+```ts
+// src/cursors-channel.ts
+import { defineChannel } from 'hono-preact';
+
+export type CursorMsg = { x: number; y: number };
+
+// The channel name carries the room-key param.
+// The payload type is the message type the room exchanges.
+export const cursorsChannel = defineChannel('board/:boardId')<CursorMsg>();
+```
+
+### Server module
+
+Place the room definition in a `.server.ts` module inside a `serverRooms` export. The build strips the server body on the client side and replaces it with a lightweight descriptor:
+
+```ts
+// src/board.server.ts
+import { defineRoom } from 'hono-preact';
+import { cursorsChannel, type CursorMsg } from './cursors-channel.js';
+
+export type CursorState = { x: number; y: number; name: string };
+
+export const serverRooms = {
+  cursors: defineRoom(cursorsChannel, {
+    // Seed the joining member's initial presence state.
+    presence: () => ({ x: 0, y: 0, name: 'Anonymous' }),
+
+    async onJoin(conn, { c, params }) {
+      // params is typed: { boardId: string }
+      const user = c.get('user');
+      conn.setPresence({ x: 0, y: 0, name: user?.name ?? 'Guest' });
+    },
+
+    onMessage(conn, msg) {
+      // The client sent a cursor position. Broadcast to every other member.
+      conn.broadcast(msg);
+    },
+
+    onLeave(conn) {
+      // No explicit cleanup needed; the presence roster removes this member
+      // automatically when the connection closes.
+    },
+  }),
+};
+```
+
+### Client component
+
+Import `serverRooms` from the `.server` module and call `.useRoom` with the channel key params:
+
+```tsx
+// src/board.tsx
+import { serverRooms } from './board.server.js';
+import type { CursorState } from './board.server.js';
+
+export default function Board() {
+  const { send, setPresence, members, self, status } =
+    serverRooms.cursors.useRoom({
+      key: { boardId: 'main' },
+      // Seed this client's initial presence.
+      presence: { x: 0, y: 0, name: 'Me' },
+      onMessage(msg, from) {
+        // Incoming cursor position from another member.
+        // `msg` is typed as CursorMsg; `from` is the sender's member id.
+        console.log(from, 'moved to', msg);
+      },
+    });
+
+  function handleMouseMove(e: MouseEvent) {
+    const pos = { x: e.clientX, y: e.clientY };
+    // Update this client's presence in the roster.
+    setPresence({ ...pos, name: self?.state?.name ?? 'Me' });
+    // Notify others of the new position.
+    send(pos);
+  }
+
+  return (
+    <div
+      onMouseMove={handleMouseMove}
+      style="position:relative;width:100%;height:400px"
+    >
+      <p>Status: {status}</p>
+      {members.map((m) => (
+        <div
+          key={m.id}
+          style={`position:absolute;left:${m.state?.x}px;top:${m.state?.y}px`}
+        >
+          {m.state?.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+`members` is reactive and updates on every join, leave, or presence change. `self` is this client's own roster entry, derived from the roster (it is `undefined` until the first server snapshot arrives). Incoming messages from other members go to `onMessage`; they do not trigger a re-render.
+
+## Broadcast vs send
+
+The server `conn` has two delivery methods:
+
+- `conn.send(msg)` sends to this one client only.
+- `conn.broadcast(msg)` fans out to every other member of the room. The sender is excluded by default; pass `{ self: true }` to also deliver to the sender.
+
+The client has only `send`. There is no client-side `broadcast` because fan-out is server-mediated: the client calls `send` and the room's `onMessage` decides whether to call `conn.broadcast`. This keeps authorization centralized on the server.
+
+## Guard inheritance
+
+The guard chain for a room is: app `use` (from `defineApp({ use })`) then route-node `use` (from `serverRoute`, if the room lives next to a route) then the room's own `use`:
+
+```ts
+const route = serverRoute('/board/:boardId');
+
+export const serverRooms = {
+  cursors: defineRoom(cursorsChannel, {
+    // Room-specific guard runs after any route-node guard.
+    use: [route.use],
+    // ...
+  }),
+};
+```
+
+A guard that denies the upgrade closes the connection with code `4403`.
+
+## Presence reconnect behavior
+
+On reconnect, the room re-joins and the server sends a fresh presence snapshot. Any presence state the client passed in `opts.presence` is re-sent on open. There is a brief membership gap between disconnect and rejoin; missed messages during a disconnect are not replayed.
+
+## Runtime scope
+
+Rooms fan out within a single Node process. If you run multiple Node processes (or deploy to Cloudflare Workers, where each request is isolated), in-process fan-out only reaches the connections on the same instance. Cross-process rooms require a shared backend; support for a Durable Object backend will be added in a later release.
+
+For a working multi-tab demo, see `apps/example-node/` in the repo. The docs site itself runs on workerd and does not include a live room demo for this reason.
+
+## API reference
+
+### `defineRoom(channel, handler)`
+
+Defines a typed broadcasting room bound to a `Channel`. Place it in a `serverRooms` export in a `.server` module.
+
+| Parameter | Type                     | Description                                                                      |
+| --------- | ------------------------ | -------------------------------------------------------------------------------- |
+| `channel` | `Channel<Name, Payload>` | The channel that keys this room. The name pattern types `onJoin`'s `ctx.params`. |
+| `handler` | `RoomHandler`            | The server-side lifecycle object (see below).                                    |
+
+Returns a `RoomRef` that the client hook reads. On the client side the `.server` import is replaced by a lightweight descriptor.
+
+#### Handler fields
+
+| Field       | Type                                                            | Description                                                                                                                                                                    |
+| ----------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `use`       | `ReadonlyArray<Middleware>`                                     | Guard chain run before the upgrade. A failing guard closes with code `4403`.                                                                                                   |
+| `presence`  | `() => State`                                                   | Seeds the joining member's initial presence state.                                                                                                                             |
+| `onJoin`    | `(conn, { c, params }) => void \| (() => void) \| Promise<...>` | Runs once per connection after the upgrade. `c` is the Hono Context; `params` is typed from the channel name. Returning a function registers it as a teardown called on leave. |
+| `onMessage` | `(conn, msg) => void \| Promise<void>`                          | Called for every incoming message from this connection.                                                                                                                        |
+| `onLeave`   | `(conn) => void`                                                | Called when the connection closes.                                                                                                                                             |
+| `onError`   | `(conn, err) => void`                                           | Called on a socket error.                                                                                                                                                      |
+
+#### `RoomConnection` fields (the `conn` handle)
+
+| Field                   | Type     | Description                                                                      |
+| ----------------------- | -------- | -------------------------------------------------------------------------------- |
+| `id`                    | `string` | This connection's stable member id.                                              |
+| `send(msg)`             | method   | Send a message to this one client.                                               |
+| `broadcast(msg, opts?)` | method   | Fan out to every other member. Pass `{ self: true }` to also include the sender. |
+| `setPresence(state)`    | method   | Publish this connection's presence state to the roster.                          |
+| `data`                  | `Data`   | Per-connection mutable bag.                                                      |
+| `close(code?, reason?)` | method   | Close this connection.                                                           |
+
+### `ref.useRoom(opts?)` / `useRoom(ref, opts?)`
+
+| Option                 | Type                          | Default                        | Description                                                                                    |
+| ---------------------- | ----------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `key`                  | channel params                | required if channel has params | The room-key params (e.g. `{ roomId: 'demo' }`). The server interpolates the topic from these. |
+| `presence`             | `State`                       |                                | Initial presence state, sent on open and re-sent on every reconnect.                           |
+| `onMessage`            | `(msg, from: string) => void` |                                | Called for each incoming message. Does not trigger a re-render.                                |
+| `onOpen`               | `() => void`                  |                                | Called when the connection opens.                                                              |
+| `onClose`              | `(e: CloseEvent) => void`     |                                | Called when the connection closes.                                                             |
+| `shouldReconnect`      | `(e: CloseEvent) => boolean`  | See below                      | Returns `true` to reconnect.                                                                   |
+| `reconnect.maxRetries` | `number`                      | `5`                            | Maximum reconnect attempts.                                                                    |
+| `reconnect.minDelay`   | `number`                      | `250`                          | Minimum delay in ms before first retry.                                                        |
+| `reconnect.maxDelay`   | `number`                      | `30000`                        | Backoff cap in ms.                                                                             |
+| `reconnect.growth`     | `number`                      | `2`                            | Exponential growth factor.                                                                     |
+| `enabled`              | `boolean`                     | `true`                         | When `false`, the room does not connect.                                                       |
+
+Default `shouldReconnect`: `false` for codes `1000` and `4000-4999`, `true` otherwise.
+
+Returns:
+
+| Field         | Type                                   | Description                                                                                       |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `send`        | `(msg) => void`                        | Send a message to the server. Queued if not yet open.                                             |
+| `setPresence` | `(state) => void`                      | Publish this client's presence state to the roster.                                               |
+| `members`     | `ReadonlyArray<PresenceMember<State>>` | The presence roster, reactive.                                                                    |
+| `self`        | `PresenceMember<State> \| undefined`   | This client's own roster entry. `undefined` until the first snapshot arrives.                     |
+| `status`      | `SocketStatus`                         | Reactive connection status (`'connecting'`, `'open'`, `'reconnecting'`, `'closing'`, `'closed'`). |
+| `close`       | `(code?, reason?) => void`             | Close the connection. Suppresses reconnect.                                                       |
+| `closeInfo`   | `SocketCloseInfo \| undefined`         | Code, reason, and wasClean from the last close event.                                             |
+
+### Type exports
+
+```ts
+import type {
+  RoomRef,
+  RoomHandler,
+  RoomConnection,
+  UseRoomOpts,
+  UseRoomResult,
+  PresenceMember,
+} from 'hono-preact';
+```
+
+## See also
+
+- [WebSockets](/docs/websockets): the typed socket primitive (`defineSocket` + `useSocket`) for private duplex channels.
+- [Realtime Channels](/docs/realtime): server-to-client pub/sub over SSE with `defineChannel` + `publish`.
+- [Live Loaders](/docs/live-loaders): persistent streaming loaders for layout-scoped widgets.
