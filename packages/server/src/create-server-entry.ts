@@ -75,9 +75,9 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       ? buildSocketRegistry(serverModules)
       : (cachedSocketRegistryPromise ??= buildSocketRegistry(serverModules));
 
-  // Room registry, partitioned from the same serverSockets map by the channel
-  // discriminator. Same caching policy as the socket registry: one async walk
-  // at boot; per-request in dev for hot-reload parity.
+  // Room registry, built from the `serverRooms` export (a distinct named export
+  // from `serverSockets`). Same caching policy as the socket registry: one
+  // async walk at boot; per-request in dev for hot-reload parity.
   let cachedRoomRegistryPromise: ReturnType<typeof buildRoomRegistry> | null =
     null;
   const roomRegistryPromise = () =>

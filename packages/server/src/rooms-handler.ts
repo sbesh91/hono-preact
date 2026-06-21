@@ -19,7 +19,7 @@ import { extractParams } from './route-pattern.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
-  serverSockets?: unknown;
+  serverRooms?: unknown;
   [key: string]: unknown;
 };
 type LazyArray = ReadonlyArray<() => Promise<unknown>>;
@@ -30,11 +30,13 @@ type AnyFrame = RoomClientFrame<unknown, unknown>;
 
 /**
  * Build the `${moduleKey}::${name}` -> RoomDef registry from the route server
- * modules. Rooms live in the SAME `serverSockets` map as plain duplex sockets
- * (the codegen emits one `serverSockets` export); the two registries partition
- * that map by the `channel` discriminator, so a room def (which carries a
- * `channel`) lands here and a plain socket lands in `buildSocketRegistry`. This
- * keeps the program's "no second endpoint, no second codegen export" constraint.
+ * modules. Rooms come from the `serverRooms` named export, which is a DISTINCT
+ * export from `serverSockets`. Mirrors `buildSocketRegistry`'s structure but
+ * reads `mod.serverRooms` instead of `mod.serverSockets`. Every object value
+ * under `serverRooms` is treated as a RoomDef; a defensive `'channel' in val`
+ * check is kept as a sanity guard (a well-formed room def always carries
+ * `channel`). The client codegen recognition for `serverRooms` is added in the
+ * serverRooms-codegen task; the server reads the export directly here.
  */
 export async function buildRoomRegistry(
   serverImports: LazyArray
@@ -48,11 +50,10 @@ export async function buildRoomRegistry(
     const moduleKey = mod.__moduleKey;
     if (typeof moduleKey !== 'string') continue;
 
-    const sockets = mod.serverSockets;
-    if (sockets && typeof sockets === 'object') {
-      for (const [name, val] of Object.entries(sockets)) {
-        // The `channel` field is the room discriminator (a SocketDef never has
-        // one). Only room defs belong in this registry.
+    const rooms = mod.serverRooms;
+    if (rooms && typeof rooms === 'object') {
+      for (const [name, val] of Object.entries(rooms)) {
+        // Sanity check: a well-formed room def always carries `channel`.
         if (val && typeof val === 'object' && 'channel' in val) {
           registry.set(`${moduleKey}::${name}`, val as AnyRoomDef);
         }

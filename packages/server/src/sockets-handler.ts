@@ -31,10 +31,10 @@ export interface GuardedDef {
 /**
  * Build the `${moduleKey}::${name}` -> SocketDef registry from the route
  * server modules. Mirrors buildLoadersMap in loaders-handler.ts, reading
- * `mod.__moduleKey` and `mod.serverSockets`. Plain duplex sockets only: a
- * room def (which carries a `channel`) is filtered out here and picked up by
- * `buildRoomRegistry` instead, so the two registries partition `serverSockets`
- * by the channel discriminator.
+ * `mod.__moduleKey` and `mod.serverSockets`. Plain duplex sockets only: rooms
+ * come from the SEPARATE `serverRooms` export and are built by
+ * `buildRoomRegistry`. Every object value under `serverSockets` is a socket
+ * def; no filtering is needed here.
  */
 export async function buildSocketRegistry(
   serverImports: LazyArray
@@ -51,10 +51,7 @@ export async function buildSocketRegistry(
     const sockets = mod.serverSockets;
     if (sockets && typeof sockets === 'object') {
       for (const [name, val] of Object.entries(sockets)) {
-        // A room def carries a `channel`; it belongs to the room registry, not
-        // here. Filtering on the discriminator keeps one `serverSockets` map
-        // the single source for both, with no second codegen export.
-        if (val && typeof val === 'object' && !('channel' in val)) {
+        if (val && typeof val === 'object') {
           registry.set(`${moduleKey}::${name}`, val as AnySocketDef);
         }
       }
@@ -171,9 +168,9 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       const name = ctx.req.query(SOCKET_NAME_PARAM);
       const key = moduleKey && name ? `${moduleKey}::${name}` : undefined;
 
-      // Resolve sockets first, then rooms. The two registries partition the
-      // serverSockets map by the channel discriminator, so a key matches at
-      // most one.
+      // Resolve sockets first, then rooms. Sockets come from `serverSockets`
+      // and rooms from the separate `serverRooms` export, so a key matches at
+      // most one registry.
       const socketDef = key ? opts.registry.get(key) : undefined;
       const roomDef = key ? opts.rooms?.get(key) : undefined;
       const def: AnySocketDef | AnyRoomDef | undefined = socketDef ?? roomDef;

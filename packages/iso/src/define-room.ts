@@ -71,7 +71,7 @@ export interface RoomHandler<Incoming, Outgoing, State, Data, Params> {
  * `channel`); the shared socket/room registry branches on it. `__moduleKey` /
  * `__roomName` are threaded by the build (the prepended `__moduleKey` export +
  * the client stub), so they are optional here and unused on the server (the
- * registry keys by the module's own `__moduleKey` + the `serverSockets`
+ * registry keys by the module's own `__moduleKey` + the `serverRooms`
  * property name).
  */
 export interface RoomDef<
@@ -111,7 +111,7 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
 
 /**
  * Define a typed broadcasting room bound to a `Channel`. Place it in a
- * `serverSockets` map in a `.server` module; consume it with the rooms client
+ * `serverRooms` map in a `.server` module; consume it with the rooms client
  * hook. The channel's name pattern (`defineChannel('room/:roomId')`) carries
  * the room-key params, which type `onJoin`'s `ctx.params`.
  *

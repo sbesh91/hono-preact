@@ -120,7 +120,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('buildRoomRegistry', () => {
-  it('keys room defs (channel discriminator) from serverSockets', async () => {
+  it('keys room defs from the serverRooms export', async () => {
     const room = defineRoom(roomChannel, {}) as unknown as RoomDef<
       unknown,
       unknown,
@@ -132,7 +132,7 @@ describe('buildRoomRegistry', () => {
       () =>
         Promise.resolve({
           __moduleKey: MODULE_KEY,
-          serverSockets: { [ROOM_NAME]: room },
+          serverRooms: { [ROOM_NAME]: room },
         }),
     ];
 
@@ -142,13 +142,35 @@ describe('buildRoomRegistry', () => {
     expect(registry.get(`${MODULE_KEY}::${ROOM_NAME}`)).toBe(room);
   });
 
-  it('ignores plain sockets (no channel) in the serverSockets map', async () => {
-    const plainSocket = {}; // a SocketDef has no `channel`
+  it('ignores entries without a channel in the serverRooms map', async () => {
+    // A malformed entry without `channel` should not be registered.
+    const badEntry = {};
     const serverImports = [
       () =>
         Promise.resolve({
           __moduleKey: MODULE_KEY,
-          serverSockets: { plain: plainSocket },
+          serverRooms: { bad: badEntry },
+        }),
+    ];
+
+    const registry = await buildRoomRegistry(serverImports);
+    expect(registry.size).toBe(0);
+  });
+
+  it('does not read rooms from serverSockets (rooms use the separate serverRooms export)', async () => {
+    const room = defineRoom(roomChannel, {}) as unknown as RoomDef<
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    >;
+    // Room placed in serverSockets (wrong export) must NOT appear in the room registry.
+    const serverImports = [
+      () =>
+        Promise.resolve({
+          __moduleKey: MODULE_KEY,
+          serverSockets: { [ROOM_NAME]: room },
         }),
     ];
 
