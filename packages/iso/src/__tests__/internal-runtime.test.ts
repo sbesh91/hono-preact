@@ -38,6 +38,9 @@ describe('iso /internal/runtime door', () => {
       ...PLUMBING,
       'env',
       ...Object.keys(contract),
+      'validateWithSchema',
+      'normalizeIssues',
+      'mapIssuesToFields',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

@@ -254,6 +254,9 @@ importers:
 
   packages/iso:
     dependencies:
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
       hono:
         specifier: '>=4.0.0'
         version: 4.12.14
