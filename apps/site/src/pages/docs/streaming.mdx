@@ -1,8 +1,8 @@
 # Streaming Loaders & Actions
 
-Static loaders return a single value once. Streaming loaders and actions are async generators that yield values over time. The consumer API (`loader.useData()`, `useAction`) is the same; only the author shape changes.
-
 Reach for streaming when the data changes while the user is looking at it: dashboards, log tails, chat token streams, progressive search results. If your data is stable for the lifetime of a request, a plain async function is simpler and should be your first choice.
+
+Streaming loaders and actions are async generators that yield values over time. The consumer API (`loader.useData()`, `useAction`) is the same as for static loaders; only the author shape changes.
 
 ## Streaming loaders
 
