@@ -80,7 +80,7 @@ The framework has three ways to invalidate or re-run a loader. They look similar
 
 The mental model: **`invalidate`** is "mark stale, refetch lazily". **`reload`** is "fetch right now". `useAction`'s `'auto'` mode is sugar over the reload path; its array mode is sugar over `loader.invalidate()` calls plus an opportunistic reload if the active loader is in the list.
 
-A common surprise: `invalidate: 'auto'` is NOT a no-op even when the loader has no observable changes — it triggers a real network request through `/__loaders`. Use `invalidate: false` (the default) if you don't want a refetch after the action.
+A common surprise: `invalidate: 'auto'` is NOT a no-op even when the loader has no observable changes; it triggers a real network request through `/__loaders`. Use `invalidate: false` (the default) if you don't want a refetch after the action.
 
 ## API
 
