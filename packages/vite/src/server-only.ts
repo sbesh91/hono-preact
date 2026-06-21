@@ -87,6 +87,7 @@ export function serverOnlyPlugin(): Plugin {
       const s = new MagicString(code);
       let needsCreateLoaderStubImport = false;
       let needsUseActionImport = false;
+      let needsUseSocketImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
         // `import type { … } from './x.server'` is erased entirely. @babel/types
@@ -150,6 +151,7 @@ export function serverOnlyPlugin(): Plugin {
             specifier.imported.type === 'Identifier' &&
             specifier.imported.name === 'serverSockets'
           ) {
+            needsUseSocketImport = true;
             stubs.push(socketStubSource(specifier.local.name, moduleKey));
           } else {
             const importedName =
@@ -197,6 +199,11 @@ export function serverOnlyPlugin(): Plugin {
       if (needsUseActionImport) {
         s.prepend(
           `import { useAction as __$useAction_hpiso } from 'hono-preact';\n`
+        );
+      }
+      if (needsUseSocketImport) {
+        s.prepend(
+          `import { useSocket as __$useSocket_hpiso } from 'hono-preact';\n`
         );
       }
 

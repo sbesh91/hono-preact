@@ -66,15 +66,14 @@ export const serverSockets = {
 
 ### Client component
 
-Import the `serverSockets` map from the `.server` module and pass the entry to `useSocket`:
+Import the `serverSockets` map from the `.server` module and call `.useSocket` on the entry:
 
 ```tsx
 // src/chat.tsx
-import { useSocket } from 'hono-preact';
 import { serverSockets } from './chat.server.js';
 
 export default function Chat() {
-  const { send, status, lastMessage } = useSocket(serverSockets.chat, {
+  const { send, status, lastMessage } = serverSockets.chat.useSocket({
     lastMessage: true,
     onMessage(msg) {
       console.log('received', msg.text);
@@ -94,6 +93,8 @@ export default function Chat() {
   );
 }
 ```
+
+The free `useSocket(ref, opts)` export also works and is equivalent; the method form is the idiomatic choice when the ref is a `serverSockets` entry.
 
 `useSocket` manages the WebSocket lifecycle: it connects on mount, reconnects with exponential backoff on unexpected drops, and closes cleanly on unmount. `send` queues messages if the socket is not yet open, flushing them once the connection is established (up to 128 queued messages).
 
@@ -118,7 +119,7 @@ A socket's guard chain consists of its own `use` array combined with any app-lev
 Override the policy with `shouldReconnect`:
 
 ```ts
-useSocket(serverSockets.chat, {
+serverSockets.chat.useSocket({
   shouldReconnect: (ev) => ev.code !== 1000 && ev.code !== 4403,
   reconnect: {
     maxRetries: 10,
@@ -231,7 +232,7 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 | `data`                  | `Data`                    | Per-connection mutable bag. Set in `open`; read anywhere in the handler. |
 | `raw`                   | `unknown`                 | Escape hatch to the underlying runtime socket.                           |
 
-### `useSocket(ref, opts?)`
+### `ref.useSocket(opts?)` / `useSocket(ref, opts?)`
 
 | Option                 | Type                                 | Default   | Description                                                                                |
 | ---------------------- | ------------------------------------ | --------- | ------------------------------------------------------------------------------------------ |

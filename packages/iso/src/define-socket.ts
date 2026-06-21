@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Middleware } from './define-middleware.js';
 import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from './internal/contract.js';
+import type { UseSocketOpts, UseSocketResult } from './use-socket.js';
 
 /** The per-connection socket handle handed to the server handlers. */
 export interface ServerSocket<Outgoing, Data> {
@@ -61,6 +62,14 @@ export interface SocketRef<Incoming, Outgoing> {
   readonly [FORM_SOCKET_FIELD]?: string;
   readonly __incoming?: Incoming;
   readonly __outgoing?: Outgoing;
+  /**
+   * Idiomatic ref-method form of `useSocket`. Equivalent to
+   * `useSocket(ref, opts)` but called directly on the ref:
+   * `serverSockets.feed.useSocket({ onMessage })`.
+   */
+  useSocket(
+    opts?: UseSocketOpts<SocketRef<Incoming, Outgoing>>
+  ): UseSocketResult<SocketRef<Incoming, Outgoing>>;
 }
 
 /**

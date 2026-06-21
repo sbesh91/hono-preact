@@ -48,14 +48,17 @@ export function actionStubSource(localName: string, moduleKey: string): string {
 }
 
 // Source for the `serverSockets` client stub. Each `serverSockets.<name>` read
-// returns a descriptor record (module + socket name) that `useSocket` reads to
-// build the /__sockets URL. Like actions, the stub is a descriptor, not a
-// singleton.
+// constructs a descriptor record (module + socket name) and attaches a
+// `.useSocket` method that delegates to `__$useSocket_hpiso`, mirroring the
+// pattern used by `actionStubSource` for `.useAction`. Like actions, the stub
+// is a descriptor, not a singleton.
 export function socketStubSource(localName: string, moduleKey: string): string {
   return (
     `const ${localName} = new Proxy({}, {\n` +
     `  get(_, name) {\n` +
-    `    return { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_SOCKET_FIELD}: String(name) };\n` +
+    `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_SOCKET_FIELD}: String(name) };\n` +
+    `    stub.useSocket = (opts) => __$useSocket_hpiso(stub, opts);\n` +
+    `    return stub;\n` +
     `  }\n` +
     `});`
   );

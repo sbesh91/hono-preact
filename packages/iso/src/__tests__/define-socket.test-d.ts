@@ -2,6 +2,7 @@
 import { expectTypeOf } from 'vitest';
 import { defineSocket, type SocketRef } from '../define-socket.js';
 import { serverRoute } from '../server-route.js';
+import type { Serialize } from '../internal/serialize.js';
 
 type In = { kind: 'ping' } | { kind: 'say'; text: string };
 type Out = { kind: 'pong'; at: number } | { kind: 'said'; text: string };
@@ -38,5 +39,31 @@ function _routeSocketProbe() {
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
 }
 
+// Probe: ref.useSocket() method form typechecks and infers message types.
+function _useSocketMethodProbe() {
+  const ref = defineSocket<In, Out, undefined>({});
+  // ref is typed as SocketRef<In, Out>; .useSocket should exist.
+  const result = ref.useSocket({
+    onMessage(msg) {
+      // msg should be Serialize<Out>
+      expectTypeOf(msg).toEqualTypeOf<Serialize<Out>>();
+    },
+  });
+  // send should accept In
+  expectTypeOf(result.send).toEqualTypeOf<(msg: In) => void>();
+
+  // It should also be callable with no options.
+  ref.useSocket();
+
+  // Typed directly from SocketRef<In, Out>
+  const ref2: SocketRef<In, Out> = ref;
+  ref2.useSocket({
+    onMessage(msg) {
+      expectTypeOf(msg).toEqualTypeOf<Serialize<Out>>();
+    },
+  });
+}
+
 void _probes;
 void _routeSocketProbe;
+void _useSocketMethodProbe;

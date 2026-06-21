@@ -44,10 +44,14 @@ describe('serverOnlyPlugin: serverSockets', () => {
     expect(out?.code).not.toContain('const serverSockets = new Proxy(');
   });
 
-  it('does not prepend a runtime import (socket stub is a plain object literal)', () => {
+  it('attaches a useSocket method to each stub and prepends the runtime import', () => {
     const code = `import { serverSockets } from './chat.server.js';`;
     const out = transform(code, '/proj/src/pages/chat.tsx');
-    expect(out?.code).not.toContain("from 'hono-preact'");
+    expect(out?.code).toContain('stub.useSocket');
+    expect(out?.code).toContain('__$useSocket_hpiso');
+    expect(out?.code).toContain(
+      `import { useSocket as __$useSocket_hpiso } from 'hono-preact';`
+    );
     expect(out?.code).not.toContain('__$useAction');
     expect(out?.code).not.toContain('__$createLoaderStub');
   });

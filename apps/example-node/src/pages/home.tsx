@@ -1,4 +1,4 @@
-import { definePage, useAction, useSocket } from 'hono-preact';
+import { definePage, useAction } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState, useCallback } from 'preact/hooks';
 import { serverLoaders, serverActions } from './home.server.js';
@@ -66,7 +66,7 @@ const ChatDemo: FunctionComponent = () => {
     []
   );
 
-  const sock = useSocket(serverSockets.chat, { onMessage });
+  const sock = serverSockets.chat.useSocket({ onMessage });
 
   const handleSend = useCallback(() => {
     const text = inputText.trim();
