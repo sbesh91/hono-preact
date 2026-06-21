@@ -8,9 +8,10 @@ import {
   getWebSocketUpgrader,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
-import type { AppConfig } from '@hono-preact/iso';
-import type { SocketDef } from '@hono-preact/iso/internal';
+import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
+import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
+import { createRoomWsEvents } from './rooms-handler.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -20,11 +21,20 @@ type GlobModule = {
 type LazyArray = ReadonlyArray<() => Promise<unknown>>;
 
 type AnySocketDef = SocketDef<unknown, unknown, unknown>;
+type AnyRoomDef = RoomDef<unknown, unknown, unknown, unknown, unknown>;
+
+/** A def with an optional guard chain (both SocketDef and RoomDef have one). */
+export interface GuardedDef {
+  use?: ReadonlyArray<unknown>;
+}
 
 /**
  * Build the `${moduleKey}::${name}` -> SocketDef registry from the route
  * server modules. Mirrors buildLoadersMap in loaders-handler.ts, reading
- * `mod.__moduleKey` and `mod.serverSockets`.
+ * `mod.__moduleKey` and `mod.serverSockets`. Plain duplex sockets only: a
+ * room def (which carries a `channel`) is filtered out here and picked up by
+ * `buildRoomRegistry` instead, so the two registries partition `serverSockets`
+ * by the channel discriminator.
  */
 export async function buildSocketRegistry(
   serverImports: LazyArray
@@ -41,7 +51,10 @@ export async function buildSocketRegistry(
     const sockets = mod.serverSockets;
     if (sockets && typeof sockets === 'object') {
       for (const [name, val] of Object.entries(sockets)) {
-        if (val && typeof val === 'object') {
+        // A room def carries a `channel`; it belongs to the room registry, not
+        // here. Filtering on the discriminator keeps one `serverSockets` map
+        // the single source for both, with no second codegen export.
+        if (val && typeof val === 'object' && !('channel' in val)) {
           registry.set(`${moduleKey}::${name}`, val as AnySocketDef);
         }
       }
@@ -52,6 +65,12 @@ export async function buildSocketRegistry(
 
 export interface SocketsHandlerOptions {
   registry: Map<string, AnySocketDef>;
+  /**
+   * Room registry (built by `buildRoomRegistry`). Rooms ride the same
+   * `/__sockets` endpoint and the same guard chain; the only divergence is the
+   * post-guard WSEvents wiring, which branches on the resolved def's shape.
+   */
+  rooms?: Map<string, AnyRoomDef>;
   appConfig?: AppConfig;
   // `dev` (registry freshness) is the caller's responsibility; not read here.
   /**
@@ -75,26 +94,89 @@ export interface SocketsHandlerOptions {
 }
 
 /**
- * Handle GET /__sockets. Resolve the socket by module key + name, run its
- * guard chain (app use + the socket's use) before upgrading, and wire the
- * connection handlers through a JSON serialize boundary. A guard denial
- * upgrades and then immediately closes WS_DENY_CODE in onOpen (a rejected
- * handshake is opaque in browsers, so we cannot refuse the HTTP upgrade).
+ * Resolve the guard chain (app use + route-node use + the def's own use) for a
+ * socket OR room connection and run it with a no-op inner to probe for a deny.
+ * Returns `true` when a guard denied the connection. Shared verbatim by the
+ * socket and room branches so the auth/permission path is single-sourced; only
+ * the post-guard WSEvents wiring differs between the two.
+ */
+export async function resolveGuardDenied(opts: {
+  def: GuardedDef;
+  ctx: Context;
+  appConfig: AppConfig | undefined;
+  resolvePageUse: (
+    path: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  routePath: string;
+  moduleKey: string;
+  name: string;
+}): Promise<boolean> {
+  const { def, ctx, appConfig, resolvePageUse, routePath, moduleKey, name } =
+    opts;
+
+  // Chain order is outer -> inner: app-use, page/route-node use, def.use.
+  // Guards run as 'loader' scope since the upgrade is an HTTP GET carrying a
+  // Hono Context; the scope tag is unused by the middleware engine itself.
+  const { serverMw, signal } = await composeServerChain<'loader'>({
+    requestSignal: ctx.req.raw.signal,
+    unitTimeoutMs: undefined,
+    defaultTimeoutMs: false,
+    appConfig,
+    resolvePageUse,
+    path: routePath,
+    unitUse: def.use ?? [],
+  });
+
+  // Dispatch the chain with a no-op inner: only `kind: 'outcome'` (a deny)
+  // matters; the inner value is discarded. Mirrors loadersHandler's deny probe.
+  const probeCtx: ServerLoaderCtx = {
+    scope: 'loader',
+    c: ctx,
+    signal,
+    location: { path: routePath, pathParams: {}, searchParams: {} },
+    module: moduleKey,
+    loader: name,
+  };
+  const guardResult = await runRequestScope(
+    () =>
+      dispatchServer<true, 'loader'>({
+        middleware: serverMw,
+        ctx: probeCtx,
+        inner: async () => true as const,
+      }),
+    { honoContext: ctx }
+  );
+
+  return guardResult.kind === 'outcome';
+}
+
+/**
+ * Handle GET /__sockets for BOTH duplex sockets and broadcasting rooms. Resolve
+ * the connection's `m::name` against the socket registry first, then the room
+ * registry; run the shared guard chain (app use + route-node use + the def's
+ * use) before upgrading; then branch the post-guard WSEvents wiring on the
+ * resolved def's shape. A guard denial upgrades and then immediately closes
+ * WS_DENY_CODE in onOpen (a rejected handshake is opaque in browsers, so we
+ * cannot refuse the HTTP upgrade).
  */
 export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
   const { appConfig } = opts;
   return (c, next) => {
-    // Lazy: the adapter installs the upgrader at boot, after this handler
-    // is registered. Resolve it per request, not at construction time.
+    // Lazy: the adapter installs the upgrader at boot, after this handler is
+    // registered. Resolve it per request, not at construction time.
     const upgrade = getWebSocketUpgrader();
 
     const createEvents = async (ctx: Context): Promise<WSEvents> => {
       const moduleKey = ctx.req.query(SOCKET_MODULE_PARAM);
       const name = ctx.req.query(SOCKET_NAME_PARAM);
-      const def =
-        moduleKey && name
-          ? opts.registry.get(`${moduleKey}::${name}`)
-          : undefined;
+      const key = moduleKey && name ? `${moduleKey}::${name}` : undefined;
+
+      // Resolve sockets first, then rooms. The two registries partition the
+      // serverSockets map by the channel discriminator, so a key matches at
+      // most one.
+      const socketDef = key ? opts.registry.get(key) : undefined;
+      const roomDef = key ? opts.rooms?.get(key) : undefined;
+      const def: AnySocketDef | AnyRoomDef | undefined = socketDef ?? roomDef;
 
       if (!def) {
         return {
@@ -105,61 +187,33 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       }
 
       // Resolve the owning route path from the moduleKey (server-derived, not
-      // client-supplied). A socket whose moduleKey is not in the route tree
-      // (a bare defineSocket not attached to a route node) falls back to
-      // SOCKETS_RPC_PATH, which matches no route pattern, so resolvePageUse
-      // returns [] and the socket gets app-use + def-use only.
+      // client-supplied). A def whose moduleKey is not in the route tree falls
+      // back to SOCKETS_RPC_PATH, which matches no route pattern, so
+      // resolvePageUse returns [] and the def gets app-use + def-use only.
       const routePath =
         moduleKey && opts.resolveRoutePath
           ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
           : SOCKETS_RPC_PATH;
 
-      // Run the guard chain (app use + page/route-node use + socket's use)
-      // before the connection goes live. Mirrors loaders-handler.ts's
-      // composeServerChain usage. Chain order: app-use (outermost), page-use
-      // (route-node use gates), def.use (innermost). Guards run as 'loader'
-      // scope since the socket upgrade is an HTTP GET request carrying a Hono
-      // Context; the scope tag is unused by the middleware engine itself.
-      const { serverMw, signal } = await composeServerChain<'loader'>({
-        requestSignal: ctx.req.raw.signal,
-        unitTimeoutMs: undefined,
-        defaultTimeoutMs: false,
+      const denied = await resolveGuardDenied({
+        def,
+        ctx,
         appConfig,
         resolvePageUse: opts.resolvePageUse ?? (() => []),
-        path: routePath,
-        unitUse: def.use ?? [],
+        routePath,
+        moduleKey: moduleKey ?? '',
+        name: name ?? '',
       });
 
-      // Dispatch the guard chain with a no-op inner to probe for a deny
-      // outcome. Only `kind: 'outcome'` matters here; the inner value is
-      // discarded. Mirrors how loadersHandler detects a deny (dispatch.kind).
-      const ctx4403: import('@hono-preact/iso').ServerLoaderCtx = {
-        scope: 'loader',
-        c: ctx,
-        signal,
-        location: { path: routePath, pathParams: {}, searchParams: {} },
-        module: moduleKey ?? '',
-        loader: name ?? '',
-      };
-      const guardResult = await runRequestScope(
-        () =>
-          dispatchServer<true, 'loader'>({
-            middleware: serverMw,
-            ctx: ctx4403,
-            inner: async () => true as const,
-          }),
-        { honoContext: ctx }
-      );
+      // Branch on the def shape. A room def carries a `channel`; delegate its
+      // (larger) wiring to the room runtime to keep this file thin.
+      if ('channel' in def) {
+        return createRoomWsEvents(def, { ctx, denied });
+      }
 
-      const denied = guardResult.kind === 'outcome';
-
-      // Per-connection state: teardown returned by def.open, and a data bag.
+      // --- Plain duplex socket wiring (unchanged from Task 2). ---
       let teardown: (() => void) | void;
       const data: Record<string, unknown> = {};
-
-      // Wrap the raw WS so socket.send JSON-stringifies and socket.data is
-      // per-connection. Type is purposely narrow here: we only use what WSS
-      // exposes (send, close); the escape hatch is socket.raw = ws itself.
       const makeSocket = (ws: {
         send(d: string): void;
         close(c?: number, r?: string): void;
@@ -176,7 +230,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
-          const result = await def.open?.(makeSocket(ws), { c: ctx });
+          const result = await socketDef!.open?.(makeSocket(ws), { c: ctx });
           teardown = typeof result === 'function' ? result : undefined;
         },
         async onMessage(ev, ws) {
@@ -188,11 +242,11 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
                 ? new TextDecoder().decode(ev.data)
                 : await (ev.data as Blob).text();
           const msg = JSON.parse(raw); // sanctioned untrusted-JSON boundary
-          await def.message?.(makeSocket(ws), msg);
+          await socketDef!.message?.(makeSocket(ws), msg);
         },
         onClose(ev, ws) {
           teardown?.();
-          def.close?.(makeSocket(ws), {
+          socketDef!.close?.(makeSocket(ws), {
             code: ev.code,
             reason: ev.reason,
           });
@@ -202,7 +256,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
           // fall back to the event itself so no information is discarded.
           const err =
             ev && 'error' in ev ? (ev as { error: unknown }).error : ev;
-          def.error?.(makeSocket(ws), err);
+          socketDef!.error?.(makeSocket(ws), err);
         },
       };
     };

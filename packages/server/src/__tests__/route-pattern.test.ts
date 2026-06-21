@@ -3,6 +3,7 @@ import {
   urlPathMatchesPattern,
   patternScore,
   findBestPattern,
+  extractParams,
 } from '../route-pattern.js';
 
 describe('urlPathMatchesPattern', () => {
@@ -123,5 +124,45 @@ describe('findBestPattern', () => {
     // the catch-all's depth 1 beats root's depth 0. Pinned so a future
     // matcher rewrite cannot flip it silently.
     expect(findBestPattern(['/', '/*'], '/')).toBe('/*');
+  });
+});
+
+describe('extractParams', () => {
+  it('captures a single :param value from a channel name pattern', () => {
+    expect(extractParams('room/:roomId', 'room/demo')).toEqual({
+      roomId: 'demo',
+    });
+  });
+
+  it('captures multiple :param values across segments', () => {
+    expect(
+      extractParams('board/:projectId/lane/:laneId', 'board/p1/lane/todo')
+    ).toEqual({ projectId: 'p1', laneId: 'todo' });
+  });
+
+  it('returns an empty object for a param-less pattern', () => {
+    expect(extractParams('lobby', 'lobby')).toEqual({});
+  });
+
+  it('mixes literal and param segments', () => {
+    expect(
+      extractParams('chat/:channel/messages', 'chat/general/messages')
+    ).toEqual({ channel: 'general' });
+  });
+
+  it('is leading-slash agnostic on both sides', () => {
+    expect(extractParams('/room/:roomId', 'room/demo')).toEqual({
+      roomId: 'demo',
+    });
+    expect(extractParams('room/:roomId', '/room/demo')).toEqual({
+      roomId: 'demo',
+    });
+  });
+
+  it('does not crash on the exotic rest grammar (best-effort capture)', () => {
+    // Room keys do not use ?/*/+; the helper must simply not throw if one
+    // appears. We only assert it returns a plain object.
+    expect(() => extractParams('files/:rest*', 'files/a/b')).not.toThrow();
+    expect(typeof extractParams('files/:rest*', 'files/a/b')).toBe('object');
   });
 });

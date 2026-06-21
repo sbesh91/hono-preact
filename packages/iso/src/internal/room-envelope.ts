@@ -29,6 +29,24 @@ export type RoomEnvelope<Msg, State> =
     }
   | { t: 'snapshot'; members: Array<PresenceMember<State>> };
 
+/**
+ * A command frame sent client->server over a room WebSocket. The server->client
+ * direction is `RoomEnvelope`; this is the inbound counterpart, a discriminated
+ * union the room runtime decodes in its `message` handler.
+ *
+ * 't: msg': an application message; the runtime forwards it to
+ *   `RoomHandler.onMessage`.
+ * 't: presence': a presence update; the runtime applies it directly (same
+ *   effect as `conn.setPresence(state)`) and does NOT route it through
+ *   `onMessage`, since presence is framework-handled.
+ *
+ * Task 6 (the client hook) encodes these; the server decodes them at the
+ * sanctioned JSON.parse wire boundary.
+ */
+export type RoomClientFrame<Incoming, State> =
+  | { t: 'msg'; msg: Incoming }
+  | { t: 'presence'; state: State };
+
 /** Encode a room envelope for transmission over the WebSocket wire. */
 export function encodeEnvelope<Msg, State>(
   e: RoomEnvelope<Msg, State>

@@ -17,6 +17,7 @@ import {
 } from './route-server-modules.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import { buildSocketRegistry, socketsHandler } from './sockets-handler.js';
+import { buildRoomRegistry } from './rooms-handler.js';
 
 export interface CreateServerEntryOptions {
   /** The manifest produced by defineRoutes(...) in the user's routes file. */
@@ -74,6 +75,16 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       ? buildSocketRegistry(serverModules)
       : (cachedSocketRegistryPromise ??= buildSocketRegistry(serverModules));
 
+  // Room registry, partitioned from the same serverSockets map by the channel
+  // discriminator. Same caching policy as the socket registry: one async walk
+  // at boot; per-request in dev for hot-reload parity.
+  let cachedRoomRegistryPromise: ReturnType<typeof buildRoomRegistry> | null =
+    null;
+  const roomRegistryPromise = () =>
+    dev
+      ? buildRoomRegistry(serverModules)
+      : (cachedRoomRegistryPromise ??= buildRoomRegistry(serverModules));
+
   // Build the moduleKey -> route path resolver for sockets. Cached for the
   // same reasons as the socket registry (one async walk at boot; per-request
   // in dev for hot-reload parity). Used by socketsHandler to derive the owning
@@ -115,12 +126,14 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     // resolveRoutePath together give socketsHandler the route-node use chain
     // for the socket's owning route, which is where auth gates live.
     .get(SOCKETS_RPC_PATH, async (c, next) => {
-      const [registry, routePathResolver] = await Promise.all([
+      const [registry, rooms, routePathResolver] = await Promise.all([
         socketRegistryPromise(),
+        roomRegistryPromise(),
         socketRoutePathResolverPromise(),
       ]);
       return socketsHandler({
         registry,
+        rooms,
         appConfig,
         resolvePageUse: pageUseResolver.byPath,
         resolveRoutePath: routePathResolver.byModuleKey,
