@@ -206,6 +206,8 @@ describe('useSocket', () => {
     expect(onMessage).toHaveBeenCalledWith({ reply: 'world' });
     // onMessage does not cause a status re-render.
     expect(result.status).toBe('open');
+    // lastMessage opt was not passed, so it must be undefined.
+    expect(result.lastMessage).toBeUndefined();
   });
 
   it('close code 4403 sets closeInfo and does NOT reconnect', async () => {

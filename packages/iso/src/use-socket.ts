@@ -189,7 +189,7 @@ export function useSocket<R extends SocketRef<unknown, unknown>>(
         let parsed: Serialize<Outgoing<R>>;
         try {
           // Single sanctioned wire-boundary cast: JSON.parse returns unknown.
-          parsed = JSON.parse(ev.data as string) as Serialize<Outgoing<R>>;
+          parsed = JSON.parse(ev.data) as Serialize<Outgoing<R>>;
         } catch {
           return;
         }
@@ -276,6 +276,6 @@ export function useSocket<R extends SocketRef<unknown, unknown>>(
     status,
     close,
     closeInfo,
-    ...(opts?.lastMessage ? { lastMessage: lastMsg } : {}),
-  } as UseSocketResult<R>;
+    lastMessage: lastMsg,
+  };
 }
