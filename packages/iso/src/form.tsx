@@ -10,7 +10,10 @@ import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { collectFormData } from './internal/form-data.js';
-import { setLastActionResult } from './internal/action-result-store.js';
+import {
+  setLastActionResult,
+  getLastActionResult,
+} from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import type { AnyLoaderRef } from './define-loader.js';
@@ -99,10 +102,17 @@ export function Form<TPayload, TResult>({
 }: FormProps<TPayload, TResult>) {
   const [pending, setPending] = useState(false);
   const [clientErrors, setClientErrors] = useState<FieldErrorsMap>({});
-  const clientErrorsRef = useRef(clientErrors);
-  clientErrorsRef.current = clientErrors;
+  const [clearedServerFields, setClearedServerFields] = useState<Set<string>>(
+    () => new Set()
+  );
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
+  // hasSubmittedRef: true once the user has attempted the first submit.
+  // Before that, handleInput stays quiet (validating mode not yet active).
+  const hasSubmittedRef = useRef(false);
+  // Debounce timer ref for live revalidation.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Sequence guard so a stale async revalidation cannot overwrite a newer one.
   const inputSeq = useRef(0);
 
   const moduleKey = action.__module;
@@ -116,24 +126,68 @@ export function Form<TPayload, TResult>({
     [action]
   );
 
-  // Server-returned validation issues (deny 422) for this action, if any.
-  const plainStub = hasOptimisticBrand(action) ? undefined : action;
-  const serverResult = useActionResult(plainStub);
+  // [Fix 0]: Pass action directly so both plain and optimistic forms are scoped
+  // to THIS action's module+action key. Previously optimistic actions passed
+  // `undefined`, which caused useActionResult to return the globally-most-recent
+  // result, cross-contaminating unrelated action errors into this form.
+  const serverResult = useActionResult(action);
+
+  // When the server returns a fresh response it is authoritative: reset the
+  // suppression set so server errors are displayed again.
+  //
+  // We compare the raw store entry reference (from getLastActionResult, which
+  // returns the same Map value object across renders until a new result is
+  // stored) rather than relying on the serverResult object (which useActionResult
+  // recreates on every render) or submittedPayload (which can be a new object
+  // reference even when the underlying data has not changed in some runtimes).
+  //
+  // Derived-state-during-render: if the store entry changed, reset
+  // clearedServerFields synchronously before the current render paints.
+  // This avoids a useEffect round-trip that can cause a flicker where
+  // the cleared set is reset AFTER the child tree sees it.
+  const storeEntry = getLastActionResult(action);
+  const prevStoreEntryRef = useRef<
+    ReturnType<typeof getLastActionResult> | undefined
+  >(undefined);
+  if (prevStoreEntryRef.current !== storeEntry) {
+    prevStoreEntryRef.current = storeEntry;
+    if (clearedServerFields.size > 0) {
+      // A new server result arrived; discard any optimistic suppressions.
+      // setClearedServerFields during render is the React/Preact-approved
+      // derived-state pattern (analogous to getDerivedStateFromProps): it
+      // schedules a synchronous re-render with the new state before painting.
+      setClearedServerFields(new Set());
+    }
+  }
+
   // Split into two memos: server errors only recompute when the server result
   // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
   const serverErrors = useMemo<FieldErrorsMap>(
     () => mapIssuesToFields(getValidationIssues(serverResult)),
     [serverResult]
   );
-  const fieldErrors = useMemo<FieldErrorsMap>(
-    // Client pre-validation reflects the most recent interaction, so it wins.
-    () => ({ ...serverErrors, ...clientErrors }),
-    [serverErrors, clientErrors]
-  );
+
+  // Merge: server errors minus optimistically-cleared fields, then client
+  // errors override (live revalidation is always the freshest signal).
+  const fieldErrors = useMemo<FieldErrorsMap>(() => {
+    const out: FieldErrorsMap = {};
+    for (const k of Object.keys(serverErrors)) {
+      if (!clearedServerFields.has(k)) out[k] = serverErrors[k]!;
+    }
+    return { ...out, ...clientErrors };
+  }, [serverErrors, clientErrors, clearedServerFields]);
 
   const handleSubmit = useCallback(
     async (e: Event) => {
       e.preventDefault();
+      // Validating mode begins at first submit.
+      hasSubmittedRef.current = true;
+      // Cancel any pending debounced revalidation.
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
       const formEl = e.currentTarget as HTMLFormElement;
       const resetForm = (fields?: string[]) => resetFormFields(formEl, fields);
       const target =
@@ -267,41 +321,55 @@ export function Form<TPayload, TResult>({
     [moduleKey, actionName, optimistic, applyInvalidate]
   );
 
-  const handleInput = useCallback(async (e: Event) => {
-    const target = e.target as { name?: string } | null;
-    const name = target?.name;
-    if (!name || !schemaRef.current) return;
-    // Only react once a field has shown an error; quiet fields stay quiet.
-    if (!clientErrorsRef.current[name]) return;
-    // Fix [7]: sequence guard against out-of-order async resolutions. Capture
-    // currentTarget before the await; the event is gone after the microtask.
-    const seq = (inputSeq.current += 1);
-    const formEl = e.currentTarget as HTMLFormElement; // capture before await
-    const record = collectFormData(new FormData(formEl));
-    const result = await validateWithSchema(schemaRef.current, record);
-    if (seq !== inputSeq.current) return; // superseded by a newer keystroke
-    const fresh = result.ok ? {} : mapIssuesToFields(result.issues);
-    // Fix [2]: re-derive errors for ALL currently-errored fields from the fresh
-    // full-form result, so cross-field schemas clear stale errors on other fields.
-    setClientErrors((prev) => {
-      if (!prev[name]) return prev; // race: field cleared (e.g. by submit) since the guard
-      const next: FieldErrorsMap = {};
-      for (const key of Object.keys(prev)) {
-        if (fresh[key]) next[key] = fresh[key]; // still failing -> keep; otherwise dropped (cleared)
-      }
+  const handleInput = useCallback((e: Event) => {
+    // Quiet before first submit; validating mode is not yet active.
+    if (!hasSubmittedRef.current) return;
+    // Schema-less forms get no live client revalidation; their server errors
+    // clear on the next submit.
+    if (!schemaRef.current) return;
+
+    const name = (e.target as { name?: string } | null)?.name;
+    if (!name) return;
+
+    // Optimistically suppress the server error for this field while the user
+    // is editing it; it re-surfaces on the next submit if still server-invalid.
+    setClearedServerFields((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
       return next;
     });
+
+    // Cancel any in-flight debounce timer.
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Capture the form element synchronously before the timer fires; the
+    // synthetic event object will be gone by the time the callback runs.
+    const formEl = e.currentTarget as HTMLFormElement;
+    const schema = schemaRef.current;
+
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      const seq = (inputSeq.current += 1);
+      const record = collectFormData(new FormData(formEl));
+      void validateWithSchema(schema, record).then((result) => {
+        if (seq !== inputSeq.current) return; // superseded by a newer keystroke
+        setClientErrors(result.ok ? {} : mapIssuesToFields(result.issues));
+      });
+    }, 150);
   }, []);
 
-  // Fix [1]: compose consumer's onInput with the framework's live-clear handler
-  // so both run on every input event. Consumer fires first.
+  // Compose consumer's onInput with the framework's live-clear handler so both
+  // run on every input event. Consumer fires first.
   const composedOnInput: JSX.InputEventHandler<HTMLFormElement> =
     consumerOnInput
       ? (e) => {
           consumerOnInput(e);
-          void handleInput(e);
+          handleInput(e);
         }
-      : (e) => void handleInput(e);
+      : (e) => handleInput(e);
 
   return (
     <form
