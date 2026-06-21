@@ -16,28 +16,6 @@ skipped.
   <MergeRefsDemo />
 </Example>
 
-## Signature
-
-```tsx
-import { mergeRefs } from 'hono-preact-ui';
-
-function mergeRefs<T>(
-  ...refs: (Ref<T> | null | undefined)[]
-): (node: T | null) => void;
-```
-
-It returns a single callback ref. Pass that to an element's `ref`, and every ref
-you merged receives the node.
-
-### Parameters
-
-| Parameter | Type                              | Description                                                                                        |
-| --------- | --------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `...refs` | `(Ref<T> \| null \| undefined)[]` | The refs to combine. Function refs are called, object refs are assigned, nullish refs are skipped. |
-
-Returns a callback ref, `(node: T \| null) => void`, that forwards the node to
-every ref passed in.
-
 ## Example
 
 A field that needs its own ref to the input (to measure or focus it) while also
@@ -68,3 +46,25 @@ export function Field({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
 This is the same helper [`renderElement`](/docs/components/render-element) uses internally to merge a consumer's `ref`
 with the framework's own, so passing a `ref` through the `render` prop always
 keeps both wired up.
+
+## Signature
+
+```tsx
+import { mergeRefs } from 'hono-preact-ui';
+
+function mergeRefs<T>(
+  ...refs: (Ref<T> | null | undefined)[]
+): (node: T | null) => void;
+```
+
+It returns a single callback ref. Pass that to an element's `ref`, and every ref
+you merged receives the node.
+
+### Parameters
+
+| Parameter | Type                              | Description                                                                                        |
+| --------- | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `...refs` | `(Ref<T> \| null \| undefined)[]` | The refs to combine. Function refs are called, object refs are assigned, nullish refs are skipped. |
+
+Returns a callback ref, `(node: T \| null) => void`, that forwards the node to
+every ref passed in.
