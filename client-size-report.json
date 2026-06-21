@@ -100,19 +100,19 @@
   },
   "sectionB": {
     "buckets": {
-      "app": 99546,
-      "actions": 17734,
-      "core": 41705,
-      "components": 106977,
+      "app": 99421,
+      "actions": 17704,
+      "core": 41482,
+      "components": 107014,
       "guards": 250,
-      "middleware": 13094,
+      "middleware": 12997,
       "vendor": 8401,
-      "prefetch": 5288,
-      "loaders": 16634,
-      "streaming": 7656,
+      "prefetch": 5146,
+      "loaders": 16758,
+      "streaming": 7648,
       "transitions": 3992
     },
-    "total": 321277,
+    "total": 320813,
     "unmatched": 51,
     "fileCount": 110
   },
