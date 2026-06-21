@@ -228,8 +228,8 @@ jobs:
           alias="${alias%-}"
           if [ -z "$alias" ]; then alias="pr-${PR_NUMBER}"; fi
           echo "Preview alias: $alias"
-          pnpm --filter site deploy:upload -- --preview-alias "$alias" 2>&1 | tee /tmp/preview-upload.log
-          url="$(grep -ioE "https://${alias}-[a-z0-9.-]*\.workers\.dev" /tmp/preview-upload.log | head -1)"
+          pnpm --filter site exec wrangler versions upload -c dist/hono_preact/wrangler.json --preview-alias "$alias" 2>&1 | tee /tmp/preview-upload.log
+          url="$(grep -ioE "https://${alias}-[a-z0-9.-]+\.workers\.dev" /tmp/preview-upload.log | head -1)"
           if [ -z "$url" ]; then
             echo "Could not find the aliased *.workers.dev preview URL in wrangler output" >&2
             exit 1
