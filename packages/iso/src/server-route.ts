@@ -4,6 +4,9 @@ import {
   type Loader,
   type LoaderCtx,
   type LoaderRef,
+  type LoaderSchemaOpts,
+  type ParamsFromOpts,
+  type SearchFromOpts,
 } from './define-loader.js';
 import type { LoaderCache } from './cache.js';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
@@ -31,9 +34,9 @@ export interface RouteServer<RouteId extends string> {
    * annotation is needed. For a channel-driven live subscription that re-pushes
    * on publish, use `liveLoader` instead.
    */
-  loader<T>(
-    fn: Loader<T, RouteParams<RouteId>>,
-    opts?: Omit<DefineLoaderOpts<T>, 'live'>
+  loader<T, O extends LoaderSchemaOpts = {}>(
+    fn: Loader<T, ParamsFromOpts<O, RouteParams<RouteId>>, SearchFromOpts<O>>,
+    opts?: Omit<DefineLoaderOpts<T>, 'live'> & O
   ): LoaderRef<T, false>;
 
   /**
