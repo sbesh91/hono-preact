@@ -13,8 +13,6 @@ export function nodeAdapter(): HonoPreactAdapter {
       return [nodeBuildPlugin(ctx), nodeDevServerPlugin(ctx)];
     },
     wrapEntry(ctx) {
-      const hasApi = ctx.apiModuleId != null;
-
       // The outer app serves built client assets under /static/* and mounts
       // the framework's core Hono app at the root.
       //
@@ -34,9 +32,6 @@ export function nodeAdapter(): HonoPreactAdapter {
         `import { createNodeWebSocket } from '@hono/node-ws';\n` +
         `import { installWebSocketUpgrader } from 'hono-preact/internal/runtime';\n` +
         `import coreApp from ${JSON.stringify(ctx.coreAppModuleId)};\n` +
-        (hasApi
-          ? `import * as __api from ${JSON.stringify(ctx.apiModuleId)};\n`
-          : '') +
         `\n` +
         `const app = new Hono()\n` +
         `  .use('/static/*', serveStatic({ root: './dist/client' }))\n` +

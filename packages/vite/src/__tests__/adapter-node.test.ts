@@ -38,14 +38,14 @@ describe('nodeAdapter', () => {
     expect(tail).toContain('injectWebSocket(server)');
   });
 
-  it('wrapEntry does not source injectWebSocket from api.ts', () => {
+  it('wrapEntry is api-agnostic: does not import api module', () => {
     const tail = nodeAdapter().wrapEntry({
       ...ctx,
       apiModuleId: '/p/src/api.ts',
     });
-    expect(tail).toContain('/p/src/api.ts');
-    // injectWebSocket comes from createNodeWebSocket, not __api
-    expect(tail).not.toContain('__api.injectWebSocket');
+    // api module is mounted inside createServerEntry, not in the wrapper
+    expect(tail).not.toContain('/p/src/api.ts');
+    expect(tail).not.toContain('__api');
   });
 
   it('wrapEntry omits the api import when there is no api module', () => {
