@@ -9,6 +9,11 @@ import type { LoaderCache } from './cache.js';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 import type { Topic } from './define-channel.js';
 import { subscribeTopic } from './internal/subscribe-topic.js';
+import {
+  defineSocket,
+  type SocketHandler,
+  type SocketRef,
+} from './define-socket.js';
 
 /** Options for a channel-driven live loader bound to a route. */
 export interface LiveLoaderOpts<T, TParams> {
@@ -44,6 +49,14 @@ export interface RouteServer<RouteId extends string> {
   liveLoader<T>(
     opts: LiveLoaderOpts<T, RouteParams<RouteId>>
   ): LoaderRef<T, true>;
+
+  /**
+   * Define a duplex WebSocket bound to this route. `ctx.params` is typed from
+   * the route's pattern. Consume with `useSocket(serverSockets.x)`.
+   */
+  socket<Incoming, Outgoing, Data = undefined>(
+    handler: SocketHandler<Incoming, Outgoing, Data, RouteParams<RouteId>>
+  ): SocketRef<Incoming, Outgoing>;
 }
 
 /**
@@ -68,6 +81,7 @@ export function serverRoute<const RouteId extends RegisteredPaths>(
 ): RouteServer<RouteId> {
   return {
     loader: (fn, opts) => defineLoader(route, fn, opts),
+    socket: (handler) => defineSocket(handler),
     liveLoader: <T>({
       topic,
       load,
