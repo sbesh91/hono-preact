@@ -77,39 +77,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Version derives from the `packageManager` field in package.json.
+      # pnpm and node must be on PATH; compressed-size-action runs install and
+      # the build-script itself for both the PR head and the base ref, then
+      # gzips the matches and posts a single sticky comparison comment.
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build framework packages
-        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
-
-      - name: Build site
-        run: pnpm --filter site build
-
-      - name: Measure PR head
-        run: node scripts/measure-client-size.mjs --out /tmp/fresh-size.json
-
-      - name: Render comment
-        env:
-          # Pins the comment to the commit it measured, so a re-measured sticky
-          # comment is distinguishable from the original at-open one.
-          SIZE_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
-          SIZE_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/render-size-comment.mjs /tmp/fresh-size.json client-size-report.json > /tmp/size-comment.md
-
-      - name: Post sticky comment
-        uses: marocchino/sticky-pull-request-comment@v2
+      - uses: preactjs/compressed-size-action@v2
         with:
-          header: client-size
-          path: /tmp/size-comment.md
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # `size:build` runs `pnpm build` then emits the framework/ui size
+          # probes. The action gzips every match and diffs head vs base.
+          build-script: size:build
+          pattern: 'apps/site/dist/{client,size-probes}/**/*.js'
+          compression: gzip
 
   lighthouse:
     name: Lighthouse
