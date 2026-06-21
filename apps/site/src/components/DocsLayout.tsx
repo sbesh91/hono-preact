@@ -129,6 +129,13 @@ export function DocsLayout({ children }: Props) {
           v{__HONO_PREACT_VERSION__}
         </span>
         <a
+          href="/llms.txt"
+          class="hidden sm:inline text-xs text-muted hover:text-foreground whitespace-nowrap no-underline"
+          title="Plain-text docs for LLMs (llms.txt)"
+        >
+          For LLMs
+        </a>
+        <a
           href="https://github.com/sbesh91/hono-preact"
           target="_blank"
           rel="noreferrer noopener"
