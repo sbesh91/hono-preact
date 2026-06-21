@@ -36,6 +36,20 @@ describe('realtime channel exports', () => {
   });
 });
 
+describe('duplex WebSocket exports', () => {
+  it('exports defineSocket', () => {
+    expect(typeof iso.defineSocket).toBe('function');
+  });
+
+  it('exports useSocket', () => {
+    expect(typeof iso.useSocket).toBe('function');
+  });
+
+  it('exports upgradeWebSocket', () => {
+    expect(typeof iso.upgradeWebSocket).toBe('function');
+  });
+});
+
 describe('active-route detection exports', () => {
   it('exports useRouteMatch', () => {
     expect(typeof iso.useRouteMatch).toBe('function');

@@ -94,11 +94,19 @@ export type { LiveLoaderOpts } from './server-route.js';
 // Duplex WebSocket sockets.
 export { defineSocket } from './define-socket.js';
 export type {
-  SocketDef,
   SocketRef,
   SocketHandler,
   ServerSocket,
 } from './define-socket.js';
+export { useSocket } from './use-socket.js';
+export type {
+  SocketStatus,
+  SocketCloseInfo,
+  ReconnectOpts,
+  UseSocketOpts,
+  UseSocketResult,
+} from './use-socket.js';
+export { upgradeWebSocket } from './upgrade-websocket.js';
 
 // Middleware + outcomes (the new system).
 export {

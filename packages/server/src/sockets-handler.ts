@@ -8,7 +8,8 @@ import {
   getWebSocketUpgrader,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
-import type { AppConfig, SocketDef } from '@hono-preact/iso';
+import type { AppConfig } from '@hono-preact/iso';
+import type { SocketDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
 
 type GlobModule = {

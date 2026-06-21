@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { upgradeWebSocket } from 'hono-preact/upgrade-websocket';
+import { upgradeWebSocket } from 'hono-preact';
 
 const app = new Hono();
 

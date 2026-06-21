@@ -9,7 +9,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: [
-      { find: 'hono-preact/upgrade-websocket', replacement: resolve(__dirname, '../../packages/iso/src/upgrade-websocket.ts') },
       { find: 'hono-preact/internal/runtime', replacement: resolve(__dirname, '../../packages/hono-preact/src/internal-runtime.ts') },
       { find: 'hono-preact/internal', replacement: resolve(__dirname, '../../packages/hono-preact/src/internal.ts') },
       { find: 'hono-preact/server/internal/runtime', replacement: resolve(__dirname, '../../packages/hono-preact/src/server-internal-runtime.ts') },
