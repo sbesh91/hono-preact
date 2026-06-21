@@ -52,6 +52,28 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     };
   }, [headings]);
 
+  // Smooth-scroll in-page instead of letting the anchor do a hard jump (and to
+  // sidestep the router/view-transition entirely). Honors modifier-clicks so
+  // "open in new tab" still works. Updates the hash without a history entry so
+  // it stays shareable without a popstate round-trip.
+  const onLinkClick = (event: MouseEvent, id: string) => {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    ) {
+      return;
+    }
+    const el = document.getElementById(id);
+    if (!el) return;
+    event.preventDefault();
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    history.replaceState(null, '', `#${id}`);
+    setActiveId(id);
+  };
+
   if (headings.length < 2) return null;
 
   return (
@@ -66,6 +88,7 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
             <li key={h.id}>
               <a
                 href={`#${h.id}`}
+                onClick={(e) => onLinkClick(e, h.id)}
                 aria-current={active ? 'true' : undefined}
                 class={`block border-l-2 no-underline leading-snug py-0.5 transition-colors duration-150 ease-out ${
                   h.depth === 3 ? 'pl-6' : 'pl-3'

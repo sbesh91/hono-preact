@@ -2475,6 +2475,11 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-activity
 
 /* rehype-autolink-headings appends this anchor to every heading. Hidden until
    the heading is hovered/focused, so it does not clutter the prose. */
+.mdx-content :is(h1, h2, h3, h4) {
+  /* Land below the 3rem sticky top bar when scrolled to via an anchor (TOC,
+     permalink, deep link) instead of hiding under it. */
+  scroll-margin-top: 4.5rem;
+}
 .mdx-content :is(h2, h3, h4) {
   position: relative;
 }
