@@ -96,9 +96,14 @@ jobs:
       - uses: preactjs/compressed-size-action@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          # `size:build` runs `pnpm build` then emits the framework/ui size
-          # probes. The action gzips every match and diffs head vs base.
-          build-script: size:build
+          # build-script must be `build` (which exists on both refs), NOT a
+          # probe-only script: the action also runs it on the base ref, and a
+          # script that exists only on this branch (e.g. a dedicated size:build)
+          # fails the base build with ERR_PNPM_NO_SCRIPT. `build` builds the app
+          # and emits the framework/ui size probes; the action gzips every match
+          # and diffs head vs base. On the introducing PR the base lacks the
+          # probe emit, so probes show as added; deltas are clean once merged.
+          build-script: build
           pattern: 'apps/site/dist/{client,size-probes}/**/*.js'
           compression: gzip
 
