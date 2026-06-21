@@ -4,6 +4,7 @@ import {
   measureSectionA,
   measureSectionC,
 } from '../measure-framework-size.mjs';
+import { FEATURE_MODULES } from '../size-probe-config.mjs';
 import { resolve } from 'node:path';
 
 const ISO = resolve('packages/iso/dist');
@@ -25,7 +26,7 @@ describe('measureSectionA', () => {
     const a = await measureSectionA(ISO);
     expect(a.core.total).toBeGreaterThan(0);
     expect(a.core.marginal).toBe(a.core.total);
-    for (const bucket of ['loaders', 'actions', 'transitions', 'prefetch', 'streaming', 'head', 'middleware']) {
+    for (const bucket of Object.keys(FEATURE_MODULES)) {
       expect(a[bucket].total).toBeGreaterThan(0);
       expect(a[bucket].marginal).toBeGreaterThanOrEqual(0);
     }
