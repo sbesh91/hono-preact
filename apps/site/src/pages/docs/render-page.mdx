@@ -1,6 +1,6 @@
 # renderPage
 
-`renderPage` is the SSR entry point exported from `hono-preact/server`. It takes a Hono context and a root Preact node, prerenders it to HTML, injects head tags collected by [hoofd](https://github.com/nickvdyck/hoofd), and returns a full HTML response. The framework always emits the `<!doctype html>` prefix and post-processes hoofd-collected head tags into the document's `</head>`. When the rendered root already returns an `<html>` element (the default when [`Layout.tsx`](/docs/structure) uses `<Head>`), `renderPage` skips the outer `<html lang>` wrap and uses your shell as-is.
+Use `renderPage` in your server's catch-all handler to SSR your app. It prerenders the Preact tree to HTML, injects collected head tags, and returns a complete HTTP response, replacing the boilerplate for dispatcher setup, head tag injection, and HTML assembly that would otherwise live in every app's catch-all handler.
 
 ## Usage
 
