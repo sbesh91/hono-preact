@@ -4,13 +4,12 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 // a WebGL2 context obtained from the transferred OffscreenCanvas. These tests
 // drive the message handler with a fake `self`, a fake OffscreenCanvas, and a
 // fake WebGL2 context so we can assert *when* a frame is drawn without a real
-// GPU. `requestAnimationFrame` is stubbed to NOT invoke its callback, so the
-// only draws observed are the synchronous ones the handler performs itself.
-
-type Drawable = { drawArrays: ReturnType<typeof vi.fn> };
+// GPU. `requestAnimationFrame` is captured rather than auto-fired, so the
+// animated loop only advances when a test explicitly flushes a frame; this lets
+// us observe the synchronous draws the handler performs on its own.
 
 function makeFakeGl() {
-  const gl = {
+  return {
     VERTEX_SHADER: 1,
     FRAGMENT_SHADER: 2,
     COMPILE_STATUS: 3,
@@ -43,7 +42,6 @@ function makeFakeGl() {
     uniform1f: vi.fn(),
     drawArrays: vi.fn(),
   };
-  return gl;
 }
 
 function makeSurface(gl: object) {
@@ -57,16 +55,20 @@ type FakeSelf = {
 
 async function loadWorker() {
   const self: FakeSelf = { onmessage: null, postMessage: vi.fn() };
+  const rafCallbacks: FrameRequestCallback[] = [];
   vi.stubGlobal('self', self);
   vi.stubGlobal(
     'requestAnimationFrame',
-    vi.fn(() => 1)
+    vi.fn((cb: FrameRequestCallback) => rafCallbacks.push(cb))
   );
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
   vi.stubGlobal('performance', { now: vi.fn(() => 0) });
   vi.resetModules();
   await import('../shader-worker.ts');
-  return self;
+  // Run one queued animation frame (the loop re-queues itself, so this advances
+  // exactly one paint). Used to get the animated path past its first frame.
+  const flushFrame = () => rafCallbacks.shift()?.(0);
+  return { self, flushFrame };
 }
 
 function init(
@@ -85,28 +87,34 @@ function resize(self: FakeSelf, width: number, height: number) {
   self.onmessage!({ data: { type: 'resize', width, height } } as MessageEvent);
 }
 
+function readyCount(self: FakeSelf) {
+  return self.postMessage.mock.calls.filter(
+    ([msg]) => (msg as { type?: string })?.type === 'ready'
+  ).length;
+}
+
 describe('shader-worker resize handling', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('redraws synchronously when the canvas is resized', async () => {
     const gl = makeFakeGl();
     const surface = makeSurface(gl);
-    const self = await loadWorker();
+    const { self } = await loadWorker();
 
     // Reduced motion draws exactly one static frame on init and does not start
     // a RAF loop, so any further draw must come from the resize handler itself.
     init(self, surface);
-    const before = (gl as Drawable).drawArrays.mock.calls.length;
+    const before = gl.drawArrays.mock.calls.length;
 
     resize(self, 200, 80);
 
-    expect((gl as Drawable).drawArrays.mock.calls.length).toBe(before + 1);
+    expect(gl.drawArrays.mock.calls.length).toBe(before + 1);
   });
 
   it('resizes the drawing buffer and viewport to the new dimensions', async () => {
     const gl = makeFakeGl();
     const surface = makeSurface(gl);
-    const self = await loadWorker();
+    const { self } = await loadWorker();
 
     init(self, surface);
     resize(self, 200, 80);
@@ -119,13 +127,45 @@ describe('shader-worker resize handling', () => {
   it('skips redraw for a no-op resize to the same dimensions', async () => {
     const gl = makeFakeGl();
     const surface = makeSurface(gl);
-    const self = await loadWorker();
+    const { self } = await loadWorker();
 
     init(self, surface, true, 100, 50);
-    const before = (gl as Drawable).drawArrays.mock.calls.length;
+    const before = gl.drawArrays.mock.calls.length;
 
     resize(self, 100, 50);
 
-    expect((gl as Drawable).drawArrays.mock.calls.length).toBe(before);
+    expect(gl.drawArrays.mock.calls.length).toBe(before);
+  });
+
+  it('does not paint or report ready when a resize arrives before the first frame', async () => {
+    const gl = makeFakeGl();
+    const surface = makeSurface(gl);
+    const { self } = await loadWorker();
+
+    // Animated path: init only queues a RAF, so no frame has painted yet and
+    // the canvas is still opacity 0. A resize here must not paint (nothing to
+    // flicker) nor fire the one-time 'ready' from a resize task.
+    init(self, surface, false);
+    expect(gl.drawArrays).not.toHaveBeenCalled();
+
+    resize(self, 200, 80);
+
+    expect(gl.drawArrays).not.toHaveBeenCalled();
+    expect(readyCount(self)).toBe(0);
+  });
+
+  it('repaints on resize once the first animated frame has painted', async () => {
+    const gl = makeFakeGl();
+    const surface = makeSurface(gl);
+    const { self, flushFrame } = await loadWorker();
+
+    init(self, surface, false);
+    flushFrame(); // first painted frame: fires 'ready', clears firstFrame
+    expect(readyCount(self)).toBe(1);
+    const before = gl.drawArrays.mock.calls.length;
+
+    resize(self, 200, 80);
+
+    expect(gl.drawArrays.mock.calls.length).toBe(before + 1);
   });
 });

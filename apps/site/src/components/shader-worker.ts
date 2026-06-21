@@ -178,7 +178,13 @@ self.onmessage = (e: MessageEvent): void => {
       // and without this the gap until the next rAF flashes the page background
       // through the canvas (a visible flicker). Also keeps the reduced-motion
       // path, which has no rAF loop, painted at the new size.
-      drawFrame();
+      //
+      // Only repaint once the first frame has been drawn. Before then the canvas
+      // is still opacity 0 (the main thread fades it in on the 'ready' post), so
+      // a cleared buffer can't flicker, and drawing here would fire 'ready' from
+      // a resize task instead of the first animation frame. Reduced motion draws
+      // its one frame during init, so firstFrame is already false by any resize.
+      if (!firstFrame) drawFrame();
     }
   } else if (msg.type === 'visibility') {
     if (msg.hidden) {
