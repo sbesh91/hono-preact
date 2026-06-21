@@ -41,6 +41,8 @@ describe('iso /internal/runtime door', () => {
       'validateWithSchema',
       'normalizeIssues',
       'mapIssuesToFields',
+      'coerceLoaderLocation',
+      'collectFormData',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());
