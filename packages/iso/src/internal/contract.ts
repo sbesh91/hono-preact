@@ -80,11 +80,17 @@ export const SOCKETS_RPC_PATH = '/__sockets';
 export const SOCKET_MODULE_PARAM = 'm';
 export const SOCKET_NAME_PARAM = 's';
 
+/** Query param carrying the interpolated room key (channel.key(params)) for a room connection. */
+export const SOCKET_ROOM_PARAM = 'r';
+
 /**
  * Client socket-stub descriptor field for the socket name (module reuses
  * FORM_MODULE_FIELD). Consumers: iso form builders and action stubs.
  */
 export const FORM_SOCKET_FIELD = '__socket';
+
+/** Client room-stub descriptor field (the channel name pattern). */
+export const FORM_ROOM_FIELD = '__room';
 
 /**
  * WebSocket close codes (4000-4999 = application-defined).
