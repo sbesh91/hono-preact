@@ -2549,3 +2549,9 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-activity
   font-size: 0.8rem;
   color: var(--muted);
 }
+/* On the highlighted (accent-background) row, --muted has poor contrast. Use a
+   slightly dimmed on-accent foreground so the subtext stays readable in both
+   light and dark modes. */
+.docs-cmdk-option[data-highlighted] .docs-cmdk-option__section {
+  color: color-mix(in oklab, var(--accent-foreground) 80%, var(--accent));
+}
