@@ -4,55 +4,6 @@ Pages often need data. On the server, that data should come from a direct functi
 
 If your loader produces values over time (dashboards, log tails, live feeds), see [Streaming](/docs/streaming).
 
-## How it works
-
-A page is a file pair:
-
-- `movies.server.ts`: the server loaders collected in a `serverLoaders` container. Never reaches the browser bundle.
-- `movies.tsx`: a pure component that consumes each loader's data via `.View()` (or `loader.useData()` inside a `loader.Boundary`) and is exported through `definePage(Component)`.
-
-`definePage(Component)` returns a routable component that self-wraps in `<Page>` with any page-level bindings. The route table in `routes.ts` declares which view and which `.server.ts` live at each URL via the `view` and `server` fields; the framework wires the rest.
-
-**At runtime:**
-
-1. **SSR:** each loader in `serverLoaders` runs directly during `prerender`. Its return value is JSON-serialized and embedded in the page's HTML.
-2. **Hydration (first load):** the client reads that embedded data. No fetch is fired.
-3. **Client-side navigation:** the Vite plugin replaces the `serverLoaders` import with a Proxy stub. Accessing `serverLoaders.name` returns a `LoaderRef` whose RPC stub POSTs `{ module, loader, location }` to `POST /__loaders`. The server runs the real function and returns JSON.
-
-Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: `loader.useData()` and the `.View()` render argument are typed `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error. The same `Serialize<T>` applies to action results (`useAction().data`, `<Form onSuccess>`, `useActionResult()`).
-
-## The `serverLoaders` container
-
-Loaders are exported in a named container symmetric with `serverActions`. Every `.server.*` file uses this shape, whether it has one loader or many:
-
-```ts
-// src/pages/movies.server.ts
-import { defineLoader } from 'hono-preact';
-
-export const serverLoaders = {
-  default: defineLoader(async () => {
-    const movies = await getMovies();
-    return { movies };
-  }),
-};
-```
-
-A single-loader page conventionally uses the key `default`. Multi-loader pages give each loader a descriptive name. There is no special-cased single-loader export; the plugin treats all entries the same way.
-
-## Options
-
-Pass a second argument to `defineLoader` to configure a loader:
-
-| Option          | Type              | Default | Description                                                                              |
-| --------------- | ----------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `params`        | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any.                                |
-| `cache`         | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.                                          |
-| `timeoutMs`     | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                                                |
-| `fallbackDelay` | `number`          | `100`   | Delay (ms) before the loading fallback mounts on a client nav; `0` shows it immediately. |
-| `use`           | `LoaderUse`       | none    | Per-loader middleware and stream observers.                                              |
-
-Each option has a fuller section below; this table is the at-a-glance summary.
-
 ## Example: listing page
 
 Snippets on this page assume:
@@ -190,6 +141,24 @@ defineLoader(async ({ c, location, signal }) => {
 By convention, loaders read; actions write. Setting cookies/headers from a loader is allowed but discouraged.
 
 On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response. Streaming loaders can set cookies too, but only **before their first `yield`**: that part of the loader runs during the server render, while the response headers are still open. Anything written after the first `yield` runs while the stream is already in flight, with headers committed, and is dropped. When in doubt, rotate sessions from an action.
+
+## The `serverLoaders` container
+
+Loaders are exported in a named container symmetric with `serverActions`. Every `.server.*` file uses this shape, whether it has one loader or many:
+
+```ts
+// src/pages/movies.server.ts
+import { defineLoader } from 'hono-preact';
+
+export const serverLoaders = {
+  default: defineLoader(async () => {
+    const movies = await getMovies();
+    return { movies };
+  }),
+};
+```
+
+A single-loader page conventionally uses the key `default`. Multi-loader pages give each loader a descriptive name. There is no special-cased single-loader export; the plugin treats all entries the same way.
 
 ## The `.View()` factory
 
@@ -527,6 +496,23 @@ const { mutate } = useAction(serverActions.addReview, {
 
 `invalidate` accepts an array of loader refs, so a single action can refresh multiple targets: `invalidate: [moviesLoader, ratingsLoader]`. Use `'auto'` instead of an array to invalidate the current page's loader only.
 
+## How it works
+
+A page is a file pair:
+
+- `movies.server.ts`: the server loaders collected in a `serverLoaders` container. Never reaches the browser bundle.
+- `movies.tsx`: a pure component that consumes each loader's data via `.View()` (or `loader.useData()` inside a `loader.Boundary`) and is exported through `definePage(Component)`.
+
+`definePage(Component)` returns a routable component that self-wraps in `<Page>` with any page-level bindings. The route table in `routes.ts` declares which view and which `.server.ts` live at each URL via the `view` and `server` fields; the framework wires the rest.
+
+**At runtime:**
+
+1. **SSR:** each loader in `serverLoaders` runs directly during `prerender`. Its return value is JSON-serialized and embedded in the page's HTML.
+2. **Hydration (first load):** the client reads that embedded data. No fetch is fired.
+3. **Client-side navigation:** the Vite plugin replaces the `serverLoaders` import with a Proxy stub. Accessing `serverLoaders.name` returns a `LoaderRef` whose RPC stub POSTs `{ module, loader, location }` to `POST /__loaders`. The server runs the real function and returns JSON.
+
+Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: `loader.useData()` and the `.View()` render argument are typed `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error. The same `Serialize<T>` applies to action results (`useAction().data`, `<Form onSuccess>`, `useActionResult()`).
+
 ## Timeouts
 
 Loaders get a deadline. By default every call has 30 seconds to finish; the
@@ -584,6 +570,20 @@ Pass `fallbackDelay: 0` to show the fallback immediately. The delay applies in t
 ## The server/client boundary
 
 Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
+
+## Options
+
+Pass a second argument to `defineLoader` to configure a loader:
+
+| Option          | Type              | Default | Description                                                                              |
+| --------------- | ----------------- | ------- | ---------------------------------------------------------------------------------------- |
+| `params`        | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any.                                |
+| `cache`         | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.                                          |
+| `timeoutMs`     | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                                                |
+| `fallbackDelay` | `number`          | `100`   | Delay (ms) before the loading fallback mounts on a client nav; `0` shows it immediately. |
+| `use`           | `LoaderUse`       | none    | Per-loader middleware and stream observers.                                              |
+
+Most options have a dedicated section above; this table is the at-a-glance summary.
 
 ## See also
 

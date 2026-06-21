@@ -46,7 +46,7 @@ apps/site/src/pages/docs/nav.ts
 
 Each MDX file maps to a route: `loaders.mdx` → `/docs/loaders`, etc.
 
-When adding or restructuring a page, also follow the **Page templates** section of the `add-docs-page` skill; the `docs-template-check` hook soft-warns when a page is missing its template's required sections.
+When adding or restructuring a page, also follow the **Page templates** section of the `add-docs-page` skill; the `docs-template-check` hook soft-warns when a page is missing its template's required sections. Pages follow the canonical order (benefit lead -> examples -> nuances -> API reference); the structure gate (`page-structure.test.ts`) enforces it.
 
 ## Red Flags — You Are About to Leave Docs Stale
 

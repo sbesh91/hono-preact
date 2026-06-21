@@ -96,6 +96,7 @@ export default defineConfig({
       'packages/hono-preact/__tests__/**/*.test.{ts,tsx}',
       'packages/create-hono-preact/__tests__/**/*.test.{ts,tsx}',
       'apps/site/src/**/__tests__/**/*.test.{ts,tsx}',
+      'apps/site/scripts/__tests__/**/*.test.{ts,tsx}',
       'scripts/__tests__/**/*.test.mjs',
     ],
     // Type-level tests (`*.test-d.ts`) assert on conditional/template-literal

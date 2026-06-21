@@ -16,33 +16,6 @@ across renders, so you can list it in effect dependencies without re-subscribing
   <UseControllableStateDemo />
 </Example>
 
-## Signature
-
-```tsx
-import { useControllableState } from 'hono-preact-ui';
-
-function useControllableState<T>(opts: {
-  value?: T; // controlled; when defined, the component is controlled
-  defaultValue: T; // uncontrolled initial value
-  onChange?: (value: T) => void;
-}): [T, (next: T) => void];
-```
-
-When `value` is defined the hook is controlled: it reads `value` and never
-updates internal state, so the parent must apply the change. When `value` is
-absent it is uncontrolled, seeded from `defaultValue`. The setter always calls
-`onChange`.
-
-### Options
-
-| Option         | Type                 | Description                                             |
-| -------------- | -------------------- | ------------------------------------------------------- |
-| `value`        | `T`                  | Controlled value. When defined, the hook is controlled. |
-| `defaultValue` | `T`                  | Initial value when uncontrolled.                        |
-| `onChange`     | `(value: T) => void` | Called with the next value on every change.             |
-
-Returns `[value, setValue]`: the current value and a stable setter.
-
 ## Example
 
 A toggle that works controlled or uncontrolled, mirroring how [`Dialog.Root`](/docs/components/dialog)
@@ -87,3 +60,30 @@ const [pressed, setPressed] = useState(false);
 
 The mode is assumed fixed for the component's lifetime, switching controlled and
 uncontrolled does not re-seed internal state, which matches typical usage.
+
+## Signature
+
+```tsx
+import { useControllableState } from 'hono-preact-ui';
+
+function useControllableState<T>(opts: {
+  value?: T; // controlled; when defined, the component is controlled
+  defaultValue: T; // uncontrolled initial value
+  onChange?: (value: T) => void;
+}): [T, (next: T) => void];
+```
+
+When `value` is defined the hook is controlled: it reads `value` and never
+updates internal state, so the parent must apply the change. When `value` is
+absent it is uncontrolled, seeded from `defaultValue`. The setter always calls
+`onChange`.
+
+### Options
+
+| Option         | Type                 | Description                                             |
+| -------------- | -------------------- | ------------------------------------------------------- |
+| `value`        | `T`                  | Controlled value. When defined, the hook is controlled. |
+| `defaultValue` | `T`                  | Initial value when uncontrolled.                        |
+| `onChange`     | `(value: T) => void` | Called with the next value on every change.             |
+
+Returns `[value, setValue]`: the current value and a stable setter.
