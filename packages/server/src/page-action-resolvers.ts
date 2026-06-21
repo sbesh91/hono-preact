@@ -1,4 +1,4 @@
-import type { ServerRoute } from '@hono-preact/iso';
+import type { ServerRoute, StandardSchemaV1 } from '@hono-preact/iso';
 import { findBestPattern } from './route-pattern.js';
 
 type ActionFn = (ctx: unknown, payload: unknown) => Promise<unknown>;
@@ -8,6 +8,7 @@ export type ActionEntry = {
   use: ReadonlyArray<unknown>;
   timeoutMs?: number | false;
   moduleKey: string;
+  input?: StandardSchemaV1;
 };
 
 type ServerModule = {
@@ -31,6 +32,7 @@ function extractActions(
     const metadata = val as {
       use?: ReadonlyArray<unknown>;
       timeoutMs?: number | false;
+      input?: StandardSchemaV1;
     };
     out.push({
       name,
@@ -39,6 +41,7 @@ function extractActions(
         use: metadata.use ?? [],
         timeoutMs: metadata.timeoutMs,
         moduleKey,
+        input: metadata.input,
       },
     });
   }

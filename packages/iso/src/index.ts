@@ -49,6 +49,7 @@ export type {
   UseActionResult,
   MutateResult,
 } from './action.js';
+export type { StandardSchemaV1 } from '@standard-schema/spec';
 export type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 // Hooks.
