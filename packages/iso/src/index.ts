@@ -85,6 +85,12 @@ export { useFormStatus, type FormStatus } from './use-form-status.js';
 export { createCache } from './cache.js';
 export type { LoaderCache } from './cache.js';
 
+// Realtime channels.
+export { defineChannel } from './define-channel.js';
+export type { Channel, Topic } from './define-channel.js';
+export { publish } from './pubsub.js';
+export type { LiveLoaderOpts } from './server-route.js';
+
 // Middleware + outcomes (the new system).
 export {
   defineServerMiddleware,

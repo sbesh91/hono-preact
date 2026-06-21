@@ -5,6 +5,7 @@ import * as contract from '../internal/contract.js';
 const PLUMBING = [
   'installHistoryShim',
   'installNavTransitionScheduler',
+  'installPubSubBackend',
   'installStreamRegistry',
   '__$createLoaderStub_hpiso',
 ] as const;

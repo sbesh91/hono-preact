@@ -7,6 +7,8 @@ export type ParsedLoaderEntry = {
   call: CallExpression;
   /** The opts ObjectExpression if the call has an opts arg; otherwise null. */
   optsArg: ObjectExpression | null;
+  /** Whether this is a live loader (route.liveLoader) or a regular loader. */
+  kind: 'loader' | 'liveLoader';
 };
 
 /**
@@ -26,6 +28,17 @@ export function isLoaderCall(call: CallExpression): boolean {
     !callee.computed &&
     callee.property.type === 'Identifier' &&
     callee.property.name === 'loader'
+  );
+}
+
+/** A `route.liveLoader({...})` / `serverRoute(...).liveLoader({...})` call. */
+export function isLiveLoaderCall(call: CallExpression): boolean {
+  const callee = call.callee;
+  return (
+    callee.type === 'MemberExpression' &&
+    !callee.computed &&
+    callee.property.type === 'Identifier' &&
+    callee.property.name === 'liveLoader'
   );
 }
 
@@ -53,7 +66,7 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
       )
         continue;
 
-      const obj = decl.init as ObjectExpression;
+      const obj = decl.init;
       for (const prop of obj.properties) {
         if (
           prop.type !== 'ObjectProperty' ||
@@ -62,21 +75,30 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
         )
           continue;
 
-        const call = prop.value as CallExpression;
-        if (!isLoaderCall(call)) continue;
+        const call = prop.value;
+        const live = isLiveLoaderCall(call);
+        if (!isLoaderCall(call) && !live) continue;
 
-        // The route-id overload `defineLoader('/r/:id', fn, opts?)` shifts the
-        // opts object to the third argument; the fn-first form keeps it second.
-        const isRouteForm = call.arguments[0]?.type === 'StringLiteral';
-        const optsCandidate = isRouteForm
-          ? call.arguments[2]
-          : call.arguments[1];
+        // route.liveLoader takes a single options object as arg 0; a loader takes
+        // (fn, opts) or the route-id form ('/r/:id', fn, opts). Pick the candidate
+        // node, then narrow it (no cast: a `.type` check narrows the const binding
+        // to ObjectExpression).
+        const isRouteForm =
+          !live && call.arguments[0]?.type === 'StringLiteral';
+        const optsCandidate = live
+          ? call.arguments[0]
+          : isRouteForm
+            ? call.arguments[2]
+            : call.arguments[1];
         const optsArg =
-          optsCandidate?.type === 'ObjectExpression'
-            ? (optsCandidate as ObjectExpression)
-            : null;
+          optsCandidate?.type === 'ObjectExpression' ? optsCandidate : null;
 
-        entries.push({ name: prop.key.name, call, optsArg });
+        entries.push({
+          name: prop.key.name,
+          call,
+          optsArg,
+          kind: live ? 'liveLoader' : 'loader',
+        });
       }
     }
   }
