@@ -1,9 +1,5 @@
 import * as v from 'valibot';
-
-// The priorities and statuses are the canonical sets from demo/data.ts.
-// Valibot's picklist validates membership without a cast.
-const PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
-const STATUSES = ['backlog', 'in_progress', 'in_review', 'done'] as const;
+import { PRIORITIES, STATUSES } from '../../demo/data.js';
 
 export const NewTaskSchema = v.object({
   projectId: v.fallback(v.string(), ''),

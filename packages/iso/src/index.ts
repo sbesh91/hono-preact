@@ -78,7 +78,6 @@ export { Form } from './form.js';
 export { useActionResult, type ActionResult } from './use-action-result.js';
 export { getValidationIssues } from './get-validation-issues.js';
 export type { ValidationIssue } from './validate.js';
-export type { InferSchemaInput, InferSchemaOutput } from './schema-types.js';
 export {
   ActionResultContext,
   type ActionResultContextValue,

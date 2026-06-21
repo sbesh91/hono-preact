@@ -49,6 +49,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
             <input
               name="title"
               placeholder="Short summary"
+              required
               class="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12.5px] text-foreground placeholder:text-muted"
             />
             <FieldError

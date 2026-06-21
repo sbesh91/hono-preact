@@ -1,19 +1,34 @@
 import { Select, Combobox, matchSubstring } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
-import type { TaskStatus, TaskPriority, User } from '../../demo/data.js';
+import {
+  STATUSES,
+  PRIORITIES,
+  type TaskStatus,
+  type TaskPriority,
+  type User,
+} from '../../demo/data.js';
 
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: 'backlog', label: 'Backlog' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'in_review', label: 'In Review' },
-  { value: 'done', label: 'Done' },
-];
-const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-];
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  backlog: 'Backlog',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  done: 'Done',
+};
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  urgent: 'Urgent',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+};
+
+const STATUS_OPTIONS = STATUSES.map((value) => ({
+  value,
+  label: STATUS_LABELS[value],
+}));
+const PRIORITY_OPTIONS = PRIORITIES.map((value) => ({
+  value,
+  label: PRIORITY_LABELS[value],
+}));
 
 const triggerCls =
   'flex w-full items-center rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12.5px] text-foreground placeholder:text-muted';

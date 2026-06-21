@@ -4,8 +4,19 @@
 
 export type User = { id: string; email: string; name: string };
 export type Project = { id: string; slug: string; name: string };
-export type TaskStatus = 'backlog' | 'in_progress' | 'in_review' | 'done';
-export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low';
+
+/** Canonical ordered set of task statuses. Derive `TaskStatus` from this. */
+export const STATUSES = [
+  'backlog',
+  'in_progress',
+  'in_review',
+  'done',
+] as const;
+/** Canonical ordered set of task priorities. Derive `TaskPriority` from this. */
+export const PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
+
+export type TaskStatus = (typeof STATUSES)[number];
+export type TaskPriority = (typeof PRIORITIES)[number];
 export type Task = {
   id: string;
   projectId: string;

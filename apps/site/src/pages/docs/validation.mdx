@@ -170,6 +170,8 @@ Pass `searchSchema` or `paramsSchema` to `defineLoader` to validate and coerce U
 - **`searchSchema` failure** throws 400 (bad query string).
 - **`paramsSchema` failure** throws 404 (the URL does not name a valid resource).
 
+Validation runs on both the SSR path (direct page load) and the client-navigation path (loader RPC fetch). A strict schema with a missing or invalid param surfaces through the loader's error boundary on both paths. Use `.default(...)` for optional search params you want to render rather than error on.
+
 ```ts
 import { defineLoader } from 'hono-preact';
 import { z } from 'zod';
@@ -180,7 +182,10 @@ const tasksLoader = defineLoader(
     // ctx.location.searchParams: { page: number }
     return getTasksPage(ctx.location.searchParams.page);
   },
-  { searchSchema: z.object({ page: z.coerce.number().min(1).default(1) }) }
+  {
+    searchSchema: z.object({ page: z.coerce.number().min(1).default(1) }),
+    params: ['page'],
+  }
 );
 
 // Validate and coerce route params.
@@ -202,6 +207,8 @@ export const serverLoaders = {
 The loader's `ctx.location.searchParams` and `ctx.location.pathParams` types narrow to the schema's output when a schema is present.
 
 **Note:** `useParams()` on the client always returns raw string params from the route match. The coerced types are a loader-side concern only.
+
+**Cache keys and search params:** `searchSchema` does not automatically add params to the client-side cache key. When the loader's data depends on a search param, declare that param in `params` (as shown above for `page`). Without it, navigating `?page=1` to `?page=2` returns the cached page-1 result.
 
 ## API reference
 
@@ -255,13 +262,13 @@ Renders the first error message for `name` inside a `<span data-field-error={nam
 
 ### Types
 
-| Name                   | Description                                                           |
-| ---------------------- | --------------------------------------------------------------------- |
-| `StandardSchemaV1`     | The Standard Schema interface. Any compliant validator implements it. |
-| `ValidationIssue`      | A single normalized validation problem: `{ path, message }`.          |
-| `InferSchemaInput<S>`  | The input type a schema accepts (pre-validation).                     |
-| `InferSchemaOutput<S>` | The output type a schema produces (post-validation / coercion).       |
-| `FieldErrorsMap`       | `Record<string, string[]>`: field name to error messages.             |
+| Name               | Description                                                           |
+| ------------------ | --------------------------------------------------------------------- |
+| `StandardSchemaV1` | The Standard Schema interface. Any compliant validator implements it. |
+| `ValidationIssue`  | A single normalized validation problem: `{ path, message }`.          |
+| `FieldErrorsMap`   | `Record<string, string[]>`: field name to error messages.             |
+
+To infer the input or output type of a schema, use `StandardSchemaV1.InferInput<S>` and `StandardSchemaV1.InferOutput<S>` from the `@standard-schema/spec` package, or the equivalent helpers your schema library provides (e.g. `z.infer<typeof MySchema>` for Zod, `v.InferOutput<typeof MySchema>` for Valibot).
 
 ## Related
 
