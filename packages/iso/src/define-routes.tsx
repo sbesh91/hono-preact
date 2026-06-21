@@ -132,6 +132,14 @@ function joinRoutePath(parentPath: string, childPath: string): string {
   return childPath === '' ? parentPath : parentPath + '/' + childPath;
 }
 
+// Compose inherited page-layer `use` (ancestors outer-first) with a node's own
+// `use`. Returns `base` unchanged when the node declares none, so the common
+// no-own-use path allocates nothing. Shared by the tree walkers that thread the
+// composed `use` down the tree (previously duplicated verbatim in three).
+function composeUse(base: PageUse, own: PageUse | undefined): PageUse {
+  return own ? [...base, ...own] : base;
+}
+
 type RouteRuleCtx = {
   hasView: boolean;
   hasLayout: boolean;
@@ -274,7 +282,7 @@ function collectRouteUse(
   const out: Array<{ path: string; use: PageUse }> = [];
   for (const r of routes) {
     const here = joinRoutePath(parentPath, r.path);
-    const composed: PageUse = r.use ? [...inherited, ...r.use] : inherited;
+    const composed: PageUse = composeUse(inherited, r.use);
     // Emit one entry per server-bearing node (same key set as
     // `collectServerRoutes`): those are the only RPC targets. Ancestor `use`
     // from view/layout/grouping nodes with no server module is already folded
@@ -447,8 +455,12 @@ function deriveLayoutLocation(
     .join('/');
   const finalPath = '/' + path;
   const filteredParams: Record<string, string> = {};
-  for (const k of Object.keys(params)) {
-    if (k !== 'rest' && k !== '0') filteredParams[k] = params[k] as string;
+  for (const [k, v] of Object.entries(params)) {
+    // Drop the catch-all keys. `pathParams` is typed `Record<string, string>`,
+    // so the old `as string` was redundant; the `v !== undefined` guard also
+    // omits the `undefined` the matcher can store for an unmatched optional/rest
+    // param (the static `string` type does not reflect that).
+    if (k !== 'rest' && k !== '0' && v !== undefined) filteredParams[k] = v;
   }
   return {
     ...active,
@@ -473,9 +485,7 @@ function buildInnerRoutes(
 ): VNode<any>[] {
   const nodes: VNode<any>[] = [];
   for (const child of children) {
-    const ownUse: PageUse = child.use
-      ? [...pendingUse, ...child.use]
-      : pendingUse;
+    const ownUse: PageUse = composeUse(pendingUse, child.use);
     if (child.view) {
       const component = withLeafGuard(
         getOrCreateLazyView(child.view, child.server, viewCache),
@@ -534,7 +544,7 @@ function flattenTree(
   const out: FlatRoute[] = [];
   for (const r of routes) {
     const here = joinRoutePath(parentPath, r.path);
-    const ownUse: PageUse = r.use ? [...pendingUse, ...r.use] : pendingUse;
+    const ownUse: PageUse = composeUse(pendingUse, r.use);
 
     if (r.view) {
       const component = withLeafGuard(
