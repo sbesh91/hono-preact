@@ -124,7 +124,17 @@ export function createRoomWsEvents(
         try {
           // Sanctioned untrusted-wire JSON.parse: the client sends the channel
           // key params as a JSON object; values are strings (channel param slots).
-          params = JSON.parse(rawR) as Record<string, string>; // sanctioned: untrusted wire JSON boundary
+          const parsed: unknown = JSON.parse(rawR);
+          // `JSON.parse('null')` succeeds but returns null, and `null["key"]`
+          // throws a TypeError. Coerce any non-plain-object result to {} so the
+          // required-param validation below denies cleanly via WS_DENY_CODE
+          // instead of throwing. Numbers, strings, and arrays also fall to {}.
+          params =
+            parsed !== null &&
+            typeof parsed === 'object' &&
+            !Array.isArray(parsed)
+              ? (parsed as Record<string, string>) // sanctioned: untrusted wire JSON boundary
+              : {};
         } catch {
           ws.close(WS_DENY_CODE, 'invalid room params');
           return;

@@ -509,6 +509,33 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
   });
 
+  it('r="null" (valid JSON, non-object) closes WS_DENY_CODE and does not join', async () => {
+    // JSON.parse('null') returns null; null["roomId"] would throw a TypeError
+    // if the guard were absent. The fix coerces non-plain-object parse results
+    // to {} so the required-param check denies cleanly.
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const onJoinSpy = vi.fn();
+    const app = makeApp(makeRoomRegistry({ onJoin: onJoinSpy }));
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent('null')}`
+    );
+    const a = conns()[0]!;
+
+    // Must not throw; the promise must resolve cleanly.
+    await expect(
+      a.events.onOpen?.(new Event('open'), a.ws as never)
+    ).resolves.toBeUndefined();
+
+    expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(onJoinSpy).not.toHaveBeenCalled();
+    expect(roomMembers(TOPIC)).toHaveLength(0);
+  });
+
   it('(security) client key params are constrained to the channel namespace', async () => {
     // A client for the `room/:roomId` channel sends params for `roomId=demo`.
     // The server interpolates the topic as `room/demo`, bound to the channel's
