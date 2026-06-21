@@ -131,12 +131,10 @@ The client has only `send`. There is no client-side `broadcast` because fan-out 
 The guard chain for a room is: app `use` (from `defineApp({ use })`) then route-node `use` (from `serverRoute`, if the room lives next to a route) then the room's own `use`:
 
 ```ts
-const route = serverRoute('/board/:boardId');
-
 export const serverRooms = {
   cursors: defineRoom(cursorsChannel, {
-    // Room-specific guard runs after any route-node guard.
-    use: [route.use],
+    // The room's own guard, composed after the inherited app and route-node use.
+    use: [requireBoardAccess],
     // ...
   }),
 };
