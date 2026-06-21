@@ -170,7 +170,16 @@ self.onmessage = (e: MessageEvent): void => {
       surface.width = width;
       surface.height = height;
     }
-    if (gl) gl.viewport(0, 0, width, height);
+    if (gl) {
+      gl.viewport(0, 0, width, height);
+      // Reassigning the canvas size above reallocates and clears the drawing
+      // buffer. Repaint in the same task so the cleared (transparent) buffer is
+      // never composited: during a window drag ResizeObserver fires rapidly,
+      // and without this the gap until the next rAF flashes the page background
+      // through the canvas (a visible flicker). Also keeps the reduced-motion
+      // path, which has no rAF loop, painted at the new size.
+      drawFrame();
+    }
   } else if (msg.type === 'visibility') {
     if (msg.hidden) {
       cancelAnimationFrame(rafId);
