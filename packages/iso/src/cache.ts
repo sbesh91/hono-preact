@@ -1,4 +1,3 @@
-import type { Loader } from './define-loader.js';
 import type { ActionResolution } from './internal/action-envelope.js';
 import { isBrowser } from './is-browser.js';
 
@@ -6,7 +5,6 @@ export interface LoaderCache<T> {
   get(locKey?: string): T | null;
   set(value: T, locKey?: string): void;
   has(locKey?: string): boolean;
-  wrap(loader: Loader<T>): Loader<T>;
   invalidate(): void;
 }
 
@@ -170,17 +168,6 @@ export function createCache<T>(): LoaderCache<T> {
     has(locKey) {
       const entry = readEntry();
       return entry !== null && entryMatches(entry, locKey);
-    },
-    wrap(loader) {
-      // Cast to Promise<T>: Task 11 will add a runtime adapter for generators/streams.
-      // wrap() writes without a locKey so existing callers remain back-compat.
-      return async (props) => {
-        const entry = readEntry();
-        if (entry !== null) return entry.value;
-        const result = await (loader(props) as Promise<T>);
-        writeEntry({ value: result, locKey: null });
-        return result;
-      };
     },
     invalidate() {
       writeEntry(null);

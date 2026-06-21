@@ -1,6 +1,7 @@
 import type { Plugin, ViteBuilder, ViteDevServer } from 'vite';
 import { createServerModuleRunner } from 'vite';
 import type { HonoPreactAdapterContext } from './adapter.js';
+import { toFetchRequest, writeFetchResponse } from './node-request.js';
 
 export function nodeBuildPlugin(ctx: HonoPreactAdapterContext): Plugin {
   return {
@@ -88,40 +89,9 @@ export function nodeDevServerPlugin(ctx: HonoPreactAdapterContext): Plugin {
             ctx.entryWrapperId
           )) as { default: { fetch: (request: Request) => Promise<Response> } };
 
-          const url = `http://${req.headers.host}${req.url}`;
-          const method = req.method ?? 'GET';
-          const headers = new Headers();
-          for (const [k, v] of Object.entries(req.headers)) {
-            if (typeof v === 'string') headers.set(k, v);
-            else if (Array.isArray(v)) v.forEach((vv) => headers.append(k, vv));
-          }
-          let body: ArrayBuffer | undefined;
-          if (method !== 'GET' && method !== 'HEAD') {
-            const chunks: Buffer[] = [];
-            for await (const c of req) chunks.push(c as Buffer);
-            if (chunks.length) {
-              const buf = Buffer.concat(chunks);
-              // Copy into a fresh ArrayBuffer: BodyInit accepts ArrayBuffer,
-              // and this sidesteps Buffer<ArrayBufferLike> typing friction.
-              body = buf.buffer.slice(
-                buf.byteOffset,
-                buf.byteOffset + buf.byteLength
-              ) as ArrayBuffer;
-            }
-          }
-          const request = new Request(url, { method, headers, body });
+          const request = await toFetchRequest(req);
           const response = await app.fetch(request);
-          res.statusCode = response.status;
-          response.headers.forEach((value, key) => res.setHeader(key, value));
-          if (response.body) {
-            const reader = response.body.getReader();
-            for (;;) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              res.write(value);
-            }
-          }
-          res.end();
+          await writeFetchResponse(res, response);
         } catch (err) {
           next(err);
         }

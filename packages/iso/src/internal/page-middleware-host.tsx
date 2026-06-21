@@ -73,8 +73,7 @@ function startChain(
     ctx: {
       scope: 'page',
       c: honoCtx,
-      signal: (honoCtx.req?.raw?.signal ??
-        new AbortController().signal) as AbortSignal,
+      signal: honoCtx.req?.raw?.signal ?? new AbortController().signal,
       location,
     },
     inner: async () => undefined,
