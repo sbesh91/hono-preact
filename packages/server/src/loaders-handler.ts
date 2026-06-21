@@ -1,4 +1,4 @@
-import type { Context, MiddlewareHandler } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import {
   isOutcome,
   timeoutOutcome,
@@ -7,7 +7,10 @@ import {
   type StandardSchemaV1,
 } from '@hono-preact/iso';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
-import { coerceLoaderLocation } from '@hono-preact/iso/internal/runtime';
+import {
+  coerceLoaderLocation,
+  type LooseLoaderFn,
+} from '@hono-preact/iso/internal/runtime';
 import { composeServerChain } from './compose-server-chain.js';
 import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
@@ -35,18 +38,8 @@ type SerializedLocation = {
   searchParams: Record<string, string>;
 };
 
-type LoaderFn = (props: {
-  c: Context;
-  location: {
-    path: string;
-    pathParams: unknown;
-    searchParams: unknown;
-  };
-  signal: AbortSignal;
-}) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
-
 type LoaderEntry = {
-  fn: LoaderFn;
+  fn: LooseLoaderFn;
   use: ReadonlyArray<unknown>;
   timeoutMs?: number | false;
   searchSchema?: StandardSchemaV1;
@@ -74,10 +67,13 @@ async function buildLoadersMap(
         //      property carries the original loader and `.use` carries any
         //      attached middleware/observers.
         if (typeof val === 'function') {
-          result[`${moduleKey}::${name}`] = { fn: val as LoaderFn, use: [] };
+          result[`${moduleKey}::${name}`] = {
+            fn: val as LooseLoaderFn,
+            use: [],
+          };
         } else if (val && typeof (val as { fn?: unknown }).fn === 'function') {
           const ref = val as {
-            fn: LoaderFn;
+            fn: LooseLoaderFn;
             use?: ReadonlyArray<unknown>;
             timeoutMs?: number | false;
             searchSchema?: StandardSchemaV1;

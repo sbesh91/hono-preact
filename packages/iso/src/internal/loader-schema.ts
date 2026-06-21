@@ -1,6 +1,21 @@
+import type { Context } from 'hono';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { validateWithSchema } from '../validate.js';
 import { deny } from '../outcomes.js';
+
+/**
+ * Loose view of a loader function for the post-coercion call seam: location
+ * params are `unknown` because the schema output type is erased at the ref
+ * (the public `Loader<T, TParams, TSearch>` generic carried it to the loader
+ * author). Reading `loaderRef.fn` as this type is the sanctioned
+ * structural-read boundary used by BOTH loader execution paths (SSR
+ * loader-runner + RPC loaders-handler) so the two cannot diverge.
+ */
+export type LooseLoaderFn = (props: {
+  c: Context;
+  location: { path: string; pathParams: unknown; searchParams: unknown };
+  signal: AbortSignal;
+}) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
 
 /**
  * Validate + coerce a loader's path/search params against its schemas. Throws
