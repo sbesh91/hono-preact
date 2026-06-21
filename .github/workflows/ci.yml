@@ -213,12 +213,25 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Branch name and PR number pass through env, never interpolated into
+          # the run script, so an attacker-influenced ref cannot inject shell.
+          # The sanitized alias below contains only [a-z0-9-].
+          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -o pipefail
-          pnpm --filter site deploy:upload 2>&1 | tee /tmp/preview-upload.log
-          url="$(grep -ioE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/preview-upload.log | head -1)"
+          # Sanitize the branch into a valid DNS label for the preview alias:
+          # lowercase, non-alphanumeric runs -> '-', trim, then cap so that
+          # "<alias>-hono-preact" stays within the 63-char DNS limit (alias <= 51).
+          alias="$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+          alias="${alias:0:51}"
+          alias="${alias%-}"
+          if [ -z "$alias" ]; then alias="pr-${PR_NUMBER}"; fi
+          echo "Preview alias: $alias"
+          pnpm --filter site deploy:upload -- --preview-alias "$alias" 2>&1 | tee /tmp/preview-upload.log
+          url="$(grep -ioE "https://${alias}-[a-z0-9.-]*\.workers\.dev" /tmp/preview-upload.log | head -1)"
           if [ -z "$url" ]; then
-            echo "Could not find a *.workers.dev preview URL in wrangler output" >&2
+            echo "Could not find the aliased *.workers.dev preview URL in wrangler output" >&2
             exit 1
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
