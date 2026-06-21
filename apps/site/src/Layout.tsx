@@ -14,6 +14,12 @@ export default function Layout({ children }: { children: ComponentChildren }) {
       <Head defaultTitle="hono-preact">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <link rel="stylesheet" href={root} />
+        <link
+          rel="alternate"
+          type="text/plain"
+          href="/llms.txt"
+          title="llms.txt"
+        />
       </Head>
       <body class="bg-background text-foreground font-sans antialiased isolate">
         <main id="app">{children}</main>
