@@ -56,3 +56,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Audit trail for the run: record what ref/commit went live. Most useful
+      # for manual workflow_dispatch deploys (which ship current main HEAD, not
+      # a tag). Runs only after the deploy step above succeeds.
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Docs site deployed"
+            echo ""
+            echo "- **Trigger:** \`${{ github.event_name }}\`"
+            echo "- **Ref:** \`${{ github.ref_name }}\`"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+            echo "- **Site:** https://framework.sbesh.com"
+          } >> "$GITHUB_STEP_SUMMARY"
