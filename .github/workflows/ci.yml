@@ -182,13 +182,6 @@ jobs:
       - name: Build all packages and app
         run: pnpm build
 
-      - name: Measure client size baseline
-        run: |
-          node scripts/measure-client-size.mjs \
-            --append-history \
-            --sha "$GITHUB_SHA" \
-            --date "$(git show -s --format=%cI "$GITHUB_SHA")"
-
       - name: Measure Lighthouse baseline
         # Soft: a wrangler/Chrome/LHCI hiccup must not block the client-size
         # baseline commit or the `next` tag move below. The PR `lighthouse` job
@@ -215,9 +208,9 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          if ! git diff --quiet client-size-report.json client-size-history.jsonl lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json; then
-            git add client-size-report.json client-size-history.jsonl lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
-            git commit -m "chore(metrics): update size + lighthouse baselines [skip ci]"
+          if ! git diff --quiet lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json; then
+            git add lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
+            git commit -m "chore(metrics): update lighthouse baselines [skip ci]"
             git push origin HEAD:main
           fi
 
