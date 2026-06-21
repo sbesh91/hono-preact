@@ -1,18 +1,9 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/preact';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, cleanup, waitFor } from '@testing-library/preact';
 import { TableOfContents } from '../TableOfContents.js';
 import type { DocHeading } from '../../../llms/generate-docs-index.js';
 
-beforeAll(() => {
-  // happy-dom lacks IntersectionObserver; stub a no-op.
-  (
-    globalThis as unknown as { IntersectionObserver: unknown }
-  ).IntersectionObserver = class {
-    observe() {}
-    disconnect() {}
-  };
-});
 afterEach(cleanup);
 
 const headings: DocHeading[] = [
@@ -30,5 +21,14 @@ describe('TableOfContents', () => {
   it('renders nothing when there are fewer than two headings', () => {
     const { container } = render(<TableOfContents headings={[headings[0]]} />);
     expect(container.querySelector('nav')).toBeNull();
+  });
+
+  it('always marks exactly one entry active (scroll-spy)', async () => {
+    const { container } = render(<TableOfContents headings={headings} />);
+    await waitFor(() =>
+      expect(container.querySelectorAll('[aria-current="true"]')).toHaveLength(
+        1
+      )
+    );
   });
 });
