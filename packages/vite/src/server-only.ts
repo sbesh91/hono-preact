@@ -12,7 +12,11 @@ import {
   type DynamicServerImport,
 } from './ast-walkers.js';
 import { extractServerLoadersMeta } from './source-extraction.js';
-import { loaderStubSource, actionStubSource } from './stub-templates.js';
+import {
+  loaderStubSource,
+  actionStubSource,
+  socketStubSource,
+} from './stub-templates.js';
 
 // The unknown-specifier rejection message lists every recognized server
 // export so a user can immediately see the valid set. The list is derived
@@ -83,6 +87,7 @@ export function serverOnlyPlugin(): Plugin {
       const s = new MagicString(code);
       let needsCreateLoaderStubImport = false;
       let needsUseActionImport = false;
+      let needsUseSocketImport = false;
 
       for (const serverImport of [...serverImports].reverse()) {
         // `import type { … } from './x.server'` is erased entirely. @babel/types
@@ -141,6 +146,13 @@ export function serverOnlyPlugin(): Plugin {
           ) {
             needsUseActionImport = true;
             stubs.push(actionStubSource(specifier.local.name, moduleKey));
+          } else if (
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name === 'serverSockets'
+          ) {
+            needsUseSocketImport = true;
+            stubs.push(socketStubSource(specifier.local.name, moduleKey));
           } else {
             const importedName =
               specifier.type === 'ImportSpecifier' &&
@@ -187,6 +199,11 @@ export function serverOnlyPlugin(): Plugin {
       if (needsUseActionImport) {
         s.prepend(
           `import { useAction as __$useAction_hpiso } from 'hono-preact';\n`
+        );
+      }
+      if (needsUseSocketImport) {
+        s.prepend(
+          `import { useSocket as __$useSocket_hpiso } from 'hono-preact';\n`
         );
       }
 

@@ -108,3 +108,6 @@ export {
 // loader/action response as typed events in tests and advanced consumers.
 export { readSSE } from './internal/sse-decoder.js';
 export type { SSEEvent } from './internal/sse-decoder.js';
+
+// Server-internal registry plumbing. Not part of the public API surface.
+export type { SocketDef } from './define-socket.js';

@@ -65,3 +65,30 @@ export const LOADER_NAME_OPTION = '__loaderName';
  */
 export const FORM_MODULE_FIELD = '__module';
 export const FORM_ACTION_FIELD = '__action';
+
+/**
+ * The socket-upgrade endpoint (a header-only GET; selectors ride the query).
+ * Consumers: iso `ws-upgrader.ts` (the seam reads this), server
+ * `page-action-handler.ts` (the generated route registration).
+ */
+export const SOCKETS_RPC_PATH = '/__sockets';
+
+/**
+ * Query params selecting which socket: module key + socket name. Consumers:
+ * iso `ws-upgrader.ts` (query-param constants), server routes (query reads).
+ */
+export const SOCKET_MODULE_PARAM = 'm';
+export const SOCKET_NAME_PARAM = 's';
+
+/**
+ * Client socket-stub descriptor field for the socket name (module reuses
+ * FORM_MODULE_FIELD). Consumers: iso form builders and action stubs.
+ */
+export const FORM_SOCKET_FIELD = '__socket';
+
+/**
+ * WebSocket close codes (4000-4999 = application-defined).
+ * 4403 Forbidden; 4408 Timeout.
+ */
+export const WS_DENY_CODE = 4403;
+export const WS_TIMEOUT_CODE = 4408;
