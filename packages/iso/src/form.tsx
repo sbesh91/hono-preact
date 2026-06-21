@@ -9,6 +9,7 @@ import {
 import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
+import { collectFormData } from './internal/form-data.js';
 import { setLastActionResult } from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
@@ -85,23 +86,6 @@ function hasOptimisticBrand<TPayload, TResult>(
   return OPTIMISTIC_BRAND in action;
 }
 
-function collectFormData(
-  fd: FormData
-): Record<string, FormDataEntryValue | FormDataEntryValue[]> {
-  const out: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
-  for (const [key, value] of fd.entries()) {
-    if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD) continue;
-    const existing = out[key];
-    out[key] =
-      existing === undefined
-        ? value
-        : Array.isArray(existing)
-          ? [...existing, value]
-          : [existing, value];
-  }
-  return out;
-}
-
 export function Form<TPayload, TResult>({
   action,
   children,
@@ -110,6 +94,7 @@ export function Form<TPayload, TResult>({
   invalidate,
   reset,
   schema,
+  onInput: consumerOnInput,
   ...rest
 }: FormProps<TPayload, TResult>) {
   const [pending, setPending] = useState(false);
@@ -118,6 +103,7 @@ export function Form<TPayload, TResult>({
   clientErrorsRef.current = clientErrors;
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
+  const inputSeq = useRef(0);
 
   const moduleKey = action.__module;
   const actionName = action.__action;
@@ -133,11 +119,17 @@ export function Form<TPayload, TResult>({
   // Server-returned validation issues (deny 422) for this action, if any.
   const plainStub = hasOptimisticBrand(action) ? undefined : action;
   const serverResult = useActionResult(plainStub);
-  const fieldErrors = useMemo<FieldErrorsMap>(() => {
-    const server = mapIssuesToFields(getValidationIssues(serverResult));
+  // Split into two memos: server errors only recompute when the server result
+  // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
+  const serverErrors = useMemo<FieldErrorsMap>(
+    () => mapIssuesToFields(getValidationIssues(serverResult)),
+    [serverResult]
+  );
+  const fieldErrors = useMemo<FieldErrorsMap>(
     // Client pre-validation reflects the most recent interaction, so it wins.
-    return { ...server, ...clientErrors };
-  }, [serverResult, clientErrors]);
+    () => ({ ...serverErrors, ...clientErrors }),
+    [serverErrors, clientErrors]
+  );
 
   const handleSubmit = useCallback(
     async (e: Event) => {
@@ -281,18 +273,35 @@ export function Form<TPayload, TResult>({
     if (!name || !schemaRef.current) return;
     // Only react once a field has shown an error; quiet fields stay quiet.
     if (!clientErrorsRef.current[name]) return;
+    // Fix [7]: sequence guard against out-of-order async resolutions. Capture
+    // currentTarget before the await; the event is gone after the microtask.
+    const seq = (inputSeq.current += 1);
     const formEl = e.currentTarget as HTMLFormElement; // capture before await
     const record = collectFormData(new FormData(formEl));
     const result = await validateWithSchema(schemaRef.current, record);
+    if (seq !== inputSeq.current) return; // superseded by a newer keystroke
     const fresh = result.ok ? {} : mapIssuesToFields(result.issues);
+    // Fix [2]: re-derive errors for ALL currently-errored fields from the fresh
+    // full-form result, so cross-field schemas clear stale errors on other fields.
     setClientErrors((prev) => {
-      if (!prev[name]) return prev; // field already cleared (e.g. by a submit); don't revive it
-      const next = { ...prev };
-      if (fresh[name]) next[name] = fresh[name];
-      else delete next[name];
+      if (!prev[name]) return prev; // race: field cleared (e.g. by submit) since the guard
+      const next: FieldErrorsMap = {};
+      for (const key of Object.keys(prev)) {
+        if (fresh[key]) next[key] = fresh[key]; // still failing -> keep; otherwise dropped (cleared)
+      }
       return next;
     });
   }, []);
+
+  // Fix [1]: compose consumer's onInput with the framework's live-clear handler
+  // so both run on every input event. Consumer fires first.
+  const composedOnInput: JSX.InputEventHandler<HTMLFormElement> =
+    consumerOnInput
+      ? (e) => {
+          consumerOnInput(e);
+          void handleInput(e);
+        }
+      : (e) => void handleInput(e);
 
   return (
     <form
@@ -300,7 +309,7 @@ export function Form<TPayload, TResult>({
       method="post"
       enctype="multipart/form-data"
       onSubmit={handleSubmit}
-      onInput={handleInput}
+      onInput={composedOnInput}
     >
       <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
       <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />

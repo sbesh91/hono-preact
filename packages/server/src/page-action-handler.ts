@@ -19,6 +19,7 @@ import {
   FORM_ACTION_FIELD,
   VALIDATION_ISSUES_KEY,
   validateWithSchema,
+  collectFormData,
 } from '@hono-preact/iso/internal/runtime';
 import { applyOutcomeHeaders } from './outcome-translation.js';
 import {
@@ -123,19 +124,7 @@ async function parseBody(
         status: 400,
       };
     }
-    const payload: Record<string, FormDataEntryValue | FormDataEntryValue[]> =
-      {};
-    for (const [key, value] of fd.entries()) {
-      if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD) continue;
-      const existing = payload[key];
-      if (existing !== undefined) {
-        payload[key] = Array.isArray(existing)
-          ? [...existing, value]
-          : [existing, value];
-      } else {
-        payload[key] = value;
-      }
-    }
+    const payload = collectFormData(fd);
     return { module: m, action: a, payload };
   }
   return {

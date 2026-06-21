@@ -21,3 +21,4 @@ export {
 } from './validate.js';
 export { env } from './is-browser.js';
 export { coerceLoaderLocation } from './internal/loader-schema.js';
+export { collectFormData } from './internal/form-data.js';
