@@ -66,7 +66,7 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
       )
         continue;
 
-      const obj = decl.init as ObjectExpression;
+      const obj = decl.init;
       for (const prop of obj.properties) {
         if (
           prop.type !== 'ObjectProperty' ||
@@ -75,28 +75,23 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
         )
           continue;
 
-        const call = prop.value as CallExpression;
+        const call = prop.value;
         const live = isLiveLoaderCall(call);
         if (!isLoaderCall(call) && !live) continue;
 
-        // route.liveLoader takes a single options object; loaders take (fn, opts) or
-        // ('/r/:id', fn, opts).
-        let optsArg: ObjectExpression | null = null;
-        if (live) {
-          optsArg =
-            call.arguments[0]?.type === 'ObjectExpression'
-              ? (call.arguments[0] as ObjectExpression)
-              : null;
-        } else {
-          const isRouteForm = call.arguments[0]?.type === 'StringLiteral';
-          const optsCandidate = isRouteForm
+        // route.liveLoader takes a single options object as arg 0; a loader takes
+        // (fn, opts) or the route-id form ('/r/:id', fn, opts). Pick the candidate
+        // node, then narrow it (no cast: a `.type` check narrows the const binding
+        // to ObjectExpression).
+        const isRouteForm =
+          !live && call.arguments[0]?.type === 'StringLiteral';
+        const optsCandidate = live
+          ? call.arguments[0]
+          : isRouteForm
             ? call.arguments[2]
             : call.arguments[1];
-          optsArg =
-            optsCandidate?.type === 'ObjectExpression'
-              ? (optsCandidate as ObjectExpression)
-              : null;
-        }
+        const optsArg =
+          optsCandidate?.type === 'ObjectExpression' ? optsCandidate : null;
 
         entries.push({
           name: prop.key.name,
