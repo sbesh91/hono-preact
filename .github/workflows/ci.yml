@@ -183,9 +183,9 @@ jobs:
         run: pnpm build
 
       - name: Measure Lighthouse baseline
-        # Soft: a wrangler/Chrome/LHCI hiccup must not block the client-size
-        # baseline commit or the `next` tag move below. The PR `lighthouse` job
-        # is the canary for genuine Lighthouse breakage.
+        # Soft: a wrangler/Chrome/LHCI hiccup must not block the `next` tag
+        # move below. The PR `lighthouse` job is the canary for genuine
+        # Lighthouse breakage.
         continue-on-error: true
         run: |
           set -o pipefail

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Extracts Lighthouse scores from an LHCI `.lighthouseci/` run into the
-// committed report/history/badge files. Writes the committed Lighthouse report/history/badge files.
+// committed report/history/badge files.
 // Pure functions for testing + a CLI block.
 //
 // Usage:
