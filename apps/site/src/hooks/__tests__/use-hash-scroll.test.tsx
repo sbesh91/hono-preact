@@ -1,50 +1,107 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup, waitFor } from '@testing-library/preact';
+import { render, cleanup } from '@testing-library/preact';
+import type { ViewTransitionLifecycle } from 'hono-preact';
+
+// Capture the lifecycle object the hook registers so tests can fire the
+// afterSwap / afterTransition phases directly. The real View Transition timing
+// (and the mid-transition scroll no-op this hook works around) only happens in a
+// browser with a compositor, so a happy-dom test verifies the wiring: that the
+// hook scrolls on mount, on hashchange, and in each post-swap phase.
+const hoisted = vi.hoisted(() => ({
+  lifecycle: null as ViewTransitionLifecycle | null,
+}));
+vi.mock('hono-preact', () => ({
+  useViewTransitionLifecycle: (lifecycle: ViewTransitionLifecycle) => {
+    hoisted.lifecycle = lifecycle;
+  },
+}));
+
 import { useHashScroll } from '../use-hash-scroll.js';
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
-  window.location.hash = '';
+  hoisted.lifecycle = null;
+  window.history.replaceState(null, '', '/');
 });
 
-function Harness({ path }: { path: string }) {
-  useHashScroll(path);
+function Harness() {
+  useHashScroll();
   return null;
 }
 
+function presentTarget(id: string) {
+  const el = document.createElement('h2');
+  el.id = id;
+  const spy = vi.fn();
+  el.scrollIntoView = spy;
+  document.body.appendChild(el);
+  return { el, spy };
+}
+
 describe('useHashScroll', () => {
-  it('scrolls a present hash target into view on mount', () => {
-    const target = document.createElement('h2');
-    target.id = 'options';
-    const spy = vi.fn();
-    target.scrollIntoView = spy;
-    document.body.appendChild(target);
+  it('scrolls to the live hash on mount (deep link / full page load)', () => {
     window.location.hash = '#options';
-
-    render(<Harness path="/docs/loaders" />);
-    expect(spy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-    target.remove();
+    const { el, spy } = presentTarget('options');
+    render(<Harness />);
+    expect(spy).toHaveBeenCalledWith({ block: 'start' });
+    el.remove();
   });
 
-  it('does nothing without a hash', () => {
-    expect(() => render(<Harness path="/docs/loaders" />)).not.toThrow();
+  it('does nothing on mount when there is no hash', () => {
+    const { el, spy } = presentTarget('options');
+    render(<Harness />);
+    expect(spy).not.toHaveBeenCalled();
+    el.remove();
   });
 
-  it('waits for a cold-loaded target to mount, then scrolls once', async () => {
+  it('scrolls on an address-bar hashchange', () => {
+    const { el, spy } = presentTarget('timeouts');
+    render(<Harness />);
+    expect(spy).not.toHaveBeenCalled(); // no hash yet
+
+    window.location.hash = '#timeouts';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(spy).toHaveBeenCalledWith({ block: 'start' });
+    el.remove();
+  });
+
+  // The cross-page flake this guards: a soft navigation runs inside a View
+  // Transition, and a scroll issued while it animates is a no-op. afterSwap fires
+  // once the (cold) content has committed but before the transition snapshots, so
+  // the scroll lands. The hook reads the live hash at fire time, not a prop.
+  it('scrolls in the afterSwap phase of a navigation', () => {
+    render(<Harness />);
+    window.location.hash = '#timeouts'; // the navigation updated the url
+    const { el, spy } = presentTarget('timeouts');
+
+    hoisted.lifecycle?.onAfterSwap?.({} as never);
+    expect(spy).toHaveBeenCalledWith({ block: 'start' });
+    el.remove();
+  });
+
+  // Safety net: if the cold target had not mounted yet at afterSwap (an unusually
+  // slow chunk), afterSwap finds nothing, but afterTransition fires after the
+  // transition finishes, where a scroll is no longer a no-op.
+  it('scrolls in afterTransition when the target was absent at afterSwap', () => {
+    render(<Harness />);
     window.location.hash = '#late';
-    render(<Harness path="/docs/loaders" />); // target absent: observe and wait
 
-    const target = document.createElement('h2');
-    target.id = 'late';
-    const spy = vi.fn();
-    target.scrollIntoView = spy;
-    document.body.appendChild(target); // a DOM mutation the observer reacts to
+    hoisted.lifecycle?.onAfterSwap?.({} as never); // target absent: nothing happens
+    const { el, spy } = presentTarget('late');
+    expect(spy).not.toHaveBeenCalled();
 
-    await waitFor(() =>
-      expect(spy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
-    );
-    target.remove();
+    hoisted.lifecycle?.onAfterTransition?.({} as never);
+    expect(spy).toHaveBeenCalledWith({ block: 'start' });
+    el.remove();
+  });
+
+  it('ignores a phase fire when the url has no hash', () => {
+    const { el, spy } = presentTarget('timeouts');
+    render(<Harness />);
+
+    hoisted.lifecycle?.onAfterSwap?.({} as never);
+    expect(spy).not.toHaveBeenCalled();
+    el.remove();
   });
 });
