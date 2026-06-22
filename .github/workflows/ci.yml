@@ -8,8 +8,8 @@ on:
 
 # Collapse superseded runs per ref. Cancel-in-progress only for PRs: a fast
 # series of pushes to a PR branch should drop stale runs (and the stale size
-# comment they'd post). On main, build-and-tag commits the lighthouse baselines and
-# force-pushes the `next` tag, so never interrupt it mid-flight.
+# comment they'd post). On main, build-and-tag pushes the lighthouse baselines to
+# the `metrics` branch and force-pushes the `next` tag, so never interrupt it mid-flight.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -181,7 +181,16 @@ jobs:
         env:
           LH_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
           LH_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/render-lighthouse-comment.mjs /tmp/fresh-lh.json lighthouse-report.json > /tmp/lh-comment.md
+        run: |
+          # Read the baseline off the `metrics` branch. Use FETCH_HEAD, not
+          # origin/metrics: a bare `git fetch <branch>` does not reliably update the
+          # remote-tracking ref, but FETCH_HEAD always points at what was just fetched.
+          # Fall back to an empty baseline when the branch or file is absent (first run);
+          # the renderer tolerates {} via `baseline.pages ?? {}`.
+          git fetch origin metrics --depth=1 2>/dev/null \
+            && git show FETCH_HEAD:lighthouse-report.json > /tmp/baseline.json \
+            || echo '{}' > /tmp/baseline.json
+          node scripts/render-lighthouse-comment.mjs /tmp/fresh-lh.json /tmp/baseline.json > /tmp/lh-comment.md
 
       - name: Post sticky comment
         uses: marocchino/sticky-pull-request-comment@v2
@@ -291,6 +300,23 @@ jobs:
       - name: Build all packages and app
         run: pnpm build
 
+      - name: Prepare metrics worktree
+        # Failure-tolerant: a missing metrics branch must not block the `next` tag
+        # move below. Always sets METRICS_WT so the measure step has a target.
+        run: |
+          set +e
+          # Detached worktree at the fetched metrics tip. The later push (HEAD:metrics)
+          # is a fast-forward because the parent is that tip; main runs are serialized
+          # by the concurrency group (cancel-in-progress: false), so no push race.
+          git fetch origin metrics --depth=1 2>/dev/null && git worktree add metrics-wt FETCH_HEAD
+          if [ -e metrics-wt/.git ]; then
+            echo "metrics worktree ready"
+          else
+            echo "::warning::metrics branch unavailable; lighthouse baselines will not persist this run (run the one-time bootstrap)."
+            mkdir -p metrics-wt
+          fi
+          echo "METRICS_WT=$PWD/metrics-wt" >> "$GITHUB_ENV"
+
       - name: Measure Lighthouse baseline
         # Soft: a wrangler/Chrome/LHCI hiccup must not block the `next` tag
         # move below. The PR `lighthouse` job is the canary for genuine
@@ -311,23 +337,31 @@ jobs:
           pnpm exec lhci upload --config=.lighthouserc.json --upload.target=filesystem --upload.outputDir=.lighthouseci
           kill $WRANGLER_PID || true
           node scripts/measure-lighthouse.mjs --in .lighthouseci --append-history --badge \
+            --out-dir "$METRICS_WT" \
             --sha "$GITHUB_SHA" --date "$(git show -s --format=%cI "$GITHUB_SHA")"
 
-      - name: Commit baselines
+      - name: Push metrics
+        # The worktree (when present) is the `metrics` branch checkout; commit and
+        # push there. Skips cleanly when the branch was unavailable (plain dir, no
+        # .git gitlink). main HEAD is never touched.
         run: |
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          if ! git diff --quiet lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json; then
-            git add lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
-            git commit -m "chore(metrics): update lighthouse baselines [skip ci]"
-            git push origin HEAD:main
+          if [ ! -e metrics-wt/.git ]; then
+            echo "no metrics worktree; skipping push"
+            exit 0
+          fi
+          git -C metrics-wt config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C metrics-wt config user.name "github-actions[bot]"
+          git -C metrics-wt add lighthouse-report.json lighthouse-history.jsonl lighthouse-badge.json
+          if ! git -C metrics-wt diff --cached --quiet; then
+            git -C metrics-wt commit -m "chore(metrics): update lighthouse baselines"
+            git -C metrics-wt push origin HEAD:metrics
           fi
 
       - name: Move next tag to HEAD
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          # Anchor to the triggering commit, not local HEAD: the 'Commit baselines'
-          # step above may have advanced HEAD with a bookkeeping commit.
+          # Anchor to the triggering commit defensively. Baselines now push to the
+          # `metrics` branch, so main HEAD no longer advances during this job.
           git tag -f next "$GITHUB_SHA"
           git push origin next --force

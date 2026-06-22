@@ -5,6 +5,7 @@ import {
   extractReport,
   historyRow,
   badgePayload,
+  resolveOutputPaths,
 } from '../measure-lighthouse.mjs';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -202,5 +203,30 @@ describe('badgePayload', () => {
       message: '0',
       color: 'red',
     });
+  });
+});
+
+describe('resolveOutputPaths', () => {
+  it('defaults all three files to root', () => {
+    expect(resolveOutputPaths({ root: '/repo' })).toEqual({
+      report: '/repo/lighthouse-report.json',
+      history: '/repo/lighthouse-history.jsonl',
+      badge: '/repo/lighthouse-badge.json',
+    });
+  });
+
+  it('bases all three under outDir when given', () => {
+    expect(resolveOutputPaths({ root: '/repo', outDir: '/wt' })).toEqual({
+      report: '/wt/lighthouse-report.json',
+      history: '/wt/lighthouse-history.jsonl',
+      badge: '/wt/lighthouse-badge.json',
+    });
+  });
+
+  it('lets out override only the report path', () => {
+    const p = resolveOutputPaths({ root: '/repo', outDir: '/wt', out: '/tmp/r.json' });
+    expect(p.report).toBe('/tmp/r.json');
+    expect(p.history).toBe('/wt/lighthouse-history.jsonl');
+    expect(p.badge).toBe('/wt/lighthouse-badge.json');
   });
 });
