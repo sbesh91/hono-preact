@@ -56,10 +56,44 @@ describe('cloudflareAdapter', () => {
     expect(tail).toContain(
       `import { installRealtimeConnector } from 'hono-preact/internal/runtime';`
     );
+    // The binding is read as a bracketed string access so any binding name is
+    // safe; the same name is passed through so the missing-binding error names
+    // the developer's actual env key.
     expect(tail).toContain(
-      'makeCfForwardConnector((c) => c.env?.HONO_PREACT_REALTIME)'
+      'makeCfForwardConnector((c) => c.env?.["HONO_PREACT_REALTIME"], "HONO_PREACT_REALTIME")'
     );
     expect(tail).toContain('installRealtimeConnector(');
+  });
+
+  it('wrapEntry honors custom realtimeBinding and realtimeClass names', () => {
+    const tail = cloudflareAdapter({
+      realtimeBinding: 'MY_REALTIME',
+      realtimeClass: 'MyRealtimeDO',
+    }).wrapEntry(ctx);
+    // Binding name flows into both the env access and the error-naming arg.
+    expect(tail).toContain(
+      'makeCfForwardConnector((c) => c.env?.["MY_REALTIME"], "MY_REALTIME")'
+    );
+    // Class name flows into the re-export declaration wrangler binds against.
+    expect(tail).toContain(
+      'export class MyRealtimeDO extends __HonoPreactRealtimeDO {}'
+    );
+    // The default names must NOT appear when overridden.
+    expect(tail).not.toContain('HONO_PREACT_REALTIME');
+    expect(tail).not.toContain(
+      'export class HonoPreactRealtimeDO extends __HonoPreactRealtimeDO'
+    );
+  });
+
+  it('rejects a realtimeClass that is not a valid JS identifier', () => {
+    // Emitted as a `class` declaration name, so a non-identifier would produce
+    // a syntactically broken entry; fail loud at config time instead.
+    expect(() => cloudflareAdapter({ realtimeClass: 'has space' })).toThrow(
+      /realtimeClass must be a valid JavaScript identifier/
+    );
+    expect(() => cloudflareAdapter({ realtimeClass: '1bad' })).toThrow(
+      /realtimeClass must be a valid JavaScript identifier/
+    );
   });
 
   it('exposes a vitePlugins function', () => {

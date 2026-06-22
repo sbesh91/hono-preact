@@ -52,11 +52,15 @@ export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
  * shape) before the `x-hp-*` headers are stamped on.
  *
  * @param getNamespace reads the DO binding off the request context (the adapter
- *   passes `(c) => c.env.HONO_PREACT_REALTIME`). Returns undefined when the
- *   binding is missing, which is a clear configuration error.
+ *   passes `(c) => c.env[<realtimeBinding>]`, by default
+ *   `(c) => c.env.HONO_PREACT_REALTIME`). Returns undefined when the binding is
+ *   missing, which is a clear configuration error.
+ * @param bindingName the configured binding name, used only to name the binding
+ *   in the missing-binding error so it points at the developer's actual env key.
  */
 export function makeCfForwardConnector(
-  getNamespace: (c: Context) => DurableObjectNamespace | undefined
+  getNamespace: (c: Context) => DurableObjectNamespace | undefined,
+  bindingName = 'HONO_PREACT_REALTIME'
 ): RealtimeConnector {
   return async (ctx) => {
     // Deny / key-fail: close the handshake WS_DENY_CODE without contacting the
@@ -77,7 +81,7 @@ export function makeCfForwardConnector(
     const ns = getNamespace(c);
     if (!ns) {
       throw new Error(
-        'hono-preact: rooms on Cloudflare require the HONO_PREACT_REALTIME ' +
+        `hono-preact: rooms on Cloudflare require the ${bindingName} ` +
           'Durable Object binding. Add it to wrangler.jsonc (see the rooms docs).'
       );
     }

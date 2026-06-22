@@ -171,7 +171,20 @@ Add these two fields to `wrangler.jsonc`:
 "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HonoPreactRealtimeDO"] }]
 ```
 
-The binding name must be exactly `HONO_PREACT_REALTIME` (the adapter reads `c.env.HONO_PREACT_REALTIME`). The class name must be exactly `HonoPreactRealtimeDO` (the name the generated entry re-exports).
+By default the binding name is `HONO_PREACT_REALTIME` and the class name is `HonoPreactRealtimeDO`: the generated entry reads `c.env.HONO_PREACT_REALTIME` and re-exports `HonoPreactRealtimeDO`. To use different names, pass them to the adapter in `vite.config.ts` and keep `wrangler.jsonc` in sync:
+
+```ts
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+
+honoPreact({
+  adapter: cloudflareAdapter({
+    realtimeBinding: 'MY_REALTIME',
+    realtimeClass: 'MyRealtimeDO',
+  }),
+});
+```
+
+`realtimeBinding` must match the binding `name`; `realtimeClass` must match both the binding `class_name` and the `new_sqlite_classes` migration tag. `realtimeClass` must be a valid JavaScript identifier (it is emitted as a `class` declaration in the generated entry).
 
 Two behaviors differ between Node and Cloudflare:
 
