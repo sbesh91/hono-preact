@@ -80,6 +80,36 @@ export function DocsLayout({ children }: Props) {
     </div>
   );
 
+  // Drawer-only area switcher (the desktop bar has its own tabs). Plain <a>s to
+  // each area's basePath, same soft-nav targets as the bar tabs; the active one
+  // is highlighted. Navigation closes the drawer via the existing path effect.
+  const renderAreaSwitcher = () => (
+    <nav
+      aria-label="Docs areas"
+      class="flex-1 flex rounded-md border border-border overflow-hidden text-sm"
+    >
+      {nav.map((area) => {
+        const TabIcon = area.icon;
+        const isActive = area.id === activeAreaId;
+        return (
+          <a
+            key={area.id}
+            href={area.basePath}
+            aria-current={isActive ? 'true' : undefined}
+            class={`flex-1 flex items-center justify-center gap-1.5 h-9 no-underline ${
+              isActive
+                ? 'bg-accent/10 text-accent font-semibold'
+                : 'text-muted hover:text-foreground hover:bg-foreground/10'
+            }`}
+          >
+            <TabIcon size={16} class="shrink-0" />
+            <span>{area.label}</span>
+          </a>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <div class="min-h-screen flex flex-col">
       {/* Docs top bar */}
@@ -179,11 +209,11 @@ export function DocsLayout({ children }: Props) {
             transition: `transform var(--spring-duration) var(--spring-soft)`,
           }}
         >
-          <div class="flex justify-between items-center px-4 py-3 border-b border-border font-bold text-[0.9rem] text-foreground">
-            {activeArea.label}
+          <div class="flex items-center gap-2 px-3 py-3 border-b border-border">
+            {renderAreaSwitcher()}
             <button
               type="button"
-              class="bg-transparent border-none text-[1.1rem] text-muted cursor-pointer leading-none p-1 hover:text-foreground"
+              class="shrink-0 bg-transparent border-none text-[1.1rem] text-muted cursor-pointer leading-none p-1 hover:text-foreground"
               onClick={() => setMobileOpen(false)}
               aria-label="Close menu"
             >
@@ -191,6 +221,27 @@ export function DocsLayout({ children }: Props) {
             </button>
           </div>
           <div class="p-3 overflow-y-auto flex-1">{renderNav(activeArea)}</div>
+          <div class="border-t border-border px-4 py-3 flex items-center gap-4 text-xs text-muted">
+            <a
+              href="https://github.com/sbesh91/hono-preact"
+              target="_blank"
+              rel="noreferrer noopener"
+              class="flex items-center gap-1.5 no-underline hover:text-foreground"
+            >
+              <GithubMark size={16} />
+              <span>GitHub</span>
+            </a>
+            <a
+              href="/llms.txt"
+              target="_blank"
+              rel="noreferrer noopener"
+              class="no-underline hover:text-foreground"
+              title="Plain-text docs for LLMs (llms.txt)"
+            >
+              For LLMs
+            </a>
+            <span class="ml-auto">v{__HONO_PREACT_VERSION__}</span>
+          </div>
         </aside>
 
         {/* Main content */}
