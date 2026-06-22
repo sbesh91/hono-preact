@@ -152,6 +152,50 @@ function _keyOptionalProbe() {
   ref.useRoom({ onMessage: () => undefined });
 }
 
+// data factory: infers Data from the factory return and seeds conn.data in
+// onJoin and onMessage. The factory receives a live Context; onJoin does NOT.
+function _dataFactoryProbe() {
+  type UserData = { name: string; role: string };
+  import('hono').then(() => {}); // type-only; Context import rides the define-room module
+  defineRoom(roomChannel, {
+    // data runs at the edge with the live Context.
+    data(c) {
+      // c is Context (from hono)
+      expectTypeOf(c.req.query).toBeFunction();
+      const result: UserData = {
+        name: c.req.query('name') ?? 'Guest',
+        role: 'user',
+      };
+      return result;
+    },
+    onJoin(conn, ctx) {
+      // ctx has params but NOT c.
+      expectTypeOf(ctx.params).toEqualTypeOf<{ roomId: string }>();
+      // conn.data is the Data type inferred from the data factory.
+      expectTypeOf(conn.data).toEqualTypeOf<UserData>();
+      // @ts-expect-error ctx.c does not exist: live Context is not passed to room callbacks
+      ctx.c;
+    },
+    onMessage(conn) {
+      // onMessage also sees conn.data typed as Data.
+      expectTypeOf(conn.data).toEqualTypeOf<UserData>();
+    },
+  });
+}
+
+// Negative: without a data factory, conn.data is `undefined` (the default Data).
+function _noDataFactoryProbe() {
+  defineRoom(roomChannel, {
+    onJoin(conn, ctx) {
+      // With no data factory, Data defaults to undefined.
+      expectTypeOf(conn.data).toEqualTypeOf<undefined>();
+      // ctx still has no c.
+      // @ts-expect-error ctx.c does not exist
+      ctx.c;
+    },
+  });
+}
+
 void _routeRoomProbes;
 void _bareRoomProbes;
 void _multiParamProbes;
@@ -159,3 +203,5 @@ void _negativeProbes;
 void _useRoomMethodProbe;
 void _keyRequiredProbe;
 void _keyOptionalProbe;
+void _dataFactoryProbe;
+void _noDataFactoryProbe;

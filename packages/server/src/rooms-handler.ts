@@ -256,10 +256,24 @@ export function createRoomWsEvents(
       //    member id, so a self-echoed join is harmless.
       publishPresence(topic, connId, 'join', initialState);
 
-      // 6. Build the RoomConnection handed to the user handlers.
+      // 6. Run the edge data factory if provided. It runs here (at the edge, in
+      //    the worker) with the live Context, before the room callback runs. The
+      //    result seeds conn.data, available to onJoin and onMessage. On
+      //    Cloudflare the room callbacks run inside a Durable Object where no
+      //    live Context exists, so this is the only place to capture it.
+      //    Sanctioned cast: the factory result seeds the per-connection bag
+      //    (unknown-typed on the internal AnyRoomDef seam) with a user-defined
+      //    serializable value; the user's own Data generic flows on the public
+      //    RoomHandler type.
+      const initialData = (roomDef.data?.(ctx) ?? {}) as Record<
+        string,
+        unknown
+      >;
+
+      // 7. Build the RoomConnection handed to the user handlers.
       conn = {
         id: connId,
-        data: {},
+        data: initialData,
         close: (code, reason) => ws.close(code, reason),
         // Send to THIS connection only.
         send: (msg) => ws.send(envMsg(myId, msg)),
@@ -276,8 +290,8 @@ export function createRoomWsEvents(
         },
       };
 
-      // 7. Run the user's join hook; capture any teardown it returns.
-      joinTeardown = await roomDef.onJoin?.(conn, { c: ctx, params });
+      // 8. Run the user's join hook; capture any teardown it returns.
+      joinTeardown = await roomDef.onJoin?.(conn, { params });
     },
 
     async onMessage(ev, _ws) {

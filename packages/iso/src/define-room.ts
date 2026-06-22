@@ -48,14 +48,23 @@ export interface RoomHandler<Incoming, Outgoing, State, Data, Params> {
   /** Seed the joining member's initial presence state. */
   presence?: () => State;
   /**
+   * Runs at the edge (the worker) with the live Hono Context, on both Node and
+   * Cloudflare. Its serializable result seeds `conn.data`, which is then
+   * available in onJoin and onMessage. Use it to capture request-derived data
+   * (the authenticated user, a header) since the room callbacks run without a
+   * live Context (inside a Durable Object on Cloudflare).
+   */
+  data?: (c: Context) => Data;
+  /**
    * Per-connection setup. May return a teardown fn called on leave.
    *
-   * `ctx.c` is the Hono Context for the upgrade request; `ctx.params` is the
-   * channel-name params recovered from the room key on the wire.
+   * `ctx.params` is the channel-name params recovered from the room key on the
+   * wire. Request-derived data captured at the edge lives on `conn.data`
+   * (seeded by the `data` factory above).
    */
   onJoin?(
     conn: RoomConnection<Outgoing, State, Data>,
-    ctx: { c: Context; params: Params }
+    ctx: { params: Params }
   ): void | (() => void) | Promise<void | (() => void)>;
   onMessage?(
     conn: RoomConnection<Outgoing, State, Data>,

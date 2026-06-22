@@ -44,13 +44,19 @@ export type CursorState = { x: number; y: number; name: string };
 
 export const serverRooms = {
   cursors: defineRoom(cursorsChannel, {
+    // data runs at the edge with the live Hono Context. Its serializable result
+    // seeds conn.data, available in onJoin and onMessage. Use it to capture
+    // request-derived values (the authenticated user, a header) that are not
+    // available inside a Durable Object on Cloudflare.
+    data: (c) => ({ name: c.get('user')?.name ?? 'Guest' }),
+
     // Seed the joining member's initial presence state.
     presence: () => ({ x: 0, y: 0, name: 'Anonymous' }),
 
-    async onJoin(conn, { c, params }) {
+    onJoin(conn, { params }) {
       // params is typed: { boardId: string }
-      const user = c.get('user');
-      conn.setPresence({ x: 0, y: 0, name: user?.name ?? 'Guest' });
+      // conn.data.name was captured at the edge by the data factory above.
+      conn.setPresence({ x: 0, y: 0, name: conn.data.name });
     },
 
     onMessage(conn, msg) {
@@ -169,14 +175,15 @@ Returns a `RoomRef` that the client hook reads. On the client side the `.server`
 
 #### Handler fields
 
-| Field       | Type                                                            | Description                                                                                                                                                                    |
-| ----------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `use`       | `ReadonlyArray<Middleware>`                                     | Guard chain run before the upgrade. A failing guard closes with code `4403`.                                                                                                   |
-| `presence`  | `() => State`                                                   | Seeds the joining member's initial presence state.                                                                                                                             |
-| `onJoin`    | `(conn, { c, params }) => void \| (() => void) \| Promise<...>` | Runs once per connection after the upgrade. `c` is the Hono Context; `params` is typed from the channel name. Returning a function registers it as a teardown called on leave. |
-| `onMessage` | `(conn, msg) => void \| Promise<void>`                          | Called for every incoming message from this connection.                                                                                                                        |
-| `onLeave`   | `(conn) => void`                                                | Called when the connection closes.                                                                                                                                             |
-| `onError`   | `(conn, err) => void`                                           | Called on a socket error.                                                                                                                                                      |
+| Field       | Type                                                         | Description                                                                                                                                                                                                                       |
+| ----------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `use`       | `ReadonlyArray<Middleware>`                                  | Guard chain run before the upgrade. A failing guard closes with code `4403`.                                                                                                                                                      |
+| `presence`  | `() => State`                                                | Seeds the joining member's initial presence state.                                                                                                                                                                                |
+| `data`      | `(c: Context) => Data`                                       | Runs at the edge (the worker) with the live Hono Context. Its serializable result seeds `conn.data`, available in `onJoin` and `onMessage`. Use it to capture request-derived data (authenticated user, headers) at upgrade time. |
+| `onJoin`    | `(conn, { params }) => void \| (() => void) \| Promise<...>` | Runs once per connection after the upgrade. `params` is typed from the channel name; request-derived data lives on `conn.data`. Returning a function registers it as a teardown called on leave.                                  |
+| `onMessage` | `(conn, msg) => void \| Promise<void>`                       | Called for every incoming message from this connection.                                                                                                                                                                           |
+| `onLeave`   | `(conn) => void`                                             | Called when the connection closes.                                                                                                                                                                                                |
+| `onError`   | `(conn, err) => void`                                        | Called on a socket error.                                                                                                                                                                                                         |
 
 #### `RoomConnection` fields (the `conn` handle)
 
