@@ -130,6 +130,8 @@ export function DocsLayout({ children }: Props) {
         </span>
         <a
           href="/llms.txt"
+          target="_blank"
+          rel="noreferrer noopener"
           class="text-xs text-muted hover:text-foreground whitespace-nowrap no-underline"
           title="Plain-text docs for LLMs (llms.txt)"
         >

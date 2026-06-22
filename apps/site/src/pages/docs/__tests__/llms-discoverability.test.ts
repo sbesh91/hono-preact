@@ -18,12 +18,31 @@ const read = (rel: string) => readFileSync(resolve(siteSrc, rel), 'utf8');
 describe('llms.txt is discoverable in the docs UI', () => {
   it('docs Overview links both /llms.txt and /llms-full.txt', () => {
     const overview = read('pages/docs/index.mdx');
-    expect(overview).toContain('(/llms.txt)');
-    expect(overview).toContain('(/llms-full.txt)');
+    expect(overview).toContain('href="/llms.txt"');
+    expect(overview).toContain('href="/llms-full.txt"');
   });
 
   it('docs topbar links /llms.txt', () => {
     expect(read('components/DocsLayout.tsx')).toContain('href="/llms.txt"');
+  });
+
+  it('the llms links are native navigations, not SPA-router soft-navs', () => {
+    // preact-iso intercepts same-origin same-tab <a> clicks; /llms.txt is not a
+    // route, so a soft-nav lands on the not-found page. The browser does a
+    // native navigation (hitting the static asset / dev middleware) only when
+    // the link has target!=_self or download. Guard every /llms*.txt anchor in
+    // the topbar and the Overview.
+    const sources = [
+      read('components/DocsLayout.tsx'),
+      read('pages/docs/index.mdx'),
+    ];
+    for (const src of sources) {
+      const anchors = src.match(/<a[^>]*href="\/llms[^"]*"[^>]*>/g) ?? [];
+      expect(anchors.length).toBeGreaterThan(0);
+      for (const a of anchors) {
+        expect(a, a).toMatch(/target="_blank"|\bdownload\b/);
+      }
+    }
   });
 
   it('document head advertises /llms.txt as a plain-text alternate', () => {
