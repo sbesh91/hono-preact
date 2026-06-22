@@ -2,7 +2,7 @@ import * as v from 'valibot';
 import { PRIORITIES, STATUSES } from '../../demo/data.js';
 
 export const NewTaskSchema = v.object({
-  projectId: v.fallback(v.string(), ''),
+  projectId: v.pipe(v.string(), v.minLength(1)),
   title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
   body: v.fallback(v.pipe(v.string(), v.trim()), ''),
   priority: v.picklist(PRIORITIES, 'Priority is required'),

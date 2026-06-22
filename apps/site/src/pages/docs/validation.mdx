@@ -210,6 +210,18 @@ The loader's `ctx.location.searchParams` and `ctx.location.pathParams` types nar
 
 **Cache keys and search params:** `searchSchema` does not automatically add params to the client-side cache key. When the loader's data depends on a search param, declare that param in `params` (as shown above for `page`). Without it, navigating `?page=1` to `?page=2` returns the cached page-1 result.
 
+## Validation timing and what middleware sees
+
+Understanding when validation runs clarifies what each layer of the stack receives.
+
+**Handlers receive coerced output.** A declared `input`, `searchSchema`, or `paramsSchema` is validated and coerced before your `defineAction` or `defineLoader` function body runs. The handler receives the schema's output type, so coercions (like `z.coerce.number()`) are already applied by the time your code sees the value.
+
+**Middleware and observers see the raw payload.** Auth guards, page-use middleware, and stream observers all run earlier in the request pipeline, before the validation step. They receive the raw, pre-validation payload or params, not the coerced values. If a middleware needs a typed value (for example, a numeric id), it should coerce that field itself. This ordering is intentional: auth gates reject unauthenticated requests before any validation work happens, so a malformed payload never reaches guarded logic.
+
+**Action schemas should be coercion-tolerant.** `<Form>` and any multipart or file POST send fields as strings because FormData is string-only. A `useAction` call that includes a `File` also sends a multipart body. A `useAction` call with no files sends typed JSON. Schemas used with actions that may receive either format should use coercing rules (e.g. `z.coerce.number()`, or valibot's `v.pipe(v.unknown(), v.transform(Number))`) so the same logical payload validates whether it arrives as a typed value or as a string.
+
+A future option to configure validation position in the middleware chain is tracked as a potential addition.
+
 ## API reference
 
 ### `defineAction(fn, { input })`
