@@ -302,6 +302,9 @@ jobs:
         # move below. Always sets METRICS_WT so the measure step has a target.
         run: |
           set +e
+          # Detached worktree at the fetched metrics tip. The later push (HEAD:metrics)
+          # is a fast-forward because the parent is that tip; main runs are serialized
+          # by the concurrency group (cancel-in-progress: false), so no push race.
           git fetch origin metrics --depth=1 2>/dev/null && git worktree add metrics-wt FETCH_HEAD
           if [ -e metrics-wt/.git ]; then
             echo "metrics worktree ready"
