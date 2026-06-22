@@ -1,5 +1,13 @@
-import { cp, rename, readFile, writeFile, access } from 'node:fs/promises';
-import { join } from 'node:path';
+import {
+  cp,
+  rename,
+  readFile,
+  writeFile,
+  access,
+  mkdir,
+  readdir,
+} from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 
 /**
  * Recursively copy a template directory into the target.
@@ -70,24 +78,44 @@ export async function fileExists(path) {
 }
 
 /**
- * Copy the agent-guidance files into a target directory. Per-file: created if
- * absent, overwritten when `force`, otherwise skipped.
- * @param {string} agentsDir
- * @param {string} targetDir
+ * Copy the agent-guidance payload into a target project. Root files (AGENTS.md,
+ * CLAUDE.md) land at the project root; recipes and the bundled docs corpus land
+ * under the project's `agents/` directory. Per-file: created if absent,
+ * overwritten when `force`, otherwise skipped.
+ *
+ * @param {string} agentsDir absolute path to templates/agents
+ * @param {string} targetDir absolute path to the destination project
  * @param {{ force: boolean }} options
  * @returns {Promise<Array<{ file: string, action: 'created' | 'overwritten' | 'skipped' }>>}
  */
-export async function copyAgentsFiles(agentsDir, targetDir, { force }) {
+export async function copyAgentGuidance(agentsDir, targetDir, { force }) {
+  /** @type {Array<{ from: string, to: string }>} */
+  const plan = [
+    { from: 'AGENTS.md', to: 'AGENTS.md' },
+    { from: 'CLAUDE.md', to: 'CLAUDE.md' },
+    { from: 'llms-full.txt', to: join('agents', 'llms-full.txt') },
+  ];
+  const skills = (await readdir(join(agentsDir, 'skills'))).filter((f) =>
+    f.endsWith('.md')
+  );
+  for (const name of skills) {
+    plan.push({
+      from: join('skills', name),
+      to: join('agents', 'skills', name),
+    });
+  }
+
   const results = [];
-  for (const file of ['AGENTS.md', 'CLAUDE.md']) {
-    const dest = join(targetDir, file);
+  for (const { from, to } of plan) {
+    const dest = join(targetDir, to);
     const exists = await fileExists(dest);
     if (exists && !force) {
-      results.push({ file, action: 'skipped' });
+      results.push({ file: to, action: 'skipped' });
       continue;
     }
-    await cp(join(agentsDir, file), dest);
-    results.push({ file, action: exists ? 'overwritten' : 'created' });
+    await mkdir(dirname(dest), { recursive: true });
+    await cp(join(agentsDir, from), dest);
+    results.push({ file: to, action: exists ? 'overwritten' : 'created' });
   }
   return results;
 }

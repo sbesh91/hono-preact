@@ -32,6 +32,9 @@
     "templates",
     "README.md"
   ],
+  "scripts": {
+    "prepack": "node --disable-warning=ExperimentalWarning ../../apps/site/scripts/generate-bundled-corpus.ts"
+  },
   "dependencies": {
     "picocolors": "^1.1.1"
   },

@@ -40,6 +40,12 @@ jobs:
       - name: Build framework packages
         run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
 
+      # The scaffolder ships a bundled docs corpus (templates/agents/llms-full.txt)
+      # that is generated, not committed. Regenerate it before tests so the
+      # corpus-presence gate and the scaffold copy test see a fresh file.
+      - name: Generate bundled agents corpus
+        run: pnpm gen:agents-corpus
+
       - name: Format check
         run: pnpm format:check
 

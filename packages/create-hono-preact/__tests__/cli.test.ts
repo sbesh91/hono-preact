@@ -42,6 +42,21 @@ describe('run() — node adapter', () => {
     expect(existsSync(join(target, 'src', 'pages', 'about.tsx'))).toBe(true);
     expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(target, 'CLAUDE.md'))).toBe(true);
+    expect(existsSync(join(target, 'agents', 'skills', 'add-a-page.md'))).toBe(
+      true
+    );
+    expect(
+      existsSync(join(target, 'agents', 'skills', 'add-a-loader.md'))
+    ).toBe(true);
+    expect(
+      existsSync(join(target, 'agents', 'skills', 'add-an-action.md'))
+    ).toBe(true);
+    expect(existsSync(join(target, 'agents', 'skills', 'add-a-guard.md'))).toBe(
+      true
+    );
+    expect(existsSync(join(target, 'agents', 'llms-full.txt'))).toBe(true);
+    // recipes are NOT dumped at the project root
+    expect(existsSync(join(target, 'skills'))).toBe(false);
 
     const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
     expect(pkg.name).toBe('my-test-app');
@@ -411,6 +426,17 @@ describe('run() — add-agents', () => {
     expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
   });
 
+  it('writes the recipes and corpus under agents/', async () => {
+    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    expect(code).toBe(0);
+    expect(existsSync(join(workDir, 'AGENTS.md'))).toBe(true);
+    expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
+    expect(existsSync(join(workDir, 'agents', 'skills', 'add-a-page.md'))).toBe(
+      true
+    );
+    expect(existsSync(join(workDir, 'agents', 'llms-full.txt'))).toBe(true);
+  });
+
   it('does not overwrite an existing AGENTS.md without --force', async () => {
     writeFileSync(join(workDir, 'AGENTS.md'), 'KEEP');
     const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
@@ -420,8 +446,8 @@ describe('run() — add-agents', () => {
   });
 
   it('returns 1 when every target is skipped', async () => {
-    writeFileSync(join(workDir, 'AGENTS.md'), 'KEEP');
-    writeFileSync(join(workDir, 'CLAUDE.md'), 'KEEP');
+    // First run populates all files; second run with no --force skips all.
+    await run({ argv: ['add-agents'], cwd: workDir, env: {} });
     const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(1);
   });
