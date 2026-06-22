@@ -79,6 +79,7 @@
     "prepublishOnly": "tsc && node scripts/consolidate.mjs"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.1.0",
     "@babel/parser": "^8.0.0",
     "@babel/traverse": "^8.0.0",
     "@babel/types": "^8.0.0",

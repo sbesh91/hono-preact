@@ -64,7 +64,11 @@ export function translateOutcomeForLoader(
   if (outcome.__outcome === 'deny') {
     applyOutcomeHeaders(c, outcome.headers);
     return c.json(
-      { __outcome: 'deny', message: outcome.message },
+      {
+        __outcome: 'deny',
+        message: outcome.message,
+        ...(outcome.data !== undefined ? { data: outcome.data } : {}),
+      },
       outcome.status
     );
   }

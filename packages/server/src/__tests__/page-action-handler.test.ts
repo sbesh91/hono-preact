@@ -3,14 +3,46 @@ import { h } from 'preact';
 import { Hono } from 'hono';
 import { pageActionHandler } from '../page-action-handler.js';
 import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
+
+const failing: StandardSchemaV1<unknown, unknown> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: () => ({ issues: [{ message: 'Required', path: ['title'] }] }),
+  },
+};
+const coercing: StandardSchemaV1<unknown, { count: number }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (v) => ({
+      value: { count: Number((v as { count: unknown }).count) },
+    }),
+  },
+};
 
 function buildHandler(
-  actions: Record<string, (ctx: unknown, payload: unknown) => Promise<unknown>>
+  actions: Record<
+    string,
+    | ((ctx: unknown, payload: unknown) => Promise<unknown>)
+    | {
+        fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
+        input?: import('@standard-schema/spec').StandardSchemaV1;
+      }
+  >
 ) {
   const resolverByPath = async () => {
     const map = new Map();
-    for (const [name, fn] of Object.entries(actions)) {
-      map.set(name, { fn, use: [], moduleKey: 'pages/test.server' });
+    for (const [name, val] of Object.entries(actions)) {
+      const entry = typeof val === 'function' ? { fn: val } : val;
+      map.set(name, {
+        fn: entry.fn,
+        use: [],
+        moduleKey: 'pages/test.server',
+        input: entry.input,
+      });
     }
     return map;
   };
@@ -170,6 +202,55 @@ describe('pageActionHandler', () => {
       }),
     });
     expect(res.status).toBe(404);
+  });
+
+  it('returns deny(422) JSON envelope with issues when input schema fails', async () => {
+    const fn = vi.fn(async () => ({ id: 1 }));
+    const handler = buildHandler({ submit: { fn, input: failing } });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.__outcome).toBe('deny');
+    expect(body.data[VALIDATION_ISSUES_KEY]).toEqual([
+      { path: ['title'], message: 'Required' },
+    ]);
+    expect(fn).not.toHaveBeenCalled(); // handler never ran
+  });
+
+  it('passes the coerced output to the handler when the schema passes', async () => {
+    let seen: unknown;
+    const fn = vi.fn(async (_ctx: unknown, payload: unknown) => {
+      seen = payload;
+      return 'ok';
+    });
+    const handler = buildHandler({ submit: { fn, input: coercing } });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: { count: '3' },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(seen).toEqual({ count: 3 }); // coercion observable to the handler
   });
 });
 

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { AnyLoaderRef } from './define-loader.js';
 import { useInvalidate } from './use-invalidate.js';
 import type { ActionUse } from './internal/use-types.js';
@@ -59,6 +60,14 @@ export type DefineActionOpts<TChunk = never, TResult = unknown> = {
   __module?: string;
   /** The action name the client-side `useAction` hook will reference. */
   __action?: string;
+  /**
+   * Standard Schema validating the action payload. When provided, the handler
+   * receives the schema's validated output (`InferOutput`) and the client-facing
+   * stub's payload type is the same `InferOutput`. The server enforces it before
+   * the handler runs; a failure becomes `deny(422)` with issues. The framework
+   * does not coerce, the schema does (e.g. `z.coerce.number()`).
+   */
+  input?: StandardSchemaV1;
 };
 
 export class TimeoutError extends Error {
@@ -71,10 +80,24 @@ export class TimeoutError extends Error {
   }
 }
 
+export function defineAction<
+  TInput extends StandardSchemaV1,
+  TResult,
+  TChunk = never,
+>(
+  fn: ActionFn<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>,
+  opts: DefineActionOpts<TChunk, TResult> & { input: TInput }
+): ActionStub<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>;
 export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
   opts?: DefineActionOpts<TChunk, TResult>
-): ActionStub<TPayload, TResult, TChunk> {
+): ActionStub<TPayload, TResult, TChunk>;
+export function defineAction(
+  // `unknown` widens the impl to accept all overloads; the permissive types are
+  // bounded here and do not escape to callers (each overload narrows them).
+  fn: ActionFn<unknown, unknown, unknown>,
+  opts?: DefineActionOpts<unknown, unknown>
+): ActionStub<unknown, unknown, unknown> {
   validateTimeoutMs(opts?.timeoutMs, 'defineAction');
   // SHAPE NOTE: `ActionStub` describes the CLIENT-side shape produced by the
   // Vite plugin (`packages/vite/src/server-only.ts`) — an object with
@@ -93,7 +116,7 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   // The key union pins the form-field constants to the typed ActionStub
   // property names at compile time; a divergence fails here, not at runtime.
   const attach = (
-    key: 'use' | 'timeoutMs' | '__module' | '__action',
+    key: 'use' | 'timeoutMs' | '__module' | '__action' | 'input',
     value: unknown
   ) => {
     Object.defineProperty(fn, key, {
@@ -105,9 +128,10 @@ export function defineAction<TPayload, TResult, TChunk = never>(
   };
   if (opts?.use) attach('use', opts.use);
   if (opts?.timeoutMs !== undefined) attach('timeoutMs', opts.timeoutMs);
+  if (opts?.input) attach('input', opts.input);
   if (opts?.__module !== undefined) attach(FORM_MODULE_FIELD, opts.__module);
   if (opts?.__action !== undefined) attach(FORM_ACTION_FIELD, opts.__action);
-  return fn as unknown as ActionStub<TPayload, TResult, TChunk>;
+  return fn as unknown as ActionStub<unknown, unknown, unknown>;
 }
 
 type UseActionOptionsCommon<TChunk = never> = {

@@ -21,7 +21,8 @@
     "preact-iso": "github:preactjs/preact-iso#v3",
     "react": "npm:@preact/compat",
     "react-dom": "npm:@preact/compat",
-    "react-is": "npm:@preact/compat"
+    "react-is": "npm:@preact/compat",
+    "valibot": "^1.4.1"
   },
   "devDependencies": {
     "@babel/parser": "^8.0.0",
@@ -34,6 +35,7 @@
     "@mdx-js/rollup": "^3.1.1",
     "@preact/preset-vite": "^2.10.5",
     "@tailwindcss/postcss": "^4.2.2",
+    "@types/hast": "^3.0.4",
     "@types/node": "^25.6.0",
     "github-slugger": "^2.0.0",
     "magic-string": "^0.30.21",
@@ -48,6 +50,7 @@
     "shiki": "^4.0.2",
     "tailwindcss": "^4.2.2",
     "typescript": "*",
+    "unist-util-visit": "^5.1.0",
     "vite": "*",
     "wrangler": "^4.92.0"
   }

@@ -1,12 +1,13 @@
 // apps/site/src/components/demo/NewTaskDialog.tsx
 import { Dialog } from 'hono-preact-ui';
-import { Form, useFormStatus } from 'hono-preact';
+import { FieldError, Form, useFormStatus } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import {
   serverActions,
   serverLoaders,
 } from '../../pages/demo/project-board.server.js';
+import { NewTaskSchema } from '../../pages/demo/task-schema.js';
 import { PrioritySelect, StatusSelect, AssigneeCombobox } from './pickers.js';
 import type { TaskStatus, TaskPriority, User } from '../../demo/data.js';
 
@@ -31,6 +32,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
         </Dialog.Description>
         <Form
           action={serverActions.createTask}
+          schema={NewTaskSchema}
           invalidate={[serverLoaders.default]}
           onSuccess={() => setOpen(false)}
           class="space-y-2.5"
@@ -46,9 +48,13 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
             <span class="mb-1 block text-[11px] font-semibold">Title</span>
             <input
               name="title"
-              required
               placeholder="Short summary"
+              required
               class="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12.5px] text-foreground placeholder:text-muted"
+            />
+            <FieldError
+              name="title"
+              class="mt-0.5 block text-[11px] text-red-500"
             />
           </label>
           <label class="block">

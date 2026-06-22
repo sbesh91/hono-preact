@@ -117,6 +117,10 @@ describe('v3 <Loader> stability', () => {
       </LocationProvider>
     );
 
+    // coerceLoaderLocation is async (even when both schemas are absent), so fn
+    // is invoked after a microtask. Wait for it before using resolveInitial.
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+
     await act(async () => {
       resolveInitial({ msg: 'initial' });
     });

@@ -67,6 +67,15 @@ export const FORM_MODULE_FIELD = '__module';
 export const FORM_ACTION_FIELD = '__action';
 
 /**
+ * Reserved key under `deny.data` carrying normalized validation issues
+ * (`ValidationIssue[]`). Consumers: server `page-action-handler.ts` (writes it
+ * on a schema-failure `deny(422)`), iso `get-validation-issues.ts` (reads it).
+ * A schema-failure deny is otherwise indistinguishable from an app-level deny;
+ * this framework-owned key is the contract that keeps them apart.
+ */
+export const VALIDATION_ISSUES_KEY = '__hpValidationIssues';
+
+/**
  * The socket-upgrade endpoint (a header-only GET; selectors ride the query).
  * Consumers: iso `ws-upgrader.ts` (the seam reads this), server
  * `page-action-handler.ts` (the generated route registration).

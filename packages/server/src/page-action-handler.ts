@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import {
   isOutcome,
   timeoutOutcome,
+  deny,
   type AppConfig,
   type ServerActionCtx,
 } from '@hono-preact/iso';
@@ -16,6 +17,9 @@ import { composeServerChain } from './compose-server-chain.js';
 import {
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
+  VALIDATION_ISSUES_KEY,
+  validateWithSchema,
+  collectFormData,
 } from '@hono-preact/iso/internal/runtime';
 import { applyOutcomeHeaders } from './outcome-translation.js';
 import {
@@ -120,19 +124,7 @@ async function parseBody(
         status: 400,
       };
     }
-    const payload: Record<string, FormDataEntryValue | FormDataEntryValue[]> =
-      {};
-    for (const [key, value] of fd.entries()) {
-      if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD) continue;
-      const existing = payload[key];
-      if (existing !== undefined) {
-        payload[key] = Array.isArray(existing)
-          ? [...existing, value]
-          : [existing, value];
-      } else {
-        payload[key] = value;
-      }
-    }
+    const payload = collectFormData(fd);
     return { module: m, action: a, payload };
   }
   return {
@@ -221,7 +213,21 @@ export function pageActionHandler(
           middleware: serverMw,
           ctx,
           inner: async () => {
-            const inner = await fn(actionCtx, payload);
+            let effectivePayload: unknown = payload;
+            if (entry.input) {
+              const validated = await validateWithSchema(entry.input, payload);
+              if (!validated.ok) {
+                // Schema failure: short-circuit to a 422 deny carrying the
+                // normalized issues under the reserved key. The handler never
+                // runs. Caught below by `isOutcome(err)`, serialized into the
+                // envelope (JSON) or the deny re-render (PE) like any deny.
+                throw deny(422, 'Validation failed', {
+                  data: { [VALIDATION_ISSUES_KEY]: validated.issues },
+                });
+              }
+              effectivePayload = validated.value;
+            }
+            const inner = await fn(actionCtx, effectivePayload);
             // Normalize return-style outcomes to throw-style so the catch
             // path handles all outcomes uniformly.
             if (isOutcome(inner)) throw inner;

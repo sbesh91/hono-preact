@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter site run dev",
     "build": "pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter site build",
+    "gen:agents-corpus": "node --disable-warning=ExperimentalWarning apps/site/scripts/generate-bundled-corpus.ts",
     "deploy": "pnpm --filter site run deploy",
     "deploy:upload": "pnpm --filter site run deploy:upload",
     "preview": "pnpm --filter site run preview",
@@ -34,6 +35,7 @@
     "happy-dom": "^20.9.0",
     "prettier": "^3.8.3",
     "typescript": "*",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "zod": "^4.4.3"
   }
 }

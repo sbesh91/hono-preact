@@ -5,6 +5,7 @@ import type {
   FunctionComponent,
 } from 'preact';
 import { useContext } from 'preact/hooks';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
@@ -24,16 +25,26 @@ import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 export type { StreamStatus } from './internal/use-loader-runner.js';
 
-export type LoaderCtx<TParams = Record<string, string>> = {
+export type LoaderCtx<
+  TParams = Record<string, string>,
+  TSearch = Record<string, string>,
+> = {
   c: Context;
-  location: Omit<RouteHook, 'pathParams'> & { pathParams: TParams };
+  location: Omit<RouteHook, 'pathParams' | 'searchParams'> & {
+    pathParams: TParams;
+    searchParams: TSearch;
+  };
   signal: AbortSignal;
 };
 
-export type Loader<T, TParams = Record<string, string>> =
-  | ((ctx: LoaderCtx<TParams>) => Promise<T>)
-  | ((ctx: LoaderCtx<TParams>) => Promise<ReadableStream<T>>)
-  | ((ctx: LoaderCtx<TParams>) => AsyncGenerator<T, void, unknown>);
+export type Loader<
+  T,
+  TParams = Record<string, string>,
+  TSearch = Record<string, string>,
+> =
+  | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<T>)
+  | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>)
+  | ((ctx: LoaderCtx<TParams, TSearch>) => AsyncGenerator<T, void, unknown>);
 
 // The accumulating (streaming) `.View` form: live loaders only. `data` is the
 // folded accumulator and `status` reflects the connection; the chunk handed to
@@ -95,6 +106,10 @@ export interface LoaderRef<T, Live extends boolean = false> {
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
+  /** Search-params schema, as authored on `defineLoader({ searchSchema })`. */
+  readonly searchSchema?: StandardSchemaV1;
+  /** Path-params schema, as authored on `defineLoader({ paramsSchema })`. */
+  readonly paramsSchema?: StandardSchemaV1;
   /** True for a `live` loader (client-only subscription, never runs on SSR). */
   readonly live: boolean;
   /**
@@ -163,6 +178,30 @@ export interface LoaderRef<T, Live extends boolean = false> {
  */
 export type AnyLoaderRef = LoaderRef<any, boolean>;
 
+/** The two schema options a loader may carry. */
+export type LoaderSchemaOpts = {
+  paramsSchema?: StandardSchemaV1;
+  searchSchema?: StandardSchemaV1;
+};
+
+/**
+ * The pathParams type a loader's ctx sees, given its opts `O`: the
+ * `paramsSchema` output if present, else `Fallback` (the bare-form default or
+ * the route form's `RouteParams<RouteId>`).
+ */
+export type ParamsFromOpts<O, Fallback = Record<string, string>> = O extends {
+  paramsSchema: infer P extends StandardSchemaV1;
+}
+  ? StandardSchemaV1.InferOutput<P>
+  : Fallback;
+
+/** The searchParams type a loader's ctx sees, given its opts `O`. */
+export type SearchFromOpts<O> = O extends {
+  searchSchema: infer S extends StandardSchemaV1;
+}
+  ? StandardSchemaV1.InferOutput<S>
+  : Record<string, string>;
+
 /**
  * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded
  * in by the `moduleKeyPlugin` Vite transform; user code does not set it.
@@ -174,6 +213,17 @@ export type DefineLoaderOpts<T> = {
   __loaderName?: string;
   cache?: LoaderCache<T>;
   params?: string[] | '*';
+  /**
+   * Standard Schema validating + coercing `ctx.location.searchParams`. NOTE:
+   * distinct from `params` above (that is the cache-key dependency list). On
+   * failure the loader RPC responds 400 and the error boundary catches it.
+   */
+  searchSchema?: StandardSchemaV1;
+  /**
+   * Standard Schema validating + coercing `ctx.location.pathParams`. On failure
+   * the loader RPC responds 404. Non-live loaders only.
+   */
+  paramsSchema?: StandardSchemaV1;
   /**
    * Per-loader timeout in milliseconds. When omitted, the handler applies
    * its configured default (30s). Pass `false` to disable the timeout for
@@ -266,14 +316,20 @@ export function defineLoader<RouteId extends RegisteredPaths, T>(
   fn: Loader<T, RouteParams<RouteId>>,
   opts: DefineLoaderOpts<T> & { live: true }
 ): LoaderRef<T, true>;
-export function defineLoader<T>(
-  fn: Loader<T>,
-  opts?: DefineLoaderOpts<T>
+// Non-live bare form, with schema inference.
+export function defineLoader<T, O extends LoaderSchemaOpts = {}>(
+  fn: Loader<T, ParamsFromOpts<O>, SearchFromOpts<O>>,
+  opts?: DefineLoaderOpts<T> & O
 ): LoaderRef<T, false>;
-export function defineLoader<RouteId extends RegisteredPaths, T>(
+// Non-live route form, with schema inference (params default to RouteParams).
+export function defineLoader<
+  RouteId extends RegisteredPaths,
+  T,
+  O extends LoaderSchemaOpts = {},
+>(
   route: RouteId,
-  fn: Loader<T, RouteParams<RouteId>>,
-  opts?: DefineLoaderOpts<T>
+  fn: Loader<T, ParamsFromOpts<O, RouteParams<RouteId>>, SearchFromOpts<O>>,
+  opts?: DefineLoaderOpts<T> & O
 ): LoaderRef<T, false>;
 export function defineLoader(
   fnOrRoute: Loader<unknown> | string,
@@ -331,6 +387,8 @@ export function defineLoader(
     fn,
     cache: cache!,
     params: opts?.params ?? [],
+    searchSchema: opts?.searchSchema,
+    paramsSchema: opts?.paramsSchema,
     live,
     timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
     fallbackDelay: opts?.fallbackDelay,

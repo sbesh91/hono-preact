@@ -1,11 +1,16 @@
-import type { Context, MiddlewareHandler } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import {
   isOutcome,
   timeoutOutcome,
   type AppConfig,
   type ServerLoaderCtx,
+  type StandardSchemaV1,
 } from '@hono-preact/iso';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
+import {
+  coerceLoaderLocation,
+  type LooseLoaderFn,
+} from '@hono-preact/iso/internal/runtime';
 import { composeServerChain } from './compose-server-chain.js';
 import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
@@ -33,16 +38,12 @@ type SerializedLocation = {
   searchParams: Record<string, string>;
 };
 
-type LoaderFn = (props: {
-  c: Context;
-  location: SerializedLocation;
-  signal: AbortSignal;
-}) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
-
 type LoaderEntry = {
-  fn: LoaderFn;
+  fn: LooseLoaderFn;
   use: ReadonlyArray<unknown>;
   timeoutMs?: number | false;
+  searchSchema?: StandardSchemaV1;
+  paramsSchema?: StandardSchemaV1;
 };
 
 async function buildLoadersMap(
@@ -66,17 +67,24 @@ async function buildLoadersMap(
         //      property carries the original loader and `.use` carries any
         //      attached middleware/observers.
         if (typeof val === 'function') {
-          result[`${moduleKey}::${name}`] = { fn: val as LoaderFn, use: [] };
+          result[`${moduleKey}::${name}`] = {
+            fn: val as LooseLoaderFn,
+            use: [],
+          };
         } else if (val && typeof (val as { fn?: unknown }).fn === 'function') {
           const ref = val as {
-            fn: LoaderFn;
+            fn: LooseLoaderFn;
             use?: ReadonlyArray<unknown>;
             timeoutMs?: number | false;
+            searchSchema?: StandardSchemaV1;
+            paramsSchema?: StandardSchemaV1;
           };
           result[`${moduleKey}::${name}`] = {
             fn: ref.fn,
             use: ref.use ?? [],
             timeoutMs: ref.timeoutMs,
+            searchSchema: ref.searchSchema,
+            paramsSchema: ref.paramsSchema,
           };
         }
       }
@@ -258,9 +266,21 @@ export function loadersHandler(
             middleware: serverMw,
             ctx,
             inner: async () => {
+              const { pathParams, searchParams } = await coerceLoaderLocation(
+                {
+                  searchSchema: entry.searchSchema,
+                  paramsSchema: entry.paramsSchema,
+                },
+                validatedLocation.pathParams,
+                validatedLocation.searchParams
+              );
               const inner = await entry.fn({
                 c,
-                location: validatedLocation,
+                location: {
+                  path: validatedLocation.path,
+                  pathParams,
+                  searchParams,
+                },
                 signal,
               });
               // A loader that does `return redirect('/login')` instead of
