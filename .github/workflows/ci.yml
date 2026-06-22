@@ -182,6 +182,11 @@ jobs:
           LH_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
           LH_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Read the baseline off the `metrics` branch. Use FETCH_HEAD, not
+          # origin/metrics: a bare `git fetch <branch>` does not reliably update the
+          # remote-tracking ref, but FETCH_HEAD always points at what was just fetched.
+          # Fall back to an empty baseline when the branch or file is absent (first run);
+          # the renderer tolerates {} via `baseline.pages ?? {}`.
           git fetch origin metrics --depth=1 2>/dev/null \
             && git show FETCH_HEAD:lighthouse-report.json > /tmp/baseline.json \
             || echo '{}' > /tmp/baseline.json
