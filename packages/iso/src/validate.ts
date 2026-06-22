@@ -42,22 +42,24 @@ export async function validateWithSchema<S extends StandardSchemaV1>(
   schema: S,
   input: unknown
 ): Promise<ValidationResult<StandardSchemaV1.InferOutput<S>>> {
-  const raw = schema['~standard'].validate(input);
-  const resolved = raw instanceof Promise ? await raw : raw;
-  if (resolved.issues && resolved.issues.length > 0) {
-    return { ok: false, issues: normalizeIssues(resolved.issues) };
+  let result = schema['~standard'].validate(input);
+  if (result instanceof Promise) result = await result;
+  // Treat a present, non-empty issues array as failure; everything else
+  // (success, or a spec-violating empty issues array) is a pass.
+  if (result.issues && result.issues.length > 0) {
+    return { ok: false, issues: normalizeIssues(result.issues) };
   }
-  // `resolved.issues` is absent or empty: treat as success. A schema returning
-  // `{ issues: [] }` violates the spec but must not be misclassified as failure.
-  if (!resolved.issues) {
-    return { ok: true, value: resolved.value };
+  // After the failure guard, the spec guarantees `value` is present.
+  // `'value' in result` narrows from Result<Output> to SuccessResult<Output>
+  // so no cast is needed; the empty-issues spec-violation case still carries
+  // `value` and is covered by the same narrowing.
+  if ('value' in result) {
+    return { ok: true, value: result.value };
   }
-  // Empty-issues case: spec violation; extract value without narrowing gap.
-  return {
-    ok: true,
-    value: (resolved as unknown as { value: StandardSchemaV1.InferOutput<S> })
-      .value,
-  };
+  // This branch is unreachable for any spec-compliant schema. A non-empty
+  // issues array was already rejected above; an absent or empty one implies
+  // success and a present `value`. Treat as a degenerate pass.
+  return { ok: true, value: undefined as StandardSchemaV1.InferOutput<S> };
 }
 
 /**

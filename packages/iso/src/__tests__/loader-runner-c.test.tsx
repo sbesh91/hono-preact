@@ -127,6 +127,27 @@ function runDirect<T>(
   ) as Promise<T>;
 }
 
+describe('runLoader SSR path: no-schema loaders (unified coercion path)', () => {
+  it('passes location unchanged to a loader with no schemas', async () => {
+    let receivedLocation: unknown;
+    const ref = defineLoader(async (ctx) => {
+      receivedLocation = ctx.location;
+      return { ok: true };
+    });
+    const locWithData = {
+      path: '/items',
+      url: 'http://localhost/items?q=test',
+      searchParams: { q: 'test' },
+      pathParams: { id: '5' },
+    } as unknown as RouteHook;
+    await runDirect(ref, locWithData);
+    expect(receivedLocation).toMatchObject({
+      searchParams: { q: 'test' },
+      pathParams: { id: '5' },
+    });
+  });
+});
+
 describe('runLoader SSR path: searchSchema coercion', () => {
   const locWithSearch = {
     path: '/x',

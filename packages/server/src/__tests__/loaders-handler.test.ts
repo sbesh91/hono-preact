@@ -174,6 +174,34 @@ describe('loadersHandler', () => {
     });
   });
 
+  it('preserves deny.data in the loader RPC envelope', async () => {
+    const { deny } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: {
+          default: async () => {
+            throw deny(403, 'no', { data: { x: 1 } });
+          },
+        },
+      },
+    });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as {
+      __outcome: string;
+      message: string;
+      data: unknown;
+    };
+    expect(body.__outcome).toBe('deny');
+    expect(body.message).toBe('no');
+    expect(body.data).toEqual({ x: 1 });
+  });
+
   it('maps redirect() thrown from a loader to a redirect outcome envelope', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {
