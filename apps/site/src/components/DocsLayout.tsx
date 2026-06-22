@@ -33,7 +33,7 @@ export function DocsLayout({ children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { path } = useLocation();
 
-  useHashScroll(path);
+  useHashScroll();
   const headings = headingsForRoute(docsPages, path);
 
   // Close the mobile drawer on navigation.

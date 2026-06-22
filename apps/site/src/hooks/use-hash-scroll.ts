@@ -1,61 +1,54 @@
 import { useEffect } from 'preact/hooks';
+import { useViewTransitionLifecycle } from 'hono-preact';
 
 // Scroll to the URL hash target after a soft (preact-iso) navigation, which does
-// not scroll on its own. Re-runs on path change and on hashchange.
+// not scroll on its own.
 //
-// On a cold navigation to a code-split page the target heading is not in the DOM
-// yet when this first runs (the lazy route chunk is still loading). Rather than
-// poll every frame, wait for it with a MutationObserver: it fires only when the
-// DOM actually changes, scrolls once, then disconnects. A deadline stops the
-// wait for a hash that never resolves. Warm pages scroll immediately.
-export function useHashScroll(path: string): void {
+// The subtlety is the framework's View Transitions: every in-app navigation
+// renders inside `startViewTransition`, and while that transition is animating,
+// setting the scroll position is a no-op (the same way it is in a backgrounded
+// tab). So WHEN we scroll matters more than how:
+//
+//   - `afterSwap` fires once the new route's content has committed to the DOM
+//     (including a cold, code-split page, whose chunk the transition awaits) but
+//     BEFORE the transition captures its final snapshot. An instant scroll here
+//     lands and is captured, so the page animates in already at the heading.
+//   - `afterTransition` is the safety net: if the heading was not in the DOM yet
+//     at afterSwap (an unusually slow cold flush), the transition has finished by
+//     now, so a scroll is no longer a no-op.
+//
+// A MutationObserver (the previous approach) cannot hit either window reliably:
+// it fires on its own microtask timing, which in practice lands mid-transition,
+// where scrollIntoView no-ops; it then disconnects, and the scroll is silently
+// lost. That was the cross-page flake.
+//
+// On the very first page load (a deep link to /docs/page#heading) no navigation
+// and no transition fire, so we also scroll once on mount, and on `hashchange`
+// (address-bar #anchor edits never reach the router). `scroll-margin-top` on the
+// headings keeps them clear of the sticky top bar.
+export function useHashScroll(): void {
   useEffect(() => {
-    let observer: MutationObserver | null = null;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    scrollToHash(window.location.hash);
+    const onHashChange = () => scrollToHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
-    const stopWaiting = () => {
-      observer?.disconnect();
-      observer = null;
-      if (timer !== undefined) clearTimeout(timer);
-      timer = undefined;
-    };
+  useViewTransitionLifecycle({
+    onAfterSwap: () => scrollToHash(window.location.hash),
+    onAfterTransition: () => scrollToHash(window.location.hash),
+  });
+}
 
-    const scrollToHash = () => {
-      stopWaiting();
-      const hash = window.location.hash.slice(1);
-      if (!hash) return;
-      let id: string;
-      try {
-        id = decodeURIComponent(hash);
-      } catch {
-        return; // malformed %-escape in the hash
-      }
-
-      const tryScroll = (): boolean => {
-        const el = document.getElementById(id);
-        if (!el) return false;
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return true;
-      };
-
-      // Warm page: the target is already here.
-      if (tryScroll()) return;
-
-      // Cold page: wait for the lazy content to mount, scroll once, give up
-      // after the deadline if it never appears.
-      if (typeof MutationObserver === 'undefined') return;
-      observer = new MutationObserver(() => {
-        if (tryScroll()) stopWaiting();
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-      timer = setTimeout(stopWaiting, 3000);
-    };
-
-    scrollToHash();
-    window.addEventListener('hashchange', scrollToHash);
-    return () => {
-      stopWaiting();
-      window.removeEventListener('hashchange', scrollToHash);
-    };
-  }, [path]);
+function scrollToHash(rawHash: string): void {
+  const hash = rawHash.replace(/^#/, '');
+  if (!hash) return;
+  let id: string;
+  try {
+    id = decodeURIComponent(hash);
+  } catch {
+    return; // malformed %-escape in the hash
+  }
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ block: 'start' });
 }
