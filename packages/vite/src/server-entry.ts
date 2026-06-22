@@ -40,12 +40,22 @@ export function generateCoreAppModule(
   // createServerEntry factory (loaders RPC, action POST, SSR catch-all, and the
   // optional api mount). The factory lives behind hono-preact/server/internal/
   // runtime: a version-coupled contract this codegen emits, not a public API.
+  // `serverImports` is re-exported so the Cloudflare adapter's worker entry can
+  // build the room registry inside the Durable Object isolate
+  // (installRoomRegistry(() => buildRoomRegistry(serverImports))). The Durable
+  // Object never sees the worker's request-time wiring, so it resolves room
+  // defs from this same lazy-loader array. The Node entry ignores the export;
+  // its room runtime builds the registry inline inside createServerEntry. It is
+  // the routes manifest's own `serverImports` array (the lazy `.server` module
+  // loaders), surfaced as a named export with no extra collection work.
   return (
     `import { createServerEntry } from 'hono-preact/server/internal/runtime';\n` +
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +
     appConfigImport +
+    `\n` +
+    `export const serverImports = routes.serverImports;\n` +
     `\n` +
     `export const app = createServerEntry({\n` +
     `  routes,\n` +

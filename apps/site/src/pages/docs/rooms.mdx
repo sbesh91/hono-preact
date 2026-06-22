@@ -44,13 +44,19 @@ export type CursorState = { x: number; y: number; name: string };
 
 export const serverRooms = {
   cursors: defineRoom(cursorsChannel, {
+    // data runs at the edge with the live Hono Context. Its serializable result
+    // seeds conn.data, available in onJoin and onMessage. Use it to capture
+    // request-derived values (the authenticated user, a header) that are not
+    // available inside a Durable Object on Cloudflare.
+    data: (c) => ({ name: c.get('user')?.name ?? 'Guest' }),
+
     // Seed the joining member's initial presence state.
     presence: () => ({ x: 0, y: 0, name: 'Anonymous' }),
 
-    async onJoin(conn, { c, params }) {
+    onJoin(conn, { params }) {
       // params is typed: { boardId: string }
-      const user = c.get('user');
-      conn.setPresence({ x: 0, y: 0, name: user?.name ?? 'Guest' });
+      // conn.data.name was captured at the edge by the data factory above.
+      conn.setPresence({ x: 0, y: 0, name: conn.data.name });
     },
 
     onMessage(conn, msg) {
@@ -150,9 +156,40 @@ On reconnect, the room re-joins and the server sends a fresh presence snapshot. 
 
 ## Runtime scope
 
-Rooms fan out within a single Node process. If you run multiple Node processes (or deploy to Cloudflare Workers, where each request is isolated), in-process fan-out only reaches the connections on the same instance. Cross-process rooms require a shared backend; support for a Durable Object backend will be added in a later release.
+On Node, rooms fan out within a single process. Each Cloudflare Worker request is isolated, so in-process fan-out only reaches connections on the same instance. Rooms on Cloudflare run inside a Durable Object where all connections for a channel key share one instance, giving true cross-connection fan-out.
 
-For a working multi-tab demo, see `apps/example-node/` in the repo. The docs site itself runs on workerd and does not include a live room demo for this reason.
+## Cloudflare setup
+
+Rooms on Cloudflare run inside a Durable Object. The framework provides and re-exports the `HonoPreactRealtimeDO` class from the generated worker entry; you only need to declare the binding and migration in `wrangler.jsonc`. Apps scaffolded with the Cloudflare template get this pre-wired.
+
+Add these two fields to `wrangler.jsonc`:
+
+```jsonc
+"durable_objects": {
+  "bindings": [{ "name": "HONO_PREACT_REALTIME", "class_name": "HonoPreactRealtimeDO" }]
+},
+"migrations": [{ "tag": "v1", "new_sqlite_classes": ["HonoPreactRealtimeDO"] }]
+```
+
+By default the binding name is `HONO_PREACT_REALTIME` and the class name is `HonoPreactRealtimeDO`: the generated entry reads `c.env.HONO_PREACT_REALTIME` and re-exports `HonoPreactRealtimeDO`. To use different names, pass them to the adapter in `vite.config.ts` and keep `wrangler.jsonc` in sync:
+
+```ts
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+
+honoPreact({
+  adapter: cloudflareAdapter({
+    realtimeBinding: 'MY_REALTIME',
+    realtimeClass: 'MyRealtimeDO',
+  }),
+});
+```
+
+`realtimeBinding` must match the binding `name`; `realtimeClass` must match both the binding `class_name` and the `new_sqlite_classes` migration tag. `realtimeClass` must be a valid JavaScript identifier (it is emitted as a `class` declaration in the generated entry).
+
+Two behaviors differ between Node and Cloudflare:
+
+- **Plain sockets (1:1 `defineSocket`/`useSocket`) are not supported on Cloudflare.** Only rooms (`defineRoom`/`useRoom`) are. A socket connection on Cloudflare fails with a "no WebSocket upgrader installed" error.
+- **`onJoin` teardown functions run only on Node.** A function returned from `onJoin` is called on connection close in the Node runtime. On Cloudflare a Durable Object can hibernate between messages, so the teardown cannot be preserved. Use `onLeave` for cleanup that must run on both runtimes.
 
 ## API reference
 
@@ -169,14 +206,15 @@ Returns a `RoomRef` that the client hook reads. On the client side the `.server`
 
 #### Handler fields
 
-| Field       | Type                                                            | Description                                                                                                                                                                    |
-| ----------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `use`       | `ReadonlyArray<Middleware>`                                     | Guard chain run before the upgrade. A failing guard closes with code `4403`.                                                                                                   |
-| `presence`  | `() => State`                                                   | Seeds the joining member's initial presence state.                                                                                                                             |
-| `onJoin`    | `(conn, { c, params }) => void \| (() => void) \| Promise<...>` | Runs once per connection after the upgrade. `c` is the Hono Context; `params` is typed from the channel name. Returning a function registers it as a teardown called on leave. |
-| `onMessage` | `(conn, msg) => void \| Promise<void>`                          | Called for every incoming message from this connection.                                                                                                                        |
-| `onLeave`   | `(conn) => void`                                                | Called when the connection closes.                                                                                                                                             |
-| `onError`   | `(conn, err) => void`                                           | Called on a socket error.                                                                                                                                                      |
+| Field       | Type                                                         | Description                                                                                                                                                                                                                       |
+| ----------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `use`       | `ReadonlyArray<Middleware>`                                  | Guard chain run before the upgrade. A failing guard closes with code `4403`.                                                                                                                                                      |
+| `presence`  | `() => State`                                                | Seeds the joining member's initial presence state.                                                                                                                                                                                |
+| `data`      | `(c: Context) => Data`                                       | Runs at the edge (the worker) with the live Hono Context. Its serializable result seeds `conn.data`, available in `onJoin` and `onMessage`. Use it to capture request-derived data (authenticated user, headers) at upgrade time. |
+| `onJoin`    | `(conn, { params }) => void \| (() => void) \| Promise<...>` | Runs once per connection after the upgrade. `params` is typed from the channel name; request-derived data lives on `conn.data`. Returning a function registers it as a teardown called on leave.                                  |
+| `onMessage` | `(conn, msg) => void \| Promise<void>`                       | Called for every incoming message from this connection.                                                                                                                                                                           |
+| `onLeave`   | `(conn) => void`                                             | Called when the connection closes.                                                                                                                                                                                                |
+| `onError`   | `(conn, err) => void`                                        | Called on a socket error.                                                                                                                                                                                                         |
 
 #### `RoomConnection` fields (the `conn` handle)
 

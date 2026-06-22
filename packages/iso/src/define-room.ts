@@ -3,7 +3,7 @@ import type { Middleware } from './define-middleware.js';
 import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
-import type { UseRoomOpts, UseRoomResult } from './use-room.js';
+import { useRoom, type UseRoomOpts, type UseRoomResult } from './use-room.js';
 
 /**
  * The per-connection handle handed to a room's server handlers.
@@ -48,14 +48,23 @@ export interface RoomHandler<Incoming, Outgoing, State, Data, Params> {
   /** Seed the joining member's initial presence state. */
   presence?: () => State;
   /**
+   * Runs at the edge (the worker) with the live Hono Context, on both Node and
+   * Cloudflare. Its serializable result seeds `conn.data`, which is then
+   * available in onJoin and onMessage. Use it to capture request-derived data
+   * (the authenticated user, a header) since the room callbacks run without a
+   * live Context (inside a Durable Object on Cloudflare).
+   */
+  data?: (c: Context) => Data;
+  /**
    * Per-connection setup. May return a teardown fn called on leave.
    *
-   * `ctx.c` is the Hono Context for the upgrade request; `ctx.params` is the
-   * channel-name params recovered from the room key on the wire.
+   * `ctx.params` is the channel-name params recovered from the room key on the
+   * wire. Request-derived data captured at the edge lives on `conn.data`
+   * (seeded by the `data` factory above).
    */
   onJoin?(
     conn: RoomConnection<Outgoing, State, Data>,
-    ctx: { c: Context; params: Params }
+    ctx: { params: Params }
   ): void | (() => void) | Promise<void | (() => void)>;
   onMessage?(
     conn: RoomConnection<Outgoing, State, Data>,
@@ -132,7 +141,7 @@ export function defineRoom<
   Name extends string,
   Payload,
   State = void,
-  Data = undefined,
+  Data = Record<string, unknown>,
 >(
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
@@ -147,5 +156,19 @@ export function defineRoom<
     ...handler,
     channel,
   };
-  return def as unknown as RoomRef<Payload, Payload, State, RouteParams<Name>>;
+  const ref = def as unknown as RoomRef<
+    Payload,
+    Payload,
+    State,
+    RouteParams<Name>
+  >;
+  // Attach the `.useRoom` ref-method to the def itself. On the client the
+  // `.server` import is replaced by a stub that attaches its own `.useRoom`, but
+  // the build skips that transform for SSR, so a server-rendered component that
+  // calls `serverRooms.x.useRoom(...)` runs against this real def. Without the
+  // method, SSR throws "useRoom is not a function" (a bare 500). The def carries
+  // no module/room key, so the hook stays disconnected during SSR (opening no
+  // socket) and the markup matches the client's first hydration render.
+  ref.useRoom = (opts) => useRoom(ref, opts);
+  return ref;
 }

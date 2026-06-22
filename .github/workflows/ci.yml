@@ -219,34 +219,37 @@ jobs:
       - name: Build site
         run: pnpm --filter site build
 
-      # Upload a NON-ACTIVE version (wrangler versions upload), not a deploy.
-      # It serves at a *.workers.dev preview URL and never touches the active
-      # framework.sbesh.com deployment or its custom-domain route, so it needs
-      # only the account-level Workers Scripts permission the token already has.
-      - name: Upload preview version
-        id: upload
+      # Deploy the PR preview as an ACTIVE deployment of a DEDICATED preview
+      # worker (hono-preact-preview), never the production hono-preact script.
+      # Why a real `wrangler deploy` and not `wrangler versions upload`:
+      #   * Cloudflare does NOT generate preview URLs for Workers that use
+      #     Durable Objects, so the non-active-version + --preview-alias model
+      #     produces no URL at all for this DO-bearing worker.
+      #   * A real deploy serves the worker at its stable *.workers.dev URL and
+      #     applies the DO migration itself (versions upload cannot), so the
+      #     preview worker needs no manual seeding.
+      # The production custom_domain route is stripped first, so the preview can
+      # never claim framework.sbesh.com; with no route the deploy needs only the
+      # account-level Workers Scripts permission the token already has, and the
+      # live site is untouched. NOTE: this is a single shared preview worker, so
+      # concurrent PRs share the one URL (last push wins).
+      - name: Deploy preview
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Branch name and PR number pass through env, never interpolated into
-          # the run script, so an attacker-influenced ref cannot inject shell.
-          # The sanitized alias below contains only [a-z0-9-].
-          HEAD_REF: ${{ github.head_ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -o pipefail
-          # Sanitize the branch into a valid DNS label for the preview alias:
-          # lowercase, non-alphanumeric runs -> '-', trim, then cap so that
-          # "<alias>-hono-preact" stays within the 63-char DNS limit (alias <= 51).
-          alias="$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
-          alias="${alias:0:51}"
-          alias="${alias%-}"
-          if [ -z "$alias" ]; then alias="pr-${PR_NUMBER}"; fi
-          echo "Preview alias: $alias"
-          pnpm --filter site exec wrangler versions upload -c dist/hono_preact/wrangler.json --preview-alias "$alias" 2>&1 | tee /tmp/preview-upload.log
-          url="$(grep -ioE "https://${alias}-[a-z0-9.-]+\.workers\.dev" /tmp/preview-upload.log | head -1)"
+          worker="hono-preact-preview"
+          # Strip the production custom_domain route so the preview worker cannot
+          # claim framework.sbesh.com. Write the copy alongside the generated
+          # config so wrangler still resolves main/assets relative to that dir.
+          jq 'del(.routes)' apps/site/dist/hono_preact/wrangler.json \
+            > apps/site/dist/hono_preact/wrangler.preview.json
+          pnpm --filter site exec wrangler deploy -c dist/hono_preact/wrangler.preview.json --name "$worker" 2>&1 | tee /tmp/preview-deploy.log
+          url="$(grep -ioE "https://${worker}\.[a-z0-9-]+\.workers\.dev" /tmp/preview-deploy.log | head -1)"
           if [ -z "$url" ]; then
-            echo "Could not find the aliased *.workers.dev preview URL in wrangler output" >&2
+            echo "Could not find the *.workers.dev URL in wrangler output" >&2
             exit 1
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -258,9 +261,9 @@ jobs:
           message: |
             ### Docs site preview
 
-            A non-production preview of this PR (uploaded via `wrangler versions upload`, not the live site):
+            A non-production preview of this PR, deployed to a dedicated preview worker (not the live `framework.sbesh.com` site):
 
-            ${{ steps.upload.outputs.url }}
+            ${{ steps.deploy.outputs.url }}
 
             Built from ${{ github.event.pull_request.head.sha }}. Updates on every push.
 

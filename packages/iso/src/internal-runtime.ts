@@ -30,6 +30,21 @@ export {
   __resetWebSocketUpgraderForTesting,
 } from './internal/ws-upgrader.js';
 export type { WebSocketUpgrader } from './internal/ws-upgrader.js';
+// Pluggable realtime connector: the in-worker Node room runtime is the default
+// (no connector installed); the Cloudflare adapter installs one to forward an
+// allowed room upgrade to a Durable Object. socketsHandler resolves + guards at
+// the edge before invoking it, so no unauthorized connection reaches the DO.
+export {
+  installRealtimeConnector,
+  getRealtimeConnector,
+  __resetRealtimeConnectorForTesting,
+} from './internal/realtime-connector.js';
+export type {
+  RealtimeConnector,
+  RoomConnectContext,
+  RoomForwardContext,
+  RoomDenyContext,
+} from './internal/realtime-connector.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export * from './internal/contract.js';
 export {

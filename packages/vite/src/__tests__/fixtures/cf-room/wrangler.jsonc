@@ -1,0 +1,12 @@
+{
+  "name": "cf-room",
+  "main": "node_modules/.vite/hono-preact/server-entry.tsx",
+  "compatibility_date": "2026-02-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "HONO_PREACT_REALTIME", "class_name": "HonoPreactRealtimeDO" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HonoPreactRealtimeDO"] }]
+}

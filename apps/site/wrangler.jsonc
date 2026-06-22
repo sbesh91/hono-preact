@@ -13,6 +13,10 @@
       "custom_domain": true,
     },
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "HONO_PREACT_REALTIME", "class_name": "HonoPreactRealtimeDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HonoPreactRealtimeDO"] }],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

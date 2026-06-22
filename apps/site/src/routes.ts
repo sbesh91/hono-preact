@@ -34,6 +34,11 @@ const routeTree = [
         server: () => import('./pages/demo/login.server.js'),
       },
       {
+        path: 'cursors',
+        view: () => import('./pages/demo/cursors-demo.js'),
+        server: () => import('./pages/demo/cursors-demo.server.js'),
+      },
+      {
         path: 'projects',
         layout: () => import('./pages/demo/projects-shell.js'),
         server: () => import('./pages/demo/projects-shell.server.js'),
