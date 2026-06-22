@@ -27,7 +27,6 @@ import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
 import { validateWithSchema, mapIssuesToFields } from './validate.js';
 import { getValidationIssues } from './get-validation-issues.js';
-import { useActionResult } from './use-action-result.js';
 import {
   FieldErrorsContext,
   type FieldErrorsMap,
@@ -141,20 +140,14 @@ export function Form<TPayload, TResult>({
     [action]
   );
 
-  // [Fix 0]: Pass action directly so both plain and optimistic forms are scoped
-  // to THIS action's module+action key. Previously optimistic actions passed
-  // `undefined`, which caused useActionResult to return the globally-most-recent
-  // result, cross-contaminating unrelated action errors into this form.
-  const serverResult = useActionResult(action);
-
   // When the server returns a fresh response it is authoritative: reset the
   // suppression set so server errors are displayed again.
   //
   // We compare the raw store entry reference (from getLastActionResult, which
   // returns the same Map value object across renders until a new result is
-  // stored) rather than relying on the serverResult object (which useActionResult
-  // recreates on every render) or submittedPayload (which can be a new object
-  // reference even when the underlying data has not changed in some runtimes).
+  // stored) rather than a derived result object (which would be recreated on
+  // every render) or submittedPayload (which can be a new object reference even
+  // when the underlying data has not changed in some runtimes).
   //
   // Derived-state-during-render: if the store entry changed, reset
   // clearedServerFields synchronously before the current render paints.
@@ -177,9 +170,15 @@ export function Form<TPayload, TResult>({
 
   // Split into two memos: server errors only recompute when the server result
   // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
+  //
+  // Key on storeEntry (the Map value object) rather than serverResult (which
+  // useActionResult re-wraps into a new object each render). storeEntry holds
+  // the same reference until a new result is stored, so this memo is stable
+  // across unrelated re-renders. getValidationIssues only reads .kind/.data,
+  // both present on StoredActionResult (the Entry type underlying storeEntry).
   const serverErrors = useMemo<FieldErrorsMap>(
-    () => mapIssuesToFields(getValidationIssues(serverResult)),
-    [serverResult]
+    () => mapIssuesToFields(getValidationIssues(storeEntry)),
+    [storeEntry]
   );
 
   // Merge: server errors minus optimistically-cleared fields, then client
@@ -197,6 +196,11 @@ export function Form<TPayload, TResult>({
       e.preventDefault();
       // Validating mode begins at first submit.
       hasSubmittedRef.current = true;
+      // Invalidate any in-flight debounced revalidation. A debounce whose timer
+      // has already fired but whose async validate has not resolved yet will see
+      // its captured seq become stale and bail without calling setClientErrors,
+      // so the submit's own state writes always win.
+      inputSeq.current += 1;
       // Cancel any pending debounced revalidation.
       if (debounceTimerRef.current !== null) {
         clearTimeout(debounceTimerRef.current);
@@ -396,14 +400,17 @@ export function Form<TPayload, TResult>({
   }, []);
 
   // Compose consumer's onInput with the framework's live-clear handler so both
-  // run on every input event. Consumer fires first.
-  const composedOnInput: JSX.InputEventHandler<HTMLFormElement> =
+  // run on every input event. Consumer fires first. useCallback stabilizes the
+  // reference so the <form> does not reattach the listener on every render.
+  const composedOnInput: JSX.InputEventHandler<HTMLFormElement> = useCallback(
     consumerOnInput
       ? (e) => {
           consumerOnInput(e);
           handleInput(e);
         }
-      : (e) => handleInput(e);
+      : (e) => handleInput(e),
+    [consumerOnInput, handleInput]
+  );
 
   return (
     <form

@@ -496,6 +496,100 @@ describe('Form client pre-validation', () => {
     expect(true).toBe(true);
   });
 
+  // Fix [0]: submit bumps inputSeq so an in-flight debounced validation whose
+  // timer has already fired cannot overwrite the post-submit error state.
+  //
+  // Scenario: (1) first submit enters validating mode and fails (sync);
+  // (2) keystroke arms debounce; (3) debounce timer fires and kicks off an
+  // async validate that we hold open; (4) second submit runs its own schema
+  // validation (sync invalid) and shows an error; (5) the stale in-flight
+  // debounce resolves valid — must NOT clear the submit error.
+  it('submit invalidates an in-flight debounced validation that fired before submit', async () => {
+    // Phase 1: a simple sync-failing schema to prime validating mode.
+    const primingSchema: StandardSchemaV1<unknown, { title: string }> = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: () => ({
+          issues: [{ message: 'Initial error', path: ['title'] }],
+        }),
+      },
+    };
+    const racyAction = defineAction(async () => ({ id: 1 }), {
+      input: primingSchema,
+      __module: 'pages/test.server',
+      __action: 'create',
+    });
+
+    const { queryByText, getByText, container } = render(
+      <Form action={racyAction} schema={primingSchema}>
+        <input name="title" />
+        <FieldError name="title" />
+        <button type="submit">Save</button>
+      </Form>
+    );
+
+    // Submit once to enter validating mode.
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form')!);
+    });
+    expect(getByText('Initial error')).toBeTruthy();
+
+    // Phase 2: swap schema so the debounce call is async (held open) and the
+    // submit call is sync invalid (showing a distinct error for easy assertion).
+    let resolveDebounce!: (r: { value: { title: string } }) => void;
+    const debouncePromise = new Promise<{ value: { title: string } }>((res) => {
+      resolveDebounce = res;
+    });
+    let debounceCallCount = 0;
+    (
+      primingSchema['~standard'] as { validate: (v: unknown) => unknown }
+    ).validate = () => {
+      debounceCallCount++;
+      if (debounceCallCount === 1) {
+        // The debounced live-revalidation call: async, in-flight.
+        return debouncePromise as never;
+      }
+      // Second call is from the second submit's own validateWithSchema.
+      return {
+        issues: [{ message: 'Submit error', path: ['title'] }],
+      };
+    };
+
+    // Keystroke to arm the debounce timer.
+    const titleInput = container.querySelector('input[name="title"]')!;
+    (titleInput as HTMLInputElement).value = 'X';
+    await act(async () => {
+      fireEvent.input(titleInput);
+    });
+    // Advance past the 150ms debounce window; the timer fires and calls validate
+    // (debounceCallCount=1). The async result stays in flight (debouncePromise
+    // not yet resolved).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+    expect(debounceCallCount).toBe(1);
+
+    // Submit while the debounced validation is in flight. handleSubmit bumps
+    // inputSeq BEFORE its own validate call, so the in-flight debounce .then
+    // will see seq !== inputSeq.current and bail without writing state.
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form')!);
+    });
+    // Submit's own validate (debounceCallCount=2) ran and showed 'Submit error'.
+    expect(debounceCallCount).toBe(2);
+    expect(getByText('Submit error')).toBeTruthy();
+
+    // Resolve the stale in-flight debounce as valid. Without the seq bump it
+    // would call setClientErrors({}) and clear 'Submit error'. With the fix it
+    // must bail (stale seq) and leave the error intact.
+    await act(async () => {
+      resolveDebounce({ value: { title: 'valid' } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(queryByText('Submit error')).toBeTruthy();
+  });
+
   // Fix [7]: the async sequence guard. We verify it does not apply a stale
   // result by resolving two validations out of order.
   it('ignores a stale async validation result superseded by a newer keystroke', async () => {
