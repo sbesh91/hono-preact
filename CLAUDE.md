@@ -50,19 +50,14 @@ The docs site (`framework.sbesh.com`, a Cloudflare Worker) deploys **only on rel
 
 So a normal merge to `main` does **not** update the live site; the docs ship with the next version cut. Two prerequisites are operator-managed outside the repo: the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repo secrets, and Cloudflare Workers Builds auto-deploy being **disabled** (if it is ever re-enabled, every `main` push deploys again and defeats the gate).
 
-Pull requests get an isolated **preview deploy** via the `preview` job in `.github/workflows/ci.yml`. It runs `wrangler versions upload` against a **dedicated `hono-preact-preview` worker** (not the production `hono-preact` script), serving a non-active version at a `*.workers.dev` preview URL and posting it as a sticky `preview-docs` PR comment that updates on every push. Previews never touch the live `framework.sbesh.com` deployment or its route, and reuse the existing `CLOUDFLARE_API_TOKEN` (the upload needs only Workers Scripts: Edit, not the zone Workers Routes permission the production deploy needs).
+Pull requests get a **preview deploy** via the `preview` job in `.github/workflows/ci.yml`. It runs a real `wrangler deploy` to a **dedicated `hono-preact-preview` worker** (not the production `hono-preact` script), served at that worker's stable `*.workers.dev` URL and posted as a sticky `preview-docs` PR comment that updates on every push. Previews never touch the live `framework.sbesh.com` deployment or its route, and reuse the existing `CLOUDFLARE_API_TOKEN` (the deploy needs only Workers Scripts: Edit, not the zone Workers Routes permission the production deploy needs).
 
-The preview worker is **separate from production because Cloudflare refuses to apply Durable Object migrations through `wrangler versions upload`** (error `10211`): a DO migration can only be applied by a real, non-versioned `wrangler deploy`. So the preview worker is **seeded once by an operator** with a routes-stripped real deploy:
+Two Cloudflare constraints shape this design, both caused by the realtime **Durable Object** (`HonoPreactRealtimeDO`):
 
-```sh
-pnpm --filter site build
-jq 'del(.routes)' apps/site/dist/hono_preact/wrangler.json \
-  > apps/site/dist/hono_preact/wrangler.preview.json   # drop the custom_domain route
-pnpm --filter site exec wrangler deploy \
-  -c dist/hono_preact/wrangler.preview.json --name hono-preact-preview
-```
+- **No `wrangler versions upload` + `--preview-alias`.** Cloudflare does not generate preview URLs for Workers that use Durable Objects, so the per-branch non-active-version model produces no URL at all. The job therefore does a real (active) deploy and reads the worker's `*.workers.dev` URL.
+- **The deploy must strip the custom_domain route.** The generated `dist/hono_preact/wrangler.json` carries the `framework.sbesh.com` route; the job writes a routes-stripped copy (`jq 'del(.routes)'`, alongside the original so wrangler still resolves `main`/`assets`) and deploys that, so the preview can never claim the production domain.
 
-After that one-time seed, `versions upload` has no migration left to apply and previews work on every push. Repeat the seed only when a **new** DO class (a new migration tag) is introduced; the `preview` job detects the `10211` failure and posts the seed command to the PR so the next person is not stuck.
+A real deploy applies the DO migration itself, so **no manual seeding is needed** (the first run creates the worker and applies the migration). Trade-off: it is a **single shared preview worker**, so concurrent PRs share the one URL (last push wins); if per-PR isolation is ever needed, deploy to `hono-preact-preview-pr-<N>` and add a cleanup-on-close job.
 
 ## PR workflow
 
