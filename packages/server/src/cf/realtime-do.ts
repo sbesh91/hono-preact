@@ -51,8 +51,8 @@ type AnyRoomDef = RoomDef<unknown, unknown, unknown, unknown, unknown>;
  *
  * onJoin TEARDOWN ON CLOUDFLARE: the function `onJoin` may return runs only on
  * Node. A teardown closure cannot survive a hibernation cycle, so it is NOT
- * captured or run here. `onLeave` is the portable leave hook on both runtimes
- * (engineClose calls it in webSocketClose); put leave-side cleanup there.
+ * captured or run here. `onLeave` is the portable leave hook on both runtimes;
+ * webSocketClose calls it after engineClose. Put leave-side cleanup there.
  */
 export class HonoPreactRealtimeDO extends DurableObject {
   /** Cached `${moduleKey}::${name}` -> RoomDef map (resolved on first use). */
@@ -142,13 +142,16 @@ export class HonoPreactRealtimeDO extends DurableObject {
     // roster (and this connection's presence) off attachments, and the joiner
     // must already be in getWebSockets() with its initial presence so the
     // snapshot it receives includes itself.
+    // `presence` is left undefined here; engineJoin -> joinPresence writes the
+    // real initial value (def.presence?.()) into the attachment via the CF
+    // transport, so def.presence() is called exactly once per join (not twice).
     const attachment: RoomConnAttachment = {
       connId,
       moduleKey,
       name,
       params,
       data,
-      presence: def.presence?.(),
+      presence: undefined,
     };
     server.serializeAttachment(attachment);
 
@@ -179,13 +182,19 @@ export class HonoPreactRealtimeDO extends DurableObject {
   async webSocketClose(ws: WebSocket): Promise<void> {
     const att = ws.deserializeAttachment() as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
-    // engineClose does: leavePresence (a CF no-op; the socket is already evicted
-    // from getWebSockets), broadcast presence/leave to the room, then onLeave.
-    // The store re-includes the closing socket so the onLeave conn resolves its
-    // `data` bag (Node parity); the closing socket receiving its own leave echo
-    // is harmless (the client dedupes by member id, and it is mid-teardown).
+    // engineClose does: leavePresence (a CF no-op; the socket is already
+    // evicted from getWebSockets), broadcast presence/leave to the room.
+    // The store re-includes the closing socket so the onLeave conn resolves
+    // its `data` bag (Node parity); the closing socket receiving its own
+    // leave echo is harmless (the client dedupes by member id, mid-teardown).
+    // The DO has no unsub/joinTeardown (teardown closures cannot survive
+    // hibernation), so onLeave runs immediately after engineClose, which
+    // preserves the CF behavior (onLeave still runs after the leave broadcast).
+    const closeWs = (code?: number, reason?: string) => ws.close(code, reason);
     const t = makeCfRoomTransport(att.connId, this.#storeWith(ws));
-    engineClose(t, def, (code, reason) => ws.close(code, reason));
+    engineClose(t, def, closeWs);
+    const conn = makeRoomConnection(t, closeWs);
+    def.onLeave?.(conn);
   }
 
   /** Hand a socket error to the room's onError hook. */

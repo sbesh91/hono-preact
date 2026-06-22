@@ -443,6 +443,44 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(aAfter).toHaveLength(0);
   });
 
+  it('(f2) onLeave fires AFTER the onJoin teardown (order regression)', async () => {
+    // Regression: the PR 5a refactor moved onLeave into engineClose so it ran
+    // BEFORE unsub and the onJoin teardown. The correct order is:
+    //   engineClose (leave roster + broadcast) -> unsub -> joinTeardown -> onLeave
+    // This test pins that: the teardown spy must fire BEFORE the onLeave spy.
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const callOrder: string[] = [];
+    const teardownSpy = vi.fn(() => {
+      callOrder.push('teardown');
+    });
+    const onLeaveSpy = vi.fn(() => {
+      callOrder.push('onLeave');
+    });
+
+    const app = makeApp(
+      makeRoomRegistry({
+        onJoin() {
+          return teardownSpy;
+        },
+        onLeave: onLeaveSpy,
+      })
+    );
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+    a.events.onClose?.({ code: 1000, reason: '' } as CloseEvent, a.ws as never);
+
+    // Both must have been called.
+    expect(teardownSpy).toHaveBeenCalledTimes(1);
+    expect(onLeaveSpy).toHaveBeenCalledTimes(1);
+
+    // The teardown must have run BEFORE onLeave.
+    expect(callOrder).toEqual(['teardown', 'onLeave']);
+  });
+
   it('(g) a denying def.use closes WS_DENY_CODE and never joins', async () => {
     const { upgrader, conns } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);

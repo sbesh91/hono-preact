@@ -199,18 +199,18 @@ export async function engineMessage(
 }
 
 /**
- * Run the leave sequence for the acting connection: leave the roster, broadcast
- * a presence/leave, then call `def.onLeave`. The caller runs the `onJoin`-
- * returned teardown and any transport teardown (unsubscribe) around this.
+ * Run the leave sequence for the acting connection: remove the connection from
+ * the roster and broadcast a presence/leave to the room. This is the protocol
+ * half of the leave sequence; it does NOT call `def.onLeave`. Each transport
+ * runtime calls `def.onLeave` itself, after `engineClose`, `unsub`, and the
+ * `onJoin`-returned teardown, so the leave hook always runs last.
  */
 export function engineClose(
   t: RoomTransport,
-  def: AnyRoomDef,
-  close: (code?: number, reason?: string) => void
+  _def: AnyRoomDef,
+  _close: (code?: number, reason?: string) => void
 ): void {
   const self = t.connId;
   t.leavePresence(self);
   t.broadcast(envPresence(self, 'leave', undefined));
-  const conn = makeRoomConnection(t, close);
-  def.onLeave?.(conn);
 }

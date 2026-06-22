@@ -278,7 +278,11 @@ describe('room-engine', () => {
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it('close broadcasts presence/leave + calls onLeave', async () => {
+  it('close broadcasts presence/leave and removes from roster, but does NOT call onLeave', async () => {
+    // engineClose is the PROTOCOL half of the leave sequence: it removes the
+    // connection from the roster and broadcasts the presence/leave. It does NOT
+    // call def.onLeave; that is the transport runtime's responsibility, run
+    // AFTER engineClose, unsub, and the onJoin teardown (onLeave last).
     const { transport, broadcasts, roster } = makeFakeTransport('A');
     const onLeave = vi.fn();
     const def = makeDef({ onLeave });
@@ -298,10 +302,7 @@ describe('room-engine', () => {
     expect(leave).toBeDefined();
     expect(leave!.env).toMatchObject({ from: 'A', t: 'presence', op: 'leave' });
 
-    // onLeave was called with a conn handle for this connection. (The engine
-    // is stateless and rebuilds the conn per call, so identity is NOT part of
-    // the contract; the id is.)
-    expect(onLeave).toHaveBeenCalledTimes(1);
-    expect((onLeave.mock.calls[0]![0] as { id: string }).id).toBe('A');
+    // onLeave must NOT be called by the engine: the transport runtime owns it.
+    expect(onLeave).not.toHaveBeenCalled();
   });
 });

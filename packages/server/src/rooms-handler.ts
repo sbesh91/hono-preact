@@ -297,11 +297,18 @@ export function createRoomWsEvents(
 
     onClose() {
       if (!transport || !topic || !connId) return;
-      // Leave the roster + announce the leave + run onLeave (the engine), then
-      // tear down the subscription and the user's onJoin teardown.
+      // Protocol: leave the roster + broadcast the presence/leave.
       engineClose(transport, roomDef, closeConn);
+      // Tear down the subscription and the onJoin teardown BEFORE calling
+      // onLeave, so the leave hook runs after all subscriptions are torn down
+      // and after the onJoin teardown (restoring the pre-PR order).
       unsub?.();
       joinTeardown?.();
+      // onLeave runs LAST: after unsub and the onJoin teardown, so the user
+      // cannot inadvertently interact with a still-active subscription or a
+      // timer started in onJoin that hasn't been cleaned up yet.
+      const conn = makeRoomConnection(transport, closeConn);
+      roomDef.onLeave?.(conn);
     },
 
     onError(ev) {
