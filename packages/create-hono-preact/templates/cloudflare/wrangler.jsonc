@@ -6,4 +6,15 @@
   "assets": {
     "directory": "./dist/client"
   }
+
+  // Realtime rooms (defineRoom/useRoom) run inside a Durable Object on
+  // Cloudflare. This is opt-in: a fresh app ships no Durable Object. When you
+  // add your first room, uncomment the two blocks below (the names must match
+  // your cloudflareAdapter() options, which default to these). See the rooms
+  // docs, "Cloudflare setup".
+  //
+  // ,"durable_objects": {
+  //   "bindings": [{ "name": "HONO_PREACT_REALTIME", "class_name": "HonoPreactRealtimeDO" }]
+  // },
+  // "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HonoPreactRealtimeDO"] }]
 }

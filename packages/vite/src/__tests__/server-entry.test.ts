@@ -54,6 +54,18 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain('dev: import.meta.env.DEV,');
   });
 
+  it('re-exports serverImports for the Cloudflare DO room registry', () => {
+    // The Cloudflare worker entry installs the room registry inside the Durable
+    // Object isolate from this re-exported lazy-loader array.
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+    });
+    expect(src).toContain('export const serverImports = routes.serverImports;');
+  });
+
   it('passes the user api app via the api option when present', () => {
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',

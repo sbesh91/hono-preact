@@ -8,12 +8,14 @@ import {
   updatePresence,
   roomMembers,
 } from '@hono-preact/iso/internal/runtime';
-import type {
-  RoomDef,
-  RoomEnvelope,
-  RoomClientFrame,
-} from '@hono-preact/iso/internal';
-import type { RoomConnection } from '@hono-preact/iso';
+import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
+import {
+  engineJoin,
+  engineMessage,
+  engineClose,
+  makeRoomConnection,
+  type RoomTransport,
+} from './room-engine.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -24,7 +26,6 @@ type LazyArray = ReadonlyArray<() => Promise<unknown>>;
 
 type AnyRoomDef = RoomDef<unknown, unknown, unknown, unknown, unknown>;
 type AnyEnvelope = RoomEnvelope<unknown, unknown>;
-type AnyFrame = RoomClientFrame<unknown, unknown>;
 
 /**
  * Build the `${moduleKey}::${name}` -> RoomDef registry from the route server
@@ -164,21 +165,32 @@ export function resolveRoomKey(
 /**
  * Build the WSEvents for a room connection. Called by `socketsHandler` after
  * the shared guard chain has run (so `denied` is already resolved); the socket
- * handler stays a thin "if room def, delegate" branch and all the room fan-out
- * lives here.
+ * handler stays a thin "if room def, delegate" branch.
  *
- * Fan-out rules (the correctness core of the PR):
- *  - Every member subscribes to the room topic on the in-process bus, which
- *    delivers the published envelope OBJECT by reference (no serialization).
- *  - A 'msg' broadcast is published to the topic; the subscribe callback
- *    UNCONDITIONALLY skips the sender's own 'msg' echoes (sender-exclude), so a
- *    plain `broadcast` reaches everyone except the sender.
- *  - `broadcast(msg, { self: true })` additionally does a direct LOCAL send to
- *    the sender (no wire flag on the envelope).
- *  - Presence deltas (join/update/leave) are ALWAYS forwarded by every
- *    callback, including the sender's own; the client dedupes by member id.
- *  - The initial snapshot is sent DIRECTLY to the joining socket, never
- *    published (other members must not re-receive the whole roster).
+ * The room PROTOCOL (snapshot/deltas, fan-out rules, frame routing, the
+ * join/message/leave sequence, the `RoomConnection` shape) lives in the
+ * transport-agnostic engine (`room-engine.ts`). This function only builds a
+ * NODE `RoomTransport` and delegates to the engine. The transport realizes each
+ * engine primitive on the in-process pub/sub bus + the presence registry:
+ *
+ *  - `sendTo(connId, env)` is ALWAYS a send to this connection's own socket
+ *    (the engine's only direct sends are self-targeted: the snapshot to the
+ *    joiner, `conn.send`, and the `{ self: true }` broadcast copy). It
+ *    JSON-stringifies once to the client (the wire encoding).
+ *  - `broadcast(env, excludeConnId)` PUBLISHES to the room topic. The exclusion
+ *    is NOT applied at publish time; instead each connection's own subscribe
+ *    callback skips the sender's own `'msg'` echoes by `env.from`. So a plain
+ *    `broadcast` reaches everyone except the sender (receiver-side exclude),
+ *    and presence deltas reach everyone (the sender's self-echo is harmless;
+ *    the client dedupes by member id). This is exactly the PR 4 fan-out: the
+ *    engine still passes `excludeConnId` (the Cloudflare transport honors it
+ *    directly), but the Node behavior is driven by the published `env.from` +
+ *    the receiver-side skip.
+ *  - presence ops map to the presence registry: `joinPresence`/`leavePresence`/
+ *    `updatePresence` -> `joinRoom`/`leaveRoom`/`updatePresence`, and
+ *    `roster()` -> `roomMembers(topic)`.
+ *  - `data(connId)` returns the per-connection bag captured at the edge in
+ *    onOpen (the `roomDef.data?.(ctx)` result seeding `conn.data`).
  */
 export function createRoomWsEvents(
   roomDef: AnyRoomDef,
@@ -186,24 +198,21 @@ export function createRoomWsEvents(
 ): WSEvents {
   const { ctx, denied, roomKey } = args;
 
-  // Wrap the raw WS so a send JSON-stringifies once to the client (the wire
-  // encoding). Server->client envelopes ride this single stringify; the
-  // client-side decodeEnvelope (Task 6) is the matching parse.
-  const makeSocket = (ws: RawWs) => ({
-    send: (msg: unknown) => ws.send(JSON.stringify(msg)),
-    close: (code?: number, reason?: string) => ws.close(code, reason),
-  });
-
   // Per-connection state populated in onOpen and read by onMessage/onClose.
   let connId: string | undefined;
   let topic: string | undefined;
-  let conn: RoomConnection<unknown, unknown, unknown> | undefined;
+  let transport: RoomTransport | undefined;
   let unsub: (() => void) | undefined;
   let joinTeardown: (() => void) | void;
+  // The connection's own socket close, captured in onOpen. `conn.close` (in
+  // every engine handler) routes to it, so all handlers close the SAME socket
+  // (as in PR 4, where the one `conn` carried `ws.close`).
+  let closeConn: (code?: number, reason?: string) => void = () => {};
 
   return {
     async onOpen(_e, rawWs) {
-      const ws = makeSocket(rawWs as RawWs);
+      const ws = rawWs as RawWs;
+      closeConn = (code, reason) => ws.close(code, reason);
       // Deny BEFORE subscribe/join if the guard chain denied OR the room key
       // failed to resolve (bad JSON, a non-string param value, or a missing
       // required `:param`). The room key was parsed + validated server-side in
@@ -217,135 +226,100 @@ export function createRoomWsEvents(
       // The server-computed topic (always channel.key(params)) and the validated
       // string-valued params. The client only varies param VALUES, never the
       // namespace, so it cannot reach an unrelated topic.
-      topic = roomKey.topic;
+      const roomTopic = roomKey.topic;
       const params = roomKey.params;
+      topic = roomTopic;
 
-      // 1. Stable member id.
-      connId = crypto.randomUUID();
+      // Stable member id.
+      const myId = crypto.randomUUID();
+      connId = myId;
 
-      // 2. Subscribe to the topic. The bus delivers the envelope OBJECT by
-      //    reference; narrowing `unknown` -> RoomEnvelope here is sanctioned:
-      //    the room layer is the sole publisher/subscriber on its own topics,
-      //    so we read our own object back through the unknown-typed seam (no
-      //    decodeEnvelope; that is the client-side wire parse).
-      const myId = connId;
-      const mySocket = ws;
-      unsub = getPubSubBackend().subscribe(topic, (message) => {
+      // Subscribe to the topic. The bus delivers the envelope OBJECT by
+      // reference; narrowing `unknown` -> RoomEnvelope here is sanctioned: the
+      // room layer is the sole publisher/subscriber on its own topics, so we
+      // read our own object back through the unknown-typed seam (no
+      // decodeEnvelope; that is the client-side wire parse). Sender-exclude is
+      // realized HERE, receiver-side: never echo my own 'msg' broadcasts back to
+      // me. Presence deltas (and others' msgs) are always forwarded.
+      unsub = getPubSubBackend().subscribe(roomTopic, (message) => {
         const env = message as AnyEnvelope; // sanctioned: own object through the unknown seam
-        // Sender-exclude: never echo my own 'msg' broadcasts back to me.
         if (env.t === 'msg' && env.from === myId) return;
-        // Presence deltas (and others' msgs) are always forwarded.
-        mySocket.send(env);
+        ws.send(JSON.stringify(env));
       });
 
-      // 3. Seed presence with the server default (may be undefined) and join.
-      const initialState = roomDef.presence?.();
-      joinRoom(topic, connId, initialState);
+      // Run the edge data factory if provided. It runs here (at the edge, in the
+      // worker) with the live Context, before the room callbacks run. The result
+      // seeds conn.data, available to onJoin and onMessage. On Cloudflare the
+      // room callbacks run inside a Durable Object where no live Context exists,
+      // so this is the only place to capture it. Sanctioned cast: the factory
+      // result seeds the per-connection bag (unknown-typed on the internal
+      // AnyRoomDef seam) with a user-defined serializable value; the user's own
+      // Data generic flows on the public RoomHandler type. Captured ONCE so the
+      // same reference is returned on every `data(connId)` (onJoin and onMessage
+      // share one bag; a mutation in onJoin is visible in onMessage).
+      const initialData = (roomDef.data?.(ctx) ?? {}) as Record<
+        string,
+        unknown
+      >;
 
-      // 4. Send the joining socket the full roster snapshot DIRECTLY (not via
-      //    publish: other members must not re-receive the whole roster).
-      const snapshot: AnyEnvelope = {
-        t: 'snapshot',
-        self: connId,
-        members: roomMembers(topic),
-      };
-      ws.send(snapshot);
-
-      // 5. Announce the join to the topic. The sender's own callback also
-      //    forwards this (presence is always forwarded); the client dedupes by
-      //    member id, so a self-echoed join is harmless.
-      publishPresence(topic, connId, 'join', initialState);
-
-      // 6. Build the RoomConnection handed to the user handlers.
-      conn = {
-        id: connId,
-        data: {},
-        close: (code, reason) => ws.close(code, reason),
-        // Send to THIS connection only.
-        send: (msg) => ws.send(envMsg(myId, msg)),
-        // Broadcast to others (sender-excluded by the subscribe callback);
-        // `{ self: true }` also does a direct local send to the sender.
-        broadcast: (msg, opts) => {
-          getPubSubBackend().publish(topic!, envMsg(myId, msg));
-          if (opts?.self) ws.send(envMsg(myId, msg));
-        },
-        // Update + announce presence (same effect as a client 'presence' frame).
-        setPresence: (state) => {
-          updatePresence(topic!, myId, state);
-          publishPresence(topic!, myId, 'update', state);
-        },
+      // The Node transport: each engine primitive realized on the in-process bus
+      // + the presence registry. `sendTo` is always this socket (the engine only
+      // ever sends to self); `broadcast` publishes (exclusion is receiver-side,
+      // above); presence ops hit the registry on this topic.
+      transport = {
+        connId: myId,
+        sendTo: (_to, env) => ws.send(JSON.stringify(env)),
+        broadcast: (env) => getPubSubBackend().publish(roomTopic, env),
+        joinPresence: (id, state) => joinRoom(roomTopic, id, state),
+        leavePresence: (id) => leaveRoom(roomTopic, id),
+        updatePresence: (id, state) => updatePresence(roomTopic, id, state),
+        roster: () => roomMembers(roomTopic),
+        data: () => initialData,
       };
 
-      // 7. Run the user's join hook; capture any teardown it returns.
-      joinTeardown = await roomDef.onJoin?.(conn, { c: ctx, params });
+      // Drive the engine join sequence (presence join, snapshot, presence/join
+      // broadcast, onJoin); capture the teardown onJoin returns.
+      joinTeardown = await engineJoin(transport, roomDef, params, closeConn);
     },
 
     async onMessage(ev, _ws) {
-      if (denied || !conn || !topic || !connId) return;
+      if (denied || !transport || !topic || !connId) return;
       const raw =
         typeof ev.data === 'string'
           ? ev.data
           : ev.data instanceof ArrayBuffer
             ? new TextDecoder().decode(ev.data)
             : await (ev.data as Blob).text();
-      let frame: AnyFrame;
-      try {
-        frame = JSON.parse(raw) as AnyFrame; // sanctioned untrusted-JSON boundary
-      } catch {
-        // A malformed (non-JSON) frame would otherwise reject this async handler
-        // with an unhandled rejection. Drop it silently.
-        return;
-      }
-      if (frame.t === 'presence') {
-        // Framework-handled presence update (does NOT go through onMessage):
-        // same effect as conn.setPresence(state).
-        updatePresence(topic, connId, frame.state);
-        publishPresence(topic, connId, 'update', frame.state);
-        return;
-      }
-      if (frame.t === 'msg') {
-        // An application message: hand the inner payload to the user handler.
-        await roomDef.onMessage?.(conn, frame.msg);
-        return;
-      }
-      // Unknown `t`: silently drop. Do NOT fall through to onMessage with an
-      // undefined payload (the old implicit-else assumed `t === 'msg'`).
+      // The engine owns the try/catch JSON.parse + frame routing (presence /
+      // msg / drop-unknown).
+      await engineMessage(transport, roomDef, raw, closeConn);
     },
 
     onClose() {
-      if (!topic || !connId) return;
-      // 10. Leave the roster, announce the leave, tear down the subscription
-      //     and the user's onJoin teardown, then call onLeave.
-      leaveRoom(topic, connId);
-      publishPresence(topic, connId, 'leave', undefined);
+      if (!transport || !topic || !connId) return;
+      // Protocol: leave the roster + broadcast the presence/leave.
+      engineClose(transport, roomDef, closeConn);
+      // Tear down the subscription and the onJoin teardown BEFORE calling
+      // onLeave, so the leave hook runs after all subscriptions are torn down
+      // and after the onJoin teardown (restoring the pre-PR order).
       unsub?.();
       joinTeardown?.();
-      if (conn) roomDef.onLeave?.(conn);
+      // onLeave runs LAST: after unsub and the onJoin teardown, so the user
+      // cannot inadvertently interact with a still-active subscription or a
+      // timer started in onJoin that hasn't been cleaned up yet.
+      const conn = makeRoomConnection(transport, closeConn);
+      roomDef.onLeave?.(conn);
     },
 
     onError(ev) {
-      if (!conn) return;
+      if (!transport) return;
       // Unwrap the real error if the event carries one (ErrorEvent shape);
       // fall back to the event itself so no information is discarded. Mirrors
-      // the socket handler's error unwrap.
+      // the socket handler's error unwrap. onError is not part of the engine
+      // sequence; it builds a conn off the transport and calls the user hook.
       const err = ev && 'error' in ev ? (ev as { error: unknown }).error : ev;
+      const conn = makeRoomConnection(transport, closeConn);
       roomDef.onError?.(conn, err);
     },
   };
-}
-
-/** Build a 'msg' envelope from a sender id and an application message. */
-function envMsg(from: string, msg: unknown): AnyEnvelope {
-  return { from, t: 'msg', msg };
-}
-
-/** Publish a presence delta to the topic. */
-function publishPresence(
-  topic: string,
-  from: string,
-  op: 'join' | 'update' | 'leave',
-  state: unknown
-): void {
-  const env: AnyEnvelope = { from, t: 'presence', op, state };
-  getPubSubBackend().publish(topic, env);
 }

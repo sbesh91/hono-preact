@@ -443,6 +443,44 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(aAfter).toHaveLength(0);
   });
 
+  it('(f2) onLeave fires AFTER the onJoin teardown (order regression)', async () => {
+    // Regression: the PR 5a refactor moved onLeave into engineClose so it ran
+    // BEFORE unsub and the onJoin teardown. The correct order is:
+    //   engineClose (leave roster + broadcast) -> unsub -> joinTeardown -> onLeave
+    // This test pins that: the teardown spy must fire BEFORE the onLeave spy.
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const callOrder: string[] = [];
+    const teardownSpy = vi.fn(() => {
+      callOrder.push('teardown');
+    });
+    const onLeaveSpy = vi.fn(() => {
+      callOrder.push('onLeave');
+    });
+
+    const app = makeApp(
+      makeRoomRegistry({
+        onJoin() {
+          return teardownSpy;
+        },
+        onLeave: onLeaveSpy,
+      })
+    );
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+    a.events.onClose?.({ code: 1000, reason: '' } as CloseEvent, a.ws as never);
+
+    // Both must have been called.
+    expect(teardownSpy).toHaveBeenCalledTimes(1);
+    expect(onLeaveSpy).toHaveBeenCalledTimes(1);
+
+    // The teardown must have run BEFORE onLeave.
+    expect(callOrder).toEqual(['teardown', 'onLeave']);
+  });
+
   it('(g) a denying def.use closes WS_DENY_CODE and never joins', async () => {
     const { upgrader, conns } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
@@ -570,25 +608,15 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
   });
 
   it('(security) client key params are constrained to the channel namespace', async () => {
-    // A client for the `room/:roomId` channel sends params for `roomId=demo`.
-    // The server interpolates the topic as `room/demo`, bound to the channel's
+    // A client for the `room/:roomId` channel sends params for `roomId=p1`.
+    // The server interpolates the topic as `room/p1`, bound to the channel's
     // namespace. The client cannot reach an unrelated topic by injecting a
-    // pre-built topic string: even if the client sends `r={"roomId":"demo"}`
-    // the resulting topic is always `room/demo`, never e.g. `board/p1`.
+    // pre-built topic string: even if the client sends `r={"roomId":"p1"}`
+    // the resulting topic is always `room/p1`, never e.g. `board/p1`.
     const { upgrader, conns } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    let seenTopic: string | undefined;
-    const app = makeApp(
-      makeRoomRegistry({
-        onJoin(_conn, { c }) {
-          // Capture the computed topic from the server context via the pub/sub
-          // backend: the connection is subscribed to the server-computed topic.
-          // We assert it via the roomMembers roster, which is keyed by topic.
-          seenTopic = c.req.query(SOCKET_ROOM_PARAM) ?? undefined;
-        },
-      })
-    );
+    const app = makeApp(makeRoomRegistry({}));
 
     // Attempt: send params that, if trusted literally as a topic, would land
     // on `board/p1` (a different channel entirely). The server must instead
@@ -609,8 +637,6 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     // An unrelated topic (`board/p1`) must be empty: the params never escape
     // the channel's namespace.
     expect(roomMembers('board/p1')).toHaveLength(0);
-    // The raw `r` param the server received was the params JSON, not a topic.
-    expect(seenTopic).toBe(params);
   });
 
   // -------------------------------------------------------------------------
@@ -748,6 +774,70 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       a.ws as never
     );
     expect(onMessageSpy).not.toHaveBeenCalled();
+  });
+
+  it('data factory runs at the edge and seeds conn.data for onJoin and onMessage', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let seenDataInJoin: unknown;
+    let seenDataInMessage: unknown;
+    const app = makeApp(
+      makeRoomRegistry({
+        // The data factory captures a query param from the live Context.
+        data: (c) => ({ tag: c.req.query('tag') ?? 'none' }),
+        onJoin(conn) {
+          seenDataInJoin = conn.data;
+        },
+        onMessage(conn) {
+          seenDataInMessage = conn.data;
+        },
+      })
+    );
+
+    // Connect with ?tag=x in addition to the standard room params.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(ROOM_PARAMS)}` +
+        `&tag=x`
+    );
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    // The data factory ran at the edge and seeded conn.data.
+    expect(seenDataInJoin).toEqual({ tag: 'x' });
+
+    // onMessage sees the same conn.data.
+    await a.events.onMessage?.(
+      {
+        data: JSON.stringify({ t: 'msg', msg: { text: 'hi' } }),
+      } as MessageEvent,
+      a.ws as never
+    );
+    expect(seenDataInMessage).toEqual({ tag: 'x' });
+  });
+
+  it('data factory result defaults to {} when not provided', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let seenData: unknown;
+    const app = makeApp(
+      makeRoomRegistry({
+        // No data factory: conn.data starts as {}.
+        onJoin(conn) {
+          seenData = conn.data;
+        },
+      })
+    );
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    expect(seenData).toEqual({});
   });
 
   it('a well-formed {t:msg} frame still reaches onMessage (regression)', async () => {

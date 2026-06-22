@@ -1,7 +1,11 @@
 import type { Context } from 'hono';
 import type { Middleware } from './define-middleware.js';
 import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from './internal/contract.js';
-import type { UseSocketOpts, UseSocketResult } from './use-socket.js';
+import {
+  useSocket,
+  type UseSocketOpts,
+  type UseSocketResult,
+} from './use-socket.js';
 
 /** The per-connection socket handle handed to the server handlers. */
 export interface ServerSocket<Outgoing, Data> {
@@ -82,12 +86,20 @@ export interface SocketRef<Incoming, Outgoing> {
 export function defineSocket<Incoming, Outgoing, Data = undefined>(
   handler: SocketHandler<Incoming, Outgoing, Data>
 ): SocketRef<Incoming, Outgoing> {
-  // The handler IS the runtime def on the server; the type presents as a
-  // client SocketRef. The build strips the body on the client and replaces it
-  // with the descriptor stub, so this object only runs server-side.
+  // A copy of the handler IS the runtime def on the server; the type presents
+  // as a client SocketRef. The build strips the body on the client and replaces
+  // it with the descriptor stub, so this object only runs server-side.
   // Single sanctioned cast: the def-doubles-as-client-ref pattern, identical
   // to how defineAction returns a server fn typed as ActionStub (action.ts
   // uses `return fn as unknown as ActionStub<...>`). The cast is bounded to
   // this one return site.
-  return handler as unknown as SocketRef<Incoming, Outgoing>;
+  const ref = { ...handler } as unknown as SocketRef<Incoming, Outgoing>;
+  // Attach the `.useSocket` ref-method to the def itself, for the same reason
+  // `defineRoom` attaches `.useRoom`: SSR skips the `.server`->stub transform,
+  // so a server-rendered component calling `serverSockets.x.useSocket(...)` runs
+  // against this real def and would otherwise throw "useSocket is not a
+  // function" (a bare 500). Without a module/socket key the hook stays
+  // disconnected during SSR, matching the client's first hydration render.
+  ref.useSocket = (opts) => useSocket(ref, opts);
+  return ref;
 }

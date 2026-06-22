@@ -109,12 +109,13 @@ export default defineConfig({
       include: ['packages/**/src/**/__tests__/**/*.test-d.{ts,tsx}'],
       tsconfig: './tsconfig.typecheck.json',
     },
-    // websocket-dev.test.ts boots real Vite dev servers (and workerd); it is
-    // CPU-heavy and starves the parallel pool. It runs separately via
-    // `pnpm test:integration` (vitest.integration.config.ts).
+    // websocket-dev.test.ts and cf-room.test.ts boot real Vite dev servers (and
+    // workerd); they are CPU-heavy and starve the parallel pool. They run
+    // separately via `pnpm test:integration` (vitest.integration.config.ts).
     exclude: [
       ...configDefaults.exclude,
       'packages/vite/src/__tests__/websocket-dev.test.ts',
+      'packages/vite/src/__tests__/cf-room.test.ts',
       'packages/create-hono-preact/__tests__/scaffold-integration.test.ts',
     ],
     setupFiles: ['./vitest.setup.ts'],

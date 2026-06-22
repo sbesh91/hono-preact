@@ -61,6 +61,13 @@ export default defineConfig((env) => ({
         ),
       },
       {
+        find: 'hono-preact/server/internal/cloudflare',
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/server-internal-cloudflare.ts'
+        ),
+      },
+      {
         find: 'hono-preact/server/internal/runtime',
         replacement: resolve(
           __dirname,
@@ -111,6 +118,13 @@ export default defineConfig((env) => ({
       {
         find: '@hono-preact/iso',
         replacement: resolve(__dirname, '../../packages/iso/src/index.ts'),
+      },
+      {
+        find: '@hono-preact/server/internal/cloudflare',
+        replacement: resolve(
+          __dirname,
+          '../../packages/server/src/internal-cloudflare.ts'
+        ),
       },
       {
         find: '@hono-preact/server/internal/runtime',
