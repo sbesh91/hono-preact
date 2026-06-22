@@ -156,8 +156,8 @@ const CursorsDemo: FunctionComponent = () => {
             key={member.id}
             style={{
               position: 'absolute',
-              left: `${member.state.x}px`,
-              top: `${member.state.y}px`,
+              left: `${member.state?.x ?? 0}px`,
+              top: `${member.state?.y ?? 0}px`,
               width: '10px',
               height: '10px',
               borderRadius: '50%',

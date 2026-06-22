@@ -119,12 +119,15 @@ function _useRoomMethodProbe() {
   // send accepts the Incoming type; setPresence accepts State.
   expectTypeOf(result.send).toEqualTypeOf<(msg: ChatMsg) => void>();
   expectTypeOf(result.setPresence).toEqualTypeOf<(state: ChatState) => void>();
-  // members is a readonly roster of PresenceMember<State>; self is optional.
+  // members is a readonly roster of PresenceMember; member state may be
+  // undefined (a room with no presence() seed, or before a member's first
+  // presence frame), so the roster state type is `State | undefined`. self is
+  // also optional (undefined until the first snapshot arrives).
   expectTypeOf(result.members).toEqualTypeOf<
-    ReadonlyArray<PresenceMember<ChatState>>
+    ReadonlyArray<PresenceMember<ChatState | undefined>>
   >();
   expectTypeOf(result.self).toEqualTypeOf<
-    PresenceMember<ChatState> | undefined
+    PresenceMember<ChatState | undefined> | undefined
   >();
   // No client broadcast on the result (fan-out is server-mediated).
   // @ts-expect-error useRoom result has no `broadcast`
