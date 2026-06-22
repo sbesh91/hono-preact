@@ -149,18 +149,24 @@ export default defineConfig((env) => ({
       configureServer(server) {
         // In dev there is no client build, and the Cloudflare dev server does
         // not serve the dist/client assets dir, so the worker catch-all would
-        // render a not-found page for these paths. Serve them directly (freshly
-        // generated, reflecting current docs) so the topbar/Overview links work
-        // in `pnpm dev`, matching production's static-asset serving.
+        // render a not-found page for these paths. Serve them directly. The
+        // corpus is generated once and cached, then invalidated when a docs
+        // page changes, so repeated requests don't re-read every MDX file while
+        // dev edits still stay reflected. (Production serves the static files
+        // emitted by closeBundle; this middleware runs in dev only.)
+        let cache: { llmsTxt: string; llmsFullTxt: string } | null = null;
+        server.watcher.on('all', (_event, file) => {
+          if (file.startsWith(docsDir) && file.endsWith('.mdx')) cache = null;
+        });
         server.middlewares.use((req, res, next) => {
           const path = (req.url || '').split('?')[0];
           if (path !== '/llms.txt' && path !== '/llms-full.txt') {
             next();
             return;
           }
-          const { llmsTxt, llmsFullTxt } = generateLlmsFiles(nav, docsDir);
+          cache ??= generateLlmsFiles(nav, docsDir);
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-          res.end(path === '/llms.txt' ? llmsTxt : llmsFullTxt);
+          res.end(path === '/llms.txt' ? cache.llmsTxt : cache.llmsFullTxt);
         });
       },
     },
