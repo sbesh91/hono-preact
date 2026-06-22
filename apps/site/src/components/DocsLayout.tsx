@@ -86,7 +86,7 @@ export function DocsLayout({ children }: Props) {
   const renderAreaSwitcher = () => (
     <nav
       aria-label="Docs areas"
-      class="flex-1 flex rounded-md border border-border overflow-hidden text-sm"
+      class="flex rounded-md border border-border divide-x divide-border overflow-hidden text-sm"
     >
       {nav.map((area) => {
         const TabIcon = area.icon;
@@ -96,7 +96,7 @@ export function DocsLayout({ children }: Props) {
             key={area.id}
             href={area.basePath}
             aria-current={isActive ? 'true' : undefined}
-            class={`flex-1 flex items-center justify-center gap-1.5 h-9 no-underline ${
+            class={`flex items-center justify-center gap-1.5 h-9 px-3 no-underline ${
               isActive
                 ? 'bg-accent/10 text-accent font-semibold'
                 : 'text-muted hover:text-foreground hover:bg-foreground/10'
@@ -213,7 +213,7 @@ export function DocsLayout({ children }: Props) {
             {renderAreaSwitcher()}
             <button
               type="button"
-              class="shrink-0 bg-transparent border-none text-[1.1rem] text-muted cursor-pointer leading-none p-1 hover:text-foreground"
+              class="shrink-0 ml-auto bg-transparent border-none text-[1.1rem] text-muted cursor-pointer leading-none p-1 hover:text-foreground"
               onClick={() => setMobileOpen(false)}
               aria-label="Close menu"
             >
