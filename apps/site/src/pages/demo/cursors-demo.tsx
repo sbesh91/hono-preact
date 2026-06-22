@@ -1,7 +1,12 @@
 import { definePage } from 'hono-preact';
 import type { JSX, FunctionComponent } from 'preact';
-import { useCallback } from 'preact/hooks';
+import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { serverRooms } from './cursors-demo.server.js';
+
+// Cap presence broadcasts at ~60/s (one per frame). Pointer events fire much
+// faster (often >100/s); without throttling, every move sends a WebSocket frame
+// and floods the socket.
+const PRESENCE_INTERVAL_MS = 16;
 
 // Live-cursors demo: all members in the 'demo' room see each other's pointer
 // positions as small colored overlays fanned out via the Durable Object
@@ -12,13 +17,46 @@ const CursorsDemo: FunctionComponent = () => {
     key: { room: 'demo' },
     presence: { x: 0, y: 0 },
   });
+  const { setPresence } = room;
+
+  // Throttle presence sends to at most one per PRESENCE_INTERVAL_MS via a single
+  // trailing timer that always flushes the LATEST position. Trailing (not just
+  // leading) so the remote cursor settles exactly where the pointer stopped,
+  // never a frame behind.
+  const pendingRef = useRef<{ x: number; y: number } | null>(null);
+  const lastSentRef = useRef(0);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handlePointerMove = useCallback(
     (e: JSX.TargetedPointerEvent<HTMLDivElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
-      room.setPresence({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      pendingRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+      // A flush is already scheduled; it will pick up this latest position.
+      if (flushTimerRef.current !== null) return;
+      const wait = Math.max(
+        0,
+        PRESENCE_INTERVAL_MS - (performance.now() - lastSentRef.current)
+      );
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null;
+        if (pendingRef.current === null) return;
+        setPresence(pendingRef.current);
+        pendingRef.current = null;
+        lastSentRef.current = performance.now();
+      }, wait);
     },
-    [room]
+    [setPresence]
+  );
+
+  // Drop a pending trailing send if the component unmounts mid-throttle.
+  useEffect(
+    () => () => {
+      if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
+    },
+    []
   );
 
   const others = room.members.filter((m) => m.id !== room.self?.id);
