@@ -2,7 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/preact';
 import { useRoom } from '../use-room.js';
+import { defineRoom } from '../define-room.js';
 import type { RoomRef } from '../define-room.js';
+import { defineChannel } from '../define-channel.js';
 import {
   FORM_MODULE_FIELD,
   FORM_ROOM_FIELD,
@@ -587,5 +589,51 @@ describe('useRoom', () => {
     expect(result.members).toHaveLength(1);
     expect(result.members[0]!.id).toBe('u2');
     expect(result.members[0]!.state).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SSR ref-method: the deployed `/demo/cursors` 500 regression.
+//
+// On a hard load, SSR imports the REAL `.server` module (the `.server`->stub
+// transform is skipped for SSR), so `serverRooms.x` is the `defineRoom()` def,
+// NOT the client stub. The cursors component calls the `.useRoom()` ref-method
+// form during render. The `.useRoom` method used to be attached ONLY by the
+// client stub, so server-rendering the real def threw "useRoom is not a
+// function" and the worker returned a bare 500. Soft client-nav never hit it
+// because the client bundle IS stubbed. `defineRoom` now attaches `.useRoom` to
+// the def itself; the def carries no module/room key, so the hook stays
+// disconnected during SSR (opening no socket) and the markup matches the
+// client's first hydration render.
+// ---------------------------------------------------------------------------
+
+describe('defineRoom server def (SSR ref-method)', () => {
+  it('renders the disconnected state during SSR without throwing and opens no socket', () => {
+    env.current = 'server';
+    const cursors = defineChannel('cursors/:room')<{ x: number; y: number }>();
+    const room = defineRoom(cursors, {
+      presence: () => ({ x: 0, y: 0 }),
+      onMessage(conn, msg) {
+        conn.broadcast(msg);
+      },
+    });
+
+    let captured: ReturnType<typeof room.useRoom> | undefined;
+    function ServerComp() {
+      captured = room.useRoom({
+        key: { room: 'demo' },
+        presence: { x: 0, y: 0 },
+      });
+      return null;
+    }
+
+    // Before the fix this throws synchronously during render.
+    expect(() => render(<ServerComp />)).not.toThrow();
+    // No module/room key on the real def -> the lifecycle never constructs a
+    // socket during SSR, so the SSR markup matches the client's first render.
+    expect(lastWS).toBeNull();
+    expect(captured?.status).toBe('connecting');
+    expect(captured?.members).toEqual([]);
+    expect(captured?.self).toBeUndefined();
   });
 });

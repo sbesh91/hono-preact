@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/preact';
 import { useSocket } from '../use-socket.js';
+import { defineSocket } from '../define-socket.js';
 import type { SocketRef } from '../define-socket.js';
 import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from '../internal/contract.js';
 import { env } from '../is-browser.js';
@@ -346,5 +347,35 @@ describe('useSocket', () => {
     expect(result.status).toBe('closed');
     // No reconnect attempt.
     expect(wsInstances.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SSR ref-method: the sibling of the rooms `/demo/cursors` 500. On a hard load
+// SSR imports the REAL `.server` module (the `.server`->stub transform is
+// skipped for SSR), so `serverSockets.x` is the `defineSocket()` def, NOT the
+// client stub. A component calling the `.useSocket()` ref-method form during
+// render used to throw "useSocket is not a function" because that method was
+// attached only by the client stub. `defineSocket` now attaches `.useSocket` to
+// the def; with no module/socket key the hook stays disconnected during SSR.
+// ---------------------------------------------------------------------------
+
+describe('defineSocket server def (SSR ref-method)', () => {
+  it('renders during SSR without throwing and opens no socket', () => {
+    env.current = 'server';
+    const feed = defineSocket<{ ping: string }, { pong: string }>({
+      message() {},
+    });
+
+    let captured: ReturnType<typeof feed.useSocket> | undefined;
+    function ServerComp() {
+      captured = feed.useSocket();
+      return null;
+    }
+
+    // Before the fix this throws synchronously during render.
+    expect(() => render(<ServerComp />)).not.toThrow();
+    expect(lastWS).toBeNull();
+    expect(captured?.status).toBe('connecting');
   });
 });

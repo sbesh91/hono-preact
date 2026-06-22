@@ -3,7 +3,7 @@ import type { Middleware } from './define-middleware.js';
 import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
-import type { UseRoomOpts, UseRoomResult } from './use-room.js';
+import { useRoom, type UseRoomOpts, type UseRoomResult } from './use-room.js';
 
 /**
  * The per-connection handle handed to a room's server handlers.
@@ -156,5 +156,19 @@ export function defineRoom<
     ...handler,
     channel,
   };
-  return def as unknown as RoomRef<Payload, Payload, State, RouteParams<Name>>;
+  const ref = def as unknown as RoomRef<
+    Payload,
+    Payload,
+    State,
+    RouteParams<Name>
+  >;
+  // Attach the `.useRoom` ref-method to the def itself. On the client the
+  // `.server` import is replaced by a stub that attaches its own `.useRoom`, but
+  // the build skips that transform for SSR, so a server-rendered component that
+  // calls `serverRooms.x.useRoom(...)` runs against this real def. Without the
+  // method, SSR throws "useRoom is not a function" (a bare 500). The def carries
+  // no module/room key, so the hook stays disconnected during SSR (opening no
+  // socket) and the markup matches the client's first hydration render.
+  ref.useRoom = (opts) => useRoom(ref, opts);
+  return ref;
 }
