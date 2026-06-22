@@ -54,12 +54,9 @@ Pull requests get an isolated **preview deploy** via the `preview` job in `.gith
 
 ## PR workflow
 
-Any time a PR is opened, immediately run a deep PR review as the first follow-up step (before any other post-open work).
+Any time a PR is opened, immediately run a deep PR review as the first follow-up step (before any other post-open work). A `PostToolUse` hook (`.claude/hooks/pr-review-reminder.sh`) injects this reminder after a successful `gh pr create`.
 
-The deep review must include these checks beyond correctness, style, and types:
-
-- **Replacement parity.** When a PR replaces or rewrites a subsystem (handler, hook, plugin, generated entry, resolver), enumerate every behavior the predecessor had and verify each one survives in the replacement. Read the deleted or renamed files via git history (`git show <pre-PR-sha>:path` or the PR's deletion diff). Do not trust comments in the new code that claim "X is preserved" or "X is folded in elsewhere"; treat them as hypotheses and confirm by reading the code they point to.
-- **Cross-cutting concerns end-to-end.** For each request path the PR touches, trace middleware composition, auth/permission gates, caching, observability hooks, and error reporting all the way through the new path and compare to the pre-PR path. A silently dropped middleware layer (especially anything auth- or permission-adjacent) is a P0 finding that blocks merge.
+The review checklist is canonical in [`REVIEW.md`](REVIEW.md) at the repo root. It reviews from a seasoned framework-developer stance across six lenses (performance, maintainability, effective testing, modularity, bundle size, effective use of web platform features) plus the repo-specific must-checks: replacement parity, cross-cutting concerns end-to-end (a silently dropped auth/permission middleware layer is a P0 that blocks merge), the public-API/breaking-change surface (including breaking changes invisible in the export-surface diff), and docs sync. Follow `REVIEW.md` for every review, and edit it (not this section) when the criteria change.
 
 ## Type casts
 
