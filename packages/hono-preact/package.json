@@ -67,6 +67,10 @@
     "./server/internal/runtime": {
       "types": "./dist/server-internal-runtime.d.ts",
       "import": "./dist/server-internal-runtime.js"
+    },
+    "./server/internal/cloudflare": {
+      "types": "./dist/server-internal-cloudflare.d.ts",
+      "import": "./dist/server-internal-cloudflare.js"
     }
   },
   "scripts": {
@@ -108,6 +112,7 @@
     }
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260515.0",
     "@hono-preact/iso": "workspace:*",
     "@hono-preact/server": "workspace:*",
     "@hono-preact/vite": "workspace:*",
