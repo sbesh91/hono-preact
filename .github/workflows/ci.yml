@@ -181,7 +181,11 @@ jobs:
         env:
           LH_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
           LH_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/render-lighthouse-comment.mjs /tmp/fresh-lh.json lighthouse-report.json > /tmp/lh-comment.md
+        run: |
+          git fetch origin metrics --depth=1 2>/dev/null \
+            && git show FETCH_HEAD:lighthouse-report.json > /tmp/baseline.json \
+            || echo '{}' > /tmp/baseline.json
+          node scripts/render-lighthouse-comment.mjs /tmp/fresh-lh.json /tmp/baseline.json > /tmp/lh-comment.md
 
       - name: Post sticky comment
         uses: marocchino/sticky-pull-request-comment@v2
