@@ -504,7 +504,7 @@ describe('Form client pre-validation', () => {
   // (2) keystroke arms debounce; (3) debounce timer fires and kicks off an
   // async validate that we hold open; (4) second submit runs its own schema
   // validation (sync invalid) and shows an error; (5) the stale in-flight
-  // debounce resolves valid — must NOT clear the submit error.
+  // debounce resolves valid; must NOT clear the submit error.
   it('submit invalidates an in-flight debounced validation that fired before submit', async () => {
     // Phase 1: a simple sync-failing schema to prime validating mode.
     const primingSchema: StandardSchemaV1<unknown, { title: string }> = {

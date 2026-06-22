@@ -56,9 +56,11 @@ export async function validateWithSchema<S extends StandardSchemaV1>(
   if ('value' in result) {
     return { ok: true, value: result.value };
   }
-  // This branch is unreachable for any spec-compliant schema. A non-empty
-  // issues array was already rejected above; an absent or empty one implies
-  // success and a present `value`. Treat as a degenerate pass.
+  // Off-spec result: neither a non-empty issues array nor a value property.
+  // The spec mandates that a non-failure result carries `value`, but a schema
+  // could return `{ issues: [] }` (empty array, no value). We treat it as a
+  // pass (empty issues = no problems) rather than blocking the form. The cast
+  // is the sanctioned boundary for fabricating the absent value at this seam.
   return { ok: true, value: undefined as StandardSchemaV1.InferOutput<S> };
 }
 

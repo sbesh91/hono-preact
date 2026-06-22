@@ -33,6 +33,13 @@ import {
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
 
+function logClientSchemaThrew(err: unknown): void {
+  console.error(
+    'hono-preact: client schema validation threw; proceeding to server-side validation.',
+    err
+  );
+}
+
 /**
  * The `action` prop accepts either a plain action stub or the branded value
  * returned by `useOptimisticAction`. The union lets `<Form>` discover the
@@ -241,10 +248,7 @@ export function Form<TPayload, TResult>({
         } catch (err) {
           // The schema's validate function threw or rejected. Fail open: let the
           // server validate authoritatively rather than dead-ending the form.
-          console.error(
-            'hono-preact: client schema validation threw; proceeding to server-side validation.',
-            err
-          );
+          logClientSchemaThrew(err);
           // Fall through to POST below.
         }
       }
@@ -398,10 +402,7 @@ export function Form<TPayload, TResult>({
         .catch((err) => {
           // The schema threw or rejected during live revalidation. Log and bail;
           // do not update clientErrors so the user can keep typing.
-          console.error(
-            'hono-preact: client schema validation threw; proceeding to server-side validation.',
-            err
-          );
+          logClientSchemaThrew(err);
         });
     }, 150);
   }, []);
