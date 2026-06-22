@@ -1,5 +1,5 @@
 import { definePage } from 'hono-preact';
-import type { FunctionComponent } from 'preact';
+import type { JSX, FunctionComponent } from 'preact';
 import { useCallback } from 'preact/hooks';
 import { serverRooms } from './cursors-demo.server.js';
 
@@ -14,8 +14,8 @@ const CursorsDemo: FunctionComponent = () => {
   });
 
   const handlePointerMove = useCallback(
-    (e: PointerEvent) => {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    (e: JSX.TargetedPointerEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
       room.setPresence({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     },
     [room]

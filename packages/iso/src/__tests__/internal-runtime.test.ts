@@ -17,6 +17,9 @@ const PLUMBING = [
   'installWebSocketUpgrader',
   'getWebSocketUpgrader',
   '__resetWebSocketUpgraderForTesting',
+  'installRealtimeConnector',
+  'getRealtimeConnector',
+  '__resetRealtimeConnectorForTesting',
   '__$createLoaderStub_hpiso',
 ] as const;
 
