@@ -55,8 +55,17 @@ Import from these subpaths of the `hono-preact` package:
 The UI component library is a separate package, `hono-preact-ui` (Dialog,
 Popover, Tooltip, Menu, Select, Combobox, plus headless hooks). It ships unstyled.
 
+## Recipes
+
+Step-by-step procedures for the most common tasks. Open the file and follow it top to
+bottom; each one ends with a command to verify your work.
+
+- Add a page (a new URL): `agents/skills/add-a-page.md`
+- Add a loader (server data for a page): `agents/skills/add-a-loader.md`
+- Add an action and form (a mutation): `agents/skills/add-an-action.md`
+- Add a guard (restrict a route): `agents/skills/add-a-guard.md`
+
 ## Docs
 
-- Full docs: https://framework.sbesh.com/docs
-- LLM index: https://framework.sbesh.com/llms.txt
-- LLM full corpus: https://framework.sbesh.com/llms-full.txt
+- Full docs (online): https://framework.sbesh.com/docs
+- Full documentation corpus, bundled offline in this project: `agents/llms-full.txt`
