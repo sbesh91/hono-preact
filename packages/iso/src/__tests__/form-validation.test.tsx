@@ -13,6 +13,7 @@ import { FieldError } from '../use-field-errors.js';
 import { defineAction } from '../action.js';
 import { clearLastActionResult } from '../internal/action-result-store.js';
 import { VALIDATION_ISSUES_KEY } from '../internal/contract.js';
+import { ActionResultContext } from '../action-result-context.js';
 
 // Cross-field schema: both `password` and `confirm` are required, and they
 // must match. Any pair of fields is valid iff both are non-empty AND equal.
@@ -588,6 +589,35 @@ describe('Form client pre-validation', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(queryByText('Submit error')).toBeTruthy();
+  });
+
+  // R4 regression: serverErrors must be populated from ActionResultContext on the
+  // no-JS / SSR deny re-render path (no client submit, result delivered via context).
+  it('shows server field errors from ActionResultContext without any client submit', () => {
+    const ctxValue = {
+      module: 'pages/test.server',
+      action: 'serverDeny',
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: {
+        [VALIDATION_ISSUES_KEY]: [
+          { path: ['title'], message: 'Title is required' },
+        ],
+      },
+      submittedPayload: {},
+    };
+    const { getByText } = render(
+      <ActionResultContext.Provider value={ctxValue}>
+        <Form action={serverDenyAction} schema={schema}>
+          <input name="title" />
+          <FieldError name="title" />
+          <button type="submit">Save</button>
+        </Form>
+      </ActionResultContext.Provider>
+    );
+    // No submit was fired; error must come from ActionResultContext (SSR path).
+    expect(getByText('Title is required')).toBeTruthy();
   });
 
   // Fix [7]: the async sequence guard. We verify it does not apply a stale

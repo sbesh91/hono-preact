@@ -27,6 +27,7 @@ import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
 import { validateWithSchema, mapIssuesToFields } from './validate.js';
 import { getValidationIssues } from './get-validation-issues.js';
+import { useActionResult } from './use-action-result.js';
 import {
   FieldErrorsContext,
   type FieldErrorsMap,
@@ -171,14 +172,20 @@ export function Form<TPayload, TResult>({
   // Split into two memos: server errors only recompute when the server result
   // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
   //
-  // Key on storeEntry (the Map value object) rather than serverResult (which
-  // useActionResult re-wraps into a new object each render). storeEntry holds
-  // the same reference until a new result is stored, so this memo is stable
-  // across unrelated re-renders. getValidationIssues only reads .kind/.data,
-  // both present on StoredActionResult (the Entry type underlying storeEntry).
+  // useActionResult reads both the browser-global action-result store (via
+  // useSyncExternalStore, restoring the subscription) AND the request-scoped
+  // ActionResultContext (the SSR / no-JS deny re-render path). Keying the memo
+  // on the deny result's underlying data object keeps it stable across unrelated
+  // re-renders: useActionResult re-wraps into a new object each render, but for
+  // a deny its .data points at the same stable store/context object until a
+  // fresh result arrives. For non-deny results the key is null (no issues).
+  const serverResult = useActionResult(
+    action as ActionStub<TPayload, TResult, never>
+  );
   const serverErrors = useMemo<FieldErrorsMap>(
-    () => mapIssuesToFields(getValidationIssues(storeEntry)),
-    [storeEntry]
+    () => mapIssuesToFields(getValidationIssues(serverResult)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [serverResult?.kind === 'deny' ? serverResult.data : null]
   );
 
   // Merge: server errors minus optimistically-cleared fields, then client
