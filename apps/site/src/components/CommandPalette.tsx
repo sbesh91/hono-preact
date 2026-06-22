@@ -83,10 +83,11 @@ export function CommandPalette({ pages }: { pages: DocPage[] }) {
         type="button"
         class="docs-cmdk-trigger"
         onClick={() => setOpen(true)}
+        aria-label="Search docs"
       >
         <Search size={15} class="shrink-0 opacity-70" />
-        <span>Search</span>
-        <kbd class="docs-cmdk-kbd">⌘K</kbd>
+        <span class="hidden md:inline">Search</span>
+        <kbd class="docs-cmdk-kbd hidden md:inline">⌘K</kbd>
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Popup class="docs-cmdk" aria-label="Command palette">
