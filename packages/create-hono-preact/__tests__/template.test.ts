@@ -13,7 +13,7 @@ import {
   copyTemplate,
   renameDotfiles,
   substituteName,
-  copyAgentsFiles,
+  copyAgentGuidance,
 } from '../lib/template.mjs';
 
 const here = resolve(fileURLToPath(import.meta.url), '..');
@@ -83,22 +83,32 @@ describe('substituteName', () => {
   });
 });
 
-describe('copyAgentsFiles', () => {
-  it('creates AGENTS.md and CLAUDE.md when absent', async () => {
+describe('copyAgentGuidance', () => {
+  it('creates root files and agents/ subtree when absent', async () => {
     const agentsDir = resolve(here, '..', 'templates', 'agents');
-    const results = await copyAgentsFiles(agentsDir, target, { force: false });
+    const results = await copyAgentGuidance(agentsDir, target, {
+      force: false,
+    });
     expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(target, 'CLAUDE.md'))).toBe(true);
-    expect(results).toEqual([
-      { file: 'AGENTS.md', action: 'created' },
-      { file: 'CLAUDE.md', action: 'created' },
-    ]);
+    expect(existsSync(join(target, 'agents', 'llms-full.txt'))).toBe(true);
+    expect(existsSync(join(target, 'agents', 'skills', 'add-a-page.md'))).toBe(
+      true
+    );
+    const createdFiles = results
+      .filter((r) => r.action === 'created')
+      .map((r) => r.file);
+    expect(createdFiles).toContain('AGENTS.md');
+    expect(createdFiles).toContain('CLAUDE.md');
+    expect(createdFiles).toContain(join('agents', 'llms-full.txt'));
   });
 
   it('skips an existing file without force', async () => {
     const agentsDir = resolve(here, '..', 'templates', 'agents');
     writeFileSync(join(target, 'AGENTS.md'), 'KEEP');
-    const results = await copyAgentsFiles(agentsDir, target, { force: false });
+    const results = await copyAgentGuidance(agentsDir, target, {
+      force: false,
+    });
     expect(readFileSync(join(target, 'AGENTS.md'), 'utf8')).toBe('KEEP');
     expect(results[0]).toEqual({ file: 'AGENTS.md', action: 'skipped' });
   });
@@ -106,7 +116,7 @@ describe('copyAgentsFiles', () => {
   it('overwrites an existing file with force', async () => {
     const agentsDir = resolve(here, '..', 'templates', 'agents');
     writeFileSync(join(target, 'AGENTS.md'), 'OLD');
-    const results = await copyAgentsFiles(agentsDir, target, { force: true });
+    const results = await copyAgentGuidance(agentsDir, target, { force: true });
     expect(readFileSync(join(target, 'AGENTS.md'), 'utf8')).not.toBe('OLD');
     expect(results[0]).toEqual({ file: 'AGENTS.md', action: 'overwritten' });
   });

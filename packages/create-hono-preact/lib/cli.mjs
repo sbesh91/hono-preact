@@ -11,7 +11,7 @@ import {
   copyTemplate,
   renameDotfiles,
   substituteName,
-  copyAgentsFiles,
+  copyAgentGuidance,
 } from './template.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -49,7 +49,7 @@ export async function run({
   }
   if (parsed.kind === 'add-agents') {
     const agentsDir = join(templatesRoot, 'agents');
-    const results = await copyAgentsFiles(agentsDir, cwd, {
+    const results = await copyAgentGuidance(agentsDir, cwd, {
       force: parsed.force,
     });
     for (const { file, action } of results) {
@@ -102,7 +102,9 @@ export async function run({
   await copyTemplate(sourceTemplate, targetPath);
   await renameDotfiles(targetPath);
   await substituteName(targetPath, basename(targetPath));
-  await copyTemplate(join(templatesRoot, 'agents'), targetPath);
+  await copyAgentGuidance(join(templatesRoot, 'agents'), targetPath, {
+    force: true,
+  });
 
   const pm = detectPackageManager(env);
 
@@ -192,7 +194,7 @@ function printHelp() {
 Scaffold a new hono-preact app.
 
 Commands:
-  add-agents [--force]          Add AGENTS.md + CLAUDE.md to an existing project
+  add-agents [--force]          Add AGENTS.md, CLAUDE.md, and agent recipes to an existing project
 
 Options:
   --adapter=<cloudflare|node>   pick the deployment target (default: cloudflare)
