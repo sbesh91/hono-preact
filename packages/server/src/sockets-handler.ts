@@ -3,6 +3,7 @@ import type { WSEvents } from 'hono/ws';
 import {
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
+  SOCKET_ROOM_PARAM,
   SOCKETS_RPC_PATH,
   WS_DENY_CODE,
   getWebSocketUpgrader,
@@ -11,7 +12,8 @@ import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
 import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
-import { createRoomWsEvents } from './rooms-handler.js';
+import { createRoomWsEvents, resolveRoomKey } from './rooms-handler.js';
+import type { RoomKeyResolution } from './rooms-handler.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -58,6 +60,34 @@ export async function buildSocketRegistry(
     }
   }
   return registry;
+}
+
+/**
+ * Fail loudly when a socket and a room share the same `${moduleKey}::${name}`
+ * key. The two registries are keyed identically, and `socketsHandler` resolves
+ * the socket first (`socketDef ?? roomDef`), so a collision would silently
+ * shadow the room (it becomes unreachable). A name must be unique across
+ * `serverSockets` and `serverRooms` within a module; throw at boot rather than
+ * leave a connection mysteriously routed to the wrong def.
+ *
+ * Called from `createServerEntry` where both registries resolve together, so it
+ * runs once at boot (or per registry rebuild in dev) rather than per connection.
+ */
+export function assertNoSocketRoomCollision(
+  registry: Map<string, AnySocketDef>,
+  rooms: Map<string, AnyRoomDef> | undefined
+): void {
+  if (!rooms) return;
+  for (const key of registry.keys()) {
+    if (rooms.has(key)) {
+      // key is `${moduleKey}::${name}`.
+      throw new Error(
+        `Realtime name collision on "${key}": a socket (serverSockets) and a ` +
+          `room (serverRooms) cannot share a name within the same module. ` +
+          `Rename one of them so each ${'`moduleKey::name`'} key is unique.`
+      );
+    }
+  }
 }
 
 export interface SocketsHandlerOptions {
@@ -107,9 +137,24 @@ export async function resolveGuardDenied(opts: {
   routePath: string;
   moduleKey: string;
   name: string;
+  /**
+   * Path params the guard chain can read via `ctx.location.pathParams`. Rooms
+   * pass their server-resolved room-key params here (so a route-node/room guard
+   * can read e.g. `ctx.location.pathParams.roomId`); plain sockets pass `{}`
+   * (the `/__sockets` endpoint is query-string only, with no param wire).
+   */
+  pathParams?: Record<string, string>;
 }): Promise<boolean> {
-  const { def, ctx, appConfig, resolvePageUse, routePath, moduleKey, name } =
-    opts;
+  const {
+    def,
+    ctx,
+    appConfig,
+    resolvePageUse,
+    routePath,
+    moduleKey,
+    name,
+    pathParams = {},
+  } = opts;
 
   // Chain order is outer -> inner: app-use, page/route-node use, def.use.
   // Guards run as 'loader' scope since the upgrade is an HTTP GET carrying a
@@ -130,7 +175,7 @@ export async function resolveGuardDenied(opts: {
     scope: 'loader',
     c: ctx,
     signal,
-    location: { path: routePath, pathParams: {}, searchParams: {} },
+    location: { path: routePath, pathParams, searchParams: {} },
     module: moduleKey,
     loader: name,
   };
@@ -192,6 +237,18 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
           ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
           : SOCKETS_RPC_PATH;
 
+      // For a room, parse + validate the room-key params SERVER-SIDE before the
+      // guard runs, so the guard chain (app -> route-node -> def use) can read
+      // them via `ctx.location.pathParams`. Plain sockets have no param wire, so
+      // they pass `{}` to the guard. The topic is still computed server-side
+      // here (channel.key(params)); the client only varies param VALUES.
+      // `'channel' in def` narrows `def` to a room, so `roomKey` is defined iff
+      // the room branch below runs (no non-null assertion needed there).
+      let roomKey: RoomKeyResolution | undefined;
+      if ('channel' in def) {
+        roomKey = resolveRoomKey(def.channel, ctx.req.query(SOCKET_ROOM_PARAM));
+      }
+
       const denied = await resolveGuardDenied({
         def,
         ctx,
@@ -200,12 +257,17 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         routePath,
         moduleKey: moduleKey ?? '',
         name: name ?? '',
+        // Only feed resolved params to the guard; a failed room-key resolution
+        // (or a plain socket) contributes no params. onOpen still denies on a
+        // failed room key, so the guard never sees a partially-resolved room.
+        pathParams: roomKey?.ok ? roomKey.params : {},
       });
 
       // Branch on the def shape. A room def carries a `channel`; delegate its
-      // (larger) wiring to the room runtime to keep this file thin.
-      if ('channel' in def) {
-        return createRoomWsEvents(def, { ctx, denied });
+      // (larger) wiring to the room runtime to keep this file thin. The
+      // pre-resolved room key is threaded in so onOpen does not re-parse.
+      if ('channel' in def && roomKey) {
+        return createRoomWsEvents(def, { ctx, denied, roomKey });
       }
 
       // --- Plain duplex socket wiring (unchanged from Task 2). ---

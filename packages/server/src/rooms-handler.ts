@@ -1,7 +1,6 @@
 import type { Context } from 'hono';
 import type { WSEvents } from 'hono/ws';
 import {
-  SOCKET_ROOM_PARAM,
   WS_DENY_CODE,
   getPubSubBackend,
   joinRoom,
@@ -69,6 +68,100 @@ interface RawWs {
 }
 
 /**
+ * The outcome of resolving a room connection's key params into a server-side
+ * topic. On success the resolved `params` and the interpolated `topic` are
+ * carried forward; the params double as the guard chain's `pathParams` (so a
+ * route-node/room guard can read e.g. `ctx.location.pathParams.roomId`) AND the
+ * `params` handed to `onJoin`. On any failure (bad JSON, a non-string param
+ * value, a missing required `:param`) the connection is denied with
+ * WS_DENY_CODE.
+ */
+export type RoomKeyResolution =
+  | { ok: true; params: Record<string, string>; topic: string }
+  | { ok: false };
+
+/**
+ * Parse + validate a room connection's key params from the untrusted wire and
+ * compute the server-side topic, BEFORE the guard chain runs. Pure (no I/O, no
+ * connection side effects) so the socket handler can resolve it once, feed the
+ * resolved params into the guard as `pathParams`, and hand the result to
+ * `createRoomWsEvents` without a re-parse.
+ *
+ * Security property preserved: the topic is ALWAYS `channel.key(params)`
+ * computed here, server-side. The client only varies param VALUES, never the
+ * channel namespace, so it cannot reach an unrelated topic.
+ *
+ * @param channel The room's bound channel (its name pattern + `key`).
+ * @param rawR    The raw `SOCKET_ROOM_PARAM` query value (or undefined).
+ */
+export function resolveRoomKey(
+  channel: AnyRoomDef['channel'],
+  rawR: string | undefined
+): RoomKeyResolution {
+  // The client sends key params as `r=<JSON>` (or omits `r` for a param-less
+  // channel). An absent/empty `r` means no params.
+  let params: Record<string, string> = {};
+  if (rawR !== undefined && rawR !== '') {
+    let parsed: unknown;
+    try {
+      // Sanctioned untrusted-wire JSON.parse: the client sends the channel key
+      // params as a JSON object whose values are strings (channel param slots).
+      parsed = JSON.parse(rawR);
+    } catch {
+      return { ok: false };
+    }
+    // `JSON.parse('null')` succeeds but returns null, and `null["key"]` throws.
+    // Coerce any non-plain-object parse result (null, numbers, strings, arrays)
+    // to {} so the required-param check below denies cleanly. Then validate that
+    // every value is a string: a non-string value (e.g. `{"roomId":[1,2,3]}`)
+    // would otherwise arrive at the handler as a typed-contract lie, so reject
+    // it here instead of casting a non-string-valued object to Record<string,string>.
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed)
+    ) {
+      const entries = Object.entries(parsed);
+      if (entries.some(([, v]) => typeof v !== 'string')) {
+        return { ok: false };
+      }
+      // Every value is a string (checked above): this is now a sound narrowing,
+      // not a cast over an unvalidated shape.
+      params = Object.fromEntries(
+        entries.filter((e): e is [string, string] => typeof e[1] === 'string')
+      );
+    }
+  }
+
+  // Compute the topic SERVER-SIDE by interpolating the channel name with the
+  // client-supplied params. The erased Channel<string,unknown> type resolves
+  // key() to zero args, but the runtime impl is interpolatePattern(name,
+  // params ?? {}), which accepts a params record; this reads that concrete
+  // runtime signature.
+  const topic = (channel.key as (p?: Record<string, string>) => string)(params);
+
+  // Validate that every required `:param` segment in the channel name has a
+  // non-empty value. interpolatePattern drops a missing segment rather than
+  // leaving `:name` in place, so we check the params object directly.
+  const missingRequired = channel.name
+    .split('/')
+    .filter((seg) => {
+      if (!seg.startsWith(':')) return false;
+      const flag = seg[seg.length - 1];
+      // Optional (?), rest-zero-or-more (*), and rest-one-or-more (+) are not
+      // required to be present. Only plain `:name` is required.
+      return flag !== '?' && flag !== '*' && flag !== '+';
+    })
+    .some((seg) => !params[seg.slice(1)]);
+
+  if (!topic || missingRequired) {
+    return { ok: false };
+  }
+
+  return { ok: true, params, topic };
+}
+
+/**
  * Build the WSEvents for a room connection. Called by `socketsHandler` after
  * the shared guard chain has run (so `denied` is already resolved); the socket
  * handler stays a thin "if room def, delegate" branch and all the room fan-out
@@ -89,9 +182,9 @@ interface RawWs {
  */
 export function createRoomWsEvents(
   roomDef: AnyRoomDef,
-  args: { ctx: Context; denied: boolean }
+  args: { ctx: Context; denied: boolean; roomKey: RoomKeyResolution }
 ): WSEvents {
-  const { ctx, denied } = args;
+  const { ctx, denied, roomKey } = args;
 
   // Wrap the raw WS so a send JSON-stringifies once to the client (the wire
   // encoding). Server->client envelopes ride this single stringify; the
@@ -111,73 +204,26 @@ export function createRoomWsEvents(
   return {
     async onOpen(_e, rawWs) {
       const ws = makeSocket(rawWs as RawWs);
-      if (denied) {
+      // Deny BEFORE subscribe/join if the guard chain denied OR the room key
+      // failed to resolve (bad JSON, a non-string param value, or a missing
+      // required `:param`). The room key was parsed + validated server-side in
+      // socketsHandler (resolveRoomKey) before the guard ran, so onOpen does not
+      // re-parse; it consumes the pre-resolved topic/params directly.
+      if (denied || !roomKey.ok) {
         ws.close(WS_DENY_CODE, 'forbidden');
         return;
       }
 
-      // 1. The client sends key params as `r=<JSON>` (or omits `r` for a
-      //    param-less channel). Parse the params from the untrusted wire boundary.
-      const rawR = ctx.req.query(SOCKET_ROOM_PARAM);
-      let params: Record<string, string> = {};
-      if (rawR !== undefined && rawR !== '') {
-        try {
-          // Sanctioned untrusted-wire JSON.parse: the client sends the channel
-          // key params as a JSON object; values are strings (channel param slots).
-          const parsed: unknown = JSON.parse(rawR);
-          // `JSON.parse('null')` succeeds but returns null, and `null["key"]`
-          // throws a TypeError. Coerce any non-plain-object result to {} so the
-          // required-param validation below denies cleanly via WS_DENY_CODE
-          // instead of throwing. Numbers, strings, and arrays also fall to {}.
-          params =
-            parsed !== null &&
-            typeof parsed === 'object' &&
-            !Array.isArray(parsed)
-              ? (parsed as Record<string, string>) // sanctioned: untrusted wire JSON boundary
-              : {};
-        } catch {
-          ws.close(WS_DENY_CODE, 'invalid room params');
-          return;
-        }
-      }
+      // The server-computed topic (always channel.key(params)) and the validated
+      // string-valued params. The client only varies param VALUES, never the
+      // namespace, so it cannot reach an unrelated topic.
+      topic = roomKey.topic;
+      const params = roomKey.params;
 
-      // 2. Compute the topic SERVER-SIDE by interpolating the channel name with
-      //    the client-supplied params. The client can only vary param VALUES, not
-      //    the namespace. This prevents cross-topic injection.
-      //    The erased Channel<string,unknown> type resolves key() to zero args,
-      //    but the runtime impl is interpolatePattern(name, params ?? {}), which
-      //    accepts a params record. The cast reads the concrete runtime signature.
-      topic = (roomDef.channel.key as (p?: Record<string, string>) => string)(
-        params
-      );
-
-      // 3. Validate that all required `:param` segments in the channel name have
-      //    a non-empty value in params. interpolatePattern drops missing segments
-      //    rather than leaving `:name` in place, so we check the params object
-      //    directly: every required (non-optional) param name from the channel
-      //    name pattern must appear as a non-empty string in the parsed params.
-      const missingRequired = roomDef.channel.name
-        .split('/')
-        .filter((seg) => {
-          if (!seg.startsWith(':')) return false;
-          const flag = seg[seg.length - 1];
-          // Optional (?), rest-zero-or-more (*), and rest-one-or-more (+) are
-          // not required to be present. Only plain `:name` is required.
-          return flag !== '?' && flag !== '*' && flag !== '+';
-        })
-        .some((seg) => {
-          const name = seg.slice(1);
-          return !params[name];
-        });
-      if (!topic || missingRequired) {
-        ws.close(WS_DENY_CODE, 'missing required room param');
-        return;
-      }
-
-      // 4. Stable member id.
+      // 1. Stable member id.
       connId = crypto.randomUUID();
 
-      // 5. Subscribe to the topic. The bus delivers the envelope OBJECT by
+      // 2. Subscribe to the topic. The bus delivers the envelope OBJECT by
       //    reference; narrowing `unknown` -> RoomEnvelope here is sanctioned:
       //    the room layer is the sole publisher/subscriber on its own topics,
       //    so we read our own object back through the unknown-typed seam (no
@@ -192,11 +238,11 @@ export function createRoomWsEvents(
         mySocket.send(env);
       });
 
-      // 6. Seed presence with the server default (may be undefined) and join.
+      // 3. Seed presence with the server default (may be undefined) and join.
       const initialState = roomDef.presence?.();
       joinRoom(topic, connId, initialState);
 
-      // 7. Send the joining socket the full roster snapshot DIRECTLY (not via
+      // 4. Send the joining socket the full roster snapshot DIRECTLY (not via
       //    publish: other members must not re-receive the whole roster).
       const snapshot: AnyEnvelope = {
         t: 'snapshot',
@@ -205,12 +251,12 @@ export function createRoomWsEvents(
       };
       ws.send(snapshot);
 
-      // 8. Announce the join to the topic. The sender's own callback also
+      // 5. Announce the join to the topic. The sender's own callback also
       //    forwards this (presence is always forwarded); the client dedupes by
       //    member id, so a self-echoed join is harmless.
       publishPresence(topic, connId, 'join', initialState);
 
-      // 9. Build the RoomConnection handed to the user handlers.
+      // 6. Build the RoomConnection handed to the user handlers.
       conn = {
         id: connId,
         data: {},
@@ -230,7 +276,7 @@ export function createRoomWsEvents(
         },
       };
 
-      // 10. Run the user's join hook; capture any teardown it returns.
+      // 7. Run the user's join hook; capture any teardown it returns.
       joinTeardown = await roomDef.onJoin?.(conn, { c: ctx, params });
     },
 
@@ -242,7 +288,14 @@ export function createRoomWsEvents(
           : ev.data instanceof ArrayBuffer
             ? new TextDecoder().decode(ev.data)
             : await (ev.data as Blob).text();
-      const frame = JSON.parse(raw) as AnyFrame; // sanctioned untrusted-JSON boundary
+      let frame: AnyFrame;
+      try {
+        frame = JSON.parse(raw) as AnyFrame; // sanctioned untrusted-JSON boundary
+      } catch {
+        // A malformed (non-JSON) frame would otherwise reject this async handler
+        // with an unhandled rejection. Drop it silently.
+        return;
+      }
       if (frame.t === 'presence') {
         // Framework-handled presence update (does NOT go through onMessage):
         // same effect as conn.setPresence(state).
@@ -250,8 +303,13 @@ export function createRoomWsEvents(
         publishPresence(topic, connId, 'update', frame.state);
         return;
       }
-      // An application message: hand the inner payload to the user handler.
-      await roomDef.onMessage?.(conn, frame.msg);
+      if (frame.t === 'msg') {
+        // An application message: hand the inner payload to the user handler.
+        await roomDef.onMessage?.(conn, frame.msg);
+        return;
+      }
+      // Unknown `t`: silently drop. Do NOT fall through to onMessage with an
+      // undefined payload (the old implicit-else assumed `t === 'msg'`).
     },
 
     onClose() {

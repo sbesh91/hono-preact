@@ -1,17 +1,25 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import {
+  defineChannel,
+  defineRoom,
   defineServerMiddleware,
   defineSocket,
   type SocketDef,
 } from '@hono-preact/iso';
+import type { RoomDef } from '@hono-preact/iso/internal';
 import {
   installWebSocketUpgrader,
   __resetWebSocketUpgraderForTesting,
   SOCKETS_RPC_PATH,
   WS_DENY_CODE,
 } from '@hono-preact/iso/internal/runtime';
-import { buildSocketRegistry, socketsHandler } from '../sockets-handler.js';
+import {
+  assertNoSocketRoomCollision,
+  buildSocketRegistry,
+  socketsHandler,
+} from '../sockets-handler.js';
+import { buildRoomRegistry } from '../rooms-handler.js';
 import type { WebSocketUpgrader } from '@hono-preact/iso/internal/runtime';
 import type { WSEvents } from 'hono/ws';
 
@@ -413,5 +421,83 @@ describe('buildSocketRegistry', () => {
     const registry = await buildSocketRegistry(serverImports);
 
     expect(registry.size).toBe(0);
+  });
+});
+
+describe('assertNoSocketRoomCollision', () => {
+  it('throws a descriptive error when a socket and a room share a moduleKey::name key', async () => {
+    const def = defineSocket<never, never>({}) as unknown as SocketDef<
+      never,
+      never,
+      undefined
+    >;
+    const channel = defineChannel('thing/:id')<void>();
+    const room = defineRoom(channel, {}) as unknown as RoomDef<
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    >;
+
+    // A single module exports BOTH serverSockets.foo and serverRooms.foo: the
+    // two registries collide on `pages/m::foo`.
+    const serverImports = [
+      () =>
+        Promise.resolve({
+          __moduleKey: 'pages/m',
+          serverSockets: { foo: def },
+          serverRooms: { foo: room },
+        }),
+    ];
+    const registry = await buildSocketRegistry(serverImports);
+    const rooms = await buildRoomRegistry(serverImports);
+
+    expect(() => assertNoSocketRoomCollision(registry, rooms)).toThrow(
+      /pages\/m::foo/
+    );
+    expect(() => assertNoSocketRoomCollision(registry, rooms)).toThrow(
+      /socket .* and a room .* cannot share a name/i
+    );
+  });
+
+  it('does not throw when socket and room names are distinct in a module', async () => {
+    const def = defineSocket<never, never>({}) as unknown as SocketDef<
+      never,
+      never,
+      undefined
+    >;
+    const channel = defineChannel('thing/:id')<void>();
+    const room = defineRoom(channel, {}) as unknown as RoomDef<
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    >;
+    const serverImports = [
+      () =>
+        Promise.resolve({
+          __moduleKey: 'pages/m',
+          serverSockets: { chatSocket: def },
+          serverRooms: { boardRoom: room },
+        }),
+    ];
+    const registry = await buildSocketRegistry(serverImports);
+    const rooms = await buildRoomRegistry(serverImports);
+
+    expect(() => assertNoSocketRoomCollision(registry, rooms)).not.toThrow();
+  });
+
+  it('is a no-op when there is no room registry', () => {
+    const def = defineSocket<never, never>({}) as unknown as SocketDef<
+      never,
+      never,
+      undefined
+    >;
+    const registry = new Map([['pages/m::foo', def]]);
+    expect(() =>
+      assertNoSocketRoomCollision(registry, undefined)
+    ).not.toThrow();
   });
 });

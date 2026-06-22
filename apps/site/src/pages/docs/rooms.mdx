@@ -142,6 +142,8 @@ export const serverRooms = {
 
 A guard that denies the upgrade closes the connection with code `4403`.
 
+The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions.
+
 ## Presence reconnect behavior
 
 On reconnect, the room re-joins and the server sends a fresh presence snapshot. Any presence state the client passed in `opts.presence` is re-sent on open. There is a brief membership gap between disconnect and rejoin; missed messages during a disconnect are not replayed.

@@ -112,6 +112,8 @@ The free `useSocket(ref, opts)` export also works and is equivalent; the method 
 
 A socket's guard chain is composed in order: app-level `use` from `defineApp({ use })`, then any `use` on the enclosing route node (via `serverRoute`), then the socket's own `use` array. Route-node and layout `use` guards are inherited, so a guard that protects a route also covers its sockets and rooms without having to be repeated. Add socket-specific authorization in the socket's own `use` array for concerns that only apply to the socket.
 
+A plain socket does not receive route path params in an inherited route-node guard. The upgrade is served from the framework's flat `/__sockets` endpoint, which is query-string only, so `ctx.location.pathParams` is empty for a socket connection. Param-dependent authorization for a socket must read the connection's query or headers in the socket's own `use` (or in `open`), not rely on a `:param` from the route the socket lives next to. (Rooms differ: a room's guard chain can read the room-key params via `ctx.location.pathParams`, because the room key rides the wire and is resolved server-side before the guard runs. See [Rooms](/docs/rooms).)
+
 ### Reconnect behavior
 
 `useSocket` reconnects automatically after unexpected drops. The default policy skips reconnect for close code `1000` (normal closure) and all `4000-4999` codes (application-defined). Code `4403` is issued by the framework when a socket's `use` guard rejects the upgrade, signaling that reconnecting would hit the same rejection.

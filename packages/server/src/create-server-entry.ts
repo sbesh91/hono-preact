@@ -16,7 +16,11 @@ import {
   makeSocketRoutePathResolver,
 } from './route-server-modules.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
-import { buildSocketRegistry, socketsHandler } from './sockets-handler.js';
+import {
+  buildSocketRegistry,
+  socketsHandler,
+  assertNoSocketRoomCollision,
+} from './sockets-handler.js';
 import { buildRoomRegistry } from './rooms-handler.js';
 
 export interface CreateServerEntryOptions {
@@ -131,6 +135,11 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         roomRegistryPromise(),
         socketRoutePathResolverPromise(),
       ]);
+      // Fail loudly if a socket and a room share a `moduleKey::name` key (the
+      // socket would otherwise silently shadow the room). Both registries are
+      // available together here; in production they are cached so this is a
+      // boot-time check, in dev it re-runs per rebuild for hot-reload parity.
+      assertNoSocketRoomCollision(registry, rooms);
       return socketsHandler({
         registry,
         rooms,

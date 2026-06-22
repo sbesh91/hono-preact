@@ -94,6 +94,39 @@ function makeApp(
   return app;
 }
 
+// A room app whose route-node `use` chain is delivered through resolvePageUse
+// (the same mechanism createServerEntry uses). The moduleKey resolves to
+// `routePath` so the route-node guard runs; the guard reads the room-key params
+// off `ctx.location.pathParams`, proving the params reach the guard chain.
+function makeAppWithRouteNodeUse(
+  rooms: Map<string, RoomDef<unknown, unknown, unknown, unknown, unknown>>,
+  routePath: string,
+  pageUse: ReadonlyArray<unknown>
+): Hono {
+  const app = new Hono();
+  app.get(
+    SOCKETS_RPC_PATH,
+    socketsHandler({
+      registry: new Map(),
+      rooms,
+      resolvePageUse: (path: string) => (path === routePath ? pageUse : []),
+      resolveRoutePath: (mk: string) =>
+        mk === MODULE_KEY ? routePath : undefined,
+    })
+  );
+  return app;
+}
+
+// Connect with an explicit JSON-encoded `r` (room key) param value.
+function connectWithRawR(app: Hono, rawR: string): Promise<Response> {
+  return app.request(
+    `http://localhost${SOCKETS_RPC_PATH}` +
+      `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+      `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+      `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(rawR)}`
+  );
+}
+
 // The room param carries the JSON-encoded channel key params. The server
 // interpolates the topic server-side from these params.
 const ROOM_PARAMS = JSON.stringify({ roomId: 'demo' });
@@ -578,5 +611,167 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(roomMembers('board/p1')).toHaveLength(0);
     // The raw `r` param the server received was the params JSON, not a topic.
     expect(seenTopic).toBe(params);
+  });
+
+  // -------------------------------------------------------------------------
+  // Finding 2: the room-key params reach the guard chain (route-node use) via
+  // ctx.location.pathParams, so resource-scoped auth works for rooms.
+  // -------------------------------------------------------------------------
+
+  it('a route-node use can read the room-key param and DENY when it is missing', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const onJoinSpy = vi.fn();
+    // A route-node guard that denies unless pathParams.roomId is present.
+    const requireRoomId = defineServerMiddleware(async (ctx, next) => {
+      const roomId = ctx.location.pathParams.roomId;
+      if (!roomId) {
+        const { deny } = await import('@hono-preact/iso');
+        throw deny('forbidden', 403);
+      }
+      await next();
+    });
+
+    const rooms = makeRoomRegistry({ onJoin: onJoinSpy });
+    const app = makeAppWithRouteNodeUse(rooms, '/board', [requireRoomId]);
+
+    // Send a param-less room key: a required `:roomId` is absent, so the
+    // server-side resolveRoomKey fails AND the guard cannot see a roomId.
+    // The connection must deny (onOpen closes WS_DENY_CODE), onJoin never runs.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({}))}`
+    );
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(onJoinSpy).not.toHaveBeenCalled();
+  });
+
+  it('a route-node use that reads the room-key param ALLOWS when present', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const onJoinSpy = vi.fn();
+    let seenRoomIdInGuard: string | undefined;
+    const requireRoomId = defineServerMiddleware(async (ctx, next) => {
+      // This is the load-bearing assertion: the room-key param reached the
+      // guard chain via ctx.location.pathParams (it was {} before the fix).
+      seenRoomIdInGuard = ctx.location.pathParams.roomId;
+      if (!seenRoomIdInGuard) {
+        const { deny } = await import('@hono-preact/iso');
+        throw deny('forbidden', 403);
+      }
+      await next();
+    });
+
+    const rooms = makeRoomRegistry({ onJoin: onJoinSpy });
+    const app = makeAppWithRouteNodeUse(rooms, '/board', [requireRoomId]);
+
+    // Send roomId=demo; the guard sees it, allows, and onJoin runs.
+    await connectWithRawR(app, JSON.stringify({ roomId: 'demo' }));
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    expect(seenRoomIdInGuard).toBe('demo');
+    expect(a.ws.closes).toHaveLength(0);
+    expect(onJoinSpy).toHaveBeenCalledOnce();
+  });
+
+  // -------------------------------------------------------------------------
+  // Finding 1 (value type): a non-string param value is rejected, never cast
+  // to Record<string,string> and never reaches onJoin.
+  // -------------------------------------------------------------------------
+
+  it('a NON-STRING param value closes WS_DENY_CODE and never joins', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const onJoinSpy = vi.fn();
+    const app = makeApp(makeRoomRegistry({ onJoin: onJoinSpy }));
+
+    // r={"roomId":["a","b"]} parses to a plain object but roomId is an array,
+    // not a string. The old code cast this to Record<string,string> and let it
+    // through; the fix rejects it.
+    await connectWithRawR(app, JSON.stringify({ roomId: ['a', 'b'] }));
+    const a = conns()[0]!;
+
+    await expect(
+      a.events.onOpen?.(new Event('open'), a.ws as never)
+    ).resolves.toBeUndefined();
+
+    expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(onJoinSpy).not.toHaveBeenCalled();
+    expect(roomMembers(TOPIC)).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Finding 1b: onMessage hardening. A malformed frame must not crash the
+  // connection (no unhandled rejection); an unknown `t` is dropped.
+  // -------------------------------------------------------------------------
+
+  it('a malformed (non-JSON) frame does NOT throw and does NOT call onMessage', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const onMessageSpy = vi.fn();
+    const app = makeApp(makeRoomRegistry({ onMessage: onMessageSpy }));
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    // A non-JSON frame must resolve cleanly (no unhandled rejection) and not
+    // dispatch to the user onMessage.
+    await expect(
+      a.events.onMessage?.({ data: 'not-json{' } as MessageEvent, a.ws as never)
+    ).resolves.toBeUndefined();
+    expect(onMessageSpy).not.toHaveBeenCalled();
+  });
+
+  it('an unknown-`t` frame is DROPPED (onMessage is not called with undefined)', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const onMessageSpy = vi.fn();
+    const app = makeApp(makeRoomRegistry({ onMessage: onMessageSpy }));
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    // A frame with an unrecognized discriminant. The old implicit else assumed
+    // t === 'msg' and called onMessage(conn, frame.msg) with msg === undefined.
+    await a.events.onMessage?.(
+      { data: JSON.stringify({ t: 'bogus', whatever: 1 }) } as MessageEvent,
+      a.ws as never
+    );
+    expect(onMessageSpy).not.toHaveBeenCalled();
+  });
+
+  it('a well-formed {t:msg} frame still reaches onMessage (regression)', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const received: unknown[] = [];
+    const app = makeApp(
+      makeRoomRegistry({
+        onMessage(_conn, msg) {
+          received.push(msg);
+        },
+      })
+    );
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    await a.events.onMessage?.(
+      {
+        data: JSON.stringify({ t: 'msg', msg: { text: 'hi' } }),
+      } as MessageEvent,
+      a.ws as never
+    );
+    expect(received).toEqual([{ text: 'hi' }]);
   });
 });
