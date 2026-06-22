@@ -12,28 +12,6 @@ import useTypeaheadCode from '../../../components/docs/UseTypeaheadDemo.tsx?high
   <UseTypeaheadDemo />
 </Example>
 
-## Signature
-
-```ts
-import { useTypeahead } from 'hono-preact-ui';
-
-function useTypeahead(opts?: UseTypeaheadOptions): (char: string) => string;
-
-interface UseTypeaheadOptions {
-  idleMs?: number; // reset the buffer after this idle gap, default 500
-}
-```
-
-Call the returned function with each printable character (for example from a `keydown` handler, skipping non-printable keys); it appends the character to the buffer, schedules a reset after `idleMs` of no input, and returns the current query.
-
-## Options
-
-| Option   | Type     | Default | Notes                                            |
-| -------- | -------- | ------- | ------------------------------------------------ |
-| `idleMs` | `number` | `500`   | Reset the accumulated query after this idle gap. |
-
-Returns `(char: string) => string`: a stable callback that accumulates `char` into the query and returns it.
-
 ## Example
 
 ```tsx
@@ -70,3 +48,25 @@ function Typeahead() {
 ```
 
 See also: [useListNavigation](/docs/components/use-list-navigation), which folds typeahead together with arrow-key and Home/End navigation.
+
+## Signature
+
+```ts
+import { useTypeahead } from 'hono-preact-ui';
+
+function useTypeahead(opts?: UseTypeaheadOptions): (char: string) => string;
+
+interface UseTypeaheadOptions {
+  idleMs?: number; // reset the buffer after this idle gap, default 500
+}
+```
+
+Call the returned function with each printable character (for example from a `keydown` handler, skipping non-printable keys); it appends the character to the buffer, schedules a reset after `idleMs` of no input, and returns the current query.
+
+## Options
+
+| Option   | Type     | Default | Notes                                            |
+| -------- | -------- | ------- | ------------------------------------------------ |
+| `idleMs` | `number` | `500`   | Reset the accumulated query after this idle gap. |
+
+Returns `(char: string) => string`: a stable callback that accumulates `char` into the query and returns it.

@@ -108,3 +108,15 @@ export {
 // loader/action response as typed events in tests and advanced consumers.
 export { readSSE } from './internal/sse-decoder.js';
 export type { SSEEvent } from './internal/sse-decoder.js';
+
+// Server-internal registry plumbing. Not part of the public API surface.
+export type { SocketDef } from './define-socket.js';
+export type { RoomDef } from './define-room.js';
+// Room wire types the server room runtime narrows the pub/sub object and the
+// inbound client frame against. The room layer is the sole publisher/subscriber
+// on its own topics, so these are read back through the `unknown`-typed seams.
+export type {
+  RoomEnvelope,
+  RoomClientFrame,
+  PresenceMember,
+} from './internal/room-envelope.js';

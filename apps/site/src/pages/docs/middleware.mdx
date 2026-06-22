@@ -1,8 +1,6 @@
 # Middleware
 
-Middleware wraps loader, action, and page calls in an outer/inner chain. Each middleware receives a `ctx` and a `next` continuation; the framework calls them in order, then unwinds. Throw a [redirect, deny, or render outcome](#outcomes) to short-circuit. Use middleware for auth gates, request-scoped setup/teardown, tracing, timing, and request logging.
-
-App config, route nodes, loaders, and actions all accept the same `use` array, and the framework partitions server- vs client-bound members by their `runs` tag.
+Middleware is how you add auth gates, tracing, timing, and request logging to loaders, actions, and page renders without repeating that logic in each handler. Declare a `use` array on your app config, a route node, or an individual loader or action; the framework runs them in order and partitions server- vs client-bound members automatically.
 
 ## The three layers
 

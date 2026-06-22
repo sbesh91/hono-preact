@@ -66,7 +66,7 @@ describe('serverLoaderValidationPlugin', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain(
-      "must export either 'serverLoaders' or 'serverActions'"
+      "must export at least one of 'serverLoaders', 'serverActions', 'serverRooms', or 'serverSockets'"
     );
   });
 
@@ -95,7 +95,7 @@ describe('serverLoaderValidationPlugin', () => {
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain('found: helper');
     expect(error).toContain(
-      "must export either 'serverLoaders' or 'serverActions'"
+      "must export at least one of 'serverLoaders', 'serverActions', 'serverRooms', or 'serverSockets'"
     );
   });
 
@@ -126,7 +126,7 @@ describe('serverLoaderValidationPlugin', () => {
     const code = `export const serverGuards = [];`;
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain(
-      "must export either 'serverLoaders' or 'serverActions'"
+      "must export at least one of 'serverLoaders', 'serverActions', 'serverRooms', or 'serverSockets'"
     );
   });
 
@@ -156,6 +156,8 @@ describe('serverLoaderValidationPlugin', () => {
     const { error } = transform(code, 'movies.server.ts');
     expect(error).toContain("'serverActions'");
     expect(error).toContain("'serverLoaders'");
+    expect(error).toContain("'serverRooms'");
+    expect(error).toContain("'serverSockets'");
     expect(error).not.toContain("'loaderUse'");
     expect(error).not.toContain("'actionUse'");
     expect(error).not.toContain("'pageUse'");
@@ -205,6 +207,17 @@ describe('serverLoaderValidationPlugin', () => {
         'const serverLoader = async () => ({});',
         'export const serverLoaders = { default: defineLoader(serverLoader) };',
         'export const serverActions = { foo: defineAction(async () => ({ ok: true })) };',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+  });
+
+  describe('serverSockets named export', () => {
+    it('passes a *.server.* file with only serverSockets (no default export)', () => {
+      const code = [
+        "import { defineSocket } from '@hono-preact/iso';",
+        'export const serverSockets = { chat: defineSocket({}) };',
       ].join('\n');
       const { error } = transform(code, 'movies.server.ts');
       expect(error).toBeNull();

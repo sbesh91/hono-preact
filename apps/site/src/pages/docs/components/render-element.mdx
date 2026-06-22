@@ -17,6 +17,40 @@ either.
   <RenderElementDemo />
 </Example>
 
+## Example
+
+Build a component that owns its behavior but lets the caller swap the element:
+
+```tsx
+import { renderElement, type RenderProp } from 'hono-preact-ui';
+import type { ComponentChildren, JSX, VNode } from 'preact';
+
+type ButtonProps = {
+  render?: RenderProp<{ pressed: boolean }>;
+  pressed?: boolean;
+  children?: ComponentChildren;
+} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+
+export function Button({
+  render,
+  pressed = false,
+  children,
+  ...rest
+}: ButtonProps): VNode {
+  return renderElement<{ pressed: boolean }>({
+    render,
+    defaultTag: 'button',
+    props: {
+      ...rest,
+      type: 'button',
+      'data-pressed': pressed ? '' : undefined,
+    },
+    state: { pressed },
+    children,
+  });
+}
+```
+
 ## Signature
 
 ```tsx
@@ -52,40 +86,6 @@ overrides.
 | `children`   | `ComponentChildren`       | Children for the rendered element.                  |
 
 Returns a `VNode`.
-
-## Example
-
-Build a component that owns its behavior but lets the caller swap the element:
-
-```tsx
-import { renderElement, type RenderProp } from 'hono-preact-ui';
-import type { ComponentChildren, JSX, VNode } from 'preact';
-
-type ButtonProps = {
-  render?: RenderProp<{ pressed: boolean }>;
-  pressed?: boolean;
-  children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
-
-export function Button({
-  render,
-  pressed = false,
-  children,
-  ...rest
-}: ButtonProps): VNode {
-  return renderElement<{ pressed: boolean }>({
-    render,
-    defaultTag: 'button',
-    props: {
-      ...rest,
-      type: 'button',
-      'data-pressed': pressed ? '' : undefined,
-    },
-    state: { pressed },
-    children,
-  });
-}
-```
 
 ## The three forms
 

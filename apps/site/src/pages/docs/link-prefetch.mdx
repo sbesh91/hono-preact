@@ -1,8 +1,6 @@
 # Link Prefetch
 
-Tell the browser to prefetch destinations the user is likely to navigate to next. When enabled, the server emits a single `<script type="speculationrules">` tag in `<head>` that instructs supporting browsers (Chrome, Edge) to prefetch same-origin `<a href>` links on moderate eagerness: roughly, the browser fetches the destination's HTML and dependent resources when the user hovers or touches a link, well before they click. Navigation feels instant when the prefetch lands.
-
-The feature is off by default. Browsers without Speculation Rules support (Safari, Firefox) silently ignore the tag.
+Link prefetch makes navigation feel instant by fetching destinations before the user clicks. Enable it once with `speculation: true` in your app config; the framework emits a Speculation Rules tag that tells supporting browsers to prefetch same-origin links on hover. The feature is off by default.
 
 ## Enabling
 

@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
-import { createNodeWebSocket } from '@hono/node-ws';
+import { upgradeWebSocket } from 'hono-preact';
 
 const app = new Hono();
-const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
 
 app.get(
   '/ws',
@@ -13,5 +12,4 @@ app.get(
   }))
 );
 
-export { injectWebSocket };
 export default app;

@@ -4,12 +4,6 @@ Pages often need to mutate data: adding a record, toggling a flag, deleting a ro
 
 For long-running operations that emit progress or results incrementally, see [Streaming](/docs/streaming).
 
-## How it works
-
-Define a `serverActions` map in your `.server.ts` file alongside the loader. Each action is wrapped with `defineAction` to carry its payload and result types.
-
-Actions are invoked via POST to the owning page's URL. On the client, the Vite plugin replaces the `serverActions` import with a Proxy: each property access returns an `ActionStub` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
-
 ## Defining actions
 
 **`src/pages/movies.server.ts`** (assumes `type MovieList = { results: { id: number; title: string }[] }`):
@@ -429,6 +423,12 @@ export const serverActions = {
 ```
 
 For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model.
+
+## How it works
+
+Define a `serverActions` map in your `.server.ts` file alongside the loader. Each action is wrapped with `defineAction` to carry its payload and result types.
+
+Actions are invoked via POST to the owning page's URL. On the client, the Vite plugin replaces the `serverActions` import with a Proxy: each property access returns an `ActionStub` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
 
 ## Timeouts
 

@@ -101,6 +101,7 @@ export const nav: NavArea[] = [
             route: '/docs/hono-middleware',
           },
           { title: 'WebSockets', route: '/docs/websockets' },
+          { title: 'Rooms & Presence', route: '/docs/rooms' },
           { title: 'renderPage', route: '/docs/render-page' },
           { title: 'Link Prefetch', route: '/docs/link-prefetch' },
           { title: 'Build & Deploy', route: '/docs/deployment' },

@@ -116,6 +116,24 @@ fi
 # Guide template: prose + examples are the only checks (many guides are pure
 # tutorial), keeping the hook's signal clean.
 
+# --- Ordering nudge (R1/R2/R3) ------------------------------------------
+# Delegate to the shared classifier so the hook and the CI gate can never
+# drift. node runs the .ts directly via native type-stripping (the project's
+# engines floor, ^22.18.0 || >=24.11.0, supports it). --disable-warning keeps
+# stderr clean on versions that still print the type-stripping ExperimentalWarning.
+# Soft-warn only; never blocks.
+if command -v node >/dev/null 2>&1; then
+  repo_root="${file_path%%/apps/site/*}"
+  cli="${repo_root}/apps/site/scripts/docs-structure.ts"
+  if [ -f "$cli" ]; then
+    order_out=$(node --disable-warning=ExperimentalWarning "$cli" "$file_path" 2>&1)
+    if [ -n "$order_out" ]; then
+      echo "docs-template-check: canonical order (see add-docs-page skill):" >&2
+      echo "$order_out" | sed 's/^/    /' >&2
+    fi
+  fi
+fi
+
 # --- Report --------------------------------------------------------------
 
 [ ${#missing[@]} -eq 0 ] && [ ${#recommend[@]} -eq 0 ] && exit 0

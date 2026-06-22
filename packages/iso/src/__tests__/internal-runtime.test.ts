@@ -6,7 +6,17 @@ const PLUMBING = [
   'installHistoryShim',
   'installNavTransitionScheduler',
   'installPubSubBackend',
+  'getPubSubBackend',
+  '__resetPubSubForTesting',
+  'joinRoom',
+  'leaveRoom',
+  'updatePresence',
+  'roomMembers',
+  '__resetPresenceForTesting',
   'installStreamRegistry',
+  'installWebSocketUpgrader',
+  'getWebSocketUpgrader',
+  '__resetWebSocketUpgraderForTesting',
   '__$createLoaderStub_hpiso',
 ] as const;
 

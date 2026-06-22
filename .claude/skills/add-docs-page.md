@@ -46,6 +46,8 @@ Add an entry `{ title: 'Page Title', route: '/docs/<slug>' }` to the right secti
 
 Every docs page rests on three pillars: **prose**, **examples**, **API reference**. The `docs-template-check` hook (PostToolUse on Edit|Write) infers the page's template from its path and soft-warns on stderr if a required pillar is missing. It never blocks. Match one of the two templates below.
 
+The canonical bucket order is: **examples first, nuance second, API reference last**. The `docs-template-check` hook soft-warns when this ordering is violated; `page-structure.test.ts` enforces it hard in CI.
+
 | Pillar | What it is | How the hook recognizes it |
 |---|---|---|
 | Prose | What the page documents and why it exists | An `# Title` h1 followed by a lead paragraph before the first `##` |
@@ -58,12 +60,14 @@ Every docs page rests on three pillars: **prose**, **examples**, **API reference
 
 ```
 # Title
-<lead paragraph: what this does and why it exists>
+<lead paragraph: what this does and the benefit>
 
-## How it works            (or the first concept section)
-  …prose interleaved with code examples…
+## Example                 (or the first runnable section; common case first)
+  …more examples for edge cases…
 
-## Options / <reference>   (a GFM table of the API the page documents)
+## How it works            (nuances, gotchas, known behavior, limitations)
+
+## Options / <reference>   (a GFM table of the API the page documents; last)
 
 <cross-links to related docs pages>
 ```
@@ -96,9 +100,10 @@ This area holds two shapes; the hook's required set is their common core (Prose 
 # name
 <lead paragraph>
 
-## Signature                   (optional; some pages go straight to Options)
-### Options / ### Parameters   (a markdown table), or a top-level ## Options
-## Example
+## Demo                        (optional <Example> live demo)
+## Example                     (fuller usage; common case first)
+## Signature                   (or go straight to ## Options)
+### Options / ### Parameters   (a markdown table)
 ```
 
 - **Required (both variants):** Prose, Examples, API reference (any of `## API reference`, `## Signature`, `## Options`, `## Parameters`, plus a table).

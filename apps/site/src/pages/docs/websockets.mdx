@@ -1,17 +1,155 @@
 # WebSockets
 
-Hono supports WebSocket upgrades via `upgradeWebSocket`. In hono-preact you register the WS route in your project's `api.ts`, and the framework's adapter wires the upgrade for both dev (`vite dev`) and the production build. This page shows the worked example for each adapter.
+hono-preact ships two WebSocket layers. The typed socket primitive (`defineSocket` + `useSocket`) gives you a declarative, type-safe duplex channel wired automatically to the framework's shared connection. The raw `upgradeWebSocket` export lets you register any hand-authored WS route in `api.ts` on the same connection, following the same Hono pattern as before, but now imported from `hono-preact` directly.
 
 For the rules around the `api.ts` mount point and framework-reserved paths, see [Composing Hono Middleware](/docs/hono-middleware).
 
-## Cloudflare Workers
+## Choosing between sockets and live loaders
 
-The Cloudflare adapter runs your code inside `workerd`, so the Worker runtime handles the upgrade. Import `upgradeWebSocket` from `hono/cloudflare-workers`:
+| Need                                      | Reach for                           |
+| ----------------------------------------- | ----------------------------------- |
+| Client sends messages to the server       | `defineSocket` + `useSocket`        |
+| Server pushes data on mutations (pub/sub) | [Realtime Channels](/docs/realtime) |
+| Server streams data to a layout widget    | [Live Loaders](/docs/live-loaders)  |
+
+A socket is the right tool when the browser needs to send upstream, or when you want a persistent full-duplex channel. Server-to-client-only scenarios (a notification feed, a dashboard widget) are better served by SSE-backed live loaders, which require no upgrade plumbing.
+
+On Node, a single HTTP connection is shared across the framework and all sockets. Cross-connection fan-out (for example, broadcasting to every connected client) requires external state such as an in-process Map or a message broker; built-in room support will be added in a later release. On Cloudflare Workers, pair with a Durable Object to hold shared state across connections.
+
+## Typed sockets with `defineSocket`
+
+The typed socket primitive integrates with the framework's route table and build pipeline. The build strips the server implementation on the client side, replacing it with a lightweight descriptor, so the types flow without shipping handler code to the browser.
+
+### Server module
+
+Place the socket definition in a `.server.ts` module, inside a `serverSockets` export:
+
+```ts
+// src/chat.server.ts
+import { defineSocket, serverRoute } from 'hono-preact';
+
+const route = serverRoute('/chat');
+
+export const serverSockets = {
+  chat: defineSocket<
+    { text: string }, // messages the client sends
+    { text: string; from: string } // messages the server sends
+  >({
+    // Optional guard middleware. A failing guard closes the socket with 4403.
+    use: [route.use],
+
+    async open(socket, { c }) {
+      const user = c.get('user');
+      socket.data = { name: user.name };
+
+      // Return a teardown fn to run on close.
+      return () => {
+        console.log(`${socket.data.name} disconnected`);
+      };
+    },
+
+    message(socket, msg) {
+      // Echo the message back to the same connection.
+      socket.send({ text: msg.text, from: socket.data.name });
+    },
+
+    close(socket, ev) {
+      console.log('closed', ev.code, ev.reason);
+    },
+  }),
+};
+```
+
+`open` runs once per connection after the upgrade. It receives the full Hono `Context` so you can read cookies, headers, and context values set by middleware. Returning a function from `open` registers a teardown that runs when the connection closes.
+
+`socket.data` is a per-connection mutable bag. Declare its shape with the third type parameter: `defineSocket<Incoming, Outgoing, Data>()`. The bag is `undefined` by default.
+
+### Client component
+
+Import the `serverSockets` map from the `.server` module and call `.useSocket` on the entry:
+
+```tsx
+// src/chat.tsx
+import { serverSockets } from './chat.server.js';
+
+export default function Chat() {
+  const { send, status, lastMessage } = serverSockets.chat.useSocket({
+    lastMessage: true,
+    onMessage(msg) {
+      console.log('received', msg.text);
+    },
+  });
+
+  return (
+    <div>
+      <p>Status: {status}</p>
+      {lastMessage && (
+        <p>
+          {lastMessage.from}: {lastMessage.text}
+        </p>
+      )}
+      <button onClick={() => send({ text: 'hello' })}>Send</button>
+    </div>
+  );
+}
+```
+
+The free `useSocket(ref, opts)` export also works and is equivalent; the method form is the idiomatic choice when the ref is a `serverSockets` entry.
+
+`useSocket` manages the WebSocket lifecycle: it connects on mount, reconnects with exponential backoff on unexpected drops, and closes cleanly on unmount. `send` queues messages if the socket is not yet open, flushing them once the connection is established (up to 128 queued messages).
+
+`status` is reactive and drives UI affordances:
+
+| Value            | Meaning                                   |
+| ---------------- | ----------------------------------------- |
+| `'connecting'`   | First connect attempt in progress         |
+| `'open'`         | Connection is established                 |
+| `'reconnecting'` | Connection dropped; backoff timer running |
+| `'closing'`      | `close()` called; handshake in progress   |
+| `'closed'`       | Connection closed and will not reconnect  |
+
+### Guard model
+
+A socket's guard chain is composed in order: app-level `use` from `defineApp({ use })`, then any `use` on the enclosing route node (via `serverRoute`), then the socket's own `use` array. Route-node and layout `use` guards are inherited, so a guard that protects a route also covers its sockets and rooms without having to be repeated. Add socket-specific authorization in the socket's own `use` array for concerns that only apply to the socket.
+
+A plain socket does not receive route path params in an inherited route-node guard. The upgrade is served from the framework's flat `/__sockets` endpoint, which is query-string only, so `ctx.location.pathParams` is empty for a socket connection. Param-dependent authorization for a socket must read the connection's query or headers in the socket's own `use` (or in `open`), not rely on a `:param` from the route the socket lives next to. (Rooms differ: a room's guard chain can read the room-key params via `ctx.location.pathParams`, because the room key rides the wire and is resolved server-side before the guard runs. See [Rooms](/docs/rooms).)
+
+### Reconnect behavior
+
+`useSocket` reconnects automatically after unexpected drops. The default policy skips reconnect for close code `1000` (normal closure) and all `4000-4999` codes (application-defined). Code `4403` is issued by the framework when a socket's `use` guard rejects the upgrade, signaling that reconnecting would hit the same rejection.
+
+Override the policy with `shouldReconnect`:
+
+```ts
+serverSockets.chat.useSocket({
+  shouldReconnect: (ev) => ev.code !== 1000 && ev.code !== 4403,
+  reconnect: {
+    maxRetries: 10,
+    minDelay: 500,
+    maxDelay: 60_000,
+    growth: 2,
+  },
+});
+```
+
+Disable the socket entirely with `enabled: false`; the hook will not connect until `enabled` becomes `true`.
+
+### Close codes
+
+| Code        | Meaning                                             |
+| ----------- | --------------------------------------------------- |
+| `1000`      | Normal closure; no reconnect by default             |
+| `4000-4999` | Application-defined; no reconnect by default        |
+| `4403`      | Guard rejected the upgrade; no reconnect by default |
+
+## Raw WebSocket routes with `upgradeWebSocket`
+
+For routes that do not fit the typed socket pattern, `upgradeWebSocket` from `hono-preact` lets you register any WS route in `api.ts` using the same Hono handler API:
 
 ```ts
 // src/api.ts
 import { Hono } from 'hono';
-import { upgradeWebSocket } from 'hono/cloudflare-workers';
+import { upgradeWebSocket } from 'hono-preact';
 
 const app = new Hono();
 
@@ -30,27 +168,18 @@ app.get(
 export default app;
 ```
 
-Connect from the browser with `new WebSocket('wss://your-app.example/ws')`. The same handler runs in `vite dev` (because the Cloudflare adapter boots workerd via `@cloudflare/vite-plugin`) and in a deployed Worker.
+`upgradeWebSocket` resolves the correct adapter at request time (Cloudflare Workers or Node), so the same `api.ts` code works across adapters without conditional imports.
 
-For long-lived stateful connections, Cloudflare's recommended pattern is to pair `upgradeWebSocket` with a Durable Object: the Hono handler accepts the upgrade and forwards the WebSocket to a Durable Object instance that owns the connection state. See the Cloudflare Workers WebSocket and Durable Object docs for the binding pattern; from Hono's perspective the handler is unchanged.
+### Node.js
 
-## Node.js
-
-The Node adapter uses `@hono/node-ws` to host the upgrade on the Node HTTP server. Install the peer dependency:
-
-```bash
-npm install @hono/node-ws
-```
-
-Then create the upgrade factory in `api.ts` and re-export `injectWebSocket`:
+On Node the framework's adapter wires the WebSocket upgrade internally (the same connection that powers `serverSockets`), so you do not install `@hono/node-ws`, call `createNodeWebSocket`, or export `injectWebSocket`. Your `api.ts` only needs `upgradeWebSocket` from `hono-preact`:
 
 ```ts
 // src/api.ts
 import { Hono } from 'hono';
-import { createNodeWebSocket } from '@hono/node-ws';
+import { upgradeWebSocket } from 'hono-preact';
 
 const app = new Hono();
-const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
 
 app.get(
   '/ws',
@@ -61,26 +190,104 @@ app.get(
   }))
 );
 
-export { injectWebSocket };
 export default app;
 ```
 
-The `injectWebSocket` named export is the contract: the framework's Node adapter looks for it on `api.ts` and attaches the upgrade handler to the underlying HTTP server. Re-export it exactly as shown. You do not call `injectWebSocket(server)` yourself; the adapter does, in both passes:
-
-- In `vite dev`, it attaches to Vite's dev HTTP server.
-- In production, it attaches to the `@hono/node-server` instance that the bundled entry boots.
-
 A working end-to-end example lives at `apps/example-node/` in the repo.
+
+### Cloudflare Workers
+
+On Cloudflare the Worker runtime handles the upgrade natively. `upgradeWebSocket` from `hono-preact` routes through `hono/cloudflare-workers` under the hood, so no extra peer install is needed. The same handler runs in `vite dev` (because the Cloudflare adapter boots workerd via `@cloudflare/vite-plugin`) and in a deployed Worker.
+
+For long-lived stateful connections, Cloudflare's recommended pattern is to pair with a Durable Object that owns the connection state. From hono-preact's perspective the handler in `api.ts` is unchanged.
 
 ## Avoiding reserved paths
 
-The framework reserves `POST /__loaders` and the catch-all SSR `GET`. Page URLs also accept `POST` for action submission. Register WebSocket routes on any non-colliding path. The build rejects catch-all and reserved-path route registrations in `api.ts`. See [Composing Hono Middleware](/docs/hono-middleware) for the full rules.
+Register WebSocket routes on any non-colliding path. The build rejects catch-all and reserved-path route registrations in `api.ts`. See [Composing Hono Middleware](/docs/hono-middleware) for the full rules.
 
-## Other long-lived patterns
+## API reference
 
-`upgradeWebSocket` is the right answer for bidirectional connections. For one-way pushes from the server to the browser, two simpler patterns are often a better fit:
+### `defineSocket<Incoming, Outgoing, Data>(handler)`
 
-- **Streaming loaders.** If the push is page data that should hydrate the initial UI, prefer a [streaming loader](/docs/streaming). The page renders shell-first and the loader's yielded chunks land in the React tree as they arrive.
-- **Server-Sent Events.** Hono ships `streamSSE` from `hono/streaming`. SSE runs over plain HTTP and requires none of the upgrade plumbing above, so a `GET` route in `api.ts` is enough.
+| Parameter  | Type       | Description                                         |
+| ---------- | ---------- | --------------------------------------------------- |
+| `Incoming` | type param | Message type the client sends (JSON-serializable).  |
+| `Outgoing` | type param | Message type the server sends (JSON-serializable).  |
+| `Data`     | type param | Per-connection data bag type. Default: `undefined`. |
 
-WebSockets are worth the extra moving parts when the browser also pushes upstream, or when the protocol is something other than `text/event-stream`.
+`handler` fields:
+
+| Field     | Type                                                      | Description                                                                                                                 |
+| --------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `use`     | `ReadonlyArray<Middleware>`                               | Guard chain run before the upgrade. A failing guard closes with code 4403.                                                  |
+| `open`    | `(socket, { c }) => void \| (() => void) \| Promise<...>` | Runs once per connection. Returning a function registers it as a teardown. `c` is the Hono Context for the upgrade request. |
+| `message` | `(socket, msg: Incoming) => void \| Promise<void>`        | Called for every incoming message.                                                                                          |
+| `close`   | `(socket, { code, reason }) => void`                      | Called when the connection closes.                                                                                          |
+| `error`   | `(socket, err) => void`                                   | Called on a socket error.                                                                                                   |
+
+`socket` fields:
+
+| Field                   | Type                      | Description                                                              |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------ |
+| `send(msg)`             | `(msg: Outgoing) => void` | Send a message to the client. JSON-encoded by the framework.             |
+| `close(code?, reason?)` | method                    | Close the connection.                                                    |
+| `data`                  | `Data`                    | Per-connection mutable bag. Set in `open`; read anywhere in the handler. |
+| `raw`                   | `unknown`                 | Escape hatch to the underlying runtime socket.                           |
+
+### `ref.useSocket(opts?)` / `useSocket(ref, opts?)`
+
+| Option                 | Type                                 | Default   | Description                                                                                |
+| ---------------------- | ------------------------------------ | --------- | ------------------------------------------------------------------------------------------ |
+| `onMessage`            | `(msg: Serialize<Outgoing>) => void` |           | Called for every incoming message. Does not trigger a re-render.                           |
+| `onOpen`               | `() => void`                         |           | Called when the connection opens.                                                          |
+| `onClose`              | `(e: CloseEvent) => void`            |           | Called when the connection closes.                                                         |
+| `shouldReconnect`      | `(e: CloseEvent) => boolean`         | See below | Returns `true` to reconnect.                                                               |
+| `reconnect.maxRetries` | `number`                             | `5`       | Maximum reconnect attempts.                                                                |
+| `reconnect.minDelay`   | `number`                             | `250`     | Minimum delay in ms before first retry.                                                    |
+| `reconnect.maxDelay`   | `number`                             | `30000`   | Backoff cap in ms.                                                                         |
+| `reconnect.growth`     | `number`                             | `2`       | Exponential growth factor.                                                                 |
+| `enabled`              | `boolean`                            | `true`    | When `false`, the socket does not connect.                                                 |
+| `lastMessage`          | `boolean`                            | `false`   | When `true`, the latest message is stored in reactive state and returned as `lastMessage`. |
+
+Default `shouldReconnect`: `false` for codes `1000` and `4000-4999`, `true` otherwise.
+
+Returns:
+
+| Field         | Type                               | Description                                               |
+| ------------- | ---------------------------------- | --------------------------------------------------------- |
+| `send`        | `(msg: Incoming) => void`          | Send a message. Queued if not yet open.                   |
+| `status`      | `SocketStatus`                     | Reactive connection status.                               |
+| `close`       | `(code?, reason?) => void`         | Close the connection. Suppresses reconnect.               |
+| `closeInfo`   | `SocketCloseInfo \| undefined`     | Code, reason, and wasClean from the last close event.     |
+| `lastMessage` | `Serialize<Outgoing> \| undefined` | Last received message, when `opts.lastMessage` is `true`. |
+
+### `upgradeWebSocket(createEvents)`
+
+Wraps `hono/ws` upgradeWebSocket, resolved at request time so the same handler works across adapters.
+
+| Parameter      | Type                                            | Description                                     |
+| -------------- | ----------------------------------------------- | ----------------------------------------------- |
+| `createEvents` | `(c: Context) => WSEvents \| Promise<WSEvents>` | Factory that returns the Hono WSEvents handler. |
+
+Returns a `MiddlewareHandler` for use in `app.get('/path', upgradeWebSocket(...))`.
+
+### Type exports
+
+```ts
+import type {
+  SocketRef,
+  SocketHandler,
+  ServerSocket,
+  SocketStatus,
+  SocketCloseInfo,
+  ReconnectOpts,
+  UseSocketOpts,
+  UseSocketResult,
+} from 'hono-preact';
+```
+
+## See also
+
+- [Realtime Channels](/docs/realtime): server-to-client pub/sub over SSE with `defineChannel` + `publish`.
+- [Live Loaders](/docs/live-loaders): persistent streaming loaders for layout-scoped widgets.
+- [Composing Hono Middleware](/docs/hono-middleware): `api.ts` mount rules and reserved paths.

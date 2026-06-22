@@ -1,6 +1,6 @@
 # The Route Table
 
-Routing is declared in one place: `src/routes.ts`. The `defineRoutes` factory takes a tree of route entries and returns a manifest the client uses for routing and the server uses for handler dispatch. There is no filesystem-based discovery: every URL in the app lives in this one file.
+Declare every URL in your app in one place: `src/routes.ts`. A code-defined route table makes URL redesign a one-edit refactor and keeps URL structure independent of file layout, with no filesystem-based discovery to work around.
 
 ## Why one file
 
@@ -146,8 +146,8 @@ For the full chain model and middleware authoring, see [Middleware](/docs/middle
 
 ## See also
 
-- [Layouts & Nested Routes](/docs/layouts) — the `layout` field, `LayoutProps`, identity preservation, the inner-router lowering.
-- [Adding Pages](/docs/pages) — the page-authoring side: views, server bindings, definePage.
-- [Server Loaders](/docs/loaders) — what the `server` import contains.
+- [Layouts & Nested Routes](/docs/layouts): the `layout` field, `LayoutProps`, identity preservation, the inner-router lowering.
+- [Adding Pages](/docs/pages): the page-authoring side: views, server bindings, definePage.
+- [Server Loaders](/docs/loaders): what the `server` import contains.
 - [Middleware](/docs/middleware): the full middleware chain and `use` authoring.
-- [Project Structure](/docs/structure) — where each piece lives in the demo app.
+- [Project Structure](/docs/structure): where each piece lives in the demo app.

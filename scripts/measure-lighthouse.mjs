@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Extracts Lighthouse scores from an LHCI `.lighthouseci/` run into the
-// committed report/history/badge files. Mirrors measure-client-size.mjs:
-// pure functions for testing + a CLI block.
+// committed report/history/badge files.
+// Pure functions for testing + a CLI block.
 //
 // Usage:
 //   node scripts/measure-lighthouse.mjs                     # write lighthouse-report.json from ./.lighthouseci

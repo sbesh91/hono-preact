@@ -1,6 +1,9 @@
 # CSRF Protection
 
-The framework does NOT enforce CSRF protection out of the box. Whether you need it depends on how your action POSTs are authenticated and how your session cookie is configured. This page is a recipe; opt in when you're shipping cookie-authenticated mutations to a real audience.
+This page is a recipe for CSRF protection. You need it when your app uses cookie
+authentication and accepts `multipart/form-data` actions; the JSON path is
+already protected by browser CORS preflight. The recipe is a single server-side
+Origin check in `api.ts`, with no client changes required.
 
 ## When you need it
 

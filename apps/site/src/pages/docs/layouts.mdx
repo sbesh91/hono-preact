@@ -200,7 +200,7 @@ Navigating `/dashboard/reports → /dashboard/reports/42` remounts only `<Report
 
 preact-iso's `<Router>` decides whether a navigation is "the same component re-rendered" or "a different component mounted" by comparing component references between the matched outgoing and incoming routes. If the references are the same, the component re-renders in place; if different, it unmounts and a new one mounts.
 
-For a layout group, the framework registers ONE shared component at the outer router under both `/path` and `/path/*`. That shared component renders `<Layout><Router>{...children}</Router></Layout>` — the inner `<Router>` matches the rest of the URL against the layout's children. Outer navigation between `/movies` and `/movies/123` finds the SAME outer component, so the layout re-renders in place; the inner Router resolves the new child and swaps its content.
+For a layout group, the framework registers ONE shared component at the outer router under both `/path` and `/path/*`. That shared component renders `<Layout><Router>{...children}</Router></Layout>`. The inner `<Router>` matches the rest of the URL against the layout's children. Outer navigation between `/movies` and `/movies/123` finds the SAME outer component, so the layout re-renders in place; the inner Router resolves the new child and swaps its content.
 
 Nesting works recursively: a layout-group child of a layout group registers as a single component within its parent's inner Router, and so on.
 
@@ -244,6 +244,6 @@ This pattern remounts the chrome on each navigation, so it's only appropriate wh
 
 ## See also
 
-- [The Route Table](/docs/routes) — the `defineRoutes` factory and the manifest.
-- [Adding Pages](/docs/pages) — view authoring.
-- [Server Loaders](/docs/loaders) — what `server` imports provide.
+- [The Route Table](/docs/routes): the `defineRoutes` factory and the manifest.
+- [Adding Pages](/docs/pages): view authoring.
+- [Server Loaders](/docs/loaders): what `server` imports provide.

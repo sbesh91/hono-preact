@@ -63,3 +63,13 @@ export function installPubSubBackend(backend: PubSubBackend): void {
 export function getPubSubBackend(): PubSubBackend {
   return current;
 }
+
+/**
+ * Test-only: drop all in-process subscriptions and restore the default
+ * backend. The registry is process-global, so suites that exercise the
+ * bus must reset it between tests to stay isolated.
+ */
+export function __resetPubSubForTesting(): void {
+  registry().clear();
+  current = inProcessBackend;
+}

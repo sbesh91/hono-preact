@@ -96,6 +96,30 @@ export type { Channel, Topic } from './define-channel.js';
 export { publish } from './pubsub.js';
 export type { LiveLoaderOpts } from './server-route.js';
 
+// Duplex WebSocket sockets.
+export { defineSocket } from './define-socket.js';
+export type {
+  SocketRef,
+  SocketHandler,
+  ServerSocket,
+} from './define-socket.js';
+export { useSocket } from './use-socket.js';
+export type {
+  SocketStatus,
+  SocketCloseInfo,
+  ReconnectOpts,
+  UseSocketOpts,
+  UseSocketResult,
+} from './use-socket.js';
+export { upgradeWebSocket } from './upgrade-websocket.js';
+
+// Broadcasting rooms (a duplex socket bound to a typed channel + presence).
+export { defineRoom } from './define-room.js';
+export type { RoomRef, RoomHandler, RoomConnection } from './define-room.js';
+export { useRoom } from './use-room.js';
+export type { UseRoomOpts, UseRoomResult } from './use-room.js';
+export type { PresenceMember } from './internal/room-envelope.js';
+
 // Middleware + outcomes (the new system).
 export {
   defineServerMiddleware,
