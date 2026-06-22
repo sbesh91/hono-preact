@@ -11,6 +11,11 @@ import type { RoomDef } from '@hono-preact/iso/internal';
 import {
   installWebSocketUpgrader,
   __resetWebSocketUpgraderForTesting,
+  installRealtimeConnector,
+  __resetRealtimeConnectorForTesting,
+  SOCKET_MODULE_PARAM,
+  SOCKET_NAME_PARAM,
+  SOCKET_ROOM_PARAM,
   SOCKETS_RPC_PATH,
   WS_DENY_CODE,
 } from '@hono-preact/iso/internal/runtime';
@@ -20,7 +25,11 @@ import {
   socketsHandler,
 } from '../sockets-handler.js';
 import { buildRoomRegistry } from '../rooms-handler.js';
-import type { WebSocketUpgrader } from '@hono-preact/iso/internal/runtime';
+import type {
+  WebSocketUpgrader,
+  RealtimeConnector,
+  RoomConnectContext,
+} from '@hono-preact/iso/internal/runtime';
 import type { WSEvents } from 'hono/ws';
 
 // ---------------------------------------------------------------------------
@@ -115,6 +124,7 @@ let app: Hono;
 
 afterEach(() => {
   __resetWebSocketUpgraderForTesting();
+  __resetRealtimeConnectorForTesting();
 });
 
 // ---------------------------------------------------------------------------
@@ -499,5 +509,220 @@ describe('assertNoSocketRoomCollision', () => {
     expect(() =>
       assertNoSocketRoomCollision(registry, undefined)
     ).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Realtime connector seam (PR 5a Task 4)
+//
+// With a connector installed (the Cloudflare adapter installs one), an ALLOWED
+// room connection is forwarded to the connector (which on CF forwards the
+// upgrade to a Durable Object) instead of running the room runtime in the
+// worker. The guard chain runs at the edge BEFORE any forward: a denied room
+// and a plain socket never reach the connector.
+// ---------------------------------------------------------------------------
+
+describe('socketsHandler: realtime connector forwarding', () => {
+  const ROOM_MODULE = 'pages/board';
+  const ROOM_NAME = 'boardRoom';
+  const roomChannel = defineChannel('room/:roomId')<{ text: string }>();
+
+  // A fake connector that records its calls and returns a sentinel Response.
+  function makeFakeConnector(): {
+    connector: RealtimeConnector;
+    calls: () => RoomConnectContext[];
+    response: Response;
+  } {
+    const calls: RoomConnectContext[] = [];
+    // A sentinel Response standing in for the forwarded upgrade. The real CF
+    // upgrade Response is { status: 101, webSocket }, but the WHATWG Response
+    // constructor outside workerd rejects status 101, so the sentinel uses a
+    // plain 200: the test asserts identity (the handler returns THIS Response),
+    // not the status code.
+    const response = new Response('forwarded-to-DO');
+    const connector: RealtimeConnector = (ctx) => {
+      calls.push(ctx);
+      return response;
+    };
+    return { connector, calls: () => calls, response };
+  }
+
+  // A room app whose `/__sockets` route returns the handler's value directly so
+  // the connector's Response can be asserted on. The connector returns a
+  // Response, so the handler returns it directly (NOT through the upgrader).
+  function makeRoomApp(
+    roomHandler: Parameters<typeof defineRoom>[1],
+    resolvePageUse?: Parameters<typeof socketsHandler>[0]['resolvePageUse'],
+    resolveRoutePath?: Parameters<typeof socketsHandler>[0]['resolveRoutePath']
+  ): Hono {
+    const room = defineRoom(roomChannel, roomHandler) as unknown as RoomDef<
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    >;
+    const rooms = new Map([[`${ROOM_MODULE}::${ROOM_NAME}`, room]]);
+    const honoApp = new Hono();
+    honoApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry: new Map(),
+        rooms,
+        resolvePageUse,
+        resolveRoutePath,
+      })
+    );
+    return honoApp;
+  }
+
+  function connectRoom(honoApp: Hono, rawR: string): Promise<Response> {
+    return honoApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(rawR)}`
+    );
+  }
+
+  it('forwards an ALLOWED room to the connector exactly once with the resolved context', async () => {
+    const { connector, calls, response } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // The upgrader must NOT be consulted on the allowed-room forward path; install
+    // one that throws so a stray upgrade() call would fail the test loudly.
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the forward path');
+    });
+
+    const app = makeRoomApp({
+      // The data factory runs at the edge with the live Context.
+      data: (c) => ({ tag: c.req.query('tag') ?? 'none' }),
+    });
+
+    const res = await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}` +
+        `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
+        `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
+        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({ roomId: 'demo' }))}` +
+        `&tag=x`
+    );
+
+    // The handler returns the connector's Response directly.
+    expect(res).toBe(response);
+    expect(await res.text()).toBe('forwarded-to-DO');
+
+    // The connector was called exactly once with the fully-resolved context.
+    expect(calls()).toHaveLength(1);
+    const ctx = calls()[0]!;
+    expect(ctx.topic).toBe('room/demo'); // server-interpolated, not client-supplied
+    expect(ctx.moduleKey).toBe(ROOM_MODULE);
+    expect(ctx.name).toBe(ROOM_NAME);
+    expect(ctx.params).toEqual({ roomId: 'demo' });
+    // data is the already-run roomDef.data(c) result captured at the edge.
+    expect(ctx.data).toEqual({ tag: 'x' });
+  });
+
+  it('does NOT forward a DENIED room: the in-worker deny path closes WS_DENY_CODE', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+
+    // The in-worker deny path goes through the upgrader (createRoomWsEvents whose
+    // onOpen closes 4403). Capture the events so we can drive onOpen.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const app = makeRoomApp({
+      use: [
+        defineServerMiddleware(async () => {
+          const { deny } = await import('@hono-preact/iso');
+          throw deny('forbidden', 403);
+        }),
+      ],
+    });
+
+    await connectRoom(app, JSON.stringify({ roomId: 'demo' }));
+
+    // The connector was never called: the guard denied BEFORE any forward.
+    expect(calls()).toHaveLength(0);
+
+    // The in-worker deny path closes WS_DENY_CODE in onOpen.
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('does NOT forward a room whose key fails to resolve (in-worker deny path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const app = makeRoomApp({});
+
+    // A required `:roomId` param is missing: resolveRoomKey returns { ok: false }.
+    await connectRoom(app, JSON.stringify({}));
+
+    // A connection whose topic/params never resolved must not be forwarded.
+    expect(calls()).toHaveLength(0);
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('never forwards a plain socket: it uses the in-worker socket path', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+
+    const openSpy = vi.fn();
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    app = makeApp(registry);
+
+    await getRequest('pages/chat', 'chatSocket');
+
+    // A plain socket is never forwarded to the connector.
+    expect(calls()).toHaveLength(0);
+
+    // It runs the in-worker socket path (def.open fires on open).
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(openSpy).toHaveBeenCalledOnce();
+  });
+
+  it('passes the resolved room-key params to a route-node guard before forwarding', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the forward path');
+    });
+
+    let seenRoomIdInGuard: string | undefined;
+    const requireRoomId = defineServerMiddleware(async (mwCtx, next) => {
+      seenRoomIdInGuard = mwCtx.location.pathParams.roomId;
+      await next();
+    });
+
+    const app = makeRoomApp(
+      {},
+      (path: string) => (path === '/board' ? [requireRoomId] : []),
+      (mk: string) => (mk === ROOM_MODULE ? '/board' : undefined)
+    );
+
+    await connectRoom(app, JSON.stringify({ roomId: 'demo' }));
+
+    // The guard saw the room-key param (params reach the guard at the edge), then
+    // allowed, then the connection was forwarded.
+    expect(seenRoomIdInGuard).toBe('demo');
+    expect(calls()).toHaveLength(1);
   });
 });

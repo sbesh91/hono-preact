@@ -7,6 +7,7 @@ import {
   SOCKETS_RPC_PATH,
   WS_DENY_CODE,
   getWebSocketUpgrader,
+  getRealtimeConnector,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -193,6 +194,116 @@ export async function resolveGuardDenied(opts: {
 }
 
 /**
+ * The fully-resolved state for a `/__sockets` connection: the def (socket and/or
+ * room view of it), the server-derived owning route path, the pre-resolved room
+ * key (rooms only), and whether the shared guard chain denied. `def` is
+ * `undefined` only when the `m::name` matches no registry.
+ *
+ * Single-sourced so the Node `createEvents` path and the CF connector branch
+ * read the SAME resolution (def lookup, route-path derivation, room-key parse,
+ * guard probe) rather than copy-pasting it and drifting.
+ */
+interface ResolvedConnection {
+  moduleKey: string | undefined;
+  name: string | undefined;
+  socketDef: AnySocketDef | undefined;
+  roomDef: AnyRoomDef | undefined;
+  def: AnySocketDef | AnyRoomDef | undefined;
+  routePath: string;
+  /** Defined iff `def` is a room (i.e. `'channel' in def`). */
+  roomKey: RoomKeyResolution | undefined;
+  denied: boolean;
+}
+
+/**
+ * Resolve a `/__sockets` connection's def, owning route path, room key, and
+ * guard outcome from the request Context. This is the shared resolution that
+ * BOTH the in-worker Node path (`createEvents`) and the CF connector branch run,
+ * so the auth/permission resolution is single-sourced and cannot drift between
+ * the two dispatch targets. It performs no connection side effects (no upgrade,
+ * no WSEvents wiring); it only reads the request and runs the guard probe.
+ *
+ * When the `m::name` matches no registry, `def` is `undefined` (the callers
+ * handle the unknown-def deny). Otherwise `roomKey` is defined iff `def` is a
+ * room (`'channel' in def`).
+ */
+async function resolveConnection(
+  ctx: Context,
+  opts: SocketsHandlerOptions
+): Promise<ResolvedConnection> {
+  const { appConfig } = opts;
+  const moduleKey = ctx.req.query(SOCKET_MODULE_PARAM);
+  const name = ctx.req.query(SOCKET_NAME_PARAM);
+  const key = moduleKey && name ? `${moduleKey}::${name}` : undefined;
+
+  // Resolve sockets first, then rooms. Sockets come from `serverSockets`
+  // and rooms from the separate `serverRooms` export, so a key matches at
+  // most one registry.
+  const socketDef = key ? opts.registry.get(key) : undefined;
+  const roomDef = key ? opts.rooms?.get(key) : undefined;
+  const def: AnySocketDef | AnyRoomDef | undefined = socketDef ?? roomDef;
+
+  if (!def) {
+    return {
+      moduleKey,
+      name,
+      socketDef: undefined,
+      roomDef: undefined,
+      def: undefined,
+      routePath: SOCKETS_RPC_PATH,
+      roomKey: undefined,
+      denied: false,
+    };
+  }
+
+  // Resolve the owning route path from the moduleKey (server-derived, not
+  // client-supplied). A def whose moduleKey is not in the route tree falls
+  // back to SOCKETS_RPC_PATH, which matches no route pattern, so
+  // resolvePageUse returns [] and the def gets app-use + def-use only.
+  const routePath =
+    moduleKey && opts.resolveRoutePath
+      ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
+      : SOCKETS_RPC_PATH;
+
+  // For a room, parse + validate the room-key params SERVER-SIDE before the
+  // guard runs, so the guard chain (app -> route-node -> def use) can read
+  // them via `ctx.location.pathParams`. Plain sockets have no param wire, so
+  // they pass `{}` to the guard. The topic is still computed server-side
+  // here (channel.key(params)); the client only varies param VALUES.
+  // `'channel' in def` narrows `def` to a room, so `roomKey` is defined iff
+  // the room branch below runs (no non-null assertion needed there).
+  let roomKey: RoomKeyResolution | undefined;
+  if ('channel' in def) {
+    roomKey = resolveRoomKey(def.channel, ctx.req.query(SOCKET_ROOM_PARAM));
+  }
+
+  const denied = await resolveGuardDenied({
+    def,
+    ctx,
+    appConfig,
+    resolvePageUse: opts.resolvePageUse ?? (() => []),
+    routePath,
+    moduleKey: moduleKey ?? '',
+    name: name ?? '',
+    // Only feed resolved params to the guard; a failed room-key resolution
+    // (or a plain socket) contributes no params. onOpen still denies on a
+    // failed room key, so the guard never sees a partially-resolved room.
+    pathParams: roomKey?.ok ? roomKey.params : {},
+  });
+
+  return {
+    moduleKey,
+    name,
+    socketDef,
+    roomDef,
+    def,
+    routePath,
+    roomKey,
+    denied,
+  };
+}
+
+/**
  * Handle GET /__sockets for BOTH duplex sockets and broadcasting rooms. Resolve
  * the connection's `m::name` against the socket registry first, then the room
  * registry; run the shared guard chain (app use + route-node use + the def's
@@ -200,25 +311,21 @@ export async function resolveGuardDenied(opts: {
  * resolved def's shape. A guard denial upgrades and then immediately closes
  * WS_DENY_CODE in onOpen (a rejected handshake is opaque in browsers, so we
  * cannot refuse the HTTP upgrade).
+ *
+ * Dispatch target: with NO realtime connector installed (the default) the room
+ * runtime runs IN the worker (the Node path below, byte-identical to before the
+ * connector seam). When a connector IS installed (the Cloudflare adapter
+ * installs one), an ALLOWED room connection is forwarded to it (after the guard
+ * has run at the edge) so the room runtime executes in a Durable Object instead.
+ * A denied room and a plain socket never reach the connector.
  */
 export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
-  const { appConfig } = opts;
-  return (c, next) => {
-    // Lazy: the adapter installs the upgrader at boot, after this handler is
-    // registered. Resolve it per request, not at construction time.
-    const upgrade = getWebSocketUpgrader();
-
+  return async (c, next) => {
     const createEvents = async (ctx: Context): Promise<WSEvents> => {
-      const moduleKey = ctx.req.query(SOCKET_MODULE_PARAM);
-      const name = ctx.req.query(SOCKET_NAME_PARAM);
-      const key = moduleKey && name ? `${moduleKey}::${name}` : undefined;
-
-      // Resolve sockets first, then rooms. Sockets come from `serverSockets`
-      // and rooms from the separate `serverRooms` export, so a key matches at
-      // most one registry.
-      const socketDef = key ? opts.registry.get(key) : undefined;
-      const roomDef = key ? opts.rooms?.get(key) : undefined;
-      const def: AnySocketDef | AnyRoomDef | undefined = socketDef ?? roomDef;
+      const { socketDef, def, denied, roomKey } = await resolveConnection(
+        ctx,
+        opts
+      );
 
       if (!def) {
         return {
@@ -227,41 +334,6 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
           },
         };
       }
-
-      // Resolve the owning route path from the moduleKey (server-derived, not
-      // client-supplied). A def whose moduleKey is not in the route tree falls
-      // back to SOCKETS_RPC_PATH, which matches no route pattern, so
-      // resolvePageUse returns [] and the def gets app-use + def-use only.
-      const routePath =
-        moduleKey && opts.resolveRoutePath
-          ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
-          : SOCKETS_RPC_PATH;
-
-      // For a room, parse + validate the room-key params SERVER-SIDE before the
-      // guard runs, so the guard chain (app -> route-node -> def use) can read
-      // them via `ctx.location.pathParams`. Plain sockets have no param wire, so
-      // they pass `{}` to the guard. The topic is still computed server-side
-      // here (channel.key(params)); the client only varies param VALUES.
-      // `'channel' in def` narrows `def` to a room, so `roomKey` is defined iff
-      // the room branch below runs (no non-null assertion needed there).
-      let roomKey: RoomKeyResolution | undefined;
-      if ('channel' in def) {
-        roomKey = resolveRoomKey(def.channel, ctx.req.query(SOCKET_ROOM_PARAM));
-      }
-
-      const denied = await resolveGuardDenied({
-        def,
-        ctx,
-        appConfig,
-        resolvePageUse: opts.resolvePageUse ?? (() => []),
-        routePath,
-        moduleKey: moduleKey ?? '',
-        name: name ?? '',
-        // Only feed resolved params to the guard; a failed room-key resolution
-        // (or a plain socket) contributes no params. onOpen still denies on a
-        // failed room key, so the guard never sees a partially-resolved room.
-        pathParams: roomKey?.ok ? roomKey.params : {},
-      });
 
       // Branch on the def shape. A room def carries a `channel`; delegate its
       // (larger) wiring to the room runtime to keep this file thin. The
@@ -320,6 +392,53 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       };
     };
 
-    return upgrade(createEvents)(c, next);
+    const connector = getRealtimeConnector();
+    if (!connector) {
+      // Node path (no connector installed): the room runtime runs IN the worker.
+      // Byte-identical to before the connector seam: lazily resolve the upgrader
+      // (the adapter installs it at boot, after this handler is registered) and
+      // run the in-worker WSEvents factory for both sockets and rooms.
+      const upgrade = getWebSocketUpgrader();
+      return upgrade(createEvents)(c, next);
+    }
+
+    // CF path: a connector is installed. Resolve def + room key + guard at the
+    // EDGE (the same resolution createEvents uses, via resolveConnection) so the
+    // guard chain runs BEFORE any forward. Only an ALLOWED room reaches the
+    // connector; a denied room and a plain socket use the in-worker path.
+    const { roomDef, roomKey, denied, moduleKey, name } =
+      await resolveConnection(c, opts);
+
+    // Forward to the connector ONLY for a room that BOTH resolved its key AND
+    // passed the guard. Everything else uses the in-worker path
+    // (upgrade(createEvents)):
+    //  - not a room (unknown def OR a plain socket): `roomDef` is undefined; the
+    //    connector forwards only rooms. Plain sockets are unsupported on a
+    //    forwarding adapter, so this hits the unknown-def deny or
+    //    getWebSocketUpgrader()'s "no upgrader" error. Do NOT call the connector.
+    //  - room + failed key (roomKey.ok === false): the in-worker path closes
+    //    WS_DENY_CODE in onOpen; do not forward a connection whose topic/params
+    //    never resolved.
+    //  - room + denied guard: the in-worker deny path closes WS_DENY_CODE. The
+    //    guard must deny BEFORE any forward, so a denied connection never
+    //    reaches the connector / the DO.
+    if (!roomDef || !roomKey || !roomKey.ok || denied) {
+      const upgrade = getWebSocketUpgrader();
+      return upgrade(createEvents)(c, next);
+    }
+
+    // Room + allowed: run the edge `data` factory once (with the live Context,
+    // since the room callbacks run without a Context inside the DO) and forward
+    // to the connector. The connector returns the upgrade Response (the
+    // forwarded 101); return it directly, NOT through upgrade().
+    const data = roomDef.data?.(c) ?? {};
+    return connector({
+      c,
+      topic: roomKey.topic,
+      moduleKey: moduleKey ?? '',
+      name: name ?? '',
+      params: roomKey.params,
+      data,
+    });
   };
 }
