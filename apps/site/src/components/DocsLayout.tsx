@@ -203,7 +203,7 @@ export function DocsLayout({ children }: Props) {
           aria-label="Docs navigation menu"
           aria-hidden={!mobileOpen}
           inert={!mobileOpen || undefined}
-          class="fixed top-0 bottom-0 left-0 w-65 bg-surface-subtle border-r border-border z-50 flex flex-col md:hidden"
+          class="fixed top-0 bottom-0 left-0 w-72 bg-surface-subtle border-r border-border z-50 flex flex-col md:hidden"
           style={{
             transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
             transition: `transform var(--spring-duration) var(--spring-soft)`,
