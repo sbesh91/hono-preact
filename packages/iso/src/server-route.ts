@@ -75,7 +75,12 @@ export interface RouteServer<RouteId extends string> {
    * on the flat socket endpoint. Attaching the room to the route node only
    * wires its `use` inheritance.
    */
-  room<Name extends string, Payload, State = void, Data = undefined>(
+  room<
+    Name extends string,
+    Payload,
+    State = void,
+    Data = Record<string, unknown>,
+  >(
     channel: Channel<Name, Payload>,
     handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
   ): RoomRef<Payload, Payload, State, RouteParams<Name>>;

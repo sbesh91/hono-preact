@@ -141,7 +141,7 @@ export function defineRoom<
   Name extends string,
   Payload,
   State = void,
-  Data = undefined,
+  Data = Record<string, unknown>,
 >(
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>

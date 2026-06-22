@@ -183,12 +183,13 @@ function _dataFactoryProbe() {
   });
 }
 
-// Negative: without a data factory, conn.data is `undefined` (the default Data).
+// Without a data factory, conn.data is `Record<string, unknown>` (matches the
+// `?? {}` runtime coercion in rooms-handler and sockets-handler).
 function _noDataFactoryProbe() {
   defineRoom(roomChannel, {
     onJoin(conn, ctx) {
-      // With no data factory, Data defaults to undefined.
-      expectTypeOf(conn.data).toEqualTypeOf<undefined>();
+      // With no data factory, Data defaults to Record<string, unknown>.
+      expectTypeOf(conn.data).toEqualTypeOf<Record<string, unknown>>();
       // ctx still has no c.
       // @ts-expect-error ctx.c does not exist
       ctx.c;
