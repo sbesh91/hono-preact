@@ -75,6 +75,13 @@ describe('LoaderHost delayed fallback', () => {
     );
     expect(screen.queryByTestId('loading')).toBeNull();
 
+    // coerceLoaderLocation is async even with no schemas, so fn is invoked
+    // after a microtask. One Promise.resolve() flush is enough; waitFor would
+    // fight fake timers.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     await act(async () => {
       resolve({ msg: 'done' });
     });
