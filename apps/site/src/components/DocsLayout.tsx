@@ -132,7 +132,7 @@ export function DocsLayout({ children }: Props) {
             wins over guide), not per-href route matching, so they stay plain
             <a>. A NavLink on the Guide tab (`/docs`) would also light up on
             every `/docs/components/*` page since that is a descendant path. */}
-        <nav class="flex items-center gap-1" aria-label="Docs areas">
+        <nav class="hidden md:flex items-center gap-1" aria-label="Docs areas">
           {nav.map((area) => {
             const TabIcon = area.icon;
             const isActive = area.id === activeAreaId;
@@ -155,14 +155,14 @@ export function DocsLayout({ children }: Props) {
         </nav>
         <span class="flex-1" />
         <CommandPalette pages={docsPages} />
-        <span class="hidden sm:inline text-xs text-muted whitespace-nowrap">
+        <span class="hidden md:inline text-xs text-muted whitespace-nowrap">
           v{__HONO_PREACT_VERSION__}
         </span>
         <a
           href="/llms.txt"
           target="_blank"
           rel="noreferrer noopener"
-          class="text-xs text-muted hover:text-foreground whitespace-nowrap no-underline"
+          class="hidden md:inline text-xs text-muted hover:text-foreground whitespace-nowrap no-underline"
           title="Plain-text docs for LLMs (llms.txt)"
         >
           For LLMs
@@ -172,7 +172,7 @@ export function DocsLayout({ children }: Props) {
           target="_blank"
           rel="noreferrer noopener"
           aria-label="hono-preact on GitHub"
-          class="flex items-center justify-center h-8 w-8 rounded text-muted hover:text-foreground hover:bg-foreground/10"
+          class="hidden md:flex items-center justify-center h-8 w-8 rounded text-muted hover:text-foreground hover:bg-foreground/10"
         >
           <GithubMark />
         </a>
