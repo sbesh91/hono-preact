@@ -42,6 +42,12 @@ lerna-debug.log*
 # lighthouse ci run output (regenerated on every `lhci collect`)
 .lighthouseci/
 
+# lighthouse metric files now live on the `metrics` branch; local measure runs write
+# them to root, so keep them out of `main`
+lighthouse-report.json
+lighthouse-history.jsonl
+lighthouse-badge.json
+
 # serena mcp (per-user runtime state; project.yml is tracked)
 .serena/cache/
 .serena/memories/
