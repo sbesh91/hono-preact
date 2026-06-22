@@ -453,6 +453,13 @@
 .mdx-content td code {
   white-space: nowrap;
 }
+/* The last column is prose (Description / Notes / Action). When a wide code
+   column forces the table to scroll, auto table-layout would otherwise squeeze
+   this column down to a word or two per line; give it a readable measure. */
+.mdx-content th:last-child,
+.mdx-content td:last-child {
+  min-width: 16rem;
+}
 /* Tighter cell padding on narrow phones so more columns fit before the wrapper
    has to scroll. */
 @media (max-width: 480px) {
