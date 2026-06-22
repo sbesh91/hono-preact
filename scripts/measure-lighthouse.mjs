@@ -7,6 +7,7 @@
 //   node scripts/measure-lighthouse.mjs                     # write lighthouse-report.json from ./.lighthouseci
 //   node scripts/measure-lighthouse.mjs --in DIR --out FILE
 //   node scripts/measure-lighthouse.mjs --append-history --badge --sha <sha> --date <iso>
+//   node scripts/measure-lighthouse.mjs --out-dir DIR --append-history --badge --sha <sha> --date <iso>
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -86,6 +87,18 @@ export function badgePayload(report) {
   return { schemaVersion: 1, label: 'lighthouse', message: String(perf), color: bandColor(perf) };
 }
 
+// Resolve the three output file paths. With `outDir`, all three live under it;
+// otherwise they default to the repo root. `out` overrides the report path only,
+// preserving the existing --out flag.
+export function resolveOutputPaths({ root, outDir, out } = {}) {
+  const base = outDir ?? root;
+  return {
+    report: out ?? join(base, 'lighthouse-report.json'),
+    history: join(base, 'lighthouse-history.jsonl'),
+    badge: join(base, 'lighthouse-badge.json'),
+  };
+}
+
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
   if (i === -1) return undefined;
@@ -97,10 +110,10 @@ function arg(name) {
 // CLI
 if (import.meta.url === `file://${process.argv[1]}`) {
   const inDir = arg('in') ?? join(ROOT, '.lighthouseci');
-  const outPath = arg('out') ?? join(ROOT, 'lighthouse-report.json');
+  const outPath = resolveOutputPaths({ root: ROOT, outDir: arg('out-dir'), out: arg('out') });
   const report = extractReport(inDir);
-  writeFileSync(outPath, JSON.stringify(report, null, 2) + '\n');
-  console.log(`Wrote ${outPath} (home performance ${report.pages[HOME]?.scores.performance ?? 'n/a'})`);
+  writeFileSync(outPath.report, JSON.stringify(report, null, 2) + '\n');
+  console.log(`Wrote ${outPath.report} (home performance ${report.pages[HOME]?.scores.performance ?? 'n/a'})`);
 
   if (process.argv.includes('--append-history')) {
     const sha = arg('sha');
@@ -109,12 +122,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.error('--append-history requires --sha and --date');
       process.exit(1);
     }
-    const historyPath = join(ROOT, 'lighthouse-history.jsonl');
+    const historyPath = outPath.history;
     appendFileSync(historyPath, JSON.stringify(historyRow(report, sha, date)) + '\n');
     console.log(`Appended history row for ${sha} to ${historyPath}`);
   }
   if (process.argv.includes('--badge')) {
-    const badgePath = join(ROOT, 'lighthouse-badge.json');
+    const badgePath = outPath.badge;
     writeFileSync(badgePath, JSON.stringify(badgePayload(report), null, 2) + '\n');
     console.log(`Wrote ${badgePath}`);
   }
