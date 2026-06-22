@@ -48,37 +48,61 @@ export default defineConfig((env) => ({
       // Umbrella subpaths (longest-prefix first).
       {
         find: 'hono-preact/internal/runtime',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/internal-runtime.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/internal-runtime.ts'
+        ),
       },
       {
         find: 'hono-preact/internal',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/internal.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/internal.ts'
+        ),
       },
       {
         find: 'hono-preact/server/internal/runtime',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/server-internal-runtime.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/server-internal-runtime.ts'
+        ),
       },
       {
         find: 'hono-preact/server',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/server.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/server.ts'
+        ),
       },
       {
         find: 'hono-preact/vite',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/vite.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/vite.ts'
+        ),
       },
       {
         find: 'hono-preact/adapter-cloudflare',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/adapter-cloudflare.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/adapter-cloudflare.ts'
+        ),
       },
       {
         find: 'hono-preact',
-        replacement: resolve(__dirname, '../../packages/hono-preact/src/index.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/index.ts'
+        ),
       },
       // Workspace packages kept so the umbrella's `export * from '@hono-preact/iso'`
       // chains through to source for HMR.
       {
         find: '@hono-preact/iso/internal/runtime',
-        replacement: resolve(__dirname, '../../packages/iso/src/internal-runtime.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/iso/src/internal-runtime.ts'
+        ),
       },
       {
         find: '@hono-preact/iso/internal',
@@ -90,7 +114,10 @@ export default defineConfig((env) => ({
       },
       {
         find: '@hono-preact/server/internal/runtime',
-        replacement: resolve(__dirname, '../../packages/server/src/internal-runtime.ts'),
+        replacement: resolve(
+          __dirname,
+          '../../packages/server/src/internal-runtime.ts'
+        ),
       },
       {
         find: '@hono-preact/server',
@@ -118,6 +145,29 @@ export default defineConfig((env) => ({
         mkdirSync(outDir, { recursive: true });
         writeFileSync(resolve(outDir, 'llms.txt'), llmsTxt);
         writeFileSync(resolve(outDir, 'llms-full.txt'), llmsFullTxt);
+      },
+      configureServer(server) {
+        // In dev there is no client build, and the Cloudflare dev server does
+        // not serve the dist/client assets dir, so the worker catch-all would
+        // render a not-found page for these paths. Serve them directly. The
+        // corpus is generated once and cached, then invalidated when a docs
+        // page changes, so repeated requests don't re-read every MDX file while
+        // dev edits still stay reflected. (Production serves the static files
+        // emitted by closeBundle; this middleware runs in dev only.)
+        let cache: { llmsTxt: string; llmsFullTxt: string } | null = null;
+        server.watcher.on('all', (_event, file) => {
+          if (file.startsWith(docsDir) && file.endsWith('.mdx')) cache = null;
+        });
+        server.middlewares.use((req, res, next) => {
+          const path = (req.url || '').split('?')[0];
+          if (path !== '/llms.txt' && path !== '/llms-full.txt') {
+            next();
+            return;
+          }
+          cache ??= generateLlmsFiles(nav, docsDir);
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.end(path === '/llms.txt' ? cache.llmsTxt : cache.llmsFullTxt);
+        });
       },
     },
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
