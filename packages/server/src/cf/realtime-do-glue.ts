@@ -1,0 +1,152 @@
+/// <reference types="@cloudflare/workers-types/latest" />
+//
+// The platform-free half of the Durable Object runtime: the worker-side forward
+// connector and the DOConnState adapter. It uses @cloudflare/workers-types ONLY
+// for TYPES (WebSocket, DurableObjectNamespace), which are erased at runtime, so
+// this module imports NO runtime workerd module (`cloudflare:workers` lives in
+// the sibling `realtime-do.ts` with the class). That keeps these helpers
+// importable and unit-testable in plain vitest (no workerd), which the class
+// itself is not.
+
+import type { Context } from 'hono';
+import {
+  makeCfRoomTransport,
+  type DOConnState,
+  type RoomConnAttachment,
+} from './room-do-transport.js';
+import type { RealtimeConnector } from '@hono-preact/iso/internal/runtime';
+
+// Re-export so the DO and the door can pull the transport bits from one place.
+export { makeCfRoomTransport };
+export type { DOConnState, RoomConnAttachment };
+
+/** Connections whose forwarded context exceeds this byte budget are denied. */
+export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
+
+// ---------------------------------------------------------------------------
+// The worker-side forward connector
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the realtime connector the Cloudflare adapter installs. It forwards an
+ * already-guarded room upgrade to the topic's Durable Object (`idFromName(topic)`,
+ * so one DO per topic), passing the resolved room context as `x-hp-*` headers.
+ *
+ * The connector runs at the edge AFTER the guard chain has allowed the upgrade
+ * and AFTER `roomDef.data?.(c)` has run (its result arrives as `data`), so the
+ * DO never sees an unauthorized connection and never needs a live Context.
+ *
+ * Inbound `Request.headers` are immutable in workerd, so the forwarded request
+ * is rebuilt from `c.req.raw` with a cloned `Headers` (the spike-confirmed
+ * shape) before the `x-hp-*` headers are stamped on.
+ *
+ * @param getNamespace reads the DO binding off the request context (the adapter
+ *   passes `(c) => c.env.HONO_PREACT_REALTIME`). Returns undefined when the
+ *   binding is missing, which is a clear configuration error.
+ */
+export function makeCfForwardConnector(
+  getNamespace: (c: Context) => DurableObjectNamespace | undefined
+): RealtimeConnector {
+  return async ({ c, topic, moduleKey, name, params, data }) => {
+    const ns = getNamespace(c);
+    if (!ns) {
+      throw new Error(
+        'hono-preact: rooms on Cloudflare require the HONO_PREACT_REALTIME ' +
+          'Durable Object binding. Add it to wrangler.jsonc (see the rooms docs).'
+      );
+    }
+
+    // Serialize the per-connection context onto forwarded headers. params/data
+    // are user/edge-derived JSON; bound their size so an oversized data bag (or
+    // a hostile params payload) cannot blow the DO's request header budget.
+    const paramsJson = JSON.stringify(params);
+    const dataJson = JSON.stringify(data ?? null);
+    const overBudget =
+      byteLength(paramsJson) > MAX_FORWARD_HEADER_BYTES ||
+      byteLength(dataJson) > MAX_FORWARD_HEADER_BYTES;
+    if (overBudget) {
+      throw new Error(
+        'hono-preact: room connection context (params/data) exceeds the ' +
+          `${MAX_FORWARD_HEADER_BYTES}-byte forward limit. Keep the room data ` +
+          'factory result small (it rides a request header to the Durable Object).'
+      );
+    }
+
+    const stub = ns.get(ns.idFromName(topic));
+
+    // Rebuild the request with a cloned, mutable Headers (inbound headers are
+    // immutable in workerd). The body/method/upgrade intent carry over from the
+    // original request so `stub.fetch` performs the WebSocket upgrade in the DO.
+    const fwd = new Request(c.req.raw, {
+      headers: new Headers(c.req.raw.headers),
+    });
+    fwd.headers.set('x-hp-topic', topic);
+    fwd.headers.set('x-hp-module', moduleKey);
+    fwd.headers.set('x-hp-name', name);
+    fwd.headers.set('x-hp-params', paramsJson);
+    fwd.headers.set('x-hp-data', dataJson);
+
+    // `stub.fetch` returns `Promise<Response>` (the forwarded 101 upgrade); the
+    // connector returns it directly. socketsHandler returns this Response as-is.
+    return stub.fetch(fwd);
+  };
+}
+
+/** UTF-8 byte length of a string (header size is measured in bytes, not chars). */
+export function byteLength(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
+
+// ---------------------------------------------------------------------------
+// DOConnState adapter over the hibernation API
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the `DOConnState` the CF transport consumes from a list of hibernation
+ * WebSockets. Each socket carries its `RoomConnAttachment` via
+ * (de)serializeAttachment; the connId is read from the attachment so the store
+ * can index by the stable member id (NOT by socket identity, which is opaque).
+ *
+ * Exported so the per-event logic is testable in plain vitest with a fake
+ * `getWebSockets()`-shaped array, without workerd. `all()` and `get()` read the
+ * attachment lazily on each call so a `setState` write is visible to a later
+ * read within the same event.
+ */
+export function makeDOConnState(sockets: WebSocket[]): DOConnState {
+  const attachmentOf = (ws: WebSocket): RoomConnAttachment =>
+    // Sanctioned cast: deserializeAttachment() returns `any` (untrusted-shaped
+    // hibernation payload). We wrote it ourselves as a RoomConnAttachment in
+    // the DO's fetch(); read it back at that one boundary.
+    ws.deserializeAttachment() as RoomConnAttachment;
+
+  return {
+    all() {
+      return sockets.map((ws) => ({
+        id: attachmentOf(ws).connId,
+        send: (data: string) => ws.send(data),
+        getState: () => attachmentOf(ws),
+      }));
+    },
+    get(connId) {
+      const ws = sockets.find((s) => attachmentOf(s).connId === connId);
+      if (!ws) return undefined;
+      return {
+        send: (data: string) => ws.send(data),
+        getState: () => attachmentOf(ws),
+        setState: (s: RoomConnAttachment) => ws.serializeAttachment(s),
+      };
+    },
+  };
+}
+
+/** Parse an `x-hp-*` JSON header; missing or malformed yields `null`. */
+export function parseHeaderJson(raw: string | null): unknown {
+  if (raw === null || raw === '') return null;
+  try {
+    // Sanctioned untrusted-wire JSON.parse: the value was stamped by the forward
+    // connector but reaches the DO over the request, so parse defensively.
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
