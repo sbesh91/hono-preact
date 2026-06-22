@@ -440,21 +440,18 @@
 .mdx-content tr:last-child td {
   border-bottom: none;
 }
-/* Keep the first column (prop/name) on one line; let later columns wrap and
-   give long type signatures and descriptions room to breathe. */
+/* Keep the first column (prop/name) on one line. */
 .mdx-content td:first-child {
   white-space: nowrap;
 }
+/* Inline code in cells (identifiers and long type signatures) stays on one
+   line so it reads cleanly. When that makes a table wider than the viewport it
+   scrolls horizontally inside its .table-wrap, rather than breaking code
+   mid-token to shrink to fit (overflow-wrap: anywhere did the latter, which
+   mangled signatures like `Promise<{ ... }>` into one-character columns on
+   mobile). Prose in cells still wraps normally. */
 .mdx-content td code {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-/* First-column code is an identifier (a part/prop name), not a long signature,
-   so keep it on one line. Overrides the td code wrapping above (which is for
-   long type signatures in later columns). */
-.mdx-content td:first-child code {
   white-space: nowrap;
-  overflow-wrap: normal;
 }
 /* Tighter cell padding on narrow phones so more columns fit before the wrapper
    has to scroll. */
