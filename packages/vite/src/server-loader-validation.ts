@@ -77,10 +77,11 @@ export function serverLoaderValidationPlugin(): Plugin {
       if (
         !namedExports.includes('serverActions') &&
         !namedExports.includes('serverLoaders') &&
+        !namedExports.includes('serverRooms') &&
         !namedExports.includes('serverSockets')
       ) {
         errors.push(
-          `${id}: .server files must export at least one of 'serverLoaders', 'serverActions', or 'serverSockets'. ` +
+          `${id}: .server files must export at least one of 'serverLoaders', 'serverActions', 'serverRooms', or 'serverSockets'. ` +
             `Use \`export const serverLoaders = { default: defineLoader(fn) }\` to define loaders.`
         );
       }

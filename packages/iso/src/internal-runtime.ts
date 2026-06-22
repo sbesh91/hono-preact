@@ -8,8 +8,22 @@
 export { installHistoryShim } from './internal/history-shim.js';
 export { installNavTransitionScheduler } from './internal/route-change.js';
 export { installStreamRegistry } from './internal/stream-registry.js';
-export { installPubSubBackend } from './internal/pubsub.js';
+export {
+  installPubSubBackend,
+  getPubSubBackend,
+  __resetPubSubForTesting,
+} from './internal/pubsub.js';
 export type { PubSubBackend } from './internal/pubsub.js';
+// Presence roster plumbing the room runtime (in @hono-preact/server) drives.
+// It pairs each registry mutation with a wire broadcast; the registry itself
+// is transport-free.
+export {
+  joinRoom,
+  leaveRoom,
+  updatePresence,
+  roomMembers,
+  __resetPresenceForTesting,
+} from './internal/presence.js';
 export {
   installWebSocketUpgrader,
   getWebSocketUpgrader,

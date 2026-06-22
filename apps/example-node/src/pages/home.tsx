@@ -3,6 +3,7 @@ import type { FunctionComponent } from 'preact';
 import { useState, useCallback } from 'preact/hooks';
 import { serverLoaders, serverActions } from './home.server.js';
 import { serverSockets } from './chat.server.js';
+import { serverRooms } from './cursors.server.js';
 
 const homeLoader = serverLoaders.default;
 const countLoader = serverLoaders.count;
@@ -15,6 +16,7 @@ const HomePage: FunctionComponent = () => {
       <p>{message}</p>
       <LiveCounter />
       <ChatDemo />
+      <CursorsDemo />
       <a href="/about">About</a>
     </section>
   );
@@ -105,6 +107,72 @@ const ChatDemo: FunctionComponent = () => {
   );
 };
 ChatDemo.displayName = 'ChatDemo';
+
+// Live-cursors demo: all members in the 'demo' room see each other's pointer
+// positions as small colored overlays. On pointermove, the client sends its
+// cursor position as a presence update (not a message); the framework fans the
+// presence delta out to all other members. Each member renders a dot for every
+// OTHER member (self is excluded: the OS cursor is already visible, and rendering
+// your own position introduces lag).
+const CursorsDemo: FunctionComponent = () => {
+  const room = serverRooms.cursors.useRoom({
+    key: { room: 'demo' },
+    presence: { x: 0, y: 0 },
+  });
+
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      room.setPresence({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    },
+    [room]
+  );
+
+  const others = room.members.filter((m) => m.id !== room.self?.id);
+
+  return (
+    <div>
+      <h2>Live cursors ({room.status})</h2>
+      <p>
+        Members: {room.members.length} (you are{' '}
+        {room.self ? `member ${room.self.id.slice(0, 6)}` : 'connecting...'})
+      </p>
+      <div
+        style={{
+          position: 'relative',
+          width: '400px',
+          height: '200px',
+          border: '1px solid #ccc',
+          overflow: 'hidden',
+          cursor: 'crosshair',
+        }}
+        onPointerMove={handlePointerMove}
+      >
+        <span style={{ userSelect: 'none', pointerEvents: 'none' }}>
+          Move your pointer here to share your cursor position.
+        </span>
+        {others.map((member) => (
+          <div
+            key={member.id}
+            style={{
+              position: 'absolute',
+              left: `${member.state?.x ?? 0}px`,
+              top: `${member.state?.y ?? 0}px`,
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: '#e05',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+            }}
+            title={member.id.slice(0, 6)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+CursorsDemo.displayName = 'CursorsDemo';
 
 const HomeView = homeLoader.View(() => <HomePage />, {
   fallback: <p>Loading...</p>,
