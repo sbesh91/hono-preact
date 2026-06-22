@@ -5,5 +5,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist/client"
-  }
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "HONO_PREACT_REALTIME", "class_name": "HonoPreactRealtimeDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HonoPreactRealtimeDO"] }]
 }
