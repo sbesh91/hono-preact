@@ -40,6 +40,19 @@ const MODULE_KEY = 'src/room';
 const ROOM_NAME = 'room';
 const ROOM_KEY = { id: 'demo' };
 
+// A second room in the same module whose guard ALWAYS denies (`use: [denyAll]`).
+// Connecting here must close the socket WS_DENY_CODE (4403) WITHOUT crashing the
+// worker. This is the regression guard for bug_001: on Cloudflare the room
+// deny/key-fail path used to call getWebSocketUpgrader() (no upgrader is
+// installed on CF), throwing "no WebSocket upgrader installed" and surfacing as a
+// 500 instead of the documented 4403 close. The fix routes the deny THROUGH the
+// connector, which does a transport-native upgrade-and-close (no DO contact).
+const DENIED_ROOM_NAME = 'deniedRoom';
+const DENIED_ROOM_KEY = { id: 'demo' };
+
+// The deny close code (packages/iso/src/internal/contract.ts WS_DENY_CODE).
+const WS_DENY_CODE = 4403;
+
 // The /__sockets contract (packages/iso/src/internal/contract.ts):
 //   path = '/__sockets', m = moduleKey, s = name, r = JSON(key params).
 const SOCKETS_RPC_PATH = '/__sockets';
@@ -56,6 +69,42 @@ function roomUrl(port: number): string {
     `&s=${encodeURIComponent(ROOM_NAME)}` +
     `&r=${encodeURIComponent(JSON.stringify(ROOM_KEY))}`
   );
+}
+
+function deniedRoomUrl(port: number): string {
+  return (
+    `ws://localhost:${port}${SOCKETS_RPC_PATH}` +
+    `?m=${encodeURIComponent(MODULE_KEY)}` +
+    `&s=${encodeURIComponent(DENIED_ROOM_NAME)}` +
+    `&r=${encodeURIComponent(JSON.stringify(DENIED_ROOM_KEY))}`
+  );
+}
+
+/**
+ * Resolve with the close code when the socket closes; reject if it errors
+ * BEFORE closing (a 500 / refused upgrade surfaces as an `error` with no clean
+ * close frame, which is exactly the bug_001 failure mode this distinguishes from
+ * a clean 4403 close).
+ */
+function waitForClose(ws: WebSocket, timeout = 10_000): Promise<number> {
+  return new Promise((res, rej) => {
+    let closed = false;
+    const t = setTimeout(() => rej(new Error('ws close timeout')), timeout);
+    ws.once('close', (code) => {
+      closed = true;
+      clearTimeout(t);
+      res(code);
+    });
+    ws.once('error', (err) => {
+      // A clean WS close also emits 'error' in `ws` for non-1000 codes; only
+      // treat an error that arrives WITHOUT a close as a failure (the crash
+      // mode). The 'close' handler clears the timeout and resolves first.
+      if (!closed) {
+        clearTimeout(t);
+        rej(err);
+      }
+    });
+  });
 }
 
 /** Connect a `ws` client and buffer every message it receives. */
@@ -273,5 +322,21 @@ describe('Cloudflare adapter: DO room (two ws clients, intra-DO fan-out)', () =>
     expect(leave?.from).toBe(aId);
 
     b.ws.close(1000);
+  }, 60_000);
+
+  it('a DENIED room connection closes WS_DENY_CODE (4403), not a worker 500 (bug_001 regression)', async () => {
+    const port = serverPort(server);
+
+    // Connect to the room whose guard always denies. On Cloudflare this routes
+    // through the connector's transport-native deny close (no DO contact). Before
+    // the fix, the worker called getWebSocketUpgrader() with no upgrader
+    // installed and threw, crashing the upgrade with a 500 instead of closing.
+    const denied = new WebSocket(deniedRoomUrl(port));
+
+    // The socket must close cleanly with 4403. waitForClose rejects if the
+    // upgrade errors WITHOUT a close frame (the crash mode), so a green
+    // assertion here proves the deny path closes 4403 rather than 500-ing.
+    const code = await waitForClose(denied);
+    expect(code).toBe(WS_DENY_CODE);
   }, 60_000);
 });

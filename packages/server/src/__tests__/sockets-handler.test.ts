@@ -611,9 +611,12 @@ describe('socketsHandler: realtime connector forwarding', () => {
     expect(res).toBe(response);
     expect(await res.text()).toBe('forwarded-to-DO');
 
-    // The connector was called exactly once with the fully-resolved context.
+    // The connector was called exactly once with the fully-resolved forward
+    // context.
     expect(calls()).toHaveLength(1);
     const ctx = calls()[0]!;
+    expect(ctx.kind).toBe('forward');
+    if (ctx.kind !== 'forward') throw new Error('expected forward kind');
     expect(ctx.topic).toBe('room/demo'); // server-interpolated, not client-supplied
     expect(ctx.moduleKey).toBe(ROOM_MODULE);
     expect(ctx.name).toBe(ROOM_NAME);
@@ -622,14 +625,17 @@ describe('socketsHandler: realtime connector forwarding', () => {
     expect(ctx.data).toEqual({ tag: 'x' });
   });
 
-  it('does NOT forward a DENIED room: the in-worker deny path closes WS_DENY_CODE', async () => {
+  it('routes a DENIED room to the connector with kind:deny (NOT the forward path, NOT the upgrader)', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);
 
-    // The in-worker deny path goes through the upgrader (createRoomWsEvents whose
-    // onOpen closes 4403). Capture the events so we can drive onOpen.
-    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
-    installWebSocketUpgrader(upgrader);
+    // The deny close runs in the connector (a transport-native upgrade-and-close
+    // on workerd), NOT through the in-worker upgrader. Install one that throws so
+    // a stray upgrade() call (e.g. the pre-fix getWebSocketUpgrader fall-through
+    // that crashed the worker on CF) fails the test loudly.
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the room deny path');
+    });
 
     const app = makeRoomApp({
       use: [
@@ -642,35 +648,29 @@ describe('socketsHandler: realtime connector forwarding', () => {
 
     await connectRoom(app, JSON.stringify({ roomId: 'demo' }));
 
-    // The connector was never called: the guard denied BEFORE any forward.
-    expect(calls()).toHaveLength(0);
-
-    // The in-worker deny path closes WS_DENY_CODE in onOpen.
-    const events = lastEvents();
-    const ws = lastWs();
-    await events.onOpen?.(new Event('open'), ws as never);
-    expect(ws.closes).toHaveLength(1);
-    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    // The connector was called exactly once with kind:deny: the guard denied
+    // (BEFORE any forward), so the connector NEVER receives a forward context for
+    // a denied connection and the DO is never contacted.
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]!.kind).toBe('deny');
   });
 
-  it('does NOT forward a room whose key fails to resolve (in-worker deny path)', async () => {
+  it('routes a room whose key fails to resolve to the connector with kind:deny', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);
-    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
-    installWebSocketUpgrader(upgrader);
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the room deny path');
+    });
 
     const app = makeRoomApp({});
 
     // A required `:roomId` param is missing: resolveRoomKey returns { ok: false }.
     await connectRoom(app, JSON.stringify({}));
 
-    // A connection whose topic/params never resolved must not be forwarded.
-    expect(calls()).toHaveLength(0);
-
-    const events = lastEvents();
-    const ws = lastWs();
-    await events.onOpen?.(new Event('open'), ws as never);
-    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    // A connection whose topic/params never resolved is routed to the connector
+    // as a deny (closed WS_DENY_CODE), not forwarded.
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]!.kind).toBe('deny');
   });
 
   it('never forwards a plain socket: it uses the in-worker socket path', async () => {
@@ -702,8 +702,9 @@ describe('socketsHandler: realtime connector forwarding', () => {
   it('guard runs EXACTLY ONCE on a DENIED CF connection (no double-invoke)', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);
-    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
-    installWebSocketUpgrader(upgrader);
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the room deny path');
+    });
 
     // Counting guard: each invocation increments the counter.
     let guardRunCount = 0;
@@ -717,19 +718,14 @@ describe('socketsHandler: realtime connector forwarding', () => {
 
     await connectRoom(app, JSON.stringify({ roomId: 'demo' }));
 
-    // The guard must run exactly once: the CF deny fall-through must reuse the
+    // The guard must run exactly once: the CF deny path must reuse the
     // already-resolved connection rather than re-running resolveConnection.
     expect(guardRunCount).toBe(1);
 
-    // The connector was never called.
-    expect(calls()).toHaveLength(0);
-
-    // The in-worker deny path closes WS_DENY_CODE in onOpen.
-    const events = lastEvents();
-    const ws = lastWs();
-    await events.onOpen?.(new Event('open'), ws as never);
-    expect(ws.closes).toHaveLength(1);
-    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    // The connector handled the deny exactly once (kind:deny), so the DO is
+    // never contacted for a denied connection.
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]!.kind).toBe('deny');
   });
 
   it('guard runs EXACTLY ONCE on an ALLOWED CF connection (forward path)', async () => {

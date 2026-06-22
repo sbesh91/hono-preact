@@ -315,9 +315,11 @@ async function resolveConnection(
  * Dispatch target: with NO realtime connector installed (the default) the room
  * runtime runs IN the worker (the Node path below, byte-identical to before the
  * connector seam). When a connector IS installed (the Cloudflare adapter
- * installs one), an ALLOWED room connection is forwarded to it (after the guard
- * has run at the edge) so the room runtime executes in a Durable Object instead.
- * A denied room and a plain socket never reach the connector.
+ * installs one), EVERY room connection goes through it (after the guard has run
+ * at the edge): an allowed room is forwarded so the room runtime executes in a
+ * Durable Object; a denied / key-failed room is closed WS_DENY_CODE by the
+ * connector via a transport-native upgrade-and-close, with no DO contact. A
+ * plain socket never reaches the connector (the in-worker upgrader handles it).
  */
 export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
   return async (c, next) => {
@@ -405,41 +407,48 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
 
     // CF path: a connector is installed. Resolve def + room key + guard at the
     // EDGE (the same resolution createEvents uses, via resolveConnection) so the
-    // guard chain runs BEFORE any forward. Only an ALLOWED room reaches the
-    // connector; a denied room and a plain socket use the in-worker path.
+    // guard chain runs BEFORE the connector decides forward vs. deny. Every ROOM
+    // connection (allowed or denied) goes THROUGH the connector; a non-room
+    // (unknown def or a plain socket) uses the in-worker upgrader path.
     const resolved = await resolveConnection(c, opts);
     const { roomDef, roomKey, denied, moduleKey, name } = resolved;
 
-    // Forward to the connector ONLY for a room that BOTH resolved its key AND
-    // passed the guard. Everything else uses the in-worker path
-    // (upgrade(createEvents)):
-    //  - not a room (unknown def OR a plain socket): `roomDef` is undefined; the
-    //    connector forwards only rooms. Plain sockets are unsupported on a
-    //    forwarding adapter, so this hits the unknown-def deny or
-    //    getWebSocketUpgrader()'s "no upgrader" error. Do NOT call the connector.
-    //  - room + failed key (roomKey.ok === false): the in-worker path closes
-    //    WS_DENY_CODE in onOpen; do not forward a connection whose topic/params
-    //    never resolved.
-    //  - room + denied guard: the in-worker deny path closes WS_DENY_CODE. The
-    //    guard must deny BEFORE any forward, so a denied connection never
-    //    reaches the connector / the DO.
-    if (!roomDef || !roomKey || !roomKey.ok || denied) {
-      const upgrade = getWebSocketUpgrader();
-      return upgrade((ctx) => createEvents(ctx, resolved))(c, next);
+    if (roomDef) {
+      // Room: the connector handles both dispositions so the deny close can use
+      // a transport-native API (WebSocketPair on workerd) that this platform-
+      // neutral file cannot import.
+      if (denied || !roomKey || !roomKey.ok) {
+        // Denied guard OR a failed room key. The guard ran BEFORE this point, so
+        // a denied connection never reaches the connector's forward path / the
+        // DO; the connector closes WS_DENY_CODE in the worker without any DO
+        // contact. A failed key (topic/params never resolved) is denied the same
+        // way. The connector returns the upgrade-and-close Response directly.
+        return connector({ c, kind: 'deny' });
+      }
+
+      // Room + allowed + key-ok: run the edge `data` factory once (with the live
+      // Context, since the room callbacks run without a Context inside the DO)
+      // and forward to the connector. The connector returns the upgrade Response
+      // (the forwarded 101); return it directly, NOT through upgrade().
+      const data = roomDef.data?.(c) ?? {};
+      return connector({
+        c,
+        kind: 'forward',
+        topic: roomKey.topic,
+        moduleKey: moduleKey ?? '',
+        name: name ?? '',
+        params: roomKey.params,
+        data,
+      });
     }
 
-    // Room + allowed: run the edge `data` factory once (with the live Context,
-    // since the room callbacks run without a Context inside the DO) and forward
-    // to the connector. The connector returns the upgrade Response (the
-    // forwarded 101); return it directly, NOT through upgrade().
-    const data = roomDef.data?.(c) ?? {};
-    return connector({
-      c,
-      topic: roomKey.topic,
-      moduleKey: moduleKey ?? '',
-      name: name ?? '',
-      params: roomKey.params,
-      data,
-    });
+    // Not a room (unknown def OR a plain socket): the connector handles rooms
+    // only. Rooms now deny cleanly via the connector above, so the ONLY path
+    // that reaches getWebSocketUpgrader() on a forwarding adapter is a non-room
+    // connection. An unknown def hits createEvents' unknown-def deny; a plain
+    // socket is unsupported on a forwarding adapter, so it surfaces
+    // getWebSocketUpgrader()'s "no upgrader installed" error (documented).
+    const upgrade = getWebSocketUpgrader();
+    return upgrade((ctx) => createEvents(ctx, resolved))(c, next);
   };
 }

@@ -14,7 +14,10 @@ import {
   type DOConnState,
   type RoomConnAttachment,
 } from './room-do-transport.js';
-import type { RealtimeConnector } from '@hono-preact/iso/internal/runtime';
+import {
+  WS_DENY_CODE,
+  type RealtimeConnector,
+} from '@hono-preact/iso/internal/runtime';
 
 // Re-export so the DO and the door can pull the transport bits from one place.
 export { makeCfRoomTransport };
@@ -28,11 +31,19 @@ export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
 // ---------------------------------------------------------------------------
 
 /**
- * Build the realtime connector the Cloudflare adapter installs. It forwards an
- * already-guarded room upgrade to the topic's Durable Object (`idFromName(topic)`,
- * so one DO per topic), passing the resolved room context as `x-hp-*` headers.
+ * Build the realtime connector the Cloudflare adapter installs. It handles BOTH
+ * room dispositions socketsHandler routes to it:
  *
- * The connector runs at the edge AFTER the guard chain has allowed the upgrade
+ *   - `forward`: an allowed, key-resolved room. The upgrade is forwarded to the
+ *     topic's Durable Object (`idFromName(topic)`, so one DO per topic), passing
+ *     the resolved room context as `x-hp-*` headers.
+ *   - `deny`: a denied / key-failed room. The connector performs a workerd-native
+ *     upgrade-and-close: it accepts the handshake and immediately closes the
+ *     client socket with WS_DENY_CODE (4403), the documented deny contract. This
+ *     happens entirely in the worker via `WebSocketPair`; the DO is NEVER
+ *     contacted, so a denied connection cannot reach the room runtime.
+ *
+ * The forward path runs at the edge AFTER the guard chain has allowed the upgrade
  * and AFTER `roomDef.data?.(c)` has run (its result arrives as `data`), so the
  * DO never sees an unauthorized connection and never needs a live Context.
  *
@@ -47,7 +58,22 @@ export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
 export function makeCfForwardConnector(
   getNamespace: (c: Context) => DurableObjectNamespace | undefined
 ): RealtimeConnector {
-  return async ({ c, topic, moduleKey, name, params, data }) => {
+  return async (ctx) => {
+    // Deny / key-fail: close the handshake WS_DENY_CODE without contacting the
+    // DO. A denied connection never reaches the room runtime (the security
+    // invariant). `WebSocketPair` is a workerd global; this seam is the only
+    // place that close can run, since socketsHandler is platform-neutral and
+    // cannot import workerd APIs.
+    if (ctx.kind === 'deny') {
+      const pair = new WebSocketPair();
+      const client = pair[0];
+      const server = pair[1];
+      server.accept();
+      server.close(WS_DENY_CODE, 'forbidden');
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    const { c, topic, moduleKey, name, params, data } = ctx;
     const ns = getNamespace(c);
     if (!ns) {
       throw new Error(

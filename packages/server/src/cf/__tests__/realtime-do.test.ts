@@ -9,7 +9,7 @@ import {
   makeDOConnState,
   type RoomConnAttachment,
 } from '../realtime-do-glue.js';
-import type { RoomConnectContext } from '@hono-preact/iso/internal/runtime';
+import type { RoomForwardContext } from '@hono-preact/iso/internal/runtime';
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -57,10 +57,15 @@ function makeContext(raw: Request): Context {
   return { req: { raw } } as unknown as Context;
 }
 
+// Forward-context fields (the connector's forward path). The `kind` discriminant
+// is included so the spread builds a complete RoomForwardContext when paired with
+// `c`; the deny path carries no fields beyond `c` and is exercised in the workerd
+// integration test (the deny close needs WebSocketPair, a workerd-only global).
 function baseCtx(
-  overrides: Partial<RoomConnectContext> = {}
-): Omit<RoomConnectContext, 'c'> {
+  overrides: Partial<Omit<RoomForwardContext, 'c'>> = {}
+): Omit<RoomForwardContext, 'c'> {
   return {
+    kind: 'forward',
     topic: 'room/abc',
     moduleKey: 'src/pages/board.server',
     name: 'board',
