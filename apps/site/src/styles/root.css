@@ -408,16 +408,22 @@
   margin: 0.25rem 0;
 }
 
+/* The wrapper (injected by rehypeWrapTables) owns the visual frame and the
+   horizontal scroll, so a wide API table scrolls inside its own box on mobile
+   instead of forcing a horizontal scrollbar on the whole page. The table keeps
+   `width: 100%`, so on desktop its columns still stretch to fill the wrapper. */
+.mdx-content .table-wrap {
+  margin: 1.25rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
 .mdx-content table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin: 1.25rem 0;
   font-size: 0.875rem;
   line-height: 1.6;
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  overflow: hidden;
 }
 .mdx-content th {
   padding: 0.625rem 0.875rem;
@@ -450,14 +456,24 @@
   white-space: nowrap;
   overflow-wrap: normal;
 }
+/* Tighter cell padding on narrow phones so more columns fit before the wrapper
+   has to scroll. */
+@media (max-width: 480px) {
+  .mdx-content th,
+  .mdx-content td {
+    padding: 0.5rem 0.625rem;
+  }
+}
 
 /* Code samples and API tables read better wider than the prose measure. On
    desktop there is room to the right of the content column, so let them grow
-   past it (capped so they never exceed the viewport). */
+   past it (capped so they never exceed the viewport). The table wrapper is the
+   direct child of .mdx-content now, so it is what gets the extra width; the
+   table inside fills it via `width: 100%`. */
 @media (min-width: 768px) {
   .docs-tabs,
   .mdx-content > pre,
-  .mdx-content > table {
+  .mdx-content > .table-wrap {
     width: min(calc(100% + 9rem), calc(100vw - 240px - 6rem));
   }
 }
