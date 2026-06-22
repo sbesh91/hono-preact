@@ -19,7 +19,7 @@ describe('cloudflareAdapter', () => {
     expect(tail).toContain(
       `import coreApp, { serverImports as __hpServerImports } from "/p/node_modules/.vite/hono-preact/core-app.tsx";`
     );
-    expect(tail).toContain('export default coreApp;');
+    expect(tail).toContain('return coreApp.fetch(request, env, ctx);');
   });
 
   it('wrapEntry re-exports the Durable Object class under the wrangler-bound name', () => {
@@ -52,10 +52,10 @@ describe('cloudflareAdapter', () => {
 
   it('wrapEntry installs the forward connector off the HONO_PREACT_REALTIME binding', () => {
     const tail = cloudflareAdapter().wrapEntry(ctx);
-    // installRealtimeConnector is on the platform-free iso runtime door.
-    expect(tail).toContain(
-      `import { installRealtimeConnector } from 'hono-preact/internal/runtime';`
-    );
+    // installRealtimeConnector is on the platform-free iso runtime door,
+    // now imported alongside installPubSubBackend in a multi-name block.
+    expect(tail).toContain(`from 'hono-preact/internal/runtime';`);
+    expect(tail).toContain('installRealtimeConnector');
     // The binding is read as a bracketed string access so any binding name is
     // safe; the same name is passed through so the missing-binding error names
     // the developer's actual env key.
@@ -93,6 +93,38 @@ describe('cloudflareAdapter', () => {
     );
     expect(() => cloudflareAdapter({ realtimeClass: '1bad' })).toThrow(
       /realtimeClass must be a valid JavaScript identifier/
+    );
+  });
+
+  it('wrapEntry installs the CF pub/sub backend off the captured runtime', () => {
+    const tail = cloudflareAdapter().wrapEntry(ctx);
+    // installPubSubBackend is on the platform-free iso runtime door, imported
+    // alongside installRealtimeConnector in a multi-name block.
+    expect(tail).toContain(`from 'hono-preact/internal/runtime';`);
+    expect(tail).toContain('installPubSubBackend');
+    expect(tail).toContain('captureRealtimeRuntime');
+    expect(tail).toContain('getRealtimeRuntime');
+    // The install is emitted across lines (installPubSubBackend(\n  make...\n));
+    // assert the call name and the contiguous inner call separately, matching
+    // how the existing makeCfForwardConnector assertion is written.
+    expect(tail).toContain('installPubSubBackend(');
+    expect(tail).toContain(
+      'makeCfPubSubBackend(getRealtimeRuntime, "HONO_PREACT_REALTIME")'
+    );
+  });
+
+  it('wrapEntry wraps the default export to capture { env, ctx } at the fetch boundary', () => {
+    const tail = cloudflareAdapter().wrapEntry(ctx);
+    expect(tail).toContain('captureRealtimeRuntime(env, ctx);');
+    expect(tail).toContain('return coreApp.fetch(request, env, ctx);');
+    // The bare `export default coreApp;` is replaced by the wrapper.
+    expect(tail).not.toContain('export default coreApp;');
+  });
+
+  it('wrapEntry threads a custom binding into the pub/sub backend too', () => {
+    const tail = cloudflareAdapter({ realtimeBinding: 'MY_REALTIME' }).wrapEntry(ctx);
+    expect(tail).toContain(
+      'makeCfPubSubBackend(getRealtimeRuntime, "MY_REALTIME")'
     );
   });
 

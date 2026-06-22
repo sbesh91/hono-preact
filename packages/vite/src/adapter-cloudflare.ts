@@ -99,26 +99,44 @@ export function cloudflareAdapter(
         `import {\n` +
         `  HonoPreactRealtimeDO as __HonoPreactRealtimeDO,\n` +
         `  makeCfForwardConnector,\n` +
+        `  makeCfPubSubBackend,\n` +
+        `  captureRealtimeRuntime,\n` +
+        `  getRealtimeRuntime,\n` +
         `  installRoomRegistry,\n` +
         `  buildRoomRegistry,\n` +
         `} from 'hono-preact/server/internal/cloudflare';\n` +
-        `import { installRealtimeConnector } from 'hono-preact/internal/runtime';\n` +
+        `import {\n` +
+        `  installRealtimeConnector,\n` +
+        `  installPubSubBackend,\n` +
+        `} from 'hono-preact/internal/runtime';\n` +
         `\n` +
         `installRoomRegistry(() => buildRoomRegistry(__hpServerImports));\n` +
-        `// The DO binding lives on the worker env. In the generated entry the\n` +
-        `// Hono Context env is untyped (no project-supplied Bindings generic),\n` +
-        `// so this reads the binding at the untyped-env boundary; the connector\n` +
-        `// throws a clear configuration error if the binding is missing.\n` +
         `installRealtimeConnector(\n` +
         `  makeCfForwardConnector((c) => c.env?.[${JSON.stringify(
           realtimeBinding
         )}], ${JSON.stringify(realtimeBinding)})\n` +
         `);\n` +
+        `// Cross-isolate pub/sub for live loaders + publish() rides the same DO\n` +
+        `// binding (read-only topic subscriptions + a publish fan-out POST).\n` +
+        `installPubSubBackend(\n` +
+        `  makeCfPubSubBackend(getRealtimeRuntime, ${JSON.stringify(
+          realtimeBinding
+        )})\n` +
+        `);\n` +
         `\n` +
         `// Re-export the Durable Object class under the name wrangler.jsonc binds.\n` +
         `export class ${realtimeClass} extends __HonoPreactRealtimeDO {}\n` +
         `\n` +
-        `export default coreApp;\n`
+        `// Capture the per-request { env, ctx } at the fetch boundary so the CF\n` +
+        `// pub/sub backend can reach the DO binding (env) and keep publish fan-out\n` +
+        `// alive past the response (ctx.waitUntil). The binding is per-request on\n` +
+        `// workerd, not a module global, so it must be captured from fetch().\n` +
+        `export default {\n` +
+        `  fetch(request, env, ctx) {\n` +
+        `    captureRealtimeRuntime(env, ctx);\n` +
+        `    return coreApp.fetch(request, env, ctx);\n` +
+        `  },\n` +
+        `};\n`
       );
     },
   };
