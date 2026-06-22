@@ -50,7 +50,19 @@ The docs site (`framework.sbesh.com`, a Cloudflare Worker) deploys **only on rel
 
 So a normal merge to `main` does **not** update the live site; the docs ship with the next version cut. Two prerequisites are operator-managed outside the repo: the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repo secrets, and Cloudflare Workers Builds auto-deploy being **disabled** (if it is ever re-enabled, every `main` push deploys again and defeats the gate).
 
-Pull requests get an isolated **preview deploy** via the `preview` job in `.github/workflows/ci.yml`. It runs `wrangler versions upload` (a non-active version of the same Worker, served at a `*.workers.dev` preview URL) and posts the URL as a sticky `preview-docs` PR comment that updates on every push. Previews never touch the live `framework.sbesh.com` deployment or its route, and reuse the existing `CLOUDFLARE_API_TOKEN` (the upload needs only Workers Scripts: Edit, not the zone Workers Routes permission the production deploy needs).
+Pull requests get an isolated **preview deploy** via the `preview` job in `.github/workflows/ci.yml`. It runs `wrangler versions upload` against a **dedicated `hono-preact-preview` worker** (not the production `hono-preact` script), serving a non-active version at a `*.workers.dev` preview URL and posting it as a sticky `preview-docs` PR comment that updates on every push. Previews never touch the live `framework.sbesh.com` deployment or its route, and reuse the existing `CLOUDFLARE_API_TOKEN` (the upload needs only Workers Scripts: Edit, not the zone Workers Routes permission the production deploy needs).
+
+The preview worker is **separate from production because Cloudflare refuses to apply Durable Object migrations through `wrangler versions upload`** (error `10211`): a DO migration can only be applied by a real, non-versioned `wrangler deploy`. So the preview worker is **seeded once by an operator** with a routes-stripped real deploy:
+
+```sh
+pnpm --filter site build
+jq 'del(.routes)' apps/site/dist/hono_preact/wrangler.json \
+  > apps/site/dist/hono_preact/wrangler.preview.json   # drop the custom_domain route
+pnpm --filter site exec wrangler deploy \
+  -c dist/hono_preact/wrangler.preview.json --name hono-preact-preview
+```
+
+After that one-time seed, `versions upload` has no migration left to apply and previews work on every push. Repeat the seed only when a **new** DO class (a new migration tag) is introduced; the `preview` job detects the `10211` failure and posts the seed command to the PR so the next person is not stuck.
 
 ## PR workflow
 

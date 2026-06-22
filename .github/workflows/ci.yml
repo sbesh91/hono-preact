@@ -219,10 +219,16 @@ jobs:
       - name: Build site
         run: pnpm --filter site build
 
-      # Upload a NON-ACTIVE version (wrangler versions upload), not a deploy.
-      # It serves at a *.workers.dev preview URL and never touches the active
-      # framework.sbesh.com deployment or its custom-domain route, so it needs
-      # only the account-level Workers Scripts permission the token already has.
+      # Upload a NON-ACTIVE version (wrangler versions upload), not a deploy, to
+      # a DEDICATED preview worker (hono-preact-preview), never the production
+      # hono-preact script. The dedicated worker exists because Cloudflare only
+      # applies Durable Object migrations through a real `wrangler deploy`, never
+      # through `versions upload`; the preview worker is seeded once by an
+      # operator (see the "Explain missing DO migration" step below) so this
+      # upload has no migration to apply. It serves at a *.workers.dev preview
+      # URL and never touches the active framework.sbesh.com deployment or its
+      # custom-domain route, so it needs only the account-level Workers Scripts
+      # permission the token already has.
       - name: Upload preview version
         id: upload
         env:
@@ -235,21 +241,35 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -o pipefail
+          worker="hono-preact-preview"
           # Sanitize the branch into a valid DNS label for the preview alias:
           # lowercase, non-alphanumeric runs -> '-', trim, then cap so that
-          # "<alias>-hono-preact" stays within the 63-char DNS limit (alias <= 51).
+          # "<alias>-hono-preact-preview" stays within the 63-char DNS limit
+          # (len("-hono-preact-preview") == 20, so alias <= 43).
           alias="$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
-          alias="${alias:0:51}"
+          alias="${alias:0:43}"
           alias="${alias%-}"
           if [ -z "$alias" ]; then alias="pr-${PR_NUMBER}"; fi
           echo "Preview alias: $alias"
-          pnpm --filter site exec wrangler versions upload -c dist/hono_preact/wrangler.json --preview-alias "$alias" 2>&1 | tee /tmp/preview-upload.log
-          url="$(grep -ioE "https://${alias}-[a-z0-9.-]+\.workers\.dev" /tmp/preview-upload.log | head -1)"
-          if [ -z "$url" ]; then
-            echo "Could not find the aliased *.workers.dev preview URL in wrangler output" >&2
+          # `versions upload` ignores routes, so the config's custom_domain route
+          # is safe to leave in here: it is never attached to the preview worker.
+          if pnpm --filter site exec wrangler versions upload -c dist/hono_preact/wrangler.json --name "$worker" --preview-alias "$alias" 2>&1 | tee /tmp/preview-upload.log; then
+            url="$(grep -ioE "https://${alias}-[a-z0-9.-]+\.workers\.dev" /tmp/preview-upload.log | head -1)"
+            if [ -z "$url" ]; then
+              echo "Could not find the aliased *.workers.dev preview URL in wrangler output" >&2
+              exit 1
+            fi
+            echo "url=$url" >> "$GITHUB_OUTPUT"
+          else
+            # Cloudflare error 10211: the upload carried a Durable Object migration
+            # the preview worker has never had applied. It needs a one-time seed
+            # deploy (surfaced to the PR by the next step). Fail loudly, not cryptically.
+            if grep -q "code: 10211" /tmp/preview-upload.log; then
+              echo "needs_seed=true" >> "$GITHUB_OUTPUT"
+              echo "::error::Preview worker '$worker' is missing a Durable Object migration this PR introduces; an operator must seed it once (see the preview-docs PR comment)." >&2
+            fi
             exit 1
           fi
-          echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Post preview comment
         uses: marocchino/sticky-pull-request-comment@v2
@@ -263,6 +283,36 @@ jobs:
             ${{ steps.upload.outputs.url }}
 
             Built from ${{ github.event.pull_request.head.sha }}. Updates on every push.
+
+      # When `versions upload` fails because the preview worker is missing a
+      # Durable Object migration this PR introduces (Cloudflare error 10211),
+      # post the one-time operator seed instead of leaving a cryptic red X.
+      # Cloudflare applies DO migrations only via a real deploy, so the seed
+      # uses `wrangler deploy` against the preview worker with routes stripped
+      # (the config's custom_domain route must not be claimed by the preview).
+      - name: Explain missing DO migration
+        if: failure() && steps.upload.outputs.needs_seed == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview-docs
+          message: |
+            ### Docs site preview unavailable
+
+            This PR introduces a Durable Object migration that the dedicated
+            preview worker (`hono-preact-preview`) has not had applied yet.
+            Cloudflare applies DO migrations only through a real deploy, never
+            through `wrangler versions upload`, so the preview cannot be built
+            until an operator seeds the worker once:
+
+            ```sh
+            pnpm --filter site build
+            jq 'del(.routes)' apps/site/dist/hono_preact/wrangler.json \
+              > apps/site/dist/hono_preact/wrangler.preview.json
+            pnpm --filter site exec wrangler deploy \
+              -c dist/hono_preact/wrangler.preview.json --name hono-preact-preview
+            ```
+
+            After that one-time seed, pushes to this PR produce a preview as usual.
 
   build-and-tag:
     name: Build and tag next
