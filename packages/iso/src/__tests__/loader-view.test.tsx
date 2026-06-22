@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
 import type { FunctionComponent } from 'preact';
-import { render } from '@testing-library/preact';
+import { render, waitFor } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
@@ -18,13 +18,15 @@ vi.mock('../is-browser.js', () => ({
 describe('LoaderRef.Boundary', () => {
   it('renders the loader fallback then transitions to children with data', async () => {
     let resolveData: (v: { value: number }) => void = () => {};
-    const ref = defineLoader<{ value: number }>(
+    const fn = vi.fn(
       () =>
         new Promise<{ value: number }>((res) => {
           resolveData = res;
-        }),
-      { __moduleKey: 'pages/test-boundary' }
+        })
     );
+    const ref = defineLoader<{ value: number }>(fn, {
+      __moduleKey: 'pages/test-boundary',
+    });
 
     const Probe = () => {
       const data = ref.useData();
@@ -48,6 +50,9 @@ describe('LoaderRef.Boundary', () => {
 
     const { findByTestId, queryByTestId } = render(tree);
     expect(queryByTestId('fallback')).not.toBeNull();
+    // coerceLoaderLocation is async even with no schemas, so fn is invoked after
+    // a microtask. Wait for it before using resolveData.
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
     resolveData({ value: 42 });
     const el = await findByTestId('data');
     expect(el.textContent).toBe('42');
@@ -57,13 +62,15 @@ describe('LoaderRef.Boundary', () => {
 describe('LoaderRef.View', () => {
   it('renders fallback then provides data, error, reload to render fn', async () => {
     let resolveData: (v: { name: string }) => void = () => {};
-    const ref = defineLoader<{ name: string }>(
+    const fn = vi.fn(
       () =>
         new Promise<{ name: string }>((res) => {
           resolveData = res;
-        }),
-      { __moduleKey: 'pages/test-view-1' }
+        })
     );
+    const ref = defineLoader<{ name: string }>(fn, {
+      __moduleKey: 'pages/test-view-1',
+    });
 
     const View = ref.View(
       ({ data }) => <span data-testid="name">{data.name}</span>,
@@ -83,6 +90,9 @@ describe('LoaderRef.View', () => {
       </RouteLocationsContext.Provider>
     );
     expect(queryByTestId('fallback')).not.toBeNull();
+    // coerceLoaderLocation is async even with no schemas, so fn is invoked after
+    // a microtask. Wait for it before using resolveData.
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
     resolveData({ name: 'ada' });
     const el = await findByTestId('name');
     expect(el.textContent).toBe('ada');

@@ -171,6 +171,35 @@ describe('makePageActionResolvers', () => {
     expect(present.get('remove')?.use).toEqual([guard]);
   });
 
+  it('reads the input schema off a defineAction value into the entry', async () => {
+    // Build a fake server module whose serverActions carries a fn with a
+    // non-enumerable `input` (as defineAction attaches it).
+    const schema = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: (v: unknown) => ({ value: v }),
+      },
+    };
+    const fn = async () => 'ok';
+    Object.defineProperty(fn, 'input', { value: schema, enumerable: false });
+    const resolvers = makePageActionResolvers(
+      [
+        {
+          path: '/foo',
+          ancestors: [],
+          server: async () => ({
+            __moduleKey: 'pages/foo.server',
+            serverActions: { submit: fn },
+          }),
+        } as never,
+      ],
+      { dev: true }
+    );
+    const entry = await resolvers.byModuleKey('pages/foo.server', 'submit');
+    expect(entry?.input).toBe(schema);
+  });
+
   it('concurrent first calls share one in-flight build', async () => {
     let calls = 0;
     let release!: (mod: unknown) => void;

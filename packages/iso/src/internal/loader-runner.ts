@@ -12,6 +12,7 @@ import type {
 } from '../define-middleware.js';
 import { dispatchServer } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
+import { coerceLoaderLocation, type LooseLoaderFn } from './loader-schema.js';
 import {
   fanStart,
   fanChunk,
@@ -167,7 +168,36 @@ export function runLoader<T>(
     }
 
     const runInner = async (): Promise<unknown> => {
-      const result = await loaderRef.fn(ctx);
+      // coerceLoaderLocation no-ops when both schemas are absent, so the same
+      // code shape works for schema and no-schema loaders. This mirrors the RPC
+      // path (loaders-handler.ts), which calls coerceLoaderLocation
+      // unconditionally, ensuring the two paths cannot diverge.
+      const coerced = await coerceLoaderLocation(
+        {
+          searchSchema: loaderRef.searchSchema,
+          paramsSchema: loaderRef.paramsSchema,
+        },
+        location.pathParams ?? {},
+        location.searchParams ?? {}
+      );
+      // Post-coercion location params are `unknown` (schema output type erased
+      // at the ref); the loader author's typed param shape came from the
+      // defineLoader generic. LooseLoaderFn is the sanctioned structural-read
+      // boundary shared by BOTH paths (SSR here + RPC loaders-handler).
+      const invoke = loaderRef.fn as unknown as LooseLoaderFn;
+      // Construct the arg explicitly rather than spreading `ctx` to avoid
+      // triggering the lazy `c` getter during object spread.
+      const result = await invoke({
+        signal: ctx.signal,
+        get c() {
+          return ctx.c;
+        },
+        location: {
+          ...location,
+          pathParams: coerced.pathParams,
+          searchParams: coerced.searchParams,
+        },
+      });
       if (isAsyncGenerator(result)) {
         if (observers.length > 0) {
           fanStart(observers, serverCtx);

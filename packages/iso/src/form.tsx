@@ -1,5 +1,12 @@
 import type { JSX, ComponentChildren } from 'preact';
-import { useState, useCallback, useMemo, useRef } from 'preact/hooks';
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+} from 'preact/hooks';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ActionStub } from './action.js';
 import {
   OPTIMISTIC_BRAND,
@@ -8,12 +15,30 @@ import {
 import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
-import { setLastActionResult } from './internal/action-result-store.js';
+import { collectFormData } from './internal/form-data.js';
+import {
+  setLastActionResult,
+  getLastActionResult,
+} from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
+import { validateWithSchema, mapIssuesToFields } from './validate.js';
+import { getValidationIssues } from './get-validation-issues.js';
+import { useActionResult } from './use-action-result.js';
+import {
+  FieldErrorsContext,
+  type FieldErrorsMap,
+} from './internal/field-errors-context.js';
+
+function logClientSchemaThrew(err: unknown): void {
+  console.error(
+    'hono-preact: client schema validation threw; proceeding to server-side validation.',
+    err
+  );
+}
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value
@@ -38,6 +63,14 @@ export type FormProps<TPayload, TResult> = Omit<
   onError?: (err: Error) => void;
   invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
   reset?: boolean;
+  /**
+   * Opt-in client-side pre-validation. Pass the SAME Standard Schema the action
+   * declares as its `input` (author it in a shared, non-`.server` module so the
+   * browser can import it). Typed to the action's payload so a mismatched schema
+   * is a compile error. On submit the form runs it and blocks the POST on
+   * failure; the server still re-validates authoritatively.
+   */
+  schema?: StandardSchemaV1<unknown, TPayload>;
 };
 
 function resetFormFields(formEl: HTMLFormElement, fields?: string[]): void {
@@ -69,23 +102,6 @@ function hasOptimisticBrand<TPayload, TResult>(
   return OPTIMISTIC_BRAND in action;
 }
 
-function collectFormData(
-  fd: FormData
-): Record<string, FormDataEntryValue | FormDataEntryValue[]> {
-  const out: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
-  for (const [key, value] of fd.entries()) {
-    if (key === FORM_MODULE_FIELD || key === FORM_ACTION_FIELD) continue;
-    const existing = out[key];
-    out[key] =
-      existing === undefined
-        ? value
-        : Array.isArray(existing)
-          ? [...existing, value]
-          : [existing, value];
-  }
-  return out;
-}
-
 export function Form<TPayload, TResult>({
   action,
   children,
@@ -93,9 +109,34 @@ export function Form<TPayload, TResult>({
   onError,
   invalidate,
   reset,
+  schema,
+  onInput: consumerOnInput,
   ...rest
 }: FormProps<TPayload, TResult>) {
   const [pending, setPending] = useState(false);
+  const [clientErrors, setClientErrors] = useState<FieldErrorsMap>({});
+  const [clearedServerFields, setClearedServerFields] = useState<Set<string>>(
+    () => new Set()
+  );
+  const schemaRef = useRef(schema);
+  schemaRef.current = schema;
+  // hasSubmittedRef: true once the user has attempted the first submit.
+  // Before that, handleInput stays quiet (validating mode not yet active).
+  const hasSubmittedRef = useRef(false);
+  // Debounce timer ref for live revalidation.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Sequence guard so a stale async revalidation cannot overwrite a newer one.
+  const inputSeq = useRef(0);
+
+  // Clear the debounce timer on unmount so a pending revalidation cannot call
+  // setClientErrors after the component has been torn down.
+  useEffect(
+    () => () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    },
+    []
+  );
+
   const moduleKey = action.__module;
   const actionName = action.__action;
   const applyInvalidate = useInvalidate();
@@ -107,9 +148,79 @@ export function Form<TPayload, TResult>({
     [action]
   );
 
+  // When the server returns a fresh response it is authoritative: reset the
+  // suppression set so server errors are displayed again.
+  //
+  // We compare the raw store entry reference (from getLastActionResult, which
+  // returns the same Map value object across renders until a new result is
+  // stored) rather than a derived result object (which would be recreated on
+  // every render) or submittedPayload (which can be a new object reference even
+  // when the underlying data has not changed in some runtimes).
+  //
+  // Derived-state-during-render: if the store entry changed, reset
+  // clearedServerFields synchronously before the current render paints.
+  // This avoids a useEffect round-trip that can cause a flicker where
+  // the cleared set is reset AFTER the child tree sees it.
+  const storeEntry = getLastActionResult(action);
+  const prevStoreEntryRef = useRef<
+    ReturnType<typeof getLastActionResult> | undefined
+  >(undefined);
+  if (prevStoreEntryRef.current !== storeEntry) {
+    prevStoreEntryRef.current = storeEntry;
+    if (clearedServerFields.size > 0) {
+      // A new server result arrived; discard any optimistic suppressions.
+      // setClearedServerFields during render is the React/Preact-approved
+      // derived-state pattern (analogous to getDerivedStateFromProps): it
+      // schedules a synchronous re-render with the new state before painting.
+      setClearedServerFields(new Set());
+    }
+  }
+
+  // Split into two memos: server errors only recompute when the server result
+  // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
+  //
+  // useActionResult reads both the browser-global action-result store (via
+  // useSyncExternalStore, restoring the subscription) AND the request-scoped
+  // ActionResultContext (the SSR / no-JS deny re-render path). Keying the memo
+  // on the deny result's underlying data object keeps it stable across unrelated
+  // re-renders: useActionResult re-wraps into a new object each render, but for
+  // a deny its .data points at the same stable store/context object until a
+  // fresh result arrives. For non-deny results the key is null (no issues).
+  const serverResult = useActionResult(
+    action as ActionStub<TPayload, TResult, never>
+  );
+  const serverErrors = useMemo<FieldErrorsMap>(
+    () => mapIssuesToFields(getValidationIssues(serverResult)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [serverResult?.kind === 'deny' ? serverResult.data : null]
+  );
+
+  // Merge: server errors minus optimistically-cleared fields, then client
+  // errors override (live revalidation is always the freshest signal).
+  const fieldErrors = useMemo<FieldErrorsMap>(() => {
+    const out: FieldErrorsMap = {};
+    for (const k of Object.keys(serverErrors)) {
+      if (!clearedServerFields.has(k)) out[k] = serverErrors[k]!;
+    }
+    return { ...out, ...clientErrors };
+  }, [serverErrors, clientErrors, clearedServerFields]);
+
   const handleSubmit = useCallback(
     async (e: Event) => {
       e.preventDefault();
+      // Validating mode begins at first submit.
+      hasSubmittedRef.current = true;
+      // Invalidate any in-flight debounced revalidation. A debounce whose timer
+      // has already fired but whose async validate has not resolved yet will see
+      // its captured seq become stale and bail without calling setClientErrors,
+      // so the submit's own state writes always win.
+      inputSeq.current += 1;
+      // Cancel any pending debounced revalidation.
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
       const formEl = e.currentTarget as HTMLFormElement;
       const resetForm = (fields?: string[]) => resetFormFields(formEl, fields);
       const target =
@@ -124,6 +235,24 @@ export function Form<TPayload, TResult>({
       fd.set(FORM_MODULE_FIELD, moduleKey);
       fd.set(FORM_ACTION_FIELD, actionName);
       const payload = collectFormData(fd) as TPayload;
+
+      if (schemaRef.current) {
+        try {
+          const result = await validateWithSchema(schemaRef.current, payload);
+          if (!result.ok) {
+            setClientErrors(mapIssuesToFields(result.issues));
+            return; // block the POST; server never sees an invalid payload
+          }
+          // Valid: clear any prior client errors and fall through to POST.
+          setClientErrors({});
+        } catch (err) {
+          // The schema's validate function threw or rejected. Fail open: let the
+          // server validate authoritatively rather than dead-ending the form.
+          logClientSchemaThrew(err);
+          // Fall through to POST below.
+        }
+      }
+
       let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);
 
@@ -232,18 +361,80 @@ export function Form<TPayload, TResult>({
     [moduleKey, actionName, optimistic, applyInvalidate]
   );
 
+  const handleInput = useCallback((e: Event) => {
+    // Quiet before first submit; validating mode is not yet active.
+    if (!hasSubmittedRef.current) return;
+    // Schema-less forms get no live client revalidation; their server errors
+    // clear on the next submit.
+    if (!schemaRef.current) return;
+
+    const name = (e.target as { name?: string } | null)?.name;
+    if (!name) return;
+
+    // Optimistically suppress the server error for this field while the user
+    // is editing it; it re-surfaces on the next submit if still server-invalid.
+    setClearedServerFields((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
+      return next;
+    });
+
+    // Cancel any in-flight debounce timer.
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Capture the form element synchronously before the timer fires; the
+    // synthetic event object will be gone by the time the callback runs.
+    const formEl = e.currentTarget as HTMLFormElement;
+    const schema = schemaRef.current;
+
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      const seq = (inputSeq.current += 1);
+      const record = collectFormData(new FormData(formEl));
+      void validateWithSchema(schema, record)
+        .then((result) => {
+          if (seq !== inputSeq.current) return; // superseded by a newer keystroke
+          setClientErrors(result.ok ? {} : mapIssuesToFields(result.issues));
+        })
+        .catch((err) => {
+          // The schema threw or rejected during live revalidation. Log and bail;
+          // do not update clientErrors so the user can keep typing.
+          logClientSchemaThrew(err);
+        });
+    }, 150);
+  }, []);
+
+  // Compose consumer's onInput with the framework's live-clear handler so both
+  // run on every input event. Consumer fires first. useCallback stabilizes the
+  // reference so the <form> does not reattach the listener on every render.
+  const composedOnInput: JSX.InputEventHandler<HTMLFormElement> = useCallback(
+    consumerOnInput
+      ? (e) => {
+          consumerOnInput(e);
+          handleInput(e);
+        }
+      : (e) => handleInput(e),
+    [consumerOnInput, handleInput]
+  );
+
   return (
     <form
       {...rest}
       method="post"
       enctype="multipart/form-data"
       onSubmit={handleSubmit}
+      onInput={composedOnInput}
     >
       <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
       <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />
-      <fieldset disabled={pending} class="hp-form-fieldset">
-        {children}
-      </fieldset>
+      <FieldErrorsContext.Provider value={fieldErrors}>
+        <fieldset disabled={pending} class="hp-form-fieldset">
+          {children}
+        </fieldset>
+      </FieldErrorsContext.Provider>
     </form>
   );
 }

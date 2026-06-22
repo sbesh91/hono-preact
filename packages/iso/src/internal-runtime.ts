@@ -32,4 +32,16 @@ export {
 export type { WebSocketUpgrader } from './internal/ws-upgrader.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export * from './internal/contract.js';
+export {
+  validateWithSchema,
+  normalizeIssues,
+  mapIssuesToFields,
+  type ValidationIssue,
+  type ValidationResult,
+} from './validate.js';
 export { env } from './is-browser.js';
+export {
+  coerceLoaderLocation,
+  type LooseLoaderFn,
+} from './internal/loader-schema.js';
+export { collectFormData } from './internal/form-data.js';

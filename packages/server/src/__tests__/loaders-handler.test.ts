@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
-import { redirect } from '@hono-preact/iso';
+import { redirect, defineLoader } from '@hono-preact/iso';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { loadersHandler } from '../loaders-handler.js';
 
 function makeApp(glob: Parameters<typeof loadersHandler>[0]) {
@@ -171,6 +172,34 @@ describe('loadersHandler', () => {
       module: 'pages/movies',
       loader: 'default',
     });
+  });
+
+  it('preserves deny.data in the loader RPC envelope', async () => {
+    const { deny } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: {
+          default: async () => {
+            throw deny(403, 'no', { data: { x: 1 } });
+          },
+        },
+      },
+    });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as {
+      __outcome: string;
+      message: string;
+      data: unknown;
+    };
+    expect(body.__outcome).toBe('deny');
+    expect(body.message).toBe('no');
+    expect(body.data).toEqual({ x: 1 });
   });
 
   it('maps redirect() thrown from a loader to a redirect outcome envelope', async () => {
@@ -448,6 +477,108 @@ describe('loadersHandler: streaming', () => {
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     const body = await res.text();
     expect(body).toContain('data: {"tick":1}');
+  });
+});
+
+describe('loadersHandler: schema validation (searchSchema / paramsSchema)', () => {
+  const numericId: StandardSchemaV1<{ id: string }, { id: number }> = {
+    '~standard': {
+      version: 1,
+      vendor: 'test',
+      validate: (v) => {
+        const id = Number((v as { id: unknown }).id);
+        return Number.isInteger(id)
+          ? { value: { id } }
+          : { issues: [{ message: 'id must be an integer', path: ['id'] }] };
+      },
+    },
+  };
+  const minPage: StandardSchemaV1<{ page: string }, { page: number }> = {
+    '~standard': {
+      version: 1,
+      vendor: 'test',
+      validate: (v) => {
+        const page = Number((v as { page: unknown }).page);
+        return page >= 1
+          ? { value: { page } }
+          : { issues: [{ message: 'page must be >= 1', path: ['page'] }] };
+      },
+    },
+  };
+
+  function globWith(loader: unknown) {
+    return {
+      './x.server.ts': {
+        __moduleKey: 'pages/x.server',
+        serverLoaders: { default: loader },
+      },
+    };
+  }
+
+  it('coerces searchParams via searchSchema and passes them to the loader', async () => {
+    let seen: unknown;
+    const ref = defineLoader(
+      async (ctx) => {
+        seen = ctx.location.searchParams;
+        return 'ok';
+      },
+      { searchSchema: minPage }
+    );
+    const handler = loadersHandler(globWith(ref), {
+      resolvePageUse: async () => [],
+    });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/x.server',
+        loader: 'default',
+        location: { path: '/x', pathParams: {}, searchParams: { page: '3' } },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(seen).toEqual({ page: 3 });
+  });
+
+  it('returns 400 when searchSchema fails', async () => {
+    const ref = defineLoader(async () => 'ok', { searchSchema: minPage });
+    const handler = loadersHandler(globWith(ref), {
+      resolvePageUse: async () => [],
+    });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/x.server',
+        loader: 'default',
+        location: { path: '/x', pathParams: {}, searchParams: { page: '0' } },
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 when paramsSchema fails', async () => {
+    const ref = defineLoader(async () => 'ok', { paramsSchema: numericId });
+    const handler = loadersHandler(globWith(ref), {
+      resolvePageUse: async () => [],
+    });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/x.server',
+        loader: 'default',
+        location: {
+          path: '/x/abc',
+          pathParams: { id: 'abc' },
+          searchParams: {},
+        },
+      }),
+    });
+    expect(res.status).toBe(404);
   });
 });
 

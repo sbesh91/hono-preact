@@ -1,0 +1,288 @@
+# Validation
+
+The framework integrates with the [Standard Schema](https://standardschema.dev) spec so you can validate action payloads, form fields, and loader params using any compliant library: Zod, Valibot, ArkType, or any other implementation. The framework depends only on the types-only `@standard-schema/spec` package and never on a specific validator.
+
+## Covered surfaces
+
+Validation covers four payload surfaces:
+
+- **Action payloads** via `defineAction(fn, { input })`: server-enforced; the handler receives the schema's output type.
+- **Form fields** via `<Form schema>`: opt-in client pre-validation before the POST fires.
+- **Loader search params** via `defineLoader(fn, { searchSchema })`: validates and coerces `ctx.location.searchParams`.
+- **Loader route params** via `defineLoader(fn, { paramsSchema })` (or `serverRoute(id).loader(fn, { paramsSchema })`): validates and coerces `ctx.location.pathParams`.
+
+**The server is always authoritative.** Client-side validation (the `<Form schema>` prop) is an opt-in enhancement that only works when the schema is importable by the browser. Both paths surface through the same field-error rendering API.
+
+**The framework does not coerce.** Standard Schema validates `Input -> Output` and the framework passes the raw payload as `Input`. Coercing FormData strings (e.g. `z.coerce.number()`) is the schema author's job.
+
+## Action validation
+
+Pass `input` to `defineAction` to attach a schema. On the server, the framework runs the schema before calling your handler; if validation fails the handler never runs and the action returns a `deny(422)` with the issues embedded in `deny.data`. On success the handler receives the schema's output type (coercion is visible).
+
+```ts
+// tasks.server.ts
+import { defineAction } from 'hono-preact';
+import { z } from 'zod';
+
+const NewTask = z.object({
+  title: z.string().min(1, 'Title is required'),
+  priority: z.enum(['urgent', 'high', 'medium', 'low']),
+});
+
+export const serverActions = {
+  createTask: defineAction(
+    async (_ctx, payload) => {
+      // payload: { title: string; priority: 'urgent' | 'high' | 'medium' | 'low' }
+      const task = await db.tasks.create(payload);
+      return { id: task.id };
+    },
+    { input: NewTask }
+  ),
+};
+```
+
+The handler's `payload` type is inferred from the schema's output. No explicit type annotation is needed.
+
+### Reading issues client-side
+
+`getValidationIssues(result)` pulls issues from a `useActionResult()` result when the result is a schema-validation failure. It returns `ValidationIssue[]` or `null` for non-validation denies.
+
+```tsx
+import { Form, useActionResult, getValidationIssues } from 'hono-preact';
+import { serverActions } from './tasks.server.js';
+
+const CreateForm = () => {
+  const result = useActionResult(serverActions.createTask);
+  const issues = getValidationIssues(result);
+
+  return (
+    <Form action={serverActions.createTask}>
+      {issues && (
+        <ul role="alert">
+          {issues.map((issue, i) => (
+            <li key={i}>{issue.message}</li>
+          ))}
+        </ul>
+      )}
+      <input name="title" placeholder="Title" />
+      <button type="submit">Create</button>
+    </Form>
+  );
+};
+```
+
+## Form client pre-validation
+
+Pass `schema` to `<Form>` to enable client-side pre-validation. When schema validation fails on submit, the POST is blocked and the field errors are stored in form-local state. Once a field has shown an error, it re-validates on input so the error clears as the user fixes it.
+
+Because `.server.*` files are stripped to typed proxies on the client, a schema passed to `<Form schema>` **must live in a shared (non-`.server`) module**. A schema used only server-side can be a local `const` inside the `.server.*` file.
+
+```ts
+// tasks.schema.ts  (shared module, not *.server.*)
+import { z } from 'zod';
+
+export const NewTaskSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  priority: z.enum(['urgent', 'high', 'medium', 'low']),
+});
+```
+
+```ts
+// tasks.server.ts
+import { defineAction } from 'hono-preact';
+import { NewTaskSchema } from './tasks.schema.js';
+
+export const serverActions = {
+  createTask: defineAction(
+    async (_ctx, payload) => {
+      const task = await db.tasks.create(payload);
+      return { id: task.id };
+    },
+    { input: NewTaskSchema }
+  ),
+};
+```
+
+```tsx
+// tasks.tsx
+import { Form } from 'hono-preact';
+import { serverActions } from './tasks.server.js';
+import { NewTaskSchema } from './tasks.schema.js';
+import { FieldError } from 'hono-preact';
+
+const CreateTaskForm = () => (
+  <Form action={serverActions.createTask} schema={NewTaskSchema}>
+    <label>
+      Title
+      <input name="title" placeholder="Short summary" />
+      <FieldError name="title" />
+    </label>
+    <button type="submit">Create</button>
+  </Form>
+);
+```
+
+The `schema` prop is typed as `StandardSchemaV1<unknown, TPayload>` where `TPayload` is the action's inferred payload type. Passing a schema that produces the wrong shape is a compile error, so the action and form cannot drift.
+
+### Rendering field errors
+
+**`<FieldError name>`** renders the first error message for a field, or nothing. It is a thin convenience wrapper around `useFieldErrors()`.
+
+```tsx
+<FieldError name="title" />
+<FieldError name="title" class="text-red-500 text-sm" />
+
+{/* Form-level errors (issues with no field path) */}
+<FieldError name="" />
+```
+
+**`useFieldErrors()`** returns the full `FieldErrorsMap` (a `Record<string, string[]>`) for custom rendering. It reads from form context and is only useful inside a `<Form>`.
+
+```tsx
+import { useFieldErrors } from 'hono-preact';
+
+const TitleField = () => {
+  const errors = useFieldErrors();
+  const titleErrors = errors['title'] ?? [];
+
+  return (
+    <label>
+      Title
+      <input name="title" />
+      {titleErrors.length > 0 && (
+        <ul>
+          {titleErrors.map((msg, i) => (
+            <li key={i}>{msg}</li>
+          ))}
+        </ul>
+      )}
+    </label>
+  );
+};
+```
+
+Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues and server-returned `deny(422)` issues into the same field-error surface, so client-skipped and server-caught errors render identically. Client pre-validation errors clear as you type once a field has been shown an error; server-returned field errors (from a `deny(422)` response) clear on the next submit rather than on input.
+
+## Loader validation
+
+Pass `searchSchema` or `paramsSchema` to `defineLoader` to validate and coerce URL params. Failures throw to the loader's error boundary rather than being sent to the client.
+
+- **`searchSchema` failure** throws 400 (bad query string).
+- **`paramsSchema` failure** throws 404 (the URL does not name a valid resource).
+
+Validation runs on both the SSR path (direct page load) and the client-navigation path (loader RPC fetch). A strict schema with a missing or invalid param surfaces through the loader's error boundary on both paths. Use `.default(...)` for optional search params you want to render rather than error on.
+
+```ts
+import { defineLoader } from 'hono-preact';
+import { z } from 'zod';
+
+// Validate and coerce search params.
+const tasksLoader = defineLoader(
+  (ctx) => {
+    // ctx.location.searchParams: { page: number }
+    return getTasksPage(ctx.location.searchParams.page);
+  },
+  {
+    searchSchema: z.object({ page: z.coerce.number().min(1).default(1) }),
+    params: ['page'],
+  }
+);
+
+// Validate and coerce route params.
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/tasks/:id');
+
+export const serverLoaders = {
+  default: route.loader(
+    (ctx) => {
+      // ctx.location.pathParams: { id: number }
+      return getTask(ctx.location.pathParams.id);
+    },
+    { paramsSchema: z.object({ id: z.coerce.number().int() }) }
+  ),
+};
+```
+
+The loader's `ctx.location.searchParams` and `ctx.location.pathParams` types narrow to the schema's output when a schema is present.
+
+**Note:** `useParams()` on the client always returns raw string params from the route match. The coerced types are a loader-side concern only.
+
+**Cache keys and search params:** `searchSchema` does not automatically add params to the client-side cache key. When the loader's data depends on a search param, declare that param in `params` (as shown above for `page`). Without it, navigating `?page=1` to `?page=2` returns the cached page-1 result.
+
+## Validation timing and what middleware sees
+
+Understanding when validation runs clarifies what each layer of the stack receives.
+
+**Handlers receive coerced output.** A declared `input`, `searchSchema`, or `paramsSchema` is validated and coerced before your `defineAction` or `defineLoader` function body runs. The handler receives the schema's output type, so coercions (like `z.coerce.number()`) are already applied by the time your code sees the value.
+
+**Middleware and observers see the raw payload.** Auth guards, page-use middleware, and stream observers all run earlier in the request pipeline, before the validation step. They receive the raw, pre-validation payload or params, not the coerced values. If a middleware needs a typed value (for example, a numeric id), it should coerce that field itself. This ordering is intentional: auth gates reject unauthenticated requests before any validation work happens, so a malformed payload never reaches guarded logic.
+
+**Action schemas should be coercion-tolerant.** `<Form>` and any multipart or file POST send fields as strings because FormData is string-only. A `useAction` call that includes a `File` also sends a multipart body. A `useAction` call with no files sends typed JSON. Schemas used with actions that may receive either format should use coercing rules (e.g. `z.coerce.number()`, or valibot's `v.pipe(v.unknown(), v.transform(Number))`) so the same logical payload validates whether it arrives as a typed value or as a string.
+
+A future option to configure validation position in the middleware chain is tracked as a potential addition.
+
+## API reference
+
+### `defineAction(fn, { input })`
+
+| Option  | Type               | Description                                                                                                                                          |
+| ------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input` | `StandardSchemaV1` | Schema applied to the action payload before the handler runs. Failure produces `deny(422)` with issues under a reserved key; the handler never runs. |
+
+### `defineLoader(fn, { searchSchema, paramsSchema })`
+
+| Option         | Type               | Description                                                                                  |
+| -------------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `searchSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.searchParams`. Failure throws 400 to the error boundary. |
+| `paramsSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.pathParams`. Failure throws 404 to the error boundary.   |
+
+`serverRoute(id).loader(fn, { paramsSchema, searchSchema })` accepts the same options.
+
+### `<Form schema>`
+
+| Prop     | Type                                  | Description                                                                                                                                        |
+| -------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema` | `StandardSchemaV1<unknown, TPayload>` | Schema for client-side pre-validation. Must live in a shared (non-`.server`) module. Typed to the action's payload; mismatches are compile errors. |
+
+### `getValidationIssues(result)`
+
+```ts
+function getValidationIssues(result: ActionResult): ValidationIssue[] | null;
+```
+
+Extracts validation issues from `useActionResult()`. Returns `null` when the result is not a schema-validation failure. A validation failure is a `deny` whose `data` carries the framework-reserved validation key; this distinguishes it from an app-level `deny`.
+
+### `useFieldErrors()`
+
+```ts
+function useFieldErrors(): FieldErrorsMap;
+// type FieldErrorsMap = Record<string, string[]>
+```
+
+Returns the enclosing `<Form>`'s merged field errors, keyed by field name. The path segments from each issue are joined with `.` (`['address', 'zip']` becomes `"address.zip"`). Issues with no path map to `""` (form-level errors). Returns `{}` outside a `<Form>`.
+
+### `<FieldError name>`
+
+| Prop     | Type                  | Description                                                                 |
+| -------- | --------------------- | --------------------------------------------------------------------------- |
+| `name`   | `string`              | The field key to render. Pass `""` for form-level errors.                   |
+| `class`  | `string`              | Optional CSS class, merged onto a custom `render` element.                  |
+| `render` | `RenderElementRender` | Customize the rendered element (a tag name, a VNode, or a render function). |
+
+Renders the first error message for `name` inside a `<span data-field-error={name} role="alert">`, or nothing when there are no errors. The `render` prop follows the framework render-element convention, pass a tag name (`render="p"`), a VNode to merge the framework props into (`render={<MyError />}`), or a function `(props) => VNode`; `data-field-error` and `role="alert"` are always applied. Use `useFieldErrors()` directly for fully custom rendering.
+
+### Types
+
+| Name               | Description                                                           |
+| ------------------ | --------------------------------------------------------------------- |
+| `StandardSchemaV1` | The Standard Schema interface. Any compliant validator implements it. |
+| `ValidationIssue`  | A single normalized validation problem: `{ path, message }`.          |
+| `FieldErrorsMap`   | `Record<string, string[]>`: field name to error messages.             |
+
+To infer the input or output type of a schema, use `StandardSchemaV1.InferInput<S>` and `StandardSchemaV1.InferOutput<S>` from the `@standard-schema/spec` package, or the equivalent helpers your schema library provides (e.g. `z.infer<typeof MySchema>` for Zod, `v.InferOutput<typeof MySchema>` for Valibot).
+
+## Related
+
+- [Server Actions](/docs/actions): defining and calling actions
+- [Server Loaders](/docs/loaders): typed data fetching with `defineLoader`
