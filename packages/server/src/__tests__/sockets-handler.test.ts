@@ -699,6 +699,61 @@ describe('socketsHandler: realtime connector forwarding', () => {
     expect(openSpy).toHaveBeenCalledOnce();
   });
 
+  it('guard runs EXACTLY ONCE on a DENIED CF connection (no double-invoke)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    // Counting guard: each invocation increments the counter.
+    let guardRunCount = 0;
+    const countingDenyGuard = defineServerMiddleware(async () => {
+      guardRunCount++;
+      const { deny } = await import('@hono-preact/iso');
+      throw deny('forbidden', 403);
+    });
+
+    const app = makeRoomApp({ use: [countingDenyGuard] });
+
+    await connectRoom(app, JSON.stringify({ roomId: 'demo' }));
+
+    // The guard must run exactly once: the CF deny fall-through must reuse the
+    // already-resolved connection rather than re-running resolveConnection.
+    expect(guardRunCount).toBe(1);
+
+    // The connector was never called.
+    expect(calls()).toHaveLength(0);
+
+    // The in-worker deny path closes WS_DENY_CODE in onOpen.
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('guard runs EXACTLY ONCE on an ALLOWED CF connection (forward path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the forward path');
+    });
+
+    let guardRunCount = 0;
+    const countingAllowGuard = defineServerMiddleware(async (_ctx, next) => {
+      guardRunCount++;
+      await next();
+    });
+
+    const app = makeRoomApp({ use: [countingAllowGuard] });
+
+    await connectRoom(app, JSON.stringify({ roomId: 'demo' }));
+
+    // The guard must run exactly once on the allow (forward) path too.
+    expect(guardRunCount).toBe(1);
+    expect(calls()).toHaveLength(1);
+  });
+
   it('passes the resolved room-key params to a route-node guard before forwarding', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);

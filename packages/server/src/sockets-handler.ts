@@ -321,11 +321,12 @@ async function resolveConnection(
  */
 export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
   return async (c, next) => {
-    const createEvents = async (ctx: Context): Promise<WSEvents> => {
-      const { socketDef, def, denied, roomKey } = await resolveConnection(
-        ctx,
-        opts
-      );
+    const createEvents = async (
+      ctx: Context,
+      preResolved?: ResolvedConnection
+    ): Promise<WSEvents> => {
+      const { socketDef, def, denied, roomKey } =
+        preResolved ?? (await resolveConnection(ctx, opts));
 
       if (!def) {
         return {
@@ -406,8 +407,8 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     // EDGE (the same resolution createEvents uses, via resolveConnection) so the
     // guard chain runs BEFORE any forward. Only an ALLOWED room reaches the
     // connector; a denied room and a plain socket use the in-worker path.
-    const { roomDef, roomKey, denied, moduleKey, name } =
-      await resolveConnection(c, opts);
+    const resolved = await resolveConnection(c, opts);
+    const { roomDef, roomKey, denied, moduleKey, name } = resolved;
 
     // Forward to the connector ONLY for a room that BOTH resolved its key AND
     // passed the guard. Everything else uses the in-worker path
@@ -424,7 +425,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     //    reaches the connector / the DO.
     if (!roomDef || !roomKey || !roomKey.ok || denied) {
       const upgrade = getWebSocketUpgrader();
-      return upgrade(createEvents)(c, next);
+      return upgrade((ctx) => createEvents(ctx, resolved))(c, next);
     }
 
     // Room + allowed: run the edge `data` factory once (with the live Context,
