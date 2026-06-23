@@ -8,6 +8,7 @@ import {
   makeCfForwardConnector,
   makeDOConnState,
   isTopicSubscriber,
+  fanOutToTopicSubscribers,
   type RoomConnAttachment,
 } from '../realtime-do-glue.js';
 import type { RoomForwardContext } from '@hono-preact/iso/internal/runtime';
@@ -332,5 +333,28 @@ describe('isTopicSubscriber', () => {
     expect(isTopicSubscriber(undefined)).toBe(false);
     expect(isTopicSubscriber('topic')).toBe(false);
     expect(isTopicSubscriber({ kind: 'room' })).toBe(false);
+  });
+});
+
+describe('fanOutToTopicSubscribers', () => {
+  it('sends the body to every subscriber and isolates a throwing send', () => {
+    const sent: string[] = [];
+    const ok1 = { send: (b: string) => sent.push(`1:${b}`) };
+    const bad = {
+      send: () => {
+        throw new Error('socket is closing');
+      },
+    };
+    const ok2 = { send: (b: string) => sent.push(`2:${b}`) };
+
+    // The middle socket throws; the loop must not abort, so ok2 (iterated after
+    // bad) still receives the body. A bare for-loop would drop it.
+    expect(() =>
+      fanOutToTopicSubscribers(
+        [ok1, bad, ok2] as unknown as WebSocket[],
+        'frame'
+      )
+    ).not.toThrow();
+    expect(sent).toEqual(['1:frame', '2:frame']);
   });
 });

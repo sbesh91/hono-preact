@@ -21,6 +21,7 @@ import {
   makeDOConnState,
   parseHeaderJson,
   isTopicSubscriber,
+  fanOutToTopicSubscribers,
 } from './realtime-do-glue.js';
 import type { DOConnState } from './realtime-do-glue.js';
 import { getRoomRegistry } from './room-registry.js';
@@ -127,9 +128,9 @@ export class HonoPreactRealtimeDO extends DurableObject {
     // subscriber sockets, then return 204. No upgrade, no engine.
     if (kind === 'publish') {
       const body = await request.text();
-      for (const ws of this.ctx.getWebSockets('topic')) {
-        ws.send(body);
-      }
+      // Isolate each subscriber: one stale or closing socket throwing on send
+      // must not drop the message for the rest (mirrors the in-process backend).
+      fanOutToTopicSubscribers(this.ctx.getWebSockets('topic'), body);
       return new Response(null, { status: 204 });
     }
 

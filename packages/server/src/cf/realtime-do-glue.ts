@@ -190,6 +190,27 @@ export function isTopicSubscriber(attachment: unknown): boolean {
   );
 }
 
+/**
+ * Fan a published frame out to a topic's subscriber sockets. Each send is
+ * isolated: a single stale or closing socket throwing on `send` (a routine
+ * outcome on workerd after a hibernation cycle or peer eviction) must not drop
+ * the message for the remaining subscribers. This mirrors the in-process
+ * backend, which wraps each subscriber so "one throwing listener does not
+ * starve the rest." Exported so the fan-out is unit-testable without workerd.
+ */
+export function fanOutToTopicSubscribers(
+  sockets: Iterable<WebSocket>,
+  body: string
+): void {
+  for (const ws of sockets) {
+    try {
+      ws.send(body);
+    } catch (err) {
+      console.error('hono-preact: pub/sub fan-out send failed', err);
+    }
+  }
+}
+
 /** Parse an `x-hp-*` JSON header; missing or malformed yields `null`. */
 export function parseHeaderJson(raw: string | null): unknown {
   if (raw === null || raw === '') return null;
