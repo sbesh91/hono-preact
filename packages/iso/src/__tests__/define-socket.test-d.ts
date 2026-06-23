@@ -1,6 +1,10 @@
 // Type-level contract for defineSocket. Run under `pnpm test:types`.
 import { expectTypeOf } from 'vitest';
-import { defineSocket, type SocketRef } from '../define-socket.js';
+import {
+  defineSocket,
+  type SocketRef,
+  type SocketHandler,
+} from '../define-socket.js';
 import { serverRoute } from '../server-route.js';
 import type { Serialize } from '../internal/serialize.js';
 
@@ -25,18 +29,30 @@ function _probes() {
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
 }
 
-// route.socket ctx has `c` (Hono Context) but no `params` field in this release.
+// route.socket's `data` factory receives the Hono Context; `open` receives
+// ONLY the socket (no Context), so a socket handler is portable to Cloudflare
+// where it runs inside a Durable Object with no live Context.
 function _routeSocketProbe() {
   const route = serverRoute('/movies/:id');
-  const ref = route.socket<In, Out, undefined>({
-    open(_socket, ctx) {
-      // ctx.c is the Hono Context for the upgrade request.
-      expectTypeOf(ctx.c).not.toBeNever();
-      // @ts-expect-error sockets have no typed params in this release
-      void ctx.params;
+  const ref = route.socket<In, Out, { joinedAt: number }>({
+    data(c) {
+      // c is the Hono Context for the upgrade request.
+      expectTypeOf(c).not.toBeNever();
+      return { joinedAt: 1 };
+    },
+    open(socket) {
+      // open's only argument is the socket; its data is the factory result.
+      expectTypeOf(socket.data).toEqualTypeOf<{ joinedAt: number }>();
     },
   });
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
+}
+
+// `open` takes only the socket now: a two-argument open does not type-check.
+function _openArityProbe() {
+  // @ts-expect-error open no longer receives a Context as a second argument
+  const _bad: SocketHandler<In, Out, undefined> = { open: (_socket, _c) => {} };
+  void _bad;
 }
 
 // Probe: ref.useSocket() method form typechecks and infers message types.
@@ -66,4 +82,5 @@ function _useSocketMethodProbe() {
 
 void _probes;
 void _routeSocketProbe;
+void _openArityProbe;
 void _useSocketMethodProbe;

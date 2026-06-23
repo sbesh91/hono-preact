@@ -20,17 +20,23 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
   /** Guard/middleware chain run before the upgrade; a deny closes 4403. */
   use?: ReadonlyArray<Middleware>;
   /**
-   * Per-connection setup. May return a teardown fn called on close.
+   * Edge factory run once at the upgrade with the live Hono Context; its
+   * result seeds `socket.data`. This is the ONLY place a socket handler sees a
+   * Context: on Cloudflare the connection runs inside a Durable Object with no
+   * live Context, so read cookies, headers, query, and middleware-set values
+   * here and stash them on `socket.data`. Runs on both Node and Cloudflare.
+   */
+  data?: (c: Context) => Data;
+  /**
+   * Per-connection setup. Receives only the socket (its `data` is the `data`
+   * factory result). May return a teardown fn.
    *
-   * `ctx.c` is the Hono Context for the upgrade request; use it to read
-   * cookies, headers, query params, and values set by middleware.
-   * There is no `ctx.params` field: the `/__sockets` endpoint is flat
-   * (query-string only), so path params are always empty at runtime.
-   * Typed route params for sockets are reserved for a later release (rooms).
+   * On Cloudflare the connection is hibernatable, so a returned teardown
+   * cannot survive a hibernation cycle; it is a Node-only convenience. Use
+   * `close` for cleanup that must run on both runtimes.
    */
   open?(
-    socket: ServerSocket<Outgoing, Data>,
-    ctx: { c: Context }
+    socket: ServerSocket<Outgoing, Data>
   ): void | (() => void) | Promise<void | (() => void)>;
   message?(
     socket: ServerSocket<Outgoing, Data>,

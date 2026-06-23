@@ -224,6 +224,42 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
     expect(received[0]).toEqual({ text: 'hi there' });
   });
 
+  it('runs def.data(c) at the edge and seeds socket.data (Node parity)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const seen: string[] = [];
+    const def = defineSocket<{ ping: true }, { who: string }, { who: string }>({
+      data: (c) => ({ who: c.req.query('u') ?? 'anon' }),
+      open(socket) {
+        // open no longer receives a Context; it reads the data factory result.
+        socket.send({ who: socket.data.who });
+      },
+      message(socket) {
+        seen.push(socket.data.who);
+      },
+    }) as unknown as SocketDef<{ ping: true }, { who: string }, { who: string }>;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    // getRequest has no query hook, so issue the request inline with `?u=alice`.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket&u=alice`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.sends[0]).toBe(JSON.stringify({ who: 'alice' }));
+
+    await events.onMessage?.(
+      { data: JSON.stringify({ ping: true }) } as MessageEvent,
+      ws as never
+    );
+    expect(seen).toEqual(['alice']);
+  });
+
   it('onClose runs the teardown returned by def.open', async () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);

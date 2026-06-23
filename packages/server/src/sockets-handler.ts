@@ -345,9 +345,12 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         return createRoomWsEvents(def, { ctx, denied, roomKey });
       }
 
-      // --- Plain duplex socket wiring (unchanged from Task 2). ---
+      // --- Plain duplex socket wiring. ---
       let teardown: (() => void) | void;
-      const data: Record<string, unknown> = {};
+      // Seed socket.data from the edge `data` factory (run with the live Context),
+      // so Node and Cloudflare seed socket.data identically. The bag stays mutable
+      // for the handler to write to across open/message/close.
+      const data = (await socketDef!.data?.(ctx)) ?? {};
       const makeSocket = (ws: {
         send(d: string): void;
         close(c?: number, r?: string): void;
@@ -364,7 +367,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
-          const result = await socketDef!.open?.(makeSocket(ws), { c: ctx });
+          const result = await socketDef!.open?.(makeSocket(ws));
           teardown = typeof result === 'function' ? result : undefined;
         },
         async onMessage(ev, ws) {
