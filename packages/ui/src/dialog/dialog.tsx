@@ -11,12 +11,24 @@ import { useControllableState } from '../use-controllable-state.js';
 import { useDescriptionRegistry } from '../use-description-registry.js';
 import { mergeRefs } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
+import { runViewTransition } from '../view-transition.js';
 import { DialogContext, useDialogContext } from './context.js';
 
 export interface DialogRootProps {
   open?: boolean; // controlled
   defaultOpen?: boolean; // uncontrolled (default false)
   onOpenChange?: (open: boolean) => void;
+  // Animate open/close with the View Transitions API: the panel morphs out of
+  // the trigger and back. Replaces the data-state CSS enter/exit animation, so
+  // style the panel without @starting-style / data-state=closed keyframes and
+  // tune the motion through ::view-transition-group(...) instead. Falls back to
+  // an instant open/close where View Transitions are unsupported.
+  //
+  // Pass a string to set the panel's view-transition-name explicitly (a stable,
+  // CSS-targetable handle, e.g. to give ::view-transition-group(name) a z-index
+  // so the panel stays above the backdrop); `true` auto-generates a unique name.
+  // Default false (off).
+  viewTransition?: boolean | string;
   children?: ComponentChildren;
 }
 
@@ -29,7 +41,13 @@ export type DialogTriggerProps = {
 // VNode<ProviderProps> that does not unify with the bare `VNode` the other
 // parts return. Matches the repo's provider components, which also infer.
 export function DialogRoot(props: DialogRootProps) {
-  const { open: openProp, defaultOpen, onOpenChange, children } = props;
+  const {
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
+    viewTransition = false,
+    children,
+  } = props;
   const [open, setOpen] = useControllableState<boolean>({
     value: openProp,
     defaultValue: defaultOpen ?? false,
@@ -49,6 +67,7 @@ export function DialogRoot(props: DialogRootProps) {
     () => ({
       open,
       setOpen,
+      viewTransition,
       dialogRef,
       triggerId,
       popupId,
@@ -60,6 +79,7 @@ export function DialogRoot(props: DialogRootProps) {
     [
       open,
       setOpen,
+      viewTransition,
       triggerId,
       popupId,
       titleId,
@@ -133,6 +153,18 @@ export function DialogPopup(props: DialogPopupProps): VNode {
   } = props;
   const ctx = useDialogContext('Popup');
 
+  // The panel's view-transition-name. A string viewTransition is used verbatim
+  // (a stable, CSS-targetable handle); otherwise a unique, CSS-ident-safe name
+  // is derived from the popup id. Only used in viewTransition mode; the trigger
+  // and the dialog take turns holding it.
+  const panelName = useMemo(
+    () =>
+      typeof ctx.viewTransition === 'string'
+        ? ctx.viewTransition
+        : `hp-dialog-${ctx.popupId.replace(/[^\w-]/g, '')}`,
+    [ctx.viewTransition, ctx.popupId]
+  );
+
   // Track the live open-state for the close listener. Updated during render so
   // it is already false by the time our own el.close() (in the layout effect
   // below) fires the close event, letting that listener skip the redundant
@@ -141,17 +173,61 @@ export function DialogPopup(props: DialogPopupProps): VNode {
   openRef.current = ctx.open;
 
   const presence = usePresence(ctx.open, {
-    onExitComplete: () => ctx.dialogRef.current?.close(),
+    // viewTransition mode closes inside the transition (in the effect below),
+    // so the presence-driven deferred close must not also fire here.
+    onExitComplete: () => {
+      if (!ctx.viewTransition) ctx.dialogRef.current?.close();
+    },
   });
 
-  // Open imperatively; the close is deferred to the exit animation
-  // (usePresence.onExitComplete), so the dialog stays in the top layer with
-  // inert/focus-trap/::backdrop intact while it animates out.
+  // Drive the native dialog's open/close imperatively.
+  //
+  // Legacy (CSS) mode: open immediately, and defer close() to the exit
+  // animation (usePresence.onExitComplete) so the dialog stays in the top layer
+  // with inert/focus-trap/::backdrop intact while it animates out.
+  //
+  // viewTransition mode: wrap each open/close DOM change in a View Transition so
+  // the browser tweens the before/after snapshots. The trigger and the dialog
+  // hand the panel's view-transition-name back and forth — the holder of the
+  // name in the "before" snapshot morphs into the holder in the "after" — so the
+  // panel grows out of the trigger on open and shrinks back into it on close.
+  // The element not yet rendered visually (a closed <dialog> is display:none)
+  // must NOT also carry the name, or the duplicate would abort the transition.
   useLayoutEffect(() => {
     const el = ctx.dialogRef.current;
     if (!el) return;
-    if (ctx.open && !el.open) el.showModal();
-  }, [ctx.open]);
+
+    if (!ctx.viewTransition) {
+      if (ctx.open && !el.open) el.showModal();
+      return;
+    }
+
+    const trigger = el.ownerDocument.getElementById(ctx.triggerId);
+    const nameOnTrigger = () => {
+      el.style.removeProperty('view-transition-name');
+      trigger?.style.setProperty('view-transition-name', panelName);
+    };
+    const nameOnDialog = () => {
+      trigger?.style.removeProperty('view-transition-name');
+      el.style.setProperty('view-transition-name', panelName);
+    };
+
+    if (ctx.open && !el.open) {
+      runViewTransition(() => {
+        nameOnDialog();
+        el.showModal();
+      });
+    } else if (!ctx.open && el.open) {
+      runViewTransition(() => {
+        nameOnTrigger();
+        el.close();
+      });
+    } else if (!ctx.open && !el.open) {
+      // Resting closed state (initial mount, or after the close settles): the
+      // trigger carries the name so the next open can morph out of it.
+      nameOnTrigger();
+    }
+  }, [ctx.open, ctx.viewTransition, ctx.triggerId, panelName]);
 
   // Native dismissal (Escape, programmatic close()) fires `close`; mirror it
   // back into open-state so the two never desync. Guard on openRef so a close

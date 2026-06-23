@@ -1,6 +1,18 @@
 // packages/ui/src/popover/popover.tsx
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
-import { useId, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
+import {
+  h,
+  type ComponentChildren,
+  type JSX,
+  type RefObject,
+  type VNode,
+} from 'preact';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'preact/hooks';
 import { useDescriptionRegistry } from '../use-description-registry.js';
 import { useDismiss } from '../use-dismiss.js';
 import { useFocusReturn } from '../use-focus-return.js';
@@ -8,12 +20,66 @@ import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
 import type { Side, Align, PositioningProps } from '../use-position.js';
 import { Positioner } from '../positioner.js';
+import { runViewTransition } from '../view-transition.js';
 import { PopoverContext, usePopoverContext } from './context.js';
+
+// How many microtask polls to wait for floating-ui to place the popup before
+// capturing the View Transition's "after" snapshot. Placement resolves within a
+// few microtasks (render -> position effect -> computePosition promise); this is
+// only a runaway cap, so it is generous and cheap to exhaust.
+const MAX_PLACEMENT_TICKS = 1000;
+
+// Resolve once the just-opened popup is mounted and floating-ui has written its
+// position (style.left), or after a tick cap so the transition never hangs. The
+// popup is mount-on-open and positioned asynchronously, so the open transition
+// awaits this before snapshotting, otherwise the panel would be captured at its
+// pre-positioned origin.
+//
+// Polls on MICROTASKS, not requestAnimationFrame: this runs inside the
+// startViewTransition update callback, during which the browser suppresses
+// rendering (so rAF callbacks never fire and an rAF poll would hang until the
+// transition times out). Microtasks keep running, and the mount, the position
+// effect, and computePosition's promise all settle on microtasks, so a
+// microtask poll observes the placement and lets the transition proceed.
+function waitForPlacement(
+  ref: RefObject<HTMLElement>
+): Promise<HTMLElement | null> {
+  return new Promise((resolve) => {
+    let ticks = 0;
+    const step = () => {
+      const el = ref.current;
+      if ((el && el.style.left !== '') || ticks >= MAX_PLACEMENT_TICKS) {
+        resolve(el);
+        return;
+      }
+      ticks++;
+      queueMicrotask(step);
+    };
+    queueMicrotask(step);
+  });
+}
+
+// hidePopover() throws if the element is not currently in the top layer; the
+// goal state (not shown) is met either way, so swallow it.
+function hidePopoverSafely(el: HTMLElement | null): void {
+  if (!el) return;
+  try {
+    el.hidePopover();
+  } catch {
+    // already hidden / disconnected
+  }
+}
 
 export interface PopoverRootProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Animate open/close with the View Transitions API: the popup morphs out of
+  // the trigger and back, instead of the data-state CSS enter/exit. Pass a
+  // string to set the popup's view-transition-name (a CSS-targetable handle,
+  // e.g. for ::view-transition-group(...) z-index); `true` auto-generates one.
+  // Falls back to an instant open/close where unsupported. Default false.
+  viewTransition?: boolean | string;
   children?: ComponentChildren;
 }
 
@@ -25,6 +91,7 @@ export function PopoverRoot(props: PopoverRootProps) {
     side = 'bottom',
     align = 'center',
     offset = 8,
+    viewTransition = false,
     children,
   } = props;
 
@@ -33,6 +100,8 @@ export function PopoverRoot(props: PopoverRootProps) {
     defaultValue: defaultOpen ?? false,
     onChange: onOpenChange,
   });
+  const openRef = useRef(open);
+  openRef.current = open;
 
   const anchorRef = useRef<HTMLElement>(null);
   const floatingRef = useRef<HTMLElement>(null);
@@ -44,12 +113,64 @@ export function PopoverRoot(props: PopoverRootProps) {
   const titleId = `${baseId}-title`;
   const descriptionId = `${baseId}-description`;
 
+  // The popup's view-transition-name: a provided string verbatim (a stable,
+  // CSS-targetable handle), else a unique name derived from the base id.
+  const panelName = useMemo(
+    () =>
+      typeof viewTransition === 'string'
+        ? viewTransition
+        : `hp-popover-${baseId.replace(/[^\w-]/g, '')}`,
+    [viewTransition, baseId]
+  );
+
+  // viewTransition mode: route every open/close through a View Transition that
+  // hands `panelName` between the trigger (anchor) and the popup, so the popup
+  // morphs out of (and back into) the trigger. Opening waits for floating-ui to
+  // place the mounted popup before the "after" snapshot; closing hides it from
+  // the top layer immediately so the exit morph plays now rather than after
+  // usePresence's exit delay (the later unmount is then invisible).
+  const setOpenViewTransition = useCallback(
+    (next: boolean) => {
+      if (next === openRef.current) return;
+      if (next) {
+        runViewTransition(async () => {
+          setOpen(true);
+          const popup = await waitForPlacement(floatingRef);
+          anchorRef.current?.style.removeProperty('view-transition-name');
+          popup?.style.setProperty('view-transition-name', panelName);
+        });
+      } else {
+        runViewTransition(() => {
+          const popup = floatingRef.current;
+          popup?.style.removeProperty('view-transition-name');
+          anchorRef.current?.style.setProperty(
+            'view-transition-name',
+            panelName
+          );
+          hidePopoverSafely(popup);
+          setOpen(false);
+        });
+      }
+    },
+    [setOpen, panelName]
+  );
+
+  const effectiveSetOpen = viewTransition ? setOpenViewTransition : setOpen;
+
+  // Resting state: while closed in viewTransition mode the trigger carries the
+  // name so the next open can morph out of it. While open the popup holds it
+  // (set by the open transition above), so leave it alone.
+  useLayoutEffect(() => {
+    if (!viewTransition || open) return;
+    anchorRef.current?.style.setProperty('view-transition-name', panelName);
+  }, [viewTransition, open, panelName]);
+
   const { hasDescription, registerDescription } = useDescriptionRegistry();
 
   const ctx = useMemo(
     () => ({
       open,
-      setOpen,
+      setOpen: effectiveSetOpen,
       anchorRef,
       floatingRef,
       popupRef,
@@ -65,7 +186,7 @@ export function PopoverRoot(props: PopoverRootProps) {
     }),
     [
       open,
-      setOpen,
+      effectiveSetOpen,
       triggerId,
       popupId,
       titleId,

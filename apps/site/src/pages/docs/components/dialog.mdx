@@ -2,6 +2,8 @@ import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { DialogDemo } from '../../../components/docs/DialogDemo.js';
 import dialogCode from '../../../components/docs/DialogDemo.tsx?highlighted';
+import { VTDialogDemo } from '../../../components/docs/VTDialogDemo.js';
+import vtDialogCode from '../../../components/docs/VTDialogDemo.tsx?highlighted';
 
 # Dialog
 
@@ -14,6 +16,48 @@ composition. It ships unstyled: style it through the `data-state` contract.
 
 <Example code={dialogCode}>
   <DialogDemo />
+</Example>
+
+## Animating with View Transitions
+
+Pass `viewTransition` to `Dialog.Root` to animate open and close with the
+[View Transitions API](https://developer.mozilla.org/docs/Web/API/View_Transitions_API)
+instead of the `data-state` CSS animation. The panel's `view-transition-name` is
+handed back and forth between the trigger and the dialog, so the panel appears to
+grow out of the trigger when it opens and shrink back into it when it closes.
+Pass `true` for an auto-generated name, or a string to set the name yourself so
+you can target the panel's group in CSS (this demo passes `"vt-dialog-panel"`).
+
+In this mode the snapshot tween supplies the motion, so style the panel _without_
+`@starting-style` or `data-state="closed"` keyframes. Where the API is
+unsupported, or under `prefers-reduced-motion`, the dialog opens and closes
+instantly. (View Transitions only run on a foregrounded page, so the morph may
+not be captured in automated/headless browsers.)
+
+### Stacking order
+
+During a transition the browser lifts each named element into its own group,
+painted above the `root` snapshot. On a page with persistent named chrome (a
+sticky header or sidebar lifted out of `root` for route transitions, as this
+docs site does) you need to pin the order explicitly, or the backdrop and panel
+land at the wrong depth mid-transition and snap into place at the end. Name the
+`::backdrop`, name the panel (the string `viewTransition` value), then set
+`z-index` on the two groups so the order is `chrome → backdrop → panel`:
+
+```css
+dialog::backdrop {
+  view-transition-name: my-dialog-backdrop;
+}
+::view-transition-group(my-dialog-backdrop) {
+  z-index: 2; /* above the page chrome groups */
+}
+::view-transition-group(vt-dialog-panel) {
+  z-index: 3; /* the panel, always above the backdrop */
+}
+```
+
+<Example code={vtDialogCode}>
+  <VTDialogDemo />
 </Example>
 
 ## Styling
@@ -141,12 +185,13 @@ expose `data-state="open" | "closed"` and pass `{ open }` to a render function.
 
 Provides state and id wiring to the parts. Renders only its children.
 
-| Prop           | Type                      | Default | Description                                       |
-| -------------- | ------------------------- | ------- | ------------------------------------------------- |
-| `open`         | `boolean`                 | -       | Controlled open state. Pair with `onOpenChange`.  |
-| `defaultOpen`  | `boolean`                 | `false` | Initial open state when uncontrolled.             |
-| `onOpenChange` | `(open: boolean) => void` | -       | Called when the dialog requests an open or close. |
-| `children`     | `ComponentChildren`       | -       | The trigger and popup.                            |
+| Prop             | Type                      | Default | Description                                                                                                                                                                                                                |
+| ---------------- | ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`           | `boolean`                 | -       | Controlled open state. Pair with `onOpenChange`.                                                                                                                                                                           |
+| `defaultOpen`    | `boolean`                 | `false` | Initial open state when uncontrolled.                                                                                                                                                                                      |
+| `onOpenChange`   | `(open: boolean) => void` | -       | Called when the dialog requests an open or close.                                                                                                                                                                          |
+| `viewTransition` | `boolean \| string`       | `false` | Animate open/close with the View Transitions API (panel morphs from the trigger) instead of the `data-state` CSS animation. A string sets the panel's `view-transition-name` for CSS targeting; `true` auto-generates one. |
+| `children`       | `ComponentChildren`       | -       | The trigger and popup.                                                                                                                                                                                                     |
 
 ### Dialog.Trigger
 

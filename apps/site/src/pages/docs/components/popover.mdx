@@ -2,6 +2,8 @@ import { Example } from '../../../components/docs/Example.js';
 import { CodeTabs } from '../../../components/docs/CodeTabs.js';
 import { PopoverDemo } from '../../../components/docs/PopoverDemo.js';
 import popoverCode from '../../../components/docs/PopoverExample.tsx?highlighted';
+import { PopoverVTDemo } from '../../../components/docs/PopoverVTDemo.js';
+import popoverVtCode from '../../../components/docs/PopoverVTDemo.tsx?highlighted';
 
 # Popover
 
@@ -15,6 +17,34 @@ and `data-align` contract.
 
 <Example code={popoverCode}>
   <PopoverDemo />
+</Example>
+
+## Animating with View Transitions
+
+Pass `viewTransition` to `Popover.Root` to animate open and close with the
+[View Transitions API](https://developer.mozilla.org/docs/Web/API/View_Transitions_API)
+instead of the `data-state` CSS animation, just like
+[Dialog](/docs/components/dialog). The popup's `view-transition-name` is handed
+between the trigger and the popup, so it morphs out of the trigger and back. Pass
+`true` for an auto-generated name, or a string to set the name yourself so you
+can target the popup's group in CSS (this demo passes `"vt-popover-panel"`).
+
+Style the popup _without_ `@starting-style` or `data-state="closed"` keyframes;
+the snapshot tween supplies the motion. Because the popup is anchored and
+mount-on-open, the transition waits for the popup to be positioned before
+capturing, then hides it from the top layer on close so the exit plays
+immediately. Give the popup's group a `z-index` so it stays above any persistent
+named chrome during the transition (there is no backdrop to order, unlike
+Dialog):
+
+```css
+::view-transition-group(vt-popover-panel) {
+  z-index: 3;
+}
+```
+
+<Example code={popoverVtCode}>
+  <PopoverVTDemo />
 </Example>
 
 ## Styling
@@ -154,15 +184,16 @@ expose `data-state="open" | "closed"` and pass state to a render function.
 Provides open state, ids, refs, and placement config to the parts. Renders only
 its children.
 
-| Prop           | Type                               | Default    | Description                                        |
-| -------------- | ---------------------------------- | ---------- | -------------------------------------------------- |
-| `open`         | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.   |
-| `defaultOpen`  | `boolean`                          | `false`    | Initial open state when uncontrolled.              |
-| `onOpenChange` | `(open: boolean) => void`          | -          | Called when the popover requests an open or close. |
-| `side`         | `'top'\|'right'\|'bottom'\|'left'` | `'bottom'` | Preferred side of the anchor to place the popup.   |
-| `align`        | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                         |
-| `offset`       | `number`                           | `8`        | Gap in pixels between the anchor and the popup.    |
-| `children`     | `ComponentChildren`                | -          | The trigger, optional anchor, and positioner.      |
+| Prop             | Type                               | Default    | Description                                                                                                                                                                      |
+| ---------------- | ---------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`           | `boolean`                          | -          | Controlled open state. Pair with `onOpenChange`.                                                                                                                                 |
+| `defaultOpen`    | `boolean`                          | `false`    | Initial open state when uncontrolled.                                                                                                                                            |
+| `onOpenChange`   | `(open: boolean) => void`          | -          | Called when the popover requests an open or close.                                                                                                                               |
+| `side`           | `'top'\|'right'\|'bottom'\|'left'` | `'bottom'` | Preferred side of the anchor to place the popup.                                                                                                                                 |
+| `align`          | `'start'\|'center'\|'end'`         | `'center'` | Alignment along that side.                                                                                                                                                       |
+| `offset`         | `number`                           | `8`        | Gap in pixels between the anchor and the popup.                                                                                                                                  |
+| `viewTransition` | `boolean \| string`                | `false`    | Animate open/close with the View Transitions API (popup morphs from the trigger). A string sets the popup's `view-transition-name` for CSS targeting; `true` auto-generates one. |
+| `children`       | `ComponentChildren`                | -          | The trigger, optional anchor, and positioner.                                                                                                                                    |
 
 ### Popover.Trigger
 
