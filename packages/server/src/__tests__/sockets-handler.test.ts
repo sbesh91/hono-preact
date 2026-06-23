@@ -295,6 +295,112 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
   });
 });
 
+describe('socketsHandler: Node robustness + deny parity (max-review fixes)', () => {
+  it('drops a malformed (non-JSON) frame instead of throwing', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const received: unknown[] = [];
+    const def = defineSocket<{ ok: true }, never>({
+      message(_s, msg) {
+        received.push(msg);
+      },
+    }) as unknown as SocketDef<{ ok: true }, never, undefined>;
+
+    app = makeApp(new Map([['pages/chat::chatSocket', def]]));
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    // A non-JSON frame must not throw and must not call message.
+    await expect(
+      events.onMessage?.({ data: 'not json{' } as MessageEvent, ws as never)
+    ).resolves.toBeUndefined();
+    expect(received).toEqual([]);
+
+    // A subsequent valid frame still works.
+    await events.onMessage?.(
+      { data: JSON.stringify({ ok: true }) } as MessageEvent,
+      ws as never
+    );
+    expect(received).toEqual([{ ok: true }]);
+  });
+
+  it('a denied connection runs none of data()/open()/close()/error()', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const calls: string[] = [];
+    const def = defineSocket<never, never>({
+      use: [
+        defineServerMiddleware(async (_ctx) => {
+          const { deny } = await import('@hono-preact/iso');
+          throw deny('forbidden', 403);
+        }),
+      ],
+      data: () => {
+        calls.push('data');
+        return {};
+      },
+      open: () => {
+        calls.push('open');
+      },
+      close: () => {
+        calls.push('close');
+      },
+      error: () => {
+        calls.push('error');
+      },
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    app = makeApp(new Map([['pages/chat::chatSocket', def]]));
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    events.onClose?.(
+      { code: WS_DENY_CODE, reason: 'forbidden' } as CloseEvent,
+      ws as never
+    );
+    events.onError?.(new Event('error'), ws as never);
+
+    expect(ws.closes[0]?.code).toBe(WS_DENY_CODE);
+    // Parity with Cloudflare, where a denied socket never reaches the DO: none
+    // of the user callbacks run for a denied connection.
+    expect(calls).toEqual([]);
+  });
+
+  it('seeds socket.data from an async data() factory before message runs', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const seen: string[] = [];
+    const def = defineSocket<{ ping: true }, never, { who: string }>({
+      data: async (c) => ({ who: c.req.query('u') ?? 'anon' }),
+      message(socket) {
+        seen.push(socket.data.who);
+      },
+    }) as unknown as SocketDef<{ ping: true }, never, { who: string }>;
+
+    app = makeApp(new Map([['pages/chat::chatSocket', def]]));
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket&u=alice`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    await events.onMessage?.(
+      { data: JSON.stringify({ ping: true }) } as MessageEvent,
+      ws as never
+    );
+    expect(seen).toEqual(['alice']);
+  });
+});
+
 describe('socketsHandler: guard denial closes WS_DENY_CODE without calling def.open', () => {
   it('a denying server middleware closes 4403 and skips def.open', async () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();

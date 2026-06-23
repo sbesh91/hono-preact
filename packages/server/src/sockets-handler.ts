@@ -347,13 +347,21 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
 
       // --- Plain duplex socket wiring. ---
       let teardown: (() => void) | void;
-      // socket.data is the edge `data` factory result captured at connect, AFTER
-      // the guard allows the upgrade (parity with the CF edge, which runs the
-      // factory only for an allowed connection). It is the connect-time seed: on
-      // Node it is a closure object the handler may mutate, but it is NOT a
-      // cross-event mutable store on Cloudflare (see define-socket). No factory
-      // means socket.data is undefined (the Data default).
-      let data: unknown;
+      // socket.data is the edge `data` factory result, seeded HERE at connect
+      // (after the guard resolved `denied`) so it is set before ANY handler
+      // runs. createEvents is async, so a buffered early frame cannot reach
+      // onMessage with socket.data still unseeded, even when the factory is
+      // async. A denied connection never runs the factory (parity with the CF
+      // edge); a factory returning null/undefined is honored verbatim (not
+      // coerced to {}); no factory means undefined (the Data default). It is the
+      // connect-time seed: on Node it is a closure object the handler may
+      // mutate, but on Cloudflare it is NOT a cross-event mutable store (see
+      // define-socket).
+      const data: unknown = denied
+        ? undefined
+        : socketDef!.data
+          ? await socketDef!.data(ctx)
+          : undefined;
       const makeSocket = (ws: {
         send(d: string): void;
         close(c?: number, r?: string): void;
@@ -370,10 +378,6 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
-          // Run the factory only for an allowed connection (a denied one never
-          // runs it, matching CF). The result is used verbatim (a factory that
-          // returns null/undefined is honored, not coerced to {}).
-          data = socketDef!.data ? await socketDef!.data(ctx) : undefined;
           const result = await socketDef!.open?.(makeSocket(ws));
           teardown = typeof result === 'function' ? result : undefined;
         },
