@@ -78,7 +78,11 @@ type ChildDidSuspend = (
 type Unsuspend = (unsuspend: () => void) => void;
 
 interface HookEntry {
-  __c?: (() => void) | null; // _cleanup
+  // _cleanup is the effect callback's return value, which preact stores
+  // verbatim. It can be a truthy non-function (e.g. `useEffect(() => true)`),
+  // so it must be typeof-guarded before calling (see detachedClone), matching
+  // compat's `typeof effect._cleanup == 'function'`.
+  __c?: unknown; // _cleanup
 }
 
 interface InternalOptions {
@@ -154,7 +158,7 @@ function detachedClone(
     const comp = vnode.__c;
     if (comp && comp.__H) {
       comp.__H.__.forEach((effect) => {
-        if (effect.__c) effect.__c();
+        if (typeof effect.__c === 'function') effect.__c();
       });
       comp.__H = null;
     }
