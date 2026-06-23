@@ -15,6 +15,7 @@ import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
 import { createRoomWsEvents, resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
+import { makeServerSocketHandle } from './server-socket-handle.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -362,15 +363,6 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         : socketDef!.data
           ? await socketDef!.data(ctx)
           : undefined;
-      const makeSocket = (ws: {
-        send(d: string): void;
-        close(c?: number, r?: string): void;
-      }) => ({
-        send: (msg: unknown) => ws.send(JSON.stringify(msg)),
-        close: (code?: number, reason?: string) => ws.close(code, reason),
-        data,
-        raw: ws,
-      });
 
       return {
         async onOpen(_e, ws) {
@@ -378,7 +370,9 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
-          const result = await socketDef!.open?.(makeSocket(ws));
+          const result = await socketDef!.open?.(
+            makeServerSocketHandle(ws, data)
+          );
           teardown = typeof result === 'function' ? result : undefined;
         },
         async onMessage(ev, ws) {
@@ -397,12 +391,12 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
           } catch {
             return;
           }
-          await socketDef!.message?.(makeSocket(ws), msg);
+          await socketDef!.message?.(makeServerSocketHandle(ws, data), msg);
         },
         onClose(ev, ws) {
           if (denied) return;
           teardown?.();
-          socketDef!.close?.(makeSocket(ws), {
+          socketDef!.close?.(makeServerSocketHandle(ws, data), {
             code: ev.code,
             reason: ev.reason,
           });
@@ -411,7 +405,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
           if (denied) return;
           const err =
             ev && 'error' in ev ? (ev as { error: unknown }).error : ev;
-          socketDef!.error?.(makeSocket(ws), err);
+          socketDef!.error?.(makeServerSocketHandle(ws, data), err);
         },
       };
     };

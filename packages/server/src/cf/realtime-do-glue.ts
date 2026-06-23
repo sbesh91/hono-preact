@@ -22,6 +22,7 @@ import {
 // Re-export so the DO and the door can pull the transport bits from one place.
 export { makeCfRoomTransport };
 export type { DOConnState, RoomConnAttachment };
+export { makeServerSocketHandle } from '../server-socket-handle.js';
 
 /** Connections whose forwarded context exceeds this byte budget are denied. */
 export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
@@ -247,29 +248,6 @@ export function isSocketConnection(
     attachment !== null &&
     (attachment as { kind?: unknown }).kind === 'socket'
   );
-}
-
-/**
- * Build the ServerSocket handle the socket handlers receive, over a single
- * runtime socket (the DO hibernation WebSocket). `send` JSON-encodes; `data` is
- * the edge-captured bag read off the attachment. Platform-free so it is unit
- * testable without workerd.
- */
-export function makeServerSocketHandle(
-  ws: { send(d: string): void; close(code?: number, reason?: string): void },
-  data: unknown
-): {
-  send(msg: unknown): void;
-  close(code?: number, reason?: string): void;
-  data: unknown;
-  raw: unknown;
-} {
-  return {
-    send: (msg: unknown) => ws.send(JSON.stringify(msg)),
-    close: (code?: number, reason?: string) => ws.close(code, reason),
-    data,
-    raw: ws,
-  };
 }
 
 /**
