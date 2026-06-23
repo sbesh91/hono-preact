@@ -36,11 +36,11 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionStub<TPayload, TResult, never>
 ): ActionResult<TPayload, TResult> {
   const ssr = useContext(ActionResultContext);
-  // Subscribe to the action-result store with a force-update; no preact/compat.
-  // Mirrors useSyncExternalStore(subscribe, getSnapshot): the snapshot is read
-  // during render and the store notification triggers a re-render. The SSR
-  // "no client state" behavior (React 18's getServerSnapshot) is the isBrowser()
-  // guard in the snapshot read.
+  // Compat-free subscription (no preact/compat useSyncExternalStore): useReducer
+  // force-update + useEffect(subscribe). useSyncExternalStore additionally re-reads
+  // the snapshot at subscribe time to close the render-to-effect tear window; this
+  // store is a synchronous in-memory store written only by post-mount submit
+  // events, so that window is empty in practice. See the 2026-06-23 drop-compat spec.
   const [, force] = useReducer((n: number, _action: void) => n + 1, 0);
   useEffect(() => subscribeActionResults(() => force()), []);
   const client = isBrowser() ? getLastActionResult(stub) : null;
