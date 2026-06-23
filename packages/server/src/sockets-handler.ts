@@ -414,7 +414,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     // connection (allowed or denied) goes THROUGH the connector; a non-room
     // (unknown def or a plain socket) uses the in-worker upgrader path.
     const resolved = await resolveConnection(c, opts);
-    const { roomDef, roomKey, denied, moduleKey, name } = resolved;
+    const { socketDef, roomDef, roomKey, denied, moduleKey, name } = resolved;
 
     if (roomDef) {
       // Room: the connector handles both dispositions so the deny close can use
@@ -445,13 +445,21 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       });
     }
 
-    // Not a room (unknown def OR a plain socket): the connector handles rooms
-    // only. Rooms now deny cleanly via the connector above, so the ONLY path
-    // that reaches getWebSocketUpgrader() on a forwarding adapter is a non-room
-    // connection. An unknown def hits createEvents' unknown-def deny; a plain
-    // socket is unsupported on a forwarding adapter, so it surfaces
-    // getWebSocketUpgrader()'s "no upgrader installed" error (documented).
-    const upgrade = getWebSocketUpgrader();
-    return upgrade((ctx) => createEvents(ctx, resolved))(c, next);
+    // Not a room. A connector is installed (CF), so a plain socket forwards to
+    // a fresh per-connection Durable Object; the guard already ran at the edge.
+    // A denied connection OR an unknown def (no socket, no room) closes via the
+    // connector's transport-native deny, with no DO contact. The in-worker
+    // getWebSocketUpgrader() is therefore never reached on a forwarding adapter.
+    if (denied || !socketDef) {
+      return connector({ c, kind: 'deny' });
+    }
+    const data = (await socketDef.data?.(c)) ?? {};
+    return connector({
+      c,
+      kind: 'socket-forward',
+      moduleKey: moduleKey ?? '',
+      name: name ?? '',
+      data,
+    });
   };
 }

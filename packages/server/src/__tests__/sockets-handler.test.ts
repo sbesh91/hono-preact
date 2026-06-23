@@ -709,30 +709,67 @@ describe('socketsHandler: realtime connector forwarding', () => {
     expect(calls()[0]!.kind).toBe('deny');
   });
 
-  it('never forwards a plain socket: it uses the in-worker socket path', async () => {
+  it('forwards a plain socket through the connector as socket-forward (CF path)', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);
 
-    const openSpy = vi.fn();
-    const def = defineSocket<never, never>({
-      open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    const def = defineSocket<{ text: string }, { reply: string }, { who: string }>(
+      { data: (c) => ({ who: c.req.query('u') ?? 'anon' }) }
+    ) as unknown as SocketDef<{ text: string }, { reply: string }, { who: string }>;
     const registry = new Map([['pages/chat::chatSocket', def]]);
-
-    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
-    installWebSocketUpgrader(upgrader);
     app = makeApp(registry);
 
-    await getRequest('pages/chat', 'chatSocket');
+    const res = await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket&u=alice`
+    );
+    // The handler returns the connector's Response identity (the sentinel).
+    expect(await res.text()).toBe('forwarded-to-DO');
 
-    // A plain socket is never forwarded to the connector.
-    expect(calls()).toHaveLength(0);
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    const fwd = recorded[0]!;
+    expect(fwd.kind).toBe('socket-forward');
+    if (fwd.kind === 'socket-forward') {
+      expect(fwd.moduleKey).toBe('pages/chat');
+      expect(fwd.name).toBe('chatSocket');
+      expect(fwd.data).toEqual({ who: 'alice' });
+    }
+  });
 
-    // It runs the in-worker socket path (def.open fires on open).
-    const events = lastEvents();
-    const ws = lastWs();
-    await events.onOpen?.(new Event('open'), ws as never);
-    expect(openSpy).toHaveBeenCalledOnce();
+  it('a denied plain socket closes via the connector deny, never the upgrader (CF path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // No upgrader is installed: a fall-through to getWebSocketUpgrader() would
+    // throw. A clean deny via the connector proves the CF path never touches it.
+    const def = defineSocket<never, never>({
+      use: [
+        defineServerMiddleware(async () => {
+          const { deny } = await import('@hono-preact/iso');
+          throw deny('forbidden', 403);
+        }),
+      ],
+    }) as unknown as SocketDef<never, never, undefined>;
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket`
+    );
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.kind).toBe('deny');
+  });
+
+  it('an unknown def on the CF path denies via the connector (no upgrader)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    app = makeApp(new Map()); // empty registry: unknown def
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=missing/module&s=nope`
+    );
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.kind).toBe('deny');
   });
 
   it('guard runs EXACTLY ONCE on a DENIED CF connection (no double-invoke)', async () => {
