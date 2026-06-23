@@ -42,6 +42,15 @@
             "command": ".claude/hooks/prefer-serena.py"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/worktree-isolation-guard.py"
+          }
+        ]
       }
     ]
   }
