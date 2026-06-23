@@ -115,6 +115,13 @@ export function makeCfForwardConnector(
     fwd.headers.set('x-hp-name', name);
     fwd.headers.set('x-hp-params', paramsJson);
     fwd.headers.set('x-hp-data', dataJson);
+    // The forward connector handles ONLY room upgrades; the DO's pub/sub topic and
+    // publish kinds are invoked separately by makeCfPubSubBackend, never here. Strip
+    // any client-supplied x-hp-kind so a room-authorized client cannot smuggle a
+    // header to divert its upgrade into the topic/publish branch on the room's DO.
+    // The server, not the client, controls DO dispatch (the DO defaults absent to
+    // 'room').
+    fwd.headers.delete('x-hp-kind');
 
     // `stub.fetch` returns `Promise<Response>` (the forwarded 101 upgrade); the
     // connector returns it directly. socketsHandler returns this Response as-is.

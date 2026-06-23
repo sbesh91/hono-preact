@@ -199,6 +199,36 @@ describe('makeCfForwardConnector', () => {
     });
     expect(records).toHaveLength(1);
   });
+
+  it('strips client-supplied x-hp-kind so the DO always takes the room path', async () => {
+    // Regression: the DO dispatches on x-hp-kind (reads it as its first decision).
+    // A non-browser client could set x-hp-kind: topic or x-hp-kind: publish on the
+    // upgrade request, which would survive into the forwarded Request and divert the
+    // room upgrade into the topic-subscribe or publish branch on the room's DO,
+    // bypassing the room engine. The connector must delete the inbound header so the
+    // server controls DO dispatch (the DO defaults an absent x-hp-kind to 'room').
+    const records: ForwardRecord[] = [];
+    const { namespace } = makeFakeNamespace(records);
+    const connector = makeCfForwardConnector(() => namespace as never);
+
+    for (const smuggled of ['topic', 'publish'] as const) {
+      records.length = 0;
+      const raw = new Request('https://example.com/__sockets?m=x', {
+        headers: {
+          Upgrade: 'websocket',
+          'x-hp-kind': smuggled,
+        },
+      });
+      await connector({ c: makeContext(raw), ...baseCtx() });
+
+      const fwd = records[0].request;
+      // x-hp-kind must not survive; the DO will default to the room path.
+      expect(
+        fwd.headers.get('x-hp-kind'),
+        `smuggled x-hp-kind: ${smuggled} survived into the forwarded request`
+      ).toBeNull();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
