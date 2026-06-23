@@ -9,6 +9,8 @@ import {
   makeDOConnState,
   isTopicSubscriber,
   fanOutToTopicSubscribers,
+  isSocketConnection,
+  makeServerSocketHandle,
   type RoomConnAttachment,
 } from '../realtime-do-glue.js';
 import type { RoomForwardContext } from '@hono-preact/iso/internal/runtime';
@@ -356,5 +358,92 @@ describe('fanOutToTopicSubscribers', () => {
       )
     ).not.toThrow();
     expect(sent).toEqual(['1:frame', '2:frame']);
+  });
+});
+
+describe('makeServerSocketHandle', () => {
+  it('JSON-stringifies sends, forwards close, exposes data + raw', () => {
+    const sends: string[] = [];
+    const closes: Array<{ c?: number; r?: string }> = [];
+    const ws = {
+      send: (d: string) => sends.push(d),
+      close: (c?: number, r?: string) => closes.push({ c, r }),
+    };
+    const socket = makeServerSocketHandle(ws, { who: 'alice' });
+    socket.send({ hello: 1 });
+    socket.close(4000, 'bye');
+    expect(sends).toEqual([JSON.stringify({ hello: 1 })]);
+    expect(closes).toEqual([{ c: 4000, r: 'bye' }]);
+    expect(socket.data).toEqual({ who: 'alice' });
+    expect(socket.raw).toBe(ws);
+  });
+});
+
+describe('isSocketConnection', () => {
+  it('is true only for a {kind:"socket"} attachment', () => {
+    expect(isSocketConnection({ kind: 'socket', moduleKey: 'm', name: 's', data: null })).toBe(true);
+    expect(isSocketConnection({ kind: 'topic' })).toBe(false);
+    expect(isSocketConnection({ connId: 'x' })).toBe(false); // room attachment
+    expect(isSocketConnection(null)).toBe(false);
+  });
+});
+
+describe('makeCfForwardConnector: socket-forward', () => {
+  function fakeNamespace() {
+    const calls: { idArg: unknown; fetched: Request[] }[] = [];
+    let uniqueCount = 0;
+    const ns = {
+      newUniqueId: () => ({ __unique: ++uniqueCount }) as unknown,
+      idFromName: (n: string) => ({ __named: n }) as unknown,
+      get: (id: unknown) => {
+        const rec = { idArg: id, fetched: [] as Request[] };
+        calls.push(rec);
+        return {
+          fetch: (req: Request) => {
+            rec.fetched.push(req);
+            return Promise.resolve(new Response('forwarded'));
+          },
+        };
+      },
+    };
+    return { ns: ns as never, calls };
+  }
+
+  it('mints a fresh DO (newUniqueId) and stamps x-hp-kind: socket + headers', async () => {
+    const { ns, calls } = fakeNamespace();
+    const connector = makeCfForwardConnector(() => ns);
+    const c = {
+      req: { raw: new Request('https://x/__sockets?m=pages/chat&s=echo') },
+    } as never;
+    const res = await connector({
+      c,
+      kind: 'socket-forward',
+      moduleKey: 'pages/chat',
+      name: 'echo',
+      data: { who: 'alice' },
+    });
+    expect(await res.text()).toBe('forwarded');
+    expect(calls).toHaveLength(1);
+    expect((calls[0]!.idArg as { __unique?: number }).__unique).toBe(1); // newUniqueId, not idFromName
+    const fwd = calls[0]!.fetched[0]!;
+    expect(fwd.headers.get('x-hp-kind')).toBe('socket');
+    expect(fwd.headers.get('x-hp-module')).toBe('pages/chat');
+    expect(fwd.headers.get('x-hp-name')).toBe('echo');
+    expect(fwd.headers.get('x-hp-data')).toBe(JSON.stringify({ who: 'alice' }));
+  });
+
+  it('rejects an over-budget data bag', async () => {
+    const { ns } = fakeNamespace();
+    const connector = makeCfForwardConnector(() => ns);
+    const c = { req: { raw: new Request('https://x/__sockets') } } as never;
+    await expect(
+      connector({
+        c,
+        kind: 'socket-forward',
+        moduleKey: 'm',
+        name: 's',
+        data: { big: 'x'.repeat(7 * 1024) },
+      })
+    ).rejects.toThrow(/forward limit/);
   });
 });
