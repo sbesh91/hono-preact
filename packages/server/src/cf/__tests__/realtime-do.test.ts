@@ -7,6 +7,7 @@ import type { Context } from 'hono';
 import {
   makeCfForwardConnector,
   makeDOConnState,
+  isTopicSubscriber,
   type RoomConnAttachment,
 } from '../realtime-do-glue.js';
 import type { RoomForwardContext } from '@hono-preact/iso/internal/runtime';
@@ -288,5 +289,16 @@ describe('makeDOConnState', () => {
       { id: 'a', state: { name: 'alice' } },
       { id: 'b', state: { name: 'bob' } },
     ]);
+  });
+});
+
+describe('isTopicSubscriber', () => {
+  it('true only for a { kind: "topic" } attachment', () => {
+    expect(isTopicSubscriber({ kind: 'topic' })).toBe(true);
+    expect(isTopicSubscriber({ connId: 'c1', moduleKey: 'm', name: 'n' })).toBe(false);
+    expect(isTopicSubscriber(null)).toBe(false);
+    expect(isTopicSubscriber(undefined)).toBe(false);
+    expect(isTopicSubscriber('topic')).toBe(false);
+    expect(isTopicSubscriber({ kind: 'room' })).toBe(false);
   });
 });

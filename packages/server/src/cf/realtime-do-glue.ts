@@ -169,6 +169,20 @@ export function makeDOConnState(sockets: WebSocket[]): DOConnState {
   };
 }
 
+/**
+ * True when a hibernation socket's attachment marks it as a live-loader topic
+ * subscriber (`{ kind: 'topic' }`), as opposed to a room connection (whose
+ * attachment is a RoomConnAttachment with no `kind`). Topic subscribers are
+ * receive-only and never run the room engine.
+ */
+export function isTopicSubscriber(attachment: unknown): boolean {
+  return (
+    typeof attachment === 'object' &&
+    attachment !== null &&
+    (attachment as { kind?: unknown }).kind === 'topic'
+  );
+}
+
 /** Parse an `x-hp-*` JSON header; missing or malformed yields `null`. */
 export function parseHeaderJson(raw: string | null): unknown {
   if (raw === null || raw === '') return null;
