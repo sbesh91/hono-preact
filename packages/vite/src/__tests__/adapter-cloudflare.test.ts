@@ -51,6 +51,14 @@ describe('cloudflareAdapter', () => {
     );
   });
 
+  it('wrapEntry installs the socket registry from the core module serverImports', () => {
+    const tail = cloudflareAdapter().wrapEntry(ctx);
+    expect(tail).toContain('buildSocketRegistry');
+    expect(tail).toContain(
+      'installSocketRegistry(() => buildSocketRegistry(__hpServerImports));'
+    );
+  });
+
   it('wrapEntry installs the forward connector off the HONO_PREACT_REALTIME binding', () => {
     const tail = cloudflareAdapter().wrapEntry(ctx);
     // installRealtimeConnector is on the platform-free iso runtime door,

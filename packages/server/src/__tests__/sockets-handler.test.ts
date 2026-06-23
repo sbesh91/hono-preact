@@ -28,7 +28,7 @@ import { buildRoomRegistry } from '../rooms-handler.js';
 import type {
   WebSocketUpgrader,
   RealtimeConnector,
-  RoomConnectContext,
+  RealtimeConnectContext,
 } from '@hono-preact/iso/internal/runtime';
 import type { WSEvents } from 'hono/ws';
 
@@ -224,6 +224,46 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
     expect(received[0]).toEqual({ text: 'hi there' });
   });
 
+  it('runs def.data(c) at the edge and seeds socket.data (Node parity)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const seen: string[] = [];
+    const def = defineSocket<{ ping: true }, { who: string }, { who: string }>({
+      data: (c) => ({ who: c.req.query('u') ?? 'anon' }),
+      open(socket) {
+        // open no longer receives a Context; it reads the data factory result.
+        socket.send({ who: socket.data.who });
+      },
+      message(socket) {
+        seen.push(socket.data.who);
+      },
+    }) as unknown as SocketDef<
+      { ping: true },
+      { who: string },
+      { who: string }
+    >;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    // getRequest has no query hook, so issue the request inline with `?u=alice`.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket&u=alice`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.sends[0]).toBe(JSON.stringify({ who: 'alice' }));
+
+    await events.onMessage?.(
+      { data: JSON.stringify({ ping: true }) } as MessageEvent,
+      ws as never
+    );
+    expect(seen).toEqual(['alice']);
+  });
+
   it('onClose runs the teardown returned by def.open', async () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
@@ -252,6 +292,112 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
     events.onClose?.({ code: 1000, reason: '' } as CloseEvent, ws as never);
 
     expect(calls).toEqual(['opened', 'teardown', 'closed']);
+  });
+});
+
+describe('socketsHandler: Node robustness + deny parity (max-review fixes)', () => {
+  it('drops a malformed (non-JSON) frame instead of throwing', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const received: unknown[] = [];
+    const def = defineSocket<{ ok: true }, never>({
+      message(_s, msg) {
+        received.push(msg);
+      },
+    }) as unknown as SocketDef<{ ok: true }, never, undefined>;
+
+    app = makeApp(new Map([['pages/chat::chatSocket', def]]));
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    // A non-JSON frame must not throw and must not call message.
+    await expect(
+      events.onMessage?.({ data: 'not json{' } as MessageEvent, ws as never)
+    ).resolves.toBeUndefined();
+    expect(received).toEqual([]);
+
+    // A subsequent valid frame still works.
+    await events.onMessage?.(
+      { data: JSON.stringify({ ok: true }) } as MessageEvent,
+      ws as never
+    );
+    expect(received).toEqual([{ ok: true }]);
+  });
+
+  it('a denied connection runs none of data()/open()/close()/error()', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const calls: string[] = [];
+    const def = defineSocket<never, never>({
+      use: [
+        defineServerMiddleware(async (_ctx) => {
+          const { deny } = await import('@hono-preact/iso');
+          throw deny('forbidden', 403);
+        }),
+      ],
+      data: () => {
+        calls.push('data');
+        return {};
+      },
+      open: () => {
+        calls.push('open');
+      },
+      close: () => {
+        calls.push('close');
+      },
+      error: () => {
+        calls.push('error');
+      },
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    app = makeApp(new Map([['pages/chat::chatSocket', def]]));
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    events.onClose?.(
+      { code: WS_DENY_CODE, reason: 'forbidden' } as CloseEvent,
+      ws as never
+    );
+    events.onError?.(new Event('error'), ws as never);
+
+    expect(ws.closes[0]?.code).toBe(WS_DENY_CODE);
+    // Parity with Cloudflare, where a denied socket never reaches the DO: none
+    // of the user callbacks run for a denied connection.
+    expect(calls).toEqual([]);
+  });
+
+  it('seeds socket.data from an async data() factory before message runs', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const seen: string[] = [];
+    const def = defineSocket<{ ping: true }, never, { who: string }>({
+      data: async (c) => ({ who: c.req.query('u') ?? 'anon' }),
+      message(socket) {
+        seen.push(socket.data.who);
+      },
+    }) as unknown as SocketDef<{ ping: true }, never, { who: string }>;
+
+    app = makeApp(new Map([['pages/chat::chatSocket', def]]));
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket&u=alice`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    await events.onMessage?.(
+      { data: JSON.stringify({ ping: true }) } as MessageEvent,
+      ws as never
+    );
+    expect(seen).toEqual(['alice']);
   });
 });
 
@@ -530,10 +676,10 @@ describe('socketsHandler: realtime connector forwarding', () => {
   // A fake connector that records its calls and returns a sentinel Response.
   function makeFakeConnector(): {
     connector: RealtimeConnector;
-    calls: () => RoomConnectContext[];
+    calls: () => RealtimeConnectContext[];
     response: Response;
   } {
-    const calls: RoomConnectContext[] = [];
+    const calls: RealtimeConnectContext[] = [];
     // A sentinel Response standing in for the forwarded upgrade. The real CF
     // upgrade Response is { status: 101, webSocket }, but the WHATWG Response
     // constructor outside workerd rejects status 101, so the sentinel uses a
@@ -673,30 +819,75 @@ describe('socketsHandler: realtime connector forwarding', () => {
     expect(calls()[0]!.kind).toBe('deny');
   });
 
-  it('never forwards a plain socket: it uses the in-worker socket path', async () => {
+  it('forwards a plain socket through the connector as socket-forward (CF path)', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);
 
-    const openSpy = vi.fn();
-    const def = defineSocket<never, never>({
-      open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    const def = defineSocket<
+      { text: string },
+      { reply: string },
+      { who: string }
+    >({
+      data: (c) => ({ who: c.req.query('u') ?? 'anon' }),
+    }) as unknown as SocketDef<
+      { text: string },
+      { reply: string },
+      { who: string }
+    >;
     const registry = new Map([['pages/chat::chatSocket', def]]);
-
-    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
-    installWebSocketUpgrader(upgrader);
     app = makeApp(registry);
 
-    await getRequest('pages/chat', 'chatSocket');
+    const res = await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket&u=alice`
+    );
+    // The handler returns the connector's Response identity (the sentinel).
+    expect(await res.text()).toBe('forwarded-to-DO');
 
-    // A plain socket is never forwarded to the connector.
-    expect(calls()).toHaveLength(0);
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    const fwd = recorded[0]!;
+    expect(fwd.kind).toBe('socket-forward');
+    if (fwd.kind === 'socket-forward') {
+      expect(fwd.moduleKey).toBe('pages/chat');
+      expect(fwd.name).toBe('chatSocket');
+      expect(fwd.data).toEqual({ who: 'alice' });
+    }
+  });
 
-    // It runs the in-worker socket path (def.open fires on open).
-    const events = lastEvents();
-    const ws = lastWs();
-    await events.onOpen?.(new Event('open'), ws as never);
-    expect(openSpy).toHaveBeenCalledOnce();
+  it('a denied plain socket closes via the connector deny, never the upgrader (CF path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // No upgrader is installed: a fall-through to getWebSocketUpgrader() would
+    // throw. A clean deny via the connector proves the CF path never touches it.
+    const def = defineSocket<never, never>({
+      use: [
+        defineServerMiddleware(async () => {
+          const { deny } = await import('@hono-preact/iso');
+          throw deny('forbidden', 403);
+        }),
+      ],
+    }) as unknown as SocketDef<never, never, undefined>;
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket`
+    );
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.kind).toBe('deny');
+  });
+
+  it('an unknown def on the CF path denies via the connector (no upgrader)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    app = makeApp(new Map()); // empty registry: unknown def
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=missing/module&s=nope`
+    );
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.kind).toBe('deny');
   });
 
   it('guard runs EXACTLY ONCE on a DENIED CF connection (no double-invoke)', async () => {
@@ -775,5 +966,22 @@ describe('socketsHandler: realtime connector forwarding', () => {
     // allowed, then the connection was forwarded.
     expect(seenRoomIdInGuard).toBe('demo');
     expect(calls()).toHaveLength(1);
+  });
+
+  it('the connector context union includes a socket-forward variant', () => {
+    const { connector, calls } = makeFakeConnector();
+    // A socket-forward context is assignable to the connector parameter (the new
+    // union member) and is recorded with its discriminant + fields. The fake
+    // connector never reads `c`, so a sanctioned single test cast stands in for
+    // the live Context the real edge path supplies in Task 7.
+    void connector({
+      c: undefined as never,
+      kind: 'socket-forward',
+      moduleKey: 'pages/chat',
+      name: 'chatSocket',
+      data: { who: 'alice' },
+    });
+    const recorded = calls();
+    expect(recorded[0]?.kind).toBe('socket-forward');
   });
 });

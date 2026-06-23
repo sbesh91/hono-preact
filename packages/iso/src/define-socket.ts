@@ -11,6 +11,10 @@ import {
 export interface ServerSocket<Outgoing, Data> {
   send(message: Outgoing): void;
   close(code?: number, reason?: string): void;
+  /** Per-connection data seeded by the `data` factory at connect time. On Node
+   * the handler may mutate it across events. On Cloudflare it is the
+   * connect-time value (the DO is hibernatable); cross-event mutable state on
+   * Cloudflare belongs in external storage. */
   data: Data;
   /** The underlying runtime socket (escape hatch). */
   readonly raw: unknown;
@@ -20,17 +24,31 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
   /** Guard/middleware chain run before the upgrade; a deny closes 4403. */
   use?: ReadonlyArray<Middleware>;
   /**
-   * Per-connection setup. May return a teardown fn called on close.
+   * Edge factory run once at the upgrade with the live Hono Context; its
+   * result seeds `socket.data`. The factory may be async. This is the ONLY
+   * place a socket handler sees a Context: on Cloudflare the connection runs
+   * inside a Durable Object with no live Context, so read cookies, headers,
+   * query, and middleware-set values here. Runs on both Node and Cloudflare.
    *
-   * `ctx.c` is the Hono Context for the upgrade request; use it to read
-   * cookies, headers, query params, and values set by middleware.
-   * There is no `ctx.params` field: the `/__sockets` endpoint is flat
-   * (query-string only), so path params are always empty at runtime.
-   * Typed route params for sockets are reserved for a later release (rooms).
+   * `socket.data` is the connect-time seed: on Node the handler may mutate it
+   * across events (open/message/close see the same object). On Cloudflare each
+   * event gets the original factory value (the DO is hibernatable and does not
+   * share in-memory state across events), so per-connection state that must
+   * survive across messages on Cloudflare belongs in external storage (Durable
+   * Object storage, KV, etc.). Keep the factory result small: it rides a
+   * request header to the Durable Object, so large results can fail the upgrade.
+   */
+  data?: (c: Context) => Data | Promise<Data>;
+  /**
+   * Per-connection setup. Receives only the socket (its `data` is the `data`
+   * factory result). May return a teardown fn.
+   *
+   * On Cloudflare the connection is hibernatable, so a returned teardown
+   * cannot survive a hibernation cycle; it is a Node-only convenience. Use
+   * `close` for cleanup that must run on both runtimes.
    */
   open?(
-    socket: ServerSocket<Outgoing, Data>,
-    ctx: { c: Context }
+    socket: ServerSocket<Outgoing, Data>
   ): void | (() => void) | Promise<void | (() => void)>;
   message?(
     socket: ServerSocket<Outgoing, Data>,

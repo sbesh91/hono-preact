@@ -41,9 +41,10 @@ export {
 } from './internal/realtime-connector.js';
 export type {
   RealtimeConnector,
-  RoomConnectContext,
+  RealtimeConnectContext,
   RoomForwardContext,
-  RoomDenyContext,
+  SocketForwardContext,
+  DenyContext,
 } from './internal/realtime-connector.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export * from './internal/contract.js';

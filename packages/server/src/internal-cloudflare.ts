@@ -21,6 +21,12 @@ export {
 } from './cf/room-registry.js';
 export { buildRoomRegistry } from './rooms-handler.js';
 export {
+  installSocketRegistry,
+  getSocketRegistry,
+  __resetSocketRegistryForTesting,
+} from './cf/socket-registry.js';
+export { buildSocketRegistry } from './sockets-handler.js';
+export {
   makeCfPubSubBackend,
   runWithRealtimeRuntime,
   getRealtimeRuntime,

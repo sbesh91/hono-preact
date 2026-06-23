@@ -124,9 +124,12 @@ let teardownCalled = false;
 // Track active timer ids so we can assert clearInterval ran.
 const activeTimers = new Set<ReturnType<typeof setInterval>>();
 
+// data factory provides the initial { n } bag; open mutates it across the
+// per-connection interval. With fix B the factory must be present for data to
+// be defined (no factory means socket.data is undefined, not {}).
 const chatDef = defineSocket<Incoming, Outgoing, { n: number }>({
+  data: () => ({ n: 0 }),
   open(socket) {
-    socket.data.n = 0;
     const id = setInterval(() => {
       socket.data.n += 1;
       socket.send({ kind: 'tick', n: socket.data.n });

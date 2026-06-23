@@ -22,6 +22,7 @@ import {
 // Re-export so the DO and the door can pull the transport bits from one place.
 export { makeCfRoomTransport };
 export type { DOConnState, RoomConnAttachment };
+export { makeServerSocketHandle } from '../server-socket-handle.js';
 
 /** Connections whose forwarded context exceeds this byte budget are denied. */
 export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
@@ -31,21 +32,24 @@ export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
 // ---------------------------------------------------------------------------
 
 /**
- * Build the realtime connector the Cloudflare adapter installs. It handles BOTH
- * room dispositions socketsHandler routes to it:
+ * Build the realtime connector the Cloudflare adapter installs. It handles room
+ * and socket dispositions socketsHandler routes to it:
  *
  *   - `forward`: an allowed, key-resolved room. The upgrade is forwarded to the
  *     topic's Durable Object (`idFromName(topic)`, so one DO per topic), passing
  *     the resolved room context as `x-hp-*` headers.
- *   - `deny`: a denied / key-failed room. The connector performs a workerd-native
- *     upgrade-and-close: it accepts the handshake and immediately closes the
- *     client socket with WS_DENY_CODE (4403), the documented deny contract. This
- *     happens entirely in the worker via `WebSocketPair`; the DO is NEVER
- *     contacted, so a denied connection cannot reach the room runtime.
+ *   - `socket-forward`: an allowed socket. Forwarded to a fresh per-connection DO
+ *     (ns.newUniqueId) with x-hp-kind: socket so the DO routes to the socket handler.
+ *   - `deny`: a denied / key-failed room or socket. The connector performs a
+ *     workerd-native upgrade-and-close: it accepts the handshake and immediately
+ *     closes the client socket with WS_DENY_CODE (4403), the documented deny
+ *     contract. This happens entirely in the worker via `WebSocketPair`; the DO
+ *     is NEVER contacted, so a denied connection cannot reach the runtime.
  *
  * The forward path runs at the edge AFTER the guard chain has allowed the upgrade
- * and AFTER `roomDef.data?.(c)` has run (its result arrives as `data`), so the
- * DO never sees an unauthorized connection and never needs a live Context.
+ * and AFTER `roomDef.data?.(c)` or `socketDef.data?.(c)` has run (its result
+ * arrives as `data`), so the DO never sees an unauthorized connection and never
+ * needs a live Context.
  *
  * Inbound `Request.headers` are immutable in workerd, so the forwarded request
  * is rebuilt from `c.req.raw` with a cloned `Headers` (the spike-confirmed
@@ -75,6 +79,35 @@ export function makeCfForwardConnector(
       server.accept();
       server.close(WS_DENY_CODE, 'forbidden');
       return new Response(null, { status: 101, webSocket: client });
+    }
+
+    if (ctx.kind === 'socket-forward') {
+      const { c, moduleKey, name, data } = ctx;
+      const ns = getNamespace(c);
+      if (!ns) {
+        throw new Error(
+          `hono-preact: sockets on Cloudflare require the ${bindingName} ` +
+            'Durable Object binding. Add it to wrangler.jsonc (see the WebSockets docs).'
+        );
+      }
+      const dataJson = JSON.stringify(data ?? null);
+      if (byteLength(dataJson) > MAX_FORWARD_HEADER_BYTES) {
+        throw new Error(
+          'hono-preact: socket connection data exceeds the ' +
+            `${MAX_FORWARD_HEADER_BYTES}-byte forward limit. Keep the socket data ` +
+            'factory result small (it rides a request header to the Durable Object).'
+        );
+      }
+      // A plain socket has no topic identity; mint a fresh DO per connection.
+      const stub = ns.get(ns.newUniqueId());
+      const fwd = new Request(c.req.raw, {
+        headers: new Headers(c.req.raw.headers),
+      });
+      fwd.headers.set('x-hp-kind', 'socket');
+      fwd.headers.set('x-hp-module', moduleKey);
+      fwd.headers.set('x-hp-name', name);
+      fwd.headers.set('x-hp-data', dataJson);
+      return stub.fetch(fwd);
     }
 
     const { c, topic, moduleKey, name, params, data } = ctx;
@@ -182,11 +215,38 @@ export function makeDOConnState(sockets: WebSocket[]): DOConnState {
  * attachment is a RoomConnAttachment with no `kind`). Topic subscribers are
  * receive-only and never run the room engine.
  */
-export function isTopicSubscriber(attachment: unknown): boolean {
+export function isTopicSubscriber(
+  attachment: unknown
+): attachment is { kind: 'topic' } {
   return (
     typeof attachment === 'object' &&
     attachment !== null &&
     (attachment as { kind?: unknown }).kind === 'topic'
+  );
+}
+
+/**
+ * The per-connection attachment for a plain duplex socket on Cloudflare. Unlike
+ * a room (RoomConnAttachment) it has no presence/params; unlike a topic
+ * subscriber ({ kind: 'topic' }) it runs the socket handler. Carried via
+ * serializeAttachment so the message/close/error handlers rebuild context
+ * across hibernation cycles.
+ */
+export interface SocketConnAttachment {
+  kind: 'socket';
+  moduleKey: string;
+  name: string;
+  data: unknown;
+}
+
+/** True when a hibernation socket's attachment marks it as a plain duplex socket. */
+export function isSocketConnection(
+  attachment: unknown
+): attachment is SocketConnAttachment {
+  return (
+    typeof attachment === 'object' &&
+    attachment !== null &&
+    (attachment as { kind?: unknown }).kind === 'socket'
   );
 }
 

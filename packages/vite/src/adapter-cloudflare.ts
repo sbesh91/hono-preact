@@ -104,6 +104,8 @@ export function cloudflareAdapter(
         `  getRealtimeRuntime,\n` +
         `  installRoomRegistry,\n` +
         `  buildRoomRegistry,\n` +
+        `  installSocketRegistry,\n` +
+        `  buildSocketRegistry,\n` +
         `} from 'hono-preact/server/internal/cloudflare';\n` +
         `import {\n` +
         `  installRealtimeConnector,\n` +
@@ -111,6 +113,7 @@ export function cloudflareAdapter(
         `} from 'hono-preact/internal/runtime';\n` +
         `\n` +
         `installRoomRegistry(() => buildRoomRegistry(__hpServerImports));\n` +
+        `installSocketRegistry(() => buildSocketRegistry(__hpServerImports));\n` +
         `installRealtimeConnector(\n` +
         `  makeCfForwardConnector((c) => c.env?.[${JSON.stringify(
           realtimeBinding

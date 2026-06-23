@@ -7,14 +7,16 @@ import type { Context } from 'hono';
 // connector that forwards the upgrade to a Durable Object instead of running the
 // room runtime in the worker.
 //
-// The connector is invoked for a ROOM connection (the only kind it handles).
-// socketsHandler resolves the def + room key + guard server-side at the edge and
-// hands the connector a discriminated `kind`:
+// The connector is invoked for a ROOM or SOCKET connection.
+// socketsHandler resolves the def + room key + guard (rooms) or socket callbacks
+// (sockets) server-side at the edge and hands the connector a discriminated `kind`:
 //   - `forward`: an allowed, key-resolved room. The connector forwards it to the
 //     room runtime (on Cloudflare: a Durable Object).
-//   - `deny`: a denied / key-failed room. The connector performs a transport-
-//     native deny close (on Cloudflare: a WebSocketPair closed WS_DENY_CODE)
-//     WITHOUT contacting the room runtime / DO.
+//   - `socket-forward`: an allowed socket. The connector mints a fresh per-
+//     connection Durable Object and forwards the socket.
+//   - `deny`: a denied / key-failed room or socket. The connector performs a
+//     transport-native deny close (on Cloudflare: a WebSocketPair closed
+//     WS_DENY_CODE) WITHOUT contacting the runtime / DO.
 // The deny close lives behind the connector seam because it needs transport-
 // native APIs (`WebSocketPair` on workerd) that the platform-neutral
 // socketsHandler cannot import. The guard runs BEFORE either path, so no
@@ -22,7 +24,7 @@ import type { Context } from 'hono';
 // handshake without any DO contact.
 
 /** Per-connection fields shared by every connector invocation. */
-interface RoomConnectBase {
+interface RealtimeConnectBase {
   c: Context;
 }
 
@@ -33,7 +35,7 @@ interface RoomConnectBase {
  * the edge with the live Context, since on Cloudflare the room callbacks run
  * inside a Durable Object with no live Context).
  */
-export interface RoomForwardContext extends RoomConnectBase {
+export interface RoomForwardContext extends RealtimeConnectBase {
   kind: 'forward';
   topic: string;
   moduleKey: string;
@@ -43,29 +45,46 @@ export interface RoomForwardContext extends RoomConnectBase {
 }
 
 /**
- * A denied or key-failed room connection. The connector performs a transport-
- * native deny close (close WS_DENY_CODE) without contacting the room runtime, so
- * a denied connection never reaches the Durable Object.
+ * An allowed plain duplex socket to forward. A plain socket has no topic
+ * identity (no fan-out), so the connector mints a fresh per-connection Durable
+ * Object. `data` is the already-run `socketDef.data?.(c)` result (run at the
+ * edge with the live Context, since the socket callbacks run inside the DO with
+ * no live Context).
  */
-export interface RoomDenyContext extends RoomConnectBase {
+export interface SocketForwardContext extends RealtimeConnectBase {
+  kind: 'socket-forward';
+  moduleKey: string;
+  name: string;
+  data: unknown; // result of socketDef.data?.(c), already run at the edge
+}
+
+/**
+ * A denied or key-failed connection (room or socket). The connector performs a
+ * transport-native deny close (WS_DENY_CODE) without contacting the runtime, so
+ * a denied connection never reaches a Durable Object.
+ */
+export interface DenyContext extends RealtimeConnectBase {
   kind: 'deny';
 }
 
 /**
  * The resolved context handed to a realtime connector. The `kind` discriminant
- * selects forward-to-runtime vs. transport-native deny close.
+ * selects forward-to-room-DO, forward-to-socket-DO, or transport-native deny.
  */
-export type RoomConnectContext = RoomForwardContext | RoomDenyContext;
+export type RealtimeConnectContext =
+  | RoomForwardContext
+  | SocketForwardContext
+  | DenyContext;
 
 /**
- * A realtime connector handles a room upgrade somewhere other than the in-worker
- * Node runtime (on Cloudflare: a Durable Object). For a `forward` it returns the
- * upgrade Response (the forwarded `101`); for a `deny` it returns a transport-
- * native upgrade-and-close Response (the client's socket closes WS_DENY_CODE).
- * socketsHandler returns the Response directly.
+ * A realtime connector handles a room or socket upgrade off the in-worker Node
+ * runtime (on Cloudflare: a Durable Object). For a `forward` or `socket-forward`
+ * it returns the upgrade Response (the forwarded `101`); for a `deny` it returns
+ * a transport-native upgrade-and-close Response (the client's socket closes
+ * WS_DENY_CODE). socketsHandler returns the Response directly.
  */
 export type RealtimeConnector = (
-  ctx: RoomConnectContext
+  ctx: RealtimeConnectContext
 ) => Response | Promise<Response>;
 
 let current: RealtimeConnector | undefined;

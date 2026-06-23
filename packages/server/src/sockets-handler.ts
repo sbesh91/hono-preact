@@ -15,6 +15,7 @@ import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
 import { createRoomWsEvents, resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
+import { makeServerSocketHandle } from './server-socket-handle.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -345,18 +346,23 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         return createRoomWsEvents(def, { ctx, denied, roomKey });
       }
 
-      // --- Plain duplex socket wiring (unchanged from Task 2). ---
+      // --- Plain duplex socket wiring. ---
       let teardown: (() => void) | void;
-      const data: Record<string, unknown> = {};
-      const makeSocket = (ws: {
-        send(d: string): void;
-        close(c?: number, r?: string): void;
-      }) => ({
-        send: (msg: unknown) => ws.send(JSON.stringify(msg)),
-        close: (code?: number, reason?: string) => ws.close(code, reason),
-        data,
-        raw: ws,
-      });
+      // socket.data is the edge `data` factory result, seeded HERE at connect
+      // (after the guard resolved `denied`) so it is set before ANY handler
+      // runs. createEvents is async, so a buffered early frame cannot reach
+      // onMessage with socket.data still unseeded, even when the factory is
+      // async. A denied connection never runs the factory (parity with the CF
+      // edge); a factory returning null/undefined is honored verbatim (not
+      // coerced to {}); no factory means undefined (the Data default). It is the
+      // connect-time seed: on Node it is a closure object the handler may
+      // mutate, but on Cloudflare it is NOT a cross-event mutable store (see
+      // define-socket).
+      const data: unknown = denied
+        ? undefined
+        : socketDef!.data
+          ? await socketDef!.data(ctx)
+          : undefined;
 
       return {
         async onOpen(_e, ws) {
@@ -364,7 +370,9 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
-          const result = await socketDef!.open?.(makeSocket(ws), { c: ctx });
+          const result = await socketDef!.open?.(
+            makeServerSocketHandle(ws, data)
+          );
           teardown = typeof result === 'function' ? result : undefined;
         },
         async onMessage(ev, ws) {
@@ -375,22 +383,29 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
               : ev.data instanceof ArrayBuffer
                 ? new TextDecoder().decode(ev.data)
                 : await (ev.data as Blob).text();
-          const msg = JSON.parse(raw); // sanctioned untrusted-JSON boundary
-          await socketDef!.message?.(makeSocket(ws), msg);
+          // Drop a malformed (non-JSON) frame instead of throwing out of the
+          // handler (mirrors the room engine's frame parsing).
+          let msg: unknown;
+          try {
+            msg = JSON.parse(raw);
+          } catch {
+            return;
+          }
+          await socketDef!.message?.(makeServerSocketHandle(ws, data), msg);
         },
         onClose(ev, ws) {
+          if (denied) return;
           teardown?.();
-          socketDef!.close?.(makeSocket(ws), {
+          socketDef!.close?.(makeServerSocketHandle(ws, data), {
             code: ev.code,
             reason: ev.reason,
           });
         },
         onError(ev, ws) {
-          // Unwrap the real error if the event carries one (ErrorEvent shape);
-          // fall back to the event itself so no information is discarded.
+          if (denied) return;
           const err =
             ev && 'error' in ev ? (ev as { error: unknown }).error : ev;
-          socketDef!.error?.(makeSocket(ws), err);
+          socketDef!.error?.(makeServerSocketHandle(ws, data), err);
         },
       };
     };
@@ -411,7 +426,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     // connection (allowed or denied) goes THROUGH the connector; a non-room
     // (unknown def or a plain socket) uses the in-worker upgrader path.
     const resolved = await resolveConnection(c, opts);
-    const { roomDef, roomKey, denied, moduleKey, name } = resolved;
+    const { socketDef, roomDef, roomKey, denied, moduleKey, name } = resolved;
 
     if (roomDef) {
       // Room: the connector handles both dispositions so the deny close can use
@@ -430,7 +445,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // Context, since the room callbacks run without a Context inside the DO)
       // and forward to the connector. The connector returns the upgrade Response
       // (the forwarded 101); return it directly, NOT through upgrade().
-      const data = roomDef.data?.(c) ?? {};
+      const data = (await roomDef.data?.(c)) ?? {};
       return connector({
         c,
         kind: 'forward',
@@ -442,13 +457,22 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       });
     }
 
-    // Not a room (unknown def OR a plain socket): the connector handles rooms
-    // only. Rooms now deny cleanly via the connector above, so the ONLY path
-    // that reaches getWebSocketUpgrader() on a forwarding adapter is a non-room
-    // connection. An unknown def hits createEvents' unknown-def deny; a plain
-    // socket is unsupported on a forwarding adapter, so it surfaces
-    // getWebSocketUpgrader()'s "no upgrader installed" error (documented).
-    const upgrade = getWebSocketUpgrader();
-    return upgrade((ctx) => createEvents(ctx, resolved))(c, next);
+    // Not a room. A connector is installed (CF). An allowed plain socket forwards
+    // to a fresh per-connection Durable Object via the connector; the guard already
+    // ran at the edge. A denied connection or an unknown def (no socket, no room)
+    // closes via the connector's transport-native deny, with no DO contact.
+    // getWebSocketUpgrader() is the Node (no-connector) path only; it is never
+    // reached on a forwarding adapter.
+    if (denied || !socketDef) {
+      return connector({ c, kind: 'deny' });
+    }
+    const data = socketDef.data ? await socketDef.data(c) : undefined;
+    return connector({
+      c,
+      kind: 'socket-forward',
+      moduleKey: moduleKey ?? '',
+      name: name ?? '',
+      data,
+    });
   };
 }

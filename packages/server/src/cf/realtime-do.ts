@@ -8,7 +8,7 @@
 // vitest; this file is only importable in workerd.
 
 import { DurableObject } from 'cloudflare:workers';
-import type { RoomDef } from '@hono-preact/iso/internal';
+import type { RoomDef, SocketDef } from '@hono-preact/iso/internal';
 import {
   engineJoin,
   engineMessage,
@@ -21,10 +21,13 @@ import {
   makeDOConnState,
   parseHeaderJson,
   isTopicSubscriber,
+  isSocketConnection,
+  makeServerSocketHandle,
   fanOutToTopicSubscribers,
 } from './realtime-do-glue.js';
-import type { DOConnState } from './realtime-do-glue.js';
+import type { DOConnState, SocketConnAttachment } from './realtime-do-glue.js';
 import { getRoomRegistry } from './room-registry.js';
+import { getSocketRegistry } from './socket-registry.js';
 
 // Re-export the platform-free helpers so the CF door can pull everything from
 // the DO module.
@@ -35,6 +38,7 @@ export {
 } from './realtime-do-glue.js';
 
 type AnyRoomDef = RoomDef<unknown, unknown, unknown, unknown, unknown>;
+type AnySocketDef = SocketDef<unknown, unknown, unknown>;
 
 // ---------------------------------------------------------------------------
 // The Durable Object
@@ -87,6 +91,31 @@ export class HonoPreactRealtimeDO extends DurableObject {
     if (!def) {
       throw new Error(
         `hono-preact: no room registered for "${moduleKey}::${name}".`
+      );
+    }
+    return def;
+  }
+
+  /** Cached `${moduleKey}::${name}` -> SocketDef map (resolved on first use). */
+  #socketRegistry: Map<string, AnySocketDef> | undefined;
+
+  /** Resolve a socket def by module key + socket name from the installed registry. */
+  async getSocketDef(moduleKey: string, name: string): Promise<AnySocketDef> {
+    if (!this.#socketRegistry) {
+      const getter = getSocketRegistry();
+      if (!getter) {
+        throw new Error(
+          'hono-preact: no socket registry installed in the Durable Object. The ' +
+            'generated Cloudflare worker entry must call installSocketRegistry() ' +
+            'at module top level.'
+        );
+      }
+      this.#socketRegistry = await getter();
+    }
+    const def = this.#socketRegistry.get(`${moduleKey}::${name}`);
+    if (!def) {
+      throw new Error(
+        `hono-preact: no socket registered for "${moduleKey}::${name}".`
       );
     }
     return def;
@@ -147,6 +176,40 @@ export class HonoPreactRealtimeDO extends DurableObject {
       return new Response(null, { status: 101, webSocket: client });
     }
 
+    // A plain duplex socket (issue #169). Accept it for hibernation (NOT tagged
+    // 'topic', so publish never selects it), seed a socket attachment, and run the
+    // socket handler's open(). The connection runs in this fresh per-connection DO
+    // (ns.newUniqueId at the edge); there is no fan-out and no room engine.
+    if (kind === 'socket') {
+      const moduleKey = request.headers.get('x-hp-module') ?? '';
+      const name = request.headers.get('x-hp-name') ?? '';
+      const data = parseHeaderJson(request.headers.get('x-hp-data'));
+      const def = await this.getSocketDef(moduleKey, name);
+
+      const pair = new WebSocketPair();
+      const client = pair[0];
+      const server = pair[1];
+      this.ctx.acceptWebSocket(server);
+      const attachment: SocketConnAttachment = {
+        kind: 'socket',
+        moduleKey,
+        name,
+        data,
+      };
+      server.serializeAttachment(attachment);
+
+      // open's teardown return cannot survive a hibernation cycle, so it is not
+      // captured here; `close` is the portable cleanup hook (see define-socket).
+      // Wrap open() so a throw does not break the handshake (matching Node, where
+      // a throw in async onOpen is swallowed and the connection stays open).
+      try {
+        await def.open?.(makeServerSocketHandle(server, data));
+      } catch (err) {
+        console.error('hono-preact: socket open() threw', err);
+      }
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
     // kind === 'room': the existing PR 5a path below, unchanged.
     const moduleKey = request.headers.get('x-hp-module') ?? '';
     const name = request.headers.get('x-hp-name') ?? '';
@@ -204,10 +267,28 @@ export class HonoPreactRealtimeDO extends DurableObject {
   ): Promise<void> {
     // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
     // the room engine for them.
-    if (isTopicSubscriber(ws.deserializeAttachment())) return;
+    const attachment = ws.deserializeAttachment();
+    if (isTopicSubscriber(attachment)) return;
+    if (isSocketConnection(attachment)) {
+      const att = attachment;
+      const def = await this.getSocketDef(att.moduleKey, att.name);
+      const raw =
+        typeof message === 'string'
+          ? message
+          : new TextDecoder().decode(message);
+      // Drop a malformed (non-JSON) frame instead of throwing out of the handler.
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      await def.message?.(makeServerSocketHandle(ws, att.data), parsed);
+      return;
+    }
     // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
     // untrusted-shaped hibernation boundary.
-    const att = ws.deserializeAttachment() as RoomConnAttachment;
+    const att = attachment as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#store());
     const raw =
@@ -216,11 +297,22 @@ export class HonoPreactRealtimeDO extends DurableObject {
   }
 
   /** Run the engine leave sequence for the closing socket. */
-  async webSocketClose(ws: WebSocket): Promise<void> {
+  async webSocketClose(
+    ws: WebSocket,
+    code: number,
+    reason: string
+  ): Promise<void> {
     // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
     // the room engine for them.
-    if (isTopicSubscriber(ws.deserializeAttachment())) return;
-    const att = ws.deserializeAttachment() as RoomConnAttachment;
+    const attachment = ws.deserializeAttachment();
+    if (isTopicSubscriber(attachment)) return;
+    if (isSocketConnection(attachment)) {
+      const att = attachment;
+      const def = await this.getSocketDef(att.moduleKey, att.name);
+      def.close?.(makeServerSocketHandle(ws, att.data), { code, reason });
+      return;
+    }
+    const att = attachment as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     // engineClose does: leavePresence (a CF no-op; the socket is already
     // evicted from getWebSockets), broadcast presence/leave to the room.
@@ -241,8 +333,15 @@ export class HonoPreactRealtimeDO extends DurableObject {
   async webSocketError(ws: WebSocket, err: unknown): Promise<void> {
     // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
     // the room engine for them.
-    if (isTopicSubscriber(ws.deserializeAttachment())) return;
-    const att = ws.deserializeAttachment() as RoomConnAttachment;
+    const attachment = ws.deserializeAttachment();
+    if (isTopicSubscriber(attachment)) return;
+    if (isSocketConnection(attachment)) {
+      const att = attachment;
+      const def = await this.getSocketDef(att.moduleKey, att.name);
+      def.error?.(makeServerSocketHandle(ws, att.data), err);
+      return;
+    }
+    const att = attachment as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#storeWith(ws));
     const conn = makeRoomConnection(t, (code, reason) =>

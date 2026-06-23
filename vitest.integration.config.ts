@@ -14,6 +14,7 @@ export default defineConfig({
       'packages/vite/src/__tests__/websocket-dev.test.ts',
       'packages/vite/src/__tests__/cf-room.test.ts',
       'packages/vite/src/__tests__/cf-pubsub.test.ts',
+      'packages/vite/src/__tests__/cf-socket.test.ts',
       'packages/create-hono-preact/__tests__/scaffold-integration.test.ts',
     ],
     environment: 'node',
