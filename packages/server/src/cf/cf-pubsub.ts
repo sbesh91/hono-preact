@@ -6,36 +6,52 @@
 // imports NO `cloudflare:workers` runtime module, so it is unit-testable in
 // plain vitest with a fake DurableObjectNamespace.
 
+// AsyncLocalStorage is typed by the local ambient declaration in
+// `node-async-hooks.d.ts` (a minimal one-export shim), NOT @types/node: this file
+// relies on @cloudflare/workers-types and DOM globals (WebSocket, MessageEvent),
+// so pulling global @types/node in would duplicate those and break door
+// isolation. The runtime module is provided by nodejs_compat on workerd and
+// natively on Node.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { PubSubBackend } from '@hono-preact/iso/internal/runtime';
 
 /**
  * The per-request worker runtime the CF backend needs: the binding-carrying
  * `env` and the `ExecutionContext` (for waitUntil). The generated worker entry
- * captures this at the fetch boundary (captureRealtimeRuntime) on every request.
+ * runs each request inside this context (runWithRealtimeRuntime), so a deep
+ * `publish()` reaches its OWN request's runtime.
  */
 export interface RealtimeRuntime {
   env: Record<string, unknown>;
   ctx: { waitUntil(promise: Promise<unknown>): void };
 }
 
-let captured: RealtimeRuntime | undefined;
+// AsyncLocalStorage, NOT a module-scoped variable: a single Cloudflare isolate
+// multiplexes concurrent in-flight requests, so a module global would be
+// overwritten by a later request between an earlier request's capture and its
+// publish() (binding the fan-out to the wrong ctx.waitUntil and silently
+// dropping publishes under load). ALS scopes the runtime to each request's async
+// context. nodejs_compat (already required for the realtime path) provides
+// node:async_hooks on workerd.
+const runtimeStore = new AsyncLocalStorage<RealtimeRuntime>();
 
-/** Stash the request runtime so the CF backend can reach the DO binding. */
-export function captureRealtimeRuntime(
+/**
+ * Run `fn` with the request runtime bound to the current async context. The
+ * generated worker entry wraps `coreApp.fetch` in this, so every `publish()`
+ * reached during the request (even after awaits) reads that request's own
+ * `{ env, ctx }`.
+ */
+export function runWithRealtimeRuntime<T>(
   env: Record<string, unknown>,
-  ctx: { waitUntil(promise: Promise<unknown>): void }
-): void {
-  captured = { env, ctx };
+  ctx: { waitUntil(promise: Promise<unknown>): void },
+  fn: () => T
+): T {
+  return runtimeStore.run({ env, ctx }, fn);
 }
 
-/** The latest captured runtime (undefined before the first request). */
+/** The current request's runtime (undefined outside a request scope). */
 export function getRealtimeRuntime(): RealtimeRuntime | undefined {
-  return captured;
-}
-
-/** Test-only: clear the captured runtime between tests. */
-export function __resetRealtimeRuntimeForTesting(): void {
-  captured = undefined;
+  return runtimeStore.getStore();
 }
 
 // The DO publish/subscribe request URLs + the discriminator header. Kept in

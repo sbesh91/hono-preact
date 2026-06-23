@@ -14,12 +14,13 @@ describe('cloudflareAdapter', () => {
 
   it('wrapEntry re-exports the core app module default', () => {
     const tail = cloudflareAdapter().wrapEntry(ctx);
-    // The worker's default export is the core Hono app (a valid Workers fetch
-    // handler); the core module is imported by its absolute path.
+    // The worker's default export is a fetch handler delegating to the core Hono
+    // app (wrapped in the realtime runtime scope); the core module is imported by
+    // its absolute path.
     expect(tail).toContain(
       `import coreApp, { serverImports as __hpServerImports } from "/p/node_modules/.vite/hono-preact/core-app.tsx";`
     );
-    expect(tail).toContain('return coreApp.fetch(request, env, ctx);');
+    expect(tail).toContain('coreApp.fetch(request, env, ctx)');
   });
 
   it('wrapEntry re-exports the Durable Object class under the wrangler-bound name', () => {
@@ -104,7 +105,7 @@ describe('cloudflareAdapter', () => {
     // alongside installRealtimeConnector in a multi-name block.
     expect(tail).toContain(`from 'hono-preact/internal/runtime';`);
     expect(tail).toContain('installPubSubBackend');
-    expect(tail).toContain('captureRealtimeRuntime');
+    expect(tail).toContain('runWithRealtimeRuntime');
     expect(tail).toContain('getRealtimeRuntime');
     // The install is emitted across lines (installPubSubBackend(\n  make...\n));
     // assert the call name and the contiguous inner call separately, matching
@@ -115,10 +116,12 @@ describe('cloudflareAdapter', () => {
     );
   });
 
-  it('wrapEntry wraps the default export to capture { env, ctx } at the fetch boundary', () => {
+  it('wrapEntry runs each request inside its { env, ctx } via AsyncLocalStorage', () => {
     const tail = cloudflareAdapter().wrapEntry(ctx);
-    expect(tail).toContain('captureRealtimeRuntime(env, ctx);');
-    expect(tail).toContain('return coreApp.fetch(request, env, ctx);');
+    // The default export wraps coreApp.fetch in runWithRealtimeRuntime so a deep
+    // publish() reads its own request's runtime (not a clobbered module global).
+    expect(tail).toContain('runWithRealtimeRuntime(env, ctx, () =>');
+    expect(tail).toContain('coreApp.fetch(request, env, ctx)');
     // The bare `export default coreApp;` is replaced by the wrapper.
     expect(tail).not.toContain('export default coreApp;');
   });

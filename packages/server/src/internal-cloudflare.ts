@@ -22,6 +22,6 @@ export {
 export { buildRoomRegistry } from './rooms-handler.js';
 export {
   makeCfPubSubBackend,
-  captureRealtimeRuntime,
+  runWithRealtimeRuntime,
   getRealtimeRuntime,
 } from './cf/cf-pubsub.js';

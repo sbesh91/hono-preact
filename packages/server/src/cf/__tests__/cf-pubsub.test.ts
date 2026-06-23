@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   makeCfPubSubBackend,
-  captureRealtimeRuntime,
+  runWithRealtimeRuntime,
   getRealtimeRuntime,
-  __resetRealtimeRuntimeForTesting,
   type RealtimeRuntime,
 } from '../cf-pubsub.js';
 
@@ -61,8 +60,6 @@ function runtimeWith(ns: unknown): RealtimeRuntime {
     ctx: { waitUntil: vi.fn() },
   } as unknown as RealtimeRuntime;
 }
-
-afterEach(() => __resetRealtimeRuntimeForTesting());
 
 describe('makeCfPubSubBackend', () => {
   it('subscribe opens an x-hp-kind:topic upgrade, accepts, and forwards parsed DO frames', async () => {
@@ -124,12 +121,43 @@ describe('makeCfPubSubBackend', () => {
     expect(() => backend.publish('counter', {})).not.toThrow();
   });
 
-  it('captureRealtimeRuntime / getRealtimeRuntime round-trips', () => {
+  it('runWithRealtimeRuntime scopes the runtime to the async context', () => {
     const env = { HONO_PREACT_REALTIME: {} };
     const ctx = { waitUntil: vi.fn() };
-    captureRealtimeRuntime(env, ctx);
-    expect(getRealtimeRuntime()).toEqual({ env, ctx });
-    __resetRealtimeRuntimeForTesting();
+
+    // Outside any run scope, there is no captured runtime.
     expect(getRealtimeRuntime()).toBeUndefined();
+
+    const inside = runWithRealtimeRuntime(env, ctx, () => {
+      // Inside the scope, the deep getRealtimeRuntime() reads THIS run's runtime.
+      expect(getRealtimeRuntime()).toEqual({ env, ctx });
+      return 'result';
+    });
+
+    // The callback's return value passes through (the entry returns coreApp.fetch).
+    expect(inside).toBe('result');
+    // The scope does not leak: outside the run, the store is empty again.
+    expect(getRealtimeRuntime()).toBeUndefined();
+  });
+
+  it('isolates the runtime across overlapping (interleaved) request scopes', async () => {
+    // The bug this replaces: a module global would let request B overwrite A's
+    // runtime. With ALS, A's deferred read inside its own run sees A's runtime
+    // even though B's run interleaves first.
+    const ctxA = { waitUntil: vi.fn() };
+    const ctxB = { waitUntil: vi.fn() };
+    const seen: Array<{ ctx: unknown } | undefined> = [];
+
+    const a = runWithRealtimeRuntime({ tag: 'A' }, ctxA, async () => {
+      await Promise.resolve(); // yield: B's run starts during this gap
+      seen[0] = getRealtimeRuntime();
+    });
+    const b = runWithRealtimeRuntime({ tag: 'B' }, ctxB, async () => {
+      seen[1] = getRealtimeRuntime();
+    });
+    await Promise.all([a, b]);
+
+    expect(seen[0]).toEqual({ env: { tag: 'A' }, ctx: ctxA });
+    expect(seen[1]).toEqual({ env: { tag: 'B' }, ctx: ctxB });
   });
 });

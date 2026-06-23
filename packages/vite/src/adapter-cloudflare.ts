@@ -100,7 +100,7 @@ export function cloudflareAdapter(
         `  HonoPreactRealtimeDO as __HonoPreactRealtimeDO,\n` +
         `  makeCfForwardConnector,\n` +
         `  makeCfPubSubBackend,\n` +
-        `  captureRealtimeRuntime,\n` +
+        `  runWithRealtimeRuntime,\n` +
         `  getRealtimeRuntime,\n` +
         `  installRoomRegistry,\n` +
         `  buildRoomRegistry,\n` +
@@ -127,14 +127,17 @@ export function cloudflareAdapter(
         `// Re-export the Durable Object class under the name wrangler.jsonc binds.\n` +
         `export class ${realtimeClass} extends __HonoPreactRealtimeDO {}\n` +
         `\n` +
-        `// Capture the per-request { env, ctx } at the fetch boundary so the CF\n` +
-        `// pub/sub backend can reach the DO binding (env) and keep publish fan-out\n` +
-        `// alive past the response (ctx.waitUntil). The binding is per-request on\n` +
-        `// workerd, not a module global, so it must be captured from fetch().\n` +
+        `// Run each request inside its { env, ctx } so the CF pub/sub backend can\n` +
+        `// reach the DO binding (env) and keep a publish fan-out alive past the\n` +
+        `// response (ctx.waitUntil). AsyncLocalStorage (not a module global)\n` +
+        `// because one workerd isolate multiplexes concurrent requests: a global\n` +
+        `// would let a later request overwrite an earlier one's runtime between\n` +
+        `// its capture and its publish().\n` +
         `export default {\n` +
         `  fetch(request, env, ctx) {\n` +
-        `    captureRealtimeRuntime(env, ctx);\n` +
-        `    return coreApp.fetch(request, env, ctx);\n` +
+        `    return runWithRealtimeRuntime(env, ctx, () =>\n` +
+        `      coreApp.fetch(request, env, ctx)\n` +
+        `    );\n` +
         `  },\n` +
         `};\n`
       );
