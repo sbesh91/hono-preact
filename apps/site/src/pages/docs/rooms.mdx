@@ -146,7 +146,7 @@ export const serverRooms = {
 };
 ```
 
-A guard that denies the upgrade closes the connection with code `4403`.
+A guard that denies the upgrade closes the connection with code `4403`. Use `deny()` rather than `redirect()` in a room guard: a WebSocket handshake cannot follow an HTTP redirect, so a `redirect()` is treated as a deny (close `4403`) and logs a warning.
 
 The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions.
 
@@ -190,6 +190,7 @@ Two behaviors differ between Node and Cloudflare:
 
 - **Plain sockets (`defineSocket`/`useSocket`) now work on Cloudflare.** The worker guards the upgrade at the edge and forwards it to a per-connection Durable Object running under the Hibernation API. See [WebSockets](/docs/websockets) for setup details.
 - **`onJoin` teardown functions run only on Node.** A function returned from `onJoin` is called on connection close in the Node runtime. On Cloudflare a Durable Object can hibernate between messages, so the teardown cannot be preserved. Use `onLeave` for cleanup that must run on both runtimes.
+- **`conn.data` is edge-seeded, not mutation-persistent.** Treat `conn.data` as read-only metadata captured by the `data()` factory at upgrade time. An in-place mutation to it in `onJoin` is not guaranteed to survive to later events on every runtime (on Cloudflare each event reads a freshly deserialized attachment). Use `setPresence` for per-connection state that evolves.
 
 ## API reference
 

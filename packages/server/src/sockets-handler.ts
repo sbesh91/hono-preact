@@ -191,7 +191,23 @@ export async function resolveGuardDenied(opts: {
     { honoContext: ctx }
   );
 
-  return guardResult.kind === 'outcome';
+  if (guardResult.kind !== 'outcome') return false;
+
+  // Any guard outcome denies the upgrade: unlike the HTTP loader/action paths,
+  // a WebSocket handshake cannot follow an HTTP redirect, so a redirecting
+  // guard can only fail closed. That is correct, but it silently diverges from
+  // the HTTP path, so surface it: a guard reused from an HTTP route that does
+  // `redirect('/login')` would otherwise look like an inexplicable 4403.
+  if (guardResult.outcome.__outcome === 'redirect') {
+    console.warn(
+      `hono-preact: a guard on the "${moduleKey}::${name}" WebSocket upgrade ` +
+        'returned redirect(); a WebSocket handshake cannot follow an HTTP ' +
+        'redirect, so the connection is closed (WS_DENY_CODE). Use deny() ' +
+        'instead of redirect() in realtime guards.'
+    );
+  }
+
+  return true;
 }
 
 /**

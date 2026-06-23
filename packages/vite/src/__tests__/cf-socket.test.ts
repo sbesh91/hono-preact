@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url';
 // worker guards at the edge then forwards the upgrade to a fresh per-connection
 // Durable Object, where the socket handler runs. We assert the full duplex
 // round-trip (client say -> server echo) carrying the edge-captured `who`, and
-// that a guard-denied socket closes 4403 with no DO contact.
+// that a guard-denied socket closes 4403. (The no-DO-contact property of the
+// deny path is proven at the Node layer in sockets-handler.test.ts, which
+// installs no upgrader so any forward would throw; this e2e only asserts the
+// close code.)
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cfSocketRoot = resolve(here, 'fixtures/cf-socket');
@@ -106,6 +109,22 @@ describe('Cloudflare adapter: plain socket (per-connection DO, duplex round-trip
     const raw = await waitForMessage(ws);
     const env = JSON.parse(raw) as { kind: string; text: string; who: string };
     expect(env).toEqual({ kind: 'echo', text: 'hi there', who: 'alice' });
+
+    ws.close(1000);
+  }, 60_000);
+
+  it('a socket without a data factory sees socket.data === undefined (Node parity)', async () => {
+    const port = serverPort(server);
+    // No `u` query and the `probe` socket has no data factory, so the connector
+    // omits x-hp-data and the DO must resolve socket.data to undefined (not the
+    // string-coerced null a `?? null` stamp would produce).
+    const ws = new WebSocket(socketUrl(port, 'probe'));
+    await waitForOpen(ws);
+
+    ws.send(JSON.stringify({ kind: 'say', text: 'x' }));
+    const raw = await waitForMessage(ws);
+    const env = JSON.parse(raw) as { kind: string; dataIsUndefined: boolean };
+    expect(env).toEqual({ kind: 'probe', dataIsUndefined: true });
 
     ws.close(1000);
   }, 60_000);

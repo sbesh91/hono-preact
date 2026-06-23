@@ -6,6 +6,8 @@ import {
 } from './internal/render-element.js';
 import {
   FieldErrorsContext,
+  FieldErrorPrefixContext,
+  fieldErrorId,
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
 
@@ -18,6 +20,38 @@ export function useFieldErrors(): FieldErrorsMap {
   return useContext(FieldErrorsContext);
 }
 
+/** ARIA props to spread onto a field control so screen readers announce and
+ * associate its error. */
+export interface FieldErrorProps_Aria {
+  'aria-invalid'?: true;
+  'aria-describedby'?: string;
+}
+
+/**
+ * Returns ARIA props to spread onto a field control (`<input>`/`<select>`/...)
+ * so it is programmatically associated with its `<FieldError>`:
+ *
+ * ```tsx
+ * <input name="title" {...useFieldErrorProps('title')} />
+ * <FieldError name="title" />
+ * ```
+ *
+ * When the field has an error this returns `aria-invalid` and an
+ * `aria-describedby` pointing at the `<FieldError>` element's id; when the
+ * field is valid (or used outside a `<Form>`) it returns an empty object, so
+ * the attributes are absent rather than stale.
+ */
+export function useFieldErrorProps(name: string): FieldErrorProps_Aria {
+  const errors = useContext(FieldErrorsContext);
+  const prefix = useContext(FieldErrorPrefixContext);
+  const hasError = (errors[name]?.length ?? 0) > 0;
+  if (!hasError) return {};
+  return {
+    'aria-invalid': true,
+    'aria-describedby': fieldErrorId(prefix, name),
+  };
+}
+
 export interface FieldErrorProps {
   /** Field name (the issue path joined by `.`). Pass `""` for form-level errors. */
   name: string;
@@ -27,9 +61,10 @@ export interface FieldErrorProps {
    * Customize the rendered element via the framework render-element convention:
    * a tag name (`'p'`), a VNode to merge the framework props into
    * (`<MyError />`), or a render function `(props) => VNode`. The framework
-   * always applies `data-field-error` and `role="alert"`, and the first message
-   * is the element's children. The function form receives the props but not the
-   * message; read `useFieldErrors()` for full control. Defaults to a `<span>`.
+   * always applies `data-field-error`, `role="alert"`, and an `id` (referenced
+   * by `useFieldErrorProps`), and the first message is the element's children.
+   * The function form receives the props but not the message; read
+   * `useFieldErrors()` for full control. Defaults to a `<span>`.
    */
   render?: RenderElementRender;
 }
@@ -41,6 +76,7 @@ export interface FieldErrorProps {
  */
 export function FieldError(props: FieldErrorProps): VNode | null {
   const errors = useFieldErrors();
+  const prefix = useContext(FieldErrorPrefixContext);
   const message = errors[props.name]?.[0];
   if (!message) return null;
   return renderElement({
@@ -48,6 +84,7 @@ export function FieldError(props: FieldErrorProps): VNode | null {
     defaultTag: 'span',
     props: {
       class: props.class,
+      id: fieldErrorId(prefix, props.name),
       'data-field-error': props.name,
       role: 'alert',
     },

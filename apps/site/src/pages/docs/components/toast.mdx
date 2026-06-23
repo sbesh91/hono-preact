@@ -234,6 +234,13 @@ For a toast to be spoken by a screen reader, its `title` and `description` must
 be plain strings; a VNode body renders visually but is not included in the
 spoken announcement.
 
+Because toasts fire imperatively from anywhere, a headless primitive cannot know
+where focus should return when a focused toast is dismissed (auto-dismiss, swipe,
+or its close button). Restoring focus is therefore the consumer's
+responsibility; the `usePresence` status / `onExitComplete` seam on `Toast.Root`
+is the hook for it. Toast does not move focus to a sibling toast on dismiss,
+which would steal focus to another unrequested notification.
+
 > Toast requires the browser Popover API to place its region in the top layer.
 > This is a deliberate, documented exception to the library's
 > progressive-enhancement baseline; all current browser versions support it.

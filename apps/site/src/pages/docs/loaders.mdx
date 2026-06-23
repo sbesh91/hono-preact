@@ -545,8 +545,9 @@ When a deadline fires, the loader's `ctx.signal` aborts with reason
 surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
 `timeoutMs` as class properties).
 
-The framework default is configurable per handler via
-`loadersHandler(glob, { defaultTimeoutMs })`.
+The framework default timeout is 30s. Override it per loader with
+`defineLoader({ timeoutMs })` (a number of milliseconds, or `false` to disable
+the timeout for that loader).
 
 ### Delaying the loading fallback
 

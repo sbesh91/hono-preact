@@ -26,7 +26,13 @@ export interface RoomConnection<Outgoing, State, Data> {
   broadcast(msg: Outgoing, opts?: { self?: boolean }): void;
   /** Publish this connection's presence state to the roster. */
   setPresence(state: State): void;
-  /** Per-connection state. */
+  /**
+   * Per-connection state, seeded once at the edge by the room's `data()`
+   * factory. Treat it as read-only connection metadata: an in-place mutation is
+   * NOT guaranteed to persist across events on every runtime (on Cloudflare each
+   * event reads a freshly deserialized attachment). Use `setPresence` for state
+   * that evolves during the connection.
+   */
   data: Data;
   /** Close this connection. */
   close(code?: number, reason?: string): void;

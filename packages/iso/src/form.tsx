@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useEffect,
+  useId,
 } from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ActionStub } from './action.js';
@@ -30,6 +31,7 @@ import { getValidationIssues } from './get-validation-issues.js';
 import { useActionResult } from './use-action-result.js';
 import {
   FieldErrorsContext,
+  FieldErrorPrefixContext,
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
 
@@ -115,6 +117,9 @@ export function Form<TPayload, TResult>({
 }: FormProps<TPayload, TResult>) {
   const [pending, setPending] = useState(false);
   const [clientErrors, setClientErrors] = useState<FieldErrorsMap>({});
+  // A stable per-Form prefix so `<FieldError>` ids are unique across forms and
+  // `useFieldErrorProps` can wire `aria-describedby` to them.
+  const fieldErrorPrefix = useId();
   const [clearedServerFields, setClearedServerFields] = useState<Set<string>>(
     () => new Set()
   );
@@ -430,11 +435,13 @@ export function Form<TPayload, TResult>({
     >
       <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
       <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />
-      <FieldErrorsContext.Provider value={fieldErrors}>
-        <fieldset disabled={pending} class="hp-form-fieldset">
-          {children}
-        </fieldset>
-      </FieldErrorsContext.Provider>
+      <FieldErrorPrefixContext.Provider value={fieldErrorPrefix}>
+        <FieldErrorsContext.Provider value={fieldErrors}>
+          <fieldset disabled={pending} class="hp-form-fieldset">
+            {children}
+          </fieldset>
+        </FieldErrorsContext.Provider>
+      </FieldErrorPrefixContext.Provider>
     </form>
   );
 }

@@ -19,6 +19,7 @@ import type { RoomConnAttachment } from './room-do-transport.js';
 import {
   makeCfRoomTransport,
   makeDOConnState,
+  socketsForCloseEvent,
   parseHeaderJson,
   isTopicSubscriber,
   isSocketConnection,
@@ -59,7 +60,11 @@ type AnySocketDef = SocketDef<unknown, unknown, unknown>;
  *
  * State lives on per-socket attachments (serializeAttachment), so the DO holds
  * no in-memory connection map and survives hibernation cycles: every handler
- * rebuilds the transport from `ctx.getWebSockets()` + attachments.
+ * rebuilds the transport from `ctx.getWebSockets()` + attachments. A corollary:
+ * `conn.data` is the edge-seeded value re-read fresh (deserializeAttachment) on
+ * every event, so an in-place mutation to it does NOT persist across events here
+ * (it does on Node, which shares one bag reference). Treat conn.data as
+ * read-only metadata; use setPresence for per-connection state that evolves.
  *
  * onJoin TEARDOWN ON CLOUDFLARE: the function `onJoin` may return runs only on
  * Node. A teardown closure cannot survive a hibernation cycle, so it is NOT
@@ -139,9 +144,7 @@ export class HonoPreactRealtimeDO extends DurableObject {
    * still in getWebSockets()), so a broadcast never double-sends to it.
    */
   #storeWith(ws: WebSocket): DOConnState {
-    const live = this.ctx.getWebSockets();
-    const sockets = live.includes(ws) ? live : [...live, ws];
-    return makeDOConnState(sockets);
+    return makeDOConnState(socketsForCloseEvent(this.ctx.getWebSockets(), ws));
   }
 
   /**
@@ -183,7 +186,11 @@ export class HonoPreactRealtimeDO extends DurableObject {
     if (kind === 'socket') {
       const moduleKey = request.headers.get('x-hp-module') ?? '';
       const name = request.headers.get('x-hp-name') ?? '';
-      const data = parseHeaderJson(request.headers.get('x-hp-data'));
+      // An ABSENT x-hp-data means no socket data factory ran -> `undefined`
+      // (Node parity, where socket.data defaults to undefined). A present
+      // 'null' (an intentional null factory result) still parses to null.
+      const rawData = request.headers.get('x-hp-data');
+      const data = rawData === null ? undefined : parseHeaderJson(rawData);
       const def = await this.getSocketDef(moduleKey, name);
 
       const pair = new WebSocketPair();

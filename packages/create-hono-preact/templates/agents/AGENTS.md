@@ -45,8 +45,9 @@ Import from these subpaths of the `hono-preact` package:
   (`defineRoutes`, `defineLoader`, `defineAction`, `useParams`, `Head`,
   `ClientScript`, `Form`, `useActionResult`, ...).
 - `hono-preact/page` - page-level outcome helpers (`redirect`, `deny`, `render`).
-- `hono-preact/server` - server handlers (`renderPage`, `loadersHandler`,
-  `pageActionHandler`, `useHonoContext`).
+- `hono-preact/server` - the page render entry point and Hono context access
+  (`renderPage`, `useHonoContext`, `HonoContext`). The request handlers are
+  internal; the generated server entry wires them for you.
 - `hono-preact/vite` - the `honoPreact()` Vite plugin. It requires an `adapter`:
   `honoPreact({ adapter: cloudflareAdapter() })`.
 - `hono-preact/adapter-cloudflare` - `cloudflareAdapter()` for Cloudflare Workers.
