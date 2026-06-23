@@ -37,7 +37,7 @@ const LiveTally = countLoader.View<number>(
           </button>
           <footer class="border-t border-border pt-4 text-xs text-muted">
             Powered by{' '}
-            <a href="/docs/live-data" class="underline hover:text-foreground">
+            <a href="/docs/live-loaders" class="underline hover:text-foreground">
               live loaders + publish
             </a>
             .{' '}
