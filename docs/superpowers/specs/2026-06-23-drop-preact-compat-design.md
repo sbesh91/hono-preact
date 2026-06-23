@@ -79,11 +79,17 @@ Our unmangled module must therefore reference the **mangled** names directly.
 
 This is a deliberate, accepted trade: we swap a coupling to `preact/compat` (a
 public, supported package whose downside is the renderer patches we want gone)
-for a coupling to preact's **private, undocumented mangle map** (stable across
-all of 10.x, verified byte-identical in 10.29.1 / 10.29.2). A build-time mangle
-step does **not** help: preact does not publish `mangle.json` to npm, so that
-path would require vendoring and hand-maintaining the same map with more
-machinery and no robustness gain.
+for a coupling to preact's **private mangle map**. That map is *documented*: it
+is the authoritative `mangle.json` at the preact repo root
+(`https://github.com/preactjs/preact/blob/10.29.1/mangle.json`), the same file
+preact and `preact/compat` build with. Every mangled name the port reads was
+cross-checked against it for 10.29.1; it is stable across all of 10.x
+(byte-identical in 10.29.1 / 10.29.2). It is private (an internal build contract,
+not a public API guarantee) and is not published to npm, which is why a
+build-time mangle step does **not** help: it would require vendoring and
+hand-maintaining the same map with more machinery and no robustness gain. (The
+one field the port uses that is absent from `mangle.json`, `_suspenders`, is a
+Suspense-internal field core never reads; its mangled name is arbitrary.)
 
 **Mitigation (required):** a runtime guard test that renders a thrown-thenable
 inside `<Suspense>` and asserts the fallback shows then resolves, plus an
@@ -95,7 +101,8 @@ guard test is the agreed mitigation.)
 
 ## Residual risks (from the spike, to address in the plan)
 
-1. **Mangle-map coupling** (headline) -> guard test + version pin.
+1. **Mangle-map coupling** (headline) -> guard test (no version pin). Names
+   cross-checked against preact's `mangle.json` for the pinned 10.29.1.
 2. **SuspenseList path (`_suspended` / `__a`)** -> ported but unused/untested.
    Decide: keep (matches compat, near-zero cost) or drop to shrink surface.
 3. **`lazy()` not ported** -> framework uses loader/`wrapPromise`, not `lazy`;

@@ -27,9 +27,23 @@
  * property name we write in source is the name used at runtime. Writing
  * `options._catchError` would read `undefined` against the shipped, mangled
  * preact. We must reference the MANGLED names directly. That couples this module
- * to preact's internal mangle map (stable across all of 10.x, verified identical
- * in 10.29.1 and 10.29.2). See the spike report for the full mapping and risk
- * analysis.
+ * to preact's mangle map.
+ *
+ * That map is NOT undocumented: it is the authoritative `mangle.json` at the
+ * preact repo root (https://github.com/preactjs/preact/blob/10.29.1/mangle.json),
+ * the same file preact and `preact/compat` build with. It is simply not published
+ * to npm (so a build-time read is impossible, which is why the names are inlined
+ * here). Every mangled name below was cross-checked against that file for 10.29.1
+ * (e.g. `_catchError`->`__e`, `_component`/`_childDidSuspend`->`__c`,
+ * `_children`->`__k`, `_parent`->`__`, `_flags`/`_pendingSuspensionCount`->`__u`).
+ * The map is stable across all of 10.x (byte-identical in 10.29.1 and 10.29.2);
+ * the guard test fails loudly if a future bump shifts it. See the spike report
+ * and the design spec for the full mapping and risk analysis.
+ *
+ * One field, `_suspenders` (below as `o`), is NOT in `mangle.json`: it is a
+ * Suspense-internal field preact core never reads, so it is mangled only by
+ * compat's own terser pass. We mirror compat's `o`; the name is arbitrary since
+ * core never touches it.
  */
 import { Component, createElement, Fragment, options } from 'preact';
 import type { ComponentChildren, ComponentClass } from 'preact';
