@@ -1,9 +1,10 @@
-import { useContext, useEffect, useReducer } from 'preact/hooks';
+import { useContext } from 'preact/hooks';
 import { ActionResultContext } from './action-result-context.js';
 import {
   getLastActionResult,
   subscribeActionResults,
 } from './internal/action-result-store.js';
+import { useStoreSnapshot } from './internal/use-store-snapshot.js';
 import { isBrowser } from './is-browser.js';
 import type { ActionStub } from './action.js';
 import type { Serialize } from './internal/serialize.js';
@@ -36,14 +37,9 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionStub<TPayload, TResult, never>
 ): ActionResult<TPayload, TResult> {
   const ssr = useContext(ActionResultContext);
-  // Compat-free subscription (no preact/compat useSyncExternalStore): useReducer
-  // force-update + useEffect(subscribe). useSyncExternalStore additionally re-reads
-  // the snapshot at subscribe time to close the render-to-effect tear window; this
-  // store is a synchronous in-memory store written only by post-mount submit
-  // events, so that window is empty in practice. See the 2026-06-23 drop-compat spec.
-  const [, force] = useReducer((n: number, _action: void) => n + 1, 0);
-  useEffect(() => subscribeActionResults(() => force()), []);
-  const client = isBrowser() ? getLastActionResult(stub) : null;
+  const client = useStoreSnapshot(subscribeActionResults, () =>
+    isBrowser() ? getLastActionResult(stub) : null
+  );
 
   // Client store wins when populated: a JS-on submit has produced a result.
   // SSR context is the fallback for the PE deny re-render path (no JS state).
