@@ -100,9 +100,9 @@ describe('makeCfPubSubBackend', () => {
     expect(fetches).toHaveLength(1);
     expect(fetches[0]!.topic).toBe('counter');
     expect(fetches[0]!.init!.method).toBe('POST');
-    expect((fetches[0]!.init!.headers as Record<string, string>)['x-hp-kind']).toBe(
-      'publish'
-    );
+    expect(
+      (fetches[0]!.init!.headers as Record<string, string>)['x-hp-kind']
+    ).toBe('publish');
     expect(fetches[0]!.init!.body).toBe(JSON.stringify({ count: 1 }));
     expect(rt.ctx.waitUntil).toHaveBeenCalledTimes(1);
   });
@@ -116,7 +116,10 @@ describe('makeCfPubSubBackend', () => {
 
   it('honors a custom binding name', () => {
     const { ns } = fakeNamespace();
-    const rt = { env: { MY_RT: ns }, ctx: { waitUntil: vi.fn() } } as unknown as RealtimeRuntime;
+    const rt = {
+      env: { MY_RT: ns },
+      ctx: { waitUntil: vi.fn() },
+    } as unknown as RealtimeRuntime;
     const backend = makeCfPubSubBackend(() => rt, 'MY_RT');
     expect(() => backend.publish('counter', {})).not.toThrow();
   });

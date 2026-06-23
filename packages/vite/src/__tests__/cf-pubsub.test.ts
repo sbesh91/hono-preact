@@ -58,9 +58,7 @@ async function openLiveLoader(port: number) {
         while ((idx = buffer.indexOf('\n\n')) !== -1) {
           const frame = buffer.slice(0, idx);
           buffer = buffer.slice(idx + 2);
-          const dataLine = frame
-            .split('\n')
-            .find((l) => l.startsWith('data:'));
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
           if (!dataLine) continue;
           const isMessage = !frame
             .split('\n')

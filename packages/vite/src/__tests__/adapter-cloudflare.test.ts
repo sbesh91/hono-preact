@@ -124,7 +124,9 @@ describe('cloudflareAdapter', () => {
   });
 
   it('wrapEntry threads a custom binding into the pub/sub backend too', () => {
-    const tail = cloudflareAdapter({ realtimeBinding: 'MY_REALTIME' }).wrapEntry(ctx);
+    const tail = cloudflareAdapter({
+      realtimeBinding: 'MY_REALTIME',
+    }).wrapEntry(ctx);
     expect(tail).toContain(
       'makeCfPubSubBackend(getRealtimeRuntime, "MY_REALTIME")'
     );

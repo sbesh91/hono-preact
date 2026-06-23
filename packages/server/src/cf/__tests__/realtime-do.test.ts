@@ -325,7 +325,9 @@ describe('makeDOConnState', () => {
 describe('isTopicSubscriber', () => {
   it('true only for a { kind: "topic" } attachment', () => {
     expect(isTopicSubscriber({ kind: 'topic' })).toBe(true);
-    expect(isTopicSubscriber({ connId: 'c1', moduleKey: 'm', name: 'n' })).toBe(false);
+    expect(isTopicSubscriber({ connId: 'c1', moduleKey: 'm', name: 'n' })).toBe(
+      false
+    );
     expect(isTopicSubscriber(null)).toBe(false);
     expect(isTopicSubscriber(undefined)).toBe(false);
     expect(isTopicSubscriber('topic')).toBe(false);
