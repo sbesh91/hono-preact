@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, waitFor } from '@testing-library/preact';
 import { options } from 'preact';
-import type { ComponentChildren } from 'preact';
 import { Suspense } from '../suspense.js';
 
 /** A child that throws a promise until it is resolved, then renders text. */
