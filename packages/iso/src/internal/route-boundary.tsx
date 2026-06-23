@@ -1,6 +1,6 @@
 import { Component } from 'preact';
 import type { ComponentChildren, FunctionComponent } from 'preact';
-import { Suspense } from 'preact/compat';
+import { Suspense } from './suspense.js';
 import { isOutcome } from '../outcomes.js';
 
 type ErrorFallback =

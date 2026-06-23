@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { Suspense } from 'preact/compat';
+import { Suspense } from './suspense.js';
 import { useContext, useId } from 'preact/hooks';
 import { ReloadContext } from '../reload-context.js';
 import {

@@ -5,7 +5,7 @@ import {
 } from 'preact';
 import type { Context } from 'hono';
 import { type RouteHook, useLocation } from 'preact-iso';
-import { Suspense } from 'preact/compat';
+import { Suspense } from './suspense.js';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { isRedirect, isRender, type Outcome } from '../outcomes.js';
