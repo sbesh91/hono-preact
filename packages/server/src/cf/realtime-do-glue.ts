@@ -31,21 +31,23 @@ export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
 // ---------------------------------------------------------------------------
 
 /**
- * Build the realtime connector the Cloudflare adapter installs. It handles BOTH
- * room dispositions socketsHandler routes to it:
+ * Build the realtime connector the Cloudflare adapter installs. It handles room
+ * and socket dispositions socketsHandler routes to it:
  *
  *   - `forward`: an allowed, key-resolved room. The upgrade is forwarded to the
  *     topic's Durable Object (`idFromName(topic)`, so one DO per topic), passing
  *     the resolved room context as `x-hp-*` headers.
- *   - `deny`: a denied / key-failed room. The connector performs a workerd-native
- *     upgrade-and-close: it accepts the handshake and immediately closes the
- *     client socket with WS_DENY_CODE (4403), the documented deny contract. This
- *     happens entirely in the worker via `WebSocketPair`; the DO is NEVER
- *     contacted, so a denied connection cannot reach the room runtime.
+ *   - `socket-forward`: an allowed socket (handler deferred to Task 7).
+ *   - `deny`: a denied / key-failed room or socket. The connector performs a
+ *     workerd-native upgrade-and-close: it accepts the handshake and immediately
+ *     closes the client socket with WS_DENY_CODE (4403), the documented deny
+ *     contract. This happens entirely in the worker via `WebSocketPair`; the DO
+ *     is NEVER contacted, so a denied connection cannot reach the runtime.
  *
  * The forward path runs at the edge AFTER the guard chain has allowed the upgrade
- * and AFTER `roomDef.data?.(c)` has run (its result arrives as `data`), so the
- * DO never sees an unauthorized connection and never needs a live Context.
+ * and AFTER `roomDef.data?.(c)` or `socketDef.data?.(c)` has run (its result
+ * arrives as `data`), so the DO never sees an unauthorized connection and never
+ * needs a live Context.
  *
  * Inbound `Request.headers` are immutable in workerd, so the forwarded request
  * is rebuilt from `c.req.raw` with a cloned `Headers` (the spike-confirmed
@@ -75,6 +77,11 @@ export function makeCfForwardConnector(
       server.accept();
       server.close(WS_DENY_CODE, 'forbidden');
       return new Response(null, { status: 101, webSocket: client });
+    }
+
+    // Socket-forward handling is deferred to Task 7.
+    if (ctx.kind === 'socket-forward') {
+      throw new Error('socket-forward connector path not yet implemented');
     }
 
     const { c, topic, moduleKey, name, params, data } = ctx;

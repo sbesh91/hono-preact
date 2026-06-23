@@ -28,7 +28,7 @@ import { buildRoomRegistry } from '../rooms-handler.js';
 import type {
   WebSocketUpgrader,
   RealtimeConnector,
-  RoomConnectContext,
+  RealtimeConnectContext,
 } from '@hono-preact/iso/internal/runtime';
 import type { WSEvents } from 'hono/ws';
 
@@ -566,10 +566,10 @@ describe('socketsHandler: realtime connector forwarding', () => {
   // A fake connector that records its calls and returns a sentinel Response.
   function makeFakeConnector(): {
     connector: RealtimeConnector;
-    calls: () => RoomConnectContext[];
+    calls: () => RealtimeConnectContext[];
     response: Response;
   } {
-    const calls: RoomConnectContext[] = [];
+    const calls: RealtimeConnectContext[] = [];
     // A sentinel Response standing in for the forwarded upgrade. The real CF
     // upgrade Response is { status: 101, webSocket }, but the WHATWG Response
     // constructor outside workerd rejects status 101, so the sentinel uses a
@@ -811,5 +811,22 @@ describe('socketsHandler: realtime connector forwarding', () => {
     // allowed, then the connection was forwarded.
     expect(seenRoomIdInGuard).toBe('demo');
     expect(calls()).toHaveLength(1);
+  });
+
+  it('the connector context union includes a socket-forward variant', () => {
+    const { connector, calls } = makeFakeConnector();
+    // A socket-forward context is assignable to the connector parameter (the new
+    // union member) and is recorded with its discriminant + fields. The fake
+    // connector never reads `c`, so a sanctioned single test cast stands in for
+    // the live Context the real edge path supplies in Task 7.
+    void connector({
+      c: undefined as never,
+      kind: 'socket-forward',
+      moduleKey: 'pages/chat',
+      name: 'chatSocket',
+      data: { who: 'alice' },
+    });
+    const recorded = calls();
+    expect(recorded[0]?.kind).toBe('socket-forward');
   });
 });
