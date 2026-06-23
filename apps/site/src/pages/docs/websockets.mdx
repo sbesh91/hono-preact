@@ -14,7 +14,7 @@ For the rules around the `api.ts` mount point and framework-reserved paths, see 
 
 A socket is the right tool when the browser needs to send upstream, or when you want a persistent full-duplex channel. Server-to-client-only scenarios (a notification feed, a dashboard widget) are better served by SSE-backed live loaders, which require no upgrade plumbing.
 
-On Node, a single HTTP connection is shared across the framework and all sockets. Cross-connection fan-out (for example, broadcasting to every connected client) requires external state such as an in-process Map or a message broker; built-in room support will be added in a later release. On Cloudflare Workers, pair with a Durable Object to hold shared state across connections.
+On Node, a single HTTP connection is shared across the framework and all sockets. On Cloudflare a typed socket runs end to end: the worker guards the upgrade at the edge and forwards it to a per-connection Durable Object that runs the handler under the Hibernation API, so the same `defineSocket` works on both runtimes. Cross-connection fan-out (broadcasting to every connected client) is a separate concern: use [Rooms](/docs/rooms), which coordinate many connections through one Durable Object per topic.
 
 ## Typed sockets with `defineSocket`
 
@@ -38,11 +38,12 @@ export const serverSockets = {
     // Optional guard middleware. A failing guard closes the socket with 4403.
     use: [route.use],
 
-    async open(socket, { c }) {
-      const user = c.get('user');
-      socket.data = { name: user.name };
+    // Edge factory: runs at the upgrade with the live Context; its result seeds
+    // socket.data. Read cookies, headers, and middleware values here.
+    data: (c) => ({ name: c.get('user').name }),
 
-      // Return a teardown fn to run on close.
+    open(socket) {
+      // Return a teardown fn to run on close (Node only; see the note below).
       return () => {
         console.log(`${socket.data.name} disconnected`);
       };
@@ -60,9 +61,9 @@ export const serverSockets = {
 };
 ```
 
-`open` runs once per connection after the upgrade. It receives the full Hono `Context` so you can read cookies, headers, and context values set by middleware. Returning a function from `open` registers a teardown that runs when the connection closes.
+`open` runs once per connection after the upgrade. It receives only the `socket`; read request-derived values (cookies, headers, middleware state) in the `data` factory, which runs at the upgrade with the full Hono `Context` and seeds `socket.data`. Returning a function from `open` registers a teardown that runs when the connection closes on Node; on Cloudflare the connection is hibernatable, so use `close` for cleanup that must run on both runtimes.
 
-`socket.data` is a per-connection mutable bag. Declare its shape with the third type parameter: `defineSocket<Incoming, Outgoing, Data>()`. The bag is `undefined` by default.
+`socket.data` is a per-connection bag seeded by the `data` factory and mutable in the handler. Declare its shape with the third type parameter: `defineSocket<Incoming, Outgoing, Data>()`. It is `undefined` by default (no `data` factory).
 
 ### Client component
 
@@ -219,8 +220,9 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 
 | Field     | Type                                                      | Description                                                                                                                 |
 | --------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `use`     | `ReadonlyArray<Middleware>`                               | Guard chain run before the upgrade. A failing guard closes with code 4403.                                                  |
-| `open`    | `(socket, { c }) => void \| (() => void) \| Promise<...>` | Runs once per connection. Returning a function registers it as a teardown. `c` is the Hono Context for the upgrade request. |
+| `use`     | `ReadonlyArray<Middleware>`                               | Guard chain run before the upgrade. A failing guard closes with code 4403.                                                                                                                                              |
+| `data`    | `(c: Context) => Data`                                    | Edge factory run once at the upgrade with the live Context; its result seeds `socket.data`. The only place a socket handler sees a Context (on Cloudflare the connection runs inside a Durable Object).               |
+| `open`    | `(socket) => void \| (() => void) \| Promise<...>`        | Runs once per connection. Returning a function registers a teardown (Node only; on Cloudflare use `close`). Receives only the socket; its `data` is the `data` factory result.                                       |
 | `message` | `(socket, msg: Incoming) => void \| Promise<void>`        | Called for every incoming message.                                                                                          |
 | `close`   | `(socket, { code, reason }) => void`                      | Called when the connection closes.                                                                                          |
 | `error`   | `(socket, err) => void`                                   | Called on a socket error.                                                                                                   |
@@ -231,7 +233,7 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 | ----------------------- | ------------------------- | ------------------------------------------------------------------------ |
 | `send(msg)`             | `(msg: Outgoing) => void` | Send a message to the client. JSON-encoded by the framework.             |
 | `close(code?, reason?)` | method                    | Close the connection.                                                    |
-| `data`                  | `Data`                    | Per-connection mutable bag. Set in `open`; read anywhere in the handler. |
+| `data`                  | `Data`                    | Per-connection bag. Seeded by the `data` factory; mutable in the handler.                |
 | `raw`                   | `unknown`                 | Escape hatch to the underlying runtime socket.                           |
 
 ### `ref.useSocket(opts?)` / `useSocket(ref, opts?)`
