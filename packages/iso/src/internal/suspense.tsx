@@ -78,7 +78,7 @@ type ChildDidSuspend = (
 type Unsuspend = (unsuspend: () => void) => void;
 
 interface HookEntry {
-  __c?: unknown; // _cleanup
+  __c?: (() => void) | null; // _cleanup
 }
 
 interface InternalOptions {
@@ -91,8 +91,6 @@ interface InternalOptions {
   unmount?: (vnode: InternalVNode) => void;
 }
 
-const internalOptions = options as unknown as InternalOptions;
-
 function isThenable(value: unknown): value is Promise<unknown> {
   return (
     typeof value === 'object' &&
@@ -101,40 +99,49 @@ function isThenable(value: unknown): value is Promise<unknown> {
   );
 }
 
-// --- options._catchError (mangled: options.__e) ---------------------------
-// Core walks the _parent chain to a component implementing _childDidSuspend.
-const oldCatchError = internalOptions.__e;
-internalOptions.__e = function (error, newVNode, oldVNode, errorInfo) {
-  if (isThenable(error)) {
-    let component: InternalComponent | null | undefined;
-    let vnode: InternalVNode | null | undefined = newVNode;
-    for (; vnode && (vnode = vnode.__); ) {
-      if ((component = vnode.__c) && component.__c) {
-        if (newVNode.__e == null) {
-          newVNode.__e = oldVNode.__e;
-          newVNode.__k = oldVNode.__k;
+// Defensive: ESM caches this module so the patch runs once, but guard anyway so
+// a duplicated module instance can never double-wrap the chained handlers.
+const PATCHED = Symbol.for('hono-preact.suspense.patched');
+const opts = options as unknown as InternalOptions & { [PATCHED]?: true };
+
+if (!opts[PATCHED]) {
+  opts[PATCHED] = true;
+
+  // --- options._catchError (mangled: options.__e) --------------------------
+  // Core walks the _parent chain to a component implementing _childDidSuspend.
+  const oldCatchError = opts.__e;
+  opts.__e = function (error, newVNode, oldVNode, errorInfo) {
+    if (isThenable(error)) {
+      let component: InternalComponent | null | undefined;
+      let vnode: InternalVNode | null | undefined = newVNode;
+      for (; vnode && (vnode = vnode.__); ) {
+        if ((component = vnode.__c) && component.__c) {
+          if (newVNode.__e == null) {
+            newVNode.__e = oldVNode.__e;
+            newVNode.__k = oldVNode.__k;
+          }
+          // Found a Suspense; do NOT fall through to oldCatchError.
+          return component.__c(error, newVNode);
         }
-        // Found a Suspense; do NOT fall through to oldCatchError.
-        return component.__c(error, newVNode);
       }
     }
-  }
-  if (oldCatchError) oldCatchError(error, newVNode, oldVNode, errorInfo);
-};
+    if (oldCatchError) oldCatchError(error, newVNode, oldVNode, errorInfo);
+  };
 
-// --- options.unmount ------------------------------------------------------
-const oldUnmount = internalOptions.unmount;
-internalOptions.unmount = function (vnode) {
-  const component = vnode.__c;
-  if (component) component.__z = true;
-  if (component && component.__R) {
-    component.__R();
-  }
-  if (component && vnode.__u & MODE_HYDRATE) {
-    vnode.type = null;
-  }
-  if (oldUnmount) oldUnmount(vnode);
-};
+  // --- options.unmount -----------------------------------------------------
+  const oldUnmount = opts.unmount;
+  opts.unmount = function (vnode) {
+    const component = vnode.__c;
+    if (component) component.__z = true;
+    if (component && component.__R) {
+      component.__R();
+    }
+    if (component && vnode.__u & MODE_HYDRATE) {
+      vnode.type = null;
+    }
+    if (oldUnmount) oldUnmount(vnode);
+  };
+}
 
 // detachedClone: park the suspended subtree off-DOM while the fallback shows
 // (non-hydration path).
@@ -147,7 +154,7 @@ function detachedClone(
     const comp = vnode.__c;
     if (comp && comp.__H) {
       comp.__H.__.forEach((effect) => {
-        if (typeof effect.__c === 'function') (effect.__c as () => void)();
+        if (effect.__c) effect.__c();
       });
       comp.__H = null;
     }
