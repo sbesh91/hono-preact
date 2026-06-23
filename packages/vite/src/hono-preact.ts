@@ -68,7 +68,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     config() {
       return {
         resolve: {
-          dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
+          dedupe: ['preact', 'preact/hooks', 'preact-iso'],
         },
         build: {
           target: 'esnext' as const,
@@ -110,6 +110,10 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     serverOnlyPlugin(),
     guardStripPlugin(),
     ...adapter.vitePlugins(ctx),
-    ...preact(),
+    // reactAliasesEnabled: false stops @preact/preset-vite from aliasing
+    // react/react-dom -> preact/compat. The framework never imports react, and
+    // pulling compat in via the alias would re-run compat's global options
+    // patches. The spike's compat-free Suspense lives in @hono-preact/iso.
+    ...preact({ reactAliasesEnabled: false }),
   ];
 }

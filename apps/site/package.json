@@ -19,9 +19,6 @@
     "lucide-preact": "^1.14.0",
     "preact": "^10.29.1",
     "preact-iso": "github:preactjs/preact-iso#v3",
-    "react": "npm:@preact/compat",
-    "react-dom": "npm:@preact/compat",
-    "react-is": "npm:@preact/compat",
     "valibot": "^1.4.1"
   },
   "devDependencies": {
