@@ -13,6 +13,7 @@ import {
 } from './toast-store.js';
 import { ToasterContext } from './context.js';
 import { ToastAnnouncer, useAnnouncer, announcementText } from './announcer.js';
+import { useStoreSnapshot } from '../use-store-snapshot.js';
 
 // Stable default hotkey to prevent useEffect re-runs on every render.
 const DEFAULT_HOTKEY = ['altKey', 'KeyT'];
@@ -29,11 +30,13 @@ export interface ToasterProps {
   children: (toast: ToastRecord) => VNode;
 }
 
-// Subscribe to the store with a force-update; no preact/compat.
+// Stable bound subscribe so useStoreSnapshot's effect never re-subscribes
+// (toastStore.subscribe is a class method; passing it bare would lose `this`).
+const subscribeToasts = (onChange: () => void) =>
+  toastStore.subscribe(onChange);
+
 function useStoreToasts(): ToastRecord[] {
-  const [, force] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => toastStore.subscribe(force), []);
-  return toastStore.toasts;
+  return useStoreSnapshot(subscribeToasts, () => toastStore.toasts);
 }
 
 export function Toaster(props: ToasterProps): VNode {
