@@ -123,12 +123,20 @@ Two pieces of the same loader API drive this pattern:
 
 ## On Cloudflare
 
-Live loaders and `publish()` work the same on Cloudflare Workers. Cross-isolate
-fan-out (a `publish()` in one request reaching a live loader streaming in another
-isolate) is backed by the same `HONO_PREACT_REALTIME` Durable Object that powers
-rooms, so no extra setup is needed once that binding is in your `wrangler.jsonc`
-(see the rooms docs, "Cloudflare setup"). Your code does not change: `publish()`
-and `route.liveLoader` are identical on Node and Cloudflare.
+`publish()` and `route.liveLoader` have the same API on Cloudflare Workers.
+Cross-isolate fan-out (a `publish()` in one request waking a live loader
+streaming in another isolate) is backed by the same `HONO_PREACT_REALTIME`
+Durable Object that powers rooms, so no extra setup is needed once that binding
+is in your `wrangler.jsonc` (see the rooms docs, "Cloudflare setup").
+
+One thing to keep in mind: `publish()` syncs the **event**, not your state. It
+fans a "something changed, re-run" wake out to every connected live loader; each
+loader then re-runs its `load(ctx)` and reads the current value. So your `load`
+must read from a **shared source of truth** that every isolate can see: a
+database, KV, D1, or Durable Object storage. A module-level `let count = 0` works
+on Node (one process shares it) but is **per-isolate on Workers**, so two tabs
+would drift apart even though the wake reached both. Read shared state in `load`,
+and `publish()` after you write it.
 
 ## Scoping the persistence
 
