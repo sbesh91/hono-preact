@@ -9,22 +9,29 @@ import {
 // A fake hibernation-style WebSocket the fake DO stub hands back on a topic
 // upgrade. The backend calls .accept() then listens for 'message'.
 function fakeWs() {
-  const listeners: Array<(ev: { data: unknown }) => void> = [];
+  const listeners: Record<string, Array<(ev: unknown) => void>> = {};
   return {
     accepted: false,
     closed: false,
     accept() {
       this.accepted = true;
     },
-    addEventListener(_type: 'message', cb: (ev: { data: unknown }) => void) {
-      listeners.push(cb);
+    addEventListener(type: string, cb: (ev: unknown) => void) {
+      (listeners[type] ??= []).push(cb);
     },
     close() {
       this.closed = true;
     },
-    // test helper: simulate a DO -> subscriber frame
+    // test helpers: drive each event type independently (a 'message' emit must
+    // NOT trip the close/error listeners).
     _emit(data: unknown) {
-      for (const cb of listeners) cb({ data });
+      for (const cb of listeners['message'] ?? []) cb({ data });
+    },
+    _close() {
+      for (const cb of listeners['close'] ?? []) cb({});
+    },
+    _error() {
+      for (const cb of listeners['error'] ?? []) cb({});
     },
   };
 }
@@ -82,7 +89,8 @@ describe('makeCfPubSubBackend', () => {
     expect(received).toEqual([{ count: 7 }]);
 
     unsub();
-    await Promise.resolve();
+    // The unsub close waits for `opening` to settle; drain microtasks fully.
+    await new Promise<void>((r) => setTimeout(r));
     expect(ws.closed).toBe(true);
   });
 
@@ -119,6 +127,72 @@ describe('makeCfPubSubBackend', () => {
     } as unknown as RealtimeRuntime;
     const backend = makeCfPubSubBackend(() => rt, 'MY_RT');
     expect(() => backend.publish('counter', {})).not.toThrow();
+  });
+
+  it('unsub before the upgrade resolves closes the DO socket (no leak)', async () => {
+    const { ns, wsByTopic } = fakeNamespace();
+    const backend = makeCfPubSubBackend(() => runtimeWith(ns));
+
+    const unsub = backend.subscribe('counter', () => {});
+    unsub(); // before the async upgrade resolves
+    await new Promise<void>((r) => setTimeout(r));
+
+    const ws = wsByTopic.get('counter')!;
+    // The DO accepts the server end synchronously (before the 101); closing this
+    // end evicts it from getWebSockets('topic') instead of leaking it for the
+    // DO's lifetime. Before the fix the closed branch returned without closing.
+    expect(ws.closed).toBe(true);
+    expect(ws.accepted).toBe(false); // bailed before accept()
+  });
+
+  it('a mid-life socket close surfaces onError exactly once', async () => {
+    const { ns, wsByTopic } = fakeNamespace();
+    const backend = makeCfPubSubBackend(() => runtimeWith(ns));
+    const onError = vi.fn();
+
+    backend.subscribe('counter', () => {}, onError);
+    await new Promise<void>((r) => setTimeout(r)); // let the upgrade open
+    const ws = wsByTopic.get('counter')!;
+    expect(ws.accepted).toBe(true);
+
+    ws._close();
+    ws._error(); // a follow-on event must not double-report
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('a close triggered by our own unsub is not reported as an error', async () => {
+    const { ns, wsByTopic } = fakeNamespace();
+    const backend = makeCfPubSubBackend(() => runtimeWith(ns));
+    const onError = vi.fn();
+
+    const unsub = backend.subscribe('counter', () => {}, onError);
+    await new Promise<void>((r) => setTimeout(r));
+    unsub();
+    await new Promise<void>((r) => setTimeout(r));
+    // The unsub closed the socket; that close event must not look like a failure.
+    wsByTopic.get('counter')!._close();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('an open failure (DO returns no WebSocket) surfaces onError', async () => {
+    const badNs = {
+      idFromName: (name: string) => ({ name }),
+      get: () => ({
+        fetch: () => Promise.resolve({} as unknown as Response), // no .webSocket
+      }),
+    };
+    const rt = {
+      env: { HONO_PREACT_REALTIME: badNs },
+      ctx: { waitUntil: vi.fn() },
+    } as unknown as RealtimeRuntime;
+    const backend = makeCfPubSubBackend(() => rt);
+    const onError = vi.fn();
+
+    backend.subscribe('counter', () => {}, onError);
+    await new Promise<void>((r) => setTimeout(r));
+    // The no-webSocket throw inside onFulfilled is folded in by the trailing
+    // .catch (the old two-arg .then form would have lost it) and surfaced.
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('runWithRealtimeRuntime scopes the runtime to the async context', () => {

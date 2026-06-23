@@ -77,8 +77,9 @@ export function makeCfPubSubBackend(
   getRuntime: () => RealtimeRuntime | undefined,
   realtimeBinding = 'HONO_PREACT_REALTIME'
 ): PubSubBackend {
-  function namespace(): DurableObjectNamespace {
-    const rt = getRuntime();
+  function resolveNamespace(
+    rt: RealtimeRuntime | undefined
+  ): DurableObjectNamespace {
     // Sanctioned env-binding read: bindings live on the untyped worker env, the
     // same boundary makeCfForwardConnector reads (c.env[binding]).
     const ns = rt?.env[realtimeBinding] as DurableObjectNamespace | undefined;
@@ -93,8 +94,10 @@ export function makeCfPubSubBackend(
 
   return {
     publish(topic, message) {
+      // One getRuntime() read: env (for the binding) and ctx (for waitUntil)
+      // must come from the SAME request runtime.
       const rt = getRuntime();
-      const ns = namespace();
+      const ns = resolveNamespace(rt);
       const stub = ns.get(ns.idFromName(topic));
       const done = stub
         .fetch(PUBLISH_URL, {
@@ -112,11 +115,21 @@ export function makeCfPubSubBackend(
       rt?.ctx.waitUntil(done);
     },
 
-    subscribe(topic, onMessage) {
-      const ns = namespace();
+    subscribe(topic, onMessage, onError) {
+      const ns = resolveNamespace(getRuntime());
       const stub = ns.get(ns.idFromName(topic));
       let socket: WebSocket | null = null;
       let closed = false;
+
+      // Report an unexpected drop exactly once, and never for a close WE
+      // initiated (unsub). Surfacing it lets the live-loader generator error
+      // rather than hang on stale data.
+      const fail = (error: unknown) => {
+        if (closed) return;
+        closed = true;
+        socket = null;
+        onError?.(error);
+      };
 
       const opening = stub
         .fetch(SUBSCRIBE_URL, {
@@ -126,33 +139,60 @@ export function makeCfPubSubBackend(
             'x-hp-topic': topic,
           },
         })
-        .then(
-          (res: Response) => {
-            if (closed) return;
-            const ws = res.webSocket;
-            if (!ws) {
-              throw new Error(
-                'hono-preact: DO topic subscribe did not return a WebSocket'
-              );
-            }
-            ws.accept();
-            ws.addEventListener('message', (ev: MessageEvent) => {
-              try {
-                onMessage(
-                  typeof ev.data === 'string' ? JSON.parse(ev.data) : null
-                );
-              } catch {
-                // A malformed DO frame is dropped (the live-loader wake path
-                // ignores the payload anyway; a re-run reads fresh state).
-                onMessage(null);
-              }
-            });
-            socket = ws;
-          },
-          (err: unknown) => {
-            console.error('hono-preact: pub/sub subscribe failed', err);
+        // .then(onFulfilled).catch(...), NOT the two-argument .then(ok, fail)
+        // form: a synchronous throw inside onFulfilled (no webSocket, or accept()
+        // throwing) rejects THIS promise, and only a trailing .catch folds those
+        // in alongside an upstream stub.fetch rejection.
+        .then((res: Response) => {
+          const ws = res.webSocket;
+          if (!ws) {
+            throw new Error(
+              'hono-preact: DO topic subscribe did not return a WebSocket'
+            );
           }
-        );
+          if (closed) {
+            // unsub ran before the upgrade resolved. The DO already accepted the
+            // server end for hibernation (synchronously, before returning the
+            // 101), so close this end to evict it instead of leaking it into the
+            // topic's getWebSockets('topic') set.
+            try {
+              ws.close();
+            } catch {
+              // already closing/closed
+            }
+            return;
+          }
+          ws.accept();
+          ws.addEventListener('message', (ev: MessageEvent) => {
+            try {
+              onMessage(
+                typeof ev.data === 'string' ? JSON.parse(ev.data) : null
+              );
+            } catch {
+              // A malformed DO frame is dropped (the live-loader wake path
+              // ignores the payload anyway; a re-run reads fresh state).
+              onMessage(null);
+            }
+          });
+          // A worker->DO topic socket can die mid-life (DO eviction on deploy or
+          // migration, a transient blip). Surface it rather than going stale.
+          ws.addEventListener('close', () =>
+            fail(new Error('hono-preact: live subscription socket closed'))
+          );
+          ws.addEventListener('error', () =>
+            fail(new Error('hono-preact: live subscription socket errored'))
+          );
+          socket = ws;
+        })
+        .catch((err: unknown) => {
+          // Open-time failure (DO unreachable, no webSocket, accept() throwing).
+          // If we already tore down, just log; otherwise surface it.
+          if (closed) {
+            console.error('hono-preact: pub/sub subscribe failed', err);
+            return;
+          }
+          fail(err);
+        });
 
       return () => {
         closed = true;

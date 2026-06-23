@@ -18,12 +18,27 @@ export function subscribeTopic(
   let pending = false;
   let wake: (() => void) | null = null;
   let closed = false;
+  // The backend's onError writes the drop here. A holder (not a bare `let`): a
+  // variable written ONLY by the callback is control-flow-narrowed to its
+  // initializer in the generator body (TS cannot see the callback run), but a
+  // property read is not. `error` is boxed so a falsy error still reads as a drop.
+  const drop: { failure: { error: unknown } | null } = { failure: null };
 
-  const unsub = getPubSubBackend().subscribe(topic, () => {
-    pending = true;
-    wake?.();
-    wake = null;
-  });
+  const unsub = getPubSubBackend().subscribe(
+    topic,
+    () => {
+      pending = true;
+      wake?.();
+      wake = null;
+    },
+    (error) => {
+      // The backend's subscription dropped (e.g. a CF worker->DO topic socket
+      // died). Record it and wake the generator so it throws instead of hanging.
+      drop.failure = { error };
+      wake?.();
+      wake = null;
+    }
+  );
 
   const teardown = () => {
     if (closed) return;
@@ -44,12 +59,21 @@ export function subscribeTopic(
   return (async function* () {
     try {
       while (!signal.aborted) {
-        if (!pending) {
+        if (!pending && !drop.failure) {
           await new Promise<void>((resolve) => {
             wake = resolve;
           });
         }
         if (signal.aborted) break;
+        const failure = drop.failure;
+        if (failure) {
+          // Surface the drop so the live-loader generator errors and the SSE
+          // stream terminates (status='error' on the client), honoring the
+          // documented live-loader drop contract instead of going silently stale.
+          throw failure.error instanceof Error
+            ? failure.error
+            : new Error('hono-preact: live subscription dropped');
+        }
         pending = false;
         yield;
       }

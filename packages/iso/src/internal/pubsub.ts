@@ -7,7 +7,19 @@
 /** A topic message bus. `subscribe` returns an unsubscribe function. */
 export interface PubSubBackend {
   publish(topic: string, message: unknown): void;
-  subscribe(topic: string, onMessage: (message: unknown) => void): () => void;
+  /**
+   * Subscribe to a topic. `onMessage` fires on every publish. `onError`, when
+   * provided, fires at most once if the subscription drops unexpectedly (e.g. a
+   * Cloudflare worker->DO topic socket dies mid-life or fails to open), so a
+   * consumer can surface the drop rather than hang on stale data. The in-process
+   * backend never calls it (a same-process subscription cannot fail). Returns an
+   * unsubscribe function.
+   */
+  subscribe(
+    topic: string,
+    onMessage: (message: unknown) => void,
+    onError?: (error: unknown) => void
+  ): () => void;
 }
 
 // Process-global registry so the bus survives HMR and multiple module
