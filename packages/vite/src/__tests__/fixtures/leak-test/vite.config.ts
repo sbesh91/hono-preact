@@ -41,7 +41,7 @@ export default defineConfig({
         replacement: resolve(__dirname, '../../../../../iso/src/index.ts'),
       },
     ],
-    dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
+    dedupe: ['preact', 'preact/hooks', 'preact-iso'],
   },
   plugins: [serverOnlyPlugin(), preact()],
   build: {
