@@ -53,9 +53,11 @@ describe('cloudflareAdapter', () => {
   it('wrapEntry installs the forward connector off the HONO_PREACT_REALTIME binding', () => {
     const tail = cloudflareAdapter().wrapEntry(ctx);
     // installRealtimeConnector is on the platform-free iso runtime door,
-    // now imported alongside installPubSubBackend in a multi-name block.
+    // now imported alongside installPubSubBackend in a multi-name block. The
+    // trailing comma pins import-list membership (not the call below, which is
+    // `installRealtimeConnector(`), so this stays distinct after the regroup.
     expect(tail).toContain(`from 'hono-preact/internal/runtime';`);
-    expect(tail).toContain('installRealtimeConnector');
+    expect(tail).toContain('installRealtimeConnector,');
     // The binding is read as a bracketed string access so any binding name is
     // safe; the same name is passed through so the missing-binding error names
     // the developer's actual env key.
