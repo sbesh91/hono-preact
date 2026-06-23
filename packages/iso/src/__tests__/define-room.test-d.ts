@@ -197,6 +197,19 @@ function _noDataFactoryProbe() {
   });
 }
 
+// Probe: an async data factory on a room typechecks.
+function _asyncRoomDataProbe() {
+  defineRoom(roomChannel, {
+    data: async (c) => {
+      expectTypeOf(c.req.query).toBeFunction();
+      return { name: 'async-user', role: 'user' };
+    },
+    onJoin(conn) {
+      expectTypeOf(conn.data).toEqualTypeOf<{ name: string; role: string }>();
+    },
+  });
+}
+
 void _routeRoomProbes;
 void _bareRoomProbes;
 void _multiParamProbes;
@@ -206,3 +219,4 @@ void _keyRequiredProbe;
 void _keyOptionalProbe;
 void _dataFactoryProbe;
 void _noDataFactoryProbe;
+void _asyncRoomDataProbe;

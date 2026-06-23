@@ -347,10 +347,13 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
 
       // --- Plain duplex socket wiring. ---
       let teardown: (() => void) | void;
-      // Seed socket.data from the edge `data` factory (run with the live Context),
-      // so Node and Cloudflare seed socket.data identically. The bag stays mutable
-      // for the handler to write to across open/message/close.
-      const data = socketDef!.data?.(ctx) ?? {};
+      // socket.data is the edge `data` factory result captured at connect, AFTER
+      // the guard allows the upgrade (parity with the CF edge, which runs the
+      // factory only for an allowed connection). It is the connect-time seed: on
+      // Node it is a closure object the handler may mutate, but it is NOT a
+      // cross-event mutable store on Cloudflare (see define-socket). No factory
+      // means socket.data is undefined (the Data default).
+      let data: unknown;
       const makeSocket = (ws: {
         send(d: string): void;
         close(c?: number, r?: string): void;
@@ -367,6 +370,10 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
             ws.close(WS_DENY_CODE, 'forbidden');
             return;
           }
+          // Run the factory only for an allowed connection (a denied one never
+          // runs it, matching CF). The result is used verbatim (a factory that
+          // returns null/undefined is honored, not coerced to {}).
+          data = socketDef!.data ? await socketDef!.data(ctx) : undefined;
           const result = await socketDef!.open?.(makeSocket(ws));
           teardown = typeof result === 'function' ? result : undefined;
         },
@@ -378,10 +385,18 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
               : ev.data instanceof ArrayBuffer
                 ? new TextDecoder().decode(ev.data)
                 : await (ev.data as Blob).text();
-          const msg = JSON.parse(raw); // sanctioned untrusted-JSON boundary
+          // Drop a malformed (non-JSON) frame instead of throwing out of the
+          // handler (mirrors the room engine's frame parsing).
+          let msg: unknown;
+          try {
+            msg = JSON.parse(raw);
+          } catch {
+            return;
+          }
           await socketDef!.message?.(makeSocket(ws), msg);
         },
         onClose(ev, ws) {
+          if (denied) return;
           teardown?.();
           socketDef!.close?.(makeSocket(ws), {
             code: ev.code,
@@ -389,8 +404,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
           });
         },
         onError(ev, ws) {
-          // Unwrap the real error if the event carries one (ErrorEvent shape);
-          // fall back to the event itself so no information is discarded.
+          if (denied) return;
           const err =
             ev && 'error' in ev ? (ev as { error: unknown }).error : ev;
           socketDef!.error?.(makeSocket(ws), err);
@@ -433,7 +447,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // Context, since the room callbacks run without a Context inside the DO)
       // and forward to the connector. The connector returns the upgrade Response
       // (the forwarded 101); return it directly, NOT through upgrade().
-      const data = roomDef.data?.(c) ?? {};
+      const data = (await roomDef.data?.(c)) ?? {};
       return connector({
         c,
         kind: 'forward',
@@ -454,7 +468,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     if (denied || !socketDef) {
       return connector({ c, kind: 'deny' });
     }
-    const data = socketDef.data?.(c) ?? {};
+    const data = socketDef.data ? await socketDef.data(c) : undefined;
     return connector({
       c,
       kind: 'socket-forward',

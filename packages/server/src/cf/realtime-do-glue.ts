@@ -214,7 +214,9 @@ export function makeDOConnState(sockets: WebSocket[]): DOConnState {
  * attachment is a RoomConnAttachment with no `kind`). Topic subscribers are
  * receive-only and never run the room engine.
  */
-export function isTopicSubscriber(attachment: unknown): boolean {
+export function isTopicSubscriber(
+  attachment: unknown
+): attachment is { kind: 'topic' } {
   return (
     typeof attachment === 'object' &&
     attachment !== null &&
@@ -237,7 +239,9 @@ export interface SocketConnAttachment {
 }
 
 /** True when a hibernation socket's attachment marks it as a plain duplex socket. */
-export function isSocketConnection(attachment: unknown): boolean {
+export function isSocketConnection(
+  attachment: unknown
+): attachment is SocketConnAttachment {
   return (
     typeof attachment === 'object' &&
     attachment !== null &&

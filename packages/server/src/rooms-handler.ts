@@ -257,7 +257,7 @@ export function createRoomWsEvents(
       // Data generic flows on the public RoomHandler type. Captured ONCE so the
       // same reference is returned on every `data(connId)` (onJoin and onMessage
       // share one bag; a mutation in onJoin is visible in onMessage).
-      const initialData = (roomDef.data?.(ctx) ?? {}) as Record<
+      const initialData = ((await roomDef.data?.(ctx)) ?? {}) as Record<
         string,
         unknown
       >;

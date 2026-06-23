@@ -11,6 +11,10 @@ import {
 export interface ServerSocket<Outgoing, Data> {
   send(message: Outgoing): void;
   close(code?: number, reason?: string): void;
+  /** Per-connection data seeded by the `data` factory at connect time. On Node
+   * the handler may mutate it across events. On Cloudflare it is the
+   * connect-time value (the DO is hibernatable); cross-event mutable state on
+   * Cloudflare belongs in external storage. */
   data: Data;
   /** The underlying runtime socket (escape hatch). */
   readonly raw: unknown;
@@ -21,12 +25,20 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
   use?: ReadonlyArray<Middleware>;
   /**
    * Edge factory run once at the upgrade with the live Hono Context; its
-   * result seeds `socket.data`. This is the ONLY place a socket handler sees a
-   * Context: on Cloudflare the connection runs inside a Durable Object with no
-   * live Context, so read cookies, headers, query, and middleware-set values
-   * here and stash them on `socket.data`. Runs on both Node and Cloudflare.
+   * result seeds `socket.data`. The factory may be async. This is the ONLY
+   * place a socket handler sees a Context: on Cloudflare the connection runs
+   * inside a Durable Object with no live Context, so read cookies, headers,
+   * query, and middleware-set values here. Runs on both Node and Cloudflare.
+   *
+   * `socket.data` is the connect-time seed: on Node the handler may mutate it
+   * across events (open/message/close see the same object). On Cloudflare each
+   * event gets the original factory value (the DO is hibernatable and does not
+   * share in-memory state across events), so per-connection state that must
+   * survive across messages on Cloudflare belongs in external storage (Durable
+   * Object storage, KV, etc.). Keep the factory result small: it rides a
+   * request header to the Durable Object, so large results can fail the upgrade.
    */
-  data?: (c: Context) => Data;
+  data?: (c: Context) => Data | Promise<Data>;
   /**
    * Per-connection setup. Receives only the socket (its `data` is the `data`
    * factory result). May return a teardown fn.

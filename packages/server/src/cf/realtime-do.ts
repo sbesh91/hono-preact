@@ -200,7 +200,13 @@ export class HonoPreactRealtimeDO extends DurableObject {
 
       // open's teardown return cannot survive a hibernation cycle, so it is not
       // captured here; `close` is the portable cleanup hook (see define-socket).
-      await def.open?.(makeServerSocketHandle(server, data));
+      // Wrap open() so a throw does not break the handshake (matching Node, where
+      // a throw in async onOpen is swallowed and the connection stays open).
+      try {
+        await def.open?.(makeServerSocketHandle(server, data));
+      } catch (err) {
+        console.error('hono-preact: socket open() threw', err);
+      }
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -264,19 +270,20 @@ export class HonoPreactRealtimeDO extends DurableObject {
     const attachment = ws.deserializeAttachment();
     if (isTopicSubscriber(attachment)) return;
     if (isSocketConnection(attachment)) {
-      // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
-      // untrusted-shaped hibernation boundary.
-      const att = attachment as SocketConnAttachment;
+      const att = attachment;
       const def = await this.getSocketDef(att.moduleKey, att.name);
       const raw =
         typeof message === 'string'
           ? message
           : new TextDecoder().decode(message);
-      // Sanctioned untrusted-wire JSON.parse of the client frame.
-      await def.message?.(
-        makeServerSocketHandle(ws, att.data),
-        JSON.parse(raw)
-      );
+      // Drop a malformed (non-JSON) frame instead of throwing out of the handler.
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      await def.message?.(makeServerSocketHandle(ws, att.data), parsed);
       return;
     }
     // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
@@ -300,7 +307,7 @@ export class HonoPreactRealtimeDO extends DurableObject {
     const attachment = ws.deserializeAttachment();
     if (isTopicSubscriber(attachment)) return;
     if (isSocketConnection(attachment)) {
-      const att = attachment as SocketConnAttachment;
+      const att = attachment;
       const def = await this.getSocketDef(att.moduleKey, att.name);
       def.close?.(makeServerSocketHandle(ws, att.data), { code, reason });
       return;
@@ -329,7 +336,7 @@ export class HonoPreactRealtimeDO extends DurableObject {
     const attachment = ws.deserializeAttachment();
     if (isTopicSubscriber(attachment)) return;
     if (isSocketConnection(attachment)) {
-      const att = attachment as SocketConnAttachment;
+      const att = attachment;
       const def = await this.getSocketDef(att.moduleKey, att.name);
       def.error?.(makeServerSocketHandle(ws, att.data), err);
       return;

@@ -49,12 +49,13 @@ export interface RoomHandler<Incoming, Outgoing, State, Data, Params> {
   presence?: () => State;
   /**
    * Runs at the edge (the worker) with the live Hono Context, on both Node and
-   * Cloudflare. Its serializable result seeds `conn.data`, which is then
-   * available in onJoin and onMessage. Use it to capture request-derived data
-   * (the authenticated user, a header) since the room callbacks run without a
-   * live Context (inside a Durable Object on Cloudflare).
+   * Cloudflare. The factory may be async. Its serializable result seeds
+   * `conn.data`, which is then available in onJoin and onMessage. Use it to
+   * capture request-derived data (the authenticated user, a header) since the
+   * room callbacks run without a live Context (inside a Durable Object on
+   * Cloudflare).
    */
-  data?: (c: Context) => Data;
+  data?: (c: Context) => Data | Promise<Data>;
   /**
    * Per-connection setup. May return a teardown fn called on leave.
    *

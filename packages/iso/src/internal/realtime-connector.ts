@@ -24,7 +24,7 @@ import type { Context } from 'hono';
 // handshake without any DO contact.
 
 /** Per-connection fields shared by every connector invocation. */
-interface RoomConnectBase {
+interface RealtimeConnectBase {
   c: Context;
 }
 
@@ -35,7 +35,7 @@ interface RoomConnectBase {
  * the edge with the live Context, since on Cloudflare the room callbacks run
  * inside a Durable Object with no live Context).
  */
-export interface RoomForwardContext extends RoomConnectBase {
+export interface RoomForwardContext extends RealtimeConnectBase {
   kind: 'forward';
   topic: string;
   moduleKey: string;
@@ -51,7 +51,7 @@ export interface RoomForwardContext extends RoomConnectBase {
  * edge with the live Context, since the socket callbacks run inside the DO with
  * no live Context).
  */
-export interface SocketForwardContext extends RoomConnectBase {
+export interface SocketForwardContext extends RealtimeConnectBase {
   kind: 'socket-forward';
   moduleKey: string;
   name: string;
@@ -63,7 +63,7 @@ export interface SocketForwardContext extends RoomConnectBase {
  * transport-native deny close (WS_DENY_CODE) without contacting the runtime, so
  * a denied connection never reaches a Durable Object.
  */
-export interface DenyContext extends RoomConnectBase {
+export interface DenyContext extends RealtimeConnectBase {
   kind: 'deny';
 }
 
@@ -77,11 +77,11 @@ export type RealtimeConnectContext =
   | DenyContext;
 
 /**
- * A realtime connector handles a room upgrade somewhere other than the in-worker
- * Node runtime (on Cloudflare: a Durable Object). For a `forward` it returns the
- * upgrade Response (the forwarded `101`); for a `deny` it returns a transport-
- * native upgrade-and-close Response (the client's socket closes WS_DENY_CODE).
- * socketsHandler returns the Response directly.
+ * A realtime connector handles a room or socket upgrade off the in-worker Node
+ * runtime (on Cloudflare: a Durable Object). For a `forward` or `socket-forward`
+ * it returns the upgrade Response (the forwarded `101`); for a `deny` it returns
+ * a transport-native upgrade-and-close Response (the client's socket closes
+ * WS_DENY_CODE). socketsHandler returns the Response directly.
  */
 export type RealtimeConnector = (
   ctx: RealtimeConnectContext

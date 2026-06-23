@@ -80,7 +80,22 @@ function _useSocketMethodProbe() {
   });
 }
 
+// Probe: an async data factory typechecks (data?: (c: Context) => Data | Promise<Data>).
+function _asyncDataProbe() {
+  type In = { kind: 'ping' } | { kind: 'say'; text: string };
+  type Out = { kind: 'pong'; at: number } | { kind: 'said'; text: string };
+  const refAsync = defineSocket<In, Out, { joinedAt: number }>({
+    data: async (c) => {
+      expectTypeOf(c).not.toBeNever();
+      return { joinedAt: 1 };
+    },
+  });
+  expectTypeOf(refAsync).toEqualTypeOf<SocketRef<In, Out>>();
+  void refAsync;
+}
+
 void _probes;
 void _routeSocketProbe;
 void _openArityProbe;
 void _useSocketMethodProbe;
+void _asyncDataProbe;
