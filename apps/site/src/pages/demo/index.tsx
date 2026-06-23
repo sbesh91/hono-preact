@@ -31,6 +31,12 @@ const DemoIndex: FunctionComponent = () => (
       >
         Live cursors (Durable Object)
       </a>
+      <a
+        href="/demo/live-tally"
+        class="mt-2 block w-full rounded-lg border border-border bg-surface px-4 py-2 text-center text-sm font-semibold text-foreground hover:bg-surface-subtle"
+      >
+        Live tally (cross-isolate publish)
+      </a>
       <footer class="mt-6 border-t border-border pt-4 text-xs text-muted">
         Behind the scenes:{' '}
         <a href="/docs/loaders" class="underline hover:text-foreground">
