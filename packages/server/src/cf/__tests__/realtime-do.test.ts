@@ -3,10 +3,14 @@ import type { Context } from 'hono';
 // Import from the platform-free glue module, NOT realtime-do.ts: the class file
 // imports `cloudflare:workers`, which does not resolve in plain vitest (Node).
 // The glue holds the connector + the DOConnState adapter (testable without
-// workerd); the class itself is covered by the Task 8 workerd integration test.
+// workerd); the class itself is covered end-to-end by
+// packages/vite/src/__tests__/cf-room.test.ts (a real @cloudflare/vite-plugin
+// workerd dev server with two ws clients).
 import {
   makeCfForwardConnector,
+  makeCfRoomTransport,
   makeDOConnState,
+  socketsForCloseEvent,
   isTopicSubscriber,
   fanOutToTopicSubscribers,
   isSocketConnection,
@@ -63,8 +67,9 @@ function makeContext(raw: Request): Context {
 
 // Forward-context fields (the connector's forward path). The `kind` discriminant
 // is included so the spread builds a complete RoomForwardContext when paired with
-// `c`; the deny path carries no fields beyond `c` and is exercised in the workerd
-// integration test (the deny close needs WebSocketPair, a workerd-only global).
+// `c`; the deny path carries no fields beyond `c` and is exercised in
+// packages/vite/src/__tests__/cf-room.test.ts (the deny close needs
+// WebSocketPair, a workerd-only global).
 function baseCtx(
   overrides: Partial<Omit<RoomForwardContext, 'c'>> = {}
 ): Omit<RoomForwardContext, 'c'> {
@@ -103,10 +108,12 @@ describe('makeCfForwardConnector', () => {
 
     expect(records).toHaveLength(1);
     const fwd = records[0];
-    // One DO per topic: the stub is obtained for idFromName(topic).
-    expect(fwd.id).toBe('room/abc');
+    // One DO per topic, on the ROOM-prefixed id namespace so a room and a
+    // live-loader topic that reuse the same channel key never co-reside.
+    expect(fwd.id).toBe('room:room/abc');
 
-    // The x-hp-* headers carry the resolved room context.
+    // The x-hp-* headers carry the resolved room context (topic stays bare; the
+    // prefix is only on the DO id derivation).
     expect(fwd.request.headers.get('x-hp-topic')).toBe('room/abc');
     expect(fwd.request.headers.get('x-hp-module')).toBe(
       'src/pages/board.server'
@@ -323,6 +330,49 @@ describe('makeDOConnState', () => {
       { id: 'b', state: { name: 'bob' } },
     ]);
   });
+
+  // If a channel key is reused across a room AND a live-loader topic, both can
+  // land on one DO. The room store must view ONLY room connections, or a topic
+  // subscriber becomes a phantom { id: undefined } roster member and receives
+  // leaked room broadcasts.
+  it('excludes non-room sockets (topic subscribers) from the room store', () => {
+    const room = makeFakeWs(attachment('r1', { presence: { x: 1 } }));
+    const topic = {
+      sent: [] as string[],
+      send(d: string) {
+        this.sent.push(d);
+      },
+      serializeAttachment: () => {},
+      deserializeAttachment: () => ({ kind: 'topic' }),
+    };
+    const store = makeDOConnState([room, topic] as never);
+
+    // Only the room connection is visible; no phantom undefined-id member.
+    expect(store.all().map((c) => c.id)).toEqual(['r1']);
+    expect(store.get('r1')).toBeDefined();
+  });
+
+  it('a sender-excluded room broadcast does not leak to a co-located topic subscriber', () => {
+    const sender = makeFakeWs(attachment('r1'));
+    const other = makeFakeWs(attachment('r2'));
+    const topicSent: string[] = [];
+    const topic = {
+      send: (d: string) => topicSent.push(d),
+      serializeAttachment: () => {},
+      deserializeAttachment: () => ({ kind: 'topic' }),
+    };
+    const store = makeDOConnState([sender, other, topic] as never);
+    const t = makeCfRoomTransport('r1', store);
+
+    // The common case: a room message is broadcast excluding the sender. The
+    // topic subscriber's undefined id never equals the excluded sender id, so
+    // without a kind filter it receives the leaked room frame.
+    t.broadcast({ t: 'msg', from: 'r1', msg: 'hi' }, 'r1');
+
+    expect(other.sent).toHaveLength(1); // real member receives
+    expect(sender.sent).toHaveLength(0); // sender excluded
+    expect(topicSent).toEqual([]); // topic subscriber NOT woken by room traffic
+  });
 });
 
 describe('isTopicSubscriber', () => {
@@ -452,5 +502,112 @@ describe('makeCfForwardConnector: socket-forward', () => {
         data: { big: 'x'.repeat(7 * 1024) },
       })
     ).rejects.toThrow(/forward limit/);
+  });
+
+  it('overwrites a client-supplied x-hp-kind with "socket" (smuggle defense)', async () => {
+    for (const smuggled of ['topic', 'publish', 'room'] as const) {
+      const { ns, calls } = fakeNamespace();
+      const connector = makeCfForwardConnector(() => ns);
+      const c = {
+        req: {
+          raw: new Request('https://x/__sockets?m=pages/chat&s=echo', {
+            headers: { 'x-hp-kind': smuggled },
+          }),
+        },
+      } as never;
+      await connector({
+        c,
+        kind: 'socket-forward',
+        moduleKey: 'pages/chat',
+        name: 'echo',
+        data: undefined,
+      });
+      const fwd = calls[0]!.fetched[0]!;
+      expect(
+        fwd.headers.get('x-hp-kind'),
+        `smuggled x-hp-kind: ${smuggled} must be overwritten to 'socket'`
+      ).toBe('socket');
+    }
+  });
+
+  it('omits x-hp-data when the socket has no data factory (undefined -> absent, Node parity)', async () => {
+    const { ns, calls } = fakeNamespace();
+    const connector = makeCfForwardConnector(() => ns);
+    const c = { req: { raw: new Request('https://x/__sockets') } } as never;
+    await connector({
+      c,
+      kind: 'socket-forward',
+      moduleKey: 'm',
+      name: 's',
+      data: undefined,
+    });
+    const fwd = calls[0]!.fetched[0]!;
+    // Absent header -> the DO resolves socket.data to undefined, matching Node.
+    expect(fwd.headers.has('x-hp-data')).toBe(false);
+  });
+
+  it('stamps x-hp-data as "null" for an intentional null factory result', async () => {
+    const { ns, calls } = fakeNamespace();
+    const connector = makeCfForwardConnector(() => ns);
+    const c = { req: { raw: new Request('https://x/__sockets') } } as never;
+    await connector({
+      c,
+      kind: 'socket-forward',
+      moduleKey: 'm',
+      name: 's',
+      data: null,
+    });
+    const fwd = calls[0]!.fetched[0]!;
+    expect(fwd.headers.get('x-hp-data')).toBe('null');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Close-time store membership: the runtime evicts the closing socket from
+// getWebSockets() before webSocketClose runs, so the close store must
+// re-include it (Node parity) so onLeave's conn still resolves its data bag and
+// the leaver appears in the roster. This pins the decision #storeWith relies on.
+// ---------------------------------------------------------------------------
+
+describe('socketsForCloseEvent', () => {
+  it('re-includes the closing socket when the runtime already evicted it', () => {
+    const a = { id: 'a' };
+    const b = { id: 'b' };
+    // The closing socket `b` is NOT in the live set (already evicted).
+    const result = socketsForCloseEvent([a], b);
+    expect(result).toContain(b);
+    expect(result).toHaveLength(2);
+  });
+
+  it('does not duplicate the closing socket when it is still live', () => {
+    const a = { id: 'a' };
+    const b = { id: 'b' };
+    // On an error the socket is usually still present; it must not be listed
+    // twice (else a broadcast double-sends to it).
+    const result = socketsForCloseEvent([a, b], b);
+    expect(result.filter((s) => s === b)).toHaveLength(1);
+    expect(result).toHaveLength(2);
+  });
+
+  it('makes the evicted closing socket resolvable in the transport store/roster', () => {
+    // End-to-end at the glue level: with the closing socket re-included, the
+    // transport resolves its data and lists it in the roster, which is what
+    // onLeave reads.
+    const leaver = {
+      deserializeAttachment: () => ({
+        connId: 'leaver',
+        moduleKey: 'm',
+        name: 'r',
+        params: {},
+        data: { uid: 7 },
+        presence: { name: 'zoe' },
+      }),
+      serializeAttachment: () => {},
+      send: () => {},
+    } as unknown as WebSocket;
+    // Live set is empty (the leaver was evicted before close fired).
+    const store = makeDOConnState(socketsForCloseEvent([], leaver));
+    expect(store.get('leaver')?.getState().data).toEqual({ uid: 7 });
+    expect(store.all().map((c) => c.id)).toContain('leaver');
   });
 });

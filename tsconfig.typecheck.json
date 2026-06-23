@@ -5,6 +5,12 @@
   },
   "include": [
     "packages/**/src/**/__tests__/**/*.test-d.ts",
-    "packages/**/src/**/__tests__/**/*.test-d.tsx"
+    "packages/**/src/**/__tests__/**/*.test-d.tsx",
+    // Ambient `import.meta.env` declarations (mirroring vite/client) so source
+    // pulled into the type-test graph that reads `import.meta.env.*` typechecks
+    // without depending on vite/client, which is unresolvable from this root
+    // config. Each package declares the same `ImportMetaEnv` subset, so they
+    // merge cleanly.
+    "packages/*/src/types.d.ts"
   ]
 }

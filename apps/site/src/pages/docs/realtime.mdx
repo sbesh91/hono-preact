@@ -129,7 +129,7 @@ export const serverLoaders = {
 
 ## Cross-connection fan-out
 
-Live loaders are server-to-client over SSE. Publishing to a topic fans out to every live loader subscribed to that topic within the same server process. On Node, that covers all connections on the same instance. On Cloudflare Workers, each request runs in an isolated Worker instance, so in-process pub/sub only reaches the publishing connection. Cross-connection fan-out on Cloudflare requires a shared backend such as a Durable Object that holds the bus; support for this will be added in a later release.
+Live loaders are server-to-client over SSE. Publishing to a topic fans out to every live loader subscribed to that topic. On Node, the in-process bus reaches all connections on the same instance. On Cloudflare Workers, each request runs in an isolated Worker instance, so fan-out is backed by a Durable Object: a subscribe holds a Worker-to-DO socket and `publish()` POSTs to the topic's DO, which fans the event out to every subscriber across isolates. This uses the same `HONO_PREACT_REALTIME` Durable Object binding rooms use; see [Cloudflare setup](/docs/rooms#cloudflare-setup) for the binding. Note `publish()` syncs the event, not your state: subscribers re-run their `load()` to read the current shared state.
 
 ## API reference
 

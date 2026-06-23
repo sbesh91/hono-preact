@@ -118,6 +118,14 @@ export function useWsLifecycle(config: WsLifecycleConfig): WsLifecycle {
     } else {
       if (queueRef.current.length < QUEUE_LIMIT) {
         queueRef.current.push(encoded);
+      } else if (import.meta.env.DEV) {
+        // Backpressure cap reached while not open: surface the drop instead of
+        // swallowing it, so a stalled connection is debuggable. Compiled out of
+        // production builds.
+        console.warn(
+          `hono-preact: WebSocket send queue full (${QUEUE_LIMIT}); ` +
+            'dropping message while the socket is not open.'
+        );
       }
     }
   }, []);
@@ -245,6 +253,14 @@ export function useWsLifecycle(config: WsLifecycleConfig): WsLifecycle {
         socketRef.current.close();
         socketRef.current = null;
       }
+      // The connection (or a pending reconnect) was torn down by an effect
+      // re-run (enabled/ready/deps change) or unmount. Report it honestly so a
+      // consumer gating on `status === 'open'` does not act on a dead socket.
+      // On a genuine reconnect the immediately-following connect() resets to
+      // 'connecting' in the same commit, so no 'closed' frame is painted. The
+      // disabled-from-the-start case never registers this cleanup (the effect
+      // early-returns above), so it keeps its initial 'connecting'.
+      setStatus('closed');
     };
     // Only reconnect when the connection identity (deps) or enabled/ready
     // change. Callback/config changes are handled via configRef.

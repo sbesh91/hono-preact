@@ -255,8 +255,12 @@ export function createRoomWsEvents(
       // result seeds the per-connection bag (unknown-typed on the internal
       // AnyRoomDef seam) with a user-defined serializable value; the user's own
       // Data generic flows on the public RoomHandler type. Captured ONCE so the
-      // same reference is returned on every `data(connId)` (onJoin and onMessage
-      // share one bag; a mutation in onJoin is visible in onMessage).
+      // same bag reference is returned on every `data(connId)` for the life of
+      // this Node process. That single-reference behavior is a Node transport
+      // detail, NOT a cross-runtime contract: on Cloudflare each event reads a
+      // freshly deserialized attachment, so an in-place mutation to conn.data is
+      // not guaranteed to persist across events. Treat conn.data as edge-seeded
+      // read-only metadata; use setPresence for state that evolves.
       const initialData = ((await roomDef.data?.(ctx)) ?? {}) as Record<
         string,
         unknown

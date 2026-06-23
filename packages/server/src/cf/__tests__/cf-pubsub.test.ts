@@ -78,11 +78,12 @@ describe('makeCfPubSubBackend', () => {
     await Promise.resolve(); // let the async upgrade resolve
 
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]!.topic).toBe('counter');
+    // The DO id is on the TOPIC-prefixed namespace, disjoint from rooms.
+    expect(fetches[0]!.topic).toBe('topic:counter');
     const headers = fetches[0]!.init!.headers as Record<string, string>;
     expect(headers['x-hp-kind']).toBe('topic');
     expect(headers['Upgrade']).toBe('websocket');
-    const ws = wsByTopic.get('counter')!;
+    const ws = wsByTopic.get('topic:counter')!;
     expect(ws.accepted).toBe(true);
 
     ws._emit(JSON.stringify({ count: 7 }));
@@ -103,7 +104,7 @@ describe('makeCfPubSubBackend', () => {
     await Promise.resolve();
 
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]!.topic).toBe('counter');
+    expect(fetches[0]!.topic).toBe('topic:counter');
     expect(fetches[0]!.init!.method).toBe('POST');
     expect(
       (fetches[0]!.init!.headers as Record<string, string>)['x-hp-kind']
@@ -137,7 +138,7 @@ describe('makeCfPubSubBackend', () => {
     unsub(); // before the async upgrade resolves
     await new Promise<void>((r) => setTimeout(r));
 
-    const ws = wsByTopic.get('counter')!;
+    const ws = wsByTopic.get('topic:counter')!;
     // The DO accepts the server end synchronously (before the 101); closing this
     // end evicts it from getWebSockets('topic') instead of leaking it for the
     // DO's lifetime. Before the fix the closed branch returned without closing.
@@ -152,7 +153,7 @@ describe('makeCfPubSubBackend', () => {
 
     backend.subscribe('counter', () => {}, onError);
     await new Promise<void>((r) => setTimeout(r)); // let the upgrade open
-    const ws = wsByTopic.get('counter')!;
+    const ws = wsByTopic.get('topic:counter')!;
     expect(ws.accepted).toBe(true);
 
     ws._close();
@@ -170,7 +171,7 @@ describe('makeCfPubSubBackend', () => {
     unsub();
     await new Promise<void>((r) => setTimeout(r));
     // The unsub closed the socket; that close event must not look like a failure.
-    wsByTopic.get('counter')!._close();
+    wsByTopic.get('topic:counter')!._close();
     expect(onError).not.toHaveBeenCalled();
   });
 

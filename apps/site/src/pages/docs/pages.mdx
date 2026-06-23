@@ -58,7 +58,7 @@ export default definePage(AboutView);
 }
 ```
 
-The `server` field declares the sibling `.server.ts` exists; `routeServerModules(routes)` in `server.tsx` wires it into the loader/action handlers automatically.
+The `server` field declares the sibling `.server.ts` exists; the generated `server.tsx` (via `createServerEntry`) wires it into the loader and action handlers automatically.
 
 ### Step 3: Link to it
 

@@ -13,6 +13,7 @@ import {
 } from './toast-store.js';
 import { ToasterContext } from './context.js';
 import { ToastAnnouncer, useAnnouncer, announcementText } from './announcer.js';
+import { pruneMapToIds } from './prune-map.js';
 
 // Stable default hotkey to prevent useEffect re-runs on every render.
 const DEFAULT_HOTKEY = ['altKey', 'KeyT'];
@@ -126,9 +127,7 @@ export function Toaster(props: ToasterProps): VNode {
     }
     // Prune ids that are no longer in the store so a recycled id re-announces.
     const live = new Set(toasts.map((t) => t.id));
-    for (const id of announced.current.keys()) {
-      if (!live.has(id)) announced.current.delete(id);
-    }
+    pruneMapToIds(announced.current, live);
   }, [toasts, announce]);
 
   const orderedIds = useMemo(() => toasts.map((t) => t.id), [toasts]);
@@ -142,6 +141,12 @@ export function Toaster(props: ToasterProps): VNode {
     },
     [heights]
   );
+  // Keep the height registry bounded: drop entries for toasts that have left
+  // the store (mirrors the `announced` prune above). Purely a memory concern
+  // (stale entries are never read for absent toasts), so no re-render.
+  useEffect(() => {
+    pruneMapToIds(heights, new Set(orderedIds));
+  }, [orderedIds, heights]);
 
   const ctx = useMemo(
     () => ({

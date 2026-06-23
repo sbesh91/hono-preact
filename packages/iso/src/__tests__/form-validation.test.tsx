@@ -9,7 +9,7 @@ import {
 } from '@testing-library/preact';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { Form } from '../form.js';
-import { FieldError } from '../use-field-errors.js';
+import { FieldError, useFieldErrorProps } from '../use-field-errors.js';
 import { defineAction } from '../action.js';
 import { clearLastActionResult } from '../internal/action-result-store.js';
 import { VALIDATION_ISSUES_KEY } from '../internal/contract.js';
@@ -104,6 +104,46 @@ afterEach(() => {
 });
 
 describe('Form client pre-validation', () => {
+  it('scopes FieldError ids per Form and wires inputs via useFieldErrorProps', async () => {
+    function TitleField() {
+      const props = useFieldErrorProps('title');
+      return <input name="title" {...props} />;
+    }
+    function OneForm() {
+      return (
+        <Form action={create} schema={schema}>
+          <TitleField />
+          <FieldError name="title" />
+          <button type="submit">Save</button>
+        </Form>
+      );
+    }
+    const { container } = render(
+      <div>
+        <OneForm />
+        <OneForm />
+      </div>
+    );
+    const forms = container.querySelectorAll('form');
+    for (const f of forms) {
+      await act(async () => {
+        fireEvent.submit(f);
+      });
+    }
+
+    const errs = container.querySelectorAll('[data-field-error="title"]');
+    const inputs = container.querySelectorAll('input[name="title"]');
+    expect(errs.length).toBe(2);
+    // Each error element carries a non-empty id...
+    expect(errs[0]!.id.length).toBeGreaterThan(0);
+    // ...that is distinct between the two forms (useId-scoped, no collision)...
+    expect(errs[0]!.id).not.toBe(errs[1]!.id);
+    // ...and each input describes exactly its own form's error element.
+    expect(inputs[0]!.getAttribute('aria-describedby')).toBe(errs[0]!.id);
+    expect(inputs[1]!.getAttribute('aria-describedby')).toBe(errs[1]!.id);
+    expect(inputs[0]!.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('blocks the POST and shows field errors when invalid', async () => {
     const fetchSpy = vi.spyOn(global, 'fetch');
     const { getByText, container } = render(

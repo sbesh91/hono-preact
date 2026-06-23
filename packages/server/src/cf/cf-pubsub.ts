@@ -14,6 +14,7 @@
 // natively on Node.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { PubSubBackend } from '@hono-preact/iso/internal/runtime';
+import { TOPIC_DO_PREFIX } from './realtime-do-glue.js';
 
 /**
  * The per-request worker runtime the CF backend needs: the binding-carrying
@@ -98,7 +99,7 @@ export function makeCfPubSubBackend(
       // must come from the SAME request runtime.
       const rt = getRuntime();
       const ns = resolveNamespace(rt);
-      const stub = ns.get(ns.idFromName(topic));
+      const stub = ns.get(ns.idFromName(TOPIC_DO_PREFIX + topic));
       const done = stub
         .fetch(PUBLISH_URL, {
           method: 'POST',
@@ -117,7 +118,7 @@ export function makeCfPubSubBackend(
 
     subscribe(topic, onMessage, onError) {
       const ns = resolveNamespace(getRuntime());
-      const stub = ns.get(ns.idFromName(topic));
+      const stub = ns.get(ns.idFromName(TOPIC_DO_PREFIX + topic));
       let socket: WebSocket | null = null;
       let closed = false;
 

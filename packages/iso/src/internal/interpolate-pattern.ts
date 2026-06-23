@@ -15,9 +15,13 @@ export function interpolatePattern(
       const m = /^:([A-Za-z0-9_]+)[?*+]?$/.exec(seg);
       if (!m) return seg; // static segment, kept verbatim
       const value = values[m[1]];
-      // Absent or empty -> drop the segment. A non-optional param is required by
-      // the caller's type, so a missing value here can only be an optional one;
-      // an empty string is treated the same to avoid emitting `//`.
+      // Absent or empty -> drop the segment (avoids emitting `//`). This does
+      // NOT enforce that a required param is present; callers that must reject a
+      // missing required value do so themselves: the strict `buildPath` overload
+      // enforces required keys at the type level, and `rooms-handler` re-checks
+      // required channel segments before trusting the topic. The loose-signature
+      // callers (build-path impl, define-channel) accept that an absent/empty
+      // required value silently truncates the path.
       return !value ? null : encodeURIComponent(value);
     })
     .filter((seg): seg is string => seg !== null)

@@ -13,12 +13,32 @@ export const serverSockets = {
   // Echoes each client message back on the SAME connection, tagged with the
   // edge-captured `who`. `who` proves the data factory ran at the edge and rode
   // to the DO; the echo proves the full duplex round-trip through the DO. One
-  // DO per connection, no fan-out.
+  // DO per connection, no fan-out. The close/error hooks exercise the DO's
+  // webSocketClose/webSocketError socket branch: they must run (not route
+  // through the room engine, not throw) when the client disconnects.
   echo: defineSocket<Incoming, Outgoing, { who: string }>({
     data: (c) => ({ who: c.req.query('u') ?? 'anon' }),
     message(socket, msg) {
       if (msg.kind === 'say') {
         socket.send({ kind: 'echo', text: msg.text, who: socket.data.who });
+      }
+    },
+    close() {},
+    error() {},
+  }),
+  // No data factory: socket.data must be `undefined` on Cloudflare, matching
+  // Node (the connector omits x-hp-data so the DO never coerces it to null).
+  probe: defineSocket<
+    Incoming,
+    { kind: 'probe'; dataIsUndefined: boolean },
+    undefined
+  >({
+    message(socket, msg) {
+      if (msg.kind === 'say') {
+        socket.send({
+          kind: 'probe',
+          dataIsUndefined: socket.data === undefined,
+        });
       }
     },
   }),

@@ -27,6 +27,15 @@ export { makeServerSocketHandle } from '../server-socket-handle.js';
 /** Connections whose forwarded context exceeds this byte budget are denied. */
 export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
 
+// DO id namespace prefixes that keep rooms and pub/sub topics in DISJOINT
+// Durable Object instances even when a channel key is reused across both:
+// idFromName(ROOM_DO_PREFIX + key) for a room vs idFromName(TOPIC_DO_PREFIX +
+// key) for a live-loader topic/publish. Without this, a reused key would
+// co-locate a room and a topic in one DO (kind-filtered in makeDOConnState as a
+// second line of defense, but kept structurally disjoint here).
+export const ROOM_DO_PREFIX = 'room:';
+export const TOPIC_DO_PREFIX = 'topic:';
+
 // ---------------------------------------------------------------------------
 // The worker-side forward connector
 // ---------------------------------------------------------------------------
@@ -90,8 +99,16 @@ export function makeCfForwardConnector(
             'Durable Object binding. Add it to wrangler.jsonc (see the WebSockets docs).'
         );
       }
-      const dataJson = JSON.stringify(data ?? null);
-      if (byteLength(dataJson) > MAX_FORWARD_HEADER_BYTES) {
+      // Only serialize when a data factory ran. Leaving x-hp-data ABSENT for a
+      // factory-less socket lets the DO resolve socket.data to `undefined`
+      // (Node parity), while an intentional `null` factory result rides as the
+      // string 'null'. Stamping `?? null` unconditionally would make a
+      // factory-less socket see `null` on CF but `undefined` on Node.
+      const dataJson = data === undefined ? undefined : JSON.stringify(data);
+      if (
+        dataJson !== undefined &&
+        byteLength(dataJson) > MAX_FORWARD_HEADER_BYTES
+      ) {
         throw new Error(
           'hono-preact: socket connection data exceeds the ' +
             `${MAX_FORWARD_HEADER_BYTES}-byte forward limit. Keep the socket data ` +
@@ -103,10 +120,14 @@ export function makeCfForwardConnector(
       const fwd = new Request(c.req.raw, {
         headers: new Headers(c.req.raw.headers),
       });
+      // set() (not just a stamp) is the deliberate smuggle defense: it
+      // overwrites any client-supplied x-hp-kind so the server controls DO
+      // dispatch (mirrors the room branch's explicit delete). A fresh
+      // newUniqueId() DO also makes a stray kind inert, but do not rely on that.
       fwd.headers.set('x-hp-kind', 'socket');
       fwd.headers.set('x-hp-module', moduleKey);
       fwd.headers.set('x-hp-name', name);
-      fwd.headers.set('x-hp-data', dataJson);
+      if (dataJson !== undefined) fwd.headers.set('x-hp-data', dataJson);
       return stub.fetch(fwd);
     }
 
@@ -135,7 +156,7 @@ export function makeCfForwardConnector(
       );
     }
 
-    const stub = ns.get(ns.idFromName(topic));
+    const stub = ns.get(ns.idFromName(ROOM_DO_PREFIX + topic));
 
     // Rebuild the request with a cloned, mutable Headers (inbound headers are
     // immutable in workerd). The body/method/upgrade intent carry over from the
@@ -148,12 +169,12 @@ export function makeCfForwardConnector(
     fwd.headers.set('x-hp-name', name);
     fwd.headers.set('x-hp-params', paramsJson);
     fwd.headers.set('x-hp-data', dataJson);
-    // The forward connector handles ONLY room upgrades; the DO's pub/sub topic and
-    // publish kinds are invoked separately by makeCfPubSubBackend, never here. Strip
-    // any client-supplied x-hp-kind so a room-authorized client cannot smuggle a
-    // header to divert its upgrade into the topic/publish branch on the room's DO.
-    // The server, not the client, controls DO dispatch (the DO defaults absent to
-    // 'room').
+    // This room branch forwards room upgrades; the socket branch above handles
+    // socket-forward, and the DO's pub/sub topic/publish kinds are invoked
+    // separately by makeCfPubSubBackend, never here. Strip any client-supplied
+    // x-hp-kind so a room-authorized client cannot smuggle a header to divert its
+    // upgrade into the topic/publish branch on the room's DO. The server, not the
+    // client, controls DO dispatch (the DO defaults absent to 'room').
     fwd.headers.delete('x-hp-kind');
 
     // `stub.fetch` returns `Promise<Response>` (the forwarded 101 upgrade); the
@@ -189,16 +210,27 @@ export function makeDOConnState(sockets: WebSocket[]): DOConnState {
     // the DO's fetch(); read it back at that one boundary.
     ws.deserializeAttachment() as RoomConnAttachment;
 
+  // A DO instance can host more than room connections: a reused channel key can
+  // co-locate live-loader topic subscribers ({ kind: 'topic' }) or plain
+  // sockets ({ kind: 'socket' }) on the same DO. The room store must view ONLY
+  // room connections, or a non-room socket surfaces as a phantom
+  // { id: undefined } roster member and receives leaked room broadcasts. Kind
+  // is immutable for a connection's lifetime, so filter once at construction.
+  const roomSockets = sockets.filter((ws) => {
+    const att: unknown = ws.deserializeAttachment();
+    return !isTopicSubscriber(att) && !isSocketConnection(att);
+  });
+
   return {
     all() {
-      return sockets.map((ws) => ({
+      return roomSockets.map((ws) => ({
         id: attachmentOf(ws).connId,
         send: (data: string) => ws.send(data),
         getState: () => attachmentOf(ws),
       }));
     },
     get(connId) {
-      const ws = sockets.find((s) => attachmentOf(s).connId === connId);
+      const ws = roomSockets.find((s) => attachmentOf(s).connId === connId);
       if (!ws) return undefined;
       return {
         send: (data: string) => ws.send(data),
@@ -269,6 +301,21 @@ export function fanOutToTopicSubscribers(
       console.error('hono-preact: pub/sub fan-out send failed', err);
     }
   }
+}
+
+/**
+ * The socket list a close/error handler builds its store from. workerd evicts
+ * the closing socket from `getWebSockets()` before `webSocketClose` runs, so
+ * re-include it (Node parity: `onLeave`/`onError` still resolve the leaver's
+ * `data` off its attachment, and the leaver appears in the roster). The
+ * `includes` guard avoids listing it twice (on an error it is usually still
+ * live), so a broadcast never double-sends to it.
+ *
+ * Pure helper, generic over the socket type, so the re-inclusion decision is
+ * unit-testable without workerd (the DO's `#storeWith` just calls it).
+ */
+export function socketsForCloseEvent<S>(live: S[], ws: S): S[] {
+  return live.includes(ws) ? live : [...live, ws];
 }
 
 /** Parse an `x-hp-*` JSON header; missing or malformed yields `null`. */

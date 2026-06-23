@@ -2,8 +2,12 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { h, type VNode } from 'preact';
 import { cleanup, render } from '@testing-library/preact';
-import { FieldError } from '../use-field-errors.js';
-import { FieldErrorsContext } from '../internal/field-errors-context.js';
+import { FieldError, useFieldErrorProps } from '../use-field-errors.js';
+import {
+  FieldErrorsContext,
+  FieldErrorPrefixContext,
+  fieldErrorId,
+} from '../internal/field-errors-context.js';
 
 afterEach(() => {
   cleanup();
@@ -11,6 +15,20 @@ afterEach(() => {
 
 function withErrors(errors: Record<string, string[]>, node: VNode) {
   return render(h(FieldErrorsContext.Provider, { value: errors }, node));
+}
+
+function withCtx(
+  errors: Record<string, string[]>,
+  prefix: string,
+  node: VNode
+) {
+  return render(
+    h(
+      FieldErrorPrefixContext.Provider,
+      { value: prefix },
+      h(FieldErrorsContext.Provider, { value: errors }, node)
+    )
+  );
 }
 
 describe('FieldError', () => {
@@ -78,5 +96,53 @@ describe('FieldError', () => {
     expect(container.querySelector('[data-field-error=""]')?.textContent).toBe(
       'Form-level problem'
     );
+  });
+});
+
+describe('FieldError / useFieldErrorProps programmatic association', () => {
+  it('FieldError emits a prefix-scoped id on the error element', () => {
+    const { container } = withCtx(
+      { title: ['Required'] },
+      'f1',
+      <FieldError name="title" />
+    );
+    const el = container.querySelector('[data-field-error="title"]')!;
+    expect(el.id).toBe(fieldErrorId('f1', 'title'));
+    expect(el.id.length).toBeGreaterThan(0);
+  });
+
+  it('useFieldErrorProps wires aria-invalid + aria-describedby to the FieldError id', () => {
+    let seen: ReturnType<typeof useFieldErrorProps> | undefined;
+    function Field({ name }: { name: string }) {
+      seen = useFieldErrorProps(name);
+      return h('input', { name, ...seen });
+    }
+    const { container } = withCtx(
+      { title: ['Required'] },
+      'f1',
+      h(
+        'div',
+        null,
+        h(Field, { name: 'title' }),
+        h(FieldError, { name: 'title' })
+      )
+    );
+    const input = container.querySelector('input[name="title"]')!;
+    const err = container.querySelector('[data-field-error="title"]')!;
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    // The input points at exactly the element that renders the message.
+    expect(input.getAttribute('aria-describedby')).toBe(err.id);
+    expect(seen?.['aria-describedby']).toBe(fieldErrorId('f1', 'title'));
+  });
+
+  it('useFieldErrorProps is inert for a valid field', () => {
+    let seen: ReturnType<typeof useFieldErrorProps> | undefined;
+    function Field() {
+      seen = useFieldErrorProps('title');
+      return null;
+    }
+    withCtx({}, 'f1', h(Field, {}));
+    expect(seen?.['aria-invalid']).toBeUndefined();
+    expect(seen?.['aria-describedby']).toBeUndefined();
   });
 });

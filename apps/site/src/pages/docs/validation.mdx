@@ -105,22 +105,31 @@ export const serverActions = {
 
 ```tsx
 // tasks.tsx
-import { Form } from 'hono-preact';
+import { Form, FieldError, useFieldErrorProps } from 'hono-preact';
 import { serverActions } from './tasks.server.js';
 import { NewTaskSchema } from './tasks.schema.js';
-import { FieldError } from 'hono-preact';
+
+const TitleField = () => (
+  <label>
+    Title
+    <input
+      name="title"
+      placeholder="Short summary"
+      {...useFieldErrorProps('title')}
+    />
+    <FieldError name="title" />
+  </label>
+);
 
 const CreateTaskForm = () => (
   <Form action={serverActions.createTask} schema={NewTaskSchema}>
-    <label>
-      Title
-      <input name="title" placeholder="Short summary" />
-      <FieldError name="title" />
-    </label>
+    <TitleField />
     <button type="submit">Create</button>
   </Form>
 );
 ```
+
+Spreading `useFieldErrorProps('title')` onto the input associates it with its `<FieldError>` for assistive technology: when the field has an error the hook returns `aria-invalid` and an `aria-describedby` pointing at the error element's id (and nothing when the field is valid). Wire it on every field so screen-reader users hear the error tied to the control, not just an isolated alert.
 
 The `schema` prop is typed as `StandardSchemaV1<unknown, TPayload>` where `TPayload` is the action's inferred payload type. Passing a schema that produces the wrong shape is a compile error, so the action and form cannot drift.
 
@@ -160,6 +169,8 @@ const TitleField = () => {
   );
 };
 ```
+
+**`useFieldErrorProps(name)`** returns the ARIA props to spread onto a field control (`<input>`/`<select>`/...) so it is programmatically associated with its `<FieldError>`. When the field has an error it returns `{ 'aria-invalid': true, 'aria-describedby': <error id> }`; when valid it returns `{}`, so the attributes are absent rather than stale. The id it references is the one `<FieldError>` renders, scoped per `<Form>` so two forms on a page do not collide.
 
 Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues and server-returned `deny(422)` issues into the same field-error surface, so client-skipped and server-caught errors render identically. Client pre-validation errors clear as you type once a field has been shown an error; server-returned field errors (from a `deny(422)` response) clear on the next submit rather than on input.
 

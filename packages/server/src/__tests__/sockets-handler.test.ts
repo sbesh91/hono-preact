@@ -430,6 +430,45 @@ describe('socketsHandler: guard denial closes WS_DENY_CODE without calling def.o
     expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
     expect(openSpy).not.toHaveBeenCalled();
   });
+
+  it('a guard returning redirect() still fails closed (WS_DENY_CODE) but warns about the divergence', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = defineSocket<never, never>({
+      use: [
+        defineServerMiddleware(async (_ctx) => {
+          const { redirect } = await import('@hono-preact/iso');
+          throw redirect('/login');
+        }),
+      ],
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    // A WebSocket handshake cannot follow an HTTP redirect, so failing closed
+    // is the only correct option (parity with the deny case above).
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+    // But the silent reinterpretation of redirect-as-deny is surfaced so a
+    // consumer reusing an HTTP auth guard on a socket can diagnose it.
+    expect(warn.mock.calls.some((c) => /redirect/i.test(String(c[0])))).toBe(
+      true
+    );
+
+    warn.mockRestore();
+  });
 });
 
 describe('socketsHandler: route-node use inheritance via resolvePageUse', () => {

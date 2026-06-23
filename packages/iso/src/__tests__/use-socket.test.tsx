@@ -379,3 +379,75 @@ describe('defineSocket server def (SSR ref-method)', () => {
     expect(captured?.status).toBe('connecting');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Teardown honesty: when an open connection is disabled (or its identity
+// changes), `status` must stop reporting 'open' so a consumer gating UI on
+// `status === 'open'` does not act on a closed socket.
+// ---------------------------------------------------------------------------
+
+describe('useSocket teardown status', () => {
+  it('reports "closed" when an open socket is disabled via enabled:false', async () => {
+    let result!: Result;
+    let utils!: ReturnType<typeof render>;
+
+    await act(async () => {
+      utils = render(
+        <Harness
+          socketRef={chatRef}
+          opts={{ enabled: true }}
+          onResult={(r) => (result = r)}
+        />
+      );
+    });
+
+    await act(async () => {
+      lastWS!._open();
+    });
+    expect(result.status).toBe('open');
+
+    // Disable: the lifecycle effect re-runs, tears down the open connection,
+    // and must not keep advertising 'open'.
+    await act(async () => {
+      utils.rerender(
+        <Harness
+          socketRef={chatRef}
+          opts={{ enabled: false }}
+          onResult={(r) => (result = r)}
+        />
+      );
+    });
+
+    expect(result.status).not.toBe('open');
+    expect(result.status).toBe('closed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Send-queue overflow is a backpressure condition, not a silent black hole:
+// dropping a message past the buffer cap must emit a dev diagnostic.
+// ---------------------------------------------------------------------------
+
+describe('useSocket send-queue overflow', () => {
+  it('warns (dev) when the send queue overflows while not open', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let result!: Result;
+
+    await act(async () => {
+      render(<Harness socketRef={chatRef} onResult={(r) => (result = r)} />);
+    });
+
+    // Socket is 'connecting' (never opened), so every send queues. The buffer
+    // cap is 128; sends beyond it are dropped and must warn.
+    await act(async () => {
+      for (let i = 0; i < 130; i++) result.send({ text: `m${i}` });
+    });
+
+    expect(warn).toHaveBeenCalled();
+    expect(
+      warn.mock.calls.some((c) => String(c[0]).includes('send queue'))
+    ).toBe(true);
+
+    warn.mockRestore();
+  });
+});

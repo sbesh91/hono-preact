@@ -35,7 +35,7 @@ Now start the dev server:
 pnpm dev
 ```
 
-Open `http://localhost:5173`. The dev server runs both the Hono server and the Vite HMR client. `server.tsx` hosts the framework's `__loaders` handler, the page-action handler, and the catch-all SSR handler; `routes.ts` declares every URL in the app and which view (and optional `.server.ts` module) lives at each path. The framework wires the server modules into the handlers via `routeServerModules(routes)`.
+Open `http://localhost:5173`. The dev server runs both the Hono server and the Vite HMR client. The generated `server.tsx` is a one-line call to the framework's `createServerEntry`, which builds the `/__loaders` RPC, the page-action POST handler, the realtime socket upgrade, and the catch-all SSR handler on a single Hono app; `routes.ts` declares every URL in the app and which view (and optional `.server.ts` module) lives at each path.
 
 ## 1. Create a view
 
