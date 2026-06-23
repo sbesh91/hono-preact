@@ -350,7 +350,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // Seed socket.data from the edge `data` factory (run with the live Context),
       // so Node and Cloudflare seed socket.data identically. The bag stays mutable
       // for the handler to write to across open/message/close.
-      const data = (await socketDef!.data?.(ctx)) ?? {};
+      const data = socketDef!.data?.(ctx) ?? {};
       const makeSocket = (ws: {
         send(d: string): void;
         close(c?: number, r?: string): void;
@@ -445,15 +445,16 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       });
     }
 
-    // Not a room. A connector is installed (CF), so a plain socket forwards to
-    // a fresh per-connection Durable Object; the guard already ran at the edge.
-    // A denied connection OR an unknown def (no socket, no room) closes via the
-    // connector's transport-native deny, with no DO contact. The in-worker
-    // getWebSocketUpgrader() is therefore never reached on a forwarding adapter.
+    // Not a room. A connector is installed (CF). An allowed plain socket forwards
+    // to a fresh per-connection Durable Object via the connector; the guard already
+    // ran at the edge. A denied connection or an unknown def (no socket, no room)
+    // closes via the connector's transport-native deny, with no DO contact.
+    // getWebSocketUpgrader() is the Node (no-connector) path only; it is never
+    // reached on a forwarding adapter.
     if (denied || !socketDef) {
       return connector({ c, kind: 'deny' });
     }
-    const data = (await socketDef.data?.(c)) ?? {};
+    const data = socketDef.data?.(c) ?? {};
     return connector({
       c,
       kind: 'socket-forward',

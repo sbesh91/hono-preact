@@ -381,7 +381,14 @@ describe('makeServerSocketHandle', () => {
 
 describe('isSocketConnection', () => {
   it('is true only for a {kind:"socket"} attachment', () => {
-    expect(isSocketConnection({ kind: 'socket', moduleKey: 'm', name: 's', data: null })).toBe(true);
+    expect(
+      isSocketConnection({
+        kind: 'socket',
+        moduleKey: 'm',
+        name: 's',
+        data: null,
+      })
+    ).toBe(true);
     expect(isSocketConnection({ kind: 'topic' })).toBe(false);
     expect(isSocketConnection({ connId: 'x' })).toBe(false); // room attachment
     expect(isSocketConnection(null)).toBe(false);

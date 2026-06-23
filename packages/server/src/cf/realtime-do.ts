@@ -261,22 +261,27 @@ export class HonoPreactRealtimeDO extends DurableObject {
   ): Promise<void> {
     // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
     // the room engine for them.
-    if (isTopicSubscriber(ws.deserializeAttachment())) return;
     const attachment = ws.deserializeAttachment();
+    if (isTopicSubscriber(attachment)) return;
     if (isSocketConnection(attachment)) {
       // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
       // untrusted-shaped hibernation boundary.
       const att = attachment as SocketConnAttachment;
       const def = await this.getSocketDef(att.moduleKey, att.name);
       const raw =
-        typeof message === 'string' ? message : new TextDecoder().decode(message);
+        typeof message === 'string'
+          ? message
+          : new TextDecoder().decode(message);
       // Sanctioned untrusted-wire JSON.parse of the client frame.
-      await def.message?.(makeServerSocketHandle(ws, att.data), JSON.parse(raw));
+      await def.message?.(
+        makeServerSocketHandle(ws, att.data),
+        JSON.parse(raw)
+      );
       return;
     }
     // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
     // untrusted-shaped hibernation boundary.
-    const att = ws.deserializeAttachment() as RoomConnAttachment;
+    const att = attachment as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#store());
     const raw =
@@ -292,15 +297,15 @@ export class HonoPreactRealtimeDO extends DurableObject {
   ): Promise<void> {
     // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
     // the room engine for them.
-    if (isTopicSubscriber(ws.deserializeAttachment())) return;
     const attachment = ws.deserializeAttachment();
+    if (isTopicSubscriber(attachment)) return;
     if (isSocketConnection(attachment)) {
       const att = attachment as SocketConnAttachment;
       const def = await this.getSocketDef(att.moduleKey, att.name);
       def.close?.(makeServerSocketHandle(ws, att.data), { code, reason });
       return;
     }
-    const att = ws.deserializeAttachment() as RoomConnAttachment;
+    const att = attachment as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     // engineClose does: leavePresence (a CF no-op; the socket is already
     // evicted from getWebSockets), broadcast presence/leave to the room.
@@ -321,15 +326,15 @@ export class HonoPreactRealtimeDO extends DurableObject {
   async webSocketError(ws: WebSocket, err: unknown): Promise<void> {
     // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
     // the room engine for them.
-    if (isTopicSubscriber(ws.deserializeAttachment())) return;
     const attachment = ws.deserializeAttachment();
+    if (isTopicSubscriber(attachment)) return;
     if (isSocketConnection(attachment)) {
       const att = attachment as SocketConnAttachment;
       const def = await this.getSocketDef(att.moduleKey, att.name);
       def.error?.(makeServerSocketHandle(ws, att.data), err);
       return;
     }
-    const att = ws.deserializeAttachment() as RoomConnAttachment;
+    const att = attachment as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#storeWith(ws));
     const conn = makeRoomConnection(t, (code, reason) =>

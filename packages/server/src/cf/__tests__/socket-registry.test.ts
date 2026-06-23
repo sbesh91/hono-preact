@@ -16,9 +16,7 @@ describe('socket registry seam', () => {
   });
 
   it('returns the installed getter', async () => {
-    const map = new Map<string, AnySocketDef>([
-      ['m::s', {} as AnySocketDef],
-    ]);
+    const map = new Map<string, AnySocketDef>([['m::s', {} as AnySocketDef]]);
     installSocketRegistry(() => map);
     const getter = getSocketRegistry();
     expect(getter).toBeDefined();

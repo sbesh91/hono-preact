@@ -19,6 +19,14 @@ type SocketRegistryGetter = () =>
 //
 // The DO's getSocketDef resolves the installed getter (once, then caches the
 // Map) and looks up `${moduleKey}::${name}`. Mirrors installRoomRegistry.
+//
+// CROSS-ISOLATE RISK: this assumes the DO isolate evaluates the worker-entry
+// module's top level (where installSocketRegistry runs). If workerd evaluates
+// the DO class in an isolate that does NOT run the entry module's top-level
+// install, getSocketRegistry() will return undefined in the DO and the fallback
+// is for the generated entry to provide serverImports to the DO via a module the
+// DO imports directly. The Task 8 workerd integration test validates this end to
+// end. Mirrors installRoomRegistry.
 
 let current: SocketRegistryGetter | undefined;
 

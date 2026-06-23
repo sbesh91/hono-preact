@@ -238,7 +238,11 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
       message(socket) {
         seen.push(socket.data.who);
       },
-    }) as unknown as SocketDef<{ ping: true }, { who: string }, { who: string }>;
+    }) as unknown as SocketDef<
+      { ping: true },
+      { who: string },
+      { who: string }
+    >;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -713,9 +717,17 @@ describe('socketsHandler: realtime connector forwarding', () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);
 
-    const def = defineSocket<{ text: string }, { reply: string }, { who: string }>(
-      { data: (c) => ({ who: c.req.query('u') ?? 'anon' }) }
-    ) as unknown as SocketDef<{ text: string }, { reply: string }, { who: string }>;
+    const def = defineSocket<
+      { text: string },
+      { reply: string },
+      { who: string }
+    >({
+      data: (c) => ({ who: c.req.query('u') ?? 'anon' }),
+    }) as unknown as SocketDef<
+      { text: string },
+      { reply: string },
+      { who: string }
+    >;
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
 
