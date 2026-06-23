@@ -6,18 +6,21 @@ import { fileURLToPath } from 'node:url';
 // End-to-end Cloudflare DO pub/sub integration test (PR 5b). A fixture app using
 // cloudflareAdapter() is served through the @cloudflare/vite-plugin workerd dev
 // server (same mechanism as cf-room.test.ts). Two SSE `live`-loader
-// subscriptions (POST /__loaders) each open a worker->DO topic socket; a publish
-// (GET /__test_publish, which calls the framework publish()) must fan out to
-// BOTH subscriptions through the DO, proving cross-isolate fan-out.
+// subscriptions (POST /__loaders) each open a worker->DO topic socket; a single
+// publish (GET /__test_publish, which calls the framework publish()) must WAKE
+// BOTH subscriptions through the DO, each delivering a fresh chunk. The proof is
+// the fan-out (each subscriber's chunk ARRIVES), not a shared value: PR 5b syncs
+// the wake event cross-isolate, not state (so the fixture carries no shared
+// counter, which would be per-isolate on workerd anyway).
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = resolve(here, 'fixtures/cf-pubsub');
 
 // The loader wire identity (see loaders-handler + loader-fetch): module key
 // 'src/data' (deriveModuleKey of src/data.server.ts at the fixture root), loader
-// name 'count' (the serverLoaders property), location for the '/' route.
+// name 'pings' (the serverLoaders property), location for the '/' route.
 const MODULE_KEY = 'src/data';
-const LOADER_NAME = 'count';
+const LOADER_NAME = 'pings';
 const LOADERS_RPC_PATH = '/__loaders';
 
 function serverPort(server: ViteDevServer): number {
@@ -26,8 +29,9 @@ function serverPort(server: ViteDevServer): number {
 }
 
 /**
- * Open an SSE `live`-loader subscription and yield each parsed `message` event's
- * data object ({ count }). Returns a reader with nextChunk() and close().
+ * Open an SSE `live`-loader subscription and COUNT the `message` chunks that
+ * arrive (the initial load plus one per publish that wakes it). Returns a reader
+ * with `arrivals`, `waitForArrivals(n)`, and `close()`.
  */
 async function openLiveLoader(port: number) {
   const res = await fetch(`http://localhost:${port}${LOADERS_RPC_PATH}`, {
@@ -43,8 +47,23 @@ async function openLiveLoader(port: number) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  const queue: Array<{ count: number }> = [];
-  let waiters: Array<(v: { count: number }) => void> = [];
+  let arrivals = 0;
+  let waiters: Array<{
+    target: number;
+    resolve: () => void;
+    timer: ReturnType<typeof setTimeout>;
+  }> = [];
+
+  const settle = () => {
+    waiters = waiters.filter((w) => {
+      if (arrivals >= w.target) {
+        clearTimeout(w.timer);
+        w.resolve();
+        return false;
+      }
+      return true;
+    });
+  };
 
   (async () => {
     try {
@@ -66,9 +85,10 @@ async function openLiveLoader(port: number) {
           if (!isMessage) continue;
           try {
             const parsed = JSON.parse(dataLine.slice('data:'.length).trim());
-            if (parsed && typeof parsed.count === 'number') {
-              if (waiters.length) waiters.shift()!(parsed);
-              else queue.push(parsed);
+            // A live-loader chunk is a JSON object; keepalives are not.
+            if (parsed && typeof parsed === 'object') {
+              arrivals += 1;
+              settle();
             }
           } catch {
             /* ignore non-JSON keepalive frames */
@@ -81,14 +101,17 @@ async function openLiveLoader(port: number) {
   })();
 
   return {
-    nextChunk(timeoutMs = 8_000): Promise<{ count: number }> {
-      if (queue.length) return Promise.resolve(queue.shift()!);
-      return new Promise((res2, rej) => {
-        const t = setTimeout(() => rej(new Error('chunk timeout')), timeoutMs);
-        waiters.push((v) => {
-          clearTimeout(t);
-          res2(v);
-        });
+    get arrivals() {
+      return arrivals;
+    },
+    waitForArrivals(target: number, timeoutMs = 8_000): Promise<void> {
+      if (arrivals >= target) return Promise.resolve();
+      return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`only ${arrivals}/${target} chunks arrived`)),
+          timeoutMs
+        );
+        waiters.push({ target, resolve, timer });
       });
     },
     async close() {
@@ -114,26 +137,29 @@ describe('Cloudflare adapter: DO pub/sub (two live-loader subscribers, cross-iso
     process.chdir(originalCwd);
   });
 
-  it('a publish() fans out to BOTH live-loader subscriptions through the DO', async () => {
+  it('a publish() wakes BOTH live-loader subscriptions through the DO', async () => {
     const port = serverPort(server);
 
     const a = await openLiveLoader(port);
     const b = await openLiveLoader(port);
 
-    // Each subscription pushes its initial value first (the load() one-shot).
-    expect((await a.nextChunk()).count).toBe(0);
-    expect((await b.nextChunk()).count).toBe(0);
+    // Each subscription delivers its initial chunk first (the load() one-shot).
+    await a.waitForArrivals(1);
+    await b.waitForArrivals(1);
 
     // Let both worker->DO topic subscriptions register before publishing.
     await new Promise<void>((res) => setTimeout(res, 500));
 
-    // Trigger publish() in the api isolate; it must reach BOTH subscriptions
-    // through the DO (cross-isolate fan-out), re-running their load() -> count 1.
+    // One publish() in the api isolate must wake BOTH subscriptions through the
+    // DO (cross-isolate fan-out), each delivering a second chunk. Remove the DO
+    // publish branch or the topic accept and these waits time out.
     const pub = await fetch(`http://localhost:${port}/__test_publish`);
     expect(pub.status).toBe(200);
 
-    expect((await a.nextChunk()).count).toBe(1);
-    expect((await b.nextChunk()).count).toBe(1);
+    await a.waitForArrivals(2);
+    await b.waitForArrivals(2);
+    expect(a.arrivals).toBe(2);
+    expect(b.arrivals).toBe(2);
 
     await a.close();
     await b.close();
