@@ -121,6 +121,23 @@ Two pieces of the same loader API drive this pattern:
 - `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
 - `loader.View(render, { initial, reduce, fallback })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and renders through the loader's Suspense boundary, so a live widget hydrates cleanly inside a lazy layout: `fallback` renders during SSR and until the first chunk arrives, then `render` receives the accumulated `data` plus a `status`.
 
+## On Cloudflare
+
+`publish()` and `route.liveLoader` have the same API on Cloudflare Workers.
+Cross-isolate fan-out (a `publish()` in one request waking a live loader
+streaming in another isolate) is backed by the same `HONO_PREACT_REALTIME`
+Durable Object that powers rooms, so no extra setup is needed once that binding
+is in your `wrangler.jsonc` (see the rooms docs, "Cloudflare setup").
+
+One thing to keep in mind: `publish()` syncs the **event**, not your state. It
+fans a "something changed, re-run" wake out to every connected live loader; each
+loader then re-runs its `load(ctx)` and reads the current value. So your `load`
+must read from a **shared source of truth** that every isolate can see: a
+database, KV, D1, or Durable Object storage. A module-level `let count = 0` works
+on Node (one process shares it) but is **per-isolate on Workers**, so two tabs
+would drift apart even though the wake reached both. Read shared state in `load`,
+and `publish()` after you write it.
+
 ## Scoping the persistence
 
 Choose the layout based on the scope you want:

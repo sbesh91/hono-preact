@@ -7,6 +7,8 @@ import type { Context } from 'hono';
 import {
   makeCfForwardConnector,
   makeDOConnState,
+  isTopicSubscriber,
+  fanOutToTopicSubscribers,
   type RoomConnAttachment,
 } from '../realtime-do-glue.js';
 import type { RoomForwardContext } from '@hono-preact/iso/internal/runtime';
@@ -198,6 +200,36 @@ describe('makeCfForwardConnector', () => {
     });
     expect(records).toHaveLength(1);
   });
+
+  it('strips client-supplied x-hp-kind so the DO always takes the room path', async () => {
+    // Regression: the DO dispatches on x-hp-kind (reads it as its first decision).
+    // A non-browser client could set x-hp-kind: topic or x-hp-kind: publish on the
+    // upgrade request, which would survive into the forwarded Request and divert the
+    // room upgrade into the topic-subscribe or publish branch on the room's DO,
+    // bypassing the room engine. The connector must delete the inbound header so the
+    // server controls DO dispatch (the DO defaults an absent x-hp-kind to 'room').
+    const records: ForwardRecord[] = [];
+    const { namespace } = makeFakeNamespace(records);
+    const connector = makeCfForwardConnector(() => namespace as never);
+
+    for (const smuggled of ['topic', 'publish'] as const) {
+      records.length = 0;
+      const raw = new Request('https://example.com/__sockets?m=x', {
+        headers: {
+          Upgrade: 'websocket',
+          'x-hp-kind': smuggled,
+        },
+      });
+      await connector({ c: makeContext(raw), ...baseCtx() });
+
+      const fwd = records[0].request;
+      // x-hp-kind must not survive; the DO will default to the room path.
+      expect(
+        fwd.headers.get('x-hp-kind'),
+        `smuggled x-hp-kind: ${smuggled} survived into the forwarded request`
+      ).toBeNull();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -288,5 +320,41 @@ describe('makeDOConnState', () => {
       { id: 'a', state: { name: 'alice' } },
       { id: 'b', state: { name: 'bob' } },
     ]);
+  });
+});
+
+describe('isTopicSubscriber', () => {
+  it('true only for a { kind: "topic" } attachment', () => {
+    expect(isTopicSubscriber({ kind: 'topic' })).toBe(true);
+    expect(isTopicSubscriber({ connId: 'c1', moduleKey: 'm', name: 'n' })).toBe(
+      false
+    );
+    expect(isTopicSubscriber(null)).toBe(false);
+    expect(isTopicSubscriber(undefined)).toBe(false);
+    expect(isTopicSubscriber('topic')).toBe(false);
+    expect(isTopicSubscriber({ kind: 'room' })).toBe(false);
+  });
+});
+
+describe('fanOutToTopicSubscribers', () => {
+  it('sends the body to every subscriber and isolates a throwing send', () => {
+    const sent: string[] = [];
+    const ok1 = { send: (b: string) => sent.push(`1:${b}`) };
+    const bad = {
+      send: () => {
+        throw new Error('socket is closing');
+      },
+    };
+    const ok2 = { send: (b: string) => sent.push(`2:${b}`) };
+
+    // The middle socket throws; the loop must not abort, so ok2 (iterated after
+    // bad) still receives the body. A bare for-loop would drop it.
+    expect(() =>
+      fanOutToTopicSubscribers(
+        [ok1, bad, ok2] as unknown as WebSocket[],
+        'frame'
+      )
+    ).not.toThrow();
+    expect(sent).toEqual(['1:frame', '2:frame']);
   });
 });

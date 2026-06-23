@@ -99,26 +99,47 @@ export function cloudflareAdapter(
         `import {\n` +
         `  HonoPreactRealtimeDO as __HonoPreactRealtimeDO,\n` +
         `  makeCfForwardConnector,\n` +
+        `  makeCfPubSubBackend,\n` +
+        `  runWithRealtimeRuntime,\n` +
+        `  getRealtimeRuntime,\n` +
         `  installRoomRegistry,\n` +
         `  buildRoomRegistry,\n` +
         `} from 'hono-preact/server/internal/cloudflare';\n` +
-        `import { installRealtimeConnector } from 'hono-preact/internal/runtime';\n` +
+        `import {\n` +
+        `  installRealtimeConnector,\n` +
+        `  installPubSubBackend,\n` +
+        `} from 'hono-preact/internal/runtime';\n` +
         `\n` +
         `installRoomRegistry(() => buildRoomRegistry(__hpServerImports));\n` +
-        `// The DO binding lives on the worker env. In the generated entry the\n` +
-        `// Hono Context env is untyped (no project-supplied Bindings generic),\n` +
-        `// so this reads the binding at the untyped-env boundary; the connector\n` +
-        `// throws a clear configuration error if the binding is missing.\n` +
         `installRealtimeConnector(\n` +
         `  makeCfForwardConnector((c) => c.env?.[${JSON.stringify(
           realtimeBinding
         )}], ${JSON.stringify(realtimeBinding)})\n` +
         `);\n` +
+        `// Cross-isolate pub/sub for live loaders + publish() rides the same DO\n` +
+        `// binding (read-only topic subscriptions + a publish fan-out POST).\n` +
+        `installPubSubBackend(\n` +
+        `  makeCfPubSubBackend(getRealtimeRuntime, ${JSON.stringify(
+          realtimeBinding
+        )})\n` +
+        `);\n` +
         `\n` +
         `// Re-export the Durable Object class under the name wrangler.jsonc binds.\n` +
         `export class ${realtimeClass} extends __HonoPreactRealtimeDO {}\n` +
         `\n` +
-        `export default coreApp;\n`
+        `// Run each request inside its { env, ctx } so the CF pub/sub backend can\n` +
+        `// reach the DO binding (env) and keep a publish fan-out alive past the\n` +
+        `// response (ctx.waitUntil). AsyncLocalStorage (not a module global)\n` +
+        `// because one workerd isolate multiplexes concurrent requests: a global\n` +
+        `// would let a later request overwrite an earlier one's runtime between\n` +
+        `// its capture and its publish().\n` +
+        `export default {\n` +
+        `  fetch(request, env, ctx) {\n` +
+        `    return runWithRealtimeRuntime(env, ctx, () =>\n` +
+        `      coreApp.fetch(request, env, ctx)\n` +
+        `    );\n` +
+        `  },\n` +
+        `};\n`
       );
     },
   };

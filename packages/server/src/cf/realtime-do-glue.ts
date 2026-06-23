@@ -115,6 +115,13 @@ export function makeCfForwardConnector(
     fwd.headers.set('x-hp-name', name);
     fwd.headers.set('x-hp-params', paramsJson);
     fwd.headers.set('x-hp-data', dataJson);
+    // The forward connector handles ONLY room upgrades; the DO's pub/sub topic and
+    // publish kinds are invoked separately by makeCfPubSubBackend, never here. Strip
+    // any client-supplied x-hp-kind so a room-authorized client cannot smuggle a
+    // header to divert its upgrade into the topic/publish branch on the room's DO.
+    // The server, not the client, controls DO dispatch (the DO defaults absent to
+    // 'room').
+    fwd.headers.delete('x-hp-kind');
 
     // `stub.fetch` returns `Promise<Response>` (the forwarded 101 upgrade); the
     // connector returns it directly. socketsHandler returns this Response as-is.
@@ -167,6 +174,41 @@ export function makeDOConnState(sockets: WebSocket[]): DOConnState {
       };
     },
   };
+}
+
+/**
+ * True when a hibernation socket's attachment marks it as a live-loader topic
+ * subscriber (`{ kind: 'topic' }`), as opposed to a room connection (whose
+ * attachment is a RoomConnAttachment with no `kind`). Topic subscribers are
+ * receive-only and never run the room engine.
+ */
+export function isTopicSubscriber(attachment: unknown): boolean {
+  return (
+    typeof attachment === 'object' &&
+    attachment !== null &&
+    (attachment as { kind?: unknown }).kind === 'topic'
+  );
+}
+
+/**
+ * Fan a published frame out to a topic's subscriber sockets. Each send is
+ * isolated: a single stale or closing socket throwing on `send` (a routine
+ * outcome on workerd after a hibernation cycle or peer eviction) must not drop
+ * the message for the remaining subscribers. This mirrors the in-process
+ * backend, which wraps each subscriber so "one throwing listener does not
+ * starve the rest." Exported so the fan-out is unit-testable without workerd.
+ */
+export function fanOutToTopicSubscribers(
+  sockets: Iterable<WebSocket>,
+  body: string
+): void {
+  for (const ws of sockets) {
+    try {
+      ws.send(body);
+    } catch (err) {
+      console.error('hono-preact: pub/sub fan-out send failed', err);
+    }
+  }
 }
 
 /** Parse an `x-hp-*` JSON header; missing or malformed yields `null`. */

@@ -20,3 +20,8 @@ export {
   __resetRoomRegistryForTesting,
 } from './cf/room-registry.js';
 export { buildRoomRegistry } from './rooms-handler.js';
+export {
+  makeCfPubSubBackend,
+  runWithRealtimeRuntime,
+  getRealtimeRuntime,
+} from './cf/cf-pubsub.js';

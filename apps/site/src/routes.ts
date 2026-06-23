@@ -39,6 +39,11 @@ const routeTree = [
         server: () => import('./pages/demo/cursors-demo.server.js'),
       },
       {
+        path: 'live-tally',
+        view: () => import('./pages/demo/live-tally.js'),
+        server: () => import('./pages/demo/live-tally.server.js'),
+      },
+      {
         path: 'projects',
         layout: () => import('./pages/demo/projects-shell.js'),
         server: () => import('./pages/demo/projects-shell.server.js'),

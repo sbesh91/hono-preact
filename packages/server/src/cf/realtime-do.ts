@@ -20,6 +20,8 @@ import {
   makeCfRoomTransport,
   makeDOConnState,
   parseHeaderJson,
+  isTopicSubscriber,
+  fanOutToTopicSubscribers,
 } from './realtime-do-glue.js';
 import type { DOConnState } from './realtime-do-glue.js';
 import { getRoomRegistry } from './room-registry.js';
@@ -43,7 +45,13 @@ type AnyRoomDef = RoomDef<unknown, unknown, unknown, unknown, unknown>;
  * already-guarded room upgrade here (`idFromName(topic)`); this DO owns the room
  * runtime for that topic: it accepts the socket for hibernation, drives the
  * shared room engine on join/message/close, and fans out intra-DO over its own
- * `ctx.getWebSockets()` (no pub/sub; that is PR 5b).
+ * `ctx.getWebSockets()`.
+ *
+ * PR 5b adds two new request kinds on the same DO (one DO per topic/channel):
+ *   - `x-hp-kind: topic` (from cf-pubsub.ts subscribe): accept a receive-only
+ *     hibernation socket tagged 'topic'; the room engine is never run for it.
+ *   - `x-hp-kind: publish` (from cf-pubsub.ts publish): read the POST body and
+ *     fan it out to all 'topic'-tagged sockets, then return 204.
  *
  * State lives on per-socket attachments (serializeAttachment), so the DO holds
  * no in-memory connection map and survives hibernation cycles: every handler
@@ -114,6 +122,32 @@ export class HonoPreactRealtimeDO extends DurableObject {
    * onJoin). Returns the 101 with the client socket.
    */
   async fetch(request: Request): Promise<Response> {
+    const kind = request.headers.get('x-hp-kind') ?? 'room';
+
+    // Cross-isolate publish (PR 5b): fan the POST body out to this topic's
+    // subscriber sockets, then return 204. No upgrade, no engine.
+    if (kind === 'publish') {
+      const body = await request.text();
+      // Isolate each subscriber: one stale or closing socket throwing on send
+      // must not drop the message for the rest (mirrors the in-process backend).
+      fanOutToTopicSubscribers(this.ctx.getWebSockets('topic'), body);
+      return new Response(null, { status: 204 });
+    }
+
+    // A worker-held live-loader subscription (PR 5b). Accept it for hibernation,
+    // tag it 'topic' (so publish selects it via getWebSockets('topic')), and
+    // mark its attachment so the message/close/error handlers skip the room
+    // engine. Receive-only: it never sends to the DO.
+    if (kind === 'topic') {
+      const pair = new WebSocketPair();
+      const client = pair[0];
+      const server = pair[1];
+      this.ctx.acceptWebSocket(server, ['topic']);
+      server.serializeAttachment({ kind: 'topic' });
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    // kind === 'room': the existing PR 5a path below, unchanged.
     const moduleKey = request.headers.get('x-hp-module') ?? '';
     const name = request.headers.get('x-hp-name') ?? '';
     // `x-hp-topic` is not re-read here: this DO instance IS the topic (the edge
@@ -168,6 +202,9 @@ export class HonoPreactRealtimeDO extends DurableObject {
     ws: WebSocket,
     message: string | ArrayBuffer
   ): Promise<void> {
+    // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
+    // the room engine for them.
+    if (isTopicSubscriber(ws.deserializeAttachment())) return;
     // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
     // untrusted-shaped hibernation boundary.
     const att = ws.deserializeAttachment() as RoomConnAttachment;
@@ -180,6 +217,9 @@ export class HonoPreactRealtimeDO extends DurableObject {
 
   /** Run the engine leave sequence for the closing socket. */
   async webSocketClose(ws: WebSocket): Promise<void> {
+    // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
+    // the room engine for them.
+    if (isTopicSubscriber(ws.deserializeAttachment())) return;
     const att = ws.deserializeAttachment() as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     // engineClose does: leavePresence (a CF no-op; the socket is already
@@ -199,6 +239,9 @@ export class HonoPreactRealtimeDO extends DurableObject {
 
   /** Hand a socket error to the room's onError hook. */
   async webSocketError(ws: WebSocket, err: unknown): Promise<void> {
+    // Topic subscribers (PR 5b) are receive-only and carry no room state; skip
+    // the room engine for them.
+    if (isTopicSubscriber(ws.deserializeAttachment())) return;
     const att = ws.deserializeAttachment() as RoomConnAttachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#storeWith(ws));

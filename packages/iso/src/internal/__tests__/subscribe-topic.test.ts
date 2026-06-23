@@ -69,4 +69,24 @@ describe('subscribeTopic', () => {
     ac.abort();
     expect(unsubCalled).toBe(1); // abort tore it down without any .next()
   });
+
+  it('throws when the backend reports a subscription drop (onError)', async () => {
+    let reportError: ((error: unknown) => void) | undefined;
+    installPubSubBackend({
+      publish: () => undefined,
+      subscribe: (_topic, _onMessage, onError) => {
+        reportError = onError;
+        return () => undefined;
+      },
+    });
+    const ac = new AbortController();
+    const gen = subscribeTopic('t', ac.signal);
+
+    const next = gen.next(); // parks waiting for a wake
+    reportError!(new Error('worker->DO socket died'));
+    // The drop wakes the generator, which throws so the live-loader generator
+    // errors (the SSE stream terminates, status='error' on the client) rather
+    // than hanging forever on stale data.
+    await expect(next).rejects.toThrow('worker->DO socket died');
+  });
 });
