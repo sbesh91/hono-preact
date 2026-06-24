@@ -12,18 +12,18 @@ import { useWsLifecycle } from './internal/ws-lifecycle.js';
 import type {
   SocketStatus,
   SocketCloseInfo,
-  ReconnectOpts,
+  ReconnectOptions,
 } from './internal/ws-lifecycle.js';
 
 // Re-export the shared lifecycle types so the public surface is unchanged.
-export type { SocketStatus, SocketCloseInfo, ReconnectOpts };
+export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
 
 // Extract the Incoming message type from a SocketRef.
 type Incoming<R> = R extends SocketRef<infer I, unknown> ? I : never;
 // Extract the Outgoing message type from a SocketRef (received by the client).
 type Outgoing<R> = R extends SocketRef<unknown, infer O> ? O : never;
 
-export type UseSocketOpts<R extends SocketRef<unknown, unknown>> = {
+export type UseSocketOptions<R extends SocketRef<unknown, unknown>> = {
   /** Called on every incoming message. Does NOT trigger a re-render. */
   onMessage?: (msg: Serialize<Outgoing<R>>) => void;
   /** Called when the connection opens. */
@@ -35,7 +35,7 @@ export type UseSocketOpts<R extends SocketRef<unknown, unknown>> = {
    * Default: false for code 1000 and 4000-4999, true otherwise.
    */
   shouldReconnect?: (e: CloseEvent) => boolean;
-  reconnect?: ReconnectOpts;
+  reconnect?: ReconnectOptions;
   /**
    * When false the socket will not connect (useful for conditional use).
    * Default: true.
@@ -59,7 +59,7 @@ export type UseSocketResult<R extends SocketRef<unknown, unknown>> = {
 
 export function useSocket<R extends SocketRef<unknown, unknown>>(
   ref: R,
-  opts?: UseSocketOpts<R>
+  opts?: UseSocketOptions<R>
 ): UseSocketResult<R> {
   const [lastMsg, setLastMsg] = useState<Serialize<Outgoing<R>> | undefined>(
     undefined

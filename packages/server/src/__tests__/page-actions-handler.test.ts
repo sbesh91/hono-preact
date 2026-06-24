@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
-import { pageActionHandler } from '../page-action-handler.js';
+import { pageActionsHandler } from '../page-actions-handler.js';
 import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
@@ -50,7 +50,7 @@ function buildHandler(
     async (c: { html: (s: string) => unknown }, _node: unknown) =>
       c.html('<!doctype html><body>RENDERED</body>')
   );
-  return pageActionHandler({
+  return pageActionsHandler({
     resolverByPath,
     resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
     renderPage: renderPage as never,
@@ -59,7 +59,7 @@ function buildHandler(
   });
 }
 
-describe('pageActionHandler', () => {
+describe('pageActionsHandler', () => {
   it('returns __outcome=success JSON envelope on Accept: application/json', async () => {
     const handler = buildHandler({
       submit: async () => ({ id: 42 }),
@@ -254,7 +254,7 @@ describe('pageActionHandler', () => {
   });
 });
 
-// Helper that wires a single defineAction fn through pageActionHandler with
+// Helper that wires a single defineAction fn through pageActionsHandler with
 // timeout options, exercising per-action and handler-default timeout paths.
 function buildTimedApp(
   actionFn: Parameters<typeof defineAction>[0],
@@ -284,7 +284,7 @@ function buildTimedApp(
     return map;
   };
   const noopRender = async () => new Response('', { status: 200 });
-  const handler = pageActionHandler({
+  const handler = pageActionsHandler({
     resolverByPath,
     resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
     renderPage: noopRender as never,
@@ -306,7 +306,7 @@ function buildTimedApp(
   return { app, post };
 }
 
-describe('pageActionHandler timeouts', () => {
+describe('pageActionsHandler timeouts', () => {
   it('returns a timeout outcome when the action exceeds its timeoutMs', async () => {
     const { post } = buildTimedApp(
       async ({ signal }) => {

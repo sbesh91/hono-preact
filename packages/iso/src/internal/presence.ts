@@ -24,8 +24,12 @@ function registry(): Roster {
   return (g[REGISTRY_KEY] ??= new Map());
 }
 
-/** Add a connection to a room's roster with its initial presence state. */
-export function joinRoom(topic: string, connId: string, state: unknown): void {
+/** Add a connection to a topic's presence roster with its initial state. */
+export function joinPresence(
+  topic: string,
+  connId: string,
+  state: unknown
+): void {
   const reg = registry();
   let members = reg.get(topic);
   if (!members) {
@@ -36,11 +40,11 @@ export function joinRoom(topic: string, connId: string, state: unknown): void {
 }
 
 /**
- * Remove a connection from a room's roster. When the room empties, prune the
- * topic so the roster does not accumulate dead topics (mirrors pubsub.ts
+ * Remove a connection from a topic's presence roster. When the topic empties,
+ * prune it so the roster does not accumulate dead topics (mirrors pubsub.ts
  * deleting an emptied subscriber Set).
  */
-export function leaveRoom(topic: string, connId: string): void {
+export function leavePresence(topic: string, connId: string): void {
   const members = registry().get(topic);
   if (!members) return;
   members.delete(connId);
@@ -63,7 +67,7 @@ export function updatePresence(
 }
 
 /** The current roster for a topic as `{ id, state }[]` (empty when unknown). */
-export function roomMembers(topic: string): Array<PresenceMember<unknown>> {
+export function presenceMembers(topic: string): Array<PresenceMember<unknown>> {
   const members = registry().get(topic);
   if (!members) return [];
   return [...members].map(([id, state]) => ({ id, state }));

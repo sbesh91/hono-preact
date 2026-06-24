@@ -1,6 +1,6 @@
 // Outcome -> HTTP response translation for the root middleware chain and the
 // loader RPC. Action outcomes are translated elsewhere: serializeActionOutcome
-// (iso internal) builds the JSON envelope, and pageActionHandler keeps its
+// (iso internal) builds the JSON envelope, and pageActionsHandler keeps its
 // HTML/PE translation inline because it is entangled with page re-rendering
 // and the request-scope action-result slot.
 

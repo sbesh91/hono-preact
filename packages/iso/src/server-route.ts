@@ -1,12 +1,12 @@
 import {
   defineLoader,
-  type DefineLoaderOpts,
+  type DefineLoaderOptions,
   type Loader,
   type LoaderCtx,
   type LoaderRef,
-  type LoaderSchemaOpts,
-  type ParamsFromOpts,
-  type SearchFromOpts,
+  type LoaderSchemaOptions,
+  type ParamsFromOptions,
+  type SearchFromOptions,
 } from './define-loader.js';
 import type { LoaderCache } from './cache.js';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
@@ -21,29 +21,33 @@ import { defineRoom, type RoomHandler, type RoomRef } from './define-room.js';
 import type { Channel } from './define-channel.js';
 
 /** Options for a channel-driven live loader bound to a route. */
-export interface LiveLoaderOpts<T, TParams> {
+export interface LiveLoaderOptions<T, TParams> {
   /** The channel topic this loader re-runs on. Build it with `channel.key(...)`. */
   topic: (ctx: LoaderCtx<TParams>) => Topic<unknown>;
   /** Produce the data. Runs on first connect and on every publish to `topic`. */
   load: (ctx: LoaderCtx<TParams>) => Promise<T>;
   cache?: LoaderCache<T>;
-  use?: DefineLoaderOpts<T>['use'];
+  use?: DefineLoaderOptions<T>['use'];
   timeoutMs?: number | false;
   // Threaded by the Vite module-key plugin; not set by hand.
   __moduleKey?: string;
   __loaderName?: string;
 }
 
-export interface RouteServer<RouteId extends string> {
+export interface RouteBinder<RouteId extends string> {
   /**
    * Define a non-live loader bound to this route. `ctx.location.pathParams` is
    * typed from the route's pattern, so no per-loader route id or `LoaderCtx<...>`
    * annotation is needed. For a channel-driven live subscription that re-pushes
    * on publish, use `liveLoader` instead.
    */
-  loader<T, O extends LoaderSchemaOpts = {}>(
-    fn: Loader<T, ParamsFromOpts<O, RouteParams<RouteId>>, SearchFromOpts<O>>,
-    opts?: Omit<DefineLoaderOpts<T>, 'live'> & O
+  loader<T, O extends LoaderSchemaOptions = {}>(
+    fn: Loader<
+      T,
+      ParamsFromOptions<O, RouteParams<RouteId>>,
+      SearchFromOptions<O>
+    >,
+    opts?: Omit<DefineLoaderOptions<T>, 'live'> & O
   ): LoaderRef<T, false>;
 
   /**
@@ -52,7 +56,7 @@ export interface RouteServer<RouteId extends string> {
    * accumulating form: `ref.View(render, { initial, reduce })`.
    */
   liveLoader<T>(
-    opts: LiveLoaderOpts<T, RouteParams<RouteId>>
+    opts: LiveLoaderOptions<T, RouteParams<RouteId>>
   ): LoaderRef<T, true>;
 
   /**
@@ -105,7 +109,7 @@ export interface RouteServer<RouteId extends string> {
  */
 export function serverRoute<const RouteId extends RegisteredPaths>(
   route: RouteId
-): RouteServer<RouteId> {
+): RouteBinder<RouteId> {
   return {
     loader: (fn, opts) => defineLoader(route, fn, opts),
     socket: (handler) => defineSocket(handler),
@@ -118,7 +122,7 @@ export function serverRoute<const RouteId extends RegisteredPaths>(
       timeoutMs,
       __moduleKey,
       __loaderName,
-    }: LiveLoaderOpts<T, RouteParams<RouteId>>) => {
+    }: LiveLoaderOptions<T, RouteParams<RouteId>>) => {
       const gen: Loader<T, RouteParams<RouteId>> = async function* (
         ctx
       ): AsyncGenerator<T, void, unknown> {

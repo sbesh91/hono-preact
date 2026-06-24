@@ -3,7 +3,7 @@ import {
   setLastActionResult,
   clearLastActionResult,
   getLastActionResult,
-  subscribeActionResults,
+  subscribeLastActionResult,
 } from '../internal/action-result-store.js';
 
 describe('action-result-store', () => {
@@ -89,7 +89,7 @@ describe('action-result-store', () => {
 
   it('subscribers fire on set and clear', () => {
     let count = 0;
-    const unsub = subscribeActionResults(() => count++);
+    const unsub = subscribeLastActionResult(() => count++);
     setLastActionResult('m', 'a', {
       kind: 'success',
       data: 1,

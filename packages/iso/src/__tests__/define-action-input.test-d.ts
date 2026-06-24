@@ -1,7 +1,7 @@
 import { expectTypeOf } from 'vitest';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { defineAction } from '../action.js';
-import type { ActionStub } from '../action.js';
+import type { ActionRef } from '../action.js';
 
 declare const NewTask: StandardSchemaV1<
   { title: string; count: string },
@@ -18,12 +18,12 @@ function _probes() {
     { input: NewTask }
   );
   expectTypeOf(create).toEqualTypeOf<
-    ActionStub<{ title: string; count: number }, { id: number }, never>
+    ActionRef<{ title: string; count: number }, { id: number }, never>
   >();
 
   // Without `input`: payload generic still inferred from usage (existing).
   const plain = defineAction(async (_ctx, payload: { x: number }) => payload.x);
-  expectTypeOf(plain).toEqualTypeOf<ActionStub<{ x: number }, number, never>>();
+  expectTypeOf(plain).toEqualTypeOf<ActionRef<{ x: number }, number, never>>();
 }
 
 void _probes;

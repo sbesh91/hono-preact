@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@babel/parser';
 import type { Program } from '@babel/types';
-import { parseServerLoaders, readParamsOpt } from '../server-loaders-parser.js';
+import {
+  parseServerLoaders,
+  readParamsOption,
+} from '../server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from '../parser-options.js';
 
 function parseProgram(code: string): Program {
@@ -161,7 +164,7 @@ describe('parseServerLoaders', () => {
   });
 });
 
-describe('readParamsOpt', () => {
+describe('readParamsOption', () => {
   function optsFrom(code: string) {
     const program = parseProgram(`
       export const serverLoaders = { x: defineLoader(fn, ${code}) };
@@ -172,26 +175,26 @@ describe('readParamsOpt', () => {
 
   it('returns string[] for array of string literals', () => {
     const opts = optsFrom(`{ params: ['genre', 'id'] }`);
-    expect(readParamsOpt(opts)).toEqual(['genre', 'id']);
+    expect(readParamsOption(opts)).toEqual(['genre', 'id']);
   });
 
   it("returns '*' for the wildcard string literal", () => {
     const opts = optsFrom(`{ params: '*' }`);
-    expect(readParamsOpt(opts)).toBe('*');
+    expect(readParamsOption(opts)).toBe('*');
   });
 
   it('returns undefined when params is absent', () => {
     const opts = optsFrom(`{ cache: true }`);
-    expect(readParamsOpt(opts)).toBeUndefined();
+    expect(readParamsOption(opts)).toBeUndefined();
   });
 
   it('returns undefined for an unsupported params shape (non-wildcard string)', () => {
     const opts = optsFrom(`{ params: 'something' }`);
-    expect(readParamsOpt(opts)).toBeUndefined();
+    expect(readParamsOption(opts)).toBeUndefined();
   });
 
   it('returns undefined for an empty array', () => {
     const opts = optsFrom(`{ params: [] }`);
-    expect(readParamsOpt(opts)).toBeUndefined();
+    expect(readParamsOption(opts)).toBeUndefined();
   });
 });

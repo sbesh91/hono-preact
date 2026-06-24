@@ -13,12 +13,12 @@ import {
   defineLoader,
   defineAction,
   useAction,
-  type ActionStub,
+  type ActionRef,
 } from '@hono-preact/iso';
 import { env } from '@hono-preact/iso/internal/runtime';
 import { Loader } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
-import { pageActionHandler } from '../page-action-handler.js';
+import { pageActionsHandler } from '../page-actions-handler.js';
 import { makePageActionResolvers } from '../page-action-resolvers.js';
 
 const loc = {
@@ -43,7 +43,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     // Server state the loader reads and the action mutates. The point of
     // this test: every existing optimistic/invalidation test fakes the
     // server side by manually swapping `base` props. Here we stand up the
-    // real `loadersHandler` + `pageActionHandler`, route the browser-side
+    // real `loadersHandler` + `pageActionsHandler`, route the browser-side
     // `fetch` to the Hono app, and assert the loader actually re-runs
     // against the same backing state after the action settles.
     let serverCount = 1;
@@ -67,7 +67,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     };
     const glob = { './pages/items.server.ts': serverModule };
 
-    // Build the pageActionHandler using the same server route structure the
+    // Build the pageActionsHandler using the same server route structure the
     // framework's generated server entry produces. In happy-dom, window.location
     // defaults to '/', so useAction posts to '/'. Register the route at '/' so
     // the resolver finds the action when the request arrives.
@@ -90,7 +90,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       )
       .post(
         '*',
-        pageActionHandler({
+        pageActionsHandler({
           resolverByPath: pageActionResolvers.byPath,
           resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
           renderPage: noopRender as never,
@@ -99,7 +99,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       );
 
     // Route every fetch to the Hono app. Both the loader RPC stub
-    // (`/__loaders`) and the action POST (mounted at `*` by pageActionHandler)
+    // (`/__loaders`) and the action POST (mounted at `*` by pageActionsHandler)
     // call through `fetch(...)`; pointing both at the same Hono app exercises
     // the real wire format on both sides.
     const fetchSpy = vi.fn(
@@ -134,7 +134,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     const incrementStub = {
       __module: 'pages/items',
       __action: 'increment',
-    } as unknown as ActionStub<void, { ok: true }>;
+    } as unknown as ActionRef<void, { ok: true }>;
 
     function CountView() {
       const { count } = countLoader.useData();

@@ -83,7 +83,7 @@ export {
   setLastActionResult,
   clearLastActionResult,
   getLastActionResult,
-  subscribeActionResults,
+  subscribeLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
 

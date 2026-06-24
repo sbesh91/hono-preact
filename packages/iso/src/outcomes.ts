@@ -71,7 +71,7 @@ type DenyInput = {
   data?: unknown;
 };
 
-type DenyOpts = {
+type DenyOptions = {
   headers?: Record<string, string>;
   data?: unknown;
 };
@@ -79,13 +79,13 @@ type DenyOpts = {
 export function deny(
   status: ErrorStatusCode,
   message?: string,
-  opts?: DenyOpts
+  opts?: DenyOptions
 ): DenyOutcome;
 export function deny(spec: DenyInput): DenyOutcome;
 export function deny(
   a: ErrorStatusCode | DenyInput,
   b?: string,
-  c?: DenyOpts
+  c?: DenyOptions
 ): DenyOutcome {
   // `JSON.stringify` drops `undefined` properties, so a deny outcome with no
   // message would arrive at the client without a `message` field and the

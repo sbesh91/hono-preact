@@ -3,10 +3,10 @@ import type { WSEvents } from 'hono/ws';
 import {
   WS_DENY_CODE,
   getPubSubBackend,
-  joinRoom,
-  leaveRoom,
+  joinPresence,
+  leavePresence,
   updatePresence,
-  roomMembers,
+  presenceMembers,
 } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
 import {
@@ -187,8 +187,8 @@ export function resolveRoomKey(
  *    directly), but the Node behavior is driven by the published `env.from` +
  *    the receiver-side skip.
  *  - presence ops map to the presence registry: `joinPresence`/`leavePresence`/
- *    `updatePresence` -> `joinRoom`/`leaveRoom`/`updatePresence`, and
- *    `roster()` -> `roomMembers(topic)`.
+ *    `updatePresence` -> `joinPresence`/`leavePresence`/`updatePresence`, and
+ *    `roster()` -> `presenceMembers(topic)`.
  *  - `data(connId)` returns the per-connection bag captured at the edge in
  *    onOpen (the `roomDef.data?.(ctx)` result seeding `conn.data`).
  */
@@ -274,10 +274,10 @@ export function createRoomWsEvents(
         connId: myId,
         sendTo: (_to, env) => ws.send(JSON.stringify(env)),
         broadcast: (env) => getPubSubBackend().publish(roomTopic, env),
-        joinPresence: (id, state) => joinRoom(roomTopic, id, state),
-        leavePresence: (id) => leaveRoom(roomTopic, id),
+        joinPresence: (id, state) => joinPresence(roomTopic, id, state),
+        leavePresence: (id) => leavePresence(roomTopic, id),
         updatePresence: (id, state) => updatePresence(roomTopic, id, state),
-        roster: () => roomMembers(roomTopic),
+        roster: () => presenceMembers(roomTopic),
         data: () => initialData,
       };
 

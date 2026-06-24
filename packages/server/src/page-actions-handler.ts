@@ -31,7 +31,7 @@ import type { ActionEntry } from './page-action-resolvers.js';
 import { pickAccept } from './accept.js';
 import type { VNode } from 'preact';
 
-export interface PageActionHandlerOptions {
+export interface PageActionsHandlerOptions {
   /**
    * Resolves the action map for the page at the given URL path. Returns a
    * Map of action name to ActionEntry, merging actions from the page and
@@ -133,8 +133,8 @@ async function parseBody(
   };
 }
 
-export function pageActionHandler(
-  opts: PageActionHandlerOptions
+export function pageActionsHandler(
+  opts: PageActionsHandlerOptions
 ): MiddlewareHandler {
   const {
     resolverByPath,
@@ -152,7 +152,7 @@ export function pageActionHandler(
     // construction (the type also marks this required) instead of composing a
     // guard-less chain.
     throw new Error(
-      'pageActionHandler requires a resolvePageUseByPath function; without it ' +
+      'pageActionsHandler requires a resolvePageUseByPath function; without it ' +
         'page-level middleware (including auth gates) is silently dropped on ' +
         'the action POST path. Pass makePageUseResolver(routes).byPath.'
     );

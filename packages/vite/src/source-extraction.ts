@@ -1,6 +1,9 @@
 import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
-import { parseServerLoaders, readParamsOpt } from './server-loaders-parser.js';
+import {
+  parseServerLoaders,
+  readParamsOption,
+} from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 // TypeScript NodeNext convention: source code imports `.server.js` even though
@@ -49,7 +52,7 @@ export function extractServerLoadersMeta(
   const meta: Record<string, string[] | '*'> = {};
   for (const entry of entries) {
     if (!entry.optsArg) continue;
-    const params = readParamsOpt(entry.optsArg);
+    const params = readParamsOption(entry.optsArg);
     if (params !== undefined) meta[entry.name] = params;
   }
 

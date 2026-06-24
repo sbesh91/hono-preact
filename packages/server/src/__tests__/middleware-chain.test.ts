@@ -7,7 +7,7 @@ import {
   defineStreamObserver,
 } from '@hono-preact/iso';
 import { loadersHandler } from '../loaders-handler.js';
-import { pageActionHandler } from '../page-action-handler.js';
+import { pageActionsHandler } from '../page-actions-handler.js';
 import { makePageActionResolvers } from '../page-action-resolvers.js';
 
 describe('loaders-handler dispatches the full chain (root -> page -> unit)', () => {
@@ -135,7 +135,7 @@ describe('stream observer fanout (E20)', () => {
     ]);
   });
 
-  it('fires onStart, onChunk per yield, and onEnd on a streaming action through pageActionHandler', async () => {
+  it('fires onStart, onChunk per yield, and onEnd on a streaming action through pageActionsHandler', async () => {
     const events: string[] = [];
     const observer = defineStreamObserver<number, { ok: true }>({
       onStart: () => events.push('start'),
@@ -174,7 +174,7 @@ describe('stream observer fanout (E20)', () => {
 
     const app = new Hono().post(
       '*',
-      pageActionHandler({
+      pageActionsHandler({
         resolverByPath: resolvers.byPath,
         resolvePageUseByPath: async () => [], // streaming-observer fixture, no page-level middleware
         renderPage: noopRender as never,
@@ -242,7 +242,7 @@ describe('stream observer fanout (E20)', () => {
   });
 });
 
-describe('pageActionHandler dispatches the full chain (root -> page -> action)', () => {
+describe('pageActionsHandler dispatches the full chain (root -> page -> action)', () => {
   it('runs page-level middleware before the action body (regression: page-level was previously dropped)', async () => {
     // Without resolvePageUseByPath the old handler only composed
     // [appUse, actionUse], silently dropping pageUse. Any user who guards a
@@ -256,7 +256,7 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
       order.push('page-out');
     });
 
-    const handler = pageActionHandler({
+    const handler = pageActionsHandler({
       resolverByPath: async () => {
         const map = new Map<
           string,
@@ -318,7 +318,7 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
       order.push('action-mw-out');
     });
 
-    const handler = pageActionHandler({
+    const handler = pageActionsHandler({
       resolverByPath: async () => {
         const map = new Map<
           string,
@@ -377,7 +377,7 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
     // construction, so a mis-wired handler fails loudly instead of running the
     // action with its page-level (auth) middleware silently dropped.
     const make = () =>
-      pageActionHandler({
+      pageActionsHandler({
         resolverByPath: async () =>
           new Map([
             [
@@ -392,7 +392,7 @@ describe('pageActionHandler dispatches the full chain (root -> page -> action)',
         // resolvePageUseByPath omitted to simulate a mis-wired (e.g. JS) caller
         renderPage: async () => new Response('', { status: 200 }),
         resolvePageNode: () => null,
-      } as unknown as Parameters<typeof pageActionHandler>[0]);
+      } as unknown as Parameters<typeof pageActionsHandler>[0]);
 
     expect(make).toThrow(/resolvePageUseByPath/);
   });

@@ -41,10 +41,10 @@ export type {
   StreamStatus,
 } from './define-loader.js';
 export { serverRoute } from './server-route.js';
-export type { RouteServer } from './server-route.js';
+export type { RouteBinder } from './server-route.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
-  ActionStub,
+  ActionRef,
   UseActionOptions,
   UseActionResult,
   MutateResult,
@@ -98,7 +98,7 @@ export type { LoaderCache } from './cache.js';
 export { defineChannel } from './define-channel.js';
 export type { Channel, Topic } from './define-channel.js';
 export { publish } from './pubsub.js';
-export type { LiveLoaderOpts } from './server-route.js';
+export type { LiveLoaderOptions } from './server-route.js';
 
 // Duplex WebSocket sockets.
 export { defineSocket } from './define-socket.js';
@@ -111,8 +111,8 @@ export { useSocket } from './use-socket.js';
 export type {
   SocketStatus,
   SocketCloseInfo,
-  ReconnectOpts,
-  UseSocketOpts,
+  ReconnectOptions,
+  UseSocketOptions,
   UseSocketResult,
 } from './use-socket.js';
 export { upgradeWebSocket } from './upgrade-websocket.js';
@@ -121,7 +121,7 @@ export { upgradeWebSocket } from './upgrade-websocket.js';
 export { defineRoom } from './define-room.js';
 export type { RoomRef, RoomHandler, RoomConnection } from './define-room.js';
 export { useRoom } from './use-room.js';
-export type { UseRoomOpts, UseRoomResult } from './use-room.js';
+export type { UseRoomOptions, UseRoomResult } from './use-room.js';
 export type { PresenceMember } from './internal/room-envelope.js';
 
 // Middleware + outcomes (the new system).

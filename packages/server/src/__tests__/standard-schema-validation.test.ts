@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { h } from 'preact';
 import { z } from 'zod';
-import { pageActionHandler } from '../page-action-handler.js';
+import { pageActionsHandler } from '../page-actions-handler.js';
 import { loadersHandler } from '../loaders-handler.js';
 import { defineAction, defineLoader } from '@hono-preact/iso';
 import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
@@ -32,7 +32,7 @@ describe('Standard Schema end-to-end (Zod)', () => {
           },
         ],
       ]);
-    const handler = pageActionHandler({
+    const handler = pageActionsHandler({
       resolverByPath,
       resolvePageUseByPath: async () => [],
       renderPage: (async (c: { html: (s: string) => unknown }) =>

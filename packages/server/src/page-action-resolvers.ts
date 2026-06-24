@@ -63,7 +63,7 @@ function extractActions(
  * pattern via `findBestPattern`.
  *
  * NOTE: framework-private. Intended consumer is the generated server entry and
- * pageActionHandler.
+ * pageActionsHandler.
  */
 export function makePageActionResolvers(
   serverRoutes: ReadonlyArray<ServerRoute>,

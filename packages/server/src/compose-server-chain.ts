@@ -54,7 +54,7 @@ export interface ComposedServerChain<S extends Scope> {
  * `S` (the chain only carries that scope's middleware by construction).
  *
  * NOTE: framework-private; intended consumers are loadersHandler and
- * pageActionHandler.
+ * pageActionsHandler.
  */
 export async function composeServerChain<S extends Scope = Scope>(
   args: ComposeServerChainArgs

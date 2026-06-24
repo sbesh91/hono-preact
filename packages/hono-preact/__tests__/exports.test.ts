@@ -77,10 +77,10 @@ describe('hono-preact/server export', () => {
   });
 
   it('no longer surfaces the low-level handlers (moved to /server/internal/runtime wiring)', async () => {
-    // The value-bearing handlers are checked here; the type-only removals (ActionEntry, LoadersHandlerOptions, PageActionHandlerOptions) are erased at runtime and are enforced by pnpm typecheck instead.
+    // The value-bearing handlers are checked here; the type-only removals (ActionEntry, LoadersHandlerOptions, PageActionsHandlerOptions) are erased at runtime and are enforced by pnpm typecheck instead.
     const m = await import('hono-preact/server');
     expect('loadersHandler' in m).toBe(false);
-    expect('pageActionHandler' in m).toBe(false);
+    expect('pageActionsHandler' in m).toBe(false);
   });
 
   it('no longer surfaces the framework-emitted resolver factories', async () => {
@@ -100,7 +100,7 @@ describe('hono-preact/server/internal/runtime export', () => {
   it('does not re-surface the low-level handlers or resolver factories', async () => {
     const m = await import('hono-preact/server/internal/runtime');
     expect('loadersHandler' in m).toBe(false);
-    expect('pageActionHandler' in m).toBe(false);
+    expect('pageActionsHandler' in m).toBe(false);
     expect('routeServerModules' in m).toBe(false);
     expect('makePageUseResolver' in m).toBe(false);
     expect('makePageActionResolvers' in m).toBe(false);

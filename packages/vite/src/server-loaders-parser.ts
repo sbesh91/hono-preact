@@ -111,7 +111,7 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
  * Returns `string[]` for array literals of string literals, `'*'` for the
  * wildcard string literal, or undefined if not present or unsupported shape.
  */
-export function readParamsOpt(
+export function readParamsOption(
   opts: ObjectExpression
 ): string[] | '*' | undefined {
   for (const prop of opts.properties) {

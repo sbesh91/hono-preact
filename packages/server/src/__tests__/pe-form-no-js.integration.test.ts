@@ -3,7 +3,7 @@ import { h } from 'preact';
 import { Hono } from 'hono';
 import { LocationProvider } from 'preact-iso';
 import { renderPage } from '../render.js';
-import { pageActionHandler } from '../page-action-handler.js';
+import { pageActionsHandler } from '../page-actions-handler.js';
 import { makePageActionResolvers } from '../page-action-resolvers.js';
 import { deny, useActionResult, type ServerRoute } from '@hono-preact/iso';
 
@@ -72,7 +72,7 @@ describe('PE form, no JS', () => {
     const app = new Hono()
       .post(
         '*',
-        pageActionHandler({
+        pageActionsHandler({
           resolverByPath: pageActionResolvers.byPath,
           resolvePageUseByPath: async () => [], // page guards not under test here
           renderPage,

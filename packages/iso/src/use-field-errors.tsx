@@ -22,7 +22,7 @@ export function useFieldErrors(): FieldErrorsMap {
 
 /** ARIA props to spread onto a field control so screen readers announce and
  * associate its error. */
-export interface FieldErrorProps_Aria {
+export interface FieldErrorAriaProps {
   'aria-invalid'?: true;
   'aria-describedby'?: string;
 }
@@ -41,7 +41,7 @@ export interface FieldErrorProps_Aria {
  * field is valid (or used outside a `<Form>`) it returns an empty object, so
  * the attributes are absent rather than stale.
  */
-export function useFieldErrorProps(name: string): FieldErrorProps_Aria {
+export function useFieldErrorProps(name: string): FieldErrorAriaProps {
   const errors = useContext(FieldErrorsContext);
   const prefix = useContext(FieldErrorPrefixContext);
   const hasError = (errors[name]?.length ?? 0) > 0;

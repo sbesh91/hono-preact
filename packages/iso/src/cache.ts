@@ -94,7 +94,7 @@ export function runRequestScope<R>(
     // Nested call: inherit the parent store. Seeded values are written
     // additively so the inner caller's overrides take effect without
     // wiping the parent's per-request state (e.g. the action-result
-    // slot set by pageActionHandler before it invokes renderPage).
+    // slot set by pageActionsHandler before it invokes renderPage).
     if (initial?.honoContext !== undefined) {
       existing.set(HONO_CONTEXT_KEY, initial.honoContext);
     }

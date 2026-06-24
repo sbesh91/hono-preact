@@ -28,7 +28,7 @@ describe('loadersHandler page-use resolver contract', () => {
     // Page-level `use` carries route/layout auth gates; on the loader RPC path
     // a missing resolver would silently drop them, exposing data the gate
     // should protect (a confidentiality bypass). resolvePageUse is required and
-    // validated at construction, mirroring pageActionHandler.
+    // validated at construction, mirroring pageActionsHandler.
     const callWithoutOpts = loadersHandler as (glob: unknown) => unknown;
     expect(() => callWithoutOpts({})).toThrow(/resolvePageUse/);
   });
