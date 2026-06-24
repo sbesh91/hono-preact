@@ -51,7 +51,7 @@ const DemoIndex: FunctionComponent = () => (
           streaming
         </a>
         ,{' '}
-        <a href="/docs/guards" class="underline hover:text-foreground">
+        <a href="/docs/middleware" class="underline hover:text-foreground">
           guards
         </a>
         .

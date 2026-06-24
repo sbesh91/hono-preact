@@ -64,3 +64,27 @@ interface PositionState {
 | `align`  | `'start' \| 'center' \| 'end'`           | Resolved alignment.                     |
 | `arrowX` | `number \| null`                         | Arrow x offset in px, or null.          |
 | `arrowY` | `number \| null`                         | Arrow y offset in px, or null.          |
+
+## Helpers
+
+Two pure helpers convert between the hook's `(side, align)` model and a Floating
+UI `Placement` string. Both are exported from `hono-preact-ui` for building your
+own positioning logic on top of the same mapping the components use.
+
+```ts
+import { placementFor, sideAlignFromPlacement } from 'hono-preact-ui';
+
+// (side, align) -> Placement: 'center' is the bare side; 'start'/'end' add the suffix.
+function placementFor(
+  side: 'top' | 'right' | 'bottom' | 'left',
+  align: 'start' | 'center' | 'end'
+): Placement; // e.g. ('bottom', 'start') -> 'bottom-start'
+
+// Placement -> (side, align): the inverse, for rendering data-side / data-align.
+function sideAlignFromPlacement(placement: Placement): {
+  side: 'top' | 'right' | 'bottom' | 'left';
+  align: 'start' | 'center' | 'end';
+};
+```
+
+`Placement` is the Floating UI placement union (e.g. `'bottom'`, `'bottom-start'`, `'left-end'`).

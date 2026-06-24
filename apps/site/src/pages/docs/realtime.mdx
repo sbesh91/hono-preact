@@ -172,12 +172,13 @@ publish(counterChannel.key()); // signal channel
 
 Defines a channel-driven live loader inside a `serverLoaders` object. Yields the result of `load` once on connect, then re-runs and pushes on every publish to `topic`.
 
-| Option      | Type                                 | Description                                                                          |
-| ----------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
-| `topic`     | `(ctx: LoaderCtx) => Topic<unknown>` | Returns the topic this loader subscribes to. Called with the same context as `load`. |
-| `load`      | `(ctx: LoaderCtx) => Promise<T>`     | Produces the data snapshot. Called on connect and on every publish.                  |
-| `cache`     | `LoaderCache<T>`                     | Optional cache shared across `load` calls.                                           |
-| `timeoutMs` | `number \| false`                    | Timeout per `load` call. Defaults to `false` (no cap).                               |
+| Option      | Type                                 | Description                                                                                              |
+| ----------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `topic`     | `(ctx: LoaderCtx) => Topic<unknown>` | Returns the topic this loader subscribes to. Called with the same context as `load`.                     |
+| `load`      | `(ctx: LoaderCtx) => Promise<T>`     | Produces the data snapshot. Called on connect and on every publish.                                      |
+| `use`       | `ReadonlyArray<Middleware>`          | Optional guard/middleware chain run on the subscription (same inheritance as a non-live loader's `use`). |
+| `cache`     | `LoaderCache<T>`                     | Optional cache shared across `load` calls.                                                               |
+| `timeoutMs` | `number \| false`                    | Timeout per `load` call. Defaults to `false` (no cap).                                                   |
 
 Returns a `LoaderRef<T, true>`. Consume it with the accumulating form `ref.View(render, { initial, reduce })`. The `StreamStatus` and `.View` option table are described on the [Live Loaders](/docs/live-loaders) page.
 
