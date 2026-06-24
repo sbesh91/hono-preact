@@ -106,10 +106,15 @@ type RoutesManifest = {
     // every `server` thunk in the tree
     () => Promise<unknown>
   >;
+  serverRoutes: ReadonlyArray<ServerRoute>; // server-bound nodes (loaders/actions/rooms/sockets)
+  routeUse: ReadonlyArray<{
+    path: string;
+    use: ReadonlyArray<Middleware | StreamObserver>;
+  }>; // page-layer `use` chain per node
 };
 ```
 
-`tree` is the original input retained for devtools and dev-time introspection. `flat` is what `<Routes>` registers with preact-iso. `serverImports` is what the generated server entry (through `createServerEntry`) adapts into the loader and action handler map.
+`tree` is the original input retained for devtools and dev-time introspection. `flat` is what `<Routes>` registers with preact-iso. `serverImports` is what the generated server entry (through `createServerEntry`) adapts into the loader and action handler map. `serverRoutes` and `routeUse` are the introspection surfaces the page-action resolver and the page-layer `use` resolver read, so the render gate and the data gate cannot drift.
 
 ## Page-layer middleware on a route node
 

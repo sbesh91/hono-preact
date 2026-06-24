@@ -70,7 +70,7 @@ export default defineRoutes([
 
 Open `http://localhost:5173/movies`. You should see "Movies".
 
-> The `view` field is a deferred dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting. No manual `<Route>` JSX is needed; `<Routes>` in `iso.tsx` registers everything from the manifest.
+> The `view` field is a deferred dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting. No manual `<Route>` JSX is needed; the framework-generated client entry (`virtual:hono-preact/client`) registers everything from the manifest.
 
 ## 2. Add a server loader
 

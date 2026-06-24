@@ -219,14 +219,14 @@ Returns a `RoomRef` that the client hook reads. On the client side the `.server`
 
 #### `RoomConnection` fields (the `conn` handle)
 
-| Field                   | Type     | Description                                                                      |
-| ----------------------- | -------- | -------------------------------------------------------------------------------- |
-| `id`                    | `string` | This connection's stable member id.                                              |
-| `send(msg)`             | method   | Send a message to this one client.                                               |
-| `broadcast(msg, opts?)` | method   | Fan out to every other member. Pass `{ self: true }` to also include the sender. |
-| `setPresence(state)`    | method   | Publish this connection's presence state to the roster.                          |
-| `data`                  | `Data`   | Per-connection mutable bag.                                                      |
-| `close(code?, reason?)` | method   | Close this connection.                                                           |
+| Field                   | Type     | Description                                                                                                        |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `id`                    | `string` | This connection's stable member id.                                                                                |
+| `send(msg)`             | method   | Send a message to this one client.                                                                                 |
+| `broadcast(msg, opts?)` | method   | Fan out to every other member. Pass `{ self: true }` to also include the sender.                                   |
+| `setPresence(state)`    | method   | Publish this connection's presence state to the roster.                                                            |
+| `data`                  | `Data`   | Per-connection metadata seeded by the `data()` factory; treat as read-only (use `setPresence` for evolving state). |
+| `close(code?, reason?)` | method   | Close this connection.                                                                                             |
 
 ### `ref.useRoom(opts?)` / `useRoom(ref, opts?)`
 

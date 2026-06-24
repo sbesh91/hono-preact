@@ -9,9 +9,11 @@ A small full-stack framework. Hono on the edge, Preact in the browser, manifest 
 ## Install
 
 ```bash
-pnpm add hono-preact hono preact preact-iso preact-render-to-string hoofd
+pnpm add hono-preact hono preact 'preact-iso@github:preactjs/preact-iso#v3' preact-render-to-string hoofd
 pnpm add -D vite
 ```
+
+> `preact-iso` must be the v3 GitHub branch (`github:preactjs/preact-iso#v3`); the npm release is still 2.x. The scaffolder pins this for you.
 
 ## Quick start
 
@@ -19,9 +21,10 @@ pnpm add -D vite
 // vite.config.ts
 import { defineConfig } from 'vite';
 import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
 
 export default defineConfig({
-  plugins: [honoPreact()],
+  plugins: [honoPreact({ adapter: cloudflareAdapter() })],
 });
 ```
 
@@ -39,7 +42,7 @@ Full walkthrough: https://framework.sbesh.com/docs/quick-start
 
 - `hono-preact`: iso runtime exports (routes, pages, loaders, actions, forms, middleware, outcomes).
 - `hono-preact/page`: page-scope outcome kitchen sink (`redirect`, `deny`, `render`, predicates).
-- `hono-preact/server`: server entry, `renderPage`, SSR streaming helpers.
+- `hono-preact/server`: the public server barrel: `renderPage`, `HonoContext`, `useHonoContext`.
 - `hono-preact/vite`: `honoPreact()` plugin for Vite.
 - `hono-preact/internal`: advanced exports for tooling authors. No stability guarantee.
 

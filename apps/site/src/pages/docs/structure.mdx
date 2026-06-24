@@ -40,7 +40,7 @@ export default defineRoutes([
 
 ### Client and server entries (generated)
 
-The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the loader RPC handler, the page action handler, the `location` middleware, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
+The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the loader RPC handler, the page action handler, the WebSocket upgrade endpoint, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
 
 ### `apps/site/src/Layout.tsx`
 
@@ -88,7 +88,6 @@ Server-only utilities (`packages/server/`):
 
 - **`renderPage`**: SSR entry that prerenders to HTML, injects head tags via hoofd, and turns middleware-thrown redirect / deny / render outcomes into the appropriate HTTP response.
 - **`HonoContext`** / **`useHonoContext`**: access the Hono `Context` from Preact components during SSR.
-- **`location`**: middleware that attaches the request URL to the Hono context for preact-iso's `LocationProvider`.
 
 ### `hono-preact/vite` (workspace package)
 
