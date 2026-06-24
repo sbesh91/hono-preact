@@ -8,14 +8,14 @@ import {
   waitFor,
 } from '@testing-library/preact';
 import { Form } from '../form.js';
-import type { ActionStub } from '../action.js';
+import type { ActionRef } from '../action.js';
 import {
   clearLastActionResult,
   getLastActionResult,
 } from '../internal/action-result-store.js';
 
-function makeStub(): ActionStub<{ text: string }, { id: number }, never> {
-  const stub = (async () => ({ id: 1 })) as unknown as ActionStub<
+function makeStub(): ActionRef<{ text: string }, { id: number }, never> {
+  const stub = (async () => ({ id: 1 })) as unknown as ActionRef<
     { text: string },
     { id: number },
     never

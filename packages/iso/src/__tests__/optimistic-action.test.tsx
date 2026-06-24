@@ -11,12 +11,12 @@ import {
 import { defineAction } from '../action.js';
 import { useOptimisticAction, OPTIMISTIC_BRAND } from '../optimistic-action.js';
 import { ReloadContext } from '../reload-context.js';
-import type { ActionStub } from '../action.js';
+import type { ActionRef } from '../action.js';
 
 const stub = {
   __module: 'movies',
   __action: 'create',
-} as unknown as ActionStub<{ title: string }, { id: number; title: string }>;
+} as unknown as ActionRef<{ title: string }, { id: number; title: string }>;
 
 afterEach(() => {
   cleanup();
@@ -185,7 +185,7 @@ describe('useOptimisticAction', () => {
     const streamStub = {
       __module: 'movies',
       __action: 'upload',
-    } as unknown as ActionStub<
+    } as unknown as ActionRef<
       { title: string },
       { id: number; title: string },
       Chunk

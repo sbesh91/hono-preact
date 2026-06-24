@@ -8,7 +8,7 @@ const INTERNALIZED_FACTORIES = [
   'makePageActionResolvers',
 ] as const;
 
-const INTERNALIZED_HANDLERS = ['loadersHandler', 'pageActionHandler'] as const;
+const INTERNALIZED_HANDLERS = ['loadersHandler', 'pageActionsHandler'] as const;
 
 describe('server boundary', () => {
   it('exposes createServerEntry on /internal/runtime', () => {

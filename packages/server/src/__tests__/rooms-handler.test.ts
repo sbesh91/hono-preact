@@ -12,7 +12,7 @@ import {
   __resetPubSubForTesting,
   __resetPresenceForTesting,
   getPubSubBackend,
-  roomMembers,
+  presenceMembers,
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
@@ -384,7 +384,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(update).toMatchObject({ op: 'update', state: { typing: true } });
 
     // The roster reflects the new state.
-    const aMember = roomMembers(TOPIC).find(
+    const aMember = presenceMembers(TOPIC).find(
       (m) => update && 'from' in update && m.id === update.from
     );
     expect(aMember?.state).toMatchObject({ typing: true });
@@ -402,7 +402,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     const b = conns()[1]!;
     await b.events.onOpen?.(new Event('open'), b.ws as never);
 
-    expect(roomMembers(TOPIC)).toHaveLength(2);
+    expect(presenceMembers(TOPIC)).toHaveLength(2);
 
     const bBefore = b.ws.sends.length;
     a.events.onClose?.({ code: 1000, reason: '' } as CloseEvent, a.ws as never);
@@ -415,7 +415,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(bNew.some((e) => e.t === 'presence' && e.op === 'leave')).toBe(true);
 
     // A is gone from the roster.
-    expect(roomMembers(TOPIC)).toHaveLength(1);
+    expect(presenceMembers(TOPIC)).toHaveLength(1);
 
     // A's subscription was torn down: a direct publish to the topic reaches B
     // (still subscribed) but NOT A (unsubscribed). The publish is done via the
@@ -505,7 +505,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(a.ws.closes).toHaveLength(1);
     expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
     expect(onJoinSpy).not.toHaveBeenCalled();
-    expect(roomMembers(TOPIC)).toHaveLength(0);
+    expect(presenceMembers(TOPIC)).toHaveLength(0);
   });
 
   it('onJoin receives params interpolated server-side from client-sent key params', async () => {
@@ -604,7 +604,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
 
     expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
     expect(onJoinSpy).not.toHaveBeenCalled();
-    expect(roomMembers(TOPIC)).toHaveLength(0);
+    expect(presenceMembers(TOPIC)).toHaveLength(0);
   });
 
   it('(security) client key params are constrained to the channel namespace', async () => {
@@ -633,10 +633,10 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
 
     // The connection must join `room/p1`, not `board/p1` or any other topic.
     // The roster confirms which topic the server used.
-    expect(roomMembers('room/p1')).toHaveLength(1);
+    expect(presenceMembers('room/p1')).toHaveLength(1);
     // An unrelated topic (`board/p1`) must be empty: the params never escape
     // the channel's namespace.
-    expect(roomMembers('board/p1')).toHaveLength(0);
+    expect(presenceMembers('board/p1')).toHaveLength(0);
   });
 
   // -------------------------------------------------------------------------
@@ -731,7 +731,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
 
     expect(a.ws.closes[0]!.code).toBe(WS_DENY_CODE);
     expect(onJoinSpy).not.toHaveBeenCalled();
-    expect(roomMembers(TOPIC)).toHaveLength(0);
+    expect(presenceMembers(TOPIC)).toHaveLength(0);
   });
 
   // -------------------------------------------------------------------------

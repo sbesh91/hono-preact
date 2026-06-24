@@ -14,17 +14,17 @@ import { useWsLifecycle } from './internal/ws-lifecycle.js';
 import type {
   SocketStatus,
   SocketCloseInfo,
-  ReconnectOpts,
+  ReconnectOptions,
 } from './internal/ws-lifecycle.js';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
-export type { SocketStatus, SocketCloseInfo, ReconnectOpts };
+export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
 
 /**
  * The structural phantom shape `useRoom` reads message/state/param types from.
  * It deliberately carries ONLY the four phantom fields, not `RoomRef`'s
  * `useRoom` method: constraining on the full `RoomRef` (which references
- * `UseRoomOpts<RoomRef<...>>` in its own method) makes the constraint check
+ * `UseRoomOptions<RoomRef<...>>` in its own method) makes the constraint check
  * recurse through that method, which TS rejects as excessively deep. `RoomRef`
  * is structurally assignable to this shape, so callers pass a `RoomRef` as-is.
  */
@@ -53,9 +53,9 @@ type Params<R> =
 // `key` mirrors the channel's `KeyArgs`: a param-less channel makes `key`
 // optional, a `:param` channel makes it required. Threading this through the
 // opts object (rather than as a positional arg) keeps the single-opts shape.
-type KeyOpt<P> = keyof P extends never ? { key?: P } : { key: P };
+type KeyOption<P> = keyof P extends never ? { key?: P } : { key: P };
 
-export type UseRoomOpts<R extends AnyRoomRefShape> = KeyOpt<Params<R>> & {
+export type UseRoomOptions<R extends AnyRoomRefShape> = KeyOption<Params<R>> & {
   /** Initial presence state, sent on open and re-sent on every reconnect. */
   presence?: State<R>;
   /**
@@ -72,7 +72,7 @@ export type UseRoomOpts<R extends AnyRoomRefShape> = KeyOpt<Params<R>> & {
    * Default: false for code 1000 and 4000-4999, true otherwise.
    */
   shouldReconnect?: (e: CloseEvent) => boolean;
-  reconnect?: ReconnectOpts;
+  reconnect?: ReconnectOptions;
   /**
    * When false the room will not connect (useful for conditional use).
    * Default: true.
@@ -106,7 +106,7 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
  */
 export function useRoom<R extends AnyRoomRefShape>(
   ref: R,
-  opts?: UseRoomOpts<R>
+  opts?: UseRoomOptions<R>
 ): UseRoomResult<R> {
   const [members, setMembers] = useState<
     ReadonlyArray<PresenceMember<State<R> | undefined>>

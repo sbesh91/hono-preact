@@ -18,10 +18,10 @@ export type { PubSubBackend } from './internal/pubsub.js';
 // It pairs each registry mutation with a wire broadcast; the registry itself
 // is transport-free.
 export {
-  joinRoom,
-  leaveRoom,
+  joinPresence,
+  leavePresence,
   updatePresence,
-  roomMembers,
+  presenceMembers,
   __resetPresenceForTesting,
 } from './internal/presence.js';
 export {

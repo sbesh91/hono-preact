@@ -8,7 +8,7 @@ import {
   useId,
 } from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { ActionStub } from './action.js';
+import type { ActionRef } from './action.js';
 import {
   OPTIMISTIC_BRAND,
   type UseOptimisticActionResult,
@@ -49,7 +49,7 @@ function logClientSchemaThrew(err: unknown): void {
  * casting away the type.
  */
 type FormActionInput<TPayload, TResult> =
-  | ActionStub<TPayload, TResult, never>
+  | ActionRef<TPayload, TResult, never>
   | UseOptimisticActionResult<TPayload, TResult, unknown>;
 
 export type FormProps<TPayload, TResult> = Omit<
@@ -192,7 +192,7 @@ export function Form<TPayload, TResult>({
   // a deny its .data points at the same stable store/context object until a
   // fresh result arrives. For non-deny results the key is null (no issues).
   const serverResult = useActionResult(
-    action as ActionStub<TPayload, TResult, never>
+    action as ActionRef<TPayload, TResult, never>
   );
   const serverErrors = useMemo<FieldErrorsMap>(
     () => mapIssuesToFields(getValidationIssues(serverResult)),

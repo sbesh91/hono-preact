@@ -1,14 +1,14 @@
 import { defineLoader, type LoaderRef } from '../define-loader.js';
 import { fetchLoaderData } from './loader-fetch.js';
 
-type StubOpts = {
+type StubOptions = {
   __moduleKey: string;
   __loaderName: string;
   params?: string[] | '*';
 };
 
 export function __$createLoaderStub_hpiso<T = unknown>(
-  opts: StubOpts
+  opts: StubOptions
 ): LoaderRef<T> {
   // LoaderHost's useLoaderRunner is the actual driver in the browser; this fn
   // is the SSR / direct-fn fallback path only; it awaits the first value and

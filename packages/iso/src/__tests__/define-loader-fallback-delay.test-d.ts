@@ -1,9 +1,9 @@
 import { expectTypeOf } from 'vitest';
 import { defineLoader } from '../define-loader.js';
-import type { DefineLoaderOpts, LoaderRef } from '../define-loader.js';
+import type { DefineLoaderOptions, LoaderRef } from '../define-loader.js';
 
 // The option is an optional number.
-expectTypeOf<DefineLoaderOpts<number>['fallbackDelay']>().toEqualTypeOf<
+expectTypeOf<DefineLoaderOptions<number>['fallbackDelay']>().toEqualTypeOf<
   number | undefined
 >();
 

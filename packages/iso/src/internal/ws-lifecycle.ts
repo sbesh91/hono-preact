@@ -26,7 +26,7 @@ export type SocketCloseInfo = {
   wasClean: boolean;
 };
 
-export type ReconnectOpts = {
+export type ReconnectOptions = {
   /** Maximum number of reconnect attempts. Default: 5. */
   maxRetries?: number;
   /** Minimum delay before first retry in ms. Default: 250. */
@@ -60,7 +60,7 @@ export type WsLifecycleConfig = {
   /** Predicate controlling whether to reconnect after a close. */
   shouldReconnect?: (e: CloseEvent) => boolean;
   /** Reconnect backoff tuning. */
-  reconnect?: ReconnectOpts;
+  reconnect?: ReconnectOptions;
 };
 
 export type WsLifecycle = {

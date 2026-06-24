@@ -3,10 +3,10 @@ import { useSyncExternalStore } from 'preact/compat';
 import { ActionResultContext } from './action-result-context.js';
 import {
   getLastActionResult,
-  subscribeActionResults,
+  subscribeLastActionResult,
 } from './internal/action-result-store.js';
 import { isBrowser } from './is-browser.js';
-import type { ActionStub } from './action.js';
+import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
 
 export type ActionResult<TPayload, TResult> =
@@ -34,10 +34,10 @@ export type ActionResult<TPayload, TResult> =
   | null;
 
 export function useActionResult<TPayload = unknown, TResult = unknown>(
-  stub?: ActionStub<TPayload, TResult, never>
+  stub?: ActionRef<TPayload, TResult, never>
 ): ActionResult<TPayload, TResult> {
   const ssr = useContext(ActionResultContext);
-  const client = useSyncExternalStore(subscribeActionResults, () =>
+  const client = useSyncExternalStore(subscribeLastActionResult, () =>
     isBrowser() ? getLastActionResult(stub) : null
   );
 

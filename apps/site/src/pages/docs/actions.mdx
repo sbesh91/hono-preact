@@ -428,7 +428,7 @@ For route-wide gating (every action plus every loader under a route), declare `u
 
 Define a `serverActions` map in your `.server.ts` file alongside the loader. Each action is wrapped with `defineAction` to carry its payload and result types.
 
-Actions are invoked via POST to the owning page's URL. On the client, the Vite plugin replaces the `serverActions` import with a Proxy: each property access returns an `ActionStub` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
+Actions are invoked via POST to the owning page's URL. On the client, the Vite plugin replaces the `serverActions` import with a Proxy: each property access returns an `ActionRef` object that encodes the module and action name. Neither the function body nor its imports ever reach the browser bundle.
 
 ## Timeouts
 
@@ -464,7 +464,7 @@ surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionStub` with the module and action name. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders` or `serverActions`. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionRef` with the module and action name. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders` or `serverActions`. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
 
 ## Security: SameSite cookies on form posts
 

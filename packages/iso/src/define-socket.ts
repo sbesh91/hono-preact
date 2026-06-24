@@ -3,7 +3,7 @@ import type { Middleware } from './define-middleware.js';
 import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from './internal/contract.js';
 import {
   useSocket,
-  type UseSocketOpts,
+  type UseSocketOptions,
   type UseSocketResult,
 } from './use-socket.js';
 
@@ -90,7 +90,7 @@ export interface SocketRef<Incoming, Outgoing> {
    * `serverSockets.feed.useSocket({ onMessage })`.
    */
   useSocket(
-    opts?: UseSocketOpts<SocketRef<Incoming, Outgoing>>
+    opts?: UseSocketOptions<SocketRef<Incoming, Outgoing>>
   ): UseSocketResult<SocketRef<Incoming, Outgoing>>;
 }
 
@@ -108,8 +108,8 @@ export function defineSocket<Incoming, Outgoing, Data = undefined>(
   // as a client SocketRef. The build strips the body on the client and replaces
   // it with the descriptor stub, so this object only runs server-side.
   // Single sanctioned cast: the def-doubles-as-client-ref pattern, identical
-  // to how defineAction returns a server fn typed as ActionStub (action.ts
-  // uses `return fn as unknown as ActionStub<...>`). The cast is bounded to
+  // to how defineAction returns a server fn typed as ActionRef (action.ts
+  // uses `return fn as unknown as ActionRef<...>`). The cast is bounded to
   // this one return site.
   const ref = { ...handler } as unknown as SocketRef<Incoming, Outgoing>;
   // Attach the `.useSocket` ref-method to the def itself, for the same reason

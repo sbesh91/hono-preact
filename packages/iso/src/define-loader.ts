@@ -179,7 +179,7 @@ export interface LoaderRef<T, Live extends boolean = false> {
 export type AnyLoaderRef = LoaderRef<any, boolean>;
 
 /** The two schema options a loader may carry. */
-export type LoaderSchemaOpts = {
+export type LoaderSchemaOptions = {
   paramsSchema?: StandardSchemaV1;
   searchSchema?: StandardSchemaV1;
 };
@@ -189,14 +189,17 @@ export type LoaderSchemaOpts = {
  * `paramsSchema` output if present, else `Fallback` (the bare-form default or
  * the route form's `RouteParams<RouteId>`).
  */
-export type ParamsFromOpts<O, Fallback = Record<string, string>> = O extends {
+export type ParamsFromOptions<
+  O,
+  Fallback = Record<string, string>,
+> = O extends {
   paramsSchema: infer P extends StandardSchemaV1;
 }
   ? StandardSchemaV1.InferOutput<P>
   : Fallback;
 
 /** The searchParams type a loader's ctx sees, given its opts `O`. */
-export type SearchFromOpts<O> = O extends {
+export type SearchFromOptions<O> = O extends {
   searchSchema: infer S extends StandardSchemaV1;
 }
   ? StandardSchemaV1.InferOutput<S>
@@ -208,7 +211,7 @@ export type SearchFromOpts<O> = O extends {
  * `cache` is an opt-in for sharing a cache instance across multiple loaders;
  * when omitted, `defineLoader` creates a fresh one.
  */
-export type DefineLoaderOpts<T> = {
+export type DefineLoaderOptions<T> = {
   __moduleKey?: string;
   __loaderName?: string;
   cache?: LoaderCache<T>;
@@ -309,32 +312,36 @@ function validateFallbackDelay(
 // single-value `LoaderRef<T, false>`.
 export function defineLoader<T>(
   fn: Loader<T>,
-  opts: DefineLoaderOpts<T> & { live: true }
+  opts: DefineLoaderOptions<T> & { live: true }
 ): LoaderRef<T, true>;
 export function defineLoader<RouteId extends RegisteredPaths, T>(
   route: RouteId,
   fn: Loader<T, RouteParams<RouteId>>,
-  opts: DefineLoaderOpts<T> & { live: true }
+  opts: DefineLoaderOptions<T> & { live: true }
 ): LoaderRef<T, true>;
 // Non-live bare form, with schema inference.
-export function defineLoader<T, O extends LoaderSchemaOpts = {}>(
-  fn: Loader<T, ParamsFromOpts<O>, SearchFromOpts<O>>,
-  opts?: DefineLoaderOpts<T> & O
+export function defineLoader<T, O extends LoaderSchemaOptions = {}>(
+  fn: Loader<T, ParamsFromOptions<O>, SearchFromOptions<O>>,
+  opts?: DefineLoaderOptions<T> & O
 ): LoaderRef<T, false>;
 // Non-live route form, with schema inference (params default to RouteParams).
 export function defineLoader<
   RouteId extends RegisteredPaths,
   T,
-  O extends LoaderSchemaOpts = {},
+  O extends LoaderSchemaOptions = {},
 >(
   route: RouteId,
-  fn: Loader<T, ParamsFromOpts<O, RouteParams<RouteId>>, SearchFromOpts<O>>,
-  opts?: DefineLoaderOpts<T> & O
+  fn: Loader<
+    T,
+    ParamsFromOptions<O, RouteParams<RouteId>>,
+    SearchFromOptions<O>
+  >,
+  opts?: DefineLoaderOptions<T> & O
 ): LoaderRef<T, false>;
 export function defineLoader(
   fnOrRoute: Loader<unknown> | string,
-  fnOrOpts?: Loader<unknown> | DefineLoaderOpts<unknown>,
-  maybeOpts?: DefineLoaderOpts<unknown>
+  fnOrOpts?: Loader<unknown> | DefineLoaderOptions<unknown>,
+  maybeOpts?: DefineLoaderOptions<unknown>
 ): LoaderRef<unknown, boolean> {
   // Normalize the two overload forms. The route id is type-level only (it
   // selects the param shape for the loader fn); it is not stored on the ref
@@ -342,7 +349,7 @@ export function defineLoader(
   const isRouteForm = typeof fnOrRoute === 'string';
   const fn = (isRouteForm ? fnOrOpts : fnOrRoute) as Loader<unknown>;
   const opts = (isRouteForm ? maybeOpts : fnOrOpts) as
-    | DefineLoaderOpts<unknown>
+    | DefineLoaderOptions<unknown>
     | undefined;
 
   const live = opts?.live ?? false;

@@ -55,7 +55,7 @@ export function getLastActionResult(stub?: {
   return last;
 }
 
-export function subscribeActionResults(listener: Listener): () => void {
+export function subscribeLastActionResult(listener: Listener): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);

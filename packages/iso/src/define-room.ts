@@ -3,7 +3,11 @@ import type { Middleware } from './define-middleware.js';
 import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
-import { useRoom, type UseRoomOpts, type UseRoomResult } from './use-room.js';
+import {
+  useRoom,
+  type UseRoomOptions,
+  type UseRoomResult,
+} from './use-room.js';
 
 /**
  * The per-connection handle handed to a room's server handlers.
@@ -130,7 +134,7 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
    * `serverRooms.board.useRoom({ key: { roomId } })`.
    */
   useRoom(
-    opts?: UseRoomOpts<RoomRef<Incoming, Outgoing, State, Params>>
+    opts?: UseRoomOptions<RoomRef<Incoming, Outgoing, State, Params>>
   ): UseRoomResult<RoomRef<Incoming, Outgoing, State, Params>>;
 }
 

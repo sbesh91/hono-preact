@@ -15,7 +15,7 @@ import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 
-export type ActionStub<TPayload, TResult, TChunk = never> = {
+export type ActionRef<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
   readonly __action: string;
   readonly __phantom?: readonly [TPayload, TResult, TChunk];
@@ -37,12 +37,12 @@ export type ActionFn<TPayload, TResult, TChunk = never> =
       payload: TPayload
     ) => AsyncGenerator<TChunk, TResult, unknown>);
 
-export type DefineActionOpts<TChunk = never, TResult = unknown> = {
+export type DefineActionOptions<TChunk = never, TResult = unknown> = {
   /**
    * Per-action middleware and (for streaming actions) stream observers.
    * Attached to the function as a non-enumerable property; the
-   * page-action-handler reads it through the typed `ActionEntry` map built at
-   * module-load time (`packages/server/src/page-action-handler.ts`).
+   * page-actions-handler reads it through the typed `ActionEntry` map built at
+   * module-load time (`packages/server/src/page-actions-handler.ts`).
    */
   use?: ActionUse<TChunk, TResult, boolean>;
   /**
@@ -86,20 +86,20 @@ export function defineAction<
   TChunk = never,
 >(
   fn: ActionFn<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>,
-  opts: DefineActionOpts<TChunk, TResult> & { input: TInput }
-): ActionStub<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>;
+  opts: DefineActionOptions<TChunk, TResult> & { input: TInput }
+): ActionRef<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>;
 export function defineAction<TPayload, TResult, TChunk = never>(
   fn: ActionFn<TPayload, TResult, TChunk>,
-  opts?: DefineActionOpts<TChunk, TResult>
-): ActionStub<TPayload, TResult, TChunk>;
+  opts?: DefineActionOptions<TChunk, TResult>
+): ActionRef<TPayload, TResult, TChunk>;
 export function defineAction(
   // `unknown` widens the impl to accept all overloads; the permissive types are
   // bounded here and do not escape to callers (each overload narrows them).
   fn: ActionFn<unknown, unknown, unknown>,
-  opts?: DefineActionOpts<unknown, unknown>
-): ActionStub<unknown, unknown, unknown> {
+  opts?: DefineActionOptions<unknown, unknown>
+): ActionRef<unknown, unknown, unknown> {
   validateTimeoutMs(opts?.timeoutMs, 'defineAction');
-  // SHAPE NOTE: `ActionStub` describes the CLIENT-side shape produced by the
+  // SHAPE NOTE: `ActionRef` describes the CLIENT-side shape produced by the
   // Vite plugin (`packages/vite/src/server-only.ts`) — an object with
   // `__module`, `__action`, and a `useAction` method. `defineAction` runs on
   // the SERVER side and returns the raw function with metadata attached via
@@ -108,12 +108,12 @@ export function defineAction(
   // identically on both sides; the plugin handles the substitution at the
   // value level. The `as unknown as` cast at the return is the single
   // bounded acknowledgement of this dual-shape contract. A future cleanup
-  // could split into `ServerActionImpl` / `ActionStub` types if the lie
+  // could split into `ServerActionImpl` / `ActionRef` types if the lie
   // starts to bite, but for now it's localized and documented.
   //
   // `Object.defineProperty` is used instead of direct assignment so a frozen
   // module export (strict ESM, HMR-frozen modules) does not throw.
-  // The key union pins the form-field constants to the typed ActionStub
+  // The key union pins the form-field constants to the typed ActionRef
   // property names at compile time; a divergence fails here, not at runtime.
   const attach = (
     key: 'use' | 'timeoutMs' | '__module' | '__action' | 'input',
@@ -131,7 +131,7 @@ export function defineAction(
   if (opts?.input) attach('input', opts.input);
   if (opts?.__module !== undefined) attach(FORM_MODULE_FIELD, opts.__module);
   if (opts?.__action !== undefined) attach(FORM_ACTION_FIELD, opts.__action);
-  return fn as unknown as ActionStub<unknown, unknown, unknown>;
+  return fn as unknown as ActionRef<unknown, unknown, unknown>;
 }
 
 type UseActionOptionsCommon<TChunk = never> = {
@@ -235,7 +235,7 @@ export function useAction<
   TChunk = never,
   TSnapshot = unknown,
 >(
-  stub: ActionStub<TPayload, TResult, TChunk>,
+  stub: ActionRef<TPayload, TResult, TChunk>,
   options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
 ): UseActionResult<TPayload, TResult> {
   const [pending, setPending] = useState(false);

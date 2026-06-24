@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { defineAction } from '../action.js';
 
 // `timeoutMs` is attached as ambient non-enumerable metadata, not on the
-// public `ActionStub` type. Reading it through the property descriptor keeps
+// public `ActionRef` type. Reading it through the property descriptor keeps
 // the assertion honest about what the implementation does (and avoids
 // asserting against a phantom field on the typed surface).
 function readAmbient(stub: object, key: string): unknown {

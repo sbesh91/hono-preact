@@ -49,7 +49,7 @@ import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import { ActiveLoaderIdContext } from '../internal/contexts.js';
-import type { ActionStub } from '../action.js';
+import type { ActionRef } from '../action.js';
 import { defineLoader } from '../define-loader.js';
 import { subscribe } from '../internal/form-submit-store.js';
 import {
@@ -60,7 +60,7 @@ import {
 const stub = {
   __module: 'movies',
   __action: 'create',
-} as unknown as ActionStub<{ title: string }, { ok: boolean }>;
+} as unknown as ActionRef<{ title: string }, { ok: boolean }>;
 
 afterEach(() => {
   cleanup();
@@ -327,7 +327,7 @@ describe('useAction', () => {
     const refStub = {
       __module: 'm',
       __action: 'go',
-    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+    } as unknown as ActionRef<Record<string, never>, { ok: true }>;
 
     function TestComponent() {
       const { mutate } = useAction(refStub, { invalidate: [active, other] });
@@ -373,7 +373,7 @@ describe('useAction', () => {
     const refStub = {
       __module: 'm',
       __action: 'go',
-    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+    } as unknown as ActionRef<Record<string, never>, { ok: true }>;
 
     function TestComponent() {
       const { mutate } = useAction(refStub, { invalidate: [other] });
@@ -407,7 +407,7 @@ describe('useAction', () => {
     const refStub = {
       __module: 'm',
       __action: 'go',
-    } as unknown as ActionStub<Record<string, never>, { ok: true }>;
+    } as unknown as ActionRef<Record<string, never>, { ok: true }>;
 
     vi.stubGlobal(
       'fetch',
@@ -461,7 +461,7 @@ describe('useAction', () => {
 
     function TestComponent() {
       const { mutate } = useAction(
-        stub as unknown as ActionStub<{ x: number }, Result>
+        stub as unknown as ActionRef<{ x: number }, Result>
       );
       mutateRef.current = mutate;
       return null;
@@ -496,7 +496,7 @@ describe('useAction', () => {
 
     function TestComponent() {
       const { mutate } = useAction(
-        stub as unknown as ActionStub<{ x: number }, { id: string }>
+        stub as unknown as ActionRef<{ x: number }, { id: string }>
       );
       mutateRef.current = mutate;
       return null;
@@ -517,11 +517,11 @@ describe('useAction', () => {
 
   it('exposes useAction as a method on the stub', async () => {
     // Mimic the shape produced by serverOnlyPlugin's client-side Proxy.
-    const methodStub: ActionStub<{ x: number }, { ok: true }> = {
+    const methodStub: ActionRef<{ x: number }, { ok: true }> = {
       __module: 'm',
       __action: 'go',
       useAction(opts) {
-        return useAction(this as ActionStub<{ x: number }, { ok: true }>, opts);
+        return useAction(this as ActionRef<{ x: number }, { ok: true }>, opts);
       },
     };
 
@@ -826,7 +826,7 @@ describe('useAction — streaming (onChunk)', () => {
 const mockStub = {
   __module: 'test-module',
   __action: 'test-action',
-} as unknown as ActionStub<Record<string, unknown>, unknown>;
+} as unknown as ActionRef<Record<string, unknown>, unknown>;
 
 describe('useAction — FormData (file upload)', () => {
   it('sends FormData when payload contains a File', async () => {
@@ -928,11 +928,7 @@ describe('useAction: streaming via SSE', () => {
     const streamingStub = {
       __module: 'x',
       __action: 'go',
-    } as unknown as ActionStub<
-      unknown,
-      { imported: number },
-      { count: number }
-    >;
+    } as unknown as ActionRef<unknown, { imported: number }, { count: number }>;
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
@@ -976,7 +972,7 @@ describe('useAction: streaming via SSE', () => {
     const streamingStub = {
       __module: 'x',
       __action: 'go',
-    } as unknown as ActionStub<unknown, unknown, { count: number }>;
+    } as unknown as ActionRef<unknown, unknown, { count: number }>;
     let caught = null as Error | null;
     let chunks = 0;
 
@@ -1020,7 +1016,7 @@ describe('useAction: streaming via SSE', () => {
     const streamingStub = {
       __module: 'x',
       __action: 'go',
-    } as unknown as ActionStub<unknown, { ok: boolean }, { count: number }>;
+    } as unknown as ActionRef<unknown, { ok: boolean }, { count: number }>;
     let caught = null as Error | null;
 
     function Probe() {

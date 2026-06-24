@@ -8,7 +8,7 @@ import {
   SOCKETS_RPC_PATH,
 } from '@hono-preact/iso/internal/runtime';
 import { loadersHandler } from './loaders-handler.js';
-import { pageActionHandler } from './page-action-handler.js';
+import { pageActionsHandler } from './page-actions-handler.js';
 import { renderPage } from './render.js';
 import {
   routeServerModules,
@@ -150,7 +150,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     })
     .post(
       '*',
-      pageActionHandler({
+      pageActionsHandler({
         resolverByPath: pageActionResolvers.byPath,
         resolvePageUseByPath: pageUseResolver.byPath,
         renderPage,

@@ -2,7 +2,7 @@
 // consumer. Standing rule (primitives review, Section F): when a new
 // feature needs cross-package agreement on a path, field name, or
 // generated id, the value starts life here, not as matching string
-// literals. Typed property positions (e.g. `ActionStub.__module`,
+// literals. Typed property positions (e.g. `ActionRef.__module`,
 // `mod.__moduleKey` reads) keep literal syntax; these constants own the
 // value positions of the contracts listed below (FormData keys, fetch
 // URLs, codegen template strings).
@@ -60,7 +60,7 @@ export const LOADER_NAME_OPTION = '__loaderName';
  * Form field names carrying the action identity in POSTs. Consumers: iso
  * `form.tsx` (FormData set/skip, hidden inputs) and `action.ts` (stub
  * property definition AND its own FormData append/skip when building
- * non-streaming POST bodies), server `page-action-handler.ts` (form reads
+ * non-streaming POST bodies), server `page-actions-handler.ts` (form reads
  * and payload skip), vite `server-only.ts` (generated action stubs).
  */
 export const FORM_MODULE_FIELD = '__module';
@@ -68,7 +68,7 @@ export const FORM_ACTION_FIELD = '__action';
 
 /**
  * Reserved key under `deny.data` carrying normalized validation issues
- * (`ValidationIssue[]`). Consumers: server `page-action-handler.ts` (writes it
+ * (`ValidationIssue[]`). Consumers: server `page-actions-handler.ts` (writes it
  * on a schema-failure `deny(422)`), iso `get-validation-issues.ts` (reads it).
  * A schema-failure deny is otherwise indistinguishable from an app-level deny;
  * this framework-owned key is the contract that keeps them apart.
@@ -78,7 +78,7 @@ export const VALIDATION_ISSUES_KEY = '__hpValidationIssues';
 /**
  * The socket-upgrade endpoint (a header-only GET; selectors ride the query).
  * Consumers: iso `ws-upgrader.ts` (the seam reads this), server
- * `page-action-handler.ts` (the generated route registration).
+ * `page-actions-handler.ts` (the generated route registration).
  */
 export const SOCKETS_RPC_PATH = '/__sockets';
 
