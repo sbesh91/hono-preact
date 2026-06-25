@@ -277,17 +277,22 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `packages/iso/src/internal/use-loader-runner.tsx` (expose the in-flight promise) and/or `packages/iso/src/internal/loader.tsx` (server-only throw)
 - Test: re-green `packages/server/src/__tests__/render-stream.test.tsx`, `action-loader-revalidation.test.tsx`; confirm `render.test.tsx`
 
+**Mechanism (spike-verified, MECHANISM B):** A bare `throw` inside `LoaderHost` itself LOOPS forever, because render-to-string@6.6.7 rebuilds hook state every render pass, so the throwing component re-fetches on each resume. The working shape (verified in `.superpowers/spike/`, scripts re-runnable): the **carrier renders once, a CHILD throws**. render-to-string's async catch (`renderNestedChildren`) replays ONLY the throwing child's subtree, not the ancestor that produced the carrier, so a stable reader created by `LoaderHost` and passed as a PROP to a server-only child survives the resume. NO Suspense boundary and NO compat are needed on the server (the spike confirmed an explicit boundary is not load-bearing; `parentRenderCount=1, childRenderCount=2, fetchCount=1, data baked`). This is the old `DataReader` shape, minus the `<Suspense>` wrapper, gated to the server.
+
 **Interfaces:**
-- Consumes: the runner's `{ data, loading, ... }` from Task 4 plus the in-flight fetch/stream promise.
-- Produces: on the server (`!isBrowser()`), a pending loader throws the in-flight promise so `prerender` awaits it (caught by render-to-string directly, no Suspense component, no compat); on resolve, renders `data` with `loading=false`. On the client, NO throw (unchanged from Task 4). After resolve the server bakes the `data-loader` element + SSR-preload payload exactly as before.
+- Consumes: the runner's `{ data, loading, ... }` from Task 4.
+- Produces: the runner re-exposes a stable `reader: { read: () => T }` (the `wrapPromise` throwing reader; created ONCE per `LoaderHost` render). On the server (`!isBrowser()`), `LoaderHost` renders a CHILD (a `DataReader`-style component) that calls `reader.read()` (throws while pending; render-to-string awaits + replays only the child; on resolve returns the value) and provides `{ data: <resolved>, loading: false }` to `LoaderDataContext`. On the client (`isBrowser()`), `LoaderHost` renders the view DIRECTLY with `{ data, loading }` from runner state (NO child throw, NO reader). Both paths feed the same `LoaderDataContext` `{ data, loading }` to the view.
 
 - [ ] **Step 1: Confirm the 4 failing server tests + the failure mode**
 
-Run `pnpm vitest run packages/server/src/__tests__/render-stream.test.tsx packages/server/src/__tests__/action-loader-revalidation.test.tsx` and confirm they fail because SSR no longer bakes loader data (e.g. `data-loader="null"`, missing `"count":2`, missing first-chunk JSON). This is the failing state to fix.
+Run `pnpm vitest run packages/server/src/__tests__/render-stream.test.tsx packages/server/src/__tests__/action-loader-revalidation.test.tsx` and confirm they fail because SSR no longer bakes loader data (e.g. `data-loader="null"`, missing `"count":2`, missing first-chunk JSON). This is the failing state to fix. (Optionally re-run `.superpowers/spike/spike-b1-reader-prop.mjs` to see the working shape: `node .superpowers/spike/spike-b1-reader-prop.mjs`.)
 
-- [ ] **Step 2: Reintroduce a server-only suspend**
+- [ ] **Step 2: Reintroduce the server-only child-throw (Mechanism B)**
 
-In the runner, expose the in-flight promise (e.g. `pending: Promise<unknown> | null`, non-null only while a server-side cold load is unresolved). In `loader.tsx`'s `LoaderHost` render, BEFORE rendering the view, add: `if (!isBrowser() && pending) throw pending;`. This makes `prerender` await the loader on the server (no Suspense component needed; `prerender`/render-to-string catches the thrown thenable). Do NOT throw on the client. Ensure the resolved value still flows into `overrideData`/`syncDataRef` so the post-await server render produces `loading=false` + data, and the existing preload-baking + streaming-loader collection (`takeServerStreamingLoaders`) still fire.
+Re-expose the runner's stable `reader` (the `wrapPromise(...)` reader, kept in `readerRef`; it was removed as the Task-4 bridge, now it is the server carrier). In `loader.tsx`, gate the render path on `isBrowser()`:
+- Server (`!isBrowser()`): render a small `DataReader`-style CHILD of `LoaderHost` that does `const data = reader.read();` (throws while pending) and provides `{ data, loading: false }` via `LoaderDataContext` around `<Envelope>{children}</Envelope>`. The child must be a SEPARATE component (so render-to-string replays only it; if you inline the `reader.read()` into `LoaderHost` it will loop). NO `<Suspense>`, NO compat.
+- Client (`isBrowser()`): unchanged from Task 4, render the view directly with `{ data, loading }` from runner state; never call `reader.read()`.
+Ensure the resolved value still flows so the post-await server render produces `loading=false` + data, and the existing preload-baking + streaming-loader collection (`takeServerStreamingLoaders`) still fire. Confirm concurrent suspenders (multiple loaders on one page) bake (the spike's `spike-multi-loader.mjs` shows render-to-string handles this).
 
 - [ ] **Step 3: Re-green the server tests**
 
