@@ -4,14 +4,39 @@ import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import { Page } from '../page.js';
 import { defineLoader } from '../define-loader.js';
+import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import type { Context } from 'hono';
 import { HonoRequestContext } from '../internal/contexts.js';
-import { env } from '../is-browser.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
   deletePreloadedData: vi.fn(),
+}));
+
+// The loader tests below exercise the CLIENT render contract through <Page>:
+// loaders are state-based in the browser (no Suspense), so children mount
+// eagerly during the pending window and re-render with data, and a cold error
+// re-throws up to the page-level errorFallback. In browser mode the runner
+// would POST to `/__loaders` (no server here), so mock `runLoader` to invoke
+// the loader's own `fn` directly with the resolved location, mirroring
+// loader-view.test.tsx. The SERVER suspension path (DataReader, gated on
+// `!isBrowser()`) is covered by the renderToStringAsync SSR integration tests
+// (packages/server render.test.tsx / render-stream.test.tsx), not the DOM
+// renderer.
+vi.mock('../internal/loader-runner.js', () => ({
+  runLoader: <T,>(
+    loaderRef: LoaderRef<T, boolean>,
+    location: RouteHook,
+    _id: string,
+    signal: AbortSignal
+  ): Promise<T> => {
+    const invoke = loaderRef.fn as unknown as (arg: {
+      signal: AbortSignal;
+      location: RouteHook;
+    }) => Promise<T>;
+    return Promise.resolve(invoke({ signal, location }));
+  },
 }));
 
 const mockRoute = vi.fn();
@@ -29,13 +54,10 @@ const loc = {
 
 const fakeC = {} as Context;
 
-const originalEnv = env.current;
 beforeEach(() => {
-  env.current = 'browser';
   mockRoute.mockClear();
 });
 afterEach(() => {
-  env.current = originalEnv;
   cleanup();
 });
 
@@ -61,9 +83,10 @@ describe('Page renders children in a default Wrapper', () => {
 
 describe('Page errorFallback catches loader errors', () => {
   it('renders errorFallback when a loader.Boundary child throws', async () => {
-    // Use server mode so the loader invokes fn() directly rather than fetch.
-    env.current = 'server';
-
+    // Client state-based path (browser mode, runLoader mocked above). A cold
+    // loader failure surfaces by LoaderHost re-throwing up to the page-level
+    // errorFallback (the framework RouteBoundary), since the loader.Boundary
+    // here carries no local errorFallback.
     const failing = defineLoader<{ msg: string }>(
       async () => {
         throw new Error('boom');
@@ -91,9 +114,7 @@ describe('Page errorFallback catches loader errors', () => {
                 <div data-testid="error">{err.message}</div>
               )}
             >
-              <failing.Boundary
-                fallback={<div data-testid="loading">Loading...</div>}
-              >
+              <failing.Boundary>
                 <PageContent />
               </failing.Boundary>
             </Page>
@@ -110,8 +131,6 @@ describe('Page errorFallback catches loader errors', () => {
 
 describe('Page renders loader content', () => {
   it('renders a resolving loader through Page', async () => {
-    env.current = 'server';
-
     const ok = defineLoader<{ msg: string }>(async () => ({ msg: 'loaded' }), {
       __moduleKey: 'test/page-content',
     });
@@ -132,9 +151,7 @@ describe('Page renders loader content', () => {
         <RouteLocationsContext.Provider value={locMap}>
           <LocationProvider>
             <Page>
-              <ok.Boundary
-                fallback={<div data-testid="loading">Loading...</div>}
-              >
+              <ok.Boundary>
                 <PageContent />
               </ok.Boundary>
             </Page>

@@ -1,6 +1,5 @@
 import { Component } from 'preact';
 import type { ComponentChildren, FunctionComponent } from 'preact';
-import { Suspense } from 'preact/compat';
 import { isOutcome } from '../outcomes.js';
 
 type ErrorFallback =
@@ -51,11 +50,8 @@ export class ErrorBoundary extends Component<
 }
 
 export const RouteBoundary: FunctionComponent<{
-  fallback?: ComponentChildren;
   errorFallback?: ErrorFallback;
   children: ComponentChildren;
-}> = ({ fallback, errorFallback, children }) => (
-  <ErrorBoundary fallback={errorFallback}>
-    <Suspense fallback={fallback}>{children}</Suspense>
-  </ErrorBoundary>
+}> = ({ errorFallback, children }) => (
+  <ErrorBoundary fallback={errorFallback}>{children}</ErrorBoundary>
 );

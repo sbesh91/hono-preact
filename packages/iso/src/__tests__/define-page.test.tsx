@@ -5,6 +5,7 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import type { Context } from 'hono';
 import { definePage, type PageBindings } from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
+import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import { HonoRequestContext } from '../internal/contexts.js';
 
@@ -15,9 +16,30 @@ vi.mock('../preload.js', () => ({
   deletePreloadedData: vi.fn(),
 }));
 
+// Browser mode: loaders are state-based (no Suspense). The loader.View test
+// below exercises that CLIENT contract through definePage/<Page>; in the
+// browser the runner would POST to `/__loaders` (no server here), so mock
+// `runLoader` to invoke the loader's own `fn` directly, mirroring
+// loader-view.test.tsx. The SERVER suspension path (DataReader) is covered by
+// the renderToStringAsync SSR integration tests, not the DOM renderer.
 vi.mock('../is-browser.js', () => ({
-  isBrowser: () => false,
-  env: { current: 'server' },
+  isBrowser: () => true,
+  env: { current: 'browser' },
+}));
+
+vi.mock('../internal/loader-runner.js', () => ({
+  runLoader: <T,>(
+    loaderRef: LoaderRef<T, boolean>,
+    location: RouteHook,
+    _id: string,
+    signal: AbortSignal
+  ): Promise<T> => {
+    const invoke = loaderRef.fn as unknown as (arg: {
+      signal: AbortSignal;
+      location: RouteHook;
+    }) => Promise<T>;
+    return Promise.resolve(invoke({ signal, location }));
+  },
 }));
 
 afterEach(() => {
