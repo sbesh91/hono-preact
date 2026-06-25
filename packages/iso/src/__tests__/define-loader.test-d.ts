@@ -1,11 +1,13 @@
-// Type-level assertions for the public `.View()` contract.
+// Type-level assertions for the public `.View()` and `.Boundary` contracts.
 // Run under `pnpm test:types`.
 //
 // SingleValueView render arg: { data: Serialize<T> | undefined; loading: boolean; error: Error | null; reload: () => void }
 // SingleValueView opts: { errorFallback? } (no `fallback`)
 // AccumulatingView opts: { initial; reduce; errorFallback? } (no `fallback`)
+// Boundary props: { errorFallback?; accumulate?; children } (no `fallback`)
 // DefineLoaderOptions + LoaderRef: no `fallbackDelay`
 import { expectTypeOf } from 'vitest';
+import { h } from 'preact';
 import { defineLoader, type DefineLoaderOptions, type LoaderRef } from '../define-loader.js';
 
 // 1. SingleValueView render arg includes `loading: boolean` and `data: Serialize<T> | undefined`.
@@ -43,17 +45,25 @@ function _accumulatingNoFallback() {
   );
 }
 
-// 4. `fallbackDelay` is NOT present on DefineLoaderOptions.
+// 4. Boundary does NOT accept `fallback` (state-based model removed it).
+function _boundaryNoFallback() {
+  const loader = defineLoader<{ n: number }>(async () => ({ n: 1 }));
+  const Boundary = loader.Boundary;
+  // @ts-expect-error `fallback` is not accepted on loader.Boundary
+  h(Boundary, { fallback: 'loading', children: null });
+}
+
+// 5. `fallbackDelay` is NOT present on DefineLoaderOptions.
 function _noFallbackDelayOnOptions() {
   expectTypeOf<DefineLoaderOptions<number>>().not.toHaveProperty('fallbackDelay');
 }
 
-// 5. `fallbackDelay` is NOT present on LoaderRef.
+// 6. `fallbackDelay` is NOT present on LoaderRef.
 function _noFallbackDelayOnRef() {
   expectTypeOf<LoaderRef<number>>().not.toHaveProperty('fallbackDelay');
 }
 
-// 6. defineLoader does NOT accept `fallbackDelay` at the call site.
+// 7. defineLoader does NOT accept `fallbackDelay` at the call site.
 function _noFallbackDelayAtCallSite() {
   // @ts-expect-error `fallbackDelay` is not accepted by defineLoader
   defineLoader(async () => 1, { fallbackDelay: 100 });
@@ -62,6 +72,7 @@ function _noFallbackDelayAtCallSite() {
 void _singleValueRenderArg;
 void _singleValueNoFallback;
 void _accumulatingNoFallback;
+void _boundaryNoFallback;
 void _noFallbackDelayOnOptions;
 void _noFallbackDelayOnRef;
 void _noFallbackDelayAtCallSite;

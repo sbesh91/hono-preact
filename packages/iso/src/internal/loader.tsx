@@ -69,7 +69,6 @@ function DataReader<T>({
 type LoaderHostProps<T> = {
   loader: LoaderRef<T, boolean>;
   location?: RouteHook;
-  fallback?: ComponentChildren;
   errorFallback?:
     | ComponentChildren
     | ((err: Error, reset: () => void) => ComponentChildren);

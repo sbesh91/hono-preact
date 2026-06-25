@@ -147,7 +147,6 @@ export interface LoaderRef<T, Live extends boolean = false> {
   Boundary: Live extends true
     ? never
     : ComponentType<{
-        fallback?: ComponentChildren;
         errorFallback?:
           | ComponentChildren
           | ((err: Error, reset: () => void) => ComponentChildren);
@@ -434,7 +433,6 @@ export function defineLoader(
       }
       return h(LoaderHost<unknown>, {
         loader: ref,
-        fallback: props.fallback,
         errorFallback: props.errorFallback,
         accumulate: props.accumulate,
         children: props.children,
