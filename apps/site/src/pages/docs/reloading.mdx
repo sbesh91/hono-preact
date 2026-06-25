@@ -65,7 +65,7 @@ export default definePage(MoviesView);
 
 ## Background refresh
 
-Reload is a background refresh: the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
+Reload is a background refresh: while `reloading` is `true`, `data` retains the previous value so the current content stays visible. Inside a `.View()` render function, `loading` is also `true` during a reload. Use `reloading` (from `useReload`) or `loading` (from `.View()`) to reflect the in-progress state in your UI.
 
 ## Three knobs, three behaviors
 
@@ -97,4 +97,4 @@ const { reload, reloading } = useReload();
 
 - [Server Loaders](/docs/loaders): `loader.invalidate()` in context.
 - [Server Actions](/docs/actions): `useAction` invalidate option.
-- [Loading States](/docs/loading-states): the fallback shown during a refetch.
+- [Loading States](/docs/loading-states): branching on `loading` during a refetch.

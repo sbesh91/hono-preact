@@ -59,7 +59,7 @@ MDX content (`pages/docs/**/*.mdx`) is mounted by `contentRoutes(import.meta.glo
 Isomorphic primitives shared between server and client (`packages/iso/`):
 
 - **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`, `ServerRoute`. The route-table primitive and runtime mounter.
-- **Page bindings**: `definePage(Component, { errorFallback, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need a Wrapper. Page-layer middleware is declared via `use` on the route node in `routes.ts`; entries are built with `defineServerMiddleware`, `defineClientMiddleware`, and `defineStreamObserver`. Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX.
+- **Page bindings**: `definePage(Component, { errorFallback, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need a Wrapper. Page-layer middleware is declared via `use` on the route node in `routes.ts`; entries are built with `defineServerMiddleware`, `defineClientMiddleware`, and `defineStreamObserver`. Loader consumption (`.View()`) lives inside the page's JSX tree; loading UI is rendered by branching on the `loading` arg inside `.View()`.
 - **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`.)
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
 - **Caching**: `createCache` (advanced: shared caches across loaders).

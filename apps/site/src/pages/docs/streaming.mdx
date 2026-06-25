@@ -34,7 +34,7 @@ For byte-level piping (e.g. forwarding a server-sent event feed without parsing)
 
 ### Consumer shape
 
-Use `.View()` to create a component that re-renders on each new chunk. The render function receives the latest `data` value plus `error` and `reload`:
+Use `.View()` to create a component that re-renders on each new chunk. The render function receives `{ data, loading, error, reload }`: `loading` is `true` before the first chunk arrives, and `data` holds the latest yielded value after that.
 
 ```tsx
 // src/pages/dashboard.tsx
@@ -43,28 +43,28 @@ import { serverLoaders } from './dashboard.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const DashboardView = dataLoader.View(
-  ({ data, error, reload }) => (
+const DashboardView = dataLoader.View(({ data, loading, error, reload }) => {
+  if (loading) return <p>Loading...</p>;
+  return (
     <>
       {error && <p>Live updates paused: {error.message}</p>}
       <p>
-        Count: {data.count}, load: {data.load}
+        Count: {data!.count}, load: {data!.load}
       </p>
     </>
-  ),
-  { fallback: <p>Loading...</p> }
-);
+  );
+});
 
 export default definePage(DashboardView);
 ```
 
-`loader.useData()` always returns the latest yielded value. `loader.useError()` returns the current error or `null`. Components re-render on each new chunk automatically.
+`loader.useData()` always returns the latest loader state. Components re-render on each new chunk automatically.
 
 See `/demo/projects/:projectId/issues/:issueId` for a running example of multi-loader streaming: the issue detail page declares multiple loaders in `serverLoaders`, each with its own `.View()` component streaming independently.
 
 ## Multi-loader streaming
 
-When a page declares multiple loaders in `serverLoaders`, each `.View()` component streams independently. They share no boundary; one loader finishing does not unblock another.
+When a page declares multiple loaders in `serverLoaders`, each `.View()` component streams independently. They share no boundary; one loader finishing does not affect another's `loading` state.
 
 ```ts
 // src/pages/movie.server.ts
@@ -88,13 +88,13 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast } = serverLoaders;
 
-const Summary = summary.View(({ data }) => <SummaryCard data={data} />, {
-  fallback: <SummarySkeleton />,
-});
+const Summary = summary.View(({ data, loading }) =>
+  loading ? <SummarySkeleton /> : <SummaryCard data={data!} />
+);
 
-const Cast = cast.View(({ data }) => <CastList items={data} />, {
-  fallback: <CastSkeleton />,
-});
+const Cast = cast.View(({ data, loading }) =>
+  loading ? <CastSkeleton /> : <CastList items={data!} />
+);
 
 function MovieDetail() {
   return (
@@ -108,7 +108,7 @@ function MovieDetail() {
 export default definePage(MovieDetail);
 ```
 
-`<Summary />` and `<Cast />` each own their Suspense boundary. `<Summary />` can paint immediately while `<Cast />` is still streaming. Each `.View()` component gets a separate streaming-SSR registry key so the server can flush chunks for both concurrently.
+`<Summary />` and `<Cast />` each track their own `loading` state. `<Summary />` can paint immediately while `<Cast />` is still streaming. Each `.View()` component gets a separate streaming-SSR registry key so the server can flush chunks for both concurrently.
 
 ## What happens on first paint
 
@@ -120,9 +120,9 @@ The first-load experience is full SSR with progressive enhancement: the user see
 
 ## Errors
 
-**Before the first chunk:** the error propagates through the normal Suspense and error boundary path. If you provide `errorFallback` in `.View()`, it renders instead of the content. Otherwise the error boundary above catches it.
+**Before the first chunk:** `loading` is `true` and `error` is null. If the stream errors before yielding any value, `loading` becomes `false` and `error` is set. The error boundary above catches render-time throws.
 
-**After the first chunk:** the stream is already open and the page is rendered. `error` in the `.View()` render function surfaces the error; `data` keeps returning the last good value. The page stays mounted with stale data visible.
+**After the first chunk:** `error` in the `.View()` render function surfaces the error; `data` keeps returning the last good value. The page stays mounted with stale data visible.
 
 ```tsx
 const StatsView = dataLoader.View(({ data, error }) => (
@@ -242,4 +242,4 @@ Each chunk arrives as a `data:` line followed by a blank line (standard SSE fram
 
 - [Server Loaders](/docs/loaders): non-streaming loaders.
 - [Server Actions](/docs/actions): streaming actions.
-- [Loading States](/docs/loading-states): fallbacks while a stream fills.
+- [Loading States](/docs/loading-states): branching on `loading` while a stream fills.

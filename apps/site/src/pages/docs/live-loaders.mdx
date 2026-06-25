@@ -83,16 +83,19 @@ function Feed({
   );
 }
 
-// The accumulating `.View` form (selected by `initial` + `reduce`) renders
-// through the loader's Suspense boundary, so the bar hydrates cleanly inside the
-// layout. `fallback` shows on SSR and until the first chunk; then `render`
-// receives the folded `data` and the connection `status`.
+// The accumulating `.View` form (selected by `initial` + `reduce`) tracks its
+// connection status as state, so the bar hydrates cleanly inside the layout.
+// Branch on `status === 'connecting'` for the pre-first-chunk affordance.
 const ActivityBar = activityLoader.View<ActivityEvent[]>(
-  ({ data, status }) => <Feed events={data} status={status} />,
+  ({ data, status }) =>
+    status === 'connecting' ? (
+      <p>Connecting to activity...</p>
+    ) : (
+      <Feed events={data} status={status} />
+    ),
   {
     initial: [],
     reduce: (acc, e) => [e, ...acc].slice(0, MAX),
-    fallback: <p>Connecting to activity...</p>,
   }
 );
 
@@ -119,7 +122,7 @@ Persistent UI is expressed as a child of a layout. A layout stays mounted across
 Two pieces of the same loader API drive this pattern:
 
 - `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
-- `loader.View(render, { initial, reduce, fallback })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and renders through the loader's Suspense boundary, so a live widget hydrates cleanly inside a lazy layout: `fallback` renders during SSR and until the first chunk arrives, then `render` receives the accumulated `data` plus a `status`.
+- `loader.View(render, { initial, reduce })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and exposes a `status` field. `status === 'connecting'` on SSR and before the first chunk arrives; after the first chunk `status` is `'open'`. Branch on `status` inside the render function to show a connecting affordance.
 
 ## On Cloudflare
 
@@ -162,7 +165,7 @@ A live loader opens the stream once and does not auto-reconnect. If the connecti
 
 ### Failure or close before the first chunk
 
-The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. On the **initial** connect, a stream that fails, times out, or closes with zero chunks _before_ its first chunk is delivered through the loader's error boundary instead: the `errorFallback` renders (or the error propagates to the nearest boundary), and the render function's `status` is not updated. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
+The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. On the **initial** connect, a stream that fails, times out, or closes with zero chunks _before_ its first chunk surfaces as `status === 'error'` in the render function rather than through the error boundary. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
 
 A failed `reload()` behaves differently and more conveniently: because the component is already mounted, a reconnect that fails (at any point, including before its first chunk) surfaces as `status === 'error'` in the render function, not through the error boundary. That is exactly what makes the reconnect-on-error pattern above work in place.
 
@@ -178,7 +181,7 @@ All other `defineLoader` options (`params`, `cache`, `timeoutMs`, `use`) work th
 
 ### `loader.View(render, { initial, reduce })` (accumulating form)
 
-Passing `initial` and `reduce` selects the accumulating form of `.View`. `data` becomes the folded accumulator and the render args carry a `status`.
+Passing `initial` and `reduce` selects the accumulating form of `.View`. `data` becomes the folded accumulator and the render args carry a `status`. Branch on `status === 'connecting'` to render the pre-first-chunk state.
 
 ```ts
 loader.View<Acc>(
@@ -191,19 +194,16 @@ loader.View<Acc>(
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
-    fallback?: ComponentChildren;
-    errorFallback?: ComponentChildren;
   }
 ): FunctionComponent
 ```
 
 `chunk` is `Serialize<T>`: the JSON round-trip of the server-side chunk, the same wire shape `useData()` and the single-value `.View` surface (a `Date` field arrives as a string).
 
-| Option     | Type                                     | Description                                                                                                  |
-| ---------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `initial`  | `Acc`                                    | Seed value; also the value rendered on SSR and before the first chunk arrives.                               |
-| `reduce`   | `(acc: Acc, chunk: Serialize<T>) => Acc` | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order. |
-| `fallback` | `ComponentChildren`                      | Rendered on SSR and while the stream is connecting (before the first chunk).                                 |
+| Option    | Type                                     | Description                                                                                                  |
+| --------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `initial` | `Acc`                                    | Seed value; also the value passed to the render function on SSR and before the first chunk arrives.          |
+| `reduce`  | `(acc: Acc, chunk: Serialize<T>) => Acc` | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order. |
 
 The `render` function receives:
 

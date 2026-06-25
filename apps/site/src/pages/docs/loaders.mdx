@@ -35,13 +35,16 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View(({ data }) => (
-  <ul>
-    {data.movies.results.map((m) => (
-      <li key={m.id}>{m.title}</li>
-    ))}
-  </ul>
-));
+const MoviesView = dataLoader.View(({ data, loading }) => {
+  if (loading) return <p>Loading...</p>;
+  return (
+    <ul>
+      {data!.movies.results.map((m) => (
+        <li key={m.id}>{m.title}</li>
+      ))}
+    </ul>
+  );
+});
 
 export default definePage(MoviesView);
 ```
@@ -62,6 +65,8 @@ export default defineRoutes([
 ```
 
 `defineLoader(fn)` returns a typed `LoaderRef<T>`. The Vite `moduleKeyPlugin` rewrites the call at build time to inject `{ __moduleKey, __loaderName }` so the RPC handler can dispatch to the correct function. `definePage(Component)` returns a routable component that self-wraps in `<Page>` with any page-level bindings captured in a closure.
+
+On the client, loaders are state-based: the render function receives `{ data, loading, error, reload }` directly on every render rather than suspending. `data` is `undefined` on a cold load and retains the previous value during a reload (stale-while-revalidate). SSR still awaits each loader before rendering, so the initial HTML arrives with data present.
 
 ## Example: detail page (using route params)
 
@@ -162,16 +167,15 @@ A single-loader page conventionally uses the key `default`. Multi-loader pages g
 
 ## The `.View()` factory
 
-`.View(render, opts)` is the primary way to consume a loader. It returns a Preact component pre-wrapped in the loader's own Suspense boundary, error boundary, data context, and reload context:
+`.View(render)` is the primary way to consume a loader. It returns a Preact component pre-wrapped in the loader's own error boundary, data context, and reload context:
 
 ```ts
 loader.View<P = {}>(
-  render: (args: P & { data: T; error: Error | null; reload: () => void }) => ComponentChildren,
-  opts?: { fallback?: ComponentChildren; errorFallback?: ComponentChildren }
+  render: (args: P & { data: Serialize<T> | undefined; loading: boolean; error: Error | null; reload: () => void }) => ComponentChildren
 ): FunctionComponent<P>
 ```
 
-The render function receives `{ data, error, reload }` plus any props declared by the generic `P`. Inside the render function's subtree, `loader.useData()` also works for descendants that need data without prop-drilling.
+The render function receives `{ data, loading, error, reload }` plus any props declared by the generic `P`. `data` is `undefined` on a cold load before the first response; during a reload it retains the previous value. Branch on `loading` and `error` to render all states yourself. Inside the render function's subtree, `loader.useData()` also works for descendants that need data without prop-drilling.
 
 **Basic usage:**
 
@@ -181,16 +185,16 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View(
-  ({ data }) => (
+const MoviesView = dataLoader.View(({ data, loading }) => {
+  if (loading) return <p>Loading...</p>;
+  return (
     <ul>
-      {data.movies.results.map((m) => (
+      {data!.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
-  ),
-  { fallback: <p>Loading...</p> }
-);
+  );
+});
 
 export default definePage(MoviesView);
 ```
@@ -199,12 +203,14 @@ export default definePage(MoviesView);
 
 ```tsx
 const MovieCard = dataLoader.View<{ highlight: boolean }>(
-  ({ data, highlight }) => (
-    <article class={highlight ? 'highlight' : undefined}>
-      <h2>{data.movie.title}</h2>
-    </article>
-  ),
-  { fallback: <MovieSkeleton /> }
+  ({ data, loading, highlight }) => {
+    if (loading) return <MovieSkeleton />;
+    return (
+      <article class={highlight ? 'highlight' : undefined}>
+        <h2>{data!.movie.title}</h2>
+      </article>
+    );
+  }
 );
 
 // Use site:
@@ -213,25 +219,21 @@ const MovieCard = dataLoader.View<{ highlight: boolean }>(
 
 **Error handling inside the render function:**
 
-The `error` argument is non-null after the stream's first chunk (for streaming loaders) or on a re-fetch error. Use `reload` to let the user retry:
+The `error` argument is non-null on a fetch error. Use `reload` to let the user retry:
 
 ```tsx
-const StatsView = statsLoader.View(
-  ({ data, error, reload }) => (
-    <>
-      {error && <button onClick={reload}>Retry</button>}
-      <p>Count: {data.count}</p>
-    </>
-  ),
-  { fallback: <StatsSkeleton /> }
-);
+const StatsView = statsLoader.View(({ data, loading, error, reload }) => {
+  if (loading) return <StatsSkeleton />;
+  if (error) return <button onClick={reload}>Retry</button>;
+  return <p>Count: {data!.count}</p>;
+});
 ```
 
 ## Composing multiple loaders per route
 
 This is the supported pattern when a route needs more than one data source. Declare each source as its own loader in the same `serverLoaders` container; the framework wires each one independently. There is no separate "parallel fetch" or "loader group" API; composition is just adding another key.
 
-Each loader gets its own independent Suspense boundary, error boundary, cache key, and streaming section, so a slow or failing source never blocks the rest of the page:
+Each loader gets its own independent error boundary, cache key, and streaming section, so a slow or failing source never blocks the rest of the page:
 
 ```ts
 // src/pages/movie.server.ts
@@ -260,19 +262,19 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast, similar } = serverLoaders;
 
-const Summary = summary.View(
-  ({ data, error, reload }) =>
-    error ? <ErrorBox onRetry={reload} /> : <SummaryCard data={data} />,
-  { fallback: <SummarySkeleton /> }
+const Summary = summary.View(({ data, loading, error, reload }) => {
+  if (loading) return <SummarySkeleton />;
+  if (error) return <ErrorBox onRetry={reload} />;
+  return <SummaryCard data={data!} />;
+});
+
+const Cast = cast.View(({ data, loading }) =>
+  loading ? <CastSkeleton /> : <CastList items={data!} />
 );
 
-const Cast = cast.View(({ data }) => <CastList items={data} />, {
-  fallback: <CastSkeleton />,
-});
-
-const Similar = similar.View(({ data }) => <SimilarCarousel items={data} />, {
-  fallback: <SimilarSkeleton />,
-});
+const Similar = similar.View(({ data, loading }) =>
+  loading ? <SimilarSkeleton /> : <SimilarCarousel items={data!} />
+);
 
 function MovieDetail() {
   return (
@@ -287,7 +289,7 @@ function MovieDetail() {
 export default definePage(MovieDetail);
 ```
 
-Each `View` component streams independently. `<Summary />` can show content while `<Cast />` and `<Similar />` are still loading.
+Each `View` component loads independently. `<Summary />` can show content while `<Cast />` and `<Similar />` are still loading.
 
 ## The `.Boundary` escape hatch
 
@@ -296,18 +298,18 @@ When you need to interleave loader-aware UI with non-loader content, use `loader
 ```tsx
 function Header() {
   return (
-    <summary.Boundary fallback={<HeaderSkeleton />}>
+    <summary.Boundary>
       <HeaderWithSummary />
     </summary.Boundary>
   );
 }
 
 function HeaderWithSummary() {
-  const data = summary.useData();
+  const { data, loading } = summary.useData();
   return (
     <header>
       <BreadcrumbTrail />
-      <h1>{data.title}</h1>
+      {loading ? <Skeleton /> : <h1>{data!.title}</h1>}
       <ActionsBar />
     </header>
   );
@@ -367,9 +369,8 @@ export const serverLoaders = {
 // src/pages/movies/layout.tsx
 import { serverLoaders } from './layout.server.js';
 
-const Feed = serverLoaders.activity.View(
-  ({ data }) => <ActivitySidebar events={data} />,
-  { fallback: null }
+const Feed = serverLoaders.activity.View(({ data, loading }) =>
+  loading ? null : <ActivitySidebar events={data!} />
 );
 
 export default function MoviesLayout({
@@ -437,7 +438,7 @@ import { definePage } from 'hono-preact';
 export default definePage(Component, { Wrapper });
 ```
 
-Loader and fallback bindings live on `serverLoaders.name.View()` inside the page's JSX tree, not on `definePage`.
+Loader consumption (`.View()`) lives inside the page's JSX tree, not on `definePage`.
 
 A page with no loader simply skips `definePage` and exports the component directly:
 
@@ -456,9 +457,8 @@ import { serverLoaders } from './movie.server.js';
 
 const { default: movieLoader } = serverLoaders;
 
-const MovieView = movieLoader.View(
-  ({ data }) => <article>{data.movie.title}</article>,
-  { fallback: <MovieSkeleton /> }
+const MovieView = movieLoader.View(({ data, loading }) =>
+  loading ? <MovieSkeleton /> : <article>{data!.movie.title}</article>
 );
 
 function MovieWrapper(props: WrapperProps) {
@@ -549,25 +549,6 @@ The framework default timeout is 30s. Override it per loader with
 `defineLoader({ timeoutMs })` (a number of milliseconds, or `false` to disable
 the timeout for that loader).
 
-### Delaying the loading fallback
-
-On a fast connection a loader's `fallback` can flash on screen for a few
-milliseconds before the data lands, which reads as a flicker. The framework
-waits `fallbackDelay` milliseconds (default `100`) before mounting the fallback
-on a client navigation; if the response arrives first, the fallback never
-paints. Set it per loader:
-
-```ts
-import { defineLoader } from 'hono-preact';
-
-export const movie = defineLoader(
-  async ({ location }) => fetchMovie(location.pathParams.id),
-  { fallbackDelay: 200 }
-);
-```
-
-Pass `fallbackDelay: 0` to show the fallback immediately. The delay applies in the browser only; server-rendered output is unchanged. Both `loader.Boundary` and `loader.View` inherit it.
-
 ## The server/client boundary
 
 Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
@@ -576,13 +557,12 @@ Two Vite plugins enforce that `.server.*` code never reaches the browser. `serve
 
 Pass a second argument to `defineLoader` to configure a loader:
 
-| Option          | Type              | Default | Description                                                                              |
-| --------------- | ----------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `params`        | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any.                                |
-| `cache`         | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.                                          |
-| `timeoutMs`     | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                                                |
-| `fallbackDelay` | `number`          | `100`   | Delay (ms) before the loading fallback mounts on a client nav; `0` shows it immediately. |
-| `use`           | `LoaderUse`       | none    | Per-loader middleware and stream observers.                                              |
+| Option      | Type              | Default | Description                                                       |
+| ----------- | ----------------- | ------- | ----------------------------------------------------------------- |
+| `params`    | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any.         |
+| `cache`     | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.                   |
+| `timeoutMs` | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                         |
+| `use`       | `LoaderUse`       | none    | Per-loader middleware and stream observers.                       |
 
 Most options have a dedicated section above; this table is the at-a-glance summary.
 
