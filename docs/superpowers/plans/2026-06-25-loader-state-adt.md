@@ -795,7 +795,7 @@ Add `import type { LoaderState, StreamState } from './loader-state.js';`. Remove
 - [ ] **Step 6: Run iso typecheck for the runtime (call-site fixes follow in Task 7/8)**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/view-renderer.test.tsx`
-Expected: the ViewRenderer test PASSES. `pnpm typecheck` at repo root will now report errors in iso tests/docs/app call sites; those are addressed in Task 7 (tests) and Task 8 (apps/site + docs). Do not commit yet — the type-flip is not green tree-wide until Task 8.
+Expected: the ViewRenderer test PASSES. This is the ONLY suite that must pass at this task boundary. The `.View` retype cascades: after this commit, the OTHER iso tests (they still destructure the old flat `{data, loading}` render args) FAIL at runtime, and repo `pnpm typecheck` reports errors in iso tests / docs / apps/site call sites. That RED interval is expected and intentional — Task 7 migrates the iso tests (restoring iso green) and Task 8 migrates apps/site + docs (restoring repo green). Do NOT fix those cascading failures in this task; they belong to Tasks 7 and 8.
 
 - [ ] **Step 7: Commit the runtime half (tests for it are green; tree typecheck is not, by design)**
 
