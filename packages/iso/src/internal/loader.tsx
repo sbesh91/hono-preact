@@ -178,7 +178,7 @@ export function LoaderHost<T>({
   return (
     <LoaderIdContext.Provider value={id}>
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-        <ReloadContext.Provider value={{ reload }}>
+        <ReloadContext.Provider value={{ reload, reloading: loading }}>
           <LoaderErrorContext.Provider value={error}>
             <LoaderStatusContext.Provider value={status}>
               {body}

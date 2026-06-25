@@ -3,6 +3,8 @@ import { useContext } from 'preact/hooks';
 
 export type ReloadContextValue = {
   reload: () => void;
+  /** True while the loader is fetching (cold load or reload). */
+  reloading: boolean;
 };
 
 export const ReloadContext = createContext<ReloadContextValue | undefined>(
