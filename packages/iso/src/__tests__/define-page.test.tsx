@@ -42,9 +42,10 @@ describe('definePage', () => {
     const locMap = new Map();
     locMap.set('test/define-page-loader-view', fakeLocation);
 
-    const Body = loader.View(
-      ({ data }) => <p data-testid="msg">{data.msg}</p>,
-      { fallback: <p>loading</p> }
+    // State-based: the render fn runs eagerly during the pending window with
+    // `data === undefined`, so guard for it (no separate Suspense fallback).
+    const Body = loader.View(({ data }) =>
+      data === undefined ? <p>loading</p> : <p data-testid="msg">{data.msg}</p>
     );
 
     function PageBody() {

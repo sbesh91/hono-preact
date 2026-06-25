@@ -1,7 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { Suspense } from 'preact/compat';
 import { useContext, useId } from 'preact/hooks';
 import { ReloadContext } from '../reload-context.js';
 import {
@@ -19,11 +18,6 @@ import {
   type AccumulateOptions,
   type StreamStatus,
 } from './use-loader-runner.js';
-import { isBrowser } from '../is-browser.js';
-import {
-  DelayedFallback,
-  DEFAULT_FALLBACK_DELAY_MS,
-} from './delayed-fallback.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 /** Streaming status for a `.View` consuming a streaming/`live` loader. */
@@ -44,10 +38,9 @@ type LoaderHostProps<T> = {
 export function LoaderHost<T>({
   loader: loaderRef,
   location: locationProp,
-  fallback,
-  errorFallback,
   accumulate,
   children,
+  errorFallback,
 }: LoaderHostProps<T>) {
   const id = useId();
   const locMap = useContext(RouteLocationsContext);
@@ -62,78 +55,73 @@ export function LoaderHost<T>({
     );
   }
 
-  // BRIDGE (this task): the runner now exposes state (`data`/`loading`) instead
-  // of `overrideData`/`reloading`, but this consumer is still Suspense-based, so
-  // it keeps reading the bridge `reader`. `data` plays the role `overrideData`
-  // did for DataReader (the non-throwing resolved value), and `loading` plays
-  // the role `reloading` did for the reload context. Task 4 removes the reader
-  // and rewrites this consumer to render off state directly.
-  const { reader, data, error, reload, loading, status } = useLoaderRunner<T>(
+  // State-based rendering: the runner exposes `data`/`loading` directly, so we
+  // render the `.View` render fn (the children) immediately rather than
+  // suspending on a throwing reader. Because nothing suspends, the SSR render
+  // and the initial client hydration take the SAME branch (no Suspense fallback
+  // swapped in/out), which keeps the markup identical across the boundary and
+  // lets Preact adopt the server DOM cleanly on hydration.
+  const { data, loading, error, reload, status } = useLoaderRunner<T>(
     loaderRef,
     location,
     id,
     accumulate
   );
 
-  // A `live` loader never runs on the server (its infinite generator would hang
-  // renderToStringAsync). Render the fallback directly on SSR; the client
-  // renders the same fallback while suspended on the first chunk, so the SSR DOM
-  // is adopted on hydration (the same Suspense + useId machinery a data loader
-  // hydrates through, seeded with a fallback instead of server data).
-  const liveServer = loaderRef.live && !isBrowser();
+  // For an accumulating (`live`) consumer the render fn always expects a valid
+  // accumulator, so during the connecting window (before the first chunk, and on
+  // SSR where a live loader never runs) surface `accumulate.initial` rather than
+  // the runner's `undefined`. A non-accumulate loader surfaces `undefined` while
+  // it is loading, which the render fn reads alongside `loading === true`.
+  const viewData =
+    accumulate && data === undefined ? (accumulate.initial as T) : data;
 
-  // Anchor a streaming consumer's fallback under the same `useId` element the
-  // resolved content uses (an `Envelope`-shaped `<section id>`), so the SSR
-  // fallback DOM is ADOPTED on hydration rather than orphaned inside a lazy
-  // layout (which would leave two overlapping bars and a duplicate
-  // view-transition-name). The `Envelope` itself can't wrap the fallback (it
-  // requires LoaderDataContext), so mirror its anchor shape directly.
-  const fallbackContent = accumulate ? (
-    <section id={id} data-loader="null">
-      {fallback}
-    </section>
-  ) : (
-    fallback
+  // A COLD error: the load failed before any data arrived (`data` is the RAW
+  // runner value, undefined here). The old Suspense path threw the reader so an
+  // error boundary caught it; the state path surfaces the error without throwing,
+  // so reproduce that propagation explicitly. A POST-first-chunk error (`data`
+  // present) is NOT cold: keep the last-good content visible and let the render
+  // fn read the error via `useError()`/`status === 'error'` (stale-while-error).
+  const coldError = error != null && data === undefined;
+
+  const content = (
+    <LoaderDataContext.Provider value={{ data: viewData, loading }}>
+      <Envelope>{children}</Envelope>
+    </LoaderDataContext.Provider>
   );
 
-  // The non-accumulate fallback is delayed (it only mounts after `fallbackDelay`
-  // ms) so a fast client navigation never flashes it. The accumulate (live)
-  // fallback is the `useId`-anchored <section> the SSR DOM is adopted from on
-  // hydration, so it must render IMMEDIATELY: a delay would render null first
-  // and orphan the SSR node (the two-overlapping-bars regression). `liveServer`
-  // renders the anchored fallback directly (the loader never runs on SSR).
-  const fallbackDelay = loaderRef.fallbackDelay ?? DEFAULT_FALLBACK_DELAY_MS;
-  const suspenseFallback = accumulate ? (
-    fallbackContent
-  ) : fallback == null ? (
-    fallback
-  ) : (
-    <DelayedFallback delay={fallbackDelay}>{fallback}</DelayedFallback>
-  );
-
-  const suspenseContent = liveServer ? (
-    <Suspense fallback={fallbackContent}>{fallbackContent}</Suspense>
-  ) : (
-    <Suspense fallback={suspenseFallback}>
-      <DataReader reader={reader} overrideData={data}>
-        <Envelope>{children}</Envelope>
-      </DataReader>
-    </Suspense>
-  );
+  let body: ComponentChildren;
+  if (coldError) {
+    if (errorFallback != null) {
+      // Local error UI. `reset` re-enters the loader (clears the error and
+      // refetches), mirroring the old ErrorBoundary `reset` semantics.
+      body =
+        typeof errorFallback === 'function'
+          ? errorFallback(error, reload)
+          : errorFallback;
+    } else {
+      // No local handler: re-throw so an OUTER boundary (a page-level
+      // `errorFallback` / `RouteBoundary`) catches it, exactly as the thrown
+      // Suspense reader propagated up the tree before.
+      throw error;
+    }
+  } else if (errorFallback != null) {
+    // No cold error (loading, resolved, or a stale post-chunk error): render the
+    // content, still wrapped in an ErrorBoundary so a render-time throw from the
+    // children subtree is caught by the local `errorFallback` rather than
+    // unwinding the page.
+    body = <ErrorBoundary fallback={errorFallback}>{content}</ErrorBoundary>;
+  } else {
+    body = content;
+  }
 
   return (
     <LoaderIdContext.Provider value={id}>
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-        <ReloadContext.Provider value={{ reload, reloading: loading }}>
+        <ReloadContext.Provider value={{ reload }}>
           <LoaderErrorContext.Provider value={error}>
             <LoaderStatusContext.Provider value={status}>
-              {errorFallback != null ? (
-                <ErrorBoundary fallback={errorFallback}>
-                  {suspenseContent}
-                </ErrorBoundary>
-              ) : (
-                suspenseContent
-              )}
+              {body}
             </LoaderStatusContext.Provider>
           </LoaderErrorContext.Provider>
         </ReloadContext.Provider>
@@ -144,18 +132,3 @@ export function LoaderHost<T>({
 
 // Public name consumed by define-loader.ts and user code.
 export { LoaderHost as Loader };
-
-type DataReaderProps<T> = {
-  reader: { read: () => T };
-  overrideData?: T;
-  children: ComponentChildren;
-};
-
-function DataReader<T>({ reader, overrideData, children }: DataReaderProps<T>) {
-  const data = overrideData !== undefined ? overrideData : reader.read();
-  return (
-    <LoaderDataContext.Provider value={{ data }}>
-      {children}
-    </LoaderDataContext.Provider>
-  );
-}

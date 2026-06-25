@@ -31,11 +31,6 @@ export type LoaderRunnerState<T> = {
   error: Error | null;
   reload: () => void;
   status: StreamStatus;
-  /**
-   * BRIDGE: the Suspense reader, kept this task only so the still-Suspense
-   * `loader.tsx` consumer stays green. Removed in Task 4.
-   */
-  reader: { read: () => T };
 };
 
 export function useLoaderRunner<T>(
@@ -277,6 +272,12 @@ export function useLoaderRunner<T>(
               return accRef.current as T;
             })
             .catch((err: unknown) => {
+              // State-based surfacing: the old Suspense reader propagated this
+              // rejection by throwing on read(); now nothing reads the reader,
+              // so push the error into state. With no chunk yet `data` stays
+              // undefined, so LoaderHost treats it as a COLD error.
+              setLoadError(err instanceof Error ? err : new Error(String(err)));
+              setStatus('error');
               settleAcc();
               throw err;
             })
@@ -352,14 +353,18 @@ export function useLoaderRunner<T>(
               // Drive the resolved value into state so `data` is available
               // without calling the throwing reader. For a non-streaming loader
               // `runLoader` never fires `onChunk`, so this is the only place the
-              // single-value cold load surfaces its result as state. The bridge
-              // `DataReader` still prefers this over `reader.read()`, so the
-              // Suspense consumer sees the same value.
+              // single-value cold load surfaces its result as state.
               setOverrideData(r);
               settle();
               return r;
             })
             .catch((err: unknown) => {
+              // State-based surfacing: the old Suspense reader propagated this
+              // rejection by throwing on read(); now nothing reads the reader,
+              // so push the error into state. `data` is still undefined (the
+              // fetch never resolved), so LoaderHost treats it as a COLD error
+              // and renders `errorFallback` / rethrows to an outer boundary.
+              setLoadError(err instanceof Error ? err : new Error(String(err)));
               settle();
               throw err;
             })
@@ -389,6 +394,5 @@ export function useLoaderRunner<T>(
     error: loadError,
     reload,
     status,
-    reader: readerRef.current,
   };
 }

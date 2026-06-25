@@ -75,8 +75,11 @@ describe('Page errorFallback catches loader errors', () => {
     locMap.set('test/page-error-boundary', loc);
 
     function PageContent() {
-      const { msg } = failing.useData();
-      return <p data-testid="content">{msg}</p>;
+      // State-based: children render eagerly during the pending window, so
+      // `useData()` returns undefined until the loader resolves. Guard for it.
+      const data = failing.useData() as { msg: string } | undefined;
+      if (data === undefined) return null;
+      return <p data-testid="content">{data.msg}</p>;
     }
 
     render(
@@ -117,8 +120,11 @@ describe('Page renders loader content', () => {
     locMap.set('test/page-content', loc);
 
     function PageContent() {
-      const { msg } = ok.useData();
-      return <p data-testid="content">{msg}</p>;
+      // State-based: children render eagerly during the pending window, so
+      // `useData()` returns undefined until the loader resolves. Guard for it.
+      const data = ok.useData() as { msg: string } | undefined;
+      if (data === undefined) return null;
+      return <p data-testid="content">{data.msg}</p>;
     }
 
     render(

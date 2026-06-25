@@ -154,9 +154,12 @@ describe('loader.View (accumulating / streaming form)', () => {
   });
 
   it('drains a reload() queued during the initial pre-first-chunk window', async () => {
-    // The first subscribe stays pending while the fallback fires reload(); that
-    // reload is queued (the initial fetch is in flight). When the first chunk
-    // finally settles, the queued reload must drain and resubscribe.
+    // The first subscribe stays pending while the view (rendered eagerly in the
+    // connecting state) fires reload(); that reload is queued (the initial fetch
+    // is in flight). When the first chunk finally settles, the queued reload must
+    // drain and resubscribe. With the state model the view fn renders during the
+    // connecting window (no separate Suspense fallback subtree), so the
+    // useReload() consumer lives inside the render fn itself.
     const first = deferred<Response>();
     const fetchMock = vi
       .fn()
@@ -169,9 +172,9 @@ describe('loader.View (accumulating / streaming form)', () => {
       live: true,
     });
 
-    // A useReload() consumer in the fallback subtree (mounted outside Suspense)
-    // fires reload() once while the bar is still connecting.
-    function Fallback() {
+    // Fires reload() exactly once while the bar is still connecting (before the
+    // first chunk arrives). Lives inside the eagerly-rendered view fn.
+    function ConnectingReloader() {
       const { reload } = useReload();
       const fired = useRef(false);
       useEffect(() => {
@@ -180,19 +183,19 @@ describe('loader.View (accumulating / streaming form)', () => {
           reload();
         }
       }, [reload]);
-      return <p data-testid="out">connecting</p>;
+      return null;
     }
 
     const Feed = ref.View<number[]>(
       ({ data, status }) => (
         <p data-testid="out">
           {data.join(',')}|{status}
+          {status === 'connecting' ? <ConnectingReloader /> : null}
         </p>
       ),
       {
         initial: [],
         reduce: (acc, chunk) => [...acc, chunk.n],
-        fallback: <Fallback />,
       }
     );
 

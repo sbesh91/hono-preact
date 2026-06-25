@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 describe('streaming loader: client-driven', () => {
-  it('renders the first chunk, then re-renders on each subsequent chunk', async () => {
+  it('renders pending (loading, no data) then the first chunk, then re-renders on each subsequent chunk', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -55,9 +55,12 @@ describe('streaming loader: client-driven', () => {
       __moduleKey: 'test-stream',
     });
 
+    // Loading-aware: with the state model the children render eagerly during the
+    // connecting window, so `data` is undefined until the first chunk lands.
     function Page() {
-      const { count } = ref.useData();
-      return <p data-testid="count">{count}</p>;
+      const data = ref.useData() as { count: number } | undefined;
+      if (data === undefined) return <p data-testid="count">pending</p>;
+      return <p data-testid="count">{data.count}</p>;
     }
 
     render(
@@ -71,11 +74,11 @@ describe('streaming loader: client-driven', () => {
       </LocationProvider>
     );
 
+    // The children render immediately (no Suspense fallback) in the pending
+    // state: the loading marker, not the data.
+    expect(screen.getByTestId('count')).toHaveTextContent('pending');
+
     // The DOM should eventually show 3, proving the stream was fully consumed.
-    await waitFor(() =>
-      expect(screen.getByTestId('count')).toHaveTextContent('3')
-    );
-    // Verify the component showed earlier chunks along the way.
     await waitFor(() =>
       expect(screen.getByTestId('count')).toHaveTextContent('3')
     );
@@ -102,7 +105,8 @@ describe('streaming loader: client-driven', () => {
     let lastData: { count: number } | null = null;
     let lastError: Error | null = null;
     function Page() {
-      lastData = ref.useData();
+      const data = ref.useData() as { count: number } | undefined;
+      if (data !== undefined) lastData = data;
       lastError = ref.useError();
       return null;
     }

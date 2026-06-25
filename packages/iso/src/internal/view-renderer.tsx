@@ -15,6 +15,13 @@ import { LoaderStatusContext } from './loader.js';
  */
 export type ViewRenderArgs = {
   data: unknown;
+  /**
+   * True while a fetch/stream-connect is in flight: a cold load that has not
+   * resolved (`data` is `undefined`), or an explicit `reload()` (`data` retains
+   * the previous value, stale-while-revalidate). Supersedes the old
+   * reload-context `reloading` boolean.
+   */
+  loading: boolean;
   status: StreamStatus;
   error: Error | null;
   reload: () => void;
@@ -38,9 +45,10 @@ export function ViewRenderer<T>({
 }) {
   const dataCtx = useContext(LoaderDataContext);
   const data = dataCtx?.data;
+  const loading = dataCtx?.loading ?? false;
   const error = loaderRef.useError();
   const status = useContext(LoaderStatusContext);
   const reloadCtx = useContext(ReloadContext);
   const reload = reloadCtx?.reload ?? (() => {});
-  return render({ data, status, error, reload, ...props });
+  return render({ data, loading, status, error, reload, ...props });
 }

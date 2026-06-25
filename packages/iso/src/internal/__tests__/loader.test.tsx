@@ -6,6 +6,8 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
 import { useReload } from '../../reload-context.js';
+import { LoaderDataContext } from '../contexts.js';
+import { useContext } from 'preact/hooks';
 import { env } from '../../is-browser.js';
 
 vi.mock('../preload.js', () => ({
@@ -29,6 +31,85 @@ afterEach(() => {
   cleanup();
 });
 
+// A loading-aware probe: with the state-based loader, children render eagerly
+// during the pending window, so `data` may be undefined. It renders a "loading"
+// marker until data is present, then the data. This replaces the Suspense
+// `fallback` prop, which no longer exists.
+function Probe({ testid = 'msg' }: { testid?: string }) {
+  const ctx = useContext(LoaderDataContext);
+  const data = ctx?.data as { msg: string } | undefined;
+  if (ctx?.loading && data === undefined)
+    return <span data-testid="loading">loading</span>;
+  return <span data-testid={testid}>{data?.msg}</span>;
+}
+
+describe('state-based <Loader>: pending/resolved render model', () => {
+  it('renders the children with loading=true & data=undefined on a cold load, with NO fallback element or Suspense boundary', async () => {
+    let resolve!: (v: { msg: string }) => void;
+    let captured: { data: unknown; loading: boolean } | null = null;
+    const fn = vi.fn(
+      () =>
+        new Promise<{ msg: string }>((r) => {
+          resolve = r;
+        })
+    );
+    const ref = defineLoader<{ msg: string }>(fn);
+
+    function Capture() {
+      captured = useContext(LoaderDataContext) as {
+        data: unknown;
+        loading: boolean;
+      } | null;
+      return <Probe />;
+    }
+
+    const { container } = render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Capture />
+        </Loader>
+      </LocationProvider>
+    );
+
+    // While pending: render fn ran with loading=true, data=undefined. The
+    // children rendered directly (no separate fallback element).
+    await waitFor(() => expect(captured?.loading).toBe(true));
+    expect(captured?.data).toBeUndefined();
+    expect(screen.queryByTestId('loading')).not.toBeNull();
+    // The resolved markup is the SAME <section> the Envelope always renders
+    // (no Suspense fallback section swapped in/out).
+    expect(container.querySelector('section')).not.toBeNull();
+
+    await act(async () => {
+      resolve({ msg: 'ready' });
+    });
+
+    await screen.findByText('ready');
+    expect(captured?.loading).toBe(false);
+    expect(captured?.data).toEqual({ msg: 'ready' });
+  });
+
+  it('renders a defined-but-falsy resolved value (no undefined-precedence ambiguity)', async () => {
+    // A loader resolving to 0 must render 0, not be mistaken for "no data".
+    const ref = defineLoader<number>(async () => 0);
+    let observed: unknown = 'unset';
+    function Capture() {
+      const ctx = useContext(LoaderDataContext);
+      observed = ctx?.data;
+      return <span data-testid="val">{String(ctx?.data)}</span>;
+    }
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Capture />
+        </Loader>
+      </LocationProvider>
+    );
+    await waitFor(() => expect(observed).toBe(0));
+    expect(screen.getByTestId('val')).toHaveTextContent('0');
+  });
+});
+
 describe('v3 <Loader> stability', () => {
   it('does not refire the loader on internal re-renders triggered by reload()', async () => {
     let callCount = 0;
@@ -39,11 +120,11 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const { msg } = ref.useData();
+      const data = ref.useData() as { msg: string } | undefined;
       const { reload } = useReload();
       return (
         <div>
-          <span data-testid="msg">{msg}</span>
+          <span data-testid="msg">{data?.msg}</span>
           <button onClick={reload}>reload</button>
         </div>
       );
@@ -68,7 +149,7 @@ describe('v3 <Loader> stability', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it('preserves child component state across reload (no Suspense unmount)', async () => {
+  it('preserves child component state across reload (no unmount), keeping the previous data visible', async () => {
     let resolveInitial!: (v: { msg: string }) => void;
     let resolveReload!: (v: { msg: string }) => void;
     const fn = vi
@@ -88,12 +169,12 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const { msg } = ref.useData();
+      const data = ref.useData() as { msg: string } | undefined;
       const { reload } = useReload();
       const [count, setCount] = useState(0);
       return (
         <div>
-          <span data-testid="msg">{msg}</span>
+          <span data-testid="msg">{data?.msg}</span>
           <span data-testid="count">{count}</span>
           <button data-testid="bump" onClick={() => setCount((c) => c + 1)}>
             bump
@@ -107,11 +188,7 @@ describe('v3 <Loader> stability', () => {
 
     render(
       <LocationProvider>
-        <Loader
-          loader={ref}
-          location={loc}
-          fallback={<div data-testid="loading">Loading…</div>}
-        >
+        <Loader loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -133,12 +210,12 @@ describe('v3 <Loader> stability', () => {
     });
     expect(screen.getByTestId('count')).toHaveTextContent('2');
 
-    // Trigger reload — should NOT remount Child or show fallback.
+    // Trigger reload — should NOT remount Child; the previous data stays
+    // visible (stale-while-revalidate) while the reload is in flight.
     await act(async () => {
       screen.getByTestId('reload').click();
     });
 
-    expect(screen.queryByTestId('loading')).toBeNull();
     expect(screen.getByTestId('msg')).toHaveTextContent('initial');
     expect(screen.getByTestId('count')).toHaveTextContent('2');
 
@@ -162,8 +239,8 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const { msg } = ref.useData();
-      return <span data-testid="msg">{msg}</span>;
+      const data = ref.useData() as { msg: string } | undefined;
+      return <span data-testid="msg">{data?.msg}</span>;
     }
 
     let trigger!: () => void;
@@ -171,11 +248,7 @@ describe('v3 <Loader> stability', () => {
       const [, force] = useState(0);
       trigger = () => force((n) => n + 1);
       return (
-        <Loader
-          loader={ref}
-          location={loc}
-          fallback={<div data-testid="loading">Loading…</div>}
-        >
+        <Loader loader={ref} location={loc}>
           <Child />
         </Loader>
       );
@@ -226,23 +299,25 @@ describe('v3 <Loader> stability', () => {
       );
     const ref = defineLoader<{ msg: string }>(fn);
 
-    function Fallback() {
+    // The children render eagerly during the pending window (no fallback
+    // subtree). A useReload() consumer mounted directly in the children can fire
+    // reload() before the initial fetch resolves; the runner must queue it.
+    function Child() {
+      const data = ref.useData() as { msg: string } | undefined;
       const { reload } = useReload();
       return (
-        <button data-testid="early-reload" onClick={reload}>
-          reload
-        </button>
+        <div>
+          <span data-testid="msg">{data?.msg}</span>
+          <button data-testid="early-reload" onClick={reload}>
+            reload
+          </button>
+        </div>
       );
-    }
-
-    function Child() {
-      const { msg } = ref.useData();
-      return <span data-testid="msg">{msg}</span>;
     }
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc} fallback={<Fallback />}>
+        <Loader loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -250,8 +325,6 @@ describe('v3 <Loader> stability', () => {
 
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
 
-    // The fallback is now wrapped in DelayedFallback (100ms default). Wait for
-    // it to appear, then click the button inside it.
     const earlyReload = await screen.findByTestId('early-reload');
     await act(async () => {
       earlyReload.click();
@@ -283,8 +356,8 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ q: string }>(fn, { params: ['q'] });
 
     function Child() {
-      const { q } = ref.useData();
-      return <span data-testid="q">{q || '(empty)'}</span>;
+      const data = ref.useData() as { q: string } | undefined;
+      return <span data-testid="q">{data ? data.q || '(empty)' : ''}</span>;
     }
 
     const make = (q: string) =>
@@ -331,8 +404,8 @@ describe('Loader: parametric loader cache should key on location', () => {
     );
 
     function Page({ id }: { id: string }) {
-      const data = ref.useData();
-      return <p data-testid={`title-${id}`}>{data.title}</p>;
+      const data = ref.useData() as { id: string; title: string } | undefined;
+      return <p data-testid={`title-${id}`}>{data?.title}</p>;
     }
 
     const makeLoc = (id: string) =>
@@ -351,8 +424,9 @@ describe('Loader: parametric loader cache should key on location', () => {
         </Loader>
       </LocationProvider>
     );
-    await waitFor(() => expect(first.queryByTestId('title-1')).not.toBeNull());
-    expect(first.queryByTestId('title-1')!.textContent).toBe('Movie 1');
+    await waitFor(() =>
+      expect(first.getByTestId('title-1').textContent).toBe('Movie 1')
+    );
 
     first.unmount();
 
@@ -364,8 +438,9 @@ describe('Loader: parametric loader cache should key on location', () => {
         </Loader>
       </LocationProvider>
     );
-    await waitFor(() => expect(second.queryByTestId('title-2')).not.toBeNull());
-    expect(second.queryByTestId('title-2')!.textContent).toBe('Movie 2');
+    await waitFor(() =>
+      expect(second.getByTestId('title-2').textContent).toBe('Movie 2')
+    );
 
     // Verify both fetches happened (cache didn't short-circuit the second).
     expect(calls).toEqual(['1', '2']);
@@ -399,7 +474,8 @@ describe('Loader: useError() on successful static load', () => {
     let observedMsg: string | undefined = undefined;
     function Child() {
       observed = ref.useError();
-      observedMsg = ref.useData().msg;
+      const data = ref.useData() as { msg: string } | undefined;
+      observedMsg = data?.msg;
       return null;
     }
     render(

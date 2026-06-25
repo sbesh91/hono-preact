@@ -3,7 +3,6 @@ import { useContext } from 'preact/hooks';
 
 export type ReloadContextValue = {
   reload: () => void;
-  reloading: boolean;
 };
 
 export const ReloadContext = createContext<ReloadContextValue | undefined>(

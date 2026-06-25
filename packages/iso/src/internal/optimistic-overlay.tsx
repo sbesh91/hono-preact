@@ -31,7 +31,11 @@ export function OptimisticOverlay<T, A>({
   );
 
   return (
-    <LoaderDataContext.Provider value={{ data: projected }}>
+    // Carry the surrounding `loading` flag through unchanged: an optimistic
+    // projection rewrites the data, not the load state.
+    <LoaderDataContext.Provider
+      value={{ data: projected, loading: ctx.loading }}
+    >
       {children}
     </LoaderDataContext.Provider>
   );

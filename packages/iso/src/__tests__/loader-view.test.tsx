@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { FunctionComponent } from 'preact';
-import { render, waitFor } from '@testing-library/preact';
+import { render, waitFor, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
@@ -15,8 +15,12 @@ vi.mock('../is-browser.js', () => ({
   env: { current: 'server' },
 }));
 
+afterEach(() => {
+  cleanup();
+});
+
 describe('LoaderRef.Boundary', () => {
-  it('renders the loader fallback then transitions to children with data', async () => {
+  it('renders children eagerly while pending (loading, no data) then with data', async () => {
     let resolveData: (v: { value: number }) => void = () => {};
     const fn = vi.fn(
       () =>
@@ -28,8 +32,12 @@ describe('LoaderRef.Boundary', () => {
       __moduleKey: 'pages/test-boundary',
     });
 
+    // Loading-aware probe: state-based rendering mounts the children during the
+    // pending window, so `data` is undefined until the loader resolves. There is
+    // no separate Suspense fallback element.
     const Probe = () => {
-      const data = ref.useData();
+      const data = ref.useData() as { value: number } | undefined;
+      if (data === undefined) return <span data-testid="pending">loading</span>;
       return <span data-testid="data">{data.value}</span>;
     };
 
@@ -42,14 +50,16 @@ describe('LoaderRef.Boundary', () => {
 
     const tree = (
       <RouteLocationsContext.Provider value={locMap}>
-        <ref.Boundary fallback={<span data-testid="fallback">loading</span>}>
+        <ref.Boundary>
           <Probe />
         </ref.Boundary>
       </RouteLocationsContext.Provider>
     );
 
     const { findByTestId, queryByTestId } = render(tree);
-    expect(queryByTestId('fallback')).not.toBeNull();
+    // Children mounted directly in the pending state (no fallback element).
+    expect(queryByTestId('pending')).not.toBeNull();
+    expect(queryByTestId('data')).toBeNull();
     // coerceLoaderLocation is async even with no schemas, so fn is invoked after
     // a microtask. Wait for it before using resolveData.
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
@@ -60,7 +70,7 @@ describe('LoaderRef.Boundary', () => {
 });
 
 describe('LoaderRef.View', () => {
-  it('renders fallback then provides data, error, reload to render fn', async () => {
+  it('renders loading=true/data=undefined then provides data, loading=false to render fn', async () => {
     let resolveData: (v: { name: string }) => void = () => {};
     const fn = vi.fn(
       () =>
@@ -72,9 +82,12 @@ describe('LoaderRef.View', () => {
       __moduleKey: 'pages/test-view-1',
     });
 
-    const View = ref.View(
-      ({ data }) => <span data-testid="name">{data.name}</span>,
-      { fallback: <span data-testid="fallback">…</span> }
+    const View = ref.View(({ data, loading }) =>
+      data === undefined ? (
+        <span data-testid="pending">loading:{String(loading)}</span>
+      ) : (
+        <span data-testid="name">{data.name}</span>
+      )
     );
 
     const locMap = new Map();
@@ -89,7 +102,8 @@ describe('LoaderRef.View', () => {
         <View />
       </RouteLocationsContext.Provider>
     );
-    expect(queryByTestId('fallback')).not.toBeNull();
+    // Render fn ran with loading=true & data=undefined (no Suspense fallback).
+    expect(queryByTestId('pending')?.textContent).toBe('loading:true');
     // coerceLoaderLocation is async even with no schemas, so fn is invoked after
     // a microtask. Wait for it before using resolveData.
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
@@ -104,13 +118,12 @@ describe('LoaderRef.View', () => {
     });
     const View: FunctionComponent<{ label: string }> = ref.View<{
       label: string;
-    }>(
-      ({ data, label }) => (
+    }>(({ data, label }) =>
+      data === undefined ? null : (
         <span data-testid="composed">
           {label}:{data.value}
         </span>
-      ),
-      { fallback: <span /> }
+      )
     );
     const locMap = new Map();
     locMap.set('pages/test-view-2', {
@@ -147,10 +160,7 @@ describe('LoaderRef.Boundary: errorFallback', () => {
 
     const { findByTestId } = render(
       <RouteLocationsContext.Provider value={locMap}>
-        <ref.Boundary
-          fallback={<span>loading</span>}
-          errorFallback={<span data-testid="err">caught</span>}
-        >
+        <ref.Boundary errorFallback={<span data-testid="err">caught</span>}>
           <span data-testid="content">should not render</span>
         </ref.Boundary>
       </RouteLocationsContext.Provider>
@@ -169,7 +179,10 @@ describe('LoaderRef.Boundary: errorFallback', () => {
     );
 
     const View = ref.View(
-      ({ data }) => <span data-testid="data">{data.value}</span>,
+      ({ data }) =>
+        data === undefined ? null : (
+          <span data-testid="data">{data.value}</span>
+        ),
       { errorFallback: <span data-testid="view-err">view-caught</span> }
     );
 
@@ -203,7 +216,8 @@ describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => 
     );
 
     const Probe = () => {
-      const data = ref.useData();
+      const data = ref.useData() as { path: string } | undefined;
+      if (data === undefined) return null;
       return <span data-testid="path">{data.path}</span>;
     };
 
@@ -229,7 +243,7 @@ describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => 
             moduleKey="pages/test-context-loc"
             location={pageLoc}
           >
-            <ref.Boundary fallback={<span />}>
+            <ref.Boundary>
               <Probe />
             </ref.Boundary>
           </RouteLocationsProvider>
