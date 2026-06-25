@@ -24,6 +24,7 @@ import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 export type { StreamStatus } from './internal/use-loader-runner.js';
+export type { LoaderState, StreamState } from './loader-state.js';
 
 export type LoaderCtx<
   TParams = Record<string, string>,
