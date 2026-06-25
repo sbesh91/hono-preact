@@ -53,3 +53,53 @@ export function parseArgs(argv) {
 
   return { kind: 'scaffold', targetDir, adapter, install, git };
 }
+
+/**
+ * Recover scaffold flags that `npm create` / `npm exec` strip from argv.
+ *
+ * npm parses long flags it doesn't recognize (e.g. `--adapter=node`) as its own
+ * config: it prints `npm warn Unknown cli config "--adapter"`, drops the flag
+ * from the argv handed to the initializer, and instead exposes it as a
+ * `npm_config_<name>` environment variable. Without this recovery,
+ * `npm create hono-preact app --adapter=node` (no `--` separator) would silently
+ * scaffold the default adapter. pnpm, yarn, and bun forward bare flags as-is, so
+ * this only ever fires under npm.
+ *
+ * Returns the flag tokens to append to argv before parsing. Anything already in
+ * argv (e.g. passed via `npm create ... -- --adapter=node`) wins and is left
+ * untouched. The durable invocation is the `--` form; this is a transitional
+ * convenience tied to npm's current (deprecated) flag handling.
+ *
+ * @param {string[]} argv
+ * @param {Record<string, string | undefined>} env
+ * @returns {string[]} synthesized flag tokens (possibly empty)
+ */
+export function recoverNpmStrippedFlags(argv, env) {
+  // The add-agents subcommand has its own flag set; never inject scaffold flags.
+  if (argv[0] === 'add-agents') return [];
+
+  const present = (/** @type {string} */ name) =>
+    argv.some((arg) => arg === name || arg.startsWith(`${name}=`));
+
+  const recovered = [];
+
+  // `adapter` is our own config namespace, so any value present is unambiguous.
+  // parseArgs validates it (node|cloudflare) once it's back in argv.
+  if (!present('--adapter') && typeof env.npm_config_adapter === 'string') {
+    recovered.push(`--adapter=${env.npm_config_adapter}`);
+  }
+
+  // `install` is not a real npm config, so npm represents the `--no-install`
+  // negation as an empty string.
+  if (!present('--no-install') && env.npm_config_install === '') {
+    recovered.push('--no-install');
+  }
+
+  // `git` IS a real npm config (the git binary path, default "git"), so only the
+  // literal "false" negation indicates `--no-git`; a configured path is not.
+  if (!present('--no-git') && env.npm_config_git === 'false') {
+    recovered.push('--no-git');
+  }
+
+  return recovered;
+}

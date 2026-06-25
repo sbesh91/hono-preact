@@ -16,4 +16,6 @@ bun create hono-preact my-app
 - `--no-git` — skip `git init`
 - `--help`, `--version`
 
+> Using npm, put framework flags after `--`: `npm create hono-preact my-app -- --adapter=node`. pnpm, yarn, and bun forward bare flags directly. (npm intercepts a bare `--adapter`; the scaffolder recovers it from `npm_config_*`, but npm still prints a warning.)
+
 See [https://framework.sbesh.com/docs](https://framework.sbesh.com/docs) for the framework documentation.

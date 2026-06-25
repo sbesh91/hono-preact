@@ -28,6 +28,8 @@ pnpm dev
 | `--version`, `-v`              |               | Print the CLI version.                                              |
 | `--help`, `-h`                 |               | Print usage.                                                        |
 
+> **Using npm?** npm intercepts bare flags (`npm warn Unknown cli config "--adapter"`) and would otherwise scaffold the default adapter. Put framework flags after a `--` separator: `npm create hono-preact my-app -- --adapter=node`. pnpm, yarn, and bun forward bare flags directly. If you do forget the `--`, the scaffolder recovers the flag from npm's config, but npm still prints its warning.
+
 ## Add agent guidance to an existing app
 
 If you added hono-preact to a project you did not scaffold (for example with

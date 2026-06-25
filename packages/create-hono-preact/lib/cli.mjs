@@ -5,7 +5,7 @@ import readline from 'node:readline/promises';
 import { resolve, join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
-import { parseArgs } from './args.mjs';
+import { parseArgs, recoverNpmStrippedFlags } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
 import {
   copyTemplate,
@@ -34,7 +34,11 @@ export async function run({
   spawnFn = realSpawn,
   prompt = defaultPrompt,
 }) {
-  const parsed = parseArgs(argv);
+  // npm strips bare framework flags from argv and exposes them as npm_config_*
+  // env vars; recover them so `npm create hono-preact app --adapter=node` works
+  // without a `--` separator. argv always wins.
+  const recovered = recoverNpmStrippedFlags(argv, env);
+  const parsed = parseArgs(recovered.length ? [...argv, ...recovered] : argv);
 
   if (parsed.kind === 'help') {
     printHelp();
@@ -80,6 +84,15 @@ export async function run({
       return 1;
     }
     targetDir = answer;
+  }
+
+  if (recovered.length > 0) {
+    console.warn(
+      `note: npm moved framework flags into its config (${recovered.join(' ')}); recovered them.`
+    );
+    console.warn(
+      `      next time, pass them after \`--\`: npm create hono-preact ${targetDir} -- ${recovered.join(' ')}`
+    );
   }
 
   const targetPath = resolve(cwd, targetDir);

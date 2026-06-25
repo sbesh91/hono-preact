@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArgs } from '../lib/args.mjs';
+import { parseArgs, recoverNpmStrippedFlags } from '../lib/args.mjs';
 
 describe('parseArgs', () => {
   it('parses a positional target dir', () => {
@@ -109,5 +109,69 @@ describe('parseArgs — add-agents', () => {
       kind: 'error',
       message: 'unknown flag: --bogus',
     });
+  });
+});
+
+describe('recoverNpmStrippedFlags', () => {
+  it('recovers --adapter from npm_config_adapter when argv lacks it', () => {
+    expect(
+      recoverNpmStrippedFlags(['my-app'], { npm_config_adapter: 'node' })
+    ).toEqual(['--adapter=node']);
+  });
+
+  it('lets an explicit --adapter in argv win (recovers nothing)', () => {
+    expect(
+      recoverNpmStrippedFlags(['my-app', '--adapter=cloudflare'], {
+        npm_config_adapter: 'node',
+      })
+    ).toEqual([]);
+  });
+
+  it('recovers --no-install from the empty-string npm_config_install sentinel', () => {
+    expect(
+      recoverNpmStrippedFlags(['my-app'], { npm_config_install: '' })
+    ).toEqual(['--no-install']);
+  });
+
+  it('recovers --no-git only for the literal "false" npm_config_git sentinel', () => {
+    expect(
+      recoverNpmStrippedFlags(['my-app'], { npm_config_git: 'false' })
+    ).toEqual(['--no-git']);
+  });
+
+  it('does not treat a real npm_config_git binary path as --no-git', () => {
+    // npm's `git` config is the git binary path (default "git"); only the
+    // `--no-git` negation produces the literal string "false".
+    expect(
+      recoverNpmStrippedFlags(['my-app'], { npm_config_git: '/usr/bin/git' })
+    ).toEqual([]);
+  });
+
+  it('ignores an unset npm_config_install (only "" means --no-install)', () => {
+    expect(recoverNpmStrippedFlags(['my-app'], {})).toEqual([]);
+  });
+
+  it('recovers several stripped flags at once, in flag order', () => {
+    expect(
+      recoverNpmStrippedFlags(['my-app'], {
+        npm_config_adapter: 'node',
+        npm_config_install: '',
+        npm_config_git: 'false',
+      })
+    ).toEqual(['--adapter=node', '--no-install', '--no-git']);
+  });
+
+  it('recovers nothing for the add-agents subcommand', () => {
+    expect(
+      recoverNpmStrippedFlags(['add-agents'], { npm_config_adapter: 'node' })
+    ).toEqual([]);
+  });
+
+  it('recovers nothing when no npm_config_* flags are present (pnpm/bun path)', () => {
+    expect(
+      recoverNpmStrippedFlags(['my-app'], {
+        npm_config_user_agent: 'pnpm/10',
+      })
+    ).toEqual([]);
   });
 });

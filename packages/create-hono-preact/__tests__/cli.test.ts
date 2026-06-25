@@ -93,6 +93,80 @@ describe('run() — cloudflare adapter', () => {
   });
 });
 
+describe('run() — npm-stripped flag recovery', () => {
+  it('honors npm_config_adapter=node when npm strips the bare --adapter flag', async () => {
+    // Mirrors `npm create hono-preact npm-node-app --adapter=node` (no `--`):
+    // npm strips --adapter from argv and exposes it as npm_config_adapter.
+    const code = await run({
+      argv: ['npm-node-app', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_adapter: 'node', npm_config_user_agent: 'npm/10' },
+    });
+    expect(code).toBe(0);
+
+    const target = join(workDir, 'npm-node-app');
+    expect(existsSync(join(target, 'package.json'))).toBe(true);
+    // The node template ships no wrangler.jsonc; its presence would mean the
+    // recovery silently fell back to the cloudflare default.
+    expect(existsSync(join(target, 'wrangler.jsonc'))).toBe(false);
+  });
+
+  it('lets an explicit --adapter in argv win over npm_config_adapter', async () => {
+    const code = await run({
+      argv: [
+        'explicit-cf-app',
+        '--adapter=cloudflare',
+        '--no-install',
+        '--no-git',
+      ],
+      cwd: workDir,
+      env: { npm_config_adapter: 'node' },
+    });
+    expect(code).toBe(0);
+    expect(existsSync(join(workDir, 'explicit-cf-app', 'wrangler.jsonc'))).toBe(
+      true
+    );
+  });
+
+  it('honors npm_config_install="" (npm-stripped --no-install) and skips install', async () => {
+    const calls: string[] = [];
+    const fakeSpawn = (cmd: string) => {
+      calls.push(cmd);
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    await run({
+      argv: ['npm-noinstall-app', '--adapter=node', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_install: '', npm_config_user_agent: 'npm/10' },
+      spawnFn: fakeSpawn,
+    });
+
+    expect(calls).not.toContain('npm');
+    expect(calls).not.toContain('pnpm');
+  });
+
+  it('hints at the `--` separator when it recovers npm-stripped flags', async () => {
+    const warns: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try {
+      await run({
+        argv: ['hint-app', '--no-install', '--no-git'],
+        cwd: workDir,
+        env: { npm_config_adapter: 'node' },
+      });
+    } finally {
+      console.warn = originalWarn;
+    }
+    expect(warns.join('\n')).toContain('-- --adapter=node');
+  });
+});
+
 describe('run() — target dir validation', () => {
   it('refuses a non-empty existing target dir', async () => {
     const target = join(workDir, 'existing');

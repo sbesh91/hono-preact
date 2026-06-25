@@ -9,3 +9,8 @@ export interface ParsedArgs {
 }
 
 export function parseArgs(argv: string[]): ParsedArgs;
+
+export function recoverNpmStrippedFlags(
+  argv: string[],
+  env: Record<string, string | undefined>
+): string[];

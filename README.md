@@ -37,6 +37,8 @@ Options:
 - `--no-git` skip `git init`
 - `--help`, `--version`
 
+> Using npm, put framework flags after `--`: `npm create hono-preact my-app -- --adapter=node`. pnpm, yarn, and bun forward bare flags directly. (npm intercepts a bare `--adapter`; the scaffolder recovers it but prints a warning.)
+
 Full CLI reference: [Docs · CLI](https://framework.sbesh.com/docs/cli).
 
 ## What a project looks like
