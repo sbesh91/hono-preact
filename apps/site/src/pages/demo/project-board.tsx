@@ -26,9 +26,9 @@ const ProjectBoardPage: FunctionComponent = () => {
 };
 ProjectBoardPage.displayName = 'ProjectBoardPage';
 
-const ProjectBoardView = boardLoader.View(() => <ProjectBoardPage />, {
-  fallback: <BoardSkeleton />,
-});
+const ProjectBoardView = boardLoader.View(({ loading }) =>
+  loading ? <BoardSkeleton /> : <ProjectBoardPage />
+);
 
 function BoardSkeleton() {
   return (

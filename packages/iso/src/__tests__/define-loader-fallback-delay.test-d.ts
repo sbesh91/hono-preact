@@ -1,17 +1,16 @@
+// `fallbackDelay` has been removed from the public API. This file asserts
+// that neither DefineLoaderOptions nor LoaderRef carry the option, and that
+// defineLoader rejects it at the call site.
 import { expectTypeOf } from 'vitest';
 import { defineLoader } from '../define-loader.js';
 import type { DefineLoaderOptions, LoaderRef } from '../define-loader.js';
 
-// The option is an optional number.
-expectTypeOf<DefineLoaderOptions<number>['fallbackDelay']>().toEqualTypeOf<
-  number | undefined
->();
+// DefineLoaderOptions does NOT include fallbackDelay.
+expectTypeOf<DefineLoaderOptions<number>>().not.toHaveProperty('fallbackDelay');
 
-// The ref surfaces it as number | undefined.
-expectTypeOf<LoaderRef<number>['fallbackDelay']>().toEqualTypeOf<
-  number | undefined
->();
+// LoaderRef does NOT surface fallbackDelay.
+expectTypeOf<LoaderRef<number>>().not.toHaveProperty('fallbackDelay');
 
-// defineLoader accepts it at the call site.
-const ref = defineLoader(async () => 1, { fallbackDelay: 100 });
-expectTypeOf(ref.fallbackDelay).toEqualTypeOf<number | undefined>();
+// defineLoader rejects fallbackDelay at the call site.
+// @ts-expect-error fallbackDelay is no longer accepted
+defineLoader(async () => 1, { fallbackDelay: 100 });

@@ -44,7 +44,6 @@ const LiveCounter = countLoader.View<number>(
   {
     initial: 0,
     reduce: (_acc, chunk) => chunk.count,
-    fallback: <p>Live count: connecting...</p>,
   }
 );
 LiveCounter.displayName = 'LiveCounter';
@@ -174,8 +173,8 @@ const CursorsDemo: FunctionComponent = () => {
 };
 CursorsDemo.displayName = 'CursorsDemo';
 
-const HomeView = homeLoader.View(() => <HomePage />, {
-  fallback: <p>Loading...</p>,
-});
+const HomeView = homeLoader.View(({ loading }) =>
+  loading ? <p>Loading...</p> : <HomePage />
+);
 
 export default definePage(HomeView, {});

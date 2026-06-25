@@ -19,8 +19,8 @@ const HomePage: FunctionComponent = () => {
 };
 HomePage.displayName = 'HomePage';
 
-const HomeView = homeLoader.View(() => <HomePage />, {
-  fallback: <p>Loading...</p>,
-});
+const HomeView = homeLoader.View(({ loading }) =>
+  loading ? <p>Loading...</p> : <HomePage />
+);
 
 export default definePage(HomeView, {});

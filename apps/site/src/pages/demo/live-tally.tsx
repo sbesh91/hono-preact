@@ -61,14 +61,6 @@ const LiveTally = pingsLoader.View<number>(
     // Ping). Each tab counts independently, which is the honest picture: publish
     // fans the event out cross-isolate, it does not share a value.
     reduce: (received) => received + 1,
-    fallback: (
-      <div class="grid min-h-screen place-items-center bg-background px-4">
-        <div class="w-full max-w-md rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm space-y-4 text-center">
-          <h1 class="text-xl font-bold text-foreground">Live tally</h1>
-          <p class="text-sm text-muted">Connecting...</p>
-        </div>
-      </div>
-    ),
   }
 );
 LiveTally.displayName = 'LiveTally';

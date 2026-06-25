@@ -129,7 +129,6 @@ export const ActivityBar = activityLoader.View<ActivityEvent[]>(
   {
     initial: [],
     reduce: accumulateActivity,
-    fallback: <ConnectingBar />,
   }
 );
 ActivityBar.displayName = 'ActivityBar';

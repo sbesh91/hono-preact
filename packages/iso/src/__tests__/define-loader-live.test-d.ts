@@ -40,9 +40,11 @@ function _liveProbes() {
 function _staticProbes() {
   const stat = defineLoader<{ at: Date }>(async () => ({ at: new Date() }));
 
-  // The single-value form type-checks; `data` is the wire shape `Serialize<T>`.
+  // The single-value form type-checks; `data` is the wire shape `Serialize<T>`
+  // or `undefined` while loading.
   stat.View((args) => {
-    expectTypeOf(args.data).toEqualTypeOf<{ at: string }>();
+    expectTypeOf(args.data).toEqualTypeOf<{ at: string } | undefined>();
+    expectTypeOf(args.loading).toEqualTypeOf<boolean>();
     return null;
   });
 
@@ -58,7 +60,7 @@ function _staticProbes() {
 // Code that must accept either liveness uses `LoaderRef<T, boolean>` instead.
 function _defaultRefProbes(loader: LoaderRef<{ n: number }>) {
   loader.View((args) => {
-    expectTypeOf(args.data).toEqualTypeOf<{ n: number }>();
+    expectTypeOf(args.data).toEqualTypeOf<{ n: number } | undefined>();
     return null;
   });
   expectTypeOf(loader.useData()).toEqualTypeOf<{ n: number }>();

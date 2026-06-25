@@ -72,7 +72,6 @@ describe('loader.View (accumulating / streaming form)', () => {
       {
         initial: [],
         reduce: (acc, chunk) => [...acc, chunk.n],
-        fallback: <p data-testid="out">connecting</p>,
       }
     );
 
@@ -124,7 +123,6 @@ describe('loader.View (accumulating / streaming form)', () => {
       {
         initial: [],
         reduce: (acc, chunk) => [...acc, chunk.n],
-        fallback: <p data-testid="out">connecting</p>,
       }
     );
 

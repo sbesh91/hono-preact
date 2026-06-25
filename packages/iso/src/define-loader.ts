@@ -61,7 +61,6 @@ type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
-    fallback?: ComponentChildren;
     errorFallback?:
       | ComponentChildren
       | ((err: Error, reset: () => void) => ComponentChildren);
@@ -69,13 +68,19 @@ type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
 ) => FunctionComponent<P>;
 
 // The single-value `.View` form: non-live loaders. `data` is the loader's value
-// as the client receives it (`Serialize<T>`).
+// as the client receives it (`Serialize<T>`), or `undefined` while loading.
+// The render fn receives `loading: boolean` so it can branch on the pending
+// state; the separate `fallback` opt has been removed.
 type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
   render: (
-    args: P & { data: Serialize<T>; error: Error | null; reload: () => void }
+    args: P & {
+      data: Serialize<T> | undefined;
+      loading: boolean;
+      error: Error | null;
+      reload: () => void;
+    }
   ) => ComponentChildren,
   opts?: {
-    fallback?: ComponentChildren;
     errorFallback?:
       | ComponentChildren
       | ((err: Error, reset: () => void) => ComponentChildren);
@@ -118,13 +123,6 @@ export interface LoaderRef<T, Live extends boolean = false> {
    * timeout, only the request signal aborts".
    */
   readonly timeoutMs?: number | false;
-  /**
-   * Per-loader delay in milliseconds before the Suspense fallback mounts on a
-   * client navigation, as authored on `defineLoader({ fallbackDelay })`.
-   * `undefined` means "use the framework default (100ms)"; `0` shows the
-   * fallback immediately.
-   */
-  readonly fallbackDelay?: number;
   /**
    * Per-loader middleware and (for streaming loaders) stream observers,
    * exactly as authored on `defineLoader({ use })`. The handler-side
@@ -234,13 +232,6 @@ export type DefineLoaderOptions<T> = {
    */
   timeoutMs?: number | false;
   /**
-   * Delay in milliseconds before this loader's fallback (loading UI) mounts on
-   * a client navigation. When omitted, the framework default of 100ms applies.
-   * Pass `0` to show the fallback immediately. On a fast connection the data
-   * usually lands within the window, so the fallback never paints.
-   */
-  fallbackDelay?: number;
-  /**
    * Per-loader middleware and (for streaming loaders) stream observers.
    * The element type LoaderUse<T, Streaming> structurally gates stream
    * observers off non-streaming loaders, but a tighter compile-time gate
@@ -294,18 +285,6 @@ function getSharedCaches(): SharedCacheMap {
   return map;
 }
 
-function validateFallbackDelay(
-  value: number | undefined,
-  context: string
-): void {
-  if (value === undefined) return;
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(
-      `${context}: fallbackDelay must be a non-negative finite number, got ${String(value)}`
-    );
-  }
-}
-
 // `{ live: true }` selects the accumulating-only `LoaderRef<T, true>`; these
 // overloads are listed first so the literal `live: true` matches before the
 // general (non-live) form. Omitting `live` (or `live: false`) yields the
@@ -355,7 +334,6 @@ export function defineLoader(
   const live = opts?.live ?? false;
 
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
-  validateFallbackDelay(opts?.fallbackDelay, 'defineLoader');
   const idKey = opts?.__moduleKey
     ? opts.__loaderName
       ? `${opts.__moduleKey}::${opts.__loaderName}`
@@ -398,7 +376,6 @@ export function defineLoader(
     paramsSchema: opts?.paramsSchema,
     live,
     timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
-    fallbackDelay: opts?.fallbackDelay,
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
     // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
@@ -472,7 +449,6 @@ export function defineLoader(
       viewOpts?: {
         initial?: unknown;
         reduce?: (acc: any, chunk: any) => any;
-        fallback?: ComponentChildren;
         errorFallback?:
           | ComponentChildren
           | ((err: Error, reset: () => void) => ComponentChildren);
@@ -508,7 +484,6 @@ export function defineLoader(
       }
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
-          fallback: viewOpts?.fallback,
           errorFallback: viewOpts?.errorFallback,
           accumulate,
           children: h(ViewRenderer<unknown>, {

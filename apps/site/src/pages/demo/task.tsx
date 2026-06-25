@@ -224,10 +224,12 @@ const CommentsSection: FunctionComponent<{
 CommentsSection.displayName = 'CommentsSection';
 
 const CommentsView = commentsLoader.View<{ taskId: string }>(
-  ({ data: comments, taskId }) => (
-    <CommentsSection comments={comments ?? []} taskId={taskId} />
-  ),
-  { fallback: <p class="text-sm text-muted">Loading comments…</p> }
+  ({ data: comments, loading, taskId }) =>
+    loading ? (
+      <p class="text-sm text-muted">Loading comments…</p>
+    ) : (
+      <CommentsSection comments={comments ?? []} taskId={taskId} />
+    )
 );
 
 // ---- Section: project activity feed ----
@@ -272,14 +274,19 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
 );
 
 const ActivityView = activityLoader.View(
-  ({ data: activity }) => <ActivitySection activity={activity ?? []} />,
-  { fallback: <p class="text-xs text-muted">Loading activity…</p> }
+  ({ data: activity, loading }) =>
+    loading ? (
+      <p class="text-xs text-muted">Loading activity…</p>
+    ) : (
+      <ActivitySection activity={activity ?? []} />
+    )
 );
 
 // ---- Page: task loads first, then comments + activity in parallel ----
 
 const TaskView = taskLoader.View(
-  ({ data: task, reload: reloadTask }) => {
+  ({ data: task, loading, reload: reloadTask }) => {
+    if (loading) return <p class="p-6">Loading task…</p>;
     if (!task) return <p class="p-6">Task not found.</p>;
     return (
       <div class="mx-auto w-full max-w-5xl px-6 py-6">
@@ -294,8 +301,7 @@ const TaskView = taskLoader.View(
         </div>
       </div>
     );
-  },
-  { fallback: <p class="p-6">Loading task…</p> }
+  }
 );
 
 export default definePage(TaskView);

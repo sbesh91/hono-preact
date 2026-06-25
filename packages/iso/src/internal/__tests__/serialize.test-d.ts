@@ -133,7 +133,8 @@ function _viewSerializeProbes(
   liveLoader: LoaderRef<{ at: Date }, true>
 ) {
   staticLoader.View((args) => {
-    expectTypeOf(args.data).toEqualTypeOf<{ at: string }>();
+    // data is the wire shape Serialize<T> or undefined while loading.
+    expectTypeOf(args.data).toEqualTypeOf<{ at: string } | undefined>();
     return null;
   });
   liveLoader.View<number[]>(

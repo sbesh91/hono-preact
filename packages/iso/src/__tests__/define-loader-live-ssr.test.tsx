@@ -67,7 +67,6 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
       {
         initial: [],
         reduce: (acc, c) => [...acc, c.n],
-        fallback: <p data-testid="bar">connecting</p>,
       }
     );
     const App = () => (
@@ -115,7 +114,6 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
       {
         initial: [],
         reduce: (acc, c) => [...acc, c.n],
-        fallback: <p data-testid="bar">connecting</p>,
       }
     );
     const App = () => (

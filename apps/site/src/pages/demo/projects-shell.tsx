@@ -108,8 +108,12 @@ function Sidebar({
 }
 
 const ShellView = shellLoader.View<{ children: LayoutProps['children'] }>(
-  ({ data, children }) => <Sidebar data={data} children={children} />,
-  { fallback: <div class="p-6 text-muted">Loading...</div> }
+  ({ data, loading, children }) =>
+    loading || !data ? (
+      <div class="p-6 text-muted">Loading...</div>
+    ) : (
+      <Sidebar data={data} children={children} />
+    )
 );
 
 export default function ProjectsShell({ children }: LayoutProps) {
