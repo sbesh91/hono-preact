@@ -38,13 +38,13 @@ export default definePage(MoviesView);
 
 ## When loading is true
 
-| Navigation                   | `loading` on entry             |
-| ---------------------------- | ------------------------------ |
-| SSR (first load)             | `false`. Data is preloaded into the HTML.  |
-| Hydration                    | `false`. Client reads from `data-loader` attribute. |
-| Client-side nav (cache miss) | `true`, until the loader resolves. |
-| Client-side nav (cache hit)  | `false`. Cached data renders immediately. |
-| Reload (stale-while-revalidate) | `true`, but `data` retains the previous value. |
+| Navigation                      | `loading` on entry                                  |
+| ------------------------------- | --------------------------------------------------- |
+| SSR (first load)                | `false`. Data is preloaded into the HTML.           |
+| Hydration                       | `false`. Client reads from `data-loader` attribute. |
+| Client-side nav (cache miss)    | `true`, until the loader resolves.                  |
+| Client-side nav (cache hit)     | `false`. Cached data renders immediately.           |
+| Reload (stale-while-revalidate) | `true`, but `data` retains the previous value.      |
 
 ## Using a skeleton
 
@@ -95,12 +95,13 @@ The `error` argument is non-null when the loader rejects (either on the initial 
 ```tsx
 const MoviesView = moviesLoader.View(({ data, loading, error, reload }) => {
   if (loading) return <p>Loading...</p>;
-  if (error) return (
-    <div role="alert">
-      <p>Couldn't load movies: {error.message}</p>
-      <button onClick={reload}>Retry</button>
-    </div>
-  );
+  if (error)
+    return (
+      <div role="alert">
+        <p>Couldn't load movies: {error.message}</p>
+        <button onClick={reload}>Retry</button>
+      </div>
+    );
   return (
     <ul>
       {data!.movies.results.map((m) => (
@@ -115,12 +116,12 @@ const MoviesView = moviesLoader.View(({ data, loading, error, reload }) => {
 
 The render function receives these args on every render:
 
-| Arg      | Type                | Description                                                                                    |
-| -------- | ------------------- | ---------------------------------------------------------------------------------------------- |
-| `data`   | `Serialize<T> \| undefined` | The loader's last resolved value. `undefined` on a cold load before the first response. Retained from the previous fetch during a reload. |
-| `loading` | `boolean`          | `true` while a fetch is in flight (cold load or reload). |
-| `error`  | `Error \| null`     | Non-null when the loader errored. Check this alongside `loading` to show a retry affordance. |
-| `reload` | `() => void`        | Re-runs the loader immediately. |
+| Arg       | Type                        | Description                                                                                                                               |
+| --------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `data`    | `Serialize<T> \| undefined` | The loader's last resolved value. `undefined` on a cold load before the first response. Retained from the previous fetch during a reload. |
+| `loading` | `boolean`                   | `true` while a fetch is in flight (cold load or reload).                                                                                  |
+| `error`   | `Error \| null`             | Non-null when the loader errored. Check this alongside `loading` to show a retry affordance.                                              |
+| `reload`  | `() => void`                | Re-runs the loader immediately.                                                                                                           |
 
 Plus any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)).
 

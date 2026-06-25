@@ -273,13 +273,12 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
   </aside>
 );
 
-const ActivityView = activityLoader.View(
-  ({ data: activity, loading }) =>
-    loading ? (
-      <p class="text-xs text-muted">Loading activity…</p>
-    ) : (
-      <ActivitySection activity={activity ?? []} />
-    )
+const ActivityView = activityLoader.View(({ data: activity, loading }) =>
+  loading ? (
+    <p class="text-xs text-muted">Loading activity…</p>
+  ) : (
+    <ActivitySection activity={activity ?? []} />
+  )
 );
 
 // ---- Page: task loads first, then comments + activity in parallel ----

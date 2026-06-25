@@ -8,7 +8,11 @@
 // DefineLoaderOptions + LoaderRef: no `fallbackDelay`
 import { expectTypeOf } from 'vitest';
 import { h } from 'preact';
-import { defineLoader, type DefineLoaderOptions, type LoaderRef } from '../define-loader.js';
+import {
+  defineLoader,
+  type DefineLoaderOptions,
+  type LoaderRef,
+} from '../define-loader.js';
 
 // 1. SingleValueView render arg includes `loading: boolean` and `data: Serialize<T> | undefined`.
 function _singleValueRenderArg() {
@@ -55,7 +59,9 @@ function _boundaryNoFallback() {
 
 // 5. `fallbackDelay` is NOT present on DefineLoaderOptions.
 function _noFallbackDelayOnOptions() {
-  expectTypeOf<DefineLoaderOptions<number>>().not.toHaveProperty('fallbackDelay');
+  expectTypeOf<DefineLoaderOptions<number>>().not.toHaveProperty(
+    'fallbackDelay'
+  );
 }
 
 // 6. `fallbackDelay` is NOT present on LoaderRef.
