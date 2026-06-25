@@ -109,20 +109,8 @@ export function LoaderHost<T>({
   // before the value lands. So the server path additionally suspends on the
   // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
   // letting `renderToStringAsync` await the loader and bake the resolved value.
-  const { data, loading, error, reload, status, reader } = useLoaderRunner<T>(
-    loaderRef,
-    location,
-    id,
-    accumulate
-  );
-
-  // For an accumulating (`live`) consumer the render fn always expects a valid
-  // accumulator, so during the connecting window (before the first chunk, and on
-  // SSR where a live loader never runs) surface `accumulate.initial` rather than
-  // the runner's `undefined`. A non-accumulate loader surfaces `undefined` while
-  // it is loading, which the render fn reads alongside `loading === true`.
-  const viewData =
-    accumulate && data === undefined ? (accumulate.initial as T) : data;
+  const { data, loading, reloading, error, reload, status, reader } =
+    useLoaderRunner<T>(loaderRef, location, id, accumulate);
 
   // A COLD error: the load failed before any data arrived (`data` is the RAW
   // runner value, undefined here). The old Suspense path threw the reader so an
@@ -142,7 +130,7 @@ export function LoaderHost<T>({
   // so render-to-string awaits the loader and bakes the resolved value. CLIENT:
   // render the view directly from runner state (never calls `reader.read()`).
   const content = isBrowser() ? (
-    <LoaderDataContext.Provider value={{ data: viewData, loading }}>
+    <LoaderDataContext.Provider value={{ data, loading }}>
       <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
     </LoaderDataContext.Provider>
   ) : (
@@ -179,7 +167,7 @@ export function LoaderHost<T>({
   return (
     <LoaderIdContext.Provider value={id}>
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-        <ReloadContext.Provider value={{ reload, reloading: loading }}>
+        <ReloadContext.Provider value={{ reload, reloading }}>
           <LoaderErrorContext.Provider value={error}>
             <LoaderStatusContext.Provider value={status}>
               {body}

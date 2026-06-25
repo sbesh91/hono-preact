@@ -15,10 +15,8 @@ import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import { isBrowser } from './is-browser.js';
-import type {
-  AccumulateOptions,
-  StreamStatus,
-} from './internal/use-loader-runner.js';
+import type { AccumulateOptions } from './internal/use-loader-runner.js';
+import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
@@ -47,18 +45,13 @@ export type Loader<
   | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>)
   | ((ctx: LoaderCtx<TParams, TSearch>) => AsyncGenerator<T, void, unknown>);
 
-// The accumulating (streaming) `.View` form: live loaders only. `data` is the
-// folded accumulator and `status` reflects the connection; the chunk handed to
-// `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`).
+// The accumulating (streaming) `.View` form: live loaders only. The render fn
+// receives the `StreamState<Acc>` discriminated union (pattern-match on
+// `status`); the folded accumulator rides the data-carrying arms. The chunk
+// handed to `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`). The
+// explicit reload callback is read via `useReload()`, not handed in.
 type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
-  render: (
-    args: P & {
-      data: Acc;
-      status: StreamStatus;
-      error: Error | null;
-      reload: () => void;
-    }
-  ) => ComponentChildren,
+  render: (args: StreamState<Acc> & P) => ComponentChildren,
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
@@ -68,19 +61,13 @@ type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
   }
 ) => FunctionComponent<P>;
 
-// The single-value `.View` form: non-live loaders. `data` is the loader's value
-// as the client receives it (`Serialize<T>`), or `undefined` while loading.
-// The render fn receives `loading: boolean` so it can branch on the pending
-// state; the separate `fallback` opt has been removed.
+// The single-value `.View` form: non-live loaders. The render fn receives the
+// `LoaderState<Serialize<T>>` discriminated union (pattern-match on `status`);
+// the loader value (the JSON round-trip the client receives) rides the
+// data-carrying arms. The explicit reload callback is read via `useReload()`,
+// not handed in.
 type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
-  render: (
-    args: P & {
-      data: Serialize<T> | undefined;
-      loading: boolean;
-      error: Error | null;
-      reload: () => void;
-    }
-  ) => ComponentChildren,
+  render: (args: LoaderState<Serialize<T>> & P) => ComponentChildren,
   opts?: {
     errorFallback?:
       | ComponentChildren

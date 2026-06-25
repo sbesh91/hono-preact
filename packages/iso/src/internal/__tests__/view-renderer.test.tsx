@@ -1,112 +1,153 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
 import { h } from 'preact';
+import type { ComponentChildren } from 'preact';
 import { render } from '@testing-library/preact';
-import { ViewRenderer, type ViewRenderArgs } from '../view-renderer.js';
+import { ViewRenderer, type ViewState } from '../view-renderer.js';
 import type { LoaderRef } from '../../define-loader.js';
+import type { StreamStatus } from '../use-loader-runner.js';
 import { LoaderDataContext } from '../contexts.js';
 import { LoaderStatusContext } from '../loader.js';
 import { ReloadContext } from '../../reload-context.js';
 
-describe('ViewRenderer', () => {
-  it('hands data/loading/status/error/reload + spread props to the render function', () => {
-    let captured: ViewRenderArgs | undefined;
-    let reloaded = false;
-    const loaderRef = {
-      useError: () => null,
-    } as unknown as LoaderRef<unknown, boolean>;
+// Mounts `ViewRenderer` inside the three loader contexts it reads
+// (`LoaderDataContext` for data/loading, `LoaderStatusContext` for the
+// streaming status, `ReloadContext` for the reload callback) with the given
+// loose values, plus a stub `loaderRef` carrying `live` + `useError()`. It
+// captures whatever union `ViewRenderer` projects and hands the render fn.
+function renderViewRenderer(
+  ctx: {
+    data: unknown;
+    loading?: boolean;
+    status?: StreamStatus;
+    live?: boolean;
+    error?: Error | null;
+    props?: Record<string, unknown>;
+  },
+  renderFn: (args: ViewState) => ComponentChildren
+) {
+  const loaderRef = {
+    live: ctx.live ?? false,
+    useError: () => ctx.error ?? null,
+  } as unknown as LoaderRef<unknown, boolean>;
 
-    render(
+  render(
+    h(
+      LoaderDataContext.Provider,
+      { value: { data: ctx.data, loading: ctx.loading ?? false } },
       h(
-        LoaderDataContext.Provider,
-        { value: { data: { n: 1 }, loading: false } },
+        LoaderStatusContext.Provider,
+        { value: ctx.status ?? 'connecting' },
         h(
-          LoaderStatusContext.Provider,
-          { value: 'open' },
-          h(
-            ReloadContext.Provider,
-            {
-              value: {
-                reload: () => {
-                  reloaded = true;
-                },
-              },
-            },
-            h(ViewRenderer, {
-              loaderRef,
-              props: { extra: 'x' },
-              render: (args: ViewRenderArgs) => {
-                captured = args;
-                return null;
-              },
-            })
-          )
+          ReloadContext.Provider,
+          { value: { reload: () => {}, reloading: false } },
+          h(ViewRenderer, {
+            loaderRef,
+            props: ctx.props ?? {},
+            render: renderFn,
+          })
         )
       )
-    );
+    )
+  );
+}
 
-    expect(captured?.data).toEqual({ n: 1 });
-    expect(captured?.loading).toBe(false);
-    expect(captured?.status).toBe('open');
-    expect(captured?.error).toBeNull();
-    expect(captured?.extra).toBe('x');
-    captured?.reload();
-    expect(reloaded).toBe(true);
+describe('ViewRenderer', () => {
+  it('passes a discriminated LoaderState to the render fn (single-value)', () => {
+    const seen: ViewState[] = [];
+    renderViewRenderer(
+      { data: { title: 'Dune' }, loading: false, live: false },
+      (s) => {
+        seen.push(s);
+        return null;
+      }
+    );
+    expect(seen[0]).toEqual({ status: 'success', data: { title: 'Dune' } });
   });
 
-  it('carries loading=true with data=undefined for a pending loader', () => {
-    let captured: ViewRenderArgs | undefined;
-    const loaderRef = {
-      useError: () => null,
-    } as unknown as LoaderRef<unknown, boolean>;
-
-    render(
-      h(
-        LoaderDataContext.Provider,
-        { value: { data: undefined, loading: true } },
-        h(ViewRenderer, {
-          loaderRef,
-          props: {},
-          render: (args: ViewRenderArgs) => {
-            captured = args;
-            return null;
-          },
-        })
-      )
+  it('passes a StreamState for live loaders', () => {
+    const seen: ViewState[] = [];
+    renderViewRenderer(
+      { data: undefined, status: 'connecting', live: true },
+      (s) => {
+        seen.push(s);
+        return null;
+      }
     );
-
-    expect(captured?.loading).toBe(true);
-    expect(captured?.data).toBeUndefined();
+    expect(seen[0]).toEqual({ status: 'connecting' });
   });
 
-  it('surfaces the loader error from useError() and defaults status/reload/loading', () => {
-    let captured: ViewRenderArgs | undefined;
+  it('reports the single-value loading arm (cold load, no data)', () => {
+    const seen: ViewState[] = [];
+    renderViewRenderer({ data: undefined, loading: true, live: false }, (s) => {
+      seen.push(s);
+      return null;
+    });
+    expect(seen[0]).toEqual({ status: 'loading' });
+  });
+
+  it('reports the revalidating arm (reload over prior data)', () => {
+    const seen: ViewState[] = [];
+    renderViewRenderer(
+      { data: { title: 'Dune' }, loading: true, live: false },
+      (s) => {
+        seen.push(s);
+        return null;
+      }
+    );
+    expect(seen[0]).toEqual({
+      status: 'revalidating',
+      data: { title: 'Dune' },
+    });
+  });
+
+  it('reports the streaming open arm once a chunk has arrived', () => {
+    const seen: ViewState[] = [];
+    renderViewRenderer(
+      { data: { count: 2 }, status: 'open', live: true },
+      (s) => {
+        seen.push(s);
+        return null;
+      }
+    );
+    expect(seen[0]).toEqual({ status: 'open', data: { count: 2 } });
+  });
+
+  it('surfaces a cold loader error as the error arm', () => {
     const err = new Error('loader failed');
-    const loaderRef = {
-      useError: () => err,
-    } as unknown as LoaderRef<unknown, boolean>;
-
-    render(
-      h(
-        LoaderDataContext.Provider,
-        { value: { data: undefined, loading: false } },
-        h(ViewRenderer, {
-          loaderRef,
-          props: {},
-          render: (args: ViewRenderArgs) => {
-            captured = args;
-            return null;
-          },
-        })
-      )
+    const seen: ViewState[] = [];
+    renderViewRenderer(
+      { data: { title: 'Dune' }, loading: false, live: false, error: err },
+      (s) => {
+        seen.push(s);
+        return null;
+      }
     );
+    expect(seen[0]).toEqual({
+      status: 'error',
+      error: err,
+      data: { title: 'Dune' },
+    });
+  });
 
-    expect(captured?.error).toBe(err);
-    // No LoaderStatusContext / ReloadContext providers: defaults apply.
-    expect(captured?.status).toBe('connecting');
-    expect(typeof captured?.reload).toBe('function');
-    // No LoaderDataContext loading reported as false default when absent is
-    // covered by the explicit-context case above; here loading is provided.
-    expect(captured?.loading).toBe(false);
+  it('merges spread props into the projected union', () => {
+    const seen: ViewState[] = [];
+    renderViewRenderer(
+      {
+        data: { title: 'Dune' },
+        loading: false,
+        live: false,
+        props: { extra: 'x' },
+      },
+      (s) => {
+        seen.push(s);
+        return null;
+      }
+    );
+    expect(seen[0]).toEqual({
+      status: 'success',
+      data: { title: 'Dune' },
+      extra: 'x',
+    });
   });
 });
