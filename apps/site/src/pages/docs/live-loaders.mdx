@@ -165,7 +165,7 @@ A live loader opens the stream once and does not auto-reconnect. If the connecti
 
 ### Failure or close before the first chunk
 
-The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. On the **initial** connect, a stream that fails, times out, or closes with zero chunks _before_ its first chunk surfaces as `status === 'error'` in the render function rather than through the error boundary. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
+The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. On the **initial** connect, a stream that fails, times out, or closes with zero chunks _before_ its first chunk is handled by the loader's error path instead: `data` is still undefined, so `errorFallback` renders (or, with no `errorFallback`, the error propagates to the nearest boundary), and the render function's `status` is not updated. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
 
 A failed `reload()` behaves differently and more conveniently: because the component is already mounted, a reconnect that fails (at any point, including before its first chunk) surfaces as `status === 'error'` in the render function, not through the error boundary. That is exactly what makes the reconnect-on-error pattern above work in place.
 
@@ -194,16 +194,20 @@ loader.View<Acc>(
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
+    errorFallback?:
+      | ComponentChildren
+      | ((err: Error, reset: () => void) => ComponentChildren);
   }
 ): FunctionComponent
 ```
 
 `chunk` is `Serialize<T>`: the JSON round-trip of the server-side chunk, the same wire shape `useData()` and the single-value `.View` surface (a `Date` field arrives as a string).
 
-| Option    | Type                                     | Description                                                                                                  |
-| --------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `initial` | `Acc`                                    | Seed value; also the value passed to the render function on SSR and before the first chunk arrives.          |
-| `reduce`  | `(acc: Acc, chunk: Serialize<T>) => Acc` | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order. |
+| Option          | Type                                                       | Description                                                                                                                                                                          |
+| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `initial`       | `Acc`                                                      | Seed value; also the value passed to the render function on SSR and before the first chunk arrives.                                                                                  |
+| `reduce`        | `(acc: Acc, chunk: Serialize<T>) => Acc`                   | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order.                                                                         |
+| `errorFallback` | `ComponentChildren` or `(err, reset) => ComponentChildren` | Rendered if the stream errors before its first chunk (the initial-connect cold error), or if the render subtree throws. The function form receives the error and a `reset` to retry. |
 
 The `render` function receives:
 
