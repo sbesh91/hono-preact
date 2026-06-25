@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { useContext, useId } from 'preact/hooks';
+import { isBrowser } from '../is-browser.js';
 import { ReloadContext } from '../reload-context.js';
 import {
   ActiveLoaderIdContext,
@@ -22,6 +23,48 @@ export { serializeLocationForCache } from './cache-key.js';
 
 /** Streaming status for a `.View` consuming a streaming/`live` loader. */
 export const LoaderStatusContext = createContext<StreamStatus>('connecting');
+
+/**
+ * SERVER-ONLY suspension carrier (Mechanism B, spike-verified in
+ * `.superpowers/spike/spike-b1-reader-prop.mjs`).
+ *
+ * `LoaderHost` (the hook owner) renders ONCE on the server and creates a stable
+ * `reader`. This SEPARATE child calls `reader.read()`, which throws the in-flight
+ * promise while the loader is pending. `renderToStringAsync` catches the throw
+ * and replays ONLY this child's subtree (not `LoaderHost`), so the reader created
+ * by the once-rendering parent survives the resume and returns the resolved value
+ * on retry; `data` then bakes into `<Envelope>`'s `data-loader` attribute and the
+ * server render completes in a single fetch.
+ *
+ * It MUST stay a distinct component reached via props. Inlining `reader.read()`
+ * into `LoaderHost` would make every retry re-run the host body and rebuild the
+ * reader, fetching forever (the spike's negative control,
+ * `spike-b3-negative-parent-throws.mjs`). No `<Suspense>` boundary and no
+ * `preact/compat` are needed on the server: render-to-string's async catch scopes
+ * the retry to this child on its own.
+ */
+function DataReader<T>({
+  reader,
+  accumulate,
+  children,
+}: {
+  reader: { read: () => T };
+  accumulate?: AccumulateOptions;
+  children: ComponentChildren;
+}) {
+  const raw = reader.read();
+  // Match LoaderHost's client-side `viewData` coercion: an accumulating (`live`)
+  // consumer always expects a valid accumulator, but a live loader never runs on
+  // the server (its reader stub resolves to `undefined`), so surface
+  // `accumulate.initial` instead of `undefined` for that SSR shell.
+  const data =
+    accumulate && raw === undefined ? (accumulate.initial as T) : raw;
+  return (
+    <LoaderDataContext.Provider value={{ data, loading: false }}>
+      <Envelope>{children}</Envelope>
+    </LoaderDataContext.Provider>
+  );
+}
 
 type LoaderHostProps<T> = {
   loader: LoaderRef<T, boolean>;
@@ -55,13 +98,18 @@ export function LoaderHost<T>({
     );
   }
 
-  // State-based rendering: the runner exposes `data`/`loading` directly, so we
-  // render the `.View` render fn (the children) immediately rather than
-  // suspending on a throwing reader. Because nothing suspends, the SSR render
-  // and the initial client hydration take the SAME branch (no Suspense fallback
-  // swapped in/out), which keeps the markup identical across the boundary and
-  // lets Preact adopt the server DOM cleanly on hydration.
-  const { data, loading, error, reload, status } = useLoaderRunner<T>(
+  // CLIENT: state-based rendering. The runner exposes `data`/`loading` directly,
+  // so we render the `.View` render fn (the children) immediately rather than
+  // suspending on a throwing reader. Because nothing suspends on the client, the
+  // initial hydration render reads the SSR-baked preload (loading=false) and
+  // adopts the server DOM cleanly.
+  //
+  // SERVER: state alone cannot bake loader data, because the loader resolves
+  // asynchronously and a single synchronous render would emit `data-loader=null`
+  // before the value lands. So the server path additionally suspends on the
+  // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
+  // letting `renderToStringAsync` await the loader and bake the resolved value.
+  const { data, loading, error, reload, status, reader } = useLoaderRunner<T>(
     loaderRef,
     location,
     id,
@@ -82,12 +130,25 @@ export function LoaderHost<T>({
   // so reproduce that propagation explicitly. A POST-first-chunk error (`data`
   // present) is NOT cold: keep the last-good content visible and let the render
   // fn read the error via `useError()`/`status === 'error'` (stale-while-error).
+  //
+  // Server-only: `coldError` is always false on the first (and only) server
+  // render of `LoaderHost`, because runner state has not updated yet. A cold
+  // failure on the server surfaces by `reader.read()` rethrowing the rejection
+  // from inside `DataReader`, which the `ErrorBoundary` wrap below (or an outer
+  // page boundary) catches, mirroring the client's `throw error` propagation.
   const coldError = error != null && data === undefined;
 
-  const content = (
+  // SERVER (`!isBrowser()`): suspend on the stable reader from a SEPARATE child
+  // so render-to-string awaits the loader and bakes the resolved value. CLIENT:
+  // render the view directly from runner state (never calls `reader.read()`).
+  const content = isBrowser() ? (
     <LoaderDataContext.Provider value={{ data: viewData, loading }}>
       <Envelope>{children}</Envelope>
     </LoaderDataContext.Provider>
+  ) : (
+    <DataReader reader={reader} accumulate={accumulate}>
+      {children}
+    </DataReader>
   );
 
   let body: ComponentChildren;

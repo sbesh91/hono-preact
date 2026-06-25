@@ -6,13 +6,31 @@ import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
+import type { LoaderRef } from '../define-loader.js';
+import type { RouteHook } from 'preact-iso';
 
-// In happy-dom, isBrowser() returns true, which would cause LoaderHost to
-// use the fetch path (POST /__loaders) instead of calling the fn directly.
-// That path requires a running server, so mock it off for unit tests.
-vi.mock('../is-browser.js', () => ({
-  isBrowser: () => false,
-  env: { current: 'server' },
+// These exercise the CLIENT render contract of `LoaderRef.View` / `.Boundary`:
+// the children mount eagerly during the pending window (no Suspense fallback),
+// then re-render with data. So they run in browser mode (the default in
+// happy-dom). In browser mode the runner would POST to `/__loaders`, which has
+// no server here, so mock `runLoader` to invoke the loader's own `fn` directly
+// with the resolved location. The server-only suspension path (`DataReader`,
+// gated on `!isBrowser()`) is intentionally NOT exercised by these unit tests:
+// it needs `renderToStringAsync` to catch the throw, which the server SSR
+// integration tests cover.
+vi.mock('../internal/loader-runner.js', () => ({
+  runLoader: <T,>(
+    loaderRef: LoaderRef<T, boolean>,
+    location: RouteHook,
+    _id: string,
+    signal: AbortSignal
+  ): Promise<T> => {
+    const invoke = loaderRef.fn as unknown as (arg: {
+      signal: AbortSignal;
+      location: RouteHook;
+    }) => Promise<T>;
+    return Promise.resolve(invoke({ signal, location }));
+  },
 }));
 
 afterEach(() => {

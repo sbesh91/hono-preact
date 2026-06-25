@@ -31,6 +31,17 @@ export type LoaderRunnerState<T> = {
   error: Error | null;
   reload: () => void;
   status: StreamStatus;
+  /**
+   * The stable throwing reader (`wrapPromise`'s `{ read }`), created ONCE per
+   * mount and only rebuilt when location/loader identity changes. SERVER ONLY:
+   * `LoaderHost` hands this to a separate child that calls `reader.read()`, so
+   * `renderToStringAsync` suspends on the in-flight loader and bakes the
+   * resolved value into the SSR HTML. The CLIENT never reads it (it derives
+   * `data`/`loading` from state above); it is the SSR suspension carrier, and
+   * because the runner (the hook owner) renders only once before the child
+   * throws, the reader survives render-to-string's child-subtree replay.
+   */
+  reader: { read: () => T };
 };
 
 export function useLoaderRunner<T>(
@@ -394,5 +405,8 @@ export function useLoaderRunner<T>(
     error: loadError,
     reload,
     status,
+    // Non-null here: every branch above assigns `readerRef.current` before
+    // this point (preload/cache stub, live-on-server stub, or wrapPromise).
+    reader: readerRef.current,
   };
 }
