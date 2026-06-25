@@ -770,6 +770,8 @@ In `loader.tsx`, destructure `reloading` from the runner and feed it to `ReloadC
 ```
 In `reload-context.tsx`, change the JSDoc on `reloading` from "True while the loader is fetching (cold load or reload)." to "True while an explicit reload/revalidation is in flight (not a cold initial load)."
 
+Also in `loader.tsx`, **remove the client-branch `viewData` coercion** (`const viewData = accumulate && data === undefined ? (accumulate.initial as T) : data;`) and pass the RAW `data` into the client `LoaderDataContext.Provider` (`value={{ data, loading }}`). With the union, a streaming `connecting` state carries no data, so `ViewRenderer`'s `toStreamState(data, ...)` maps `data === undefined` to `{ status: 'connecting' }` directly; the seed must not be surfaced. This deletes the remaining `accumulate.initial as T` cast (the Global Constraint forbids it; review of Task 3 flagged it as the natural casualty of this task).
+
 - [ ] **Step 5: Retype the `.View` render args in `define-loader.ts`**
 
 `SingleValueView<T>` render arg (lines ~74-79):
@@ -889,7 +891,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ### Task 8: Migrate `apps/site` call sites + docs; demo SWR (#8)
 
-**Files (call sites):** `apps/site/src/pages/demo/project-board.tsx`, `apps/site/src/pages/demo/task.tsx`.
+**Files (call sites):** `apps/site/src/pages/demo/project-board.tsx`, `apps/site/src/pages/demo/task.tsx`, **and every live/streaming `.View` consumer** — `apps/site/src/components/demo/ActivityBar.tsx` (feeds `Feed`, which derefs `events[0]`/`events.map` UNGUARDED), `apps/site/src/pages/demo/live-tally.tsx`, `apps/example-node/src/pages/home.tsx` (`LiveCounter`). After Task 3 removed the SSR seed coercion, these receive `data === undefined` during the `connecting` SSR frame; the union migration MUST give each a `connecting` arm (or `events={data ?? []}` interim) so SSR cannot throw. `ActivityBar` is SSR'd on every `/demo/projects*` request and currently 500s in the interim — this is a hard requirement, not cosmetic.
+
+**SSR regression guard:** add a test that SSR-renders `ActivityBar`/`Feed` (or the projects shell) through the REAL `.View` path (not the mock in `ActivityBar.test.tsx`) with no chunks, asserting the `connecting` arm renders without throwing. Nothing in the current suite or `pnpm --filter site build` (demo pages are runtime worker-SSR, not prerendered) catches this, so the gap must be closed here.
 **Files (docs):** `apps/site/src/pages/docs/loaders.mdx`, `quick-start.mdx`, `loading-states.mdx`, `reloading.mdx`, `streaming.mdx`, `live-loaders.mdx`, `actions.mdx`, `pages.mdx`, `layouts.mdx`, `optimistic-ui.mdx`, `structure.mdx`, `realtime.mdx`.
 **Files (release notes):** `docs/superpowers/specs/2026-06-25-v0.9-release-notes.md`.
 
