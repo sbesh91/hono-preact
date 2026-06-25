@@ -14,6 +14,7 @@ import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
+import type { HydrationAnchor } from './envelope.js';
 import {
   useLoaderRunner,
   type AccumulateOptions,
@@ -53,15 +54,15 @@ function DataReader<T>({
   children: ComponentChildren;
 }) {
   const raw = reader.read();
-  // Match LoaderHost's client-side `viewData` coercion: an accumulating (`live`)
-  // consumer always expects a valid accumulator, but a live loader never runs on
-  // the server (its reader stub resolves to `undefined`), so surface
-  // `accumulate.initial` instead of `undefined` for that SSR shell.
-  const data =
-    accumulate && raw === undefined ? (accumulate.initial as T) : raw;
+  // Live loaders never run on the server; their reader resolves to undefined.
+  // The client reconnects on mount, so there is no baked server value to
+  // anchor. Non-live loaders resolve and bake their value into data-loader.
+  const anchor: HydrationAnchor = accumulate
+    ? { kind: 'none' }
+    : { kind: 'data', value: raw };
   return (
-    <LoaderDataContext.Provider value={{ data, loading: false }}>
-      <Envelope>{children}</Envelope>
+    <LoaderDataContext.Provider value={{ data: raw, loading: false }}>
+      <Envelope anchor={anchor}>{children}</Envelope>
     </LoaderDataContext.Provider>
   );
 }
@@ -142,7 +143,7 @@ export function LoaderHost<T>({
   // render the view directly from runner state (never calls `reader.read()`).
   const content = isBrowser() ? (
     <LoaderDataContext.Provider value={{ data: viewData, loading }}>
-      <Envelope>{children}</Envelope>
+      <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
     </LoaderDataContext.Provider>
   ) : (
     <DataReader reader={reader} accumulate={accumulate}>

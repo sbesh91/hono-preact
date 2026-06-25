@@ -5,27 +5,31 @@ import type {
   JSX,
 } from 'preact';
 import { useContext } from 'preact/hooks';
-import { isBrowser } from '../is-browser.js';
 import type { WrapperProps } from '../page.js';
-import { LoaderDataContext, LoaderIdContext } from './contexts.js';
+import { LoaderIdContext } from './contexts.js';
+
+/** What the `data-loader` hydration attribute carries. Discriminated + extensible. */
+export type HydrationAnchor =
+  | { kind: 'none' }
+  | { kind: 'data'; value: unknown };
 
 type EnvelopeProps = {
   as?: ComponentType<WrapperProps> | keyof JSX.IntrinsicElements;
+  anchor: HydrationAnchor;
   children: ComponentChildren;
 };
 
 export const Envelope: FunctionComponent<EnvelopeProps> = ({
   as = 'section',
+  anchor,
   children,
 }) => {
   const id = useContext(LoaderIdContext);
-  const ctx = useContext(LoaderDataContext);
-  if (!id || !ctx) throw new Error('<Envelope> must be inside a <Loader>');
+  if (!id) throw new Error('<Envelope> must be inside a <Loader>');
 
-  // Coerce undefined → null so JSON.stringify(undefined) (which returns
-  // undefined and serializes as the literal string "undefined") never
-  // reaches the wire. Loaders that return undefined should hydrate to null.
-  const dataLoader = isBrowser() ? 'null' : JSON.stringify(ctx.data ?? null);
+  // Coerce undefined -> null so JSON.stringify(undefined) never reaches the wire.
+  const dataLoader =
+    anchor.kind === 'data' ? JSON.stringify(anchor.value ?? null) : 'null';
 
   if (typeof as === 'string') {
     const Tag = as;

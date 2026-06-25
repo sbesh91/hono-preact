@@ -48,6 +48,42 @@ afterEach(() => {
 // SSR no-hang + single Envelope node + single-node hydration the orphan fix
 // depends on.
 describe('live loader.View: SSR no-hang + single-node hydration', () => {
+  it('live SSR anchors data-loader="null" and does not serialize accumulate.initial', () => {
+    // initial carries a BigInt: JSON.stringify would throw if the SSR path tried
+    // to serialize it. A live loader must emit data-loader="null" on SSR because
+    // the client connects via the live stream; there is no baked server value.
+    async function* live() {
+      yield { n: 1 };
+    }
+    const ref = defineLoader<{ n: number }>(live, {
+      __moduleKey: 'test-ssr-bigint',
+      live: true,
+    });
+    const View = ref.View<{ total: bigint }>(
+      (s) => (s.status === 'connecting' ? <p>connecting</p> : <p>open</p>),
+      { initial: { total: 0n }, reduce: (acc) => acc }
+    );
+    const App = () => (
+      <LocationProvider>
+        <RouteLocationsProvider moduleKey="test-ssr-bigint" location={LOC}>
+          <View />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    env.current = 'server';
+    const container = document.createElement('div');
+    // Must not throw even though BigInt cannot be JSON-serialized.
+    render(<App />, container);
+
+    const sections = container.querySelectorAll('section[data-loader]');
+    expect(sections.length).toBe(1);
+    expect(sections[0].getAttribute('data-loader')).toBe('null');
+    expect(container.textContent).toContain('connecting');
+
+    render(null, container);
+  });
+
   it('renders the connecting view on the server without invoking the loader', () => {
     let invoked = 0;
     async function* live() {
@@ -61,7 +97,7 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
     const Bar = ref.View<number[]>(
       ({ data, status }) => (
         <p data-testid="bar">
-          {data.join(',')}|{status}
+          {(data ?? []).join(',')}|{status}
         </p>
       ),
       {
@@ -83,12 +119,12 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
 
     // The infinite generator is never started on the server.
     expect(invoked).toBe(0);
-    // Exactly one Envelope section, carrying the connecting-state view. Its
-    // `data-loader` serializes the initial accumulator (`[]`) the view rendered
-    // with, not a separate "null" fallback marker.
+    // Exactly one Envelope section, carrying the connecting-state view. A live
+    // loader never bakes server data: the client reconnects on mount, so
+    // data-loader="null" (the anchor is 'none', not 'data').
     const sections = container.querySelectorAll('section[data-loader]');
     expect(sections.length).toBe(1);
-    expect(sections[0].getAttribute('data-loader')).toBe('[]');
+    expect(sections[0].getAttribute('data-loader')).toBe('null');
     // The view fn ran with status === 'connecting' (no first chunk yet).
     expect(container.textContent).toContain('connecting');
 
@@ -108,7 +144,7 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
     const Bar = ref.View<number[]>(
       ({ data, status }) => (
         <p data-testid="bar">
-          {data.join(',')}|{status}
+          {(data ?? []).join(',')}|{status}
         </p>
       ),
       {
