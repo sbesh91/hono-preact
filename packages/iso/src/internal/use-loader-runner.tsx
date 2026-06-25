@@ -17,12 +17,25 @@ export type AccumulateOptions = {
 };
 
 export type LoaderRunnerState<T> = {
-  reader: { read: () => T };
-  overrideData: T | undefined;
+  /**
+   * The resolved loader value. `undefined` on a cold load that has not
+   * resolved; during a reload it retains the PREVIOUS value (stale-while-
+   * revalidate). Derived without ever calling the throwing bridge reader.
+   */
+  data: T | undefined;
+  /**
+   * True while a fetch/stream-connect is in flight: a cold load that has not
+   * resolved, or an explicit `reload()`.
+   */
+  loading: boolean;
   error: Error | null;
   reload: () => void;
-  reloading: boolean;
   status: StreamStatus;
+  /**
+   * BRIDGE: the Suspense reader, kept this task only so the still-Suspense
+   * `loader.tsx` consumer stays green. Removed in Task 4.
+   */
+  reader: { read: () => T };
 };
 
 export function useLoaderRunner<T>(
@@ -37,6 +50,13 @@ export function useLoaderRunner<T>(
   const [status, setStatus] = useState<StreamStatus>('connecting');
   // Accumulated value for the streaming path; reset on each (re)subscribe.
   const accRef = useRef<unknown>(accumulate ? accumulate.initial : undefined);
+
+  // The synchronously-available value, set by the non-throwing reader paths
+  // (SSR-preload hit, browser-cache hit, live-on-server stub). Lets us derive
+  // `data` for those paths WITHOUT calling the throwing bridge reader. Reset to
+  // undefined whenever a fetching (throwing) reader is built or the location /
+  // loader identity changes, so a cold load reports `data === undefined`.
+  const syncDataRef = useRef<T | undefined>(undefined);
 
   const locationRef = useRef(location);
   locationRef.current = location;
@@ -222,6 +242,10 @@ export function useLoaderRunner<T>(
     prevLocKey.current = locKey;
     prevLoaderId.current = loaderRef.__id;
     if (locationChanged || loaderChanged) setOverrideData(undefined);
+    // Default: no synchronous value. The non-throwing paths below set it when a
+    // value is available immediately (preload/cache); a cold fetch leaves it
+    // undefined so `data` is undefined until `overrideData` lands.
+    syncDataRef.current = undefined;
 
     if (accumulate) {
       // Streaming consumption: fold every chunk into accumulated state via the
@@ -268,6 +292,8 @@ export function useLoaderRunner<T>(
         preloadConsumedRef.current = true;
         loaderRef.cache.set(preloaded, locKey);
         readerRef.current = { read: () => preloaded };
+        // Synchronously available (non-throwing): expose it as `data`.
+        syncDataRef.current = preloaded;
         if (isBrowser()) {
           const unsub = subscribeToLoaderStream(id, {
             push: (value) => {
@@ -290,6 +316,8 @@ export function useLoaderRunner<T>(
       } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
         const cached = loaderRef.cache.get(locKey)!;
         readerRef.current = { read: () => cached };
+        // Synchronously available (non-throwing): expose it as `data`.
+        syncDataRef.current = cached;
       } else {
         inFlightRef.current = true;
         const settle = () => {
@@ -321,6 +349,13 @@ export function useLoaderRunner<T>(
           fetchPromise
             .then((r) => {
               if (isBrowser()) loaderRef.cache.set(r, locKey);
+              // Drive the resolved value into state so `data` is available
+              // without calling the throwing reader. For a non-streaming loader
+              // `runLoader` never fires `onChunk`, so this is the only place the
+              // single-value cold load surfaces its result as state. The bridge
+              // `DataReader` still prefers this over `reader.read()`, so the
+              // Suspense consumer sees the same value.
+              setOverrideData(r);
               settle();
               return r;
             })
@@ -333,12 +368,27 @@ export function useLoaderRunner<T>(
     }
   }
 
+  // Derive `data` WITHOUT calling the throwing bridge reader: the streamed /
+  // resolved value (`overrideData`, set via setState) takes precedence; else the
+  // synchronously-available value (preload/cache); else undefined (cold load).
+  // During a reload `overrideData` retains the previous value, so `data` is the
+  // stale value while `loading` is true (stale-while-revalidate).
+  const data = overrideData !== undefined ? overrideData : syncDataRef.current;
+
+  // `loading` is true while a load is in flight: an explicit reload (`reloading`
+  // state, which re-renders), or a cold load that has not resolved yet
+  // (`inFlightRef` set, no value, no error). Settling the cold load fires
+  // setOverrideData, which both clears `inFlightRef` and re-renders with `data`.
+  const loading =
+    reloading ||
+    (inFlightRef.current && data === undefined && loadError === null);
+
   return {
-    reader: readerRef.current,
-    overrideData,
+    data,
+    loading,
     error: loadError,
     reload,
-    reloading,
     status,
+    reader: readerRef.current,
   };
 }

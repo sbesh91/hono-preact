@@ -62,8 +62,18 @@ export function LoaderHost<T>({
     );
   }
 
-  const { reader, overrideData, error, reload, reloading, status } =
-    useLoaderRunner<T>(loaderRef, location, id, accumulate);
+  // BRIDGE (this task): the runner now exposes state (`data`/`loading`) instead
+  // of `overrideData`/`reloading`, but this consumer is still Suspense-based, so
+  // it keeps reading the bridge `reader`. `data` plays the role `overrideData`
+  // did for DataReader (the non-throwing resolved value), and `loading` plays
+  // the role `reloading` did for the reload context. Task 4 removes the reader
+  // and rewrites this consumer to render off state directly.
+  const { reader, data, error, reload, loading, status } = useLoaderRunner<T>(
+    loaderRef,
+    location,
+    id,
+    accumulate
+  );
 
   // A `live` loader never runs on the server (its infinite generator would hang
   // renderToStringAsync). Render the fallback directly on SSR; the client
@@ -105,7 +115,7 @@ export function LoaderHost<T>({
     <Suspense fallback={fallbackContent}>{fallbackContent}</Suspense>
   ) : (
     <Suspense fallback={suspenseFallback}>
-      <DataReader reader={reader} overrideData={overrideData}>
+      <DataReader reader={reader} overrideData={data}>
         <Envelope>{children}</Envelope>
       </DataReader>
     </Suspense>
@@ -114,7 +124,7 @@ export function LoaderHost<T>({
   return (
     <LoaderIdContext.Provider value={id}>
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-        <ReloadContext.Provider value={{ reload, reloading }}>
+        <ReloadContext.Provider value={{ reload, reloading: loading }}>
           <LoaderErrorContext.Provider value={error}>
             <LoaderStatusContext.Provider value={status}>
               {errorFallback != null ? (
