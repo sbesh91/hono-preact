@@ -16,6 +16,29 @@ export type AccumulateOptions = {
   reduce: (acc: unknown, chunk: unknown) => unknown;
 };
 
+/**
+ * The runner's single-value lifecycle, modelled as a discriminated union. Each
+ * settle produces a FRESH object, so resolving to `undefined` lands in
+ * `{ tag: 'success', value: undefined }` and is a real state change (clears
+ * loading) rather than a no-op `setState(undefined)` (review #10). `revalidating`
+ * and `error` carry the prior value so a reload/error keeps the last-good data
+ * visible (stale-while-revalidate).
+ */
+type LoaderPhase<T> =
+  | { tag: 'loading' }
+  | { tag: 'revalidating'; value: T }
+  | { tag: 'success'; value: T }
+  | { tag: 'error'; error: Error; value?: T };
+
+/**
+ * Read the value a phase carries, if any, without a variant-coercion cast.
+ * `value` is typed by the variant (`T`, or `T | undefined` on `error`), so the
+ * `in` narrowing carries the type through with no `as`.
+ */
+function phaseValue<T>(p: LoaderPhase<T>): T | undefined {
+  return 'value' in p ? p.value : undefined;
+}
+
 export type LoaderRunnerState<T> = {
   /**
    * The resolved loader value. `undefined` on a cold load that has not
@@ -28,6 +51,13 @@ export type LoaderRunnerState<T> = {
    * resolved, or an explicit `reload()`.
    */
   loading: boolean;
+  /**
+   * True ONLY while an explicit `reload()`/revalidation is in flight (the
+   * `revalidating` phase, which retains the prior value). A cold load reports
+   * `false` here even though `loading` is `true`, so consumers can tell a
+   * first-load apart from a refresh-over-stale-data.
+   */
+  reloading: boolean;
   error: Error | null;
   reload: () => void;
   status: StreamStatus;
@@ -50,9 +80,10 @@ export function useLoaderRunner<T>(
   id: string,
   accumulate?: AccumulateOptions
 ): LoaderRunnerState<T> {
-  const [reloading, setReloading] = useState(false);
-  const [overrideData, setOverrideData] = useState<T | undefined>(undefined);
-  const [loadError, setLoadError] = useState<Error | null>(null);
+  // Single-value lifecycle as one ADT (replaces the `overrideData` sentinel +
+  // separate `reloading`/`loadError` states). `data`/`loading`/`reloading`/
+  // `error` are all DERIVED from this below.
+  const [phase, setPhase] = useState<LoaderPhase<T>>({ tag: 'loading' });
   const [status, setStatus] = useState<StreamStatus>('connecting');
   // Accumulated value for the streaming path; reset on each (re)subscribe.
   const accRef = useRef<unknown>(accumulate ? accumulate.initial : undefined);
@@ -99,8 +130,8 @@ export function useLoaderRunner<T>(
     }
   });
 
-  // True while either the initial Suspense fetch or an explicit reload is in
-  // flight. Tracked via a ref so reload() can read it without recapturing on
+  // True while a fetch is in flight: a cold load (no value yet) or an explicit
+  // reload. Tracked via a ref so reload() can read it without recapturing on
   // every state change, and so the wrapPromise branch below can flip it
   // during render without scheduling an extra setState.
   const inFlightRef = useRef(false);
@@ -114,7 +145,10 @@ export function useLoaderRunner<T>(
     (chunk: unknown) => {
       if (!accumulate) return;
       accRef.current = accumulate.reduce(accRef.current, chunk);
-      setOverrideData(accRef.current as T);
+      // A fresh `success` object per chunk; streaming already re-renders. The
+      // accumulator is `unknown` by design (erased-ref boundary), so reading it
+      // as `T` here is the ONE sanctioned cast (not a phase-variant coercion).
+      setPhase({ tag: 'success', value: accRef.current as T });
       setStatus('open');
     },
     [accumulate]
@@ -132,7 +166,8 @@ export function useLoaderRunner<T>(
       return runLoader<T>(loaderRef, locationRef.current, id, signal, {
         onChunk: (value) => applyChunk(value),
         onError: (err) => {
-          setLoadError(err);
+          // Retain prior chunks (stale-while-error) by carrying the prior value.
+          setPhase((p) => ({ tag: 'error', error: err, value: phaseValue(p) }));
           setStatus('error');
         },
         onEnd: () => setStatus('closed'),
@@ -143,20 +178,28 @@ export function useLoaderRunner<T>(
 
   const runReload = useCallback(() => {
     inFlightRef.current = true;
-    setReloading(true);
-    setLoadError(null);
+    // Enter `revalidating` retaining the prior value (stale-while-revalidate);
+    // with no prior value fall back to a cold `loading`. Moving off `error`/
+    // `success` here also clears any prior error (error is derived from phase).
+    setPhase((p) => {
+      const prior = phaseValue(p);
+      return prior !== undefined
+        ? { tag: 'revalidating', value: prior }
+        : { tag: 'loading' };
+    });
 
     if (accumulate) {
       // Streaming/live reload = resubscribe: `subscribeAccumulate` aborts the
       // current stream (via newAbortSignal), resets to `initial`, reopens, and
       // folds chunks through `reduce`. Reset the surfaced data to `initial` and
       // drive status connecting -> open/closed/error, mirroring a fresh mount.
-      setOverrideData(accumulate.initial as T);
+      // `revalidating` keeps `reloading`/`loading` true until the first chunk.
+      setPhase({ tag: 'revalidating', value: accumulate.initial as T });
       setStatus('connecting');
       subscribeAccumulate(newAbortSignal())
         .then((firstChunk) => {
+          // applyChunk moves the phase to `success` (clears reloading).
           applyChunk(firstChunk);
-          setReloading(false);
           inFlightRef.current = false;
           if (queuedReloadRef.current) {
             queuedReloadRef.current = false;
@@ -164,9 +207,9 @@ export function useLoaderRunner<T>(
           }
         })
         .catch((err: unknown) => {
-          setLoadError(err instanceof Error ? err : new Error(String(err)));
+          const e = err instanceof Error ? err : new Error(String(err));
+          setPhase((p) => ({ tag: 'error', error: e, value: phaseValue(p) }));
           setStatus('error');
-          setReloading(false);
           inFlightRef.current = false;
           queuedReloadRef.current = false;
         });
@@ -180,7 +223,7 @@ export function useLoaderRunner<T>(
       newAbortSignal(),
       {
         onChunk: (value) => {
-          setOverrideData(value);
+          setPhase({ tag: 'success', value });
           if (isBrowser()) {
             loaderRef.cache.set(
               value,
@@ -188,7 +231,8 @@ export function useLoaderRunner<T>(
             );
           }
         },
-        onError: (err) => setLoadError(err),
+        onError: (err) =>
+          setPhase((p) => ({ tag: 'error', error: err, value: phaseValue(p) })),
         onEnd: () => {
           /* nothing to do */
         },
@@ -202,8 +246,9 @@ export function useLoaderRunner<T>(
             result,
             serializeLocationForCache(locationRef.current, loaderRef.params)
           );
-        setOverrideData(result);
-        setReloading(false);
+        // A fresh `success` per settle (clears reloading); `result` may be
+        // `undefined`, which is a real state change here (review #10).
+        setPhase({ tag: 'success', value: result });
         inFlightRef.current = false;
         if (queuedReloadRef.current) {
           queuedReloadRef.current = false;
@@ -211,8 +256,8 @@ export function useLoaderRunner<T>(
         }
       })
       .catch((err: unknown) => {
-        setLoadError(err instanceof Error ? err : new Error(String(err)));
-        setReloading(false);
+        const e = err instanceof Error ? err : new Error(String(err));
+        setPhase((p) => ({ tag: 'error', error: e, value: phaseValue(p) }));
         inFlightRef.current = false;
         queuedReloadRef.current = false;
       });
@@ -228,9 +273,9 @@ export function useLoaderRunner<T>(
   }, []);
 
   // Stable reader: only rebuilt when location or loader identity changes.
-  // Without this, every re-render (e.g. from setReloading) would call
+  // Without this, every re-render (e.g. from a phase setState) would call
   // wrapPromise(...) again, fire a duplicate XHR, and throw a fresh promise
-  // into Suspense — unmounting the children and wiping any optimistic UI
+  // into Suspense, unmounting the children and wiping any optimistic UI
   // state below.
   //
   // The location key includes path AND searchParams so /movies?genre=action →
@@ -247,10 +292,10 @@ export function useLoaderRunner<T>(
   if (readerRef.current === null || locationChanged || loaderChanged) {
     prevLocKey.current = locKey;
     prevLoaderId.current = loaderRef.__id;
-    if (locationChanged || loaderChanged) setOverrideData(undefined);
+    if (locationChanged || loaderChanged) setPhase({ tag: 'loading' });
     // Default: no synchronous value. The non-throwing paths below set it when a
     // value is available immediately (preload/cache); a cold fetch leaves it
-    // undefined so `data` is undefined until `overrideData` lands.
+    // undefined so `data` is undefined until the phase settles.
     syncDataRef.current = undefined;
 
     if (accumulate) {
@@ -285,9 +330,15 @@ export function useLoaderRunner<T>(
             .catch((err: unknown) => {
               // State-based surfacing: the old Suspense reader propagated this
               // rejection by throwing on read(); now nothing reads the reader,
-              // so push the error into state. With no chunk yet `data` stays
-              // undefined, so LoaderHost treats it as a COLD error.
-              setLoadError(err instanceof Error ? err : new Error(String(err)));
+              // so push the error into state. With no chunk yet the phase has no
+              // value, so `data` stays undefined and LoaderHost treats it as a
+              // COLD error.
+              const e = err instanceof Error ? err : new Error(String(err));
+              setPhase((p) => ({
+                tag: 'error',
+                error: e,
+                value: phaseValue(p),
+              }));
               setStatus('error');
               settleAcc();
               throw err;
@@ -309,13 +360,20 @@ export function useLoaderRunner<T>(
         if (isBrowser()) {
           const unsub = subscribeToLoaderStream(id, {
             push: (value) => {
-              setOverrideData(value as T);
+              // `value` is an erased stream payload (`unknown`); reading it as
+              // `T` is the pre-existing stream boundary, not a phase coercion.
+              setPhase({ tag: 'success', value: value as T });
               loaderRef.cache.set(value as T, locKey);
             },
             end: () => {
               /* nothing to do */
             },
-            error: (err) => setLoadError(err),
+            error: (err) =>
+              setPhase((p) => ({
+                tag: 'error',
+                error: err,
+                value: phaseValue(p),
+              })),
           });
           // Unsubscribe on unmount: attach to the abortRef signal.
           if (abortRef.current) {
@@ -347,10 +405,15 @@ export function useLoaderRunner<T>(
           newAbortSignal(),
           {
             onChunk: (value) => {
-              setOverrideData(value);
+              setPhase({ tag: 'success', value });
               if (isBrowser()) loaderRef.cache.set(value, locKey);
             },
-            onError: (err) => setLoadError(err),
+            onError: (err) =>
+              setPhase((p) => ({
+                tag: 'error',
+                error: err,
+                value: phaseValue(p),
+              })),
             onEnd: () => {
               /* nothing to do */
             },
@@ -364,18 +427,26 @@ export function useLoaderRunner<T>(
               // Drive the resolved value into state so `data` is available
               // without calling the throwing reader. For a non-streaming loader
               // `runLoader` never fires `onChunk`, so this is the only place the
-              // single-value cold load surfaces its result as state.
-              setOverrideData(r);
+              // single-value cold load surfaces its result as state. A fresh
+              // `success` object means a resolve-to-`undefined` still re-renders
+              // and clears loading (review #10).
+              setPhase({ tag: 'success', value: r });
               settle();
               return r;
             })
             .catch((err: unknown) => {
               // State-based surfacing: the old Suspense reader propagated this
               // rejection by throwing on read(); now nothing reads the reader,
-              // so push the error into state. `data` is still undefined (the
-              // fetch never resolved), so LoaderHost treats it as a COLD error
-              // and renders `errorFallback` / rethrows to an outer boundary.
-              setLoadError(err instanceof Error ? err : new Error(String(err)));
+              // so push the error into state. The phase has no value (the fetch
+              // never resolved), so `data` is undefined and LoaderHost treats it
+              // as a COLD error and renders `errorFallback` / rethrows to an
+              // outer boundary.
+              const e = err instanceof Error ? err : new Error(String(err));
+              setPhase((p) => ({
+                tag: 'error',
+                error: e,
+                value: phaseValue(p),
+              }));
               settle();
               throw err;
             })
@@ -384,25 +455,35 @@ export function useLoaderRunner<T>(
     }
   }
 
-  // Derive `data` WITHOUT calling the throwing bridge reader: the streamed /
-  // resolved value (`overrideData`, set via setState) takes precedence; else the
-  // synchronously-available value (preload/cache); else undefined (cold load).
-  // During a reload `overrideData` retains the previous value, so `data` is the
-  // stale value while `loading` is true (stale-while-revalidate).
-  const data = overrideData !== undefined ? overrideData : syncDataRef.current;
+  // Derive the public fields WITHOUT calling the throwing bridge reader. The
+  // phase's settled value (streamed/resolved, set via setState) takes
+  // precedence; else the synchronously-available value (preload/cache); else
+  // undefined (cold load). During a reload the `revalidating`/`error` phase
+  // retains the previous value, so `data` is the stale value while `loading` is
+  // true (stale-while-revalidate). `settledValue !== undefined` (not a falsy
+  // check) so a defined-but-falsy value like `0` is surfaced, not masked.
+  const settledValue = phaseValue(phase);
+  const data = settledValue !== undefined ? settledValue : syncDataRef.current;
 
-  // `loading` is true while a load is in flight: an explicit reload (`reloading`
-  // state, which re-renders), or a cold load that has not resolved yet
-  // (`inFlightRef` set, no value, no error). Settling the cold load fires
-  // setOverrideData, which both clears `inFlightRef` and re-renders with `data`.
+  const reloading = phase.tag === 'revalidating';
+  const error = phase.tag === 'error' ? phase.error : null;
+
+  // `loading` is true while a load is in flight: an explicit reload (the
+  // `revalidating` phase, which re-renders), or a cold load that has not
+  // resolved yet (`inFlightRef` set, no value, no error). The synchronous
+  // preload/cache paths leave `phase` at its initial `loading` tag but populate
+  // `syncDataRef`, so the cold case is gated on `data === undefined` /
+  // `inFlightRef` rather than the bare `loading` tag. Settling the cold load
+  // sets a `success`/`error` phase, which both clears `inFlightRef` and
+  // re-renders with `data`.
   const loading =
-    reloading ||
-    (inFlightRef.current && data === undefined && loadError === null);
+    reloading || (inFlightRef.current && data === undefined && error === null);
 
   return {
     data,
     loading,
-    error: loadError,
+    reloading,
+    error,
     reload,
     status,
     // Non-null here: every branch above assigns `readerRef.current` before

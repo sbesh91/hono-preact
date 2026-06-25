@@ -155,4 +155,65 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     expect(captured.loading).toBe(false);
     expect(fn).not.toHaveBeenCalled();
   });
+
+  it('a loader resolving to undefined clears loading (review #10)', async () => {
+    let resolve!: (v: Data | undefined) => void;
+    const fn = vi.fn(
+      () =>
+        new Promise<Data>((r) => {
+          resolve = r as (v: Data) => void;
+        })
+    );
+    const ref = defineLoader<Data>(fn);
+    render(<Probe loaderRef={ref} />);
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolve(undefined);
+    });
+    // Resolved to undefined: loading must clear (not stay stuck on the sentinel).
+    await waitFor(() => expect(captured.loading).toBe(false));
+    expect(captured.data).toBeUndefined();
+    expect(captured.error).toBeNull();
+  });
+
+  it('reloading is false on a cold load and true only during reload (review #5)', async () => {
+    let resolveInitial!: (v: Data) => void;
+    let resolveReload!: (v: Data) => void;
+    const fn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Data>((r) => {
+            resolveInitial = r;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Data>((r) => {
+            resolveReload = r;
+          })
+      );
+    const ref = defineLoader<Data>(fn);
+    render(<Probe loaderRef={ref} />);
+    // Cold load in flight: loading true, reloading false.
+    expect(captured.loading).toBe(true);
+    expect(captured.reloading).toBe(false);
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveInitial({ msg: 'A' });
+    });
+    await waitFor(() => expect(captured.data).toEqual({ msg: 'A' }));
+    expect(captured.reloading).toBe(false);
+    // Explicit reload: reloading true.
+    await act(async () => {
+      captured.reload();
+    });
+    expect(captured.reloading).toBe(true);
+    expect(captured.loading).toBe(true);
+    await act(async () => {
+      resolveReload({ msg: 'B' });
+    });
+    await waitFor(() => expect(captured.data).toEqual({ msg: 'B' }));
+    expect(captured.reloading).toBe(false);
+  });
 });
