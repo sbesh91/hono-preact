@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **No `preact/compat` / `@preact/compat` import anywhere in shipped source** when done (`packages/*/src`, `apps/site/src`), excluding comments and the `leak-test` fixture. This is the whole point; it is all-or-nothing.
-- **Loaders must never throw/suspend.** Loading is state surfaced through `.View()`. The page middleware chain is the only framework code that still suspends, and only onto preact-iso's `ErrorBoundary`.
+- **Loaders never throw ON THE CLIENT** (loading is state surfaced through `.View()`). On the **SERVER** a loader DOES suspend (throws the pending promise) so preact-iso's `prerender` awaits it and bakes the resolved data into the `data-loader` element + the SSR-preload payload + streams it; the throw is caught by `prerender`/render-to-string directly, with NO Suspense component and NO compat. This dual-mode is what makes SSR and hydration render the same `loading=false`+data branch (added as Task 4b after the gap surfaced in Task 4). The page middleware chain also suspends and, on the client, resolves onto preact-iso's `ErrorBoundary`.
 - **Hydration parity:** SSR and the initial client render must produce the same branch (data present, or `status==='connecting'` for live). No SSR-DOM-adoption code.
 - preact-iso's `ErrorBoundary` signature is `{ children, onError? }`; pass NO `onError` so genuine errors/outcomes propagate to the framework's outer `ErrorBoundary` (which rethrows outcomes). It catches only thrown promises (via preact-iso's installed `options.__e` patch) and re-renders on resolve, no fallback.
 - No em-dashes in prose, comments, or commit messages. Commit trailer on every commit: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
@@ -263,6 +263,49 @@ Expected: all pass. Confirm `loader.tsx` no longer imports `preact/compat`: `gre
 ```bash
 git add packages/iso/src/internal/loader.tsx packages/iso/src/internal/view-renderer.tsx packages/iso/src/internal/contexts.ts packages/iso/src/internal/use-loader-runner.tsx packages/iso/src/internal/__tests__/loader.test.tsx packages/iso/src/internal/__tests__/view-renderer.test.tsx packages/iso/src/internal/__tests__/loader-streaming.test.tsx packages/iso/src/__tests__/loader-view.test.tsx
 git commit -m "feat(iso): state-based loader rendering; remove Suspense/DataReader/DelayedFallback
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 4b: Server-side loader suspension so SSR awaits + bakes + streams (gap fix)
+
+**Why:** Task 4 removed loader suspension on the server too, so `prerender` no longer awaits loader data; SSR emits `data-loader="null"` with no preload payload and streaming breaks (4 server tests fail: `render-stream.test.tsx` x3, `action-loader-revalidation.test.tsx` x1). Restore a SERVER-ONLY suspension so SSR bakes data again, while the client stays state-based.
+
+**Files:**
+- Modify: `packages/iso/src/internal/use-loader-runner.tsx` (expose the in-flight promise) and/or `packages/iso/src/internal/loader.tsx` (server-only throw)
+- Test: re-green `packages/server/src/__tests__/render-stream.test.tsx`, `action-loader-revalidation.test.tsx`; confirm `render.test.tsx`
+
+**Interfaces:**
+- Consumes: the runner's `{ data, loading, ... }` from Task 4 plus the in-flight fetch/stream promise.
+- Produces: on the server (`!isBrowser()`), a pending loader throws the in-flight promise so `prerender` awaits it (caught by render-to-string directly, no Suspense component, no compat); on resolve, renders `data` with `loading=false`. On the client, NO throw (unchanged from Task 4). After resolve the server bakes the `data-loader` element + SSR-preload payload exactly as before.
+
+- [ ] **Step 1: Confirm the 4 failing server tests + the failure mode**
+
+Run `pnpm vitest run packages/server/src/__tests__/render-stream.test.tsx packages/server/src/__tests__/action-loader-revalidation.test.tsx` and confirm they fail because SSR no longer bakes loader data (e.g. `data-loader="null"`, missing `"count":2`, missing first-chunk JSON). This is the failing state to fix.
+
+- [ ] **Step 2: Reintroduce a server-only suspend**
+
+In the runner, expose the in-flight promise (e.g. `pending: Promise<unknown> | null`, non-null only while a server-side cold load is unresolved). In `loader.tsx`'s `LoaderHost` render, BEFORE rendering the view, add: `if (!isBrowser() && pending) throw pending;`. This makes `prerender` await the loader on the server (no Suspense component needed; `prerender`/render-to-string catches the thrown thenable). Do NOT throw on the client. Ensure the resolved value still flows into `overrideData`/`syncDataRef` so the post-await server render produces `loading=false` + data, and the existing preload-baking + streaming-loader collection (`takeServerStreamingLoaders`) still fire.
+
+- [ ] **Step 3: Re-green the server tests**
+
+Run:
+```bash
+pnpm vitest run packages/server/src/__tests__/render-stream.test.tsx packages/server/src/__tests__/action-loader-revalidation.test.tsx packages/server/src/__tests__/render.test.tsx
+```
+Expected: all pass (SSR bakes the data-loader JSON + streams chunks again). Also re-run `pnpm vitest run packages/iso/src/internal/__tests__/loader.test.tsx` to confirm hydration parity holds (client reads preload -> `loading=false`).
+
+- [ ] **Step 4: Confirm no compat reintroduced**
+
+Run `grep -rn "preact/compat" packages/iso/src/internal/loader.tsx packages/iso/src/internal/use-loader-runner.tsx`. Expected: nothing (the server throw is a bare `throw promise`, caught by prerender, not a compat Suspense).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/iso/src/internal/use-loader-runner.tsx packages/iso/src/internal/loader.tsx packages/server/src/__tests__
+git commit -m "fix(iso): suspend loaders on the server so SSR awaits + bakes + streams (client stays state-based)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
