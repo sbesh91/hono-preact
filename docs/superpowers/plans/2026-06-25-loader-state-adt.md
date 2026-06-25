@@ -435,7 +435,7 @@ describe('toLoaderState', () => {
   });
   it('data===undefined projects to loading at this seam', () => {
     // The pure projection cannot distinguish "cold, no value" from "resolved to
-    // undefined" — both have data===undefined, so both map to `loading` here.
+    // undefined"; both have data===undefined, so both map to `loading` here.
     // The resolved-to-undefined-is-success case is a RUNNER concern (the phase
     // ADT carries `{ tag: 'success', value: undefined }`), asserted in Task 5,
     // not at this projection seam.
