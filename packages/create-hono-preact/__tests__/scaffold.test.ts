@@ -1,0 +1,70 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { scaffold } from '../lib/scaffold.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const templatesRoot = resolve(here, '..', 'templates');
+
+let workDir: string;
+beforeEach(() => {
+  workDir = mkdtempSync(join(tmpdir(), 'chp-scaffold-'));
+});
+afterEach(() => rmSync(workDir, { recursive: true, force: true }));
+
+function readPkg(dir: string) {
+  return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+}
+
+describe('scaffold', () => {
+  it('cloudflare: writes wrangler.jsonc and cloudflare devDeps, no node deps', async () => {
+    const target = join(workDir, 'cf');
+    await scaffold(target, { adapter: 'cloudflare', ui: false }, templatesRoot);
+    expect(existsSync(join(target, 'wrangler.jsonc'))).toBe(true);
+    expect(existsSync(join(target, 'src', 'pages', 'home.tsx'))).toBe(true);
+    const pkg = readPkg(target);
+    expect(pkg.devDependencies).toHaveProperty('wrangler');
+    expect(pkg.devDependencies).not.toHaveProperty('@hono/node-server');
+    expect(pkg.scripts).toHaveProperty('deploy');
+    expect(pkg.dependencies).not.toHaveProperty('hono-preact-ui');
+    expect(pkg.name).toBe('cf');
+  });
+
+  it('node: writes node devDeps and start script, no wrangler.jsonc', async () => {
+    const target = join(workDir, 'nd');
+    await scaffold(target, { adapter: 'node', ui: false }, templatesRoot);
+    expect(existsSync(join(target, 'wrangler.jsonc'))).toBe(false);
+    const pkg = readPkg(target);
+    expect(pkg.devDependencies).toHaveProperty('@hono/node-server');
+    expect(pkg.devDependencies).not.toHaveProperty('wrangler');
+    expect(pkg.scripts).toHaveProperty('start');
+  });
+
+  it('ui on: adds hono-preact-ui and a Dialog import in home.tsx', async () => {
+    const target = join(workDir, 'ui');
+    await scaffold(target, { adapter: 'node', ui: true }, templatesRoot);
+    const pkg = readPkg(target);
+    expect(pkg.dependencies).toHaveProperty('hono-preact-ui');
+    const home = readFileSync(join(target, 'src', 'pages', 'home.tsx'), 'utf8');
+    expect(home).toContain("from 'hono-preact-ui'");
+    expect(home).toContain('DialogRoot');
+  });
+
+  it('ui off: home.tsx has no hono-preact-ui import', async () => {
+    const target = join(workDir, 'noui');
+    await scaffold(target, { adapter: 'node', ui: false }, templatesRoot);
+    const home = readFileSync(join(target, 'src', 'pages', 'home.tsx'), 'utf8');
+    expect(home).not.toContain('hono-preact-ui');
+  });
+
+  it('substitutes the project name and copies agent guidance', async () => {
+    const target = join(workDir, 'my-app');
+    await scaffold(target, { adapter: 'cloudflare', ui: false }, templatesRoot);
+    expect(readPkg(target).name).toBe('my-app');
+    expect(readFileSync(join(target, 'src', 'Layout.tsx'), 'utf8')).toContain('{{name}}');
+    expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
+    expect(existsSync(join(target, '.gitignore'))).toBe(true);
+  });
+});

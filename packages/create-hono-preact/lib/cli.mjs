@@ -2,17 +2,13 @@ import { readFileSync } from 'node:fs';
 import { readdir, mkdir } from 'node:fs/promises';
 import { spawn as realSpawn } from 'node:child_process';
 import readline from 'node:readline/promises';
-import { resolve, join, basename, dirname } from 'node:path';
+import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
 import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
-import {
-  copyTemplate,
-  renameDotfiles,
-  substituteName,
-  copyAgentGuidance,
-} from './template.mjs';
+import { copyAgentGuidance } from './template.mjs';
+import { scaffold } from './scaffold.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const templatesRoot = resolve(here, '..', 'templates');
@@ -98,13 +94,7 @@ export async function run({
     }
   }
 
-  const sourceTemplate = join(templatesRoot, adapter);
-  await copyTemplate(sourceTemplate, targetPath);
-  await renameDotfiles(targetPath);
-  await substituteName(targetPath, basename(targetPath));
-  await copyAgentGuidance(join(templatesRoot, 'agents'), targetPath, {
-    force: true,
-  });
+  await scaffold(targetPath, { adapter, ui: false }, templatesRoot);
 
   const pm = detectPackageManager(env);
 

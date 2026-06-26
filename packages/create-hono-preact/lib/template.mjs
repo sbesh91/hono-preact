@@ -20,6 +20,23 @@ export async function copyTemplate(source, target) {
 }
 
 /**
+ * Recursively copy a template tree into the target, skipping files whose
+ * basename appears in `exclude`. Existing files are overwritten (overlay
+ * semantics); directories are always traversed.
+ *
+ * @param {string} source absolute path to the template tree
+ * @param {string} target absolute path to the destination dir
+ * @param {string[]} [exclude] basenames to skip (e.g. ['package.json'])
+ */
+export async function copyTreeExcept(source, target, exclude = []) {
+  const skip = new Set(exclude);
+  await cp(source, target, {
+    recursive: true,
+    filter: (src) => !skip.has(basename(src)),
+  });
+}
+
+/**
  * Rename underscore-prefixed dotfiles emitted by the template
  * (e.g. `_gitignore` -> `.gitignore`). npm and pnpm strip dotfiles from
  * published tarballs, so the template ships with the underscore name.
