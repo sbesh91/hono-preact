@@ -5,7 +5,7 @@
  *   { kind: 'version' } |
  *   { kind: 'error', message: string } |
  *   { kind: 'add-agents', force: boolean } |
- *   { kind: 'scaffold', targetDir: string | undefined, adapter: 'cloudflare' | 'node', install: boolean, git: boolean }
+ *   { kind: 'scaffold', targetDir: string | undefined, adapter: 'cloudflare' | 'node' | undefined, ui: boolean | undefined, install: boolean | undefined, git: boolean | undefined, yes: boolean, skipHints: boolean }
  * }
  */
 export function parseArgs(argv) {
@@ -19,19 +19,37 @@ export function parseArgs(argv) {
   }
 
   let targetDir;
-  let adapter = 'cloudflare';
-  let install = true;
-  let git = true;
+  /** @type {'cloudflare' | 'node' | undefined} */
+  let adapter;
+  /** @type {boolean | undefined} */
+  let ui;
+  /** @type {boolean | undefined} */
+  let install;
+  /** @type {boolean | undefined} */
+  let git;
+  let yes = false;
+  let skipHints = false;
 
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === '--help' || arg === '-h') return { kind: 'help' };
     if (arg === '--version' || arg === '-v') return { kind: 'version' };
-    if (arg === '--no-install') {
+    if (arg === '--yes' || arg === '-y') {
+      yes = true;
+    } else if (arg === '--skip-hints') {
+      skipHints = true;
+    } else if (arg === '--no-install') {
       install = false;
     } else if (arg === '--no-git') {
       git = false;
-    } else if (arg.startsWith('--adapter=')) {
-      const value = arg.slice('--adapter='.length);
+    } else if (arg === '--ui') {
+      ui = true;
+    } else if (arg === '--no-ui') {
+      ui = false;
+    } else if (arg === '--adapter' || arg.startsWith('--adapter=')) {
+      const value = arg.includes('=')
+        ? arg.slice('--adapter='.length)
+        : argv[++i];
       if (value !== 'cloudflare' && value !== 'node') {
         return {
           kind: 'error',
@@ -51,5 +69,5 @@ export function parseArgs(argv) {
     }
   }
 
-  return { kind: 'scaffold', targetDir, adapter, install, git };
+  return { kind: 'scaffold', targetDir, adapter, ui, install, git, yes, skipHints };
 }

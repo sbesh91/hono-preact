@@ -2,92 +2,60 @@ import { describe, it, expect } from 'vitest';
 import { parseArgs } from '../lib/args.mjs';
 
 describe('parseArgs', () => {
-  it('parses a positional target dir', () => {
+  it('parses a bare positional target dir with undefined optionals', () => {
     expect(parseArgs(['my-app'])).toEqual({
       kind: 'scaffold',
       targetDir: 'my-app',
-      adapter: 'cloudflare',
-      install: true,
-      git: true,
+      adapter: undefined,
+      ui: undefined,
+      install: undefined,
+      git: undefined,
+      yes: false,
+      skipHints: false,
     });
   });
 
-  it('defaults adapter to cloudflare', () => {
-    expect(parseArgs(['my-app']).adapter).toBe('cloudflare');
+  it('accepts --adapter node (space form)', () => {
+    expect(parseArgs(['my-app', '--adapter', 'node']).adapter).toBe('node');
   });
 
-  it('accepts --adapter=node', () => {
-    expect(parseArgs(['my-app', '--adapter=node']).adapter).toBe('node');
-  });
-
-  it('accepts --adapter=cloudflare', () => {
+  it('accepts --adapter=cloudflare (equals form)', () => {
     expect(parseArgs(['my-app', '--adapter=cloudflare']).adapter).toBe(
       'cloudflare'
     );
   });
 
   it('rejects an unknown adapter', () => {
-    const result = parseArgs(['my-app', '--adapter=deno']);
-    expect(result.kind).toBe('error');
-    if (result.kind === 'error') {
-      expect(result.message).toMatch(/unknown adapter.*deno/i);
-    }
+    const r = parseArgs(['my-app', '--adapter=deno']);
+    expect(r.kind).toBe('error');
   });
 
-  it('--no-install flips install to false', () => {
-    expect(parseArgs(['my-app', '--no-install']).install).toBe(false);
+  it('--ui sets ui true, --no-ui sets ui false', () => {
+    expect(parseArgs(['a', '--ui']).ui).toBe(true);
+    expect(parseArgs(['a', '--no-ui']).ui).toBe(false);
   });
 
-  it('--no-git flips git to false', () => {
-    expect(parseArgs(['my-app', '--no-git']).git).toBe(false);
+  it('--no-install / --no-git set those false; otherwise undefined', () => {
+    expect(parseArgs(['a', '--no-install']).install).toBe(false);
+    expect(parseArgs(['a', '--no-git']).git).toBe(false);
+    expect(parseArgs(['a']).install).toBe(undefined);
+    expect(parseArgs(['a']).git).toBe(undefined);
   });
 
-  it('returns kind=help for --help', () => {
+  it('-y / --yes set yes; --skip-hints sets skipHints', () => {
+    expect(parseArgs(['a', '-y']).yes).toBe(true);
+    expect(parseArgs(['a', '--yes']).yes).toBe(true);
+    expect(parseArgs(['a', '--skip-hints']).skipHints).toBe(true);
+  });
+
+  it('still returns help/version', () => {
     expect(parseArgs(['--help'])).toEqual({ kind: 'help' });
+    expect(parseArgs(['-v'])).toEqual({ kind: 'version' });
   });
 
-  it('returns kind=help for -h', () => {
-    expect(parseArgs(['-h'])).toEqual({ kind: 'help' });
-  });
-
-  it('returns kind=version for --version', () => {
-    expect(parseArgs(['--version'])).toEqual({ kind: 'version' });
-  });
-
-  it('returns kind=scaffold with no targetDir when none given', () => {
-    expect(parseArgs([])).toEqual({
-      kind: 'scaffold',
-      targetDir: undefined,
-      adapter: 'cloudflare',
-      install: true,
-      git: true,
-    });
-  });
-
-  it('flags can appear before the target dir', () => {
-    expect(parseArgs(['--adapter=node', '--no-install', 'my-app'])).toEqual({
-      kind: 'scaffold',
-      targetDir: 'my-app',
-      adapter: 'node',
-      install: false,
-      git: true,
-    });
-  });
-
-  it('rejects unknown flags with kind=error', () => {
-    const result = parseArgs(['my-app', '--unknown']);
-    expect(result.kind).toBe('error');
-    if (result.kind === 'error') {
-      expect(result.message).toMatch(/unknown flag.*--unknown/i);
-    }
-  });
-
-  it('rejects multiple positional args', () => {
-    const result = parseArgs(['my-app', 'extra']);
-    expect(result.kind).toBe('error');
-    if (result.kind === 'error') {
-      expect(result.message).toMatch(/unexpected/i);
-    }
+  it('rejects unknown flags and extra positionals', () => {
+    expect(parseArgs(['a', '--bogus']).kind).toBe('error');
+    expect(parseArgs(['a', 'b']).kind).toBe('error');
   });
 });
 

@@ -67,7 +67,11 @@ export async function run({
     return 2;
   }
 
-  let { targetDir, adapter, install, git } = parsed;
+  let { targetDir } = parsed;
+  const adapter = parsed.adapter ?? 'cloudflare';
+  const ui = parsed.ui ?? false;
+  const install = parsed.install ?? true;
+  const git = parsed.git ?? true;
 
   if (!targetDir) {
     const answer = (await prompt('Project directory name: ')).trim();
@@ -94,7 +98,7 @@ export async function run({
     }
   }
 
-  await scaffold(targetPath, { adapter, ui: false }, templatesRoot);
+  await scaffold(targetPath, { adapter, ui }, templatesRoot);
 
   const pm = detectPackageManager(env);
 
@@ -187,9 +191,12 @@ Commands:
   add-agents [--force]          Add AGENTS.md, CLAUDE.md, and agent recipes to an existing project
 
 Options:
-  --adapter=<cloudflare|node>   pick the deployment target (default: cloudflare)
+  --adapter <cloudflare|node>   pick the deployment target (default: cloudflare)
+  --ui, --no-ui                 include or exclude hono-preact-ui components
   --no-install                  skip dependency install
   --no-git                      skip 'git init'
+  -y, --yes                     accept defaults for anything not specified
+  --skip-hints                  suppress the "Next steps" note
   -h, --help                    show this help
   -v, --version                 show version`);
 }
