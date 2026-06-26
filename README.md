@@ -14,28 +14,20 @@ Four files. That's the whole project shape.
 
 ## Quick start
 
-The fastest way to start is the scaffolder. It generates a complete, deploy-ready app and installs dependencies for you:
+The fastest way to start is the scaffolder. Run it with no arguments for the
+interactive wizard, or pass a directory:
 
 ```bash
-npm create hono-preact my-app
+npm create hono-preact
 # or: pnpm create hono-preact my-app
-# or: yarn create hono-preact my-app
-# or: bun create hono-preact my-app
 ```
 
-Then:
-
-```bash
-cd my-app
-pnpm dev
-```
-
-Options:
-
-- `--adapter=<cloudflare|node>` pick the deployment target (default: `cloudflare`)
-- `--no-install` skip the dependency install step
-- `--no-git` skip `git init`
-- `--help`, `--version`
+The wizard picks the adapter (Cloudflare Workers or Node), optional
+`hono-preact-ui` components, and whether to install and init git. For scripting,
+every prompt has a flag (`--adapter`, `--ui`/`--no-ui`, `--no-install`,
+`--no-git`, `--yes`); with npm, pass tool flags after `--`
+(`npm create hono-preact my-app -- --adapter node`). pnpm, yarn, and bun forward
+them directly.
 
 Full CLI reference: [Docs · CLI](https://framework.sbesh.com/docs/cli).
 
