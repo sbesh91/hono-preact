@@ -16,7 +16,7 @@ import {
 } from '../stream-registry.js';
 
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => null),
+  getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
 }));
 
@@ -581,7 +581,10 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
   // which is `undefined` for a preload-hydrated loader (its phase is still
   // `loading`), so it fell back to a cold `loading` and never revalidated.
   it('enters revalidating (keeping prior data) on reload over an SSR preload', async () => {
-    vi.mocked(getPreloadedData).mockReturnValueOnce({ n: 1 });
+    vi.mocked(getPreloadedData).mockReturnValueOnce({
+      present: true,
+      value: { n: 1 },
+    });
     let resolveReload: (v: { n: number }) => void = () => {};
     const fn = vi.fn(
       () =>
@@ -641,7 +644,10 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
   // derivation fell back to `syncDataRef.current` whenever the settled value
   // was `undefined`, masking a real resolve-to-undefined as stale data.
   it('shows the new undefined value (not stale preload) when a reload resolves to undefined', async () => {
-    vi.mocked(getPreloadedData).mockReturnValueOnce({ n: 1 });
+    vi.mocked(getPreloadedData).mockReturnValueOnce({
+      present: true,
+      value: { n: 1 },
+    });
     let resolveReload: (v: { n: number } | undefined) => void = () => {};
     const fn = vi.fn(
       () =>
@@ -754,7 +760,10 @@ describe('stale-while-error for preloaded loaders on stream error (R1R2 review)'
     __resetStreamRegistryForTests();
     installStreamRegistry();
 
-    vi.mocked(getPreloadedData).mockReturnValueOnce({ n: 1 });
+    vi.mocked(getPreloadedData).mockReturnValueOnce({
+      present: true,
+      value: { n: 1 },
+    });
     // The fetch fn must never run: a preload hit reads its value synchronously
     // and only subscribes to the live channel. If it were called the test would
     // be exercising a cold fetch, not the preload-stream path.

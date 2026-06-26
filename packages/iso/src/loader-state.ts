@@ -19,55 +19,132 @@ export type StreamState<T> =
   | { status: 'error'; error: Error; data?: T };
 
 /**
- * Project the runner's authoritative discriminant into the single-value union.
- * Keyed on `settled` (a settled value exists), NOT on `data === undefined`, so a
- * loader that legitimately resolves to `undefined` lands in `success`/`error`
- * rather than collapsing back to `loading` (review #1).
- *
- * `data` is typed `T` (not `T | undefined`): the caller (`loader.tsx`) passes
- * the runner's settled value, whose type already admits `undefined` when the
- * loader can return it (inference binds `T` to that wider type). In the
- * data-carrying arms the value IS `T`, so no cast is needed. Cold errors (error
- * with no settled value) are routed to `errorFallback`/the boundary in
- * `loader.tsx` before the render fn runs; here they fall through to `loading`.
+ * The runner's single-value lifecycle as a discriminated union. value-presence
+ * is carried STRUCTURALLY by the variant tag, never by a `data === undefined`
+ * test: `success` / `revalidating` / `staleError` HAVE a value (which may itself
+ * legitimately be `undefined` / `null`, a real resolved value); `loading` and the
+ * cold `error` have NONE. Splitting the cold `error` (no value) from `staleError`
+ * (an error over a prior value) is what lets a loader that resolves to `undefined`
+ * keep its view on a reload failure instead of unwinding the page.
  */
-export function toLoaderState<T>(
-  data: T,
-  error: Error | null,
-  settled: boolean,
-  reloading: boolean
-): LoaderState<T> {
-  if (error !== null && settled) return { status: 'error', error, data };
-  if (!settled) return { status: 'loading' };
-  if (reloading) return { status: 'revalidating', data };
-  return { status: 'success', data };
+export type LoaderPhase<T> =
+  | { tag: 'loading' }
+  | { tag: 'revalidating'; value: T }
+  | { tag: 'success'; value: T }
+  | { tag: 'error'; error: Error }
+  | { tag: 'staleError'; error: Error; value: T };
+
+/**
+ * A present/absent value. Distinguishes "no value" from a present value that is
+ * itself `null` / `undefined`, which a `!== null` test could not. Carries the
+ * SSR-preload / browser-cache adoption (`getPreloadedData`) and the runner's
+ * synchronously-available settled value.
+ */
+export type SyncValue<T> = { present: true; value: T } | { present: false };
+
+/**
+ * What the runner hands `loader.tsx`: either a renderable union to put on
+ * context, or a cold-error signal to route to the `errorFallback` / boundary. A
+ * cold error (the load failed before ANY value settled) is the only thing that
+ * unwinds the page; every other state renders in-view.
+ */
+export type LoaderView<T> =
+  | { kind: 'render'; state: LoaderState<T> }
+  | { kind: 'coldError'; error: Error };
+
+/** Phases that carry a settled value. Structural; no `value !== undefined`. */
+type ValuedPhase<T> =
+  | { tag: 'revalidating'; value: T }
+  | { tag: 'success'; value: T }
+  | { tag: 'staleError'; error: Error; value: T };
+
+/**
+ * Type predicate: does this phase carry a settled value? Narrows to the
+ * value-bearing variants so `phase.value` is `T` without a cast. This is the
+ * structural replacement for the old `data !== undefined` value-presence test.
+ */
+export function hasPhaseValue<T>(p: LoaderPhase<T>): p is ValuedPhase<T> {
+  return (
+    p.tag === 'success' || p.tag === 'revalidating' || p.tag === 'staleError'
+  );
 }
 
 /**
- * Project loose streaming-context fields into a streaming union. Error wins
- * FIRST, before the connecting/undefined guard: a COLD stream error (the connect
- * rejects before any chunk, so `data === undefined`) must reach the `error` arm
- * in-view rather than hang on `connecting` forever (review #5). The error arm's
- * `data` is therefore optional, and may be `undefined` on a cold error; a
- * post-chunk error carries the last-good value.
- *
- * After the error check, `connecting` carries no data (the `initial` accumulator
- * is an internal reduce seed). Key the connecting arm on the stream status too,
- * not just `data === undefined`: a manual `reload()` of a live loader surfaces
- * `data = accumulate.initial` (a defined value, e.g. `[]`) together with
- * `status === 'connecting'`, and that reconnect must project to `connecting`
- * (mirroring a fresh mount) rather than to `open` with the empty seed. Safe
- * because the runner only sets `status === 'open'` once a chunk has arrived, so
- * `open`/`closed` always carry data.
+ * Project the structural phase (plus any synchronously-adopted preload / cache
+ * value) into the single-value view. Pure structural dispatch on the variant tag
+ * and the `sync.present` flag: NO `data === undefined` / `value !== undefined`
+ * test anywhere. A loader that resolves to `undefined` / `null` lands in
+ * `success` / `staleError` (it HAS a value) rather than collapsing to `loading`;
+ * only a cold `error` (no value) becomes the `coldError` signal `loader.tsx`
+ * routes to the boundary.
+ */
+export function toLoaderView<T>(
+  phase: LoaderPhase<T>,
+  sync: SyncValue<T>
+): LoaderView<T> {
+  switch (phase.tag) {
+    case 'success':
+      return {
+        kind: 'render',
+        state: { status: 'success', data: phase.value },
+      };
+    case 'revalidating':
+      return {
+        kind: 'render',
+        state: { status: 'revalidating', data: phase.value },
+      };
+    case 'staleError':
+      return {
+        kind: 'render',
+        state: { status: 'error', error: phase.error, data: phase.value },
+      };
+    case 'error':
+      return { kind: 'coldError', error: phase.error };
+    case 'loading':
+      // A still-`loading` phase whose value is already available synchronously
+      // (an SSR preload or browser-cache hit) renders as `success` from that
+      // value; with no such value it is a genuine cold load.
+      return sync.present
+        ? { kind: 'render', state: { status: 'success', data: sync.value } }
+        : { kind: 'render', state: { status: 'loading' } };
+  }
+}
+
+/**
+ * Project the streaming lifecycle into a `StreamState`, keyed on `status` ALONE
+ * (never on `data === undefined`). An open / closed stream whose accumulated
+ * value is legitimately `undefined` therefore surfaces as `open` / `closed` with
+ * `data: undefined`, not stuck on `connecting`. `value` is the accumulated value
+ * as a present/absent carrier; a cold connect error (no chunk yet) reaches the
+ * `error` arm without data.
  */
 export function toStreamState<T>(
-  data: T | undefined,
   status: StreamStatus,
+  value: SyncValue<T>,
   error: Error | null
 ): StreamState<T> {
-  if (error !== null) return { status: 'error', error, data };
-  if (status === 'connecting' || data === undefined)
-    return { status: 'connecting' };
-  if (status === 'closed') return { status: 'closed', data };
-  return { status: 'open', data };
+  switch (status) {
+    case 'connecting':
+      return { status: 'connecting' };
+    case 'open':
+      // `open`/`closed` are only ever set once the accumulator exists, so the
+      // absent fallback is unreachable defense, not a value-presence decision.
+      return value.present
+        ? { status: 'open', data: value.value }
+        : { status: 'connecting' };
+    case 'closed':
+      return value.present
+        ? { status: 'closed', data: value.value }
+        : { status: 'connecting' };
+    case 'error': {
+      // `error` is the streaming error OBJECT, not a value-presence test. The
+      // runner only sets `status === 'error'` alongside a real error, so the
+      // `??` fallback is unreachable defense that keeps the arm's `error: Error`.
+      const err =
+        error ?? new Error('Streaming loader errored before settling.');
+      return value.present
+        ? { status: 'error', error: err, data: value.value }
+        : { status: 'error', error: err };
+    }
+  }
 }

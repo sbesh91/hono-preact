@@ -8,21 +8,24 @@ import * as preload from '../preload.js';
 import { env } from '../../is-browser.js';
 
 // The runner reads the SSR preload payload through this module; stub it so each
-// test controls whether a preloaded value is present (default: none).
+// test controls whether a preloaded value is present (default: absent).
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => null),
+  getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
 }));
 
-// State-machine tests for useLoaderRunner's data/loading fields. They drive the
-// runner DIRECTLY (no <Loader>/Suspense) so they assert the RETURNED state,
-// never a thrown reader: a Probe component captures each render's runner state
-// into a module-scoped variable.
+// State-machine tests for useLoaderRunner. They drive the runner DIRECTLY (no
+// <Loader>/Suspense) so they assert the RETURNED state, never a thrown reader: a
+// Probe component captures each render's runner state into a module-scoped
+// variable. The runner now returns the discriminated `view` union (plus the
+// `reloading` flag); these helpers read the same data/loading/error the old
+// scalar fields exposed STRUCTURALLY off the union, so the assertions are
+// unchanged in meaning.
 describe('useLoaderRunner exposes data/loading state without throwing', () => {
   const originalEnv = env.current;
   beforeEach(() => {
     env.current = 'browser';
-    vi.mocked(preload.getPreloadedData).mockReturnValue(null);
+    vi.mocked(preload.getPreloadedData).mockReturnValue({ present: false });
   });
   afterEach(() => {
     env.current = originalEnv;
@@ -40,6 +43,27 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
   type Data = { msg: string };
   type Captured = ReturnType<typeof useLoaderRunner<Data>>;
   let captured: Captured;
+
+  // Read the settled value off the rendered union (the `data`-bearing arms),
+  // mirroring the old `runner.data`. Cold-error / loading carry none.
+  const viewData = (c: Captured): Data | undefined =>
+    c.view.kind === 'render' && 'data' in c.view.state
+      ? c.view.state.data
+      : undefined;
+  // A fetch/stream-connect in flight: the cold `loading` arm or `revalidating`
+  // (the old `runner.loading`). A cold error is not loading.
+  const viewLoading = (c: Captured): boolean =>
+    c.view.kind === 'render' &&
+    (c.view.state.status === 'loading' ||
+      c.view.state.status === 'revalidating');
+  // The surfaced error (cold-error signal or the stale-error arm), mirroring the
+  // old `runner.error`.
+  const viewError = (c: Captured): Error | null =>
+    c.view.kind === 'coldError'
+      ? c.view.error
+      : c.view.kind === 'render' && c.view.state.status === 'error'
+        ? c.view.state.error
+        : null;
 
   // `loaderRef` (not `ref`): `ref` is a Preact-reserved prop and is intercepted
   // by the renderer rather than passed through to the component.
@@ -68,9 +92,9 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
 
     // Cold load in flight: no data yet, loading true. Reading the bridge reader
     // would throw the suspender; we assert the returned state instead.
-    expect(captured.data).toBeUndefined();
-    expect(captured.loading).toBe(true);
-    expect(captured.error).toBeNull();
+    expect(viewData(captured)).toBeUndefined();
+    expect(viewLoading(captured)).toBe(true);
+    expect(viewError(captured)).toBeNull();
 
     // coerceLoaderLocation is async, so the loader fn runs a microtask later;
     // wait for it before resolving (mirrors loader.test.tsx).
@@ -79,9 +103,9 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
       resolve({ msg: 'hello' });
     });
 
-    await waitFor(() => expect(captured.data).toEqual({ msg: 'hello' }));
-    expect(captured.loading).toBe(false);
-    expect(captured.error).toBeNull();
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'hello' }));
+    expect(viewLoading(captured)).toBe(false);
+    expect(viewError(captured)).toBeNull();
   });
 
   it('reload retains previous data while loading (stale-while-revalidate)', async () => {
@@ -109,26 +133,29 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     await act(async () => {
       resolveInitial({ msg: 'A' });
     });
-    await waitFor(() => expect(captured.data).toEqual({ msg: 'A' }));
-    expect(captured.loading).toBe(false);
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'A' }));
+    expect(viewLoading(captured)).toBe(false);
 
     // Reload with a pending fetch: data stays the PREVIOUS value, loading true.
     await act(async () => {
       captured.reload();
     });
-    expect(captured.loading).toBe(true);
-    expect(captured.data).toEqual({ msg: 'A' });
+    expect(viewLoading(captured)).toBe(true);
+    expect(viewData(captured)).toEqual({ msg: 'A' });
 
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
     await act(async () => {
       resolveReload({ msg: 'B' });
     });
-    await waitFor(() => expect(captured.data).toEqual({ msg: 'B' }));
-    expect(captured.loading).toBe(false);
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'B' }));
+    expect(viewLoading(captured)).toBe(false);
   });
 
   it('preloaded data is available immediately with loading false', () => {
-    vi.mocked(preload.getPreloadedData).mockReturnValue({ msg: 'preloaded' });
+    vi.mocked(preload.getPreloadedData).mockReturnValue({
+      present: true,
+      value: { msg: 'preloaded' },
+    });
     const fn = vi.fn(() => Promise.resolve({ msg: 'fetched' }));
     const ref = defineLoader<Data>(fn);
 
@@ -136,9 +163,9 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
 
     // SSR-preload path resolves synchronously: data present, never pending,
     // loading false. The fetch fn is not invoked for the initial value.
-    expect(captured.data).toEqual({ msg: 'preloaded' });
-    expect(captured.loading).toBe(false);
-    expect(captured.error).toBeNull();
+    expect(viewData(captured)).toEqual({ msg: 'preloaded' });
+    expect(viewLoading(captured)).toBe(false);
+    expect(viewError(captured)).toBeNull();
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -151,8 +178,8 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
 
     render(<Probe loaderRef={ref} />);
 
-    expect(captured.data).toEqual({ msg: 'cached' });
-    expect(captured.loading).toBe(false);
+    expect(viewData(captured)).toEqual({ msg: 'cached' });
+    expect(viewLoading(captured)).toBe(false);
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -171,9 +198,9 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
       resolve(undefined);
     });
     // Resolved to undefined: loading must clear (not stay stuck on the sentinel).
-    await waitFor(() => expect(captured.loading).toBe(false));
-    expect(captured.data).toBeUndefined();
-    expect(captured.error).toBeNull();
+    await waitFor(() => expect(viewLoading(captured)).toBe(false));
+    expect(viewData(captured)).toBeUndefined();
+    expect(viewError(captured)).toBeNull();
   });
 
   it('reloading is false on a cold load and true only during reload (review #5)', async () => {
@@ -196,24 +223,24 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     const ref = defineLoader<Data>(fn);
     render(<Probe loaderRef={ref} />);
     // Cold load in flight: loading true, reloading false.
-    expect(captured.loading).toBe(true);
+    expect(viewLoading(captured)).toBe(true);
     expect(captured.reloading).toBe(false);
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
     await act(async () => {
       resolveInitial({ msg: 'A' });
     });
-    await waitFor(() => expect(captured.data).toEqual({ msg: 'A' }));
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'A' }));
     expect(captured.reloading).toBe(false);
     // Explicit reload: reloading true.
     await act(async () => {
       captured.reload();
     });
     expect(captured.reloading).toBe(true);
-    expect(captured.loading).toBe(true);
+    expect(viewLoading(captured)).toBe(true);
     await act(async () => {
       resolveReload({ msg: 'B' });
     });
-    await waitFor(() => expect(captured.data).toEqual({ msg: 'B' }));
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'B' }));
     expect(captured.reloading).toBe(false);
   });
 });

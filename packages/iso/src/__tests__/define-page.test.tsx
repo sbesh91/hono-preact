@@ -12,7 +12,7 @@ import { HonoRequestContext } from '../internal/contexts.js';
 const fakeC = {} as Context;
 
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => null),
+  getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
 }));
 

@@ -2,7 +2,7 @@
 import { Component } from 'preact';
 import type { ComponentChildren } from 'preact';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/preact';
+import { render, screen, waitFor, cleanup, act } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
