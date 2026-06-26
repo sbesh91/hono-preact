@@ -49,13 +49,13 @@ const countLoader = serverLoaders.count;
 // reduce just returns the latest chunk.
 // Branch on `status === 'connecting'` for the pre-first-chunk affordance.
 const CountDisplay = countLoader.View<number>(
-  ({ data, status }) =>
-    status === 'connecting' ? (
+  (s) =>
+    s.status === 'connecting' ? (
       <p>Connecting...</p>
     ) : (
       <div>
-        <p>Count: {data}</p>
-        <p>Status: {status}</p>
+        <p>Count: {s.data}</p>
+        <p>Status: {s.status}</p>
       </div>
     ),
   {

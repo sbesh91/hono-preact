@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
-import type { StreamStatus } from 'hono-preact';
+import type { StreamState, StreamStatus } from 'hono-preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
 import type { TaskStatus } from '../../demo/data.js';
 import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
@@ -124,8 +124,23 @@ function Feed({
 // LoaderHost (Suspense + useId), so the bar hydrates cleanly inside the lazy
 // projects-shell layout (no orphan, no isBrowser guard). On SSR the loader
 // never runs and the fallback renders; the client connects and folds chunks.
+// The `.View` render fn, pulled out as a named export so the SSR regression
+// guard (ActivityBar.ssr.test.tsx) can drive the REAL render fn + Feed through
+// a real (keyed) live loader, exactly as ActivityBar does. `connecting` carries
+// no data (SSR and pre-first-chunk), so it MUST short-circuit to ConnectingBar:
+// Feed dereferences `events[0]`/`events.map`, so handing it `undefined` 500s the
+// SSR. Feed only ever sees a real accumulated `ActivityEvent[]` (open/closed/
+// error arms).
+export function renderActivityBar(s: StreamState<ActivityEvent[]>) {
+  return s.status === 'connecting' ? (
+    <ConnectingBar />
+  ) : (
+    <Feed events={s.data} status={s.status} />
+  );
+}
+
 export const ActivityBar = activityLoader.View<ActivityEvent[]>(
-  ({ data, status }) => <Feed events={data} status={status} />,
+  renderActivityBar,
   {
     initial: [],
     reduce: accumulateActivity,

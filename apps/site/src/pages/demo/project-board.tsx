@@ -8,7 +8,9 @@ import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
 const boardLoader = serverLoaders.default;
 
 const ProjectBoardPage: FunctionComponent = () => {
-  const data = boardLoader.useData();
+  const s = boardLoader.useData();
+  if (s.status === 'loading') return <BoardSkeleton />;
+  const data = s.data;
   if (!data) return <p class="p-6">Unknown project.</p>;
   const { project, tasks, users } = data;
   return (
@@ -26,8 +28,8 @@ const ProjectBoardPage: FunctionComponent = () => {
 };
 ProjectBoardPage.displayName = 'ProjectBoardPage';
 
-const ProjectBoardView = boardLoader.View(({ loading }) =>
-  loading ? <BoardSkeleton /> : <ProjectBoardPage />
+const ProjectBoardView = boardLoader.View((s) =>
+  s.status === 'loading' ? <BoardSkeleton /> : <ProjectBoardPage />
 );
 
 function BoardSkeleton() {

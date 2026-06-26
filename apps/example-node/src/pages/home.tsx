@@ -9,7 +9,9 @@ const homeLoader = serverLoaders.default;
 const countLoader = serverLoaders.count;
 
 const HomePage: FunctionComponent = () => {
-  const { message } = homeLoader.useData();
+  const s = homeLoader.useData();
+  if (s.status === 'loading') return <p>Loading...</p>;
+  const { message } = s.data;
   return (
     <section>
       <h1>example-node</h1>
@@ -26,11 +28,13 @@ HomePage.displayName = 'HomePage';
 // Accumulating live view: data is the latest count pushed over the channel.
 // Open two tabs and click Increment in one; both update live.
 const LiveCounter = countLoader.View<number>(
-  ({ data, status }) => {
+  (s) => {
     const inc = useAction(serverActions.increment);
+    // `connecting` carries no data; fall back to the initial count (0).
+    const count = s.status === 'connecting' ? 0 : s.data;
     return (
       <p>
-        Live count: <strong>{data}</strong> ({status}){' '}
+        Live count: <strong>{count}</strong> ({s.status}){' '}
         <button
           type="button"
           disabled={inc.pending}
@@ -173,8 +177,8 @@ const CursorsDemo: FunctionComponent = () => {
 };
 CursorsDemo.displayName = 'CursorsDemo';
 
-const HomeView = homeLoader.View(({ loading }) =>
-  loading ? <p>Loading...</p> : <HomePage />
+const HomeView = homeLoader.View((s) =>
+  s.status === 'loading' ? <p>Loading...</p> : <HomePage />
 );
 
 export default definePage(HomeView, {});

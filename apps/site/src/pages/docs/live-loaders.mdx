@@ -87,11 +87,11 @@ function Feed({
 // connection status as state, so the bar hydrates cleanly inside the layout.
 // Branch on `status === 'connecting'` for the pre-first-chunk affordance.
 const ActivityBar = activityLoader.View<ActivityEvent[]>(
-  ({ data, status }) =>
-    status === 'connecting' ? (
+  (s) =>
+    s.status === 'connecting' ? (
       <p>Connecting to activity...</p>
     ) : (
-      <Feed events={data} status={status} />
+      <Feed events={s.data} status={s.status} />
     ),
   {
     initial: [],
@@ -122,7 +122,7 @@ Persistent UI is expressed as a child of a layout. A layout stays mounted across
 Two pieces of the same loader API drive this pattern:
 
 - `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
-- `loader.View(render, { initial, reduce })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state and exposes a `status` field. `status === 'connecting'` on SSR and before the first chunk arrives; after the first chunk `status` is `'open'`. Branch on `status` inside the render function to show a connecting affordance.
+- `loader.View(render, { initial, reduce })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state, and the render function receives a `StreamState<Acc>` discriminated union to match on `status`. `status === 'connecting'` on SSR and before the first chunk arrives (this arm carries no data); after the first chunk `status` is `'open'`, with the accumulator on `data`. Switch on `status` inside the render function to show a connecting affordance.
 
 ## On Cloudflare
 
@@ -161,7 +161,7 @@ When the user navigates out of the layout's scope, the layout unmounts and the s
 
 ### No automatic reconnect on drop
 
-A live loader opens the stream once and does not auto-reconnect. If the connection drops mid-session (a network blip, a server restart, an idle proxy timeout), `status` becomes `'error'` or `'closed'` and stays there until the layout unmounts and remounts (scope exit and re-entry). To recover in place, branch on `status` and call `reload()` (for example, a "Reconnect" button shown when `status === 'error'`); `reload()` resets `data` to `initial` and re-opens the stream.
+A live loader opens the stream once and does not auto-reconnect. If the connection drops mid-session (a network blip, a server restart, an idle proxy timeout), `status` becomes `'error'` or `'closed'` and stays there until the layout unmounts and remounts (scope exit and re-entry). To recover in place, branch on `status` and call `reload()` from `useReload()` (for example, a "Reconnect" button shown when `status === 'error'`); `reload()` resets `data` to `initial` and re-opens the stream.
 
 ### Failure or close before the first chunk
 
@@ -181,16 +181,11 @@ All other `defineLoader` options (`params`, `cache`, `timeoutMs`, `use`) work th
 
 ### `loader.View(render, { initial, reduce })` (accumulating form)
 
-Passing `initial` and `reduce` selects the accumulating form of `.View`. `data` becomes the folded accumulator and the render args carry a `status`. Branch on `status === 'connecting'` to render the pre-first-chunk state.
+Passing `initial` and `reduce` selects the accumulating form of `.View`. The render function receives a `StreamState<Acc>` discriminated union; switch on `status` (`connecting | open | closed | error`). The `connecting` arm carries no data; the other arms carry the folded accumulator as `data`.
 
 ```ts
 loader.View<Acc>(
-  render: (args: {
-    data: Acc;
-    status: StreamStatus;
-    error: Error | null;
-    reload: () => void;
-  }) => ComponentChildren,
+  render: (args: StreamState<Acc>) => ComponentChildren,
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
@@ -209,14 +204,16 @@ loader.View<Acc>(
 | `reduce`        | `(acc: Acc, chunk: Serialize<T>) => Acc`                   | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order.                                                                         |
 | `errorFallback` | `ComponentChildren` or `(err, reset) => ComponentChildren` | Rendered if the stream errors before its first chunk (the initial-connect cold error), or if the render subtree throws. The function form receives the error and a `reset` to retry. |
 
-The `render` function receives:
+The render function receives a `StreamState<Acc>` discriminated union. Match on `status`:
 
-| Field    | Type            | Description                                                                                       |
-| -------- | --------------- | ------------------------------------------------------------------------------------------------- |
-| `data`   | `Acc`           | Current accumulated value. Starts as `initial`, updated after each chunk.                         |
-| `status` | `StreamStatus`  | Connection state: `'connecting'`, `'open'`, `'closed'`, or `'error'`.                             |
-| `error`  | `Error \| null` | Set when `status === 'error'`.                                                                    |
-| `reload` | `() => void`    | Resubscribe: aborts the current stream, resets `data` to `initial`, reconnects, and folds afresh. |
+| `status`       | Fields                      | When                                                                               |
+| -------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| `'connecting'` | (none)                      | SSR and before the first chunk arrives. No data yet.                               |
+| `'open'`       | `data: Acc`                 | The stream is live; `data` is the folded accumulator, updated after each chunk.    |
+| `'closed'`     | `data: Acc`                 | The stream ended cleanly after at least one chunk; `data` is the last accumulator. |
+| `'error'`      | `error: Error`, `data: Acc` | The stream errored after at least one chunk; `data` is the last accumulator.       |
+
+The imperative `reload()` (resubscribe: abort the current stream, reset `data` to `initial`, reconnect, and fold afresh) is read from `useReload()`, not passed as a render arg.
 
 `StreamStatus` values:
 

@@ -108,11 +108,11 @@ function Sidebar({
 }
 
 const ShellView = shellLoader.View<{ children: LayoutProps['children'] }>(
-  ({ data, loading, children }) =>
-    loading || !data ? (
+  (s) =>
+    s.status === 'loading' || !s.data ? (
       <div class="p-6 text-muted">Loading...</div>
     ) : (
-      <Sidebar data={data} children={children} />
+      <Sidebar data={s.data} children={s.children} />
     )
 );
 

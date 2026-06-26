@@ -9,8 +9,11 @@ const pingsLoader = serverLoaders.pings;
 // Cloudflare. There is no shared counter: publish() syncs the EVENT, not state,
 // so each tab keeps its own honest count (the reduce just counts arrivals).
 const LiveTally = pingsLoader.View<number>(
-  ({ data, status }) => {
+  (s) => {
     const ping = useAction(serverActions.ping);
+    // `connecting` carries no data; fall back to the initial tally (0) until
+    // the first chunk arrives.
+    const count = s.status === 'connecting' ? 0 : s.data;
     return (
       <div class="grid min-h-screen place-items-center bg-background px-4">
         <div class="w-full max-w-md rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm space-y-4 text-center">
@@ -19,16 +22,16 @@ const LiveTally = pingsLoader.View<number>(
             Open this page in a second tab and click Ping. Every open tab gets a
             live update, fanned out cross-isolate through the Durable Object.
           </p>
-          <p class="text-5xl font-bold text-foreground tabular-nums">{data}</p>
+          <p class="text-5xl font-bold text-foreground tabular-nums">{count}</p>
           <p class="text-xs text-muted">live updates received in this tab</p>
           <div class="flex items-center justify-center gap-2 text-sm text-muted">
             <span
               class={[
                 'inline-block w-2 h-2 rounded-full',
-                status === 'open' ? 'bg-green-500' : 'bg-amber-400',
+                s.status === 'open' ? 'bg-green-500' : 'bg-amber-400',
               ].join(' ')}
             />
-            <span>{status === 'open' ? 'Connected' : 'Connecting...'}</span>
+            <span>{s.status === 'open' ? 'Connected' : 'Connecting...'}</span>
           </div>
           <button
             type="button"
