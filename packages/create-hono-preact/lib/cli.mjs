@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { readdir, mkdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { spawn as realSpawn } from 'node:child_process';
-import readline from 'node:readline/promises';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
@@ -9,6 +8,8 @@ import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
 import { copyAgentGuidance } from './template.mjs';
 import { scaffold } from './scaffold.mjs';
+import { resolveOptions } from './resolve.mjs';
+import { clackPrompts, brandBanner } from './prompts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const templatesRoot = resolve(here, '..', 'templates');
@@ -18,8 +19,9 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   argv: string[],
  *   cwd: string,
  *   env: Record<string, string | undefined>,
+ *   isTTY?: boolean,
+ *   prompts?: import('./prompts.mjs').PromptAdapter,
  *   spawnFn?: typeof realSpawn,
- *   prompt?: (message: string) => Promise<string>,
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
@@ -27,8 +29,9 @@ export async function run({
   argv,
   cwd,
   env,
+  isTTY = false,
+  prompts = clackPrompts,
   spawnFn = realSpawn,
-  prompt = defaultPrompt,
 }) {
   const parsed = parseArgs(argv);
 
@@ -67,23 +70,20 @@ export async function run({
     return 2;
   }
 
-  let { targetDir } = parsed;
-  const adapter = parsed.adapter ?? 'cloudflare';
-  const ui = parsed.ui ?? false;
-  const install = parsed.install ?? true;
-  const git = parsed.git ?? true;
+  const interactive = Boolean(isTTY) && !parsed.yes;
+  if (interactive) prompts.intro(brandBanner);
 
-  if (!targetDir) {
-    const answer = (await prompt('Project directory name: ')).trim();
-    if (!answer) {
-      console.error('error: a project directory name is required');
-      return 1;
-    }
-    targetDir = answer;
+  /** @type {import('./resolve.mjs').ResolvedOptions} */
+  let options;
+  try {
+    options = await resolveOptions(parsed, { interactive, prompts });
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return 1;
   }
+  const { targetDir, adapter, ui, install, git, skipHints } = options;
 
   const targetPath = resolve(cwd, targetDir);
-
   try {
     const entries = await readdir(targetPath);
     if (entries.length > 0) {
@@ -91,32 +91,49 @@ export async function run({
       return 1;
     }
   } catch (err) {
-    if (err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT') {
-      await mkdir(targetPath, { recursive: true });
-    } else {
+    if (!(err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT')) {
       throw err;
     }
+    // Directory doesn't exist yet; scaffold() will create it.
   }
 
+  const spin = interactive ? prompts.spinner() : null;
+  spin?.start('Scaffolding project...');
   await scaffold(targetPath, { adapter, ui }, templatesRoot);
+  spin?.stop('Project scaffolded');
 
   const pm = detectPackageManager(env);
+  const childStdio = interactive ? 'ignore' : 'inherit';
 
   if (install) {
-    const installExit = await runChild(spawnFn, pm, ['install'], targetPath);
-    if (installExit !== 0) return 1;
+    spin?.start('Installing dependencies...');
+    const code = await runChild(spawnFn, pm, ['install'], targetPath, childStdio);
+    spin?.stop('Dependencies installed');
+    if (code !== 0) return 1;
   }
 
   if (git) {
-    const gitExit = await runChild(spawnFn, 'git', ['init'], targetPath);
-    if (gitExit !== 0) {
+    const code = await runChild(spawnFn, 'git', ['init'], targetPath, childStdio);
+    if (code !== 0) {
       console.warn(
         'warning: git init failed (is git installed?); continuing without git'
       );
     }
   }
 
-  printNextSteps(targetDir, pm, install);
+  if (!skipHints) {
+    if (interactive) {
+      const dev = pm === 'npm' ? 'npm run dev' : `${pm} dev`;
+      const lines = [`cd ${targetDir}`];
+      if (!install) lines.push(pm === 'npm' ? 'npm install' : `${pm} install`);
+      lines.push(dev);
+      prompts.note(lines.map((l) => `  ${l}`).join('\n'), 'Next steps');
+    } else {
+      printNextSteps(targetDir, pm, install);
+    }
+  }
+
+  if (interactive) prompts.outro(pc.green("You're all set!"));
   return 0;
 }
 
@@ -125,11 +142,12 @@ export async function run({
  * @param {string} cmd
  * @param {string[]} args
  * @param {string} cwd
+ * @param {import('node:child_process').StdioOptions} [stdio]
  * @returns {Promise<number>}
  */
-function runChild(spawnFn, cmd, args, cwd) {
+function runChild(spawnFn, cmd, args, cwd, stdio = 'inherit') {
   return new Promise((res) => {
-    const child = spawnFn(cmd, args, { cwd, stdio: 'inherit' });
+    const child = spawnFn(cmd, args, { cwd, stdio });
     let settled = false;
     const settle = (/** @type {number} */ code) => {
       if (settled) return;
@@ -163,22 +181,6 @@ function printNextSteps(targetDir, pm, installed) {
   }
   console.log(`  ${dev}`);
   console.log('');
-}
-
-/**
- * @param {string} message
- * @returns {Promise<string>}
- */
-async function defaultPrompt(message) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  try {
-    return await rl.question(message);
-  } finally {
-    rl.close();
-  }
 }
 
 function printHelp() {

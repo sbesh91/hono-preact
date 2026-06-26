@@ -9,6 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../lib/cli.mjs';
+import type { PromptAdapter } from '../lib/prompts.mjs';
 
 let workDir: string;
 beforeEach(() => {
@@ -313,47 +314,6 @@ describe('run() — git step', () => {
   });
 });
 
-describe('run() — prompt for target dir', () => {
-  it('prompts when target dir is missing and uses the answer', async () => {
-    const calls: string[] = [];
-    const fakeSpawn = () => ({
-      on: (e: string, cb: (c: number) => void) => {
-        if (e === 'close') queueMicrotask(() => cb(0));
-      },
-    });
-    const fakePrompt = async (msg: string) => {
-      calls.push(msg);
-      return 'prompted-app';
-    };
-
-    const code = await run({
-      argv: ['--adapter=node', '--no-install', '--no-git'],
-      cwd: workDir,
-      env: {},
-      spawnFn: fakeSpawn,
-      prompt: fakePrompt,
-    });
-
-    expect(code).toBe(0);
-    expect(calls.length).toBe(1);
-    expect(calls[0].toLowerCase()).toContain('project');
-    expect(existsSync(join(workDir, 'prompted-app', 'package.json'))).toBe(
-      true
-    );
-  });
-
-  it('returns 1 when the user provides an empty answer', async () => {
-    const fakePrompt = async () => '';
-    const code = await run({
-      argv: ['--adapter=node', '--no-install', '--no-git'],
-      cwd: workDir,
-      env: {},
-      prompt: fakePrompt,
-    });
-    expect(code).toBe(1);
-  });
-});
-
 describe('run() — help and version', () => {
   it('--help returns 0 and prints usage', async () => {
     const lines: string[] = [];
@@ -461,5 +421,71 @@ describe('run() — add-agents', () => {
     });
     expect(code).toBe(0);
     expect(readFileSync(join(workDir, 'AGENTS.md'), 'utf8')).not.toBe('OLD');
+  });
+});
+
+function fakePrompts(answers: {
+  dir?: string;
+  adapter?: 'cloudflare' | 'node';
+  ui?: boolean;
+  install?: boolean;
+  git?: boolean;
+}) {
+  const calls = { text: 0, selectAdapter: 0, confirm: 0 };
+  return {
+    calls,
+    prompts: {
+      text: async () => {
+        calls.text++;
+        return answers.dir ?? 'prompted-app';
+      },
+      selectAdapter: async () => {
+        calls.selectAdapter++;
+        return answers.adapter ?? ('cloudflare' as const);
+      },
+      confirm: async ({ message }: { message: string }) => {
+        calls.confirm++;
+        if (/ui|components/i.test(message)) return answers.ui ?? false;
+        if (/install/i.test(message)) return answers.install ?? true;
+        return answers.git ?? true;
+      },
+      intro: () => {},
+      outro: () => {},
+      note: () => {},
+      spinner: () => ({ start: () => {}, stop: () => {} }),
+    } satisfies PromptAdapter,
+  };
+}
+
+describe('run() — interactive wizard', () => {
+  it('prompts for dir + adapter + ui and scaffolds a node+ui app', async () => {
+    const fake = fakePrompts({ dir: 'wiz-app', adapter: 'node', ui: true });
+    const code = await run({
+      argv: ['--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: true,
+      prompts: fake.prompts,
+    });
+    expect(code).toBe(0);
+    const target = join(workDir, 'wiz-app');
+    expect(existsSync(join(target, 'wrangler.jsonc'))).toBe(false); // node
+    const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
+    expect(pkg.dependencies).toHaveProperty('hono-preact-ui'); // ui on
+    expect(fake.calls.text).toBe(1); // dir prompted
+    expect(fake.calls.selectAdapter).toBe(1); // adapter prompted
+  });
+
+  it('does not prompt for a value supplied by a flag', async () => {
+    const fake = fakePrompts({ dir: 'flagged' });
+    await run({
+      argv: ['flagged', '--adapter=cloudflare', '--no-ui', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: true,
+      prompts: fake.prompts,
+    });
+    expect(fake.calls.text).toBe(0); // dir came from positional
+    expect(fake.calls.selectAdapter).toBe(0); // adapter from flag
   });
 });
