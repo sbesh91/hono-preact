@@ -215,3 +215,123 @@ describe('streaming loader: client-driven', () => {
     expect((lastError as Error | null)?.message).toBe('mid-stream');
   });
 });
+
+/**
+ * Build a mock SSE Response that emits one chunk and stays OPEN (never closes
+ * its controller) so the loader settles on the `open` status rather than racing
+ * to `closed`. Returns a `close()` to end it cleanly after the assertion.
+ */
+function openSseResponse(chunk: string): {
+  res: Response;
+  close: () => void;
+} {
+  const enc = new TextEncoder();
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      ctrl = controller;
+      controller.enqueue(enc.encode(chunk));
+      // Intentionally left open: the loader should report `open`, not `closed`.
+    },
+  });
+  return {
+    res: new Response(stream, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }),
+    close: () => ctrl.close(),
+  };
+}
+
+// Re-review of #192 (DEEP FIX): the `stream` finding. `toStreamState` keyed its
+// connecting/open/closed decision on `data === undefined`, so a streaming
+// accumulator that is legitimately `undefined` was trapped on `connecting` even
+// after the stream went `open` / `closed`. These render through the real
+// accumulating `.View` and FAIL against the pre-fix `data === undefined` guard.
+describe('streaming loader: undefined accumulator (re-review #192 deep fix)', () => {
+  it('shows the open arm (not connecting) for an open stream whose accumulator is undefined', async () => {
+    const { res, close } = openSseResponse('data: {"count":1}\n\n');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res));
+
+    const MODULE_KEY = 'test-stream-open-undef';
+    const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
+      __moduleKey: MODULE_KEY,
+      live: true,
+    });
+
+    const LiveView = ref.View(
+      (s) => {
+        if (s.status === 'open')
+          return <p data-testid="out">open:{String(s.data)}</p>;
+        if (s.status === 'closed')
+          return <p data-testid="out">closed:{String(s.data)}</p>;
+        if (s.status === 'error') return <p data-testid="out">error</p>;
+        return <p data-testid="out">connecting</p>;
+      },
+      { initial: undefined, reduce: () => undefined }
+    );
+
+    const LOC = { path: '/', pathParams: {}, searchParams: {} };
+    render(
+      <LocationProvider>
+        <RouteLocationsProvider moduleKey={MODULE_KEY} location={LOC}>
+          <LiveView />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    // Before the first chunk: connecting (no data yet).
+    expect(screen.getByTestId('out')).toHaveTextContent('connecting');
+
+    // After the chunk folds the accumulator to `undefined` and the stream stays
+    // open, the view is the `open` arm with `data === undefined`, NOT connecting.
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('open:undefined')
+    );
+
+    await act(async () => {
+      close();
+    });
+  });
+
+  it('shows the closed arm (not connecting) when a stream with an undefined accumulator ends', async () => {
+    // One chunk (folded to `undefined`) then the stream closes. After `onEnd` the
+    // status is `closed` with `data === undefined`; that must surface as `closed`,
+    // not `connecting`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(dripSseResponse(['data: {"count":1}\n\n']))
+    );
+
+    const MODULE_KEY = 'test-stream-closed-undef';
+    const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
+      __moduleKey: MODULE_KEY,
+      live: true,
+    });
+
+    const LiveView = ref.View(
+      (s) => {
+        if (s.status === 'closed')
+          return <p data-testid="out">closed:{String(s.data)}</p>;
+        if (s.status === 'open')
+          return <p data-testid="out">open:{String(s.data)}</p>;
+        if (s.status === 'error') return <p data-testid="out">error</p>;
+        return <p data-testid="out">connecting</p>;
+      },
+      { initial: undefined, reduce: () => undefined }
+    );
+
+    const LOC = { path: '/', pathParams: {}, searchParams: {} };
+    render(
+      <LocationProvider>
+        <RouteLocationsProvider moduleKey={MODULE_KEY} location={LOC}>
+          <LiveView />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('closed:undefined')
+    );
+  });
+});

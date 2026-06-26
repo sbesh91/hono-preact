@@ -811,3 +811,183 @@ describe('stale-while-error for preloaded loaders on stream error (R1R2 review)'
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
 });
+
+// Re-review of #192 (DEEP FIX): structural value-presence edge cases for loaders
+// whose value is legitimately `undefined` / `null`. These render through the
+// `<Loader>` boundary + `loader.useData()` (the same projected union `.View`
+// reads), NOT the runner directly, so they exercise the projection seam
+// end-to-end. Each FAILS against the pre-fix `data === undefined` heuristic.
+describe('undefined/null loader values (re-review #192 deep fix)', () => {
+  // `settled` finding: a loader resolves to `undefined`, then `reload()` REJECTS.
+  // The reject must surface as the IN-VIEW `error` arm (stale-while-error over
+  // the settled-`undefined` value), NOT a COLD error that unwinds the page to
+  // `errorFallback`. (Fails pre-fix: a settled-`undefined` reads as `!settled`,
+  // so the reload error routes to the boundary and unwinds.)
+  it('keeps the in-view error arm (no page unwind) when a reload rejects over a settled-undefined value', async () => {
+    let resolveInitial!: (v: string | undefined) => void;
+    let rejectReload!: (e: Error) => void;
+    const fn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<string | undefined>((r) => {
+            resolveInitial = r;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<string | undefined>((_r, rej) => {
+            rejectReload = rej;
+          })
+      );
+    const ref = defineLoader<string | undefined>(fn);
+
+    function Child() {
+      const s = ref.useData();
+      const { reload } = useReload();
+      let body: string;
+      if (s.status === 'loading') body = 'loading';
+      else if (s.status === 'revalidating') body = 'reval';
+      else if (s.status === 'error') body = `err:${s.error.message}`;
+      else body = `done:${String(s.data)}`;
+      return (
+        <div>
+          <span data-testid="out">{body}</span>
+          <button data-testid="reload" onClick={reload}>
+            reload
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <LocationProvider>
+        <Loader
+          loader={ref}
+          location={loc}
+          errorFallback={() => <span data-testid="fallback">FALLBACK</span>}
+        >
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveInitial(undefined);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('done:undefined')
+    );
+
+    // Reload, then reject it. The rejection must NOT unwind the page.
+    await act(async () => {
+      screen.getByTestId('reload').click();
+    });
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      rejectReload(new Error('reload boom'));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('err:reload boom')
+    );
+    expect(screen.queryByTestId('fallback')).toBeNull();
+  });
+
+  // `reload` finding: a reload over a settled-`undefined` value must enter
+  // `revalidating` (keeping the prior view) while the reload is pending, NOT the
+  // cold `loading` skeleton. (Fails pre-fix: `prior !== undefined` is false for a
+  // settled-`undefined`, so the reload drops to a cold `loading`.)
+  it('enters revalidating (not cold loading) on reload over a settled-undefined value', async () => {
+    let resolveInitial!: (v: string | undefined) => void;
+    const fn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<string | undefined>((r) => {
+            resolveInitial = r;
+          })
+      )
+      .mockImplementationOnce(() => new Promise<string | undefined>(() => {}));
+    const ref = defineLoader<string | undefined>(fn);
+
+    function Child() {
+      const s = ref.useData();
+      const { reload } = useReload();
+      let body: string;
+      if (s.status === 'loading') body = 'loading';
+      else if (s.status === 'revalidating') body = 'reval';
+      else if (s.status === 'success') body = `done:${String(s.data)}`;
+      else body = `other:${s.status}`;
+      return (
+        <div>
+          <span data-testid="out">{body}</span>
+          <button data-testid="reload" onClick={reload}>
+            reload
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveInitial(undefined);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('done:undefined')
+    );
+
+    // Reload pending: the prior (settled-undefined) view is held as
+    // `revalidating`, not replaced by the cold loading skeleton.
+    await act(async () => {
+      screen.getByTestId('reload').click();
+    });
+    expect(screen.getByTestId('out')).toHaveTextContent('reval');
+  });
+
+  // `preload` finding: a PRESENT preload value of `null` must be adopted on the
+  // first client render (`success` arm, `data === null`) WITHOUT a refetch. (Fails
+  // pre-fix: the `!== null` heuristic cannot distinguish a baked `null` from an
+  // absent preload, so the wrapper object is adopted as the value / a refetch
+  // fires.)
+  it('adopts a present preload value of null on hydration without refetching', async () => {
+    vi.mocked(getPreloadedData).mockReturnValueOnce({
+      present: true,
+      value: null,
+    });
+    const fn = vi.fn(() => Promise.resolve('fetched'));
+    const ref = defineLoader<string | null>(fn);
+
+    function Child() {
+      const s = ref.useData();
+      let body: string;
+      if (s.status === 'loading') body = 'loading';
+      else if (s.status === 'success')
+        body = s.data === null ? 'success:null' : `success:${String(s.data)}`;
+      else body = `other:${s.status}`;
+      return <span data-testid="out">{body}</span>;
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('success:null')
+    );
+    expect(fn).not.toHaveBeenCalled();
+  });
+});
