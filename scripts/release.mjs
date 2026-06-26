@@ -26,8 +26,11 @@ const readPkg = (rel) =>
 
 const framework = readPkg('packages/hono-preact/package.json');
 const cli = readPkg('packages/create-hono-preact/package.json');
-const tplCf = readPkg('packages/create-hono-preact/templates/cloudflare/package.json');
-const tplNode = readPkg('packages/create-hono-preact/templates/node/package.json');
+// The hono-preact pin lives once in the base template fragment; the adapter
+// and feature overlays do not carry it. (The scaffolder deep-merges fragments.)
+const tplBase = readPkg(
+  'packages/create-hono-preact/templates/base/package.json'
+);
 
 const version = framework.version;
 const [major, minor] = version.split('.');
@@ -37,11 +40,8 @@ const errors = [];
 if (cli.version !== version) {
   errors.push(`create-hono-preact version ${cli.version} != hono-preact ${version}`);
 }
-if (tplCf.dependencies['hono-preact'] !== expectedPin) {
-  errors.push(`templates/cloudflare hono-preact pin ${tplCf.dependencies['hono-preact']} != ${expectedPin}`);
-}
-if (tplNode.dependencies['hono-preact'] !== expectedPin) {
-  errors.push(`templates/node hono-preact pin ${tplNode.dependencies['hono-preact']} != ${expectedPin}`);
+if (tplBase.dependencies['hono-preact'] !== expectedPin) {
+  errors.push(`templates/base hono-preact pin ${tplBase.dependencies['hono-preact']} != ${expectedPin}`);
 }
 if (errors.length) {
   console.error('Release blocked — fix version mismatches first:');
