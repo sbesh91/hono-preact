@@ -9,6 +9,7 @@ import { useReload } from '../../reload-context.js';
 import { LoaderDataContext } from '../contexts.js';
 import { useContext } from 'preact/hooks';
 import { env } from '../../is-browser.js';
+import { getPreloadedData } from '../preload.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
@@ -519,5 +520,212 @@ describe('LoaderRef.useData(): discriminated LoaderState (review #1,#2)', () => 
     );
     await screen.findByText('Dune');
     expect(seenUseData).toEqual({ status: 'success', data: { title: 'Dune' } });
+  });
+});
+
+// End-to-end regressions the high-effort review of #192 found. These render
+// through the `<Loader>` boundary and consume the projected union via
+// `loader.useData()` (the same context union `loader.View` reads), so they
+// exercise the projection seam end-to-end, not the runner in isolation.
+describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
+  // #1: a loader that legitimately resolves to `undefined` must render the
+  // `success` arm, not collapse back to `loading` forever. The old projection
+  // keyed on `data === undefined`, which cannot tell "cold, no value" from
+  // "settled to undefined" and so reported `loading` indefinitely.
+  it('renders success (not loading-forever) when the loader resolves to undefined', async () => {
+    let resolve!: (v: string | undefined) => void;
+    const fn = vi.fn(
+      () =>
+        new Promise<string | undefined>((r) => {
+          resolve = r;
+        })
+    );
+    const ref = defineLoader<string | undefined>(fn);
+
+    function Child() {
+      const s = ref.useData();
+      if (s.status === 'loading') return <span data-testid="out">loading</span>;
+      if (s.status === 'success')
+        return <span data-testid="out">done:{String(s.data)}</span>;
+      return <span data-testid="out">other:{s.status}</span>;
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolve(undefined);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('done:undefined')
+    );
+  });
+
+  // #2: a reload over a value that was hydrated from an SSR preload must enter
+  // `revalidating` (so consumers get refresh feedback) while keeping the prior
+  // data visible. The old `runReload` read only `phaseValue(p)` as the prior,
+  // which is `undefined` for a preload-hydrated loader (its phase is still
+  // `loading`), so it fell back to a cold `loading` and never revalidated.
+  it('enters revalidating (keeping prior data) on reload over an SSR preload', async () => {
+    vi.mocked(getPreloadedData).mockReturnValueOnce({ n: 1 });
+    let resolveReload: (v: { n: number }) => void = () => {};
+    const fn = vi.fn(
+      () =>
+        new Promise<{ n: number }>((r) => {
+          resolveReload = r;
+        })
+    );
+    const ref = defineLoader<{ n: number }>(fn);
+
+    function Child() {
+      const s = ref.useData();
+      const { reload } = useReload();
+      let body: string;
+      if (s.status === 'revalidating') body = `reval:${JSON.stringify(s.data)}`;
+      else if (s.status === 'loading') body = 'loading';
+      else if (s.status === 'success') body = `done:${JSON.stringify(s.data)}`;
+      else body = `other:${s.status}`;
+      return (
+        <div>
+          <span data-testid="out">{body}</span>
+          <button data-testid="reload" onClick={reload}>
+            reload
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    // Preload hydrates synchronously: success with the preloaded value, and the
+    // fetch fn is not invoked for the initial value.
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('done:{"n":1}')
+    );
+    expect(fn).not.toHaveBeenCalled();
+
+    // Reload with the next fetch left pending: revalidating, prior data kept.
+    await act(async () => {
+      screen.getByTestId('reload').click();
+    });
+    expect(screen.getByTestId('out')).toHaveTextContent('reval:{"n":1}');
+
+    // Settle cleanly so no promise dangles past the test.
+    await act(async () => {
+      resolveReload({ n: 2 });
+    });
+  });
+
+  // #3: when a reload over a preload-hydrated value resolves to `undefined`,
+  // the view must show the NEW undefined, not the stale prior value. The old
+  // derivation fell back to `syncDataRef.current` whenever the settled value
+  // was `undefined`, masking a real resolve-to-undefined as stale data.
+  it('shows the new undefined value (not stale preload) when a reload resolves to undefined', async () => {
+    vi.mocked(getPreloadedData).mockReturnValueOnce({ n: 1 });
+    let resolveReload: (v: { n: number } | undefined) => void = () => {};
+    const fn = vi.fn(
+      () =>
+        new Promise<{ n: number } | undefined>((r) => {
+          resolveReload = r;
+        })
+    );
+    const ref = defineLoader<{ n: number } | undefined>(fn);
+
+    function Child() {
+      const s = ref.useData();
+      const { reload } = useReload();
+      let body: string;
+      if (s.status === 'revalidating') body = 'reval';
+      else if (s.status === 'loading') body = 'loading';
+      else if (s.status === 'success')
+        body = `done:${s.data === undefined ? 'undefined' : JSON.stringify(s.data)}`;
+      else body = `other:${s.status}`;
+      return (
+        <div>
+          <span data-testid="out">{body}</span>
+          <button data-testid="reload" onClick={reload}>
+            reload
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('done:{"n":1}')
+    );
+
+    await act(async () => {
+      screen.getByTestId('reload').click();
+    });
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveReload(undefined);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('done:undefined')
+    );
+  });
+
+  // #7: `useData()` must hand back a referentially stable object across
+  // re-renders that do not change the loader state, so memoized consumers do
+  // not see a "new" value every render. The old `useData()` rebuilt a fresh
+  // union object on every call.
+  it('useData() is referentially stable across re-renders with unchanged state', async () => {
+    const ref = defineLoader<{ v: number }>(async () => ({ v: 1 }));
+    const seen: unknown[] = [];
+    function Child() {
+      const s = ref.useData();
+      seen.push(s);
+      const [, setN] = useState(0);
+      return (
+        <button data-testid="bump" onClick={() => setN((n) => n + 1)}>
+          bump
+        </button>
+      );
+    }
+
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    // Settle into success (initial render is loading, then a success render).
+    await waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(2));
+    const before = seen.length;
+
+    // Force a re-render via unrelated child state; loader state is unchanged.
+    await act(async () => {
+      screen.getByTestId('bump').click();
+    });
+    expect(seen.length).toBeGreaterThan(before);
+
+    const last = seen[seen.length - 1];
+    const prev = seen[seen.length - 2];
+    expect(Object.is(last, prev)).toBe(true);
   });
 });
