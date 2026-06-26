@@ -27,16 +27,16 @@ npm create hono-preact my-app -- --adapter node --ui --yes
 
 ### Options
 
-| Flag | Description |
-| --- | --- |
-| `--adapter <cloudflare\|node>` | Choose the deployment target (prompted otherwise). |
-| `--ui`, `--no-ui` | Include or exclude `hono-preact-ui` components. |
-| `--no-install` | Skip the dependency install step. |
-| `--no-git` | Skip `git init`. |
-| `-y`, `--yes` | Accept defaults for anything not specified (no prompts). |
-| `--skip-hints` | Suppress the "Next steps" note. |
-| `--version`, `-v` | Print the CLI version. |
-| `--help`, `-h` | Print usage. |
+| Flag                           | Description                                              |
+| ------------------------------ | -------------------------------------------------------- |
+| `--adapter <cloudflare\|node>` | Choose the deployment target (prompted otherwise).       |
+| `--ui`, `--no-ui`              | Include or exclude `hono-preact-ui` components.          |
+| `--no-install`                 | Skip the dependency install step.                        |
+| `--no-git`                     | Skip `git init`.                                         |
+| `-y`, `--yes`                  | Accept defaults for anything not specified (no prompts). |
+| `--skip-hints`                 | Suppress the "Next steps" note.                          |
+| `--version`, `-v`              | Print the CLI version.                                   |
+| `--help`, `-h`                 | Print usage.                                             |
 
 > In a non-interactive shell (CI, piped input), the CLI never prompts: it uses
 > your flags plus defaults (adapter `cloudflare`, UI off, install on, git on),
