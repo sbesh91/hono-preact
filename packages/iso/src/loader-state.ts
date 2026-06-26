@@ -24,7 +24,8 @@ export function toLoaderState<T>(
   loading: boolean,
   error: Error | null
 ): LoaderState<T> {
-  if (error !== null && data !== undefined) return { status: 'error', error, data };
+  if (error !== null && data !== undefined)
+    return { status: 'error', error, data };
   if (data === undefined) return { status: 'loading' };
   if (loading) return { status: 'revalidating', data };
   return { status: 'success', data };
