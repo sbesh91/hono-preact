@@ -8,6 +8,7 @@ export interface PromptAdapter {
   confirm(opts: { message: string; initialValue?: boolean }): Promise<boolean>;
   intro(message: string): void;
   outro(message: string): void;
+  cancel(message: string): void;
   note(message: string, title?: string): void;
   spinner(): { start(message: string): void; stop(message: string, code?: number): void };
 }

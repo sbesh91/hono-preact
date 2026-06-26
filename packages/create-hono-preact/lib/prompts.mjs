@@ -20,6 +20,7 @@ function guard(value) {
 export const clackPrompts = {
   intro: (message) => clack.intro(message),
   outro: (message) => clack.outro(message),
+  cancel: (message) => clack.cancel(message),
   note: (message, title) => clack.note(message, title),
   spinner: () => clack.spinner(),
   text: async (opts) => guard(await clack.text(opts)),

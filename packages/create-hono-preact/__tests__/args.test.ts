@@ -46,6 +46,9 @@ describe('parseArgs', () => {
   it('rejects an unknown adapter', () => {
     const r = parseArgs(['my-app', '--adapter=deno']);
     expect(r.kind).toBe('error');
+    if (r.kind === 'error') {
+      expect(r.message).toMatch(/unknown adapter.*deno/i);
+    }
   });
 
   it('--ui sets ui true, --no-ui sets ui false', () => {
@@ -72,8 +75,16 @@ describe('parseArgs', () => {
   });
 
   it('rejects unknown flags and extra positionals', () => {
-    expect(parseArgs(['a', '--bogus']).kind).toBe('error');
-    expect(parseArgs(['a', 'b']).kind).toBe('error');
+    const flag = parseArgs(['a', '--bogus']);
+    expect(flag.kind).toBe('error');
+    if (flag.kind === 'error') {
+      expect(flag.message).toMatch(/unknown flag.*--bogus/i);
+    }
+    const positional = parseArgs(['a', 'b']);
+    expect(positional.kind).toBe('error');
+    if (positional.kind === 'error') {
+      expect(positional.message).toMatch(/unexpected/i);
+    }
   });
 });
 

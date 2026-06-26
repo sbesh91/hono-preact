@@ -431,7 +431,7 @@ function fakePrompts(answers: {
   install?: boolean;
   git?: boolean;
 }) {
-  const calls = { text: 0, selectAdapter: 0, confirm: 0 };
+  const calls = { text: 0, selectAdapter: 0, confirm: 0, cancel: 0 };
   return {
     calls,
     prompts: {
@@ -451,6 +451,9 @@ function fakePrompts(answers: {
       },
       intro: () => {},
       outro: () => {},
+      cancel: () => {
+        calls.cancel++;
+      },
       note: () => {},
       spinner: () => ({ start: () => {}, stop: () => {} }),
     } satisfies PromptAdapter,
@@ -519,9 +522,27 @@ describe('run() — interactive wizard', () => {
       spawnFn: failingSpawn as never,
     });
     expect(code).toBe(1);
-    expect(stops.some((s) => s.code === 1)).toBe(true);
+    expect(stops.some((s) => s.code === 2)).toBe(true);
     expect(stops.some((s) => s.message === 'Dependencies installed')).toBe(
       false
     );
+  });
+
+  it('interactive: a non-empty flag-supplied target dir cancels and returns 1', async () => {
+    const target = join(workDir, 'occupied');
+    const fsp = await import('node:fs/promises');
+    await fsp.mkdir(target);
+    await fsp.writeFile(join(target, 'keep.txt'), 'x');
+    const fake = fakePrompts({ dir: 'occupied' });
+    const code = await run({
+      argv: ['occupied', '--adapter=node', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: true,
+      prompts: fake.prompts,
+    });
+    expect(code).toBe(1);
+    expect(fake.calls.text).toBe(0); // dir came from the positional, not a prompt
+    expect(fake.calls.cancel).toBe(1); // clack frame closed via cancel
   });
 });

@@ -9,6 +9,11 @@ export interface ResolvedOptions {
   skipHints: boolean;
 }
 
+export function validateDirName(
+  value: string,
+  cwd: string
+): string | undefined;
+
 export function resolveOptions(
   parsed: {
     targetDir?: string;
@@ -18,5 +23,5 @@ export function resolveOptions(
     git?: boolean;
     skipHints?: boolean;
   },
-  ctx: { interactive: boolean; prompts: PromptAdapter }
+  ctx: { interactive: boolean; prompts: PromptAdapter; cwd: string }
 ): Promise<ResolvedOptions>;

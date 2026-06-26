@@ -1,5 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { resolveOptions } from '../lib/resolve.mjs';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { resolveOptions, validateDirName } from '../lib/resolve.mjs';
 
 function stubPrompts(overrides = {}) {
   return {
@@ -8,6 +11,7 @@ function stubPrompts(overrides = {}) {
     confirm: vi.fn(async () => true),
     intro: vi.fn(),
     outro: vi.fn(),
+    cancel: vi.fn(),
     note: vi.fn(),
     spinner: () => ({ start: vi.fn(), stop: vi.fn() }),
     ...overrides,
@@ -15,13 +19,14 @@ function stubPrompts(overrides = {}) {
 }
 
 const base = { yes: false, skipHints: false };
+const cwd = tmpdir();
 
 describe('resolveOptions — non-interactive', () => {
   it('applies defaults and never prompts', async () => {
     const prompts = stubPrompts();
     const opts = await resolveOptions(
       { ...base, targetDir: 'app' },
-      { interactive: false, prompts }
+      { interactive: false, prompts, cwd }
     );
     expect(opts).toEqual({
       targetDir: 'app',
@@ -40,7 +45,7 @@ describe('resolveOptions — non-interactive', () => {
     await expect(
       resolveOptions(
         { ...base },
-        { interactive: false, prompts: stubPrompts() }
+        { interactive: false, prompts: stubPrompts(), cwd }
       )
     ).rejects.toThrow(/project directory is required/i);
   });
@@ -55,7 +60,7 @@ describe('resolveOptions — non-interactive', () => {
         install: false,
         git: false,
       },
-      { interactive: false, prompts: stubPrompts() }
+      { interactive: false, prompts: stubPrompts(), cwd }
     );
     expect(opts).toMatchObject({
       adapter: 'node',
@@ -71,7 +76,7 @@ describe('resolveOptions — interactive', () => {
     const prompts = stubPrompts();
     const opts = await resolveOptions(
       { ...base, adapter: 'cloudflare' }, // adapter supplied; dir/ui/install/git prompted
-      { interactive: true, prompts }
+      { interactive: true, prompts, cwd }
     );
     expect(prompts.text).toHaveBeenCalledTimes(1); // dir
     expect(prompts.selectAdapter).not.toHaveBeenCalled(); // adapter came from flag
@@ -84,5 +89,33 @@ describe('resolveOptions — interactive', () => {
       git: true,
       skipHints: false,
     });
+  });
+});
+
+describe('validateDirName', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'chp-validate-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('rejects an empty or whitespace-only name', () => {
+    expect(validateDirName('', dir)).toMatch(/required/i);
+    expect(validateDirName('   ', dir)).toMatch(/required/i);
+  });
+
+  it('rejects an existing non-empty directory', () => {
+    mkdirSync(join(dir, 'occupied'));
+    writeFileSync(join(dir, 'occupied', 'keep.txt'), 'x');
+    expect(validateDirName('occupied', dir)).toMatch(/not empty/i);
+  });
+
+  it('accepts a fresh name', () => {
+    expect(validateDirName('brand-new-app', dir)).toBeUndefined();
+  });
+
+  it('accepts an existing empty directory', () => {
+    mkdirSync(join(dir, 'empty-existing'));
+    expect(validateDirName('empty-existing', dir)).toBeUndefined();
   });
 });

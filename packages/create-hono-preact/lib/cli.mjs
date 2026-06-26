@@ -76,7 +76,7 @@ export async function run({
   /** @type {import('./resolve.mjs').ResolvedOptions} */
   let options;
   try {
-    options = await resolveOptions(parsed, { interactive, prompts });
+    options = await resolveOptions(parsed, { interactive, prompts, cwd });
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
@@ -87,7 +87,13 @@ export async function run({
   try {
     const entries = await readdir(targetPath);
     if (entries.length > 0) {
-      console.error(`error: target directory '${targetDir}' is not empty`);
+      // The interactive prompt already validates a prompted dir; this still
+      // guards a flag-supplied dir, so close the clack frame cleanly there.
+      if (interactive) {
+        prompts.cancel(`Target directory '${targetDir}' is not empty.`);
+      } else {
+        console.error(`error: target directory '${targetDir}' is not empty`);
+      }
       return 1;
     }
   } catch (err) {
@@ -118,7 +124,8 @@ export async function run({
     );
     if (code !== 0) {
       if (interactive) {
-        spin?.stop('Dependency install failed', 1);
+        // clack status code 2 renders the error glyph (1 is the cancel glyph).
+        spin?.stop('Dependency install failed', 2);
         console.error(
           `Run '${pm} install' in ${targetDir} to see what failed.`
         );
