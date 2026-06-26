@@ -85,20 +85,24 @@ describe('LoaderRef methods', () => {
     expect(b.cache.has()).toBe(false);
   });
 
-  it('useData() returns the data from LoaderDataContext', () => {
+  it('useData() returns a discriminated LoaderState (review #1,#2)', () => {
+    // useData() projects the loader context into the discriminated union, not
+    // the raw value: a resolved loader reads as { status: 'success', data }.
     const loader = defineLoader(async () => ({ value: 42 }));
     const Probe = () => {
-      const data = loader.useData();
-      return h('span', null, JSON.stringify(data));
+      const state = loader.useData();
+      return h('span', null, JSON.stringify(state));
     };
     const { container } = render(
       h(
         LoaderDataContext.Provider,
-        { value: { data: { value: 42 } } },
+        { value: { data: { value: 42 }, loading: false } },
         h(Probe, null)
       )
     );
-    expect(container.textContent).toBe('{"value":42}');
+    expect(container.textContent).toBe(
+      '{"status":"success","data":{"value":42}}'
+    );
   });
 
   it('useData() throws when called outside a LoaderDataContext', () => {

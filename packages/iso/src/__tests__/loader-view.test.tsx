@@ -54,9 +54,9 @@ describe('LoaderRef.Boundary', () => {
     // pending window, so `data` is undefined until the loader resolves. There is
     // no separate Suspense fallback element.
     const Probe = () => {
-      const data = ref.useData() as { value: number } | undefined;
-      if (data === undefined) return <span data-testid="pending">loading</span>;
-      return <span data-testid="data">{data.value}</span>;
+      const s = ref.useData();
+      if (!('data' in s)) return <span data-testid="pending">loading</span>;
+      return <span data-testid="data">{s.data.value}</span>;
     };
 
     const locMap = new Map();
@@ -100,11 +100,13 @@ describe('LoaderRef.View', () => {
       __moduleKey: 'pages/test-view-1',
     });
 
-    const View = ref.View(({ data, loading }) =>
-      data === undefined ? (
-        <span data-testid="pending">loading:{String(loading)}</span>
+    const View = ref.View((s) =>
+      'data' in s ? (
+        <span data-testid="name">{s.data.name}</span>
       ) : (
-        <span data-testid="name">{data.name}</span>
+        <span data-testid="pending">
+          loading:{String(s.status === 'loading')}
+        </span>
       )
     );
 
@@ -136,12 +138,12 @@ describe('LoaderRef.View', () => {
     });
     const View: FunctionComponent<{ label: string }> = ref.View<{
       label: string;
-    }>(({ data, label }) =>
-      data === undefined ? null : (
+    }>((s) =>
+      'data' in s ? (
         <span data-testid="composed">
-          {label}:{data.value}
+          {s.label}:{s.data.value}
         </span>
-      )
+      ) : null
     );
     const locMap = new Map();
     locMap.set('pages/test-view-2', {
@@ -197,10 +199,8 @@ describe('LoaderRef.Boundary: errorFallback', () => {
     );
 
     const View = ref.View(
-      ({ data }) =>
-        data === undefined ? null : (
-          <span data-testid="data">{data.value}</span>
-        ),
+      (s) =>
+        'data' in s ? <span data-testid="data">{s.data.value}</span> : null,
       { errorFallback: <span data-testid="view-err">view-caught</span> }
     );
 
@@ -234,9 +234,9 @@ describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => 
     );
 
     const Probe = () => {
-      const data = ref.useData() as { path: string } | undefined;
-      if (data === undefined) return null;
-      return <span data-testid="path">{data.path}</span>;
+      const s = ref.useData();
+      if (!('data' in s)) return null;
+      return <span data-testid="path">{s.data.path}</span>;
     };
 
     const layoutLoc = {

@@ -16,8 +16,10 @@ function _probes() {
   // Live ref: useData and Boundary are never; accumulating View is available.
   expectTypeOf(ref.useData).toBeNever();
   ref.View<number[]>(
-    (args) => {
-      expectTypeOf(args.data).toEqualTypeOf<number[]>();
+    (s) => {
+      if (s.status === 'open' || s.status === 'closed') {
+        expectTypeOf(s.data).toEqualTypeOf<number[]>();
+      }
       return null;
     },
     { initial: [], reduce: (acc) => acc }

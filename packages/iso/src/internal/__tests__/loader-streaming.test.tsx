@@ -58,9 +58,9 @@ describe('streaming loader: client-driven', () => {
     // Loading-aware: with the state model the children render eagerly during the
     // connecting window, so `data` is undefined until the first chunk lands.
     function Page() {
-      const data = ref.useData() as { count: number } | undefined;
-      if (data === undefined) return <p data-testid="count">pending</p>;
-      return <p data-testid="count">{data.count}</p>;
+      const s = ref.useData();
+      if (!('data' in s)) return <p data-testid="count">pending</p>;
+      return <p data-testid="count">{s.data.count}</p>;
     }
 
     render(
@@ -105,8 +105,8 @@ describe('streaming loader: client-driven', () => {
     let lastData: { count: number } | null = null;
     let lastError: Error | null = null;
     function Page() {
-      const data = ref.useData() as { count: number } | undefined;
-      if (data !== undefined) lastData = data;
+      const s = ref.useData();
+      if ('data' in s) lastData = s.data;
       lastError = ref.useError();
       return null;
     }

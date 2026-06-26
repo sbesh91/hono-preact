@@ -120,7 +120,8 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const data = ref.useData() as { msg: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       const { reload } = useReload();
       return (
         <div>
@@ -169,7 +170,8 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const data = ref.useData() as { msg: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       const { reload } = useReload();
       const [count, setCount] = useState(0);
       return (
@@ -210,7 +212,7 @@ describe('v3 <Loader> stability', () => {
     });
     expect(screen.getByTestId('count')).toHaveTextContent('2');
 
-    // Trigger reload — should NOT remount Child; the previous data stays
+    // Trigger reload; should NOT remount Child; the previous data stays
     // visible (stale-while-revalidate) while the reload is in flight.
     await act(async () => {
       screen.getByTestId('reload').click();
@@ -239,7 +241,8 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const data = ref.useData() as { msg: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       return <span data-testid="msg">{data?.msg}</span>;
     }
 
@@ -303,7 +306,8 @@ describe('v3 <Loader> stability', () => {
     // subtree). A useReload() consumer mounted directly in the children can fire
     // reload() before the initial fetch resolves; the runner must queue it.
     function Child() {
-      const data = ref.useData() as { msg: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       const { reload } = useReload();
       return (
         <div>
@@ -356,7 +360,8 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ q: string }>(fn, { params: ['q'] });
 
     function Child() {
-      const data = ref.useData() as { q: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       return <span data-testid="q">{data ? data.q || '(empty)' : ''}</span>;
     }
 
@@ -404,7 +409,8 @@ describe('Loader: parametric loader cache should key on location', () => {
     );
 
     function Page({ id }: { id: string }) {
-      const data = ref.useData() as { id: string; title: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       return <p data-testid={`title-${id}`}>{data?.title}</p>;
     }
 
@@ -474,7 +480,8 @@ describe('Loader: useError() on successful static load', () => {
     let observedMsg: string | undefined = undefined;
     function Child() {
       observed = ref.useError();
-      const data = ref.useData() as { msg: string } | undefined;
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
       observedMsg = data?.msg;
       return null;
     }
@@ -487,5 +494,30 @@ describe('Loader: useError() on successful static load', () => {
     );
     await waitFor(() => expect(observedMsg).toBe('hi'));
     expect(observed).toBe(null);
+  });
+});
+
+describe('LoaderRef.useData(): discriminated LoaderState (review #1,#2)', () => {
+  it('returns { status: "success", data } once the loader resolves', async () => {
+    const ref = defineLoader<{ title: string }>(async () => ({
+      title: 'Dune',
+    }));
+    let seenUseData: unknown = null;
+    function Child() {
+      // useData() now hands back the discriminated union, not the raw value.
+      seenUseData = ref.useData();
+      const s = ref.useData();
+      const data = 'data' in s ? s.data : undefined;
+      return <span data-testid="title">{data?.title}</span>;
+    }
+    render(
+      <LocationProvider>
+        <Loader loader={ref} location={loc}>
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+    await screen.findByText('Dune');
+    expect(seenUseData).toEqual({ status: 'success', data: { title: 'Dune' } });
   });
 });

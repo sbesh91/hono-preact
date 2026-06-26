@@ -64,9 +64,9 @@ describe('loader.View (accumulating / streaming form)', () => {
       live: true,
     });
     const Feed = ref.View<number[]>(
-      ({ data, status }) => (
+      (s) => (
         <p data-testid="out">
-          {data.join(',')}|{status}
+          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
         </p>
       ),
       {
@@ -105,21 +105,25 @@ describe('loader.View (accumulating / streaming form)', () => {
       live: true,
     });
     const Feed = ref.View<number[]>(
-      ({ data, status, reload }) => (
-        <div>
-          <p data-testid="out">
-            {/* If reload overwrote Acc with a raw chunk, `data` is an object,
-                not an array, and this surfaces it instead of crashing. */}
-            {Array.isArray(data)
-              ? data.join(',')
-              : `NOT-ARRAY:${JSON.stringify(data)}`}
-            |{status}
-          </p>
-          <button data-testid="reload" onClick={reload}>
-            reload
-          </button>
-        </div>
-      ),
+      (s) => {
+        const { reload } = useReload();
+        const data = s.status === 'connecting' ? [] : s.data;
+        return (
+          <div>
+            <p data-testid="out">
+              {/* If reload overwrote Acc with a raw chunk, `data` is an object,
+                  not an array, and this surfaces it instead of crashing. */}
+              {Array.isArray(data)
+                ? data.join(',')
+                : `NOT-ARRAY:${JSON.stringify(data)}`}
+              |{s.status}
+            </p>
+            <button data-testid="reload" onClick={reload}>
+              reload
+            </button>
+          </div>
+        );
+      },
       {
         initial: [],
         reduce: (acc, chunk) => [...acc, chunk.n],
@@ -185,10 +189,10 @@ describe('loader.View (accumulating / streaming form)', () => {
     }
 
     const Feed = ref.View<number[]>(
-      ({ data, status }) => (
+      (s) => (
         <p data-testid="out">
-          {data.join(',')}|{status}
-          {status === 'connecting' ? <ConnectingReloader /> : null}
+          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
+          {s.status === 'connecting' ? <ConnectingReloader /> : null}
         </p>
       ),
       {

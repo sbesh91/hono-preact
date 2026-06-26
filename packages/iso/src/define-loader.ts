@@ -16,6 +16,7 @@ import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import { isBrowser } from './is-browser.js';
 import type { AccumulateOptions } from './internal/use-loader-runner.js';
+import { toLoaderState } from './loader-state.js';
 import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
@@ -121,16 +122,20 @@ export interface LoaderRef<T, Live extends boolean = false> {
    */
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   /**
-   * The loader's data as the client receives it: `Serialize<T>`, the JSON
-   * round-trip of the server-side return `T` (e.g. a `Date` field arrives as a
-   * string). `never` on a `live` loader (it has no single value).
+   * Consume the loader's data as a discriminated `LoaderState<Serialize<T>>`:
+   * pattern-match on `status` (`loading` | `success` | `revalidating` |
+   * `error`). The data-carrying arms expose `Serialize<T>`, the JSON round-trip
+   * of the server-side return `T` (e.g. a `Date` field arrives as a string).
+   * `never` on a `live` loader (it has no single value).
    */
-  useData: Live extends true ? never : () => Serialize<T>;
+  useData: Live extends true ? never : () => LoaderState<Serialize<T>>;
   useError(): Error | null;
   invalidate(): void;
   /**
-   * The lower-level Suspense boundary (single-value loaders). `never` on a
-   * `live` loader: consume it via the accumulating `.View` form instead.
+   * The lower-level state-based boundary (single-value loaders): it renders its
+   * children eagerly and provides the loader's state on context, which children
+   * read via `useData()` (pattern-match on `status`). `never` on a `live`
+   * loader: consume it via the accumulating `.View` form instead.
    */
   Boundary: Live extends true
     ? never
@@ -155,8 +160,8 @@ export interface LoaderRef<T, Live extends boolean = false> {
  * loader (invalidate, prefetch) without reading its data shape.
  *
  * Uses `LoaderRef<any>`, not `LoaderRef<unknown>`, deliberately. `LoaderRef<T>`
- * is invariant in `T` (it surfaces `T` through `useData(): Serialize<T>`), so a
- * concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
+ * is invariant in `T` (it surfaces `T` through `useData(): LoaderState<Serialize<T>>`),
+ * so a concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
  * sites never inspect the data with a meaningful type. `boolean` (not the default
  * `false`) erases liveness so a live `LoaderRef<T, true>` is also accepted.
@@ -381,7 +386,7 @@ export function defineLoader(
           'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
         );
       }
-      return ctx.data as unknown;
+      return toLoaderState(ctx.data, ctx.loading, ref.useError());
     },
     useError() {
       return useContext(LoaderErrorContext);

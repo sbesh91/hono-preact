@@ -95,9 +95,9 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
       live: true,
     });
     const Bar = ref.View<number[]>(
-      ({ data, status }) => (
+      (s) => (
         <p data-testid="bar">
-          {(data ?? []).join(',')}|{status}
+          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
         </p>
       ),
       {
@@ -142,9 +142,9 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
       live: true,
     });
     const Bar = ref.View<number[]>(
-      ({ data, status }) => (
+      (s) => (
         <p data-testid="bar">
-          {(data ?? []).join(',')}|{status}
+          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
         </p>
       ),
       {

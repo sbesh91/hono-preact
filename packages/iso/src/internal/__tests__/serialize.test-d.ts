@@ -3,7 +3,7 @@
 // the JSON round-trip transform applied at the loader/action client boundary.
 import { expectTypeOf } from 'vitest';
 import type { Serialize } from '../serialize.js';
-import type { LoaderRef } from '../../define-loader.js';
+import type { LoaderRef, LoaderState } from '../../define-loader.js';
 import type { UseActionResult } from '../../action.js';
 import type { ActionResult } from '../../use-action-result.js';
 
@@ -116,10 +116,11 @@ expectTypeOf<
 // (not just that Serialize<T> works in isolation). A reverted seam fails here.
 // ---------------------------------------------------------------------------
 
-// Loader: `useData()` and the `View` render arg expose the wire shape.
-expectTypeOf<ReturnType<LoaderRef<{ at: Date }>['useData']>>().toEqualTypeOf<{
-  at: string;
-}>();
+// Loader: `useData()` exposes the discriminated state over the wire shape, and
+// the `View` render arg's data-carrying arms expose the wire shape.
+expectTypeOf<ReturnType<LoaderRef<{ at: Date }>['useData']>>().toEqualTypeOf<
+  LoaderState<{ at: string }>
+>();
 
 // `View` applies Serialize on both forms: the non-live single-value form's
 // `data` and the live accumulating form's `reduce` chunk are the wire shape,
@@ -132,14 +133,18 @@ function _viewSerializeProbes(
   staticLoader: LoaderRef<{ at: Date }, false>,
   liveLoader: LoaderRef<{ at: Date }, true>
 ) {
-  staticLoader.View((args) => {
-    // data is the wire shape Serialize<T> or undefined while loading.
-    expectTypeOf(args.data).toEqualTypeOf<{ at: string } | undefined>();
+  staticLoader.View((s) => {
+    // data is the wire shape Serialize<T> on the data-carrying arms.
+    if (s.status === 'success' || s.status === 'revalidating') {
+      expectTypeOf(s.data).toEqualTypeOf<{ at: string }>();
+    }
     return null;
   });
   liveLoader.View<number[]>(
-    (args) => {
-      expectTypeOf(args.data).toEqualTypeOf<number[]>();
+    (s) => {
+      if (s.status === 'open' || s.status === 'closed') {
+        expectTypeOf(s.data).toEqualTypeOf<number[]>();
+      }
       return null;
     },
     {
