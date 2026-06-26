@@ -12,7 +12,7 @@ A `max`-effort multi-agent review of PR #191 surfaced 15 verified findings. Two 
 - **#4** `reactAliasesEnabled: false` (drop `preact/compat` aliasing): the PR's purpose; release notes §3a documents it with a migration path.
 - **#6** removal of `fallbackDelay` / cold-nav loading paints immediately: release notes §2 documents it; the cold-nav flash only affects first-time un-prefetched navigations, and reloads are covered by stale-while-revalidate.
 
-The remaining findings are genuine implementation gaps in the **unreleased** v0.9 loader-consumption API. Because v0.9 is unreleased, we take the one cheap opportunity to fix the root cause rather than the symptoms: the loader value lifecycle was modelled by overloading `data === undefined` as a sentinel and by flat, independently-derived `{ data, loading, error }` fields. We replace that with an **algebraic data type (ADT)** — internally as the runner's single source of truth, and externally as a discriminated-union public API the consumer pattern-matches on.
+The remaining findings are genuine implementation gaps in the **unreleased** v0.9 loader-consumption API. Because v0.9 is unreleased, we take the one cheap opportunity to fix the root cause rather than the symptoms: the loader value lifecycle was modelled by overloading `data === undefined` as a sentinel and by flat, independently-derived `{ data, loading, error }` fields. We replace that with an **algebraic data type (ADT)**: internally as the runner's single source of truth, and externally as a discriminated-union public API the consumer pattern-matches on.
 
 ### Decisions (settled with the maintainer)
 
@@ -43,7 +43,7 @@ The runner projects the appropriate public union (below) for its consumer. Publi
 
 ## Public API: discriminated-union consumption
 
-### Single-value loaders — `LoaderState<T>`
+### Single-value loaders: `LoaderState<T>`
 
 ```ts
 type LoaderState<T> =
@@ -66,7 +66,7 @@ const MovieView = movie.View((s) => {
 });
 ```
 
-### Streaming / live loaders — `StreamState<T>`
+### Streaming / live loaders: `StreamState<T>`
 
 ```ts
 type StreamState<T> =
@@ -76,7 +76,7 @@ type StreamState<T> =
   | { status: 'error'; error: Error; data: T }; // error, last accumulated value
 ```
 
-`connecting` carries **no** `data`. The `accumulate.initial` seed is therefore purely the internal `reduce` start value — never surfaced to the render function and never serialized. This dissolves the `accumulate.initial as T` coercion casts (finding #13) and makes the SSR/hydration anchor trivially `null` (finding #3).
+`connecting` carries **no** `data`. The `accumulate.initial` seed is therefore purely the internal `reduce` start value, never surfaced to the render function and never serialized. This dissolves the `accumulate.initial as T` coercion casts (finding #13) and makes the SSR/hydration anchor trivially `null` (finding #3).
 
 ### `loader.useData()` (Boundary escape hatch)
 
@@ -90,11 +90,11 @@ Boundary consumers `switch` on it exactly like a `.View` render arg. This resolv
 
 ### Cold-error rule (keeps the boundary intact)
 
-Invariant: **a union never carries an error without data.** Cold errors — a failed cold load, or a live stream that errors before its first chunk — have no value, so they continue to route through `LoaderHost`'s `errorFallback` and the route `ErrorBoundary`, exactly as today. This preserves the existing SSR throw path (`DataReader` rethrow) and the #63 redirect-double-mount fix. The union's `error` variant is only the with-data stale-while-error case. `errorFallback` semantics are unchanged.
+Invariant: **a union never carries an error without data.** Cold errors (a failed cold load, or a live stream that errors before its first chunk) have no value, so they continue to route through `LoaderHost`'s `errorFallback` and the route `ErrorBoundary`, exactly as today. This preserves the existing SSR throw path (`DataReader` rethrow) and the #63 redirect-double-mount fix. The union's `error` variant is only the with-data stale-while-error case. `errorFallback` semantics are unchanged.
 
 ## Hydration anchor: discriminated descriptor (finding #3)
 
-`Envelope` currently decides the `data-loader` hydration attribute itself, branching on `isBrowser()` and (in the buggy state) serializing `accumulate.initial` for live SSR — which throws on a non-serializable seed (`BigInt`, circular) and produces a server `"[]"` / client `"null"` mismatch. We make `Envelope` a dumb renderer of an explicit descriptor the call sites construct:
+`Envelope` currently decides the `data-loader` hydration attribute itself, branching on `isBrowser()` and (in the buggy state) serializing `accumulate.initial` for live SSR, which throws on a non-serializable seed (`BigInt`, circular) and produces a server `"[]"` / client `"null"` mismatch. We make `Envelope` a dumb renderer of an explicit descriptor the call sites construct:
 
 ```ts
 type HydrationAnchor =
@@ -118,7 +118,7 @@ This removes the new boolean that an earlier draft proposed, removes the `isBrow
 
 ## `useReload().reloading` (finding #5)
 
-`ReloadContext` is wired to `reloading: loading` today, so the public `useReload().reloading` is `true` during a cold initial load, not just an explicit `reload()` — breaking the documented `<button disabled={reloading}>` pattern. After the ADT change, the runner surfaces the reload-only signal (`phase.tag === 'revalidating'`) and `LoaderHost` feeds `ReloadContext` that, not the combined `loading`. The `ReloadContextValue.reloading` JSDoc is corrected to "true while an explicit reload/revalidation is in flight (not a cold initial load)."
+`ReloadContext` is wired to `reloading: loading` today, so the public `useReload().reloading` is `true` during a cold initial load, not just an explicit `reload()`, breaking the documented `<button disabled={reloading}>` pattern. After the ADT change, the runner surfaces the reload-only signal (`phase.tag === 'revalidating'`) and `LoaderHost` feeds `ReloadContext` that, not the combined `loading`. The `ReloadContextValue.reloading` JSDoc is corrected to "true while an explicit reload/revalidation is in flight (not a cold initial load)."
 
 ## `useStoreSnapshot` faithful port (findings #7/#11, #12)
 
@@ -195,7 +195,7 @@ TypeScript surfaces every stale call site at compile time, so the migration is c
 ## Non-goals
 
 - No change to #4 (compat alias) or #6 (fallbackDelay) behavior.
-- Do not remove the framework-wide `loaderRef.live` boolean — same instinct, separate change, out of scope.
+- Do not remove the framework-wide `loaderRef.live` boolean; same instinct, separate change, out of scope.
 - No change to `page-middleware-host.tsx` suspension, the `DataReader` SSR Mechanism-B carrier, or preact-iso route-lazy handling.
 - No global/framework-provided loading UI; loading stays a loader-local concern the consumer renders.
 

@@ -4,7 +4,7 @@
 
 **Goal:** Fold the PR #191 `max`-review fixes into a discriminated-union loader-consumption API: an internal `LoaderPhase` ADT in the runner, public `LoaderState<T>` / `StreamState<T>` unions for `.View` / `useData`, a `HydrationAnchor` descriptor for SSR serialization, and a faithful `useStoreSnapshot`.
 
-**Architecture:** The runner (`use-loader-runner.tsx`) owns one ADT as its single source of truth; `ViewRenderer` projects loader-context state into a public discriminated union the consumer `switch`es on; `Envelope` becomes a dumb renderer of an explicit anchor descriptor. Cold errors (no data) keep routing through `errorFallback`/`ErrorBoundary` — the unions never carry an error without data.
+**Architecture:** The runner (`use-loader-runner.tsx`) owns one ADT as its single source of truth; `ViewRenderer` projects loader-context state into a public discriminated union the consumer `switch`es on; `Envelope` becomes a dumb renderer of an explicit anchor descriptor. Cold errors (no data) keep routing through `errorFallback`/`ErrorBoundary`; the unions never carry an error without data.
 
 **Tech Stack:** TypeScript, Preact + preact/hooks, preact-iso, Vitest + @testing-library/preact (happy-dom), MDX docs under `apps/site`.
 
@@ -21,7 +21,7 @@
 
 ---
 
-## Phase A — Independent fixes (each green on its own, no dependency on the union)
+## Phase A: Independent fixes (each green on its own, no dependency on the union)
 
 ### Task 1: `useForceUpdate()` helper (#14)
 
@@ -31,7 +31,7 @@
 - Modify (later steps): `packages/iso/src/optimistic.ts:29`
 
 **Interfaces:**
-- Produces: `useForceUpdate(): () => void` — returns a stable callback that schedules a re-render of the calling component.
+- Produces: `useForceUpdate(): () => void`: returns a stable callback that schedules a re-render of the calling component.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -64,7 +64,7 @@ describe('useForceUpdate', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/use-force-update.test.tsx`
-Expected: FAIL — cannot find module `../use-force-update.js`.
+Expected: FAIL, cannot find module `../use-force-update.js`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -128,7 +128,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `useForceUpdate` (Task 1).
-- Produces: `useStoreSnapshot<T>(subscribe, getSnapshot): T` — re-renders only when the snapshot changes by `Object.is`, and re-reads at subscribe time.
+- Produces: `useStoreSnapshot<T>(subscribe, getSnapshot): T`: re-renders only when the snapshot changes by `Object.is`, and re-reads at subscribe time.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -290,7 +290,7 @@ it('live SSR anchors data-loader="null" and does not serialize accumulate.initia
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/loader-streaming.test.tsx`
-Expected: FAIL — currently throws `TypeError: Do not know how to serialize a BigInt`, or emits `data-loader="[]"`/`"{}"` instead of `"null"`.
+Expected: FAIL, currently throws `TypeError: Do not know how to serialize a BigInt`, or emits `data-loader="[]"`/`"{}"` instead of `"null"`.
 
 - [ ] **Step 3: Make `Envelope` a dumb renderer of an anchor**
 
@@ -351,7 +351,7 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
 
 In `packages/iso/src/internal/loader.tsx`:
 
-`DataReader` (server) — anchor is `none` for live, `data` for single-value. Replace the `accumulate.initial` coercion + `<Envelope>` usage (lines ~60-66):
+`DataReader` (server): anchor is `none` for live, `data` for single-value. Replace the `accumulate.initial` coercion + `<Envelope>` usage (lines ~60-66):
 ```tsx
   const anchor: HydrationAnchor = accumulate
     ? { kind: 'none' }
@@ -362,7 +362,7 @@ In `packages/iso/src/internal/loader.tsx`:
     </LoaderDataContext.Provider>
   );
 ```
-Note: `data: raw` (no `accumulate.initial` coercion) — the live render fn's `connecting` arm needs no data (Task 6/7 unions). Drop the now-unused `accumulate` destructure if nothing else uses it; keep the `reader.read()` call.
+Note: `data: raw` (no `accumulate.initial` coercion); the live render fn's `connecting` arm needs no data (Task 6/7 unions). Drop the now-unused `accumulate` destructure if nothing else uses it; keep the `reader.read()` call.
 
 `LoaderHost` client branch (line ~143-146): the client never bakes data, so anchor is always `none`:
 ```tsx
@@ -381,7 +381,7 @@ Add `import type { HydrationAnchor } from './envelope.js';` and ensure `Envelope
 - [ ] **Step 5: Run the streaming + loader suites**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/loader-streaming.test.tsx src/internal/__tests__/loader.test.tsx src/__tests__/define-loader-live-ssr.test.tsx`
-Expected: PASS. (The existing live-ssr test that asserted `data-loader="[]"` must be updated to `"null"` here — that assertion was the bug.)
+Expected: PASS. (The existing live-ssr test that asserted `data-loader="[]"` must be updated to `"null"` here, since that assertion was the bug.)
 
 - [ ] **Step 6: Commit**
 
@@ -394,7 +394,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Phase B — The discriminated-union redesign (lands cohesively; green at the end of Task 8)
+## Phase B: The discriminated-union redesign (lands cohesively; green at the end of Task 8)
 
 > Phase B changes a public type shape. The union type-flip (Task 6) cascades compile errors across docs/call sites/tests that Tasks 7-8 resolve. Between Task 6 and Task 8 the tree will not typecheck; that is expected. Do not commit a half-migrated tree except at the task boundaries below, each of which restores green for its scope.
 
@@ -464,7 +464,7 @@ describe('toStreamState', () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `cd packages/iso && pnpm vitest run src/__tests__/loader-state.test.ts`
-Expected: FAIL — cannot find module `../loader-state.js`.
+Expected: FAIL, cannot find module `../loader-state.js`.
 
 - [ ] **Step 3: Write the types + projections**
 
@@ -612,7 +612,7 @@ it('reloading is false on a cold load and true only during reload (review #5)', 
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/use-loader-runner.test.tsx`
-Expected: the #10 test FAILS (loading stuck true after resolve(undefined)); the #5 test FAILS (`captured.reloading` is undefined — field does not exist yet).
+Expected: the #10 test FAILS (loading stuck true after resolve(undefined)); the #5 test FAILS (`captured.reloading` is undefined; field does not exist yet).
 
 - [ ] **Step 3: Reshape the runner's single-value state to a `LoaderPhase` ADT**
 
@@ -653,7 +653,7 @@ Return `{ data, loading, reloading, error, reload, status, reader: readerRef.cur
 
 > Keep `syncDataRef`, `readerRef` (SSR Mechanism-B carrier), `inFlightRef`, `queuedReloadRef`, the abort plumbing, and the preload-clear effect unchanged. Only the `overrideData`/`reloading` state and the `data`/`loading`/`error` derivation change. Preserve every existing behavior the file documents (querystring-only refetch, queued-reload draining).
 >
-> **Cast discipline (Global Constraint):** do not add `as T` casts to read a phase variant's value. Structure the reads so narrowing carries the type — e.g. a local `phaseValue(p: LoaderPhase<T>): T | undefined` helper that returns `'value' in p ? p.value : undefined` (no cast; `value` is `T` / `T | undefined` by the variant), and build the `revalidating` phase from that helper's result. The ONE acceptable cast is reading the erased streaming accumulator `accRef.current` (typed `unknown` by design) as `T` when surfacing a chunk — that is a pre-existing erased-ref boundary, not variant coercion, and is unrelated to the `accumulate.initial as T` casts this work removes (#13).
+> **Cast discipline (Global Constraint):** do not add `as T` casts to read a phase variant's value. Structure the reads so narrowing carries the type, e.g. a local `phaseValue(p: LoaderPhase<T>): T | undefined` helper that returns `'value' in p ? p.value : undefined` (no cast; `value` is `T` / `T | undefined` by the variant), and build the `revalidating` phase from that helper's result. The ONE acceptable cast is reading the erased streaming accumulator `accRef.current` (typed `unknown` by design) as `T` when surfacing a chunk, a pre-existing erased-ref boundary, not variant coercion, and is unrelated to the `accumulate.initial as T` casts this work removes (#13).
 
 - [ ] **Step 4: Run the full runner suite**
 
@@ -715,7 +715,7 @@ it('passes a StreamState for live loaders', () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/view-renderer.test.tsx`
-Expected: FAIL — render fn currently receives the flat `{ data, loading, status, error, reload }`, not a `{ status, data }` union.
+Expected: FAIL, render fn currently receives the flat `{ data, loading, status, error, reload }`, not a `{ status, data }` union.
 
 - [ ] **Step 3: Project the union in `ViewRenderer`**
 
@@ -795,7 +795,7 @@ Add `import type { LoaderState, StreamState } from './loader-state.js';`. Remove
 - [ ] **Step 6: Run iso typecheck for the runtime (call-site fixes follow in Task 7/8)**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/view-renderer.test.tsx`
-Expected: the ViewRenderer test PASSES. This is the ONLY suite that must pass at this task boundary. The `.View` retype cascades: after this commit, the OTHER iso tests (they still destructure the old flat `{data, loading}` render args) FAIL at runtime, and repo `pnpm typecheck` reports errors in iso tests / docs / apps/site call sites. That RED interval is expected and intentional — Task 7 migrates the iso tests (restoring iso green) and Task 8 migrates apps/site + docs (restoring repo green). Do NOT fix those cascading failures in this task; they belong to Tasks 7 and 8.
+Expected: the ViewRenderer test PASSES. This is the ONLY suite that must pass at this task boundary. The `.View` retype cascades: after this commit, the OTHER iso tests (they still destructure the old flat `{data, loading}` render args) FAIL at runtime, and repo `pnpm typecheck` reports errors in iso tests / docs / apps/site call sites. That RED interval is expected and intentional; Task 7 migrates the iso tests (restoring iso green) and Task 8 migrates apps/site + docs (restoring repo green). Do NOT fix those cascading failures in this task; they belong to Tasks 7 and 8.
 
 - [ ] **Step 7: Commit the runtime half (tests for it are green; tree typecheck is not, by design)**
 
@@ -835,7 +835,7 @@ it('useData() returns a discriminated LoaderState (review #1,#2)', async () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `cd packages/iso && pnpm vitest run src/internal/__tests__/loader.test.tsx`
-Expected: FAIL — `useData()` returns the raw value, not `{ status, data }`.
+Expected: FAIL, `useData()` returns the raw value, not `{ status, data }`.
 
 - [ ] **Step 3: Change the `useData` impl + type**
 
@@ -891,7 +891,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ### Task 8: Migrate `apps/site` call sites + docs; demo SWR (#8)
 
-**Files (call sites):** `apps/site/src/pages/demo/project-board.tsx`, `apps/site/src/pages/demo/task.tsx`, **and every live/streaming `.View` consumer** — `apps/site/src/components/demo/ActivityBar.tsx` (feeds `Feed`, which derefs `events[0]`/`events.map` UNGUARDED), `apps/site/src/pages/demo/live-tally.tsx`, `apps/example-node/src/pages/home.tsx` (`LiveCounter`). After Task 3 removed the SSR seed coercion, these receive `data === undefined` during the `connecting` SSR frame; the union migration MUST give each a `connecting` arm (or `events={data ?? []}` interim) so SSR cannot throw. `ActivityBar` is SSR'd on every `/demo/projects*` request and currently 500s in the interim — this is a hard requirement, not cosmetic.
+**Files (call sites):** `apps/site/src/pages/demo/project-board.tsx`, `apps/site/src/pages/demo/task.tsx`, **and every live/streaming `.View` consumer**: `apps/site/src/components/demo/ActivityBar.tsx` (feeds `Feed`, which derefs `events[0]`/`events.map` UNGUARDED), `apps/site/src/pages/demo/live-tally.tsx`, `apps/example-node/src/pages/home.tsx` (`LiveCounter`). After Task 3 removed the SSR seed coercion, these receive `data === undefined` during the `connecting` SSR frame; the union migration MUST give each a `connecting` arm (or `events={data ?? []}` interim) so SSR cannot throw. `ActivityBar` is SSR'd on every `/demo/projects*` request and currently 500s in the interim; this is a hard requirement, not cosmetic.
 
 **SSR regression guard:** add a test that SSR-renders `ActivityBar`/`Feed` (or the projects shell) through the REAL `.View` path (not the mock in `ActivityBar.test.tsx`) with no chunks, asserting the `connecting` arm renders without throwing. Nothing in the current suite or `pnpm --filter site build` (demo pages are runtime worker-SSR, not prerendered) catches this, so the gap must be closed here.
 **Files (docs):** `apps/site/src/pages/docs/loaders.mdx`, `quick-start.mdx`, `loading-states.mdx`, `reloading.mdx`, `streaming.mdx`, `live-loaders.mdx`, `actions.mdx`, `pages.mdx`, `layouts.mdx`, `optimistic-ui.mdx`, `structure.mdx`, `realtime.mdx`.
@@ -902,7 +902,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Streaming `({ data, status }) => BODY` becomes `(s) => s.status === 'connecting' ? <Connecting/> : <Real data={s.data} status={s.status}/>`.
 - `const x = loader.useData(); x.field` becomes `const s = loader.useData(); if (s.status !== 'success' && s.status !== 'revalidating') return <Loading/>; s.data.field`.
 
-- [ ] **Step 1: Demo `task.tsx` — SWR (review #8)**
+- [ ] **Step 1: Demo `task.tsx`, SWR (review #8)**
 
 `TaskView` (line ~286): replace `if (loading) return <p class="p-6">Loading task…</p>;` with a union switch that keeps prior content during `revalidating`:
 ```tsx
@@ -962,7 +962,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Phase C — Verification
+## Phase C: Verification
 
 ### Task 9: Full pre-push CI gate
 
@@ -991,7 +991,7 @@ Do not push. Report the commit range and the CI-gate results, and offer to open/
 
 ---
 
-## Self-Review (author checklist — completed before handoff)
+## Self-Review (author checklist, completed before handoff)
 
 1. **Spec coverage:** every spec section maps to a task (ADT→T5, unions→T4, ViewRenderer projection→T6, cold-error rule→T4 projection, hydration anchor→T3, reloading→T5/T6, useStoreSnapshot→T2, useForceUpdate→T1, demo SWR→T8, cleanups→T5/T7, migration→T7/T8). #4/#6 are documented no-ops.
 2. **Placeholders:** runtime tasks carry full code; migration tasks carry the exact transformation rule + worked examples + exact file lists (a compiler-guided mechanical migration, verified by typecheck + site build).

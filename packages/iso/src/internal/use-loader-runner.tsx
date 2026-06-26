@@ -146,6 +146,18 @@ export function useLoaderRunner<T>(
   const queuedReloadRef = useRef(false);
   const runReloadRef = useRef<() => void>(() => {});
 
+  // Normalize an unknown thrown value and push it into the error phase, retaining
+  // the prior value for stale-while-error. The `?? syncDataRef.current` fallback
+  // is the stale-while-error anchor: a preload-hydrated loader that has not yet
+  // settled its phase carries its value on `syncDataRef`, so a stream error before
+  // the first push still surfaces `data` rather than a cold-error hole (review #8).
+  const setError = (err: unknown) =>
+    setPhase((p) => ({
+      tag: 'error',
+      error: err instanceof Error ? err : new Error(String(err)),
+      value: phaseValue(p) ?? syncDataRef.current,
+    }));
+
   // Fold one chunk into the accumulator and surface it. Shared by the initial
   // subscribe and reload() so a streaming reload re-folds through `reduce`
   // rather than overwriting the accumulator with a raw chunk.
@@ -175,11 +187,7 @@ export function useLoaderRunner<T>(
         onChunk: (value) => applyChunk(value),
         onError: (err) => {
           // Retain prior chunks (stale-while-error) by carrying the prior value.
-          setPhase((p) => ({
-            tag: 'error',
-            error: err,
-            value: phaseValue(p) ?? syncDataRef.current,
-          }));
+          setError(err);
           setStatus('error');
         },
         onEnd: () => setStatus('closed'),
@@ -210,7 +218,6 @@ export function useLoaderRunner<T>(
       // folds chunks through `reduce`. Reset the surfaced data to `initial` and
       // drive status connecting -> open/closed/error, mirroring a fresh mount.
       // `revalidating` keeps `reloading`/`loading` true until the first chunk.
-      setPhase({ tag: 'revalidating', value: accumulate.initial as T });
       setStatus('connecting');
       subscribeAccumulate(newAbortSignal())
         .then((firstChunk) => {
@@ -223,12 +230,7 @@ export function useLoaderRunner<T>(
           }
         })
         .catch((err: unknown) => {
-          const e = err instanceof Error ? err : new Error(String(err));
-          setPhase((p) => ({
-            tag: 'error',
-            error: e,
-            value: phaseValue(p) ?? syncDataRef.current,
-          }));
+          setError(err);
           setStatus('error');
           inFlightRef.current = false;
           queuedReloadRef.current = false;
@@ -251,12 +253,7 @@ export function useLoaderRunner<T>(
             );
           }
         },
-        onError: (err) =>
-          setPhase((p) => ({
-            tag: 'error',
-            error: err,
-            value: phaseValue(p) ?? syncDataRef.current,
-          })),
+        onError: (err) => setError(err),
         onEnd: () => {
           /* nothing to do */
         },
@@ -280,12 +277,7 @@ export function useLoaderRunner<T>(
         }
       })
       .catch((err: unknown) => {
-        const e = err instanceof Error ? err : new Error(String(err));
-        setPhase((p) => ({
-          tag: 'error',
-          error: e,
-          value: phaseValue(p) ?? syncDataRef.current,
-        }));
+        setError(err);
         inFlightRef.current = false;
         queuedReloadRef.current = false;
       });
@@ -362,12 +354,7 @@ export function useLoaderRunner<T>(
               // value AND a live loader never preloads (so `syncDataRef` is
               // undefined too), so `data` stays undefined and LoaderHost treats
               // it as a COLD error.
-              const e = err instanceof Error ? err : new Error(String(err));
-              setPhase((p) => ({
-                tag: 'error',
-                error: e,
-                value: phaseValue(p) ?? syncDataRef.current,
-              }));
+              setError(err);
               setStatus('error');
               settleAcc();
               throw err;
@@ -403,12 +390,7 @@ export function useLoaderRunner<T>(
             // `syncDataRef.current` retains the preloaded value V, so the error
             // phase is settled (`data = V`) and surfaces in-view as the error
             // arm rather than unwinding the page as a cold error (R1R2 review).
-            error: (err) =>
-              setPhase((p) => ({
-                tag: 'error',
-                error: err,
-                value: phaseValue(p) ?? syncDataRef.current,
-              })),
+            error: (err) => setError(err),
           });
           // Unsubscribe on unmount: attach to the abortRef signal.
           if (abortRef.current) {
@@ -443,12 +425,7 @@ export function useLoaderRunner<T>(
               setPhase({ tag: 'success', value });
               if (isBrowser()) loaderRef.cache.set(value, locKey);
             },
-            onError: (err) =>
-              setPhase((p) => ({
-                tag: 'error',
-                error: err,
-                value: phaseValue(p) ?? syncDataRef.current,
-              })),
+            onError: (err) => setError(err),
             onEnd: () => {
               /* nothing to do */
             },
@@ -476,16 +453,8 @@ export function useLoaderRunner<T>(
               // (no preload, no cache), so `syncDataRef` is undefined and the
               // phase has no value (the fetch never resolved): `data` is
               // undefined and LoaderHost treats it as a COLD error and renders
-              // `errorFallback` / rethrows to an outer boundary. The
-              // `?? syncDataRef.current` fallback is inert here (it is the
-              // uniform error-phase construction); it only retains a value on the
-              // preload-hydrated stream-error path.
-              const e = err instanceof Error ? err : new Error(String(err));
-              setPhase((p) => ({
-                tag: 'error',
-                error: e,
-                value: phaseValue(p) ?? syncDataRef.current,
-              }));
+              // `errorFallback` / rethrows to an outer boundary.
+              setError(err);
               settle();
               throw err;
             })
