@@ -175,7 +175,11 @@ export function useLoaderRunner<T>(
         onChunk: (value) => applyChunk(value),
         onError: (err) => {
           // Retain prior chunks (stale-while-error) by carrying the prior value.
-          setPhase((p) => ({ tag: 'error', error: err, value: phaseValue(p) }));
+          setPhase((p) => ({
+            tag: 'error',
+            error: err,
+            value: phaseValue(p) ?? syncDataRef.current,
+          }));
           setStatus('error');
         },
         onEnd: () => setStatus('closed'),
@@ -220,7 +224,11 @@ export function useLoaderRunner<T>(
         })
         .catch((err: unknown) => {
           const e = err instanceof Error ? err : new Error(String(err));
-          setPhase((p) => ({ tag: 'error', error: e, value: phaseValue(p) }));
+          setPhase((p) => ({
+            tag: 'error',
+            error: e,
+            value: phaseValue(p) ?? syncDataRef.current,
+          }));
           setStatus('error');
           inFlightRef.current = false;
           queuedReloadRef.current = false;
@@ -244,7 +252,11 @@ export function useLoaderRunner<T>(
           }
         },
         onError: (err) =>
-          setPhase((p) => ({ tag: 'error', error: err, value: phaseValue(p) })),
+          setPhase((p) => ({
+            tag: 'error',
+            error: err,
+            value: phaseValue(p) ?? syncDataRef.current,
+          })),
         onEnd: () => {
           /* nothing to do */
         },
@@ -269,7 +281,11 @@ export function useLoaderRunner<T>(
       })
       .catch((err: unknown) => {
         const e = err instanceof Error ? err : new Error(String(err));
-        setPhase((p) => ({ tag: 'error', error: e, value: phaseValue(p) }));
+        setPhase((p) => ({
+          tag: 'error',
+          error: e,
+          value: phaseValue(p) ?? syncDataRef.current,
+        }));
         inFlightRef.current = false;
         queuedReloadRef.current = false;
       });
@@ -343,13 +359,14 @@ export function useLoaderRunner<T>(
               // State-based surfacing: the old Suspense reader propagated this
               // rejection by throwing on read(); now nothing reads the reader,
               // so push the error into state. With no chunk yet the phase has no
-              // value, so `data` stays undefined and LoaderHost treats it as a
-              // COLD error.
+              // value AND a live loader never preloads (so `syncDataRef` is
+              // undefined too), so `data` stays undefined and LoaderHost treats
+              // it as a COLD error.
               const e = err instanceof Error ? err : new Error(String(err));
               setPhase((p) => ({
                 tag: 'error',
                 error: e,
-                value: phaseValue(p),
+                value: phaseValue(p) ?? syncDataRef.current,
               }));
               setStatus('error');
               settleAcc();
@@ -380,11 +397,17 @@ export function useLoaderRunner<T>(
             end: () => {
               /* nothing to do */
             },
+            // Stale-while-error: a preload-hydrated loader keeps its phase at
+            // `loading` while the value lives on `syncDataRef`, so a live-channel
+            // error BEFORE any push has no `phaseValue(p)`. Falling back to
+            // `syncDataRef.current` retains the preloaded value V, so the error
+            // phase is settled (`data = V`) and surfaces in-view as the error
+            // arm rather than unwinding the page as a cold error (R1R2 review).
             error: (err) =>
               setPhase((p) => ({
                 tag: 'error',
                 error: err,
-                value: phaseValue(p),
+                value: phaseValue(p) ?? syncDataRef.current,
               })),
           });
           // Unsubscribe on unmount: attach to the abortRef signal.
@@ -424,7 +447,7 @@ export function useLoaderRunner<T>(
               setPhase((p) => ({
                 tag: 'error',
                 error: err,
-                value: phaseValue(p),
+                value: phaseValue(p) ?? syncDataRef.current,
               })),
             onEnd: () => {
               /* nothing to do */
@@ -449,15 +472,19 @@ export function useLoaderRunner<T>(
             .catch((err: unknown) => {
               // State-based surfacing: the old Suspense reader propagated this
               // rejection by throwing on read(); now nothing reads the reader,
-              // so push the error into state. The phase has no value (the fetch
-              // never resolved), so `data` is undefined and LoaderHost treats it
-              // as a COLD error and renders `errorFallback` / rethrows to an
-              // outer boundary.
+              // so push the error into state. This branch is the cold-fetch path
+              // (no preload, no cache), so `syncDataRef` is undefined and the
+              // phase has no value (the fetch never resolved): `data` is
+              // undefined and LoaderHost treats it as a COLD error and renders
+              // `errorFallback` / rethrows to an outer boundary. The
+              // `?? syncDataRef.current` fallback is inert here (it is the
+              // uniform error-phase construction); it only retains a value on the
+              // preload-hydrated stream-error path.
               const e = err instanceof Error ? err : new Error(String(err));
               setPhase((p) => ({
                 tag: 'error',
                 error: e,
-                value: phaseValue(p),
+                value: phaseValue(p) ?? syncDataRef.current,
               }));
               settle();
               throw err;

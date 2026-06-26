@@ -6,10 +6,14 @@ import { LocationProvider, type RouteHook } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
 import { useReload } from '../../reload-context.js';
-import { LoaderDataContext } from '../contexts.js';
+import { LoaderDataContext, LoaderIdContext } from '../contexts.js';
 import { useContext } from 'preact/hooks';
 import { env } from '../../is-browser.js';
 import { getPreloadedData } from '../preload.js';
+import {
+  installStreamRegistry,
+  __resetStreamRegistryForTests,
+} from '../stream-registry.js';
 
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => null),
@@ -730,5 +734,80 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
     const last = seen[seen.length - 1];
     const prev = seen[seen.length - 2];
     expect(Object.is(last, prev)).toBe(true);
+  });
+});
+
+// R1R2 review regression: a non-live loader hydrated from an SSR preload (value
+// V on `syncDataRef`, phase still `loading`) subscribes to its live update
+// channel; when that channel errors BEFORE any push, the error must stay
+// in-view as the stale-while-error arm (status `error`, data V), NOT unwind the
+// page to `errorFallback`. The error-phase value carries `phaseValue(p) ??
+// syncDataRef.current`, so the preload value is retained even though the phase
+// was still `loading` when the error fired.
+describe('stale-while-error for preloaded loaders on stream error (R1R2 review)', () => {
+  afterEach(() => {
+    __resetStreamRegistryForTests();
+    delete (window as { __HP_STREAM__?: unknown }).__HP_STREAM__;
+  });
+
+  it('keeps the preloaded value in the error arm (no errorFallback) when the stream errors before any push', async () => {
+    __resetStreamRegistryForTests();
+    installStreamRegistry();
+
+    vi.mocked(getPreloadedData).mockReturnValueOnce({ n: 1 });
+    // The fetch fn must never run: a preload hit reads its value synchronously
+    // and only subscribes to the live channel. If it were called the test would
+    // be exercising a cold fetch, not the preload-stream path.
+    const fn = vi.fn(() => Promise.resolve({ n: 1 }));
+    const ref = defineLoader<{ n: number }>(fn);
+
+    let capturedId: string | null = null;
+    function Child() {
+      capturedId = useContext(LoaderIdContext);
+      const s = ref.useData();
+      let body: string;
+      if (s.status === 'loading') body = 'loading';
+      else if (s.status === 'revalidating')
+        body = `reval:${JSON.stringify(s.data)}`;
+      else if (s.status === 'error') body = `error:${JSON.stringify(s.data)}`;
+      else if (s.status === 'success')
+        body = `success:${JSON.stringify(s.data)}`;
+      else body = `other:${s.status}`;
+      return <span data-testid="out">{body}</span>;
+    }
+
+    render(
+      <LocationProvider>
+        <Loader
+          loader={ref}
+          location={loc}
+          errorFallback={() => <span data-testid="fallback">FALLBACK</span>}
+        >
+          <Child />
+        </Loader>
+      </LocationProvider>
+    );
+
+    // Preload hydrates synchronously to success(V); the fetch fn never runs.
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('success:{"n":1}')
+    );
+    expect(fn).not.toHaveBeenCalled();
+    expect(capturedId).not.toBeNull();
+
+    // The live channel errors before any push (phase is still `loading`).
+    await act(async () => {
+      window.__HP_STREAM__!.error(capturedId!, {
+        message: 'stream boom',
+        name: 'Error',
+      });
+    });
+
+    // Stale-while-error: the error arm renders in-view WITH the preloaded value,
+    // and the page does NOT unwind to `errorFallback`.
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('error:{"n":1}')
+    );
+    expect(screen.queryByTestId('fallback')).toBeNull();
   });
 });
