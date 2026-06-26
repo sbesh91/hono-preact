@@ -16,13 +16,12 @@ import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import { isBrowser } from './is-browser.js';
 import type { AccumulateOptions } from './internal/use-loader-runner.js';
-import type { LoaderState, StreamState } from './loader-state.js';
+import type { LoaderState, StreamState, StreamStatus } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
-export type { StreamStatus } from './internal/use-loader-runner.js';
-export type { LoaderState, StreamState } from './loader-state.js';
+export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
 export type LoaderCtx<
   TParams = Record<string, string>,
@@ -277,6 +276,20 @@ function getSharedCaches(): SharedCacheMap {
 }
 
 /**
+ * The streaming-only statuses: the part of the streaming vocabulary that never
+ * appears on a single-value `LoaderState` (the shared `error` stays on the
+ * `LoaderState` side). Derived from the status union via `Exclude`, so the
+ * exclusion set has ONE source of truth: adding a `StreamStatus` member forces
+ * this map to list it (a missing key is a compile error) and it cannot drift.
+ */
+type StreamOnlyStatus = Exclude<StreamStatus, LoaderState<unknown>['status']>;
+const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
+  connecting: true,
+  open: true,
+  closed: true,
+};
+
+/**
  * Narrow `LoaderDataContext`'s union to the single-value `LoaderState` half by
  * excluding the stream-only statuses. A non-live loader always carries a
  * `LoaderState` on context, so this lets `useData()` return the context value
@@ -287,9 +300,7 @@ function getSharedCaches(): SharedCacheMap {
 function isLoaderState(
   s: LoaderState<unknown> | StreamState<unknown>
 ): s is LoaderState<unknown> {
-  return (
-    s.status !== 'connecting' && s.status !== 'open' && s.status !== 'closed'
-  );
+  return !(s.status in STREAM_ONLY_STATUSES);
 }
 
 // `{ live: true }` selects the accumulating-only `LoaderRef<T, true>`; these

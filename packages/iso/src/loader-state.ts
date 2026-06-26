@@ -1,5 +1,3 @@
-import type { StreamStatus } from './internal/use-loader-runner.js';
-
 /** Single-value loader consumption state. Pattern-match on `status`. */
 export type LoaderState<T> =
   | { status: 'loading' }
@@ -17,6 +15,13 @@ export type StreamState<T> =
   // carries the last-good `data`. Read `data` only after narrowing to a
   // data-bearing status (`open`/`closed`), or guard it on the error arm.
   | { status: 'error'; error: Error; data?: T };
+
+/**
+ * The streaming lifecycle vocabulary, derived from `StreamState` so the literal
+ * union has ONE source of truth (it was previously declared three times). A
+ * `.View` consuming a `live` loader reports one of these as `status`.
+ */
+export type StreamStatus = StreamState<unknown>['status'];
 
 /**
  * The runner's single-value lifecycle as a discriminated union. value-presence

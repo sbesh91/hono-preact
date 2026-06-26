@@ -24,22 +24,43 @@ export function OptimisticOverlay<T, A>({
       '<OptimisticOverlay> must be inside a route page that has a loader'
     );
 
-  // An optimistic projection rewrites the loader DATA, not the load status, so
-  // re-provide the SAME discriminated arm with the data replaced. Read the value
-  // off whichever data-carrying arm is present; while loading/connecting there
-  // is no value to project over, so pass the state through unchanged. `ctx.data`
-  // is the erased context value (`unknown`); reading it as the overlay's bound
-  // `T` is the pre-existing structural-read boundary (the `loader` prop binds
-  // `T`).
+  // An optimistic projection rewrites the loader DATA, not the load status. Read
+  // the current value off whichever data-carrying arm is present, or treat it as
+  // absent during a cold `loading` / `connecting` first load. `ctx.data` is the
+  // erased context value (`unknown`); reading it as the overlay's bound `T` is
+  // the pre-existing structural-read boundary (the `loader` prop binds `T`).
   const base = ('data' in ctx ? ctx.data : undefined) as T;
   const projected = pending.reduce<T>(
     (acc, action) => reducer(acc, action),
     base
   );
 
+  // Data-bearing arm (`success` / `revalidating` / `error`): re-provide the SAME
+  // discriminated arm with the data replaced (load status unchanged).
+  if ('data' in ctx) {
+    return (
+      <LoaderDataContext.Provider value={{ ...ctx, data: projected }}>
+        {children}
+      </LoaderDataContext.Provider>
+    );
+  }
+
+  // Cold first load (`loading` / `connecting`, no underlying value yet). When
+  // there ARE pending actions, surface their projection so descendants reading
+  // `loader.useData()` see the optimistic items DURING the first load, restoring
+  // parity with the overlay before the loader state machine landed (which always
+  // projected). It rides the `revalidating` arm: data is available but
+  // PROVISIONAL while the real first load is still in flight, which is the honest
+  // status (`success` would falsely claim the load completed). With no pending
+  // actions there is nothing to project, so the genuine `loading` / `connecting`
+  // arm passes through unchanged. The reduce seeds from the absent base; the
+  // reducer is responsible for tolerating an empty base, so the overlay never
+  // builds an invalid value itself.
   return (
     <LoaderDataContext.Provider
-      value={'data' in ctx ? { ...ctx, data: projected } : ctx}
+      value={
+        pending.length > 0 ? { status: 'revalidating', data: projected } : ctx
+      }
     >
       {children}
     </LoaderDataContext.Provider>

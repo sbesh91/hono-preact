@@ -230,6 +230,8 @@ const StatsView = statsLoader.View((s) => {
 });
 ```
 
+This inline `error` arm renders for a **reload that fails after the first load already succeeded** (stale-while-error: the prior `data` stays available alongside the error, so you can keep the last-good UI). A loader's **cold first-load** rejection is different: it fails before any value settles, so it routes to the loader's error boundary and the page-level `errorFallback` instead, and the render function is never called with that cold error. See [Loading States](/docs/loading-states) for the cold-error-versus-stale-error distinction.
+
 ## Composing multiple loaders per route
 
 This is the supported pattern when a route needs more than one data source. Declare each source as its own loader in the same `serverLoaders` container; the framework wires each one independently. There is no separate "parallel fetch" or "loader group" API; composition is just adding another key.

@@ -1,5 +1,4 @@
 import type { ComponentChildren } from 'preact';
-import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { useContext, useId, useMemo } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
@@ -20,12 +19,8 @@ import type { HydrationAnchor } from './envelope.js';
 import {
   useLoaderRunner,
   type AccumulateOptions,
-  type StreamStatus,
 } from './use-loader-runner.js';
 export { serializeLocationForCache } from './cache-key.js';
-
-/** Streaming status for a `.View` consuming a streaming/`live` loader. */
-export const LoaderStatusContext = createContext<StreamStatus>('connecting');
 
 /**
  * SERVER-ONLY suspension carrier (Mechanism B, spike-verified in
@@ -119,7 +114,7 @@ export function LoaderHost<T>({
   // before the value lands. So the server path additionally suspends on the
   // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
   // letting `renderToStringAsync` await the loader and bake the resolved value.
-  const { view, reloading, reload, status, reader } = useLoaderRunner<T>(
+  const { view, reloading, reload, reader } = useLoaderRunner<T>(
     loaderRef,
     location,
     id,
@@ -213,9 +208,7 @@ export function LoaderHost<T>({
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
         <ReloadContext.Provider value={{ reload, reloading }}>
           <LoaderErrorContext.Provider value={error}>
-            <LoaderStatusContext.Provider value={status}>
-              {body}
-            </LoaderStatusContext.Provider>
+            {body}
           </LoaderErrorContext.Provider>
         </ReloadContext.Provider>
       </ActiveLoaderIdContext.Provider>

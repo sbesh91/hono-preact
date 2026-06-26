@@ -167,9 +167,11 @@ A live loader opens the stream once and does not auto-reconnect. If the connecti
 
 ### Failure or close before the first chunk
 
-The `status` field reports `'error'` / `'closed'` for failures and clean ends that happen _after_ the first chunk arrives. On the **initial** connect, a stream that fails, times out, or closes with zero chunks _before_ its first chunk is handled by the loader's error path instead: `data` is still undefined, so `errorFallback` renders (or, with no `errorFallback`, the error propagates to the nearest boundary), and the render function's `status` is not updated. Live loaders normally yield immediately on connect (e.g. a backfill of recent events), so this only affects empty or pre-first-chunk-failing streams.
+A stream lifecycle event is **data, not an exception**: failures and clean ends always travel through the render function's `status` field, at every point in the stream's life. A failure on the **initial** connect (the stream fails or times out before its first chunk arrives) surfaces as `status === 'error'`, exactly like a mid-stream drop; because no chunk has arrived, that cold-connect error carries no accumulated value, so its `data` is `undefined`. Branch on it (show an error UI rather than handing your render an empty accumulator), the way the `'error'` row in the table below describes. A stream that ends cleanly before its first chunk simply stays on the `connecting` affordance: there is no accumulator to show.
 
-A failed `reload()` behaves differently and more conveniently: because the component is already mounted, a reconnect that fails (at any point, including before its first chunk) surfaces as `status === 'error'` in the render function, not through the error boundary. That is exactly what makes the reconnect-on-error pattern above work in place.
+Because the cold-connect error surfaces in-view, the reconnect-on-error pattern above works on the very first connect too: a "Reconnect" button shown when `status === 'error'` calls `reload()` to re-open the stream. A failed `reload()` behaves identically, so the in-place recovery pattern is uniform across the first connect and every later reconnect.
+
+`errorFallback` does **not** catch a stream connect failure. It only catches a **render-time throw** from the render subtree (and, during SSR, a throw raised while the document renders). Stream lifecycle errors never reach it.
 
 ## API reference
 
@@ -200,20 +202,20 @@ loader.View<Acc>(
 
 `chunk` is `Serialize<T>`: the JSON round-trip of the server-side chunk, the same wire shape `useData()` and the single-value `.View` surface (a `Date` field arrives as a string).
 
-| Option          | Type                                                       | Description                                                                                                                                                                          |
-| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `initial`       | `Acc`                                                      | Seed value; also the value passed to the render function on SSR and before the first chunk arrives.                                                                                  |
-| `reduce`        | `(acc: Acc, chunk: Serialize<T>) => Acc`                   | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order.                                                                         |
-| `errorFallback` | `ComponentChildren` or `(err, reset) => ComponentChildren` | Rendered if the stream errors before its first chunk (the initial-connect cold error), or if the render subtree throws. The function form receives the error and a `reset` to retry. |
+| Option          | Type                                                       | Description                                                                                                                                                                                                                                                                    |
+| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `initial`       | `Acc`                                                      | Seed value; also the value passed to the render function on SSR and before the first chunk arrives.                                                                                                                                                                            |
+| `reduce`        | `(acc: Acc, chunk: Serialize<T>) => Acc`                   | Folds each incoming chunk (the JSON wire shape) into the accumulated value. Called for every chunk in order.                                                                                                                                                                   |
+| `errorFallback` | `ComponentChildren` or `(err, reset) => ComponentChildren` | Rendered if the render subtree throws (or, during SSR, a throw while the document renders). It does **not** catch stream connect failures: a cold-connect error surfaces in-view as `status === 'error'` instead. The function form receives the error and a `reset` to retry. |
 
 The render function receives a `StreamState<Acc>` discriminated union. Match on `status`:
 
-| `status`       | Fields                      | When                                                                               |
-| -------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| `'connecting'` | (none)                      | SSR and before the first chunk arrives. No data yet.                               |
-| `'open'`       | `data: Acc`                 | The stream is live; `data` is the folded accumulator, updated after each chunk.    |
-| `'closed'`     | `data: Acc`                 | The stream ended cleanly after at least one chunk; `data` is the last accumulator. |
-| `'error'`      | `error: Error`, `data: Acc` | The stream errored after at least one chunk; `data` is the last accumulator.       |
+| `status`       | Fields                       | When                                                                                                                                              |
+| -------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'connecting'` | (none)                       | SSR and before the first chunk arrives. No data yet.                                                                                              |
+| `'open'`       | `data: Acc`                  | The stream is live; `data` is the folded accumulator, updated after each chunk.                                                                   |
+| `'closed'`     | `data: Acc`                  | The stream ended cleanly after at least one chunk; `data` is the last accumulator.                                                                |
+| `'error'`      | `error: Error`, `data?: Acc` | The stream errored (on the initial connect, or after a chunk). `data` is the last accumulator if a chunk had arrived, otherwise absent: guard it. |
 
 The imperative `reload()` (resubscribe: abort the current stream, reset `data` to `initial`, reconnect, and fold afresh) is read from `useReload()`, not passed as a render arg.
 

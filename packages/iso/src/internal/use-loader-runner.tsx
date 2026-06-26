@@ -11,11 +11,10 @@ import type {
   LoaderPhase,
   LoaderView,
   StreamState,
+  StreamStatus,
   SyncValue,
 } from '../loader-state.js';
 import { hasPhaseValue, toLoaderView, toStreamState } from '../loader-state.js';
-
-export type StreamStatus = 'connecting' | 'open' | 'closed' | 'error';
 
 /** Streaming consumption: fold every chunk into accumulated state. */
 export type AccumulateOptions = {
@@ -40,12 +39,6 @@ export type LoaderRunnerState<T> = {
    * `useReload()`'s `reloading` flag; the load status is otherwise on the union.
    */
   reloading: boolean;
-  /**
-   * The raw streaming lifecycle status. Carried for the (consumer-less)
-   * `LoaderStatusContext` provider until it is removed; the public streaming
-   * status is on `view.state.status`.
-   */
-  status: StreamStatus;
   /**
    * The stable throwing reader (`wrapPromise`'s `{ read }`), created ONCE per
    * mount and only rebuilt when location/loader identity changes. SERVER ONLY:
@@ -479,7 +472,6 @@ export function useLoaderRunner<T>(
     view,
     reload,
     reloading,
-    status,
     // Non-null here: every branch above assigns `readerRef.current` before
     // this point (preload/cache stub, live-on-server stub, or wrapPromise).
     reader: readerRef.current,
