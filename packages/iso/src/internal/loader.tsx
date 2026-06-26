@@ -1,8 +1,9 @@
 import type { ComponentChildren } from 'preact';
 import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { useContext, useId } from 'preact/hooks';
+import { useContext, useId, useMemo } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
+import { toLoaderState, toStreamState } from '../loader-state.js';
 import { ReloadContext } from '../reload-context.js';
 import {
   ActiveLoaderIdContext,
@@ -54,6 +55,13 @@ function DataReader<T>({
   children: ComponentChildren;
 }) {
   const raw = reader.read();
+  // Project to the same public union the client carries on context. The server
+  // render is always settled (the reader awaited the value): a non-live loader
+  // is `success`; a live loader's stub resolves to `undefined`, which projects
+  // to `connecting` (the client reconnects on mount).
+  const state = accumulate
+    ? toStreamState(raw, 'connecting', null)
+    : toLoaderState(raw, null, true, false);
   // Live loaders never run on the server; their reader resolves to undefined.
   // The client reconnects on mount, so there is no baked server value to
   // anchor. Non-live loaders resolve and bake their value into data-loader.
@@ -61,7 +69,7 @@ function DataReader<T>({
     ? { kind: 'none' }
     : { kind: 'data', value: raw };
   return (
-    <LoaderDataContext.Provider value={{ data: raw, loading: false }}>
+    <LoaderDataContext.Provider value={state}>
       <Envelope anchor={anchor}>{children}</Envelope>
     </LoaderDataContext.Provider>
   );
@@ -109,28 +117,44 @@ export function LoaderHost<T>({
   // before the value lands. So the server path additionally suspends on the
   // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
   // letting `renderToStringAsync` await the loader and bake the resolved value.
-  const { data, loading, reloading, error, reload, status, reader } =
+  const { data, reloading, settled, error, reload, status, reader } =
     useLoaderRunner<T>(loaderRef, location, id, accumulate);
 
-  // A COLD error: the load failed before any data arrived (`data` is the RAW
-  // runner value, undefined here). The old Suspense path threw the reader so an
-  // error boundary caught it; the state path surfaces the error without throwing,
-  // so reproduce that propagation explicitly. A POST-first-chunk error (`data`
-  // present) is NOT cold: keep the last-good content visible and let the render
-  // fn read the error via `useError()`/`status === 'error'` (stale-while-error).
+  // Project the runner's authoritative state into the public union ONCE, here,
+  // and carry it on `LoaderDataContext` (review #6). `ViewRenderer` and
+  // `useData()` READ this union; they never re-project. Memoized on the runner's
+  // fields so the value is referentially stable across re-renders that do not
+  // change the loader state, keeping `useData()` consumers stable (review #7).
+  const viewState = useMemo(
+    () =>
+      accumulate
+        ? toStreamState(data, status, error)
+        : toLoaderState(data, error, settled, reloading),
+    [accumulate, data, status, error, settled, reloading]
+  );
+
+  // A COLD error: a SINGLE-VALUE load that failed before any value settled. The
+  // old Suspense path threw the reader so an error boundary caught it; the state
+  // path surfaces the error without throwing, so reproduce that propagation
+  // explicitly. Keyed on `!settled` (no settled value), not `data === undefined`,
+  // so a real resolve-to-`undefined` is not mistaken for a cold failure. A
+  // POST-settle error (a value exists) is NOT cold: keep the last-good content
+  // visible and let the render fn read the error via the union's `error` arm /
+  // `useError()` (stale-while-error). Streaming (`accumulate`) cold errors are
+  // NOT routed here; they surface in-view via the `StreamState.error` arm.
   //
   // Server-only: `coldError` is always false on the first (and only) server
   // render of `LoaderHost`, because runner state has not updated yet. A cold
   // failure on the server surfaces by `reader.read()` rethrowing the rejection
   // from inside `DataReader`, which the `ErrorBoundary` wrap below (or an outer
   // page boundary) catches, mirroring the client's `throw error` propagation.
-  const coldError = error != null && data === undefined;
+  const coldError = !accumulate && error != null && !settled;
 
   // SERVER (`!isBrowser()`): suspend on the stable reader from a SEPARATE child
   // so render-to-string awaits the loader and bakes the resolved value. CLIENT:
   // render the view directly from runner state (never calls `reader.read()`).
   const content = isBrowser() ? (
-    <LoaderDataContext.Provider value={{ data, loading }}>
+    <LoaderDataContext.Provider value={viewState}>
       <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
     </LoaderDataContext.Provider>
   ) : (

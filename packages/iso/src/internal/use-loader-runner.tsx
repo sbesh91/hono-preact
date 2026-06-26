@@ -58,6 +58,14 @@ export type LoaderRunnerState<T> = {
    * first-load apart from a refresh-over-stale-data.
    */
   reloading: boolean;
+  /**
+   * Authoritative discriminant: a settled value exists. True for any settled
+   * phase (success/revalidating/error, whose value MAY legitimately be
+   * `undefined`) or when a synchronous preload/cache value is present. The
+   * public `LoaderState`/`StreamState` union is projected from this in
+   * `loader.tsx`, never re-derived from `data === undefined`.
+   */
+  settled: boolean;
   error: Error | null;
   reload: () => void;
   status: StreamStatus;
@@ -181,8 +189,12 @@ export function useLoaderRunner<T>(
     // Enter `revalidating` retaining the prior value (stale-while-revalidate);
     // with no prior value fall back to a cold `loading`. Moving off `error`/
     // `success` here also clears any prior error (error is derived from phase).
+    // A preload/cache-hydrated loader keeps its phase at `loading` while the
+    // value lives on `syncDataRef`, so the prior must consult `syncDataRef`
+    // too, otherwise a reload-over-preload would drop straight to a cold
+    // `loading` instead of `revalidating` (review #2).
     setPhase((p) => {
-      const prior = phaseValue(p);
+      const prior = p.tag === 'loading' ? syncDataRef.current : phaseValue(p);
       return prior !== undefined
         ? { tag: 'revalidating', value: prior }
         : { tag: 'loading' };
@@ -456,33 +468,47 @@ export function useLoaderRunner<T>(
   }
 
   // Derive the public fields WITHOUT calling the throwing bridge reader. The
-  // phase's settled value (streamed/resolved, set via setState) takes
-  // precedence; else the synchronously-available value (preload/cache); else
-  // undefined (cold load). During a reload the `revalidating`/`error` phase
-  // retains the previous value, so `data` is the stale value while `loading` is
-  // true (stale-while-revalidate). `settledValue !== undefined` (not a falsy
-  // check) so a defined-but-falsy value like `0` is surfaced, not masked.
-  const settledValue = phaseValue(phase);
-  const data = settledValue !== undefined ? settledValue : syncDataRef.current;
+  // settled phases (`success`/`revalidating`/`error`) OWN their value, even when
+  // it is `undefined` (a real resolve-to-undefined); only the initial `loading`
+  // phase defers to the synchronously-available value (preload/cache) on
+  // `syncDataRef`. Keying `data` on the phase tag (not `value !== undefined`)
+  // means a settled-`undefined` no longer falls back to a stale `syncDataRef`
+  // value (review #3).
+  const data =
+    phase.tag === 'loading' ? syncDataRef.current : phaseValue(phase);
+
+  // `settled` is the authoritative discriminant a settled value exists:
+  // `success`/`revalidating` always own a value (even `undefined`, a real
+  // resolve-to-undefined), and any phase carrying a value (`error` after a prior
+  // chunk, or the synchronous preload/cache value on a still-`loading` phase)
+  // counts too. A COLD `error` (the load failed before any value, so `data` is
+  // `undefined`) is NOT settled, which is what lets `loader.tsx` route it to the
+  // boundary. The public union is projected from THIS in `loader.tsx`, never
+  // re-derived from `data === undefined` (which cannot tell cold from
+  // settled-undefined, review #1).
+  const settled =
+    phase.tag === 'success' ||
+    phase.tag === 'revalidating' ||
+    data !== undefined;
 
   const reloading = phase.tag === 'revalidating';
   const error = phase.tag === 'error' ? phase.error : null;
 
   // `loading` is true while a load is in flight: an explicit reload (the
   // `revalidating` phase, which re-renders), or a cold load that has not
-  // resolved yet (`inFlightRef` set, no value, no error). The synchronous
+  // settled yet (`inFlightRef` set, not settled, no error). The synchronous
   // preload/cache paths leave `phase` at its initial `loading` tag but populate
-  // `syncDataRef`, so the cold case is gated on `data === undefined` /
-  // `inFlightRef` rather than the bare `loading` tag. Settling the cold load
-  // sets a `success`/`error` phase, which both clears `inFlightRef` and
-  // re-renders with `data`.
+  // `syncDataRef`, so `settled` is already true for them and they report
+  // `loading: false`. Settling a cold load sets a `success`/`error` phase, which
+  // both clears `inFlightRef` and re-renders.
   const loading =
-    reloading || (inFlightRef.current && data === undefined && error === null);
+    reloading || (inFlightRef.current && !settled && error === null);
 
   return {
     data,
     loading,
     reloading,
+    settled,
     error,
     reload,
     status,

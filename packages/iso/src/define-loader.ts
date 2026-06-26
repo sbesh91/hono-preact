@@ -16,7 +16,6 @@ import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import { isBrowser } from './is-browser.js';
 import type { AccumulateOptions } from './internal/use-loader-runner.js';
-import { toLoaderState } from './loader-state.js';
 import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
@@ -277,6 +276,22 @@ function getSharedCaches(): SharedCacheMap {
   return map;
 }
 
+/**
+ * Narrow `LoaderDataContext`'s union to the single-value `LoaderState` half by
+ * excluding the stream-only statuses. A non-live loader always carries a
+ * `LoaderState` on context, so this lets `useData()` return the context value
+ * directly (no re-projection, no cast). The shared `error` status stays on the
+ * `LoaderState` side, which is correct: `useData()` is never called on a `live`
+ * loader (it throws first).
+ */
+function isLoaderState(
+  s: LoaderState<unknown> | StreamState<unknown>
+): s is LoaderState<unknown> {
+  return (
+    s.status !== 'connecting' && s.status !== 'open' && s.status !== 'closed'
+  );
+}
+
 // `{ live: true }` selects the accumulating-only `LoaderRef<T, true>`; these
 // overloads are listed first so the literal `live: true` matches before the
 // general (non-live) form. Omitting `live` (or `live: false`) yields the
@@ -386,7 +401,18 @@ export function defineLoader(
           'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
         );
       }
-      return toLoaderState(ctx.data, ctx.loading, ref.useError());
+      // The context carries the already-projected union (built once in
+      // `loader.tsx`); return it BY REFERENCE so consumers see a referentially
+      // stable value across re-renders (review #7) rather than a fresh
+      // projection each call. A non-live loader always carries a `LoaderState`
+      // (the runner never projects `toStreamState` for it); `isLoaderState`
+      // narrows to that without a cast, and the throw is unreachable defense.
+      if (!isLoaderState(ctx)) {
+        throw new Error(
+          'loader.useData() read a streaming state on a non-live loader; this is an internal invariant violation.'
+        );
+      }
+      return ctx;
     },
     useError() {
       return useContext(LoaderErrorContext);
@@ -477,8 +503,7 @@ export function defineLoader(
         h(ref.Boundary, {
           errorFallback: viewOpts?.errorFallback,
           accumulate,
-          children: h(ViewRenderer<unknown>, {
-            loaderRef: ref,
+          children: h(ViewRenderer, {
             props,
             render,
           }),

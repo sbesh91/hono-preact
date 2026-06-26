@@ -24,17 +24,22 @@ export function OptimisticOverlay<T, A>({
       '<OptimisticOverlay> must be inside a route page that has a loader'
     );
 
-  const base = ctx.data as T;
+  // An optimistic projection rewrites the loader DATA, not the load status, so
+  // re-provide the SAME discriminated arm with the data replaced. Read the value
+  // off whichever data-carrying arm is present; while loading/connecting there
+  // is no value to project over, so pass the state through unchanged. `ctx.data`
+  // is the erased context value (`unknown`); reading it as the overlay's bound
+  // `T` is the pre-existing structural-read boundary (the `loader` prop binds
+  // `T`).
+  const base = ('data' in ctx ? ctx.data : undefined) as T;
   const projected = pending.reduce<T>(
     (acc, action) => reducer(acc, action),
     base
   );
 
   return (
-    // Carry the surrounding `loading` flag through unchanged: an optimistic
-    // projection rewrites the data, not the load state.
     <LoaderDataContext.Provider
-      value={{ data: projected, loading: ctx.loading }}
+      value={'data' in ctx ? { ...ctx, data: projected } : ctx}
     >
       {children}
     </LoaderDataContext.Provider>

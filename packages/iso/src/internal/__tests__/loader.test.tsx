@@ -33,21 +33,24 @@ afterEach(() => {
 });
 
 // A loading-aware probe: with the state-based loader, children render eagerly
-// during the pending window, so `data` may be undefined. It renders a "loading"
-// marker until data is present, then the data. This replaces the Suspense
-// `fallback` prop, which no longer exists.
+// during the pending window, so the union is in its `loading` arm (no data). It
+// renders a "loading" marker until a data-carrying arm is present, then the
+// data. This replaces the Suspense `fallback` prop, which no longer exists.
 function Probe({ testid = 'msg' }: { testid?: string }) {
   const ctx = useContext(LoaderDataContext);
-  const data = ctx?.data as { msg: string } | undefined;
-  if (ctx?.loading && data === undefined)
+  if (ctx?.status === 'loading')
     return <span data-testid="loading">loading</span>;
+  const data =
+    ctx && 'data' in ctx
+      ? (ctx.data as { msg: string } | undefined)
+      : undefined;
   return <span data-testid={testid}>{data?.msg}</span>;
 }
 
 describe('state-based <Loader>: pending/resolved render model', () => {
-  it('renders the children with loading=true & data=undefined on a cold load, with NO fallback element or Suspense boundary', async () => {
+  it('renders the children with the loading arm (no data) on a cold load, with NO fallback element or Suspense boundary', async () => {
     let resolve!: (v: { msg: string }) => void;
-    let captured: { data: unknown; loading: boolean } | null = null;
+    let captured: { status: string; data?: unknown } | null = null;
     const fn = vi.fn(
       () =>
         new Promise<{ msg: string }>((r) => {
@@ -57,10 +60,7 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Capture() {
-      captured = useContext(LoaderDataContext) as {
-        data: unknown;
-        loading: boolean;
-      } | null;
+      captured = useContext(LoaderDataContext);
       return <Probe />;
     }
 
@@ -72,10 +72,10 @@ describe('state-based <Loader>: pending/resolved render model', () => {
       </LocationProvider>
     );
 
-    // While pending: render fn ran with loading=true, data=undefined. The
-    // children rendered directly (no separate fallback element).
-    await waitFor(() => expect(captured?.loading).toBe(true));
-    expect(captured?.data).toBeUndefined();
+    // While pending: the union is in its `loading` arm (no data). The children
+    // rendered directly (no separate fallback element).
+    await waitFor(() => expect(captured?.status).toBe('loading'));
+    expect(captured && 'data' in captured).toBe(false);
     expect(screen.queryByTestId('loading')).not.toBeNull();
     // The resolved markup is the SAME <section> the Envelope always renders
     // (no Suspense fallback section swapped in/out).
@@ -86,8 +86,10 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     });
 
     await screen.findByText('ready');
-    expect(captured?.loading).toBe(false);
-    expect(captured?.data).toEqual({ msg: 'ready' });
+    expect(captured?.status).toBe('success');
+    expect(captured && 'data' in captured ? captured.data : undefined).toEqual({
+      msg: 'ready',
+    });
   });
 
   it('renders a defined-but-falsy resolved value (no undefined-precedence ambiguity)', async () => {
@@ -96,8 +98,9 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     let observed: unknown = 'unset';
     function Capture() {
       const ctx = useContext(LoaderDataContext);
-      observed = ctx?.data;
-      return <span data-testid="val">{String(ctx?.data)}</span>;
+      const data = ctx && 'data' in ctx ? ctx.data : undefined;
+      observed = data;
+      return <span data-testid="val">{String(data)}</span>;
     }
     render(
       <LocationProvider>

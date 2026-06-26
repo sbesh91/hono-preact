@@ -22,14 +22,15 @@ const reducer = (base: Todo[], action: Action): Todo[] => {
 
 function DataReader() {
   const ctx = useContext(LoaderDataContext);
-  return <pre data-testid="out">{JSON.stringify(ctx?.data)}</pre>;
+  const data = ctx && 'data' in ctx ? ctx.data : undefined;
+  return <pre data-testid="out">{JSON.stringify(data)}</pre>;
 }
 
 describe('<OptimisticOverlay>', () => {
   it('passes base data through unchanged when pending is empty', () => {
     const base: Todo[] = [{ id: 'a', text: 'first' }];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ data: base }}>
+      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
         <OptimisticOverlay loader={todoLoader} reducer={reducer}>
           <DataReader />
         </OptimisticOverlay>
@@ -45,7 +46,7 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'add', todo: { id: 'c', text: 'third' } },
     ];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ data: base }}>
+      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
         <OptimisticOverlay
           loader={todoLoader}
           reducer={reducer}
@@ -70,7 +71,7 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'remove', id: 'a' },
     ];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ data: base }}>
+      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
         <OptimisticOverlay
           loader={todoLoader}
           reducer={reducer}
@@ -91,7 +92,7 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'add', todo: { id: 'b', text: 'second' } },
     ];
     render(
-      <LoaderDataContext.Provider value={{ data: base }}>
+      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
         <OptimisticOverlay
           loader={todoLoader}
           reducer={reducer}

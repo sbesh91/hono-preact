@@ -15,19 +15,27 @@ export type StreamState<T> =
   | { status: 'error'; error: Error; data: T };
 
 /**
- * Project loose loader-context fields into a single-value union. Cold errors
- * (error with no data) are handled by errorFallback/ErrorBoundary before the
- * render fn runs, so the `error` arm always carries data here.
+ * Project the runner's authoritative discriminant into the single-value union.
+ * Keyed on `settled` (a settled value exists), NOT on `data === undefined`, so a
+ * loader that legitimately resolves to `undefined` lands in `success`/`error`
+ * rather than collapsing back to `loading` (review #1).
+ *
+ * `data` is typed `T` (not `T | undefined`): the caller (`loader.tsx`) passes
+ * the runner's settled value, whose type already admits `undefined` when the
+ * loader can return it (inference binds `T` to that wider type). In the
+ * data-carrying arms the value IS `T`, so no cast is needed. Cold errors (error
+ * with no settled value) are routed to `errorFallback`/the boundary in
+ * `loader.tsx` before the render fn runs; here they fall through to `loading`.
  */
 export function toLoaderState<T>(
-  data: T | undefined,
-  loading: boolean,
-  error: Error | null
+  data: T,
+  error: Error | null,
+  settled: boolean,
+  reloading: boolean
 ): LoaderState<T> {
-  if (error !== null && data !== undefined)
-    return { status: 'error', error, data };
-  if (data === undefined) return { status: 'loading' };
-  if (loading) return { status: 'revalidating', data };
+  if (error !== null && settled) return { status: 'error', error, data };
+  if (!settled) return { status: 'loading' };
+  if (reloading) return { status: 'revalidating', data };
   return { status: 'success', data };
 }
 

@@ -96,7 +96,7 @@ describe('LoaderRef methods', () => {
     const { container } = render(
       h(
         LoaderDataContext.Provider,
-        { value: { data: { value: 42 }, loading: false } },
+        { value: { status: 'success', data: { value: 42 } } },
         h(Probe, null)
       )
     );

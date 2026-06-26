@@ -3,35 +3,46 @@ import { toLoaderState, toStreamState } from '../loader-state.js';
 
 describe('toLoaderState', () => {
   const e = new Error('boom');
-  it('cold load -> loading', () => {
-    expect(toLoaderState(undefined, true, null)).toEqual({ status: 'loading' });
+  // Signature: toLoaderState(data, error, settled, reloading). Projection is
+  // keyed on the authoritative `settled` discriminant, never on
+  // `data === undefined`.
+  it('not settled -> loading', () => {
+    expect(toLoaderState(undefined, null, false, false)).toEqual({
+      status: 'loading',
+    });
   });
   it('settled value -> success', () => {
-    expect(toLoaderState({ a: 1 }, false, null)).toEqual({
+    expect(toLoaderState({ a: 1 }, null, true, false)).toEqual({
       status: 'success',
       data: { a: 1 },
     });
   });
-  it('reload with prior data -> revalidating', () => {
-    expect(toLoaderState({ a: 1 }, true, null)).toEqual({
+  it('settled + reloading -> revalidating (keeps prior data)', () => {
+    expect(toLoaderState({ a: 1 }, null, true, true)).toEqual({
       status: 'revalidating',
       data: { a: 1 },
     });
   });
-  it('error with prior data -> error (stale-while-error)', () => {
-    expect(toLoaderState({ a: 1 }, false, e)).toEqual({
+  it('settled + error -> error (stale-while-error)', () => {
+    expect(toLoaderState({ a: 1 }, e, true, false)).toEqual({
       status: 'error',
       error: e,
       data: { a: 1 },
     });
   });
-  it('data===undefined projects to loading at this seam', () => {
-    // The pure projection cannot distinguish "cold, no value" from "resolved to
-    // undefined"; both have data===undefined, so both map to `loading` here.
-    // The resolved-to-undefined-is-success case is a RUNNER concern (the phase
-    // ADT carries `{ tag: 'success', value: undefined }`), asserted in Task 5,
-    // not at this projection seam.
-    expect(toLoaderState(undefined, false, null)).toEqual({
+  it('settled value of undefined -> success with data undefined (review #1)', () => {
+    // A loader that legitimately resolves to `undefined` is SETTLED, so it
+    // projects to `success` (data === undefined), NOT back to `loading`. This is
+    // the core regression the old `data === undefined -> loading` heuristic hit.
+    expect(toLoaderState(undefined, null, true, false)).toEqual({
+      status: 'success',
+      data: undefined,
+    });
+  });
+  it('error but not settled -> loading (cold error routed to the boundary)', () => {
+    // A cold error (no settled value) projects to `loading` here; `loader.tsx`
+    // routes it to `errorFallback`/the boundary before the render fn runs.
+    expect(toLoaderState(undefined, e, false, false)).toEqual({
       status: 'loading',
     });
   });

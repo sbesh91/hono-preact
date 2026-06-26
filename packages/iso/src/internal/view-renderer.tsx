@@ -1,14 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useContext } from 'preact/hooks';
-import type { LoaderRef } from '../define-loader.js';
-import {
-  toLoaderState,
-  toStreamState,
-  type LoaderState,
-  type StreamState,
-} from '../loader-state.js';
+import type { LoaderState, StreamState } from '../loader-state.js';
 import { LoaderDataContext } from './contexts.js';
-import { LoaderStatusContext } from './loader.js';
 
 /**
  * The discriminated value `ViewRenderer` hands every render function: a
@@ -16,37 +9,34 @@ import { LoaderStatusContext } from './loader.js';
  * the data type erased to `unknown` at this internal seam (the public
  * `LoaderRef.View` overloads restore `Serialize<T>` / the caller's `Acc`). The
  * index signature carries the consumer's spread props. Pattern-match on
- * `status`; the explicit `reload()` callback is now read via `useReload()`,
- * not handed in here.
+ * `status`; the explicit `reload()` callback is read via `useReload()`, not
+ * handed in here.
  */
 export type ViewState = (LoaderState<unknown> | StreamState<unknown>) & {
   [key: string]: unknown;
 };
 
-// Projects the loose loader-context fields (`data`/`loading` from
-// `LoaderDataContext`, the streaming `status`, and the `error` from
-// `useError()`) into the public discriminated union, then hands `union & props`
-// to the consumer's render function. Reads `LoaderDataContext` directly rather
-// than `loaderRef.useData()` so it also serves `live` loaders (whose
-// `useData()` throws by design); the accumulated value lands in the same
-// context. Lives here, next to its context dependencies, rather than in
-// define-loader.ts.
-export function ViewRenderer<T>({
-  loaderRef,
+// Reads the PROJECTED union straight off `LoaderDataContext` (computed once in
+// `loader.tsx`) and merges the consumer's spread props, then hands `union &
+// props` to the render function. It no longer re-projects loose fields: the
+// discriminant is authoritative on context, so a `live` loader's `StreamState`
+// and a single-value loader's `LoaderState` both ride the same context and are
+// read here without a second derivation (review #6). Lives here, next to its
+// context dependency, rather than in define-loader.ts.
+export function ViewRenderer({
   props,
   render,
 }: {
-  loaderRef: LoaderRef<T, boolean>;
   props: Record<string, unknown>;
   render: (args: ViewState) => ComponentChildren;
 }) {
-  const dataCtx = useContext(LoaderDataContext);
-  const data = dataCtx?.data;
-  const loading = dataCtx?.loading ?? false;
-  const error = loaderRef.useError();
-  const status = useContext(LoaderStatusContext);
-  const state = loaderRef.live
-    ? toStreamState(data, status, error)
-    : toLoaderState(data, loading, error);
+  const state = useContext(LoaderDataContext);
+  if (!state) {
+    throw new Error(
+      'loader.View render function must be rendered inside a `loader.View` / `loader.Boundary`.'
+    );
+  }
+  // `state` is the projected union; spread the consumer props last so they
+  // compose onto it (the render arg is `union & props`).
   return render({ ...state, ...props });
 }

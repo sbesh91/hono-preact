@@ -1,95 +1,66 @@
 // @vitest-environment happy-dom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { h } from 'preact';
 import type { ComponentChildren } from 'preact';
-import { render } from '@testing-library/preact';
+import { render, cleanup } from '@testing-library/preact';
 import { ViewRenderer, type ViewState } from '../view-renderer.js';
-import type { LoaderRef } from '../../define-loader.js';
-import type { StreamStatus } from '../use-loader-runner.js';
+import type { LoaderState, StreamState } from '../../loader-state.js';
 import { LoaderDataContext } from '../contexts.js';
-import { LoaderStatusContext } from '../loader.js';
-import { ReloadContext } from '../../reload-context.js';
 
-// Mounts `ViewRenderer` inside the three loader contexts it reads
-// (`LoaderDataContext` for data/loading, `LoaderStatusContext` for the
-// streaming status, `ReloadContext` for the reload callback) with the given
-// loose values, plus a stub `loaderRef` carrying `live` + `useError()`. It
-// captures whatever union `ViewRenderer` projects and hands the render fn.
+afterEach(() => {
+  cleanup();
+});
+
+// Mounts `ViewRenderer` under a `LoaderDataContext` already carrying the
+// PROJECTED union (the projection now happens once in `loader.tsx`, not here).
+// ViewRenderer's job is to read that union and merge the consumer's spread
+// props, so these assert it passes the union through unchanged (plus props).
 function renderViewRenderer(
-  ctx: {
-    data: unknown;
-    loading?: boolean;
-    status?: StreamStatus;
-    live?: boolean;
-    error?: Error | null;
-    props?: Record<string, unknown>;
-  },
-  renderFn: (args: ViewState) => ComponentChildren
+  state: LoaderState<unknown> | StreamState<unknown>,
+  renderFn: (args: ViewState) => ComponentChildren,
+  props: Record<string, unknown> = {}
 ) {
-  const loaderRef = {
-    live: ctx.live ?? false,
-    useError: () => ctx.error ?? null,
-  } as unknown as LoaderRef<unknown, boolean>;
-
   render(
     h(
       LoaderDataContext.Provider,
-      { value: { data: ctx.data, loading: ctx.loading ?? false } },
-      h(
-        LoaderStatusContext.Provider,
-        { value: ctx.status ?? 'connecting' },
-        h(
-          ReloadContext.Provider,
-          { value: { reload: () => {}, reloading: false } },
-          h(ViewRenderer, {
-            loaderRef,
-            props: ctx.props ?? {},
-            render: renderFn,
-          })
-        )
-      )
+      { value: state },
+      h(ViewRenderer, { props, render: renderFn })
     )
   );
 }
 
 describe('ViewRenderer', () => {
-  it('passes a discriminated LoaderState to the render fn (single-value)', () => {
+  it('passes a single-value LoaderState through to the render fn', () => {
     const seen: ViewState[] = [];
-    renderViewRenderer(
-      { data: { title: 'Dune' }, loading: false, live: false },
-      (s) => {
-        seen.push(s);
-        return null;
-      }
-    );
+    renderViewRenderer({ status: 'success', data: { title: 'Dune' } }, (s) => {
+      seen.push(s);
+      return null;
+    });
     expect(seen[0]).toEqual({ status: 'success', data: { title: 'Dune' } });
   });
 
-  it('passes a StreamState for live loaders', () => {
+  it('passes a StreamState (connecting) through to the render fn', () => {
     const seen: ViewState[] = [];
-    renderViewRenderer(
-      { data: undefined, status: 'connecting', live: true },
-      (s) => {
-        seen.push(s);
-        return null;
-      }
-    );
+    renderViewRenderer({ status: 'connecting' }, (s) => {
+      seen.push(s);
+      return null;
+    });
     expect(seen[0]).toEqual({ status: 'connecting' });
   });
 
-  it('reports the single-value loading arm (cold load, no data)', () => {
+  it('passes the single-value loading arm through', () => {
     const seen: ViewState[] = [];
-    renderViewRenderer({ data: undefined, loading: true, live: false }, (s) => {
+    renderViewRenderer({ status: 'loading' }, (s) => {
       seen.push(s);
       return null;
     });
     expect(seen[0]).toEqual({ status: 'loading' });
   });
 
-  it('reports the revalidating arm (reload over prior data)', () => {
+  it('passes the revalidating arm through', () => {
     const seen: ViewState[] = [];
     renderViewRenderer(
-      { data: { title: 'Dune' }, loading: true, live: false },
+      { status: 'revalidating', data: { title: 'Dune' } },
       (s) => {
         seen.push(s);
         return null;
@@ -101,23 +72,20 @@ describe('ViewRenderer', () => {
     });
   });
 
-  it('reports the streaming open arm once a chunk has arrived', () => {
+  it('passes the streaming open arm through', () => {
     const seen: ViewState[] = [];
-    renderViewRenderer(
-      { data: { count: 2 }, status: 'open', live: true },
-      (s) => {
-        seen.push(s);
-        return null;
-      }
-    );
+    renderViewRenderer({ status: 'open', data: { count: 2 } }, (s) => {
+      seen.push(s);
+      return null;
+    });
     expect(seen[0]).toEqual({ status: 'open', data: { count: 2 } });
   });
 
-  it('surfaces a cold loader error as the error arm', () => {
+  it('passes the error arm through', () => {
     const err = new Error('loader failed');
     const seen: ViewState[] = [];
     renderViewRenderer(
-      { data: { title: 'Dune' }, loading: false, live: false, error: err },
+      { status: 'error', error: err, data: { title: 'Dune' } },
       (s) => {
         seen.push(s);
         return null;
@@ -130,24 +98,26 @@ describe('ViewRenderer', () => {
     });
   });
 
-  it('merges spread props into the projected union', () => {
+  it('merges spread props into the union', () => {
     const seen: ViewState[] = [];
     renderViewRenderer(
-      {
-        data: { title: 'Dune' },
-        loading: false,
-        live: false,
-        props: { extra: 'x' },
-      },
+      { status: 'success', data: { title: 'Dune' } },
       (s) => {
         seen.push(s);
         return null;
-      }
+      },
+      { extra: 'x' }
     );
     expect(seen[0]).toEqual({
       status: 'success',
       data: { title: 'Dune' },
       extra: 'x',
     });
+  });
+
+  it('throws when rendered outside a Loader (no context)', () => {
+    expect(() =>
+      render(h(ViewRenderer, { props: {}, render: () => null }))
+    ).toThrow(/loader\.View/);
   });
 });
