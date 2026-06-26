@@ -69,5 +69,14 @@ export function parseArgs(argv) {
     }
   }
 
-  return { kind: 'scaffold', targetDir, adapter, ui, install, git, yes, skipHints };
+  return {
+    kind: 'scaffold',
+    targetDir,
+    adapter,
+    ui,
+    install,
+    git,
+    yes,
+    skipHints,
+  };
 }

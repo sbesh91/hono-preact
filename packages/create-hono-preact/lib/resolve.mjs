@@ -67,5 +67,12 @@ export async function resolveOptions(parsed, { interactive, prompts }) {
       : true;
   }
 
-  return { targetDir, adapter, ui, install, git, skipHints: Boolean(parsed.skipHints) };
+  return {
+    targetDir,
+    adapter,
+    ui,
+    install,
+    git,
+    skipHints: Boolean(parsed.skipHints),
+  };
 }

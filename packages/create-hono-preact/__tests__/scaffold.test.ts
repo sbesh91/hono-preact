@@ -63,7 +63,9 @@ describe('scaffold', () => {
     const target = join(workDir, 'my-app');
     await scaffold(target, { adapter: 'cloudflare', ui: false }, templatesRoot);
     expect(readPkg(target).name).toBe('my-app');
-    expect(readFileSync(join(target, 'src', 'Layout.tsx'), 'utf8')).toContain('{{name}}');
+    expect(readFileSync(join(target, 'src', 'Layout.tsx'), 'utf8')).toContain(
+      '{{name}}'
+    );
     expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(target, '.gitignore'))).toBe(true);
   });

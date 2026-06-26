@@ -39,11 +39,17 @@ describe('composePackageJson', () => {
     try {
       writeFileSync(
         join(dir, 'base.json'),
-        JSON.stringify({ scripts: { dev: 'vite' }, dependencies: { preact: '^10' } })
+        JSON.stringify({
+          scripts: { dev: 'vite' },
+          dependencies: { preact: '^10' },
+        })
       );
       writeFileSync(
         join(dir, 'overlay.json'),
-        JSON.stringify({ scripts: { deploy: 'wrangler deploy' }, devDependencies: { wrangler: '^4' } })
+        JSON.stringify({
+          scripts: { deploy: 'wrangler deploy' },
+          devDependencies: { wrangler: '^4' },
+        })
       );
       const merged = await composePackageJson([
         join(dir, 'base.json'),

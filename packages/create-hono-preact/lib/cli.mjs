@@ -91,7 +91,9 @@ export async function run({
       return 1;
     }
   } catch (err) {
-    if (!(err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT')) {
+    if (
+      !(err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT')
+    ) {
       throw err;
     }
     // Directory doesn't exist yet; scaffold() will create it.
@@ -107,13 +109,33 @@ export async function run({
 
   if (install) {
     spin?.start('Installing dependencies...');
-    const code = await runChild(spawnFn, pm, ['install'], targetPath, childStdio);
+    const code = await runChild(
+      spawnFn,
+      pm,
+      ['install'],
+      targetPath,
+      childStdio
+    );
+    if (code !== 0) {
+      if (interactive) {
+        spin?.stop('Dependency install failed', 1);
+        console.error(
+          `Run '${pm} install' in ${targetDir} to see what failed.`
+        );
+      }
+      return 1;
+    }
     spin?.stop('Dependencies installed');
-    if (code !== 0) return 1;
   }
 
   if (git) {
-    const code = await runChild(spawnFn, 'git', ['init'], targetPath, childStdio);
+    const code = await runChild(
+      spawnFn,
+      'git',
+      ['init'],
+      targetPath,
+      childStdio
+    );
     if (code !== 0) {
       console.warn(
         'warning: git init failed (is git installed?); continuing without git'

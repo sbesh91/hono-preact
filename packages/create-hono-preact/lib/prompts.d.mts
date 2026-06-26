@@ -9,7 +9,7 @@ export interface PromptAdapter {
   intro(message: string): void;
   outro(message: string): void;
   note(message: string, title?: string): void;
-  spinner(): { start(message: string): void; stop(message: string): void };
+  spinner(): { start(message: string): void; stop(message: string, code?: number): void };
 }
 
 export const clackPrompts: PromptAdapter;

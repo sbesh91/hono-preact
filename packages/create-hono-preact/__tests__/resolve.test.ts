@@ -38,16 +38,31 @@ describe('resolveOptions — non-interactive', () => {
 
   it('throws when targetDir is missing', async () => {
     await expect(
-      resolveOptions({ ...base }, { interactive: false, prompts: stubPrompts() })
+      resolveOptions(
+        { ...base },
+        { interactive: false, prompts: stubPrompts() }
+      )
     ).rejects.toThrow(/project directory is required/i);
   });
 
   it('flag values override defaults', async () => {
     const opts = await resolveOptions(
-      { ...base, targetDir: 'app', adapter: 'node', ui: true, install: false, git: false },
+      {
+        ...base,
+        targetDir: 'app',
+        adapter: 'node',
+        ui: true,
+        install: false,
+        git: false,
+      },
       { interactive: false, prompts: stubPrompts() }
     );
-    expect(opts).toMatchObject({ adapter: 'node', ui: true, install: false, git: false });
+    expect(opts).toMatchObject({
+      adapter: 'node',
+      ui: true,
+      install: false,
+      git: false,
+    });
   });
 });
 

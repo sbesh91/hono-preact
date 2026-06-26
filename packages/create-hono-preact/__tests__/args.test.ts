@@ -25,6 +25,24 @@ describe('parseArgs', () => {
     );
   });
 
+  it('accepts --adapter=node (equals form, node value)', () => {
+    expect(parseArgs(['my-app', '--adapter=node']).adapter).toBe('node');
+  });
+
+  it('returns kind=help for -h', () => {
+    expect(parseArgs(['-h'])).toEqual({ kind: 'help' });
+  });
+
+  it('flags can appear before the target dir', () => {
+    const r = parseArgs(['--adapter=node', '--no-install', 'my-app']);
+    expect(r).toMatchObject({
+      kind: 'scaffold',
+      targetDir: 'my-app',
+      adapter: 'node',
+      install: false,
+    });
+  });
+
   it('rejects an unknown adapter', () => {
     const r = parseArgs(['my-app', '--adapter=deno']);
     expect(r.kind).toBe('error');

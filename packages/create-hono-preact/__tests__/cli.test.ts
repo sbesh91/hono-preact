@@ -479,7 +479,13 @@ describe('run() — interactive wizard', () => {
   it('does not prompt for a value supplied by a flag', async () => {
     const fake = fakePrompts({ dir: 'flagged' });
     await run({
-      argv: ['flagged', '--adapter=cloudflare', '--no-ui', '--no-install', '--no-git'],
+      argv: [
+        'flagged',
+        '--adapter=cloudflare',
+        '--no-ui',
+        '--no-install',
+        '--no-git',
+      ],
       cwd: workDir,
       env: {},
       isTTY: true,
@@ -487,5 +493,35 @@ describe('run() — interactive wizard', () => {
     });
     expect(fake.calls.text).toBe(0); // dir came from positional
     expect(fake.calls.selectAdapter).toBe(0); // adapter from flag
+  });
+
+  it('interactive: failed install stops the spinner as failed and returns 1', async () => {
+    const stops: Array<{ message: string; code?: number }> = [];
+    const fake = fakePrompts({ dir: 'fail-install', adapter: 'node' });
+    // override spinner to record stop calls
+    (fake.prompts as PromptAdapter).spinner = () => ({
+      start: () => {},
+      stop: (message: string, code?: number) => {
+        stops.push({ message, code });
+      },
+    });
+    const failingSpawn = (cmd: string) => ({
+      on: (e: string, cb: (c: number) => void) => {
+        if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
+      },
+    });
+    const code = await run({
+      argv: ['fail-install', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'pnpm/10' },
+      isTTY: true,
+      prompts: fake.prompts,
+      spawnFn: failingSpawn as never,
+    });
+    expect(code).toBe(1);
+    expect(stops.some((s) => s.code === 1)).toBe(true);
+    expect(stops.some((s) => s.message === 'Dependencies installed')).toBe(
+      false
+    );
   });
 });
