@@ -145,7 +145,9 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       const { mutate } = useAction(incrementStub, { invalidate: 'auto' });
       return (
         <div>
-          <span data-testid="count">count: {'data' in s ? s.data.count : '…'}</span>
+          <span data-testid="count">
+            count: {'data' in s ? s.data.count : '…'}
+          </span>
           <button onClick={() => mutate(undefined as void)}>bump</button>
         </div>
       );
