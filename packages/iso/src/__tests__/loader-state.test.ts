@@ -47,6 +47,14 @@ describe('toStreamState', () => {
       status: 'connecting',
     });
   });
+  it('reload with seed (connecting status, defined initial) -> connecting', () => {
+    // A live-loader reload surfaces data = accumulate.initial (e.g. []) with
+    // status 'connecting' before the first chunk re-arrives; project that as
+    // connecting (mirroring a fresh mount), not open with the empty seed.
+    expect(toStreamState([], 'connecting', null)).toEqual({
+      status: 'connecting',
+    });
+  });
   it('open with data', () => {
     expect(toStreamState([1], 'open', null)).toEqual({
       status: 'open',

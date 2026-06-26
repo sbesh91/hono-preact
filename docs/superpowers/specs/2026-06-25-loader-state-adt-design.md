@@ -210,7 +210,7 @@ TypeScript surfaces every stale call site at compile time, so the migration is c
 
 TDD, red-first, one failing test per fix before its change:
 
-- `undefined`-resolving single-value loader clears `loading` and renders `success` (#10).
+- `undefined`-resolving single-value loader: the RUNNER clears `loading` (the `success: { value: undefined }` phase, so no hang), but the pure `toLoaderState` projection collapses `data === undefined` back to the `loading` arm at the seam, so end-to-end such a loader projects to `loading`, not `success` (#10).
 - exhaustive `switch` over `LoaderState` / `StreamState` typechecks (`*.test-d.ts`).
 - `loader.useData()` returns the union (#1/#2).
 - live-loader SSR with a non-serializable `initial` (`BigInt`) does not throw and emits `data-loader="null"` (#3).
