@@ -141,11 +141,11 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       // window, so `useData()` is `undefined` until the first fetch resolves.
       // Guard the destructure (the new client contract) rather than assuming a
       // resolved value is always present, as the pre-state Suspense model did.
-      const data = countLoader.useData() as { count: number } | undefined;
+      const s = countLoader.useData();
       const { mutate } = useAction(incrementStub, { invalidate: 'auto' });
       return (
         <div>
-          <span data-testid="count">count: {data ? data.count : '…'}</span>
+          <span data-testid="count">count: {'data' in s ? s.data.count : '…'}</span>
           <button onClick={() => mutate(undefined as void)}>bump</button>
         </div>
       );

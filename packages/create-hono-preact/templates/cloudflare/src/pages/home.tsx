@@ -5,7 +5,9 @@ import { serverLoaders } from './home.server.js';
 const homeLoader = serverLoaders.default;
 
 const HomePage: FunctionComponent = () => {
-  const { message, renderedAt } = homeLoader.useData();
+  const s = homeLoader.useData();
+  if (s.status === 'loading') return <p>Loading...</p>;
+  const { message, renderedAt } = s.data;
   return (
     <section>
       <h1>Welcome to {'{{name}}'}</h1>
@@ -19,8 +21,8 @@ const HomePage: FunctionComponent = () => {
 };
 HomePage.displayName = 'HomePage';
 
-const HomeView = homeLoader.View(({ loading }) =>
-  loading ? <p>Loading...</p> : <HomePage />
+const HomeView = homeLoader.View((s) =>
+  s.status === 'loading' ? <p>Loading...</p> : <HomePage />
 );
 
 export default definePage(HomeView, {});
