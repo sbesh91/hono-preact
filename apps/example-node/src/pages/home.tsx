@@ -30,11 +30,14 @@ HomePage.displayName = 'HomePage';
 const LiveCounter = countLoader.View<number>(
   (s) => {
     const inc = useAction(serverActions.increment);
-    // `connecting` carries no data; fall back to the initial count (0).
-    const count = s.status === 'connecting' ? 0 : s.data;
+    // Only `open`/`closed` carry the accumulated count; `connecting` and a cold
+    // `error` (the connect failed before the first chunk) carry no data, so fall
+    // back to the initial count (0) rather than dereferencing `s.data`.
+    const count = s.status === 'open' || s.status === 'closed' ? s.data : 0;
     return (
       <p>
-        Live count: <strong>{count}</strong> ({s.status}){' '}
+        Live count: <strong>{count}</strong> ({s.status})
+        {s.status === 'error' && <> error: {s.error.message}</>}{' '}
         <button
           type="button"
           disabled={inc.pending}

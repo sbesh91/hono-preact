@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
+import { Component } from 'preact';
+import type { ComponentChildren } from 'preact';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
+import { RouteLocationsProvider } from '../route-locations.js';
 
 /**
  * Build a mock SSE Response that emits each chunk in a separate microtask
@@ -82,6 +85,91 @@ describe('streaming loader: client-driven', () => {
     await waitFor(() =>
       expect(screen.getByTestId('count')).toHaveTextContent('3')
     );
+  });
+
+  it('surfaces a COLD connect error (rejected before any chunk) in the StreamState error arm in-view, NOT to an outer boundary', async () => {
+    // The live/accumulate connect fails before any chunk arrives: `fetch`
+    // resolves to an error status, so the first-chunk promise rejects with no
+    // accumulated value. The runner lands on { status: 'error', data: undefined }
+    // (a cold stream error). The render fn MUST see `status === 'error'` in-view;
+    // the page must NOT unwind to an outer boundary (that is the single-value
+    // cold-error path, not the streaming one).
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'connect refused' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const MODULE_KEY = 'test-stream-cold-err';
+    const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
+      __moduleKey: MODULE_KEY,
+      live: true,
+    });
+
+    // Records whether an OUTER boundary caught a throw. A cold STREAM error must
+    // never reach it (only single-value cold errors route to the boundary).
+    let boundaryCaught: Error | null = null;
+    class Boundary extends Component<
+      { children: ComponentChildren },
+      { err: Error | null }
+    > {
+      state = { err: null };
+      static getDerivedStateFromError(err: Error) {
+        boundaryCaught = err;
+        return { err };
+      }
+      render() {
+        return this.state.err ? (
+          <p data-testid="boundary">boundary:{this.state.err.message}</p>
+        ) : (
+          this.props.children
+        );
+      }
+    }
+
+    // The real, fully-typed accumulating `.View` consumer path: the render fn
+    // receives a `StreamState<number>` directly (no cast at the seam).
+    const seen: string[] = [];
+    const LiveView = ref.View<number>(
+      (s) => {
+        seen.push(s.status);
+        if (s.status === 'error')
+          return <p data-testid="out">stream-error:{s.error.message}</p>;
+        if (s.status === 'connecting')
+          return <p data-testid="out">connecting</p>;
+        return <p data-testid="out">data:{String(s.data)}</p>;
+      },
+      { initial: 0, reduce: (_acc, chunk) => chunk.count }
+    );
+
+    // Structurally a preact-iso RouteHook; assignable with no cast.
+    const LOC = { path: '/', pathParams: {}, searchParams: {} };
+
+    render(
+      <LocationProvider>
+        <Boundary>
+          <RouteLocationsProvider moduleKey={MODULE_KEY} location={LOC}>
+            <LiveView />
+          </RouteLocationsProvider>
+        </Boundary>
+      </LocationProvider>
+    );
+
+    // Before the connect settles the render fn shows the connecting affordance.
+    expect(screen.getByTestId('out')).toHaveTextContent('connecting');
+
+    // Once the cold connect error settles it surfaces IN-VIEW via the error arm.
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('stream-error')
+    );
+    // The error reached the render fn, not an outer boundary.
+    expect(boundaryCaught).toBeNull();
+    expect(screen.queryByTestId('boundary')).toBeNull();
+    expect(seen).toContain('error');
   });
 
   it('surfaces a post-first-chunk error via useError and keeps last-good data', async () => {

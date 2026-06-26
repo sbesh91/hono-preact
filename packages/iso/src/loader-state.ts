@@ -12,7 +12,11 @@ export type StreamState<T> =
   | { status: 'connecting' }
   | { status: 'open'; data: T }
   | { status: 'closed'; data: T }
-  | { status: 'error'; error: Error; data: T };
+  // `data` is optional: a COLD stream error (the connect rejects before any
+  // chunk) surfaces here with no accumulated value. A post-chunk error still
+  // carries the last-good `data`. Read `data` only after narrowing to a
+  // data-bearing status (`open`/`closed`), or guard it on the error arm.
+  | { status: 'error'; error: Error; data?: T };
 
 /**
  * Project the runner's authoritative discriminant into the single-value union.
@@ -40,24 +44,30 @@ export function toLoaderState<T>(
 }
 
 /**
- * Project loose streaming-context fields into a streaming union. `connecting`
- * carries no data (the `initial` accumulator is an internal reduce seed). Key
- * the connecting arm on the stream status too, not just `data === undefined`: a
- * manual `reload()` of a live loader surfaces `data = accumulate.initial` (a
- * defined value, e.g. `[]`) together with `status === 'connecting'`, and that
- * reconnect must project to `connecting` (mirroring a fresh mount) rather than
- * to `open` with the empty seed. Safe because the runner only sets
- * `status === 'open'` once a chunk has arrived, so `open`/`closed`/`error`
- * always carry data.
+ * Project loose streaming-context fields into a streaming union. Error wins
+ * FIRST, before the connecting/undefined guard: a COLD stream error (the connect
+ * rejects before any chunk, so `data === undefined`) must reach the `error` arm
+ * in-view rather than hang on `connecting` forever (review #5). The error arm's
+ * `data` is therefore optional, and may be `undefined` on a cold error; a
+ * post-chunk error carries the last-good value.
+ *
+ * After the error check, `connecting` carries no data (the `initial` accumulator
+ * is an internal reduce seed). Key the connecting arm on the stream status too,
+ * not just `data === undefined`: a manual `reload()` of a live loader surfaces
+ * `data = accumulate.initial` (a defined value, e.g. `[]`) together with
+ * `status === 'connecting'`, and that reconnect must project to `connecting`
+ * (mirroring a fresh mount) rather than to `open` with the empty seed. Safe
+ * because the runner only sets `status === 'open'` once a chunk has arrived, so
+ * `open`/`closed` always carry data.
  */
 export function toStreamState<T>(
   data: T | undefined,
   status: StreamStatus,
   error: Error | null
 ): StreamState<T> {
+  if (error !== null) return { status: 'error', error, data };
   if (status === 'connecting' || data === undefined)
     return { status: 'connecting' };
-  if (error !== null) return { status: 'error', error, data };
   if (status === 'closed') return { status: 'closed', data };
   return { status: 'open', data };
 }

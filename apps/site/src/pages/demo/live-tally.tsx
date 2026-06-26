@@ -11,9 +11,10 @@ const pingsLoader = serverLoaders.pings;
 const LiveTally = pingsLoader.View<number>(
   (s) => {
     const ping = useAction(serverActions.ping);
-    // `connecting` carries no data; fall back to the initial tally (0) until
-    // the first chunk arrives.
-    const count = s.status === 'connecting' ? 0 : s.data;
+    // Only `open`/`closed` carry the accumulated tally; `connecting` and a cold
+    // `error` carry no data, so fall back to the initial tally (0) until a chunk
+    // arrives, rather than dereferencing `s.data`.
+    const count = s.status === 'open' || s.status === 'closed' ? s.data : 0;
     return (
       <div class="grid min-h-screen place-items-center bg-background px-4">
         <div class="w-full max-w-md rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm space-y-4 text-center">
@@ -28,10 +29,20 @@ const LiveTally = pingsLoader.View<number>(
             <span
               class={[
                 'inline-block w-2 h-2 rounded-full',
-                s.status === 'open' ? 'bg-green-500' : 'bg-amber-400',
+                s.status === 'open'
+                  ? 'bg-green-500'
+                  : s.status === 'error'
+                    ? 'bg-red-500'
+                    : 'bg-amber-400',
               ].join(' ')}
             />
-            <span>{s.status === 'open' ? 'Connected' : 'Connecting...'}</span>
+            <span>
+              {s.status === 'open'
+                ? 'Connected'
+                : s.status === 'error'
+                  ? 'Disconnected'
+                  : 'Connecting...'}
+            </span>
           </div>
           <button
             type="button"

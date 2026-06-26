@@ -85,14 +85,16 @@ function Feed({
 
 // The accumulating `.View` form (selected by `initial` + `reduce`) tracks its
 // connection status as state, so the bar hydrates cleanly inside the layout.
-// Branch on `status === 'connecting'` for the pre-first-chunk affordance.
+// Branch on `status` for each affordance: `connecting` (pre-first-chunk) and a
+// cold `error` (the connect failed before any chunk) carry no data, so guard
+// them before reading `s.data`.
 const ActivityBar = activityLoader.View<ActivityEvent[]>(
-  (s) =>
-    s.status === 'connecting' ? (
-      <p>Connecting to activity...</p>
-    ) : (
-      <Feed events={s.data} status={s.status} />
-    ),
+  (s) => {
+    if (s.status === 'open' || s.status === 'closed')
+      return <Feed events={s.data} status={s.status} />;
+    if (s.status === 'error') return <p>Activity stream disconnected.</p>;
+    return <p>Connecting to activity...</p>;
+  },
   {
     initial: [],
     reduce: (acc, e) => [e, ...acc].slice(0, MAX),

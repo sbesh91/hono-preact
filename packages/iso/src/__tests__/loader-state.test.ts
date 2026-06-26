@@ -78,11 +78,21 @@ describe('toStreamState', () => {
       data: [1],
     });
   });
-  it('error with data', () => {
+  it('post-chunk error keeps last-good data', () => {
     expect(toStreamState([1], 'error', e)).toEqual({
       status: 'error',
       error: e,
       data: [1],
+    });
+  });
+  it('cold error (rejected before any chunk) -> error arm with undefined data (review #5)', () => {
+    // Error wins BEFORE the connecting/undefined guard, so a cold stream error
+    // (no accumulated value yet) reaches the `error` arm in-view rather than
+    // hanging on `connecting`. The error arm's `data` is `undefined` here.
+    expect(toStreamState(undefined, 'error', e)).toEqual({
+      status: 'error',
+      error: e,
+      data: undefined,
     });
   });
 });
