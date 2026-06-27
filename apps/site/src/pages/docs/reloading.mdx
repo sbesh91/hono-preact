@@ -26,7 +26,7 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View((s) => {
+const MoviesView = dataLoader.View(({ data }) => {
   const { reload, reloading } = useReload();
 
   const handleAdd = async () => {
@@ -34,7 +34,7 @@ const MoviesView = dataLoader.View((s) => {
     reload();
   };
 
-  if (s.status === 'loading') return <p>Loading...</p>;
+  if (!data) return <p>Loading...</p>;
 
   return (
     <>
@@ -42,7 +42,7 @@ const MoviesView = dataLoader.View((s) => {
         {reloading ? 'Adding...' : 'Add Movie'}
       </button>
       <ul>
-        {s.data.movies.results.map((m) => (
+        {data.movies.results.map((m) => (
           <li key={m.id}>{m.title}</li>
         ))}
       </ul>

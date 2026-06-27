@@ -152,11 +152,11 @@ import { serverLoaders } from './movies.server.js';
 const moviesLoader = serverLoaders.default;
 
 const MovieList = () => {
-  const s = moviesLoader.useData();
-  if (s.status === 'loading') return <p>Loading...</p>;
+  const { data } = moviesLoader.useData();
+  if (!data) return <p>Loading...</p>;
   return (
     <ul>
-      {s.data.map((m) => (
+      {data.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>

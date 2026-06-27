@@ -107,13 +107,13 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View((s) => {
-  if (s.status === 'loading') return <p>Loading...</p>;
+const MoviesView = dataLoader.View(({ data }) => {
+  if (!data) return <p>Loading...</p>;
   return (
     <main>
       <h1>Movies</h1>
       <ul>
-        {s.data.movies.map((m) => (
+        {data.movies.map((m) => (
           <li key={m.id}>{m.title}</li>
         ))}
       </ul>
@@ -190,14 +190,14 @@ const AddMovieForm: FunctionComponent = () => (
   </Form>
 );
 
-const MoviesView = dataLoader.View((s) => {
-  if (s.status === 'loading') return <p>Loading...</p>;
+const MoviesView = dataLoader.View(({ data }) => {
+  if (!data) return <p>Loading...</p>;
   return (
     <main>
       <h1>Movies</h1>
       <AddMovieForm />
       <ul>
-        {s.data.movies.map((m) => (
+        {data.movies.map((m) => (
           <li key={m.id}>{m.title}</li>
         ))}
       </ul>

@@ -9,9 +9,9 @@ const homeLoader = serverLoaders.default;
 const countLoader = serverLoaders.count;
 
 const HomePage: FunctionComponent = () => {
-  const s = homeLoader.useData();
-  if (s.status === 'loading') return <p>Loading...</p>;
-  const { message } = s.data;
+  const { data } = homeLoader.useData();
+  if (!data) return <p>Loading...</p>;
+  const { message } = data;
   return (
     <section>
       <h1>example-node</h1>
@@ -180,8 +180,8 @@ const CursorsDemo: FunctionComponent = () => {
 };
 CursorsDemo.displayName = 'CursorsDemo';
 
-const HomeView = homeLoader.View((s) =>
-  s.status === 'loading' ? <p>Loading...</p> : <HomePage />
+const HomeView = homeLoader.View(({ data }) =>
+  data ? <HomePage /> : <p>Loading...</p>
 );
 
 export default definePage(HomeView, {});

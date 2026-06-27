@@ -1,13 +1,22 @@
-/** Single-value loader consumption state. Pattern-match on `status`. */
+/**
+ * Single-value loader consumption state. Pattern-match on `status`. The cold
+ * `loading` arm declares `data?: never` (rather than omitting `data`) so `data`
+ * is uniformly readable on the bare union as `T | undefined` without a narrow,
+ * while the cold arm still carries no value (`never` forbids assigning one).
+ */
 export type LoaderState<T> =
-  | { status: 'loading' }
+  | { status: 'loading'; data?: never }
   | { status: 'success'; data: T }
   | { status: 'revalidating'; data: T }
   | { status: 'error'; error: Error; data: T };
 
-/** Streaming/live loader consumption state. Pattern-match on `status`. */
+/**
+ * Streaming/live loader consumption state. Pattern-match on `status`. As with
+ * `LoaderState`, the cold `connecting` arm declares `data?: never` so `data` is
+ * uniformly readable on the bare union without a narrow while carrying no value.
+ */
 export type StreamState<T> =
-  | { status: 'connecting' }
+  | { status: 'connecting'; data?: never }
   | { status: 'open'; data: T }
   | { status: 'closed'; data: T }
   // `data` is optional: a COLD stream error (the connect rejects before any

@@ -1,6 +1,6 @@
 # Loading States
 
-Show a loading UI during client-side navigation by switching on the `LoaderState` the `loader.View()` render function receives. It is a discriminated union with four `status` variants: `loading` (no data yet), `success`, `revalidating` (a background refresh with the prior data still present), and `error`. Match on `status` and render your own affordance for each; the framework supplies the state, not the UI.
+Show a loading UI during client-side navigation by switching on the `LoaderState` the `loader.View()` render function receives. It is a discriminated union with four `status` variants: `loading` (no data yet), `success`, `revalidating` (a background refresh with the prior data still present), and `error`. Match on `status` and render your own affordance for each; the framework supplies the state, not the UI. For a simple loading-or-content split you can skip the `status` check and read `data` directly (it is `undefined` only while `loading`); reach for `status` when you need to tell `revalidating` or `error` apart.
 
 ## Basic usage
 
@@ -11,12 +11,13 @@ import { serverLoaders } from './movies.server.js';
 
 const moviesLoader = serverLoaders.default;
 
-const MoviesView = moviesLoader.View((s) => {
-  if (s.status === 'loading') return <p>Loading...</p>;
-  // success | revalidating | error all carry `data`, narrowed to the value type.
+const MoviesView = moviesLoader.View(({ data }) => {
+  // `data` is present in every arm but the cold `loading` one, so a truthy
+  // check doubles as the loading guard and narrows `data` to the value type.
+  if (!data) return <p>Loading...</p>;
   return (
     <ul>
-      {s.data.movies.results.map((m) => (
+      {data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -49,7 +50,7 @@ The `loading` status appears only on a client-side navigation with no cached val
 
 ## Using a skeleton
 
-Match the `loading` status and return a skeleton component:
+Return a skeleton component while the cold load is in flight (`data` still absent):
 
 ```tsx
 const MoviesSkeleton = () => (
@@ -60,16 +61,17 @@ const MoviesSkeleton = () => (
   </ul>
 );
 
-const MoviesView = moviesLoader.View((s) => {
-  if (s.status === 'loading') return <MoviesSkeleton />;
-  return (
+const MoviesView = moviesLoader.View(({ data }) =>
+  data ? (
     <ul>
-      {s.data.movies.results.map((m) => (
+      {data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
-  );
-});
+  ) : (
+    <MoviesSkeleton />
+  )
+);
 ```
 
 ## Stale-while-revalidate
@@ -77,15 +79,15 @@ const MoviesView = moviesLoader.View((s) => {
 During a reload the status is `revalidating`: a refresh is in flight, but `data` still holds the previous value. Render the cold-load placeholder only for `loading`, and show a subtle indicator for `revalidating` so the current content stays visible:
 
 ```tsx
-const MoviesView = moviesLoader.View((s) => {
-  if (s.status === 'loading') return <MoviesSkeleton />;
+const MoviesView = moviesLoader.View(({ status, data }) => {
+  if (!data) return <MoviesSkeleton />;
   return (
     <div>
-      {s.status === 'revalidating' && (
+      {status === 'revalidating' && (
         <span class="text-sm text-muted">Refreshing...</span>
       )}
       <ul>
-        {s.data.movies.results.map((m) => (
+        {data.movies.results.map((m) => (
           <li key={m.id}>{m.title}</li>
         ))}
       </ul>
@@ -129,12 +131,12 @@ The render function receives a `LoaderState<T>` discriminated union. Match on `s
 
 | `status`         | Fields                               | When                                                                                      |
 | ---------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `'loading'`      | (none)                               | Cold load before the first response. No data yet.                                         |
+| `'loading'`      | `data?: never`                       | Cold load before the first response. No data yet.                                         |
 | `'success'`      | `data: Serialize<T>`                 | The loader resolved; `data` is the value.                                                 |
 | `'revalidating'` | `data: Serialize<T>`                 | A background refresh is in flight; `data` is the previous value (stale-while-revalidate). |
 | `'error'`        | `error: Error`, `data: Serialize<T>` | The loader rejected; `data` is the last good value.                                       |
 
-In the `success`, `revalidating`, and `error` arms `data` is narrowed to `Serialize<T>`, so there is no `undefined` to guard. The render function also receives any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)). The imperative `reload()` callback is read from `useReload()`, not passed as a render arg (see [Reloading](/docs/reloading)).
+In the `success`, `revalidating`, and `error` arms `data` is narrowed to `Serialize<T>`, so there is no `undefined` to guard. Because the `loading` arm declares `data?: never`, `data` is readable on the un-narrowed union as `Serialize<T> | undefined` (`undefined` only while `loading`), so a render that reads `data` directly does not need to narrow on `status` first. The render function also receives any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)). The imperative `reload()` callback is read from `useReload()`, not passed as a render arg (see [Reloading](/docs/reloading)).
 
 ## Page-level error fallback
 
