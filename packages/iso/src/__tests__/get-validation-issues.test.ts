@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getValidationIssues } from '../get-validation-issues.js';
+import { LoaderValidationError } from '../loader-validation-error.js';
 import { VALIDATION_ISSUES_KEY } from '../internal/contract.js';
 
 describe('getValidationIssues', () => {
@@ -75,5 +76,21 @@ describe('getValidationIssues', () => {
       submittedPayload: {},
     };
     expect(getValidationIssues(result)).toEqual(issues);
+  });
+
+  // Loader parity: a thrown LoaderValidationError surfaces issues through the
+  // same reader actions use, so error boundaries render field errors uniformly.
+  it('returns the issues from a LoaderValidationError', () => {
+    const issues = [{ path: ['page'], message: 'page must be >= 1' }];
+    const err = new LoaderValidationError(
+      400,
+      'Invalid search parameters',
+      issues
+    );
+    expect(getValidationIssues(err)).toEqual(issues);
+  });
+
+  it('returns null for a plain Error (non-validation loader failure)', () => {
+    expect(getValidationIssues(new Error('boom'))).toBeNull();
   });
 });

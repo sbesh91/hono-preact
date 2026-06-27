@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchLoaderData } from '../loader-fetch.js';
+import { LoaderValidationError } from '../../loader-validation-error.js';
+import { getValidationIssues } from '../../get-validation-issues.js';
+import { VALIDATION_ISSUES_KEY } from '../contract.js';
 
 const loc = { path: '/x', pathParams: {}, searchParams: {} };
 
@@ -110,6 +113,59 @@ describe('fetchLoaderData: deny outcome envelope', () => {
     await expect(
       fetchLoaderData('m', 'default', loc, new AbortController().signal).first
     ).rejects.toThrow(/Request denied \(403\)/);
+  });
+
+  it('rejects with a LoaderValidationError carrying issues when the deny envelope carries validation issues', async () => {
+    const issues = [{ path: ['page'], message: 'page must be >= 1' }];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          __outcome: 'deny',
+          message: 'Invalid search parameters',
+          data: { [VALIDATION_ISSUES_KEY]: issues },
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const err = await fetchLoaderData(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    ).first.catch((e) => e);
+
+    expect(err).toBeInstanceOf(LoaderValidationError);
+    expect(err.status).toBe(400);
+    expect(err.message).toBe('Invalid search parameters');
+    expect(err.issues).toEqual(issues);
+    // The shared reader pulls issues from the loader error too (action parity).
+    expect(getValidationIssues(err)).toEqual(issues);
+  });
+
+  it('throws a plain (non-validation) Error when a deny carries data without the issues key', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          __outcome: 'deny',
+          message: 'Forbidden',
+          data: { reason: 'nope' },
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const err = await fetchLoaderData(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    ).first.catch((e) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(LoaderValidationError);
+    expect(err.message).toBe('Forbidden');
+    expect(getValidationIssues(err)).toBeNull();
   });
 
   it('falls back to the legacy { error } shape for non-deny error responses', async () => {

@@ -107,7 +107,12 @@ function makeApp(
   const app = new Hono();
   app.get(
     SOCKETS_RPC_PATH,
-    socketsHandler({ registry, appConfig, resolvePageUse, resolveRoutePath })
+    socketsHandler({
+      registry,
+      appConfig,
+      resolvePageUse: resolvePageUse ?? (() => []),
+      resolveRoutePath,
+    })
   );
   return app;
 }
@@ -471,6 +476,28 @@ describe('socketsHandler: guard denial closes WS_DENY_CODE without calling def.o
   });
 });
 
+describe('socketsHandler: fail-closed at construction', () => {
+  it('throws when resolvePageUse is omitted (auth-bypass guard)', () => {
+    // page-level `use` carries route/layout auth gates; an absent resolver
+    // would silently drop them on the socket-upgrade path. Mirrors the
+    // loadersHandler / pageActionsHandler construction guards.
+    expect(() =>
+      socketsHandler({
+        registry: new Map<string, SocketDef<unknown, unknown, unknown>>(),
+      })
+    ).toThrow(/resolvePageUse/);
+  });
+
+  it('throws when resolvePageUse is not a function', () => {
+    expect(() =>
+      socketsHandler({
+        registry: new Map<string, SocketDef<unknown, unknown, unknown>>(),
+        resolvePageUse: {} as never,
+      })
+    ).toThrow(/resolvePageUse/);
+  });
+});
+
 describe('socketsHandler: route-node use inheritance via resolvePageUse', () => {
   it('a denying route-node use closes WS_DENY_CODE without calling def.open', async () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
@@ -754,7 +781,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       socketsHandler({
         registry: new Map(),
         rooms,
-        resolvePageUse,
+        resolvePageUse: resolvePageUse ?? (() => []),
         resolveRoutePath,
       })
     );

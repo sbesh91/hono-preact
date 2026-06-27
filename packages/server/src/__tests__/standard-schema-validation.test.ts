@@ -116,4 +116,62 @@ describe('Standard Schema end-to-end (Zod)', () => {
     });
     expect(bad.status).toBe(400);
   });
+
+  it('surfaces loader search-schema issues under VALIDATION_ISSUES_KEY (parity with actions)', async () => {
+    const ref = defineLoader(async (ctx) => ctx.location.searchParams, {
+      searchSchema: z.object({ page: z.coerce.number().min(1) }),
+    });
+    const glob = {
+      './t.server.ts': {
+        __moduleKey: 'pages/t.server',
+        serverLoaders: { default: ref },
+      },
+    };
+    const handler = loadersHandler(glob, { resolvePageUse: async () => [] });
+    const app = new Hono().post('*', handler);
+
+    const bad = await app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/t.server',
+        loader: 'default',
+        location: { path: '/t', pathParams: {}, searchParams: { page: '0' } },
+      }),
+    });
+    expect(bad.status).toBe(400);
+    const body = await bad.json();
+    expect(body.__outcome).toBe('deny');
+    expect(Array.isArray(body.data[VALIDATION_ISSUES_KEY])).toBe(true);
+    expect(body.data[VALIDATION_ISSUES_KEY].length).toBeGreaterThan(0);
+  });
+
+  it('surfaces loader params-schema issues under VALIDATION_ISSUES_KEY (404 path)', async () => {
+    const ref = defineLoader(async (ctx) => ctx.location.pathParams, {
+      paramsSchema: z.object({ id: z.coerce.number().int() }),
+    });
+    const glob = {
+      './t.server.ts': {
+        __moduleKey: 'pages/t.server',
+        serverLoaders: { default: ref },
+      },
+    };
+    const handler = loadersHandler(glob, { resolvePageUse: async () => [] });
+    const app = new Hono().post('*', handler);
+
+    const bad = await app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/t.server',
+        loader: 'default',
+        location: { path: '/t', pathParams: { id: 'abc' }, searchParams: {} },
+      }),
+    });
+    expect(bad.status).toBe(404);
+    const body = await bad.json();
+    expect(body.__outcome).toBe('deny');
+    expect(Array.isArray(body.data[VALIDATION_ISSUES_KEY])).toBe(true);
+    expect(body.data[VALIDATION_ISSUES_KEY].length).toBeGreaterThan(0);
+  });
 });

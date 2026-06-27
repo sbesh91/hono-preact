@@ -183,6 +183,32 @@ Pass `searchSchema` or `paramsSchema` to `defineLoader` to validate and coerce U
 
 Validation runs on both the SSR path (direct page load) and the client-navigation path (loader RPC fetch). A strict schema with a missing or invalid param surfaces through the loader's error boundary on both paths. Use `.default(...)` for optional search params you want to render rather than error on.
 
+### Reading loader validation issues
+
+On the client-navigation path the failure reaches the error boundary as a `LoaderValidationError` carrying the same normalized field issues an action's `deny(422)` does. Read them with `getValidationIssues(error)`, the same reader the action path uses, so field-level errors render identically across actions and loaders:
+
+```tsx
+import { LoaderValidationError, getValidationIssues } from 'hono-preact';
+
+function LoaderErrorFallback({ error }: { error: unknown }) {
+  const issues = getValidationIssues(error);
+  if (error instanceof LoaderValidationError && issues) {
+    return (
+      <ul>
+        {issues.map((issue, i) => (
+          <li key={i}>
+            {issue.path.join('.')}: {issue.message}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return <p>Something went wrong.</p>;
+}
+```
+
+`getValidationIssues` returns `null` for any non-validation failure (an app-level `deny`, a thrown error), so the same reader works for action results and loader errors alike.
+
 ```ts
 import { defineLoader } from 'hono-preact';
 import { z } from 'zod';
@@ -243,10 +269,10 @@ A future option to configure validation position in the middleware chain is trac
 
 ### `defineLoader(fn, { searchSchema, paramsSchema })`
 
-| Option         | Type               | Description                                                                                  |
-| -------------- | ------------------ | -------------------------------------------------------------------------------------------- |
-| `searchSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.searchParams`. Failure throws 400 to the error boundary. |
-| `paramsSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.pathParams`. Failure throws 404 to the error boundary.   |
+| Option         | Type               | Description                                                                                                                                                 |
+| -------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `searchSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.searchParams`. Failure throws 400 to the error boundary (a `LoaderValidationError` carrying issues on the client path). |
+| `paramsSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.pathParams`. Failure throws 404 to the error boundary (a `LoaderValidationError` carrying issues on the client path).   |
 
 `serverRoute(id).loader(fn, { paramsSchema, searchSchema })` accepts the same options.
 

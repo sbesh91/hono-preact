@@ -90,7 +90,10 @@ function makeApp(
   rooms: Map<string, RoomDef<unknown, unknown, unknown, unknown, unknown>>
 ): Hono {
   const app = new Hono();
-  app.get(SOCKETS_RPC_PATH, socketsHandler({ registry: new Map(), rooms }));
+  app.get(
+    SOCKETS_RPC_PATH,
+    socketsHandler({ registry: new Map(), rooms, resolvePageUse: () => [] })
+  );
   return app;
 }
 
