@@ -176,12 +176,12 @@ Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues an
 
 ## Loader validation
 
-Pass `searchSchema` or `paramsSchema` to `defineLoader` to validate and coerce URL params. Failures throw to the loader's error boundary rather than being sent to the client.
+Pass `searchSchema` or `paramsSchema` to `defineLoader` to validate and coerce URL params.
 
-- **`searchSchema` failure** throws 400 (bad query string).
-- **`paramsSchema` failure** throws 404 (the URL does not name a valid resource).
+- **`searchSchema` failure** is a 400 (bad query string).
+- **`paramsSchema` failure** is a 404 (the URL does not name a valid resource).
 
-Validation runs on both the SSR path (direct page load) and the client-navigation path (loader RPC fetch). A strict schema with a missing or invalid param surfaces through the loader's error boundary on both paths. Use `.default(...)` for optional search params you want to render rather than error on.
+Validation runs on both entry paths, but they fail differently because they happen at different layers. On a **direct page load (SSR)** an invalid param is a bad URL: the response is a plain `400`/`404` (the status above), and no client error boundary renders. On a **client navigation (loader RPC fetch)** the failure reaches the loader's error boundary, where you can render a custom fallback and read the field issues (below). Use `.default(...)` for optional search params you want to render rather than error on.
 
 ### Reading loader validation issues
 
@@ -208,6 +208,8 @@ function LoaderErrorFallback({ error }: { error: unknown }) {
 ```
 
 `getValidationIssues` returns `null` for any non-validation failure (an app-level `deny`, a thrown error), so the same reader works for action results and loader errors alike.
+
+This fallback renders on client navigation. A direct/refreshed load of the same invalid URL returns a bare `400`/`404` instead (a bad URL is a status, not a field-error screen), so do not rely on it for first-paint rendering.
 
 ```ts
 import { defineLoader } from 'hono-preact';
@@ -269,10 +271,10 @@ A future option to configure validation position in the middleware chain is trac
 
 ### `defineLoader(fn, { searchSchema, paramsSchema })`
 
-| Option         | Type               | Description                                                                                                                                                 |
-| -------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `searchSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.searchParams`. Failure throws 400 to the error boundary (a `LoaderValidationError` carrying issues on the client path). |
-| `paramsSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.pathParams`. Failure throws 404 to the error boundary (a `LoaderValidationError` carrying issues on the client path).   |
+| Option         | Type               | Description                                                                                                                                                        |
+| -------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `searchSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.searchParams`. Failure is a 400: a bare status on direct load, a `LoaderValidationError` carrying issues on client navigation. |
+| `paramsSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.pathParams`. Failure is a 404: a bare status on direct load, a `LoaderValidationError` carrying issues on client navigation.   |
 
 `serverRoute(id).loader(fn, { paramsSchema, searchSchema })` accepts the same options.
 

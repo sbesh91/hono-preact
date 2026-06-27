@@ -143,6 +143,30 @@ describe('fetchLoaderData: deny outcome envelope', () => {
     expect(getValidationIssues(err)).toEqual(issues);
   });
 
+  it('throws a plain Error (not LoaderValidationError) when the deny carries an empty issues array', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          __outcome: 'deny',
+          message: 'Forbidden',
+          data: { [VALIDATION_ISSUES_KEY]: [] },
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const err = await fetchLoaderData(
+      'm',
+      'default',
+      loc,
+      new AbortController().signal
+    ).first.catch((e) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(LoaderValidationError);
+    expect(getValidationIssues(err)).toBeNull();
+  });
+
   it('throws a plain (non-validation) Error when a deny carries data without the issues key', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

@@ -14,6 +14,7 @@ import {
   type ActionResolution,
 } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
+import { assertPageUseResolver } from './page-use-guard.js';
 import {
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
@@ -146,17 +147,11 @@ export function pageActionsHandler(
     onError,
   } = opts;
 
-  if (typeof resolvePageUseByPath !== 'function') {
-    // page-level `use` carries route/layout auth gates; a missing resolver
-    // would silently drop them on the action POST path. Fail loudly at
-    // construction (the type also marks this required) instead of composing a
-    // guard-less chain.
-    throw new Error(
-      'pageActionsHandler requires a resolvePageUseByPath function; without it ' +
-        'page-level middleware (including auth gates) is silently dropped on ' +
-        'the action POST path. Pass makePageUseResolver(routes).byPath.'
-    );
-  }
+  assertPageUseResolver(resolvePageUseByPath, {
+    handler: 'pageActionsHandler',
+    option: 'resolvePageUseByPath',
+    surface: 'action POST path',
+  });
 
   return async (c) => {
     const accept = pickAccept(c.req.header('Accept'));

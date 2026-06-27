@@ -13,6 +13,7 @@ import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
 import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
+import { assertPageUseResolver } from './page-use-guard.js';
 import { createRoomWsEvents, resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
 import { makeServerSocketHandle } from './server-socket-handle.js';
@@ -346,18 +347,11 @@ async function resolveConnection(
  * plain socket never reaches the connector (the in-worker upgrader handles it).
  */
 export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
-  if (typeof opts?.resolvePageUse !== 'function') {
-    // page-level `use` carries route/layout auth gates; a missing resolver
-    // would silently drop them on the socket-upgrade path, letting a
-    // connection bypass the gate that protects the owning route. Fail loudly
-    // at construction (the type also marks this required) instead of upgrading
-    // through a guard-less chain. Mirrors loadersHandler / pageActionsHandler.
-    throw new Error(
-      'socketsHandler requires opts.resolvePageUse; without it page-level ' +
-        'middleware (including auth gates) is silently dropped on the socket ' +
-        'upgrade path. Pass makePageUseResolver(routes).byPath.'
-    );
-  }
+  assertPageUseResolver(opts?.resolvePageUse, {
+    handler: 'socketsHandler',
+    option: 'opts.resolvePageUse',
+    surface: 'socket upgrade path',
+  });
   return async (c, next) => {
     const createEvents = async (
       ctx: Context,

@@ -8,7 +8,7 @@ export type ValidationIssue = {
 };
 
 /** Structural guard for a single normalized issue read off untrusted JSON. */
-export function isValidationIssue(x: unknown): x is ValidationIssue {
+function isValidationIssue(x: unknown): x is ValidationIssue {
   if (typeof x !== 'object' || x === null) return false;
   const { path, message } = x as { path?: unknown; message?: unknown };
   return (
@@ -21,18 +21,23 @@ export function isValidationIssue(x: unknown): x is ValidationIssue {
 /**
  * Read the framework-reserved issues array off an untrusted `data` bag (a deny
  * payload or wire JSON). Returns the validated issues, or `null` when the key
- * is absent or any element is malformed. Single source of truth for both the
- * action-result reader (`getValidationIssues`) and the client loader-RPC decode
- * (`loader-fetch`), so the two cannot drift on what counts as a validation deny.
+ * is absent, the array is empty, or any element is malformed. An EMPTY array is
+ * not a validation failure (no fields to report), so it returns `null` rather
+ * than `[]` to keep `if (issues)` truthiness checks honest at every call site.
+ * Returns a fresh array (never the live `data` reference) so a consumer that
+ * mutates the result cannot reach back into the deny payload. Single source of
+ * truth for both the action-result reader (`getValidationIssues`) and the
+ * client loader-RPC decode (`loader-fetch`), so the two cannot drift on what
+ * counts as a validation deny.
  */
 export function readValidationIssues(data: unknown): ValidationIssue[] | null {
   if (typeof data !== 'object' || data === null) return null;
   const raw = (data as Record<string, unknown>)[VALIDATION_ISSUES_KEY];
   // `data` is untrusted wire JSON: this read is the sanctioned cast boundary
   // (same class as decodeActionResponse).
-  if (!Array.isArray(raw)) return null;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
   if (!raw.every(isValidationIssue)) return null;
-  return raw as ValidationIssue[]; // sound: every element guarded above
+  return raw.slice() as ValidationIssue[]; // sound: every element guarded above
 }
 
 /** Result of running a schema: the validated output or the issues. */

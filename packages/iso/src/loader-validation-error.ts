@@ -14,7 +14,6 @@ import type { ValidationIssue } from './validate.js';
  * invalid route param (the URL names no valid resource).
  */
 export class LoaderValidationError extends Error {
-  readonly kind = 'loader-validation' as const;
   readonly status: number;
   readonly issues: ValidationIssue[];
   constructor(status: number, message: string, issues: ValidationIssue[]) {

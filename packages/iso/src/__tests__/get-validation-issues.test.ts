@@ -93,4 +93,38 @@ describe('getValidationIssues', () => {
   it('returns null for a plain Error (non-validation loader failure)', () => {
     expect(getValidationIssues(new Error('boom'))).toBeNull();
   });
+
+  // An empty issues array is not a validation failure (no fields to report);
+  // treat it like a non-validation deny so callers fall through to a generic
+  // error instead of rendering an empty list.
+  it('returns null for a deny carrying an empty issues array', () => {
+    const result = {
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: { [VALIDATION_ISSUES_KEY]: [] },
+      submittedPayload: {},
+    };
+    expect(getValidationIssues(result)).toBeNull();
+  });
+
+  it('returns null for a LoaderValidationError with no issues', () => {
+    expect(
+      getValidationIssues(new LoaderValidationError(400, 'x', []))
+    ).toBeNull();
+  });
+
+  it('does not alias the deny data array (returns a defensive copy)', () => {
+    const issues = [{ path: ['a'], message: 'bad' }];
+    const result = {
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: { [VALIDATION_ISSUES_KEY]: issues },
+      submittedPayload: {},
+    };
+    const out = getValidationIssues(result);
+    expect(out).toEqual(issues);
+    expect(out).not.toBe(issues);
+  });
 });
