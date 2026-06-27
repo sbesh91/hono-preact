@@ -11,11 +11,7 @@ import { LocationProvider } from 'preact-iso';
 import { h, type ComponentType } from 'preact';
 import { defineClientMiddleware } from '../define-middleware.js';
 import { redirect } from '../outcomes.js';
-import {
-  defineRoutes,
-  Routes,
-  type ViewProps,
-} from '../define-routes.js';
+import { defineRoutes, Routes, type ViewProps } from '../define-routes.js';
 import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
@@ -200,9 +196,21 @@ describe('guarded nav edge cases', () => {
     const c = mk('C');
 
     const manifest = defineRoutes([
-      { path: '/a', view: () => Promise.resolve({ default: a.View }), use: [a.mw] },
-      { path: '/b', view: () => Promise.resolve({ default: b.View }), use: [b.mw] },
-      { path: '/c', view: () => Promise.resolve({ default: c.View }), use: [c.mw] },
+      {
+        path: '/a',
+        view: () => Promise.resolve({ default: a.View }),
+        use: [a.mw],
+      },
+      {
+        path: '/b',
+        view: () => Promise.resolve({ default: b.View }),
+        use: [b.mw],
+      },
+      {
+        path: '/c',
+        view: () => Promise.resolve({ default: c.View }),
+        use: [c.mw],
+      },
     ]);
 
     window.history.replaceState({}, '', '/a');
