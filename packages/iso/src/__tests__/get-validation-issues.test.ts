@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getValidationIssues } from '../get-validation-issues.js';
+import { LoaderValidationError } from '../loader-validation-error.js';
 import { VALIDATION_ISSUES_KEY } from '../internal/contract.js';
 
 describe('getValidationIssues', () => {
@@ -75,5 +76,55 @@ describe('getValidationIssues', () => {
       submittedPayload: {},
     };
     expect(getValidationIssues(result)).toEqual(issues);
+  });
+
+  // Loader parity: a thrown LoaderValidationError surfaces issues through the
+  // same reader actions use, so error boundaries render field errors uniformly.
+  it('returns the issues from a LoaderValidationError', () => {
+    const issues = [{ path: ['page'], message: 'page must be >= 1' }];
+    const err = new LoaderValidationError(
+      400,
+      'Invalid search parameters',
+      issues
+    );
+    expect(getValidationIssues(err)).toEqual(issues);
+  });
+
+  it('returns null for a plain Error (non-validation loader failure)', () => {
+    expect(getValidationIssues(new Error('boom'))).toBeNull();
+  });
+
+  // An empty issues array is not a validation failure (no fields to report);
+  // treat it like a non-validation deny so callers fall through to a generic
+  // error instead of rendering an empty list.
+  it('returns null for a deny carrying an empty issues array', () => {
+    const result = {
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: { [VALIDATION_ISSUES_KEY]: [] },
+      submittedPayload: {},
+    };
+    expect(getValidationIssues(result)).toBeNull();
+  });
+
+  it('returns null for a LoaderValidationError with no issues', () => {
+    expect(
+      getValidationIssues(new LoaderValidationError(400, 'x', []))
+    ).toBeNull();
+  });
+
+  it('does not alias the deny data array (returns a defensive copy)', () => {
+    const issues = [{ path: ['a'], message: 'bad' }];
+    const result = {
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: { [VALIDATION_ISSUES_KEY]: issues },
+      submittedPayload: {},
+    };
+    const out = getValidationIssues(result);
+    expect(out).toEqual(issues);
+    expect(out).not.toBe(issues);
   });
 });

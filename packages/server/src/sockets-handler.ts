@@ -13,6 +13,7 @@ import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
 import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
+import { assertPageUseResolver } from './page-use-guard.js';
 import { createRoomWsEvents, resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
 import { makeServerSocketHandle } from './server-socket-handle.js';
@@ -103,12 +104,19 @@ export interface SocketsHandlerOptions {
   appConfig?: AppConfig;
   // `dev` (registry freshness) is the caller's responsibility; not read here.
   /**
-   * Page-layer `use` resolver. When provided, the route-node `use` chain is
-   * composed as the middle layer (outer -> inner: app-use, page-use, def.use),
-   * which is where route/layout auth gates live. Defaults to returning `[]`
-   * (no page-layer guards) when omitted.
+   * Page-layer `use` resolver. The route-node `use` chain is composed as the
+   * middle layer (outer -> inner: app-use, page-use, def.use), which is where
+   * route/layout auth gates live.
+   *
+   * REQUIRED: page-level `use` is where route/layout auth gates live, so an
+   * absent resolver would silently drop them on the socket-upgrade path,
+   * letting a connection bypass the gate that protects the owning route. The
+   * handler validates this at construction and throws rather than upgrading
+   * through a guard-less chain, mirroring `loadersHandler` /
+   * `pageActionsHandler`. Pass `pageUseResolver.byPath` from
+   * `makePageUseResolver`.
    */
-  resolvePageUse?: (
+  resolvePageUse: (
     path: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
@@ -298,7 +306,7 @@ async function resolveConnection(
     def,
     ctx,
     appConfig,
-    resolvePageUse: opts.resolvePageUse ?? (() => []),
+    resolvePageUse: opts.resolvePageUse,
     routePath,
     moduleKey: moduleKey ?? '',
     name: name ?? '',
@@ -339,6 +347,11 @@ async function resolveConnection(
  * plain socket never reaches the connector (the in-worker upgrader handles it).
  */
 export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
+  assertPageUseResolver(opts?.resolvePageUse, {
+    handler: 'socketsHandler',
+    option: 'opts.resolvePageUse',
+    surface: 'socket upgrade path',
+  });
   return async (c, next) => {
     const createEvents = async (
       ctx: Context,

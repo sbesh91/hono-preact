@@ -12,6 +12,7 @@ import {
   type LooseLoaderFn,
 } from '@hono-preact/iso/internal/runtime';
 import { composeServerChain } from './compose-server-chain.js';
+import { assertPageUseResolver } from './page-use-guard.js';
 import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
   sseGeneratorResponse,
@@ -160,17 +161,11 @@ export function loadersHandler(
   glob: LazyGlob | EagerGlob | LazyArray,
   opts: LoadersHandlerOptions
 ): MiddlewareHandler {
-  if (typeof opts?.resolvePageUse !== 'function') {
-    // page-level `use` carries route/layout auth gates; a missing resolver
-    // would silently drop them on the loader RPC path, exposing data the gate
-    // should protect. Fail loudly at construction (the type also marks this
-    // required) instead of fetching loaders through a guard-less chain.
-    throw new Error(
-      'loadersHandler requires opts.resolvePageUse; without it page-level ' +
-        'middleware (including auth gates) is silently dropped on the loader ' +
-        'RPC path. Pass makePageUseResolver(routes).byPath.'
-    );
-  }
+  assertPageUseResolver(opts?.resolvePageUse, {
+    handler: 'loadersHandler',
+    option: 'opts.resolvePageUse',
+    surface: 'loader RPC path',
+  });
   const {
     dev = false,
     onError,

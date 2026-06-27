@@ -1,38 +1,41 @@
-import type { ActionResult } from './use-action-result.js';
-import type { ValidationIssue } from './validate.js';
-import { VALIDATION_ISSUES_KEY } from './internal/contract.js';
+import { readValidationIssues, type ValidationIssue } from './validate.js';
+import { LoaderValidationError } from './loader-validation-error.js';
 
 /**
- * Extract normalized validation issues from an action result, or `null` when the
- * result is not a schema-validation failure. A validation failure is a `deny`
- * whose `data` carries the framework-reserved `VALIDATION_ISSUES_KEY`; this is
- * what distinguishes it from an app-level `deny`. Pair with `useActionResult`:
+ * Extract normalized validation issues from an action result OR a loader
+ * validation error, or `null` when the input is not a schema-validation
+ * failure. For actions a validation failure is a `deny` whose `data` carries
+ * the framework-reserved `VALIDATION_ISSUES_KEY`; for loaders it is a thrown
+ * `LoaderValidationError` (the loader path reaches an error boundary rather
+ * than a `useActionResult()` value). One reader serves both so field errors
+ * render identically:
  *
  * ```tsx
- * const result = useActionResult(create);
- * const issues = getValidationIssues(result); // ValidationIssue[] | null
+ * // action
+ * const issues = getValidationIssues(useActionResult(create));
+ * // loader (inside an error boundary)
+ * const issues = getValidationIssues(error);
  * ```
+ *
+ * The input is typed `unknown`: a loader error arrives off a `catch`, and an
+ * action result is structurally probed below, so there is nothing to gain from
+ * a narrower signature (any narrower type is a subtype of `unknown` anyway).
  */
-function isValidationIssue(x: unknown): x is ValidationIssue {
-  if (typeof x !== 'object' || x === null) return false;
-  const { path, message } = x as { path?: unknown; message?: unknown };
-  return (
-    Array.isArray(path) &&
-    path.every((seg) => typeof seg === 'string' || typeof seg === 'number') &&
-    typeof message === 'string'
-  );
-}
-
-export function getValidationIssues(
-  result: ActionResult<unknown, unknown>
-): ValidationIssue[] | null {
-  if (!result || result.kind !== 'deny') return null;
-  const { data } = result;
-  if (typeof data !== 'object' || data === null) return null;
-  const raw = (data as Record<string, unknown>)[VALIDATION_ISSUES_KEY];
-  // `data` is untrusted wire JSON: this read is the sanctioned cast boundary
-  // (same class as decodeActionResponse).
-  if (!Array.isArray(raw)) return null;
-  if (!raw.every(isValidationIssue)) return null;
-  return raw as ValidationIssue[]; // sound: every element guarded above
+export function getValidationIssues(input: unknown): ValidationIssue[] | null {
+  // Loader path: a thrown LoaderValidationError carries already-normalized
+  // issues. Return a defensive copy, and treat an empty list as no issues.
+  if (input instanceof LoaderValidationError) {
+    return input.issues.length > 0 ? input.issues.slice() : null;
+  }
+  // Action path: a deny result whose `data` carries the reserved key. Probe the
+  // discriminant structurally rather than asserting an ActionResult shape that
+  // was never verified.
+  if (
+    typeof input !== 'object' ||
+    input === null ||
+    (input as { kind?: unknown }).kind !== 'deny'
+  ) {
+    return null;
+  }
+  return readValidationIssues((input as { data?: unknown }).data);
 }

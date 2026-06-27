@@ -80,6 +80,7 @@ export { Form } from './form.js';
 export { useActionResult, type ActionResult } from './use-action-result.js';
 export { getValidationIssues } from './get-validation-issues.js';
 export type { ValidationIssue } from './validate.js';
+export { LoaderValidationError } from './loader-validation-error.js';
 export {
   ActionResultContext,
   type ActionResultContextValue,

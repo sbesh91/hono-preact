@@ -184,7 +184,10 @@ beforeAll(async () => {
   ]);
 
   const app = new Hono();
-  app.get(SOCKETS_RPC_PATH, socketsHandler({ registry: new Map(), rooms }));
+  app.get(
+    SOCKETS_RPC_PATH,
+    socketsHandler({ registry: new Map(), rooms, resolvePageUse: () => [] })
+  );
 
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
   installWebSocketUpgrader(upgradeWebSocket);

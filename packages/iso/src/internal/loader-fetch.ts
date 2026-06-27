@@ -2,6 +2,8 @@ import { readSSE } from './sse-decoder.js';
 import { TimeoutError } from '../action.js';
 import { LOADERS_RPC_PATH } from './contract.js';
 import { toError } from './to-error.js';
+import { readValidationIssues } from '../validate.js';
+import { LoaderValidationError } from '../loader-validation-error.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -101,7 +103,10 @@ function isEventStream(res: Response): boolean {
 /**
  * Build the error to throw for a non-ok loader response. Prefers the structured
  * outcome envelope (`timeout` / `deny`), then the legacy `{ error }` shape, then
- * a generic status message with remediation.
+ * a generic status message with remediation. A `deny` whose `data` carries the
+ * reserved validation-issues key becomes a `LoaderValidationError` so the issues
+ * survive to the error boundary (`getValidationIssues` parity with actions);
+ * any other deny stays a plain `Error`.
  */
 async function loaderHttpError(res: Response): Promise<Error> {
   const body = (await res.json().catch(() => ({}))) as {
@@ -109,6 +114,7 @@ async function loaderHttpError(res: Response): Promise<Error> {
     __outcome?: string;
     message?: string;
     timeoutMs?: number;
+    data?: unknown;
   };
   if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
     return new TimeoutError(body.timeoutMs);
@@ -116,11 +122,16 @@ async function loaderHttpError(res: Response): Promise<Error> {
   if (body.__outcome === 'deny') {
     // `deny()` defaults `message` for first-party callers, but a hand-rolled
     // envelope from custom server middleware might still arrive without one.
-    return new Error(
+    const message =
       typeof body.message === 'string'
         ? body.message
-        : `Request denied (${res.status})`
-    );
+        : `Request denied (${res.status})`;
+    // A loader schema (paramsSchema/searchSchema) failure ships the normalized
+    // issues under the reserved key; preserve them on a LoaderValidationError
+    // so an error boundary can render field errors via getValidationIssues().
+    const issues = readValidationIssues(body.data);
+    if (issues) return new LoaderValidationError(res.status, message, issues);
+    return new Error(message);
   }
   return new Error(
     body.error ??

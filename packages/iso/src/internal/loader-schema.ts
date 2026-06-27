@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { validateWithSchema } from '../validate.js';
 import { deny } from '../outcomes.js';
+import { VALIDATION_ISSUES_KEY } from './contract.js';
 
 /**
  * Loose view of a loader function for the post-coercion call seam: location
@@ -20,11 +21,15 @@ export type LooseLoaderFn = (props: {
 /**
  * Validate + coerce a loader's path/search params against its schemas. Throws
  * `deny(404)` for an invalid route param (the URL names no valid resource) and
- * `deny(400)` for an invalid query string. Returns the coerced values (typed
- * `unknown`: the schema output type is not known here; the public
- * `Loader<T, TParams, TSearch>` generic carries it to the loader author). Shared
- * by BOTH loader execution paths (SSR `loader-runner.ts` and RPC
- * `loaders-handler.ts`) so they cannot drift.
+ * `deny(400)` for an invalid query string. Each deny carries the normalized
+ * Standard Schema issues under `VALIDATION_ISSUES_KEY`, matching the action
+ * path's `deny(422)` so `getValidationIssues` / `<FieldError>` surface
+ * field-level errors uniformly on the loader path (the status differs by
+ * intent: a bad route param is a 404 resource miss, a bad query string a 400).
+ * Returns the coerced values (typed `unknown`: the schema output type is not
+ * known here; the public `Loader<T, TParams, TSearch>` generic carries it to
+ * the loader author). Shared by BOTH loader execution paths (SSR
+ * `loader-runner.ts` and RPC `loaders-handler.ts`) so they cannot drift.
  */
 export async function coerceLoaderLocation(
   schemas: { searchSchema?: StandardSchemaV1; paramsSchema?: StandardSchemaV1 },
@@ -35,12 +40,20 @@ export async function coerceLoaderLocation(
   let s = searchParams;
   if (schemas.paramsSchema) {
     const r = await validateWithSchema(schemas.paramsSchema, pathParams);
-    if (!r.ok) throw deny(404, 'Invalid route parameters');
+    if (!r.ok) {
+      throw deny(404, 'Invalid route parameters', {
+        data: { [VALIDATION_ISSUES_KEY]: r.issues },
+      });
+    }
     p = r.value;
   }
   if (schemas.searchSchema) {
     const r = await validateWithSchema(schemas.searchSchema, searchParams);
-    if (!r.ok) throw deny(400, 'Invalid search parameters');
+    if (!r.ok) {
+      throw deny(400, 'Invalid search parameters', {
+        data: { [VALIDATION_ISSUES_KEY]: r.issues },
+      });
+    }
     s = r.value;
   }
   return { pathParams: p, searchParams: s };
