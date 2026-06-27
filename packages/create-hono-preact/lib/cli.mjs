@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
 import { spawn as realSpawn } from 'node:child_process';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +7,7 @@ import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
 import { copyAgentGuidance } from './template.mjs';
 import { scaffold } from './scaffold.mjs';
-import { resolveOptions } from './resolve.mjs';
+import { resolveOptions, checkTargetDir } from './resolve.mjs';
 import { clackPrompts, brandBanner } from './prompts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -22,6 +21,7 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   isTTY?: boolean,
  *   prompts?: import('./prompts.mjs').PromptAdapter,
  *   spawnFn?: typeof realSpawn,
+ *   stdin?: import('node:stream').Readable & { isTTY?: boolean },
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
@@ -32,6 +32,7 @@ export async function run({
   isTTY = false,
   prompts = clackPrompts,
   spawnFn = realSpawn,
+  stdin = process.stdin,
 }) {
   const parsed = parseArgs(argv);
 
@@ -73,10 +74,38 @@ export async function run({
   const interactive = Boolean(isTTY) && !parsed.yes;
   if (interactive) prompts.intro(brandBanner);
 
+  // Non-interactive with a piped stdin and no positional dir: read the project
+  // directory from stdin (preserves `printf 'name' | npm create hono-preact`).
+  let targetDirArg = parsed.targetDir;
+  if (
+    targetDirArg === undefined &&
+    !interactive &&
+    stdin &&
+    stdin.isTTY === false
+  ) {
+    const line = (await readFirstLine(stdin)).trim();
+    if (line) targetDirArg = line;
+  }
+
+  // Validate a known target dir (positional or stdin) before prompting for
+  // anything else, so a wizard's worth of answers is never collected and then
+  // discarded. A prompted dir is validated inline by resolveOptions instead.
+  if (targetDirArg !== undefined) {
+    const reason = checkTargetDir(resolve(cwd, targetDirArg), targetDirArg);
+    if (reason) {
+      if (interactive) prompts.cancel(reason);
+      else console.error(`error: ${reason}`);
+      return 1;
+    }
+  }
+
   /** @type {import('./resolve.mjs').ResolvedOptions} */
   let options;
   try {
-    options = await resolveOptions(parsed, { interactive, prompts, cwd });
+    options = await resolveOptions(
+      { ...parsed, targetDir: targetDirArg },
+      { interactive, prompts, cwd }
+    );
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
@@ -84,26 +113,6 @@ export async function run({
   const { targetDir, adapter, ui, install, git, skipHints } = options;
 
   const targetPath = resolve(cwd, targetDir);
-  try {
-    const entries = await readdir(targetPath);
-    if (entries.length > 0) {
-      // The interactive prompt already validates a prompted dir; this still
-      // guards a flag-supplied dir, so close the clack frame cleanly there.
-      if (interactive) {
-        prompts.cancel(`Target directory '${targetDir}' is not empty.`);
-      } else {
-        console.error(`error: target directory '${targetDir}' is not empty`);
-      }
-      return 1;
-    }
-  } catch (err) {
-    if (
-      !(err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT')
-    ) {
-      throw err;
-    }
-    // Directory doesn't exist yet; scaffold() will create it.
-  }
 
   const spin = interactive ? prompts.spinner() : null;
   spin?.start('Scaffolding project...');
@@ -111,37 +120,38 @@ export async function run({
   spin?.stop('Project scaffolded');
 
   const pm = detectPackageManager(env);
-  const childStdio = interactive ? 'ignore' : 'inherit';
 
   if (install) {
     spin?.start('Installing dependencies...');
-    const code = await runChild(
+    // Interactive mode hides the child behind a spinner, so capture its output
+    // and surface it on failure; non-interactive inherits the terminal.
+    const { code, output } = await runChild(
       spawnFn,
       pm,
       ['install'],
       targetPath,
-      childStdio
+      interactive ? 'capture' : 'inherit'
     );
     if (code !== 0) {
       if (interactive) {
         // clack status code 2 renders the error glyph (1 is the cancel glyph).
         spin?.stop('Dependency install failed', 2);
-        console.error(
-          `Run '${pm} install' in ${targetDir} to see what failed.`
-        );
+        const captured = output.trim();
+        if (captured) console.error(captured);
       }
+      console.error(`error: '${pm} install' failed in ${targetDir}.`);
       return 1;
     }
     spin?.stop('Dependencies installed');
   }
 
   if (git) {
-    const code = await runChild(
+    const { code } = await runChild(
       spawnFn,
       'git',
       ['init'],
       targetPath,
-      childStdio
+      interactive ? 'ignore' : 'inherit'
     );
     if (code !== 0) {
       console.warn(
@@ -167,29 +177,71 @@ export async function run({
 }
 
 /**
+ * Run a child process. `mode` is 'inherit' (child writes to the terminal),
+ * 'ignore' (discard output), or 'capture' (collect stdout+stderr and return it
+ * in `output`). Resolves with the exit code and any captured output. A child
+ * terminated by a signal (close code null) is reported as a non-zero exit.
+ *
  * @param {typeof realSpawn} spawnFn
  * @param {string} cmd
  * @param {string[]} args
  * @param {string} cwd
- * @param {import('node:child_process').StdioOptions} [stdio]
- * @returns {Promise<number>}
+ * @param {'inherit' | 'ignore' | 'capture'} [mode]
+ * @returns {Promise<{ code: number, output: string }>}
  */
-function runChild(spawnFn, cmd, args, cwd, stdio = 'inherit') {
+function runChild(spawnFn, cmd, args, cwd, mode = 'inherit') {
+  const stdio = mode === 'capture' ? ['ignore', 'pipe', 'pipe'] : mode;
   return new Promise((res) => {
     const child = spawnFn(cmd, args, { cwd, stdio });
+    let output = '';
+    const collect = (/** @type {Buffer} */ chunk) => {
+      output += chunk.toString();
+    };
+    child.stdout?.on?.('data', collect);
+    child.stderr?.on?.('data', collect);
     let settled = false;
     const settle = (/** @type {number} */ code) => {
       if (settled) return;
       settled = true;
-      res(code);
+      res({ code, output });
     };
-    child.on('close', (code) => settle(code ?? 0));
+    // A signal kill gives (null, signal); treat that as a failure, not success.
+    child.on('close', (code, signal) => settle(code ?? (signal ? 1 : 0)));
     // 'error' fires when the binary isn't found on PATH (ENOENT) etc.
     // Without this listener the Promise would hang and 'close' would never fire.
     child.on('error', (err) => {
       console.error(`error: failed to run '${cmd}': ${err.message}`);
       settle(127);
     });
+  });
+}
+
+/**
+ * Read the first line from a stream (used to accept a project directory from a
+ * piped stdin in non-interactive mode). Resolves with the line without its
+ * trailing newline, or whatever was buffered at end-of-stream.
+ *
+ * @param {import('node:stream').Readable & { off?: Function }} stream
+ * @returns {Promise<string>}
+ */
+function readFirstLine(stream) {
+  return new Promise((res) => {
+    let buf = '';
+    const done = (/** @type {string} */ value) => {
+      stream.off?.('data', onData);
+      stream.off?.('end', onEnd);
+      stream.off?.('error', onEnd);
+      res(value);
+    };
+    const onData = (/** @type {Buffer} */ chunk) => {
+      buf += chunk.toString();
+      const nl = buf.indexOf('\n');
+      if (nl !== -1) done(buf.slice(0, nl));
+    };
+    const onEnd = () => done(buf);
+    stream.on('data', onData);
+    stream.on('end', onEnd);
+    stream.on('error', onEnd);
   });
 }
 

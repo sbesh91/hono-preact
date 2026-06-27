@@ -51,6 +51,19 @@ describe('parseArgs', () => {
     }
   });
 
+  it('rejects --adapter with a missing value', () => {
+    const atEnd = parseArgs(['my-app', '--adapter']);
+    expect(atEnd.kind).toBe('error');
+    if (atEnd.kind === 'error') {
+      expect(atEnd.message).toMatch(/requires a value/i);
+    }
+    const beforeFlag = parseArgs(['my-app', '--adapter', '--no-git']);
+    expect(beforeFlag.kind).toBe('error');
+    if (beforeFlag.kind === 'error') {
+      expect(beforeFlag.message).toMatch(/requires a value/i);
+    }
+  });
+
   it('--ui sets ui true, --no-ui sets ui false', () => {
     expect(parseArgs(['a', '--ui']).ui).toBe(true);
     expect(parseArgs(['a', '--no-ui']).ui).toBe(false);

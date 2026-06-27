@@ -18,6 +18,11 @@ export interface RunOptions {
     args: string[],
     opts: { cwd: string; stdio?: unknown },
   ) => SpawnedProcess;
+  stdin?: {
+    isTTY?: boolean;
+    on(event: string, listener: (arg: unknown) => void): unknown;
+    off?(event: string, listener: (arg: unknown) => void): unknown;
+  };
 }
 
 export function run(options: RunOptions): Promise<number>;

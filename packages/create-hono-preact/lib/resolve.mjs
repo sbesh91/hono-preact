@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 /**
@@ -12,10 +12,32 @@ import { resolve as resolvePath } from 'node:path';
  */
 
 /**
+ * Single source of truth for whether a resolved target path is usable as a fresh
+ * project directory. Returns an error message when the path already exists as a
+ * file, or as a non-empty directory; returns undefined when it does not exist or
+ * is an empty directory. Used by both the interactive prompt validator and the
+ * flag-supplied-dir guard, so the two never diverge.
+ *
+ * @param {string} dest absolute target path
+ * @param {string} name the name to show in the message
+ * @returns {string | undefined}
+ */
+export function checkTargetDir(dest, name) {
+  if (!existsSync(dest)) return undefined;
+  if (!statSync(dest).isDirectory()) {
+    return `A file named '${name}' already exists.`;
+  }
+  if (readdirSync(dest).length > 0) {
+    return `Directory '${name}' already exists and is not empty.`;
+  }
+  return undefined;
+}
+
+/**
  * Validate a project directory name for the interactive prompt: reject an empty
- * or whitespace-only name, and reject a target that already exists and is not
- * empty (an empty existing directory is allowed). Returns an error string to
- * show, or undefined when the name is acceptable.
+ * or whitespace-only name, and reject a target that already exists as a file or
+ * a non-empty directory (an empty existing directory is allowed). Returns an
+ * error string to show, or undefined when the name is acceptable.
  *
  * @param {string} value the raw prompt input
  * @param {string} cwd directory the target is resolved against
@@ -24,11 +46,7 @@ import { resolve as resolvePath } from 'node:path';
 export function validateDirName(value, cwd) {
   const name = value.trim();
   if (name.length === 0) return 'A project directory is required.';
-  const dest = resolvePath(cwd, name);
-  if (existsSync(dest) && readdirSync(dest).length > 0) {
-    return `Directory '${name}' already exists and is not empty.`;
-  }
-  return undefined;
+  return checkTargetDir(resolvePath(cwd, name), name);
 }
 
 /**

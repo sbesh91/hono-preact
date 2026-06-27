@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { run } from '../lib/cli.mjs';
 import type { PromptAdapter } from '../lib/prompts.mjs';
 
@@ -19,7 +20,7 @@ afterEach(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-describe('run() — node adapter', () => {
+describe('run(): node adapter', () => {
   it('scaffolds a new node app with --no-install --no-git', async () => {
     const code = await run({
       argv: ['my-test-app', '--adapter=node', '--no-install', '--no-git'],
@@ -67,7 +68,7 @@ describe('run() — node adapter', () => {
   });
 });
 
-describe('run() — cloudflare adapter', () => {
+describe('run(): cloudflare adapter', () => {
   it('scaffolds a new cloudflare app, including wrangler.jsonc', async () => {
     const code = await run({
       argv: ['my-cf-app', '--adapter=cloudflare', '--no-install', '--no-git'],
@@ -94,7 +95,7 @@ describe('run() — cloudflare adapter', () => {
   });
 });
 
-describe('run() — target dir validation', () => {
+describe('run(): target dir validation', () => {
   it('refuses a non-empty existing target dir', async () => {
     const target = join(workDir, 'existing');
     const fs = await import('node:fs/promises');
@@ -124,7 +125,7 @@ describe('run() — target dir validation', () => {
   });
 });
 
-describe('run() — install step', () => {
+describe('run(): install step', () => {
   it('invokes the detected package manager when install is enabled', async () => {
     const calls: Array<{ cmd: string; args: string[]; cwd: string }> = [];
     const fakeSpawn = (cmd: string, args: string[], opts: { cwd: string }) => {
@@ -190,7 +191,7 @@ describe('run() — install step', () => {
   });
 });
 
-describe('run() — git step', () => {
+describe('run(): git step', () => {
   it('invokes git init when git is enabled', async () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const fakeSpawn = (cmd: string, args: string[]) => {
@@ -314,7 +315,7 @@ describe('run() — git step', () => {
   });
 });
 
-describe('run() — help and version', () => {
+describe('run(): help and version', () => {
   it('--help returns 0 and prints usage', async () => {
     const lines: string[] = [];
     const originalLog = console.log;
@@ -350,7 +351,7 @@ describe('run() — help and version', () => {
   });
 });
 
-describe('run() — next-steps output', () => {
+describe('run(): next-steps output', () => {
   it('prints next steps after a successful scaffold', async () => {
     const lines: string[] = [];
     const originalLog = console.log;
@@ -378,7 +379,7 @@ describe('run() — next-steps output', () => {
   });
 });
 
-describe('run() — add-agents', () => {
+describe('run(): add-agents', () => {
   it('writes AGENTS.md and CLAUDE.md into the cwd', async () => {
     const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(0);
@@ -460,7 +461,7 @@ function fakePrompts(answers: {
   };
 }
 
-describe('run() — interactive wizard', () => {
+describe('run(): interactive wizard', () => {
   it('prompts for dir + adapter + ui and scaffolds a node+ui app', async () => {
     const fake = fakePrompts({ dir: 'wiz-app', adapter: 'node', ui: true });
     const code = await run({
@@ -544,5 +545,69 @@ describe('run() — interactive wizard', () => {
     expect(code).toBe(1);
     expect(fake.calls.text).toBe(0); // dir came from the positional, not a prompt
     expect(fake.calls.cancel).toBe(1); // clack frame closed via cancel
+  });
+});
+
+describe('run(): target-dir edge cases', () => {
+  it('non-interactive: a target name that is an existing file errors', async () => {
+    writeFileSync(join(workDir, 'afile'), 'x');
+    const code = await run({
+      argv: ['afile', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+    });
+    expect(code).toBe(1);
+    expect(existsSync(join(workDir, 'afile', 'package.json'))).toBe(false);
+  });
+
+  it('non-interactive: reads the project dir from a piped stdin', async () => {
+    const stdin = Readable.from(['piped-app\n']) as unknown as {
+      isTTY?: boolean;
+    };
+    stdin.isTTY = false;
+    const code = await run({
+      argv: ['--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: false,
+      stdin: stdin as never,
+    });
+    expect(code).toBe(0);
+    expect(existsSync(join(workDir, 'piped-app', 'package.json'))).toBe(true);
+  });
+});
+
+describe('run(): install failure diagnostics', () => {
+  it('interactive: surfaces the captured installer error and returns 1', async () => {
+    const errs: string[] = [];
+    const originalError = console.error;
+    console.error = (...args) => errs.push(args.join(' '));
+    try {
+      const fake = fakePrompts({ dir: 'cap-app', adapter: 'node' });
+      const failingSpawn = (cmd: string) => ({
+        stderr: {
+          on: (e: string, cb: (b: Buffer) => void) => {
+            if (e === 'data' && cmd !== 'git') {
+              cb(Buffer.from('ENOSPC: no space left on device'));
+            }
+          },
+        },
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
+        },
+      });
+      const code = await run({
+        argv: ['cap-app', '--no-git'],
+        cwd: workDir,
+        env: { npm_config_user_agent: 'pnpm/10' },
+        isTTY: true,
+        prompts: fake.prompts,
+        spawnFn: failingSpawn as never,
+      });
+      expect(code).toBe(1);
+      expect(errs.join('\n')).toContain('ENOSPC');
+    } finally {
+      console.error = originalError;
+    }
   });
 });

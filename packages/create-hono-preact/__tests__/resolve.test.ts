@@ -21,7 +21,7 @@ function stubPrompts(overrides = {}) {
 const base = { yes: false, skipHints: false };
 const cwd = tmpdir();
 
-describe('resolveOptions — non-interactive', () => {
+describe('resolveOptions: non-interactive', () => {
   it('applies defaults and never prompts', async () => {
     const prompts = stubPrompts();
     const opts = await resolveOptions(
@@ -71,7 +71,7 @@ describe('resolveOptions — non-interactive', () => {
   });
 });
 
-describe('resolveOptions — interactive', () => {
+describe('resolveOptions: interactive', () => {
   it('prompts only for fields not supplied by flags', async () => {
     const prompts = stubPrompts();
     const opts = await resolveOptions(
@@ -108,6 +108,11 @@ describe('validateDirName', () => {
     mkdirSync(join(dir, 'occupied'));
     writeFileSync(join(dir, 'occupied', 'keep.txt'), 'x');
     expect(validateDirName('occupied', dir)).toMatch(/not empty/i);
+  });
+
+  it('rejects a name that is an existing file', () => {
+    writeFileSync(join(dir, 'afile'), 'x');
+    expect(validateDirName('afile', dir)).toMatch(/file named/i);
   });
 
   it('accepts a fresh name', () => {

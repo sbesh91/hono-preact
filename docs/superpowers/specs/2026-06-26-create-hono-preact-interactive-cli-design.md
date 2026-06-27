@@ -250,25 +250,25 @@ base `home.tsx` (no UI import) is used unchanged.
 A thin `@clack/prompts` shell at the edge over a pure, injectable core, preserving
 the current testing approach (`run()` already accepts an injectable `prompt`).
 
-- `lib/args.mjs` — `parseArgs(argv)` -> a partial-intent object plus flag
+- `lib/args.mjs`, `parseArgs(argv)` -> a partial-intent object plus flag
   booleans. New flags (`--ui`/`--no-ui`, `--yes`, `--skip-hints`). This branch
   is off pre-#190 `main`, so there is no recovery code to remove; PR #190 is
   simply superseded and never merged.
-- `lib/prompts.mjs` — `@clack/prompts` wizard: `resolveOptions(partial, { isTTY,
+- `lib/prompts.mjs`, `@clack/prompts` wizard: `resolveOptions(partial, { isTTY,
   prompt })` returns fully-resolved options, prompting only for fields not
   supplied by flags and only when interactive; plus `intro`/`outro`/`spinner`
   helpers. The prompt surface is injectable so unit tests pass stubs and never
   touch a real TTY.
-- `lib/scaffold.mjs` — `scaffold(targetDir, options)`: base + overlay copy,
+- `lib/scaffold.mjs`, `scaffold(targetDir, options)`: base + overlay copy,
   `package.json` deep-merge, dotfile rename, name substitution. Pure file IO,
   no prompts.
-- `lib/template.mjs` — existing copy/rename/substitute/agent-guidance helpers,
+- `lib/template.mjs`, existing copy/rename/substitute/agent-guidance helpers,
   extended with the deep-merge and overlay-copy primitives.
-- `lib/detect-pm.mjs` — unchanged.
-- `lib/cli.mjs` — orchestrator: `parseArgs` -> `resolveOptions` (prompt if TTY)
+- `lib/detect-pm.mjs`, unchanged.
+- `lib/cli.mjs`, orchestrator: `parseArgs` -> `resolveOptions` (prompt if TTY)
   -> `scaffold` -> install -> git init -> next-steps note/outro. Install and git
   keep using `node:child_process` `spawn` (the existing injectable `spawnFn`).
-- `lib/*.d.mts` — hand-authored declarations updated for the new/changed exports.
+- `lib/*.d.mts`, hand-authored declarations updated for the new/changed exports.
 
 ## Dependencies
 
@@ -284,20 +284,20 @@ umbrella, so no umbrella/`--filter` wiring is required.
 
 TDD throughout, mirroring the current `__tests__/` layout:
 
-- `args.test.ts` — `parseArgs`: new flags, `--yes`, `--ui`/`--no-ui`, the
+- `args.test.ts`, `parseArgs`: new flags, `--yes`, `--ui`/`--no-ui`, the
   unchanged `add-agents` path, and error cases (unknown adapter, unknown flag).
-- `resolve.test.ts` (new) — `resolveOptions` with stubbed prompts and an `isTTY`
+- `resolve.test.ts` (new), `resolveOptions` with stubbed prompts and an `isTTY`
   toggle: prompts fire only for missing fields; `--yes` and non-TTY skip all
   prompts and apply defaults; flag values override; missing dir in non-TTY
   errors.
-- `merge.test.ts` (new) — the `package.json` deep-merge: nested objects merge,
+- `merge.test.ts` (new), the `package.json` deep-merge: nested objects merge,
   scalars/arrays replace, base untouched when no fragment.
-- `cli.test.ts` — `run()`/`scaffold()` integration across the adapter x ui
+- `cli.test.ts`, `run()`/`scaffold()` integration across the adapter x ui
   matrix: cloudflare vs node files (e.g. `wrangler.jsonc` presence), ui on adds
   `hono-preact-ui` to the written `package.json` and a `Dialog` import in
   `home.tsx`, ui off does neither; install/git spawn behavior via the injected
   `spawnFn`.
-- `scaffold-integration.test.ts` — the existing PR-time "scaffold then build each
+- `scaffold-integration.test.ts`, the existing PR-time "scaffold then build each
   adapter" test, extended to also build a `--ui` variant so a UI scaffold is
   proven to typecheck and build.
 - A manual real `npm create` smoke check confirming the flag-free path prompts

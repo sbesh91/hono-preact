@@ -37,8 +37,8 @@
 
 **Interfaces:**
 - Produces:
-  - `deepMerge(a: object, b: object): object` — nested objects merge recursively; arrays and scalars from `b` replace those in `a`; neither input mutated.
-  - `composePackageJson(fragmentPaths: string[]): Promise<object>` — read and deep-merge an ordered list of `package.json` fragment files (earlier = base, later = overlay).
+  - `deepMerge(a: object, b: object): object`, nested objects merge recursively; arrays and scalars from `b` replace those in `a`; neither input mutated.
+  - `composePackageJson(fragmentPaths: string[]): Promise<object>`, read and deep-merge an ordered list of `package.json` fragment files (earlier = base, later = overlay).
 
 - [ ] **Step 1: Add the dependency**
 
@@ -212,8 +212,8 @@ git commit -m "feat(create): add @clack/prompts and package.json deep-merge util
 **Interfaces:**
 - Consumes: `deepMerge`, `composePackageJson` (Task 1).
 - Produces:
-  - `copyTreeExcept(source: string, target: string, exclude?: string[]): Promise<void>` — recursive copy, skipping files whose basename is in `exclude`, overwriting existing files.
-  - `scaffold(targetDir: string, options: { adapter: 'cloudflare' | 'node', ui: boolean }, templatesRoot: string): Promise<void>` — compose base + overlays into `targetDir`.
+  - `copyTreeExcept(source: string, target: string, exclude?: string[]): Promise<void>`, recursive copy, skipping files whose basename is in `exclude`, overwriting existing files.
+  - `scaffold(targetDir: string, options: { adapter: 'cloudflare' | 'node', ui: boolean }, templatesRoot: string): Promise<void>`, compose base + overlays into `targetDir`.
 
 - [ ] **Step 1: Restructure the template tree on disk**
 
@@ -916,7 +916,7 @@ function stubPrompts(overrides = {}) {
 
 const base = { yes: false, skipHints: false };
 
-describe('resolveOptions — non-interactive', () => {
+describe('resolveOptions, non-interactive', () => {
   it('applies defaults and never prompts', async () => {
     const prompts = stubPrompts();
     const opts = await resolveOptions(
@@ -951,7 +951,7 @@ describe('resolveOptions — non-interactive', () => {
   });
 });
 
-describe('resolveOptions — interactive', () => {
+describe('resolveOptions, interactive', () => {
   it('prompts only for fields not supplied by flags', async () => {
     const prompts = stubPrompts();
     const opts = await resolveOptions(
@@ -1303,7 +1303,7 @@ function fakePrompts(answers: {
   };
 }
 
-describe('run() — interactive wizard', () => {
+describe('run(), interactive wizard', () => {
   it('prompts for dir + adapter + ui and scaffolds a node+ui app', async () => {
     const fake = fakePrompts({ dir: 'wiz-app', adapter: 'node', ui: true });
     const code = await run({

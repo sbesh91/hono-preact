@@ -47,9 +47,22 @@ export function parseArgs(argv) {
     } else if (arg === '--no-ui') {
       ui = false;
     } else if (arg === '--adapter' || arg.startsWith('--adapter=')) {
-      const value = arg.includes('=')
-        ? arg.slice('--adapter='.length)
-        : argv[++i];
+      let value;
+      if (arg.includes('=')) {
+        value = arg.slice('--adapter='.length);
+      } else {
+        // Space form: the next token is the value. Reject a missing value (flag
+        // at end of argv) or a flag-looking token rather than swallowing it.
+        const next = argv[i + 1];
+        if (next === undefined || next.startsWith('-')) {
+          return {
+            kind: 'error',
+            message: "--adapter requires a value ('cloudflare' or 'node')",
+          };
+        }
+        value = next;
+        i++;
+      }
       if (value !== 'cloudflare' && value !== 'node') {
         return {
           kind: 'error',

@@ -70,3 +70,27 @@ describe('scaffold', () => {
     expect(existsSync(join(target, '.gitignore'))).toBe(true);
   });
 });
+
+describe('feature/ui home.tsx parity with base', () => {
+  // The UI overlay forks the whole home page (overlays are file-granular), so
+  // guard the shared core: if a base edit changes the loader usage or the
+  // welcome copy, the UI overlay must be updated to match or this fails.
+  it('keeps the base loader usage and welcome copy', () => {
+    const baseHome = readFileSync(
+      join(templatesRoot, 'base', 'src', 'pages', 'home.tsx'),
+      'utf8'
+    );
+    const uiHome = readFileSync(
+      join(templatesRoot, 'feature', 'ui', 'src', 'pages', 'home.tsx'),
+      'utf8'
+    );
+    for (const marker of [
+      'homeLoader.useData()',
+      'definePage(HomeView',
+      'Welcome to {',
+    ]) {
+      expect(baseHome).toContain(marker);
+      expect(uiHome).toContain(marker);
+    }
+  });
+});

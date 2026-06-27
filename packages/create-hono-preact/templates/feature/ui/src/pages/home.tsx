@@ -1,3 +1,7 @@
+// Overlay copy of base/src/pages/home.tsx that adds a hono-preact-ui Dialog.
+// Overlays are file-granular, so this forks the whole page; keep its loader
+// usage and welcome copy in sync with base/src/pages/home.tsx (a parity test in
+// __tests__/scaffold.test.ts guards the shared markers).
 import { definePage } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import {

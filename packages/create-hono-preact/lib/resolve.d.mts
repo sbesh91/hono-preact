@@ -9,6 +9,11 @@ export interface ResolvedOptions {
   skipHints: boolean;
 }
 
+export function checkTargetDir(
+  dest: string,
+  name: string
+): string | undefined;
+
 export function validateDirName(
   value: string,
   cwd: string
