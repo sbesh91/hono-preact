@@ -1,11 +1,10 @@
-import {
-  type ComponentChildren,
-  type FunctionComponent,
-  type JSX,
-} from 'preact';
+import { type ComponentChildren, type FunctionComponent } from 'preact';
 import type { Context } from 'hono';
-import { type RouteHook, useLocation } from 'preact-iso';
-import { Suspense } from 'preact/compat';
+import {
+  ErrorBoundary as PreactIsoErrorBoundary,
+  type RouteHook,
+  useLocation,
+} from 'preact-iso';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { isRedirect, isRender, type Outcome } from '../outcomes.js';
@@ -238,18 +237,24 @@ function DeferredHost({
 /**
  * Suspense strategy wrapper. Lazily dispatches the chain once per path (see the
  * lazy-ref note below) and renders the outcome through HostConsumer.
+ *
+ * The boundary is preact-iso's public `ErrorBoundary`: it catches the promise
+ * `HostConsumer` throws (via `wrapped.read()`) and re-renders on resolve, which
+ * is the suspension support this path needs post-navigation. No `onError` is
+ * passed, so genuine errors and thrown framework outcomes (render/deny) are NOT
+ * a promise and propagate up to the outer framework `ErrorBoundary`
+ * (route-boundary.tsx), which rethrows outcomes for the dispatcher / renderPage
+ * to translate.
  */
 function SuspenseHost({
   use,
   location,
   honoCtx,
-  fallback,
   children,
 }: {
   use: ReadonlyArray<UseEntry>;
   location: RouteHook;
   honoCtx: Context | undefined;
-  fallback?: JSX.Element;
   children: ComponentChildren;
 }) {
   // Lazy ref pattern. `useRef(null)` serves a dual purpose: it's the
@@ -269,18 +274,17 @@ function SuspenseHost({
     resultRef.current = wrapPromise(startChain(use, location, honoCtx));
   }
   return (
-    <Suspense fallback={fallback}>
+    <PreactIsoErrorBoundary>
       <HostConsumer resultRef={resultRef}>{children}</HostConsumer>
-    </Suspense>
+    </PreactIsoErrorBoundary>
   );
 }
 
 export const PageMiddlewareHost: FunctionComponent<{
   use?: ReadonlyArray<UseEntry>;
   location: RouteHook;
-  fallback?: JSX.Element;
   children: ComponentChildren;
-}> = ({ use = [], location, fallback, children }) => {
+}> = ({ use = [], location, children }) => {
   const honoCtx = useContext(HonoRequestContext).context;
   // Choose the render strategy ONCE per mount so the hook order stays stable
   // across renders (hasClientNavigated() flips to true after the first
@@ -306,12 +310,7 @@ export const PageMiddlewareHost: FunctionComponent<{
     );
   }
   return (
-    <SuspenseHost
-      use={use}
-      location={location}
-      honoCtx={honoCtx}
-      fallback={fallback}
-    >
+    <SuspenseHost use={use} location={location} honoCtx={honoCtx}>
       {children}
     </SuspenseHost>
   );

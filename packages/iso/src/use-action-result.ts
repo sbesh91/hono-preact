@@ -1,5 +1,5 @@
 import { useContext } from 'preact/hooks';
-import { useSyncExternalStore } from 'preact/compat';
+import { useStoreSnapshot } from './internal/use-store-snapshot.js';
 import { ActionResultContext } from './action-result-context.js';
 import {
   getLastActionResult,
@@ -37,7 +37,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionRef<TPayload, TResult, never>
 ): ActionResult<TPayload, TResult> {
   const ssr = useContext(ActionResultContext);
-  const client = useSyncExternalStore(subscribeLastActionResult, () =>
+  const client = useStoreSnapshot(subscribeLastActionResult, () =>
     isBrowser() ? getLastActionResult(stub) : null
   );
 

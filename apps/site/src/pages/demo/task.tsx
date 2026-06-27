@@ -4,6 +4,7 @@ import {
   useFormStatus,
   useOptimisticAction,
   useParams,
+  useReload,
   ViewTransitionName,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
@@ -223,11 +224,15 @@ const CommentsSection: FunctionComponent<{
 };
 CommentsSection.displayName = 'CommentsSection';
 
-const CommentsView = commentsLoader.View<{ taskId: string }>(
-  ({ data: comments, taskId }) => (
-    <CommentsSection comments={comments ?? []} taskId={taskId} />
-  ),
-  { fallback: <p class="text-sm text-muted">Loading comments…</p> }
+// During `revalidating` the prior comments stay on screen (the union's
+// revalidating/success/error arms all carry `data`); the loading placeholder
+// shows only on the cold first load.
+const CommentsView = commentsLoader.View<{ taskId: string }>((s) =>
+  s.status === 'loading' ? (
+    <p class="text-sm text-muted">Loading comments…</p>
+  ) : (
+    <CommentsSection comments={s.data} taskId={s.taskId} />
+  )
 );
 
 // ---- Section: project activity feed ----
@@ -271,31 +276,40 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
   </aside>
 );
 
-const ActivityView = activityLoader.View(
-  ({ data: activity }) => <ActivitySection activity={activity ?? []} />,
-  { fallback: <p class="text-xs text-muted">Loading activity…</p> }
+// Same shape: keep the prior activity during a background revalidation, show
+// the loading line only for the cold first load.
+const ActivityView = activityLoader.View((s) =>
+  s.status === 'loading' ? (
+    <p class="text-xs text-muted">Loading activity…</p>
+  ) : (
+    <ActivitySection activity={s.data} />
+  )
 );
 
 // ---- Page: task loads first, then comments + activity in parallel ----
 
-const TaskView = taskLoader.View(
-  ({ data: task, reload: reloadTask }) => {
-    if (!task) return <p class="p-6">Task not found.</p>;
-    return (
-      <div class="mx-auto w-full max-w-5xl px-6 py-6">
-        <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
-          <main class="space-y-6">
-            <article class={`${PANEL} space-y-5`}>
-              <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
-            </article>
-            <CommentsView taskId={task.id} />
-          </main>
-          <ActivityView />
-        </div>
+const TaskView = taskLoader.View((s) => {
+  // `useReload` runs unconditionally at the top of the render fn (it lives in
+  // the loader boundary `.View` establishes). The loading arm shows the cold
+  // placeholder; success/revalidating/error all carry the task, so the prior
+  // content stays put during a background reload.
+  const { reload: reloadTask } = useReload();
+  if (s.status === 'loading') return <p class="p-6">Loading task…</p>;
+  const task = s.data;
+  if (!task) return <p class="p-6">Task not found.</p>;
+  return (
+    <div class="mx-auto w-full max-w-5xl px-6 py-6">
+      <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
+        <main class="space-y-6">
+          <article class={`${PANEL} space-y-5`}>
+            <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
+          </article>
+          <CommentsView taskId={task.id} />
+        </main>
+        <ActivityView />
       </div>
-    );
-  },
-  { fallback: <p class="p-6">Loading task…</p> }
-);
+    </div>
+  );
+});
 
 export default definePage(TaskView);

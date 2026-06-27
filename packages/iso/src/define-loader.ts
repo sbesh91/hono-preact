@@ -15,15 +15,13 @@ import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import { isBrowser } from './is-browser.js';
-import type {
-  AccumulateOptions,
-  StreamStatus,
-} from './internal/use-loader-runner.js';
+import type { AccumulateOptions } from './internal/use-loader-runner.js';
+import type { LoaderState, StreamState, StreamStatus } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
-export type { StreamStatus } from './internal/use-loader-runner.js';
+export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
 export type LoaderCtx<
   TParams = Record<string, string>,
@@ -46,36 +44,30 @@ export type Loader<
   | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>)
   | ((ctx: LoaderCtx<TParams, TSearch>) => AsyncGenerator<T, void, unknown>);
 
-// The accumulating (streaming) `.View` form: live loaders only. `data` is the
-// folded accumulator and `status` reflects the connection; the chunk handed to
-// `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`).
+// The accumulating (streaming) `.View` form: live loaders only. The render fn
+// receives the `StreamState<Acc>` discriminated union (pattern-match on
+// `status`); the folded accumulator rides the data-carrying arms. The chunk
+// handed to `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`). The
+// explicit reload callback is read via `useReload()`, not handed in.
 type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
-  render: (
-    args: P & {
-      data: Acc;
-      status: StreamStatus;
-      error: Error | null;
-      reload: () => void;
-    }
-  ) => ComponentChildren,
+  render: (args: StreamState<Acc> & P) => ComponentChildren,
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
-    fallback?: ComponentChildren;
     errorFallback?:
       | ComponentChildren
       | ((err: Error, reset: () => void) => ComponentChildren);
   }
 ) => FunctionComponent<P>;
 
-// The single-value `.View` form: non-live loaders. `data` is the loader's value
-// as the client receives it (`Serialize<T>`).
+// The single-value `.View` form: non-live loaders. The render fn receives the
+// `LoaderState<Serialize<T>>` discriminated union (pattern-match on `status`);
+// the loader value (the JSON round-trip the client receives) rides the
+// data-carrying arms. The explicit reload callback is read via `useReload()`,
+// not handed in.
 type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
-  render: (
-    args: P & { data: Serialize<T>; error: Error | null; reload: () => void }
-  ) => ComponentChildren,
+  render: (args: LoaderState<Serialize<T>> & P) => ComponentChildren,
   opts?: {
-    fallback?: ComponentChildren;
     errorFallback?:
       | ComponentChildren
       | ((err: Error, reset: () => void) => ComponentChildren);
@@ -119,13 +111,6 @@ export interface LoaderRef<T, Live extends boolean = false> {
    */
   readonly timeoutMs?: number | false;
   /**
-   * Per-loader delay in milliseconds before the Suspense fallback mounts on a
-   * client navigation, as authored on `defineLoader({ fallbackDelay })`.
-   * `undefined` means "use the framework default (100ms)"; `0` shows the
-   * fallback immediately.
-   */
-  readonly fallbackDelay?: number;
-  /**
    * Per-loader middleware and (for streaming loaders) stream observers,
    * exactly as authored on `defineLoader({ use })`. The handler-side
    * dispatcher calls `partitionUse(ref.use)` to split middleware from
@@ -135,21 +120,24 @@ export interface LoaderRef<T, Live extends boolean = false> {
    */
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   /**
-   * The loader's data as the client receives it: `Serialize<T>`, the JSON
-   * round-trip of the server-side return `T` (e.g. a `Date` field arrives as a
-   * string). `never` on a `live` loader (it has no single value).
+   * Consume the loader's data as a discriminated `LoaderState<Serialize<T>>`:
+   * pattern-match on `status` (`loading` | `success` | `revalidating` |
+   * `error`). The data-carrying arms expose `Serialize<T>`, the JSON round-trip
+   * of the server-side return `T` (e.g. a `Date` field arrives as a string).
+   * `never` on a `live` loader (it has no single value).
    */
-  useData: Live extends true ? never : () => Serialize<T>;
+  useData: Live extends true ? never : () => LoaderState<Serialize<T>>;
   useError(): Error | null;
   invalidate(): void;
   /**
-   * The lower-level Suspense boundary (single-value loaders). `never` on a
-   * `live` loader: consume it via the accumulating `.View` form instead.
+   * The lower-level state-based boundary (single-value loaders): it renders its
+   * children eagerly and provides the loader's state on context, which children
+   * read via `useData()` (pattern-match on `status`). `never` on a `live`
+   * loader: consume it via the accumulating `.View` form instead.
    */
   Boundary: Live extends true
     ? never
     : ComponentType<{
-        fallback?: ComponentChildren;
         errorFallback?:
           | ComponentChildren
           | ((err: Error, reset: () => void) => ComponentChildren);
@@ -170,8 +158,8 @@ export interface LoaderRef<T, Live extends boolean = false> {
  * loader (invalidate, prefetch) without reading its data shape.
  *
  * Uses `LoaderRef<any>`, not `LoaderRef<unknown>`, deliberately. `LoaderRef<T>`
- * is invariant in `T` (it surfaces `T` through `useData(): Serialize<T>`), so a
- * concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
+ * is invariant in `T` (it surfaces `T` through `useData(): LoaderState<Serialize<T>>`),
+ * so a concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
  * sites never inspect the data with a meaningful type. `boolean` (not the default
  * `false`) erases liveness so a live `LoaderRef<T, true>` is also accepted.
@@ -234,13 +222,6 @@ export type DefineLoaderOptions<T> = {
    */
   timeoutMs?: number | false;
   /**
-   * Delay in milliseconds before this loader's fallback (loading UI) mounts on
-   * a client navigation. When omitted, the framework default of 100ms applies.
-   * Pass `0` to show the fallback immediately. On a fast connection the data
-   * usually lands within the window, so the fallback never paints.
-   */
-  fallbackDelay?: number;
-  /**
    * Per-loader middleware and (for streaming loaders) stream observers.
    * The element type LoaderUse<T, Streaming> structurally gates stream
    * observers off non-streaming loaders, but a tighter compile-time gate
@@ -294,16 +275,32 @@ function getSharedCaches(): SharedCacheMap {
   return map;
 }
 
-function validateFallbackDelay(
-  value: number | undefined,
-  context: string
-): void {
-  if (value === undefined) return;
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(
-      `${context}: fallbackDelay must be a non-negative finite number, got ${String(value)}`
-    );
-  }
+/**
+ * The streaming-only statuses: the part of the streaming vocabulary that never
+ * appears on a single-value `LoaderState` (the shared `error` stays on the
+ * `LoaderState` side). Derived from the status union via `Exclude`, so the
+ * exclusion set has ONE source of truth: adding a `StreamStatus` member forces
+ * this map to list it (a missing key is a compile error) and it cannot drift.
+ */
+type StreamOnlyStatus = Exclude<StreamStatus, LoaderState<unknown>['status']>;
+const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
+  connecting: true,
+  open: true,
+  closed: true,
+};
+
+/**
+ * Narrow `LoaderDataContext`'s union to the single-value `LoaderState` half by
+ * excluding the stream-only statuses. A non-live loader always carries a
+ * `LoaderState` on context, so this lets `useData()` return the context value
+ * directly (no re-projection, no cast). The shared `error` status stays on the
+ * `LoaderState` side, which is correct: `useData()` is never called on a `live`
+ * loader (it throws first).
+ */
+function isLoaderState(
+  s: LoaderState<unknown> | StreamState<unknown>
+): s is LoaderState<unknown> {
+  return !(s.status in STREAM_ONLY_STATUSES);
 }
 
 // `{ live: true }` selects the accumulating-only `LoaderRef<T, true>`; these
@@ -355,7 +352,6 @@ export function defineLoader(
   const live = opts?.live ?? false;
 
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
-  validateFallbackDelay(opts?.fallbackDelay, 'defineLoader');
   const idKey = opts?.__moduleKey
     ? opts.__loaderName
       ? `${opts.__moduleKey}::${opts.__loaderName}`
@@ -398,7 +394,6 @@ export function defineLoader(
     paramsSchema: opts?.paramsSchema,
     live,
     timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
-    fallbackDelay: opts?.fallbackDelay,
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
     // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
@@ -417,7 +412,18 @@ export function defineLoader(
           'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
         );
       }
-      return ctx.data as unknown;
+      // The context carries the already-projected union (built once in
+      // `loader.tsx`); return it BY REFERENCE so consumers see a referentially
+      // stable value across re-renders (review #7) rather than a fresh
+      // projection each call. A non-live loader always carries a `LoaderState`
+      // (the runner never projects `toStreamState` for it); `isLoaderState`
+      // narrows to that without a cast, and the throw is unreachable defense.
+      if (!isLoaderState(ctx)) {
+        throw new Error(
+          'loader.useData() read a streaming state on a non-live loader; this is an internal invariant violation.'
+        );
+      }
+      return ctx;
     },
     useError() {
       return useContext(LoaderErrorContext);
@@ -457,7 +463,6 @@ export function defineLoader(
       }
       return h(LoaderHost<unknown>, {
         loader: ref,
-        fallback: props.fallback,
         errorFallback: props.errorFallback,
         accumulate: props.accumulate,
         children: props.children,
@@ -472,7 +477,6 @@ export function defineLoader(
       viewOpts?: {
         initial?: unknown;
         reduce?: (acc: any, chunk: any) => any;
-        fallback?: ComponentChildren;
         errorFallback?:
           | ComponentChildren
           | ((err: Error, reset: () => void) => ComponentChildren);
@@ -508,11 +512,9 @@ export function defineLoader(
       }
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
-          fallback: viewOpts?.fallback,
           errorFallback: viewOpts?.errorFallback,
           accumulate,
-          children: h(ViewRenderer<unknown>, {
-            loaderRef: ref,
+          children: h(ViewRenderer, {
             props,
             render,
           }),

@@ -1,6 +1,6 @@
 # Loading States
 
-Show a loading UI during client-side navigation by passing a `fallback` to `loader.View()`, so users see a skeleton or spinner instead of a blank page while their data loads.
+Show a loading UI during client-side navigation by switching on the `LoaderState` the `loader.View()` render function receives. It is a discriminated union with four `status` variants: `loading` (no data yet), `success`, `revalidating` (a background refresh with the prior data still present), and `error`. Match on `status` and render your own affordance for each; the framework supplies the state, not the UI.
 
 ## Basic usage
 
@@ -11,16 +11,17 @@ import { serverLoaders } from './movies.server.js';
 
 const moviesLoader = serverLoaders.default;
 
-const MoviesView = moviesLoader.View(
-  ({ data }) => (
+const MoviesView = moviesLoader.View((s) => {
+  if (s.status === 'loading') return <p>Loading...</p>;
+  // success | revalidating | error all carry `data`, narrowed to the value type.
+  return (
     <ul>
-      {data.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
-  ),
-  { fallback: <p>Loading…</p> }
-);
+  );
+});
 
 export default definePage(MoviesView);
 ```
@@ -34,20 +35,21 @@ export default definePage(MoviesView);
 }
 ```
 
-`fallback` is rendered by the Suspense boundary `.View()` installs around the loader fetch. It only appears on client-side navigation; SSR and first-load hydration read from preloaded data and render immediately.
+The `loading` status appears only on a client-side navigation with no cached value; SSR and first-load hydration render with data already present, so the initial paint is `success`, never `loading`.
 
-## When fallback shows
+## When each status appears
 
-| Navigation                   | Fallback shown?                                |
-| ---------------------------- | ---------------------------------------------- |
-| SSR (first load)             | No. Data is preloaded into the HTML.           |
-| Hydration                    | No. Client reads from `data-loader` attribute. |
-| Client-side nav (cache miss) | Yes, until the loader resolves.                |
-| Client-side nav (cache hit)  | No. Cached data renders immediately.           |
+| Navigation                      | `status` on entry                                         |
+| ------------------------------- | --------------------------------------------------------- |
+| SSR (first load)                | `success`. Data is preloaded into the HTML.               |
+| Hydration                       | `success`. Client reads from the `data-loader` attribute. |
+| Client-side nav (cache miss)    | `loading`, until the loader resolves (then `success`).    |
+| Client-side nav (cache hit)     | `success`. Cached data renders immediately.               |
+| Reload (stale-while-revalidate) | `revalidating`. `data` retains the previous value.        |
 
 ## Using a skeleton
 
-Any Preact element works as a fallback, including a layout-matching skeleton:
+Match the `loading` status and return a skeleton component:
 
 ```tsx
 const MoviesSkeleton = () => (
@@ -58,57 +60,85 @@ const MoviesSkeleton = () => (
   </ul>
 );
 
-const MoviesView = moviesLoader.View(
-  ({ data }) => (
+const MoviesView = moviesLoader.View((s) => {
+  if (s.status === 'loading') return <MoviesSkeleton />;
+  return (
     <ul>
-      {data.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
-  ),
-  { fallback: <MoviesSkeleton /> }
-);
+  );
+});
 ```
 
-## Error fallback
+## Stale-while-revalidate
 
-If the loader rejects, the boundary renders `errorFallback` instead of unwinding the page tree. Pass it alongside `fallback` in the same `.View()` options. The fallback may be an element or a function that receives the error and a `reset()` callback:
+During a reload the status is `revalidating`: a refresh is in flight, but `data` still holds the previous value. Render the cold-load placeholder only for `loading`, and show a subtle indicator for `revalidating` so the current content stays visible:
 
 ```tsx
-const MoviesView = moviesLoader.View(
-  ({ data }) => (
+const MoviesView = moviesLoader.View((s) => {
+  if (s.status === 'loading') return <MoviesSkeleton />;
+  return (
+    <div>
+      {s.status === 'revalidating' && (
+        <span class="text-sm text-muted">Refreshing...</span>
+      )}
+      <ul>
+        {s.data.movies.results.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+    </div>
+  );
+});
+```
+
+## Error handling inside the render function
+
+When the loader rejects, the status is `error`. That arm also carries the last good `data` (so prior content can stay visible), and `reload` from `useReload()` lets the user retry:
+
+```tsx
+import { useReload } from 'hono-preact';
+
+const MoviesView = moviesLoader.View((s) => {
+  const { reload } = useReload();
+  if (s.status === 'loading') return <p>Loading...</p>;
+  if (s.status === 'error')
+    return (
+      <div role="alert">
+        <p>Couldn't load movies: {s.error.message}</p>
+        <button onClick={reload}>Retry</button>
+      </div>
+    );
+  return (
     <ul>
-      {data.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
-  ),
-  {
-    fallback: <p>Loading…</p>,
-    errorFallback: (err, reset) => (
-      <div role="alert">
-        <p>Couldn't load movies: {err.message}</p>
-        <button onClick={reset}>Retry</button>
-      </div>
-    ),
-  }
-);
+  );
+});
 ```
 
-Calling `reset()` clears the boundary so the next render attempt re-enters the loader. For runtime invalidation of cached data from elsewhere on the page, use [`useReload`](/docs/reloading) or [cross-page invalidation](/docs/loaders#cross-page-invalidation).
+A cold error (the very first load fails, with no prior data) is caught by the loader's error boundary and the page-level `errorFallback` before the render function runs, so the `error` arm always carries a `data` value.
 
-## `.View()` options reference
+## The `LoaderState` union
 
-Both options are passed as the second argument to `loader.View(render, opts)`:
+The render function receives a `LoaderState<T>` discriminated union. Match on `status`:
 
-| Option          | Type                                                       | Description                                                       |
-| --------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| `fallback`      | `ComponentChildren`                                        | Shown while the loader is pending.                                |
-| `errorFallback` | `ComponentChildren \| ((err, reset) => ComponentChildren)` | Shown when the loader errors; the function form receives `reset`. |
+| `status`         | Fields                               | When                                                                                      |
+| ---------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `'loading'`      | (none)                               | Cold load before the first response. No data yet.                                         |
+| `'success'`      | `data: Serialize<T>`                 | The loader resolved; `data` is the value.                                                 |
+| `'revalidating'` | `data: Serialize<T>`                 | A background refresh is in flight; `data` is the previous value (stale-while-revalidate). |
+| `'error'`        | `error: Error`, `data: Serialize<T>` | The loader rejected; `data` is the last good value.                                       |
 
-## Page-level fallbacks
+In the `success`, `revalidating`, and `error` arms `data` is narrowed to `Serialize<T>`, so there is no `undefined` to guard. The render function also receives any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)). The imperative `reload()` callback is read from `useReload()`, not passed as a render arg (see [Reloading](/docs/reloading)).
 
-`definePage` accepts a page-level `errorFallback` that catches errors from the rest of the page tree (e.g. a render-time throw outside any loader boundary):
+## Page-level error fallback
+
+`definePage` accepts a page-level `errorFallback` that catches errors from the rest of the page tree (for example, a render-time throw outside any loader boundary):
 
 ```tsx
 export default definePage(MoviesView, {
@@ -116,11 +146,11 @@ export default definePage(MoviesView, {
 });
 ```
 
-Loader-specific loading and error UI lives on `.View()` / `.Boundary`. The page-level `errorFallback` is the outer safety net.
+Loader-specific loading and error UI lives inside the `.View()` render function. The page-level `errorFallback` is the outer safety net.
 
 ## See also
 
 - [Server Loaders](/docs/loaders): where `.View()` comes from.
-- [Streaming](/docs/streaming): fallback behavior for streaming loaders.
+- [Streaming](/docs/streaming): state-based loading for streaming loaders.
 - [Middleware](/docs/middleware): the `use` binding.
 - [Project Structure](/docs/structure): the full `definePage` bindings list (including `Wrapper`).

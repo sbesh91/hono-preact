@@ -26,7 +26,7 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View(({ data }) => {
+const MoviesView = dataLoader.View((s) => {
   const { reload, reloading } = useReload();
 
   const handleAdd = async () => {
@@ -34,13 +34,15 @@ const MoviesView = dataLoader.View(({ data }) => {
     reload();
   };
 
+  if (s.status === 'loading') return <p>Loading...</p>;
+
   return (
     <>
       <button onClick={handleAdd} disabled={reloading}>
         {reloading ? 'Adding...' : 'Add Movie'}
       </button>
       <ul>
-        {data.movies.results.map((m) => (
+        {s.data.movies.results.map((m) => (
           <li key={m.id}>{m.title}</li>
         ))}
       </ul>
@@ -65,7 +67,7 @@ export default definePage(MoviesView);
 
 ## Background refresh
 
-Reload is a background refresh: the current content stays visible while the new data fetches. There is no Suspense fallback shown during reload. Use `reloading` to reflect the in-progress state in your UI.
+Reload is a background refresh. While `reloading` is `true`, the loader's previous value is retained so the current content stays visible; `reloading` reflects an explicit reload or revalidation only, never the cold initial load. Inside a `.View()` render function the same in-flight refresh surfaces as the `revalidating` status, whose arm still carries `data`. Use `reloading` (from `useReload`) or the `revalidating` status (from the `.View()` render arg) to reflect the in-progress state in your UI. `reloading` is `true` only while revalidating a value that already exists; a reload or retry of a loader that has not produced a value yet (a failed first load, or a live reconnect after a cold pre-first-chunk error) is itself a cold load, so branch on `status === 'loading'` for that case, not `reloading`.
 
 ## Three knobs, three behaviors
 
@@ -91,10 +93,10 @@ const { reload, reloading } = useReload();
 | Value       | Type         | Description                                                                                                                                                                                                                   |
 | ----------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `reload`    | `() => void` | Re-runs the `serverLoader`. If called while a fetch (initial load or a previous reload) is still in flight, the call is queued and runs once the in-flight fetch settles; concurrent calls coalesce into a single queued run. |
-| `reloading` | `boolean`    | `true` while the loader is fetching, `false` otherwise.                                                                                                                                                                       |
+| `reloading` | `boolean`    | `true` while an explicit reload or revalidation is in flight; `false` during the cold initial load and when idle.                                                                                                             |
 
 ## See also
 
 - [Server Loaders](/docs/loaders): `loader.invalidate()` in context.
 - [Server Actions](/docs/actions): `useAction` invalidate option.
-- [Loading States](/docs/loading-states): the fallback shown during a refetch.
+- [Loading States](/docs/loading-states): switching on the `LoaderState` union during a refetch.

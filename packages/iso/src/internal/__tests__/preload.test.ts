@@ -19,34 +19,48 @@ beforeEach(() => {
 });
 
 describe('getPreloadedData', () => {
-  it('returns null when not in browser', () => {
+  // Returns a present/absent discriminant: `{ present: false }` for "no preload"
+  // and `{ present: true, value }` for a baked payload, so a baked `null` is
+  // PRESENT, not collapsed into absence.
+  it('returns absent when not in browser', () => {
     env.current = 'server';
     makeElement('test-id', '{"msg":"hi"}');
-    expect(getPreloadedData('test-id')).toBeNull();
+    expect(getPreloadedData('test-id')).toEqual({ present: false });
   });
 
-  it('returns null when the element does not exist', () => {
-    expect(getPreloadedData('no-such-id')).toBeNull();
+  it('returns absent when the element does not exist', () => {
+    expect(getPreloadedData('no-such-id')).toEqual({ present: false });
   });
 
-  it('returns null when the element has no data-loader attribute', () => {
+  it('returns absent when the element has no data-loader attribute', () => {
     makeElement('test-id');
-    expect(getPreloadedData('test-id')).toBeNull();
+    expect(getPreloadedData('test-id')).toEqual({ present: false });
   });
 
-  it('returns the parsed object when data-loader contains valid JSON', () => {
+  it('returns the parsed object as a present value when data-loader is valid JSON', () => {
     makeElement('test-id', '{"msg":"hello"}');
-    expect(getPreloadedData('test-id')).toEqual({ msg: 'hello' });
+    expect(getPreloadedData('test-id')).toEqual({
+      present: true,
+      value: { msg: 'hello' },
+    });
   });
 
-  it('returns an empty object when data-loader is "{}"', () => {
+  it('returns a present empty object when data-loader is "{}"', () => {
     makeElement('test-id', '{}');
-    expect(getPreloadedData('test-id')).toEqual({});
+    expect(getPreloadedData('test-id')).toEqual({ present: true, value: {} });
   });
 
-  it('returns null when data-loader contains malformed JSON', () => {
+  it('returns a PRESENT value of null when data-loader is "null" (not absent)', () => {
+    // The core preload fix: a loader that SSR'd `null` is present with value
+    // `null`, distinct from "no preload". The old `T | null` return collapsed
+    // the two and refetched on hydration.
+    makeElement('test-id', 'null');
+    expect(getPreloadedData('test-id')).toEqual({ present: true, value: null });
+  });
+
+  it('returns absent when data-loader contains malformed JSON', () => {
     makeElement('test-id', '{not valid json}');
-    expect(getPreloadedData('test-id')).toBeNull();
+    expect(getPreloadedData('test-id')).toEqual({ present: false });
   });
 
   it('does NOT delete data-loader on read (pure read; caller schedules delete in useEffect)', () => {
@@ -62,8 +76,14 @@ describe('getPreloadedData', () => {
 
   it('returns the same value on a second call (read is idempotent)', () => {
     makeElement('test-id', '{"msg":"hi"}');
-    expect(getPreloadedData('test-id')).toEqual({ msg: 'hi' });
-    expect(getPreloadedData('test-id')).toEqual({ msg: 'hi' });
+    expect(getPreloadedData('test-id')).toEqual({
+      present: true,
+      value: { msg: 'hi' },
+    });
+    expect(getPreloadedData('test-id')).toEqual({
+      present: true,
+      value: { msg: 'hi' },
+    });
   });
 });
 

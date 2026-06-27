@@ -65,6 +65,7 @@ describe('honoPreact config plugin', () => {
     };
     expect(result.resolve.dedupe).toContain('preact');
     expect(result.resolve.dedupe).toContain('preact-iso');
+    expect(result.resolve.dedupe).not.toContain('preact/compat');
     expect(result.build.target).toBe('esnext');
     expect(result.build.assetsDir).toBe('static');
   });

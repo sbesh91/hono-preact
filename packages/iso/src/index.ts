@@ -39,6 +39,8 @@ export type {
   LoaderCtx,
   Loader as LoaderFn,
   StreamStatus,
+  LoaderState,
+  StreamState,
 } from './define-loader.js';
 export { serverRoute } from './server-route.js';
 export type { RouteBinder } from './server-route.js';

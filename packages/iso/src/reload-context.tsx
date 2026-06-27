@@ -3,6 +3,7 @@ import { useContext } from 'preact/hooks';
 
 export type ReloadContextValue = {
   reload: () => void;
+  /** True while an explicit reload/revalidation is in flight (not a cold initial load). */
   reloading: boolean;
 };
 

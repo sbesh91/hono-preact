@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from 'preact/compat';
 import type { ActionRef } from './action.js';
 import { isPending, subscribe } from './internal/form-submit-store.js';
 import { isBrowser } from './is-browser.js';
+import { useStoreSnapshot } from './internal/use-store-snapshot.js';
 
 export type FormStatus = { pending: boolean };
 
@@ -11,10 +11,7 @@ export type FormStatus = { pending: boolean };
 export function useFormStatus<TPayload = unknown, TResult = unknown>(
   stub?: ActionRef<TPayload, TResult, never>
 ): FormStatus {
-  // preact/compat (10.29) ships only the 2-arg signature of useSyncExternalStore.
-  // The SSR "always idle" behavior that React 18's getServerSnapshot would
-  // provide is achieved via the isBrowser() guard inside getSnapshot.
-  const pending = useSyncExternalStore(subscribe, () =>
+  const pending = useStoreSnapshot(subscribe, () =>
     isBrowser() ? isPending(stub) : false
   );
   return { pending };

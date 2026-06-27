@@ -1,8 +1,9 @@
 import type { ComponentChildren } from 'preact';
-import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { Suspense } from 'preact/compat';
-import { useContext, useId } from 'preact/hooks';
+import { useContext, useId, useMemo } from 'preact/hooks';
+import { isBrowser } from '../is-browser.js';
+import { toStreamState } from '../loader-state.js';
+import type { LoaderState, StreamState } from '../loader-state.js';
 import { ReloadContext } from '../reload-context.js';
 import {
   ActiveLoaderIdContext,
@@ -14,25 +15,66 @@ import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
+import type { HydrationAnchor } from './envelope.js';
 import {
   useLoaderRunner,
   type AccumulateOptions,
-  type StreamStatus,
 } from './use-loader-runner.js';
-import { isBrowser } from '../is-browser.js';
-import {
-  DelayedFallback,
-  DEFAULT_FALLBACK_DELAY_MS,
-} from './delayed-fallback.js';
 export { serializeLocationForCache } from './cache-key.js';
 
-/** Streaming status for a `.View` consuming a streaming/`live` loader. */
-export const LoaderStatusContext = createContext<StreamStatus>('connecting');
+/**
+ * SERVER-ONLY suspension carrier (Mechanism B, spike-verified in
+ * `.superpowers/spike/spike-b1-reader-prop.mjs`).
+ *
+ * `LoaderHost` (the hook owner) renders ONCE on the server and creates a stable
+ * `reader`. This SEPARATE child calls `reader.read()`, which throws the in-flight
+ * promise while the loader is pending. `renderToStringAsync` catches the throw
+ * and replays ONLY this child's subtree (not `LoaderHost`), so the reader created
+ * by the once-rendering parent survives the resume and returns the resolved value
+ * on retry; `data` then bakes into `<Envelope>`'s `data-loader` attribute and the
+ * server render completes in a single fetch.
+ *
+ * It MUST stay a distinct component reached via props. Inlining `reader.read()`
+ * into `LoaderHost` would make every retry re-run the host body and rebuild the
+ * reader, fetching forever (the spike's negative control,
+ * `spike-b3-negative-parent-throws.mjs`). No `<Suspense>` boundary and no
+ * `preact/compat` are needed on the server: render-to-string's async catch scopes
+ * the retry to this child on its own.
+ */
+function DataReader<T>({
+  reader,
+  accumulate,
+  children,
+}: {
+  reader: { read: () => T };
+  accumulate?: AccumulateOptions;
+  children: ComponentChildren;
+}) {
+  const raw = reader.read();
+  // Project to the same public union the client carries on context. The server
+  // render is always settled (the reader awaited the value): a non-live loader
+  // is `success`; a live loader's stub resolves to `undefined`, which projects
+  // to `connecting` (the client reconnects on mount). Built structurally, no
+  // `data === undefined` test.
+  const state: LoaderState<T> | StreamState<T> = accumulate
+    ? toStreamState('connecting', { present: false }, null)
+    : { status: 'success', data: raw };
+  // Live loaders never run on the server; their reader resolves to undefined.
+  // The client reconnects on mount, so there is no baked server value to
+  // anchor. Non-live loaders resolve and bake their value into data-loader.
+  const anchor: HydrationAnchor = accumulate
+    ? { kind: 'none' }
+    : { kind: 'data', value: raw };
+  return (
+    <LoaderDataContext.Provider value={state}>
+      <Envelope anchor={anchor}>{children}</Envelope>
+    </LoaderDataContext.Provider>
+  );
+}
 
 type LoaderHostProps<T> = {
   loader: LoaderRef<T, boolean>;
   location?: RouteHook;
-  fallback?: ComponentChildren;
   errorFallback?:
     | ComponentChildren
     | ((err: Error, reset: () => void) => ComponentChildren);
@@ -44,10 +86,9 @@ type LoaderHostProps<T> = {
 export function LoaderHost<T>({
   loader: loaderRef,
   location: locationProp,
-  fallback,
-  errorFallback,
   accumulate,
   children,
+  errorFallback,
 }: LoaderHostProps<T>) {
   const id = useId();
   const locMap = useContext(RouteLocationsContext);
@@ -62,69 +103,112 @@ export function LoaderHost<T>({
     );
   }
 
-  const { reader, overrideData, error, reload, reloading, status } =
-    useLoaderRunner<T>(loaderRef, location, id, accumulate);
-
-  // A `live` loader never runs on the server (its infinite generator would hang
-  // renderToStringAsync). Render the fallback directly on SSR; the client
-  // renders the same fallback while suspended on the first chunk, so the SSR DOM
-  // is adopted on hydration (the same Suspense + useId machinery a data loader
-  // hydrates through, seeded with a fallback instead of server data).
-  const liveServer = loaderRef.live && !isBrowser();
-
-  // Anchor a streaming consumer's fallback under the same `useId` element the
-  // resolved content uses (an `Envelope`-shaped `<section id>`), so the SSR
-  // fallback DOM is ADOPTED on hydration rather than orphaned inside a lazy
-  // layout (which would leave two overlapping bars and a duplicate
-  // view-transition-name). The `Envelope` itself can't wrap the fallback (it
-  // requires LoaderDataContext), so mirror its anchor shape directly.
-  const fallbackContent = accumulate ? (
-    <section id={id} data-loader="null">
-      {fallback}
-    </section>
-  ) : (
-    fallback
+  // CLIENT: state-based rendering. The runner exposes `data`/`loading` directly,
+  // so we render the `.View` render fn (the children) immediately rather than
+  // suspending on a throwing reader. Because nothing suspends on the client, the
+  // initial hydration render reads the SSR-baked preload (loading=false) and
+  // adopts the server DOM cleanly.
+  //
+  // SERVER: state alone cannot bake loader data, because the loader resolves
+  // asynchronously and a single synchronous render would emit `data-loader=null`
+  // before the value lands. So the server path additionally suspends on the
+  // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
+  // letting `renderToStringAsync` await the loader and bake the resolved value.
+  const { view, reloading, reload, reader } = useLoaderRunner<T>(
+    loaderRef,
+    location,
+    id,
+    accumulate
   );
 
-  // The non-accumulate fallback is delayed (it only mounts after `fallbackDelay`
-  // ms) so a fast client navigation never flashes it. The accumulate (live)
-  // fallback is the `useId`-anchored <section> the SSR DOM is adopted from on
-  // hydration, so it must render IMMEDIATELY: a delay would render null first
-  // and orphan the SSR node (the two-overlapping-bars regression). `liveServer`
-  // renders the anchored fallback directly (the loader never runs on SSR).
-  const fallbackDelay = loaderRef.fallbackDelay ?? DEFAULT_FALLBACK_DELAY_MS;
-  const suspenseFallback = accumulate ? (
-    fallbackContent
-  ) : fallback == null ? (
-    fallback
-  ) : (
-    <DelayedFallback delay={fallbackDelay}>{fallback}</DelayedFallback>
+  // The runner builds the public union (or a cold-error signal) STRUCTURALLY;
+  // `loader.tsx` only ROUTES it (review #6). `ViewRenderer` / `useData()` READ
+  // the union off context; nothing re-projects. `error` for `LoaderErrorContext`
+  // / `errorFallback` is read off the view discriminant (cold error, or the
+  // stale-error arm), never re-derived from `data === undefined`.
+  const error: Error | null =
+    view.kind === 'coldError'
+      ? view.error
+      : view.state.status === 'error'
+        ? view.state.error
+        : null;
+
+  // Stabilize the renderable union's REFERENCE across re-renders that do not
+  // change the loader state, so memoized `useData()` consumers stay stable
+  // (review #7). The runner builds a fresh `view.state` each render; this
+  // `useMemo` keyed on its fields returns the cached reference when nothing
+  // changed. `null` on a cold error (which routes to the boundary, not context).
+  const renderState = view.kind === 'render' ? view.state : null;
+  const memoStatus = renderState ? renderState.status : null;
+  const memoData =
+    renderState && 'data' in renderState ? renderState.data : undefined;
+  const memoError =
+    renderState && 'error' in renderState ? renderState.error : null;
+  const viewState = useMemo(
+    () => renderState,
+    [memoStatus, memoData, memoError]
   );
 
-  const suspenseContent = liveServer ? (
-    <Suspense fallback={fallbackContent}>{fallbackContent}</Suspense>
+  // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The
+  // old Suspense path threw the reader so an error boundary caught it; the state
+  // path surfaces the error without throwing, so reproduce that propagation
+  // explicitly. The runner already decided this STRUCTURALLY (the cold `error`
+  // phase -> `view.kind === 'coldError'`), so a real resolve-to-`undefined` (a
+  // value-bearing phase) is never mistaken for a cold failure, and a POST-settle
+  // (stale) error stays in-view via the `error` arm / `useError()`. Streaming
+  // (`accumulate`) cold errors are NEVER `coldError`; they surface in-view via
+  // the `StreamState.error` arm.
+  //
+  // Server-only: `view.kind` is always `render` on the first (and only) server
+  // render of `LoaderHost`, because runner state has not updated yet. A cold
+  // failure on the server surfaces by `reader.read()` rethrowing the rejection
+  // from inside `DataReader`, which the `ErrorBoundary` wrap below (or an outer
+  // page boundary) catches, mirroring the client's `throw` propagation.
+
+  // SERVER (`!isBrowser()`): suspend on the stable reader from a SEPARATE child
+  // so render-to-string awaits the loader and bakes the resolved value. CLIENT:
+  // render the view directly from runner state (never calls `reader.read()`).
+  const content = isBrowser() ? (
+    <LoaderDataContext.Provider value={viewState}>
+      <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
+    </LoaderDataContext.Provider>
   ) : (
-    <Suspense fallback={suspenseFallback}>
-      <DataReader reader={reader} overrideData={overrideData}>
-        <Envelope>{children}</Envelope>
-      </DataReader>
-    </Suspense>
+    <DataReader reader={reader} accumulate={accumulate}>
+      {children}
+    </DataReader>
   );
+
+  let body: ComponentChildren;
+  if (view.kind === 'coldError') {
+    if (errorFallback != null) {
+      // Local error UI. `reset` re-enters the loader (clears the error and
+      // refetches), mirroring the old ErrorBoundary `reset` semantics.
+      body =
+        typeof errorFallback === 'function'
+          ? errorFallback(view.error, reload)
+          : errorFallback;
+    } else {
+      // No local handler: re-throw so an OUTER boundary (a page-level
+      // `errorFallback` / `RouteBoundary`) catches it, exactly as the thrown
+      // Suspense reader propagated up the tree before.
+      throw view.error;
+    }
+  } else if (errorFallback != null) {
+    // No cold error (loading, resolved, or a stale post-chunk error): render the
+    // content, still wrapped in an ErrorBoundary so a render-time throw from the
+    // children subtree is caught by the local `errorFallback` rather than
+    // unwinding the page.
+    body = <ErrorBoundary fallback={errorFallback}>{content}</ErrorBoundary>;
+  } else {
+    body = content;
+  }
 
   return (
     <LoaderIdContext.Provider value={id}>
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
         <ReloadContext.Provider value={{ reload, reloading }}>
           <LoaderErrorContext.Provider value={error}>
-            <LoaderStatusContext.Provider value={status}>
-              {errorFallback != null ? (
-                <ErrorBoundary fallback={errorFallback}>
-                  {suspenseContent}
-                </ErrorBoundary>
-              ) : (
-                suspenseContent
-              )}
-            </LoaderStatusContext.Provider>
+            {body}
           </LoaderErrorContext.Provider>
         </ReloadContext.Provider>
       </ActiveLoaderIdContext.Provider>
@@ -134,18 +218,3 @@ export function LoaderHost<T>({
 
 // Public name consumed by define-loader.ts and user code.
 export { LoaderHost as Loader };
-
-type DataReaderProps<T> = {
-  reader: { read: () => T };
-  overrideData?: T;
-  children: ComponentChildren;
-};
-
-function DataReader<T>({ reader, overrideData, children }: DataReaderProps<T>) {
-  const data = overrideData !== undefined ? overrideData : reader.read();
-  return (
-    <LoaderDataContext.Provider value={{ data }}>
-      {children}
-    </LoaderDataContext.Provider>
-  );
-}

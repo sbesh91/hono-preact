@@ -1,42 +1,44 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/preact';
 import { Envelope } from '../envelope.js';
-import { LoaderDataContext, LoaderIdContext } from '../contexts.js';
-import { env } from '../../is-browser.js';
+import { LoaderIdContext } from '../contexts.js';
 
-const originalEnv = env.current;
-beforeEach(() => {
-  env.current = 'server';
-});
 afterEach(() => {
-  env.current = originalEnv;
   cleanup();
 });
 
 describe('<Envelope> data-loader serialization', () => {
-  it('serializes undefined data as null (not the literal "undefined")', () => {
+  it('anchor kind="none" emits data-loader="null" regardless of value', () => {
     const { container } = render(
       <LoaderIdContext.Provider value="loader-1">
-        <LoaderDataContext.Provider value={{ data: undefined }}>
-          <Envelope>
-            <span>child</span>
-          </Envelope>
-        </LoaderDataContext.Provider>
+        <Envelope anchor={{ kind: 'none' }}>
+          <span>child</span>
+        </Envelope>
       </LoaderIdContext.Provider>
     );
     const el = container.querySelector('[data-loader]')!;
     expect(el.getAttribute('data-loader')).toBe('null');
   });
 
-  it('serializes regular data as JSON', () => {
+  it('anchor kind="data" with undefined value serializes as null', () => {
     const { container } = render(
       <LoaderIdContext.Provider value="loader-2">
-        <LoaderDataContext.Provider value={{ data: { msg: 'hi' } }}>
-          <Envelope>
-            <span>child</span>
-          </Envelope>
-        </LoaderDataContext.Provider>
+        <Envelope anchor={{ kind: 'data', value: undefined }}>
+          <span>child</span>
+        </Envelope>
+      </LoaderIdContext.Provider>
+    );
+    const el = container.querySelector('[data-loader]')!;
+    expect(el.getAttribute('data-loader')).toBe('null');
+  });
+
+  it('anchor kind="data" serializes regular data as JSON', () => {
+    const { container } = render(
+      <LoaderIdContext.Provider value="loader-3">
+        <Envelope anchor={{ kind: 'data', value: { msg: 'hi' } }}>
+          <span>child</span>
+        </Envelope>
       </LoaderIdContext.Provider>
     );
     const el = container.querySelector('[data-loader]')!;

@@ -65,16 +65,19 @@ const AddMovieForm = () => (
   </Form>
 );
 
-const MoviesView = dataLoader.View(({ data }) => (
-  <main>
-    <AddMovieForm />
-    <ul>
-      {data.movies.results.map((m) => (
-        <li key={m.id}>{m.title}</li>
-      ))}
-    </ul>
-  </main>
-));
+const MoviesView = dataLoader.View((s) => {
+  if (s.status === 'loading') return <p>Loading...</p>;
+  return (
+    <main>
+      <AddMovieForm />
+      <ul>
+        {s.data.movies.results.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+    </main>
+  );
+});
 
 export default definePage(MoviesView);
 ```
@@ -186,11 +189,13 @@ import { serverLoaders, serverActions } from './movies.server.js';
 const moviesLoader = serverLoaders.default;
 
 const Movies = () => {
-  const { movies } = moviesLoader.useData();
+  const s = moviesLoader.useData();
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (data) => console.log('added', data),
   });
+
+  if (s.status === 'loading') return <p>Loading...</p>;
 
   return (
     <>
@@ -262,8 +267,9 @@ Pass no argument to track any in-flight form submission on the page. Pass a spec
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { movies } = moviesLoader.useData();
-const [items, setItems] = useState(movies.results);
+const s = moviesLoader.useData();
+const initialMovies = s.status === 'loading' ? [] : s.data.movies.results;
+const [items, setItems] = useState(initialMovies);
 
 const { mutate } = useAction(serverActions.addMovie, {
   onMutate: (payload) => {

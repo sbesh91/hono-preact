@@ -68,7 +68,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     config() {
       return {
         resolve: {
-          dedupe: ['preact', 'preact/compat', 'preact/hooks', 'preact-iso'],
+          dedupe: ['preact', 'preact/hooks', 'preact-iso'],
         },
         build: {
           target: 'esnext' as const,
@@ -110,6 +110,6 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     serverOnlyPlugin(),
     guardStripPlugin(),
     ...adapter.vitePlugins(ctx),
-    ...preact(),
+    ...preact({ reactAliasesEnabled: false }),
   ];
 }
