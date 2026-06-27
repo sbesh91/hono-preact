@@ -38,6 +38,7 @@ lerna-debug.log*
 .DS_Store
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+.tmp
 
 # lighthouse ci run output (regenerated on every `lhci collect`)
 .lighthouseci/
