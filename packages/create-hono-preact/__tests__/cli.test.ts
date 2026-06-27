@@ -8,7 +8,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { run } from '../lib/cli.mjs';
+import type { PromptAdapter } from '../lib/prompts.mjs';
 
 let workDir: string;
 beforeEach(() => {
@@ -18,7 +20,7 @@ afterEach(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-describe('run() — node adapter', () => {
+describe('run(): node adapter', () => {
   it('scaffolds a new node app with --no-install --no-git', async () => {
     const code = await run({
       argv: ['my-test-app', '--adapter=node', '--no-install', '--no-git'],
@@ -66,7 +68,7 @@ describe('run() — node adapter', () => {
   });
 });
 
-describe('run() — cloudflare adapter', () => {
+describe('run(): cloudflare adapter', () => {
   it('scaffolds a new cloudflare app, including wrangler.jsonc', async () => {
     const code = await run({
       argv: ['my-cf-app', '--adapter=cloudflare', '--no-install', '--no-git'],
@@ -93,7 +95,7 @@ describe('run() — cloudflare adapter', () => {
   });
 });
 
-describe('run() — target dir validation', () => {
+describe('run(): target dir validation', () => {
   it('refuses a non-empty existing target dir', async () => {
     const target = join(workDir, 'existing');
     const fs = await import('node:fs/promises');
@@ -123,7 +125,7 @@ describe('run() — target dir validation', () => {
   });
 });
 
-describe('run() — install step', () => {
+describe('run(): install step', () => {
   it('invokes the detected package manager when install is enabled', async () => {
     const calls: Array<{ cmd: string; args: string[]; cwd: string }> = [];
     const fakeSpawn = (cmd: string, args: string[], opts: { cwd: string }) => {
@@ -189,7 +191,7 @@ describe('run() — install step', () => {
   });
 });
 
-describe('run() — git step', () => {
+describe('run(): git step', () => {
   it('invokes git init when git is enabled', async () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const fakeSpawn = (cmd: string, args: string[]) => {
@@ -313,48 +315,7 @@ describe('run() — git step', () => {
   });
 });
 
-describe('run() — prompt for target dir', () => {
-  it('prompts when target dir is missing and uses the answer', async () => {
-    const calls: string[] = [];
-    const fakeSpawn = () => ({
-      on: (e: string, cb: (c: number) => void) => {
-        if (e === 'close') queueMicrotask(() => cb(0));
-      },
-    });
-    const fakePrompt = async (msg: string) => {
-      calls.push(msg);
-      return 'prompted-app';
-    };
-
-    const code = await run({
-      argv: ['--adapter=node', '--no-install', '--no-git'],
-      cwd: workDir,
-      env: {},
-      spawnFn: fakeSpawn,
-      prompt: fakePrompt,
-    });
-
-    expect(code).toBe(0);
-    expect(calls.length).toBe(1);
-    expect(calls[0].toLowerCase()).toContain('project');
-    expect(existsSync(join(workDir, 'prompted-app', 'package.json'))).toBe(
-      true
-    );
-  });
-
-  it('returns 1 when the user provides an empty answer', async () => {
-    const fakePrompt = async () => '';
-    const code = await run({
-      argv: ['--adapter=node', '--no-install', '--no-git'],
-      cwd: workDir,
-      env: {},
-      prompt: fakePrompt,
-    });
-    expect(code).toBe(1);
-  });
-});
-
-describe('run() — help and version', () => {
+describe('run(): help and version', () => {
   it('--help returns 0 and prints usage', async () => {
     const lines: string[] = [];
     const originalLog = console.log;
@@ -390,7 +351,7 @@ describe('run() — help and version', () => {
   });
 });
 
-describe('run() — next-steps output', () => {
+describe('run(): next-steps output', () => {
   it('prints next steps after a successful scaffold', async () => {
     const lines: string[] = [];
     const originalLog = console.log;
@@ -418,7 +379,7 @@ describe('run() — next-steps output', () => {
   });
 });
 
-describe('run() — add-agents', () => {
+describe('run(): add-agents', () => {
   it('writes AGENTS.md and CLAUDE.md into the cwd', async () => {
     const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(0);
@@ -461,5 +422,192 @@ describe('run() — add-agents', () => {
     });
     expect(code).toBe(0);
     expect(readFileSync(join(workDir, 'AGENTS.md'), 'utf8')).not.toBe('OLD');
+  });
+});
+
+function fakePrompts(answers: {
+  dir?: string;
+  adapter?: 'cloudflare' | 'node';
+  ui?: boolean;
+  install?: boolean;
+  git?: boolean;
+}) {
+  const calls = { text: 0, selectAdapter: 0, confirm: 0, cancel: 0 };
+  return {
+    calls,
+    prompts: {
+      text: async () => {
+        calls.text++;
+        return answers.dir ?? 'prompted-app';
+      },
+      selectAdapter: async () => {
+        calls.selectAdapter++;
+        return answers.adapter ?? ('cloudflare' as const);
+      },
+      confirm: async ({ message }: { message: string }) => {
+        calls.confirm++;
+        if (/ui|components/i.test(message)) return answers.ui ?? false;
+        if (/install/i.test(message)) return answers.install ?? true;
+        return answers.git ?? true;
+      },
+      intro: () => {},
+      outro: () => {},
+      cancel: () => {
+        calls.cancel++;
+      },
+      note: () => {},
+      spinner: () => ({ start: () => {}, stop: () => {} }),
+    } satisfies PromptAdapter,
+  };
+}
+
+describe('run(): interactive wizard', () => {
+  it('prompts for dir + adapter + ui and scaffolds a node+ui app', async () => {
+    const fake = fakePrompts({ dir: 'wiz-app', adapter: 'node', ui: true });
+    const code = await run({
+      argv: ['--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: true,
+      prompts: fake.prompts,
+    });
+    expect(code).toBe(0);
+    const target = join(workDir, 'wiz-app');
+    expect(existsSync(join(target, 'wrangler.jsonc'))).toBe(false); // node
+    const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
+    expect(pkg.dependencies).toHaveProperty('hono-preact-ui'); // ui on
+    expect(fake.calls.text).toBe(1); // dir prompted
+    expect(fake.calls.selectAdapter).toBe(1); // adapter prompted
+  });
+
+  it('does not prompt for a value supplied by a flag', async () => {
+    const fake = fakePrompts({ dir: 'flagged' });
+    await run({
+      argv: [
+        'flagged',
+        '--adapter=cloudflare',
+        '--no-ui',
+        '--no-install',
+        '--no-git',
+      ],
+      cwd: workDir,
+      env: {},
+      isTTY: true,
+      prompts: fake.prompts,
+    });
+    expect(fake.calls.text).toBe(0); // dir came from positional
+    expect(fake.calls.selectAdapter).toBe(0); // adapter from flag
+  });
+
+  it('interactive: failed install stops the spinner as failed and returns 1', async () => {
+    const stops: Array<{ message: string; code?: number }> = [];
+    const fake = fakePrompts({ dir: 'fail-install', adapter: 'node' });
+    // override spinner to record stop calls
+    (fake.prompts as PromptAdapter).spinner = () => ({
+      start: () => {},
+      stop: (message: string, code?: number) => {
+        stops.push({ message, code });
+      },
+    });
+    const failingSpawn = (cmd: string) => ({
+      on: (e: string, cb: (c: number) => void) => {
+        if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
+      },
+    });
+    const code = await run({
+      argv: ['fail-install', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'pnpm/10' },
+      isTTY: true,
+      prompts: fake.prompts,
+      spawnFn: failingSpawn as never,
+    });
+    expect(code).toBe(1);
+    expect(stops.some((s) => s.code === 2)).toBe(true);
+    expect(stops.some((s) => s.message === 'Dependencies installed')).toBe(
+      false
+    );
+  });
+
+  it('interactive: a non-empty flag-supplied target dir cancels and returns 1', async () => {
+    const target = join(workDir, 'occupied');
+    const fsp = await import('node:fs/promises');
+    await fsp.mkdir(target);
+    await fsp.writeFile(join(target, 'keep.txt'), 'x');
+    const fake = fakePrompts({ dir: 'occupied' });
+    const code = await run({
+      argv: ['occupied', '--adapter=node', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: true,
+      prompts: fake.prompts,
+    });
+    expect(code).toBe(1);
+    expect(fake.calls.text).toBe(0); // dir came from the positional, not a prompt
+    expect(fake.calls.cancel).toBe(1); // clack frame closed via cancel
+  });
+});
+
+describe('run(): target-dir edge cases', () => {
+  it('non-interactive: a target name that is an existing file errors', async () => {
+    writeFileSync(join(workDir, 'afile'), 'x');
+    const code = await run({
+      argv: ['afile', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+    });
+    expect(code).toBe(1);
+    expect(existsSync(join(workDir, 'afile', 'package.json'))).toBe(false);
+  });
+
+  it('non-interactive: reads the project dir from a piped stdin', async () => {
+    const stdin = Readable.from(['piped-app\n']) as unknown as {
+      isTTY?: boolean;
+    };
+    stdin.isTTY = false;
+    const code = await run({
+      argv: ['--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      isTTY: false,
+      stdin: stdin as never,
+    });
+    expect(code).toBe(0);
+    expect(existsSync(join(workDir, 'piped-app', 'package.json'))).toBe(true);
+  });
+});
+
+describe('run(): install failure diagnostics', () => {
+  it('interactive: surfaces the captured installer error and returns 1', async () => {
+    const errs: string[] = [];
+    const originalError = console.error;
+    console.error = (...args) => errs.push(args.join(' '));
+    try {
+      const fake = fakePrompts({ dir: 'cap-app', adapter: 'node' });
+      const failingSpawn = (cmd: string) => ({
+        stderr: {
+          on: (e: string, cb: (b: Buffer) => void) => {
+            if (e === 'data' && cmd !== 'git') {
+              cb(Buffer.from('ENOSPC: no space left on device'));
+            }
+          },
+        },
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
+        },
+      });
+      const code = await run({
+        argv: ['cap-app', '--no-git'],
+        cwd: workDir,
+        env: { npm_config_user_agent: 'pnpm/10' },
+        isTTY: true,
+        prompts: fake.prompts,
+        spawnFn: failingSpawn as never,
+      });
+      expect(code).toBe(1);
+      expect(errs.join('\n')).toContain('ENOSPC');
+    } finally {
+      console.error = originalError;
+    }
   });
 });

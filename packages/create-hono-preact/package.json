@@ -36,6 +36,7 @@
     "prepack": "node --disable-warning=ExperimentalWarning ../../apps/site/scripts/generate-bundled-corpus.ts"
   },
   "dependencies": {
+    "@clack/prompts": "^1.6.0",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
