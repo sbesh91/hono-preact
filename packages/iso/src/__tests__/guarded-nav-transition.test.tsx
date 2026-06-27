@@ -10,6 +10,7 @@ import {
 import { LocationProvider } from 'preact-iso';
 import { h, type ComponentType } from 'preact';
 import { defineClientMiddleware } from '../define-middleware.js';
+import { redirect } from '../outcomes.js';
 import {
   defineRoutes,
   Routes,
@@ -127,5 +128,105 @@ describe('guarded cold nav under the nav-transition scheduler', () => {
         ).not.toBeNull(),
       { timeout: 3000 }
     );
+  });
+});
+
+describe('guarded nav edge cases', () => {
+  it('a guarded chain that redirects during nav lands on the redirect target', async () => {
+    const redirectMw = defineClientMiddleware(async () => {
+      await Promise.resolve();
+      throw redirect('/c');
+    });
+    const passMw = defineClientMiddleware(async (_c, next) => {
+      await next();
+    });
+    const AView: ComponentType<ViewProps> = () =>
+      h('a', { href: '/b', 'data-testid': 'to-b' }, 'go b');
+    const BView: ComponentType<ViewProps> = () =>
+      h('div', { 'data-testid': 'route-B' }, 'route-B');
+    const CView: ComponentType<ViewProps> = () =>
+      h('div', { 'data-testid': 'route-C' }, 'route-C');
+
+    const manifest = defineRoutes([
+      { path: '/a', view: () => Promise.resolve({ default: AView }) },
+      {
+        path: '/b',
+        view: () => Promise.resolve({ default: BView }),
+        use: [redirectMw],
+      },
+      {
+        path: '/c',
+        view: () => Promise.resolve({ default: CView }),
+        use: [passMw],
+      },
+    ]);
+
+    window.history.replaceState({}, '', '/a');
+    const { container } = rtlRender(
+      h(LocationProvider, null, h(Routes, { routes: manifest }))
+    );
+    const link = await findByTestId(container, 'to-b');
+    setNavDirectionForTesting('push');
+    fireEvent.click(link);
+
+    await waitFor(
+      () =>
+        expect(
+          container.querySelector('[data-testid="route-C"]')
+        ).not.toBeNull(),
+      { timeout: 3000 }
+    );
+    expect(container.querySelector('[data-testid="route-B"]')).toBeNull();
+  });
+
+  it('rapid double-nav lands on the final target, not a superseded one', async () => {
+    const mk = (id: string) => {
+      const mw = defineClientMiddleware(async (_c, next) => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await next();
+      });
+      const View: ComponentType<ViewProps> = () =>
+        h(
+          'div',
+          null,
+          h('div', { 'data-testid': `route-${id}` }, `route-${id}`),
+          h('a', { href: '/c', 'data-testid': 'to-c' }, 'c')
+        );
+      return { mw, View };
+    };
+    const a = mk('A');
+    const b = mk('B');
+    const c = mk('C');
+
+    const manifest = defineRoutes([
+      { path: '/a', view: () => Promise.resolve({ default: a.View }), use: [a.mw] },
+      { path: '/b', view: () => Promise.resolve({ default: b.View }), use: [b.mw] },
+      { path: '/c', view: () => Promise.resolve({ default: c.View }), use: [c.mw] },
+    ]);
+
+    window.history.replaceState({}, '', '/a');
+    const { container } = rtlRender(
+      h(LocationProvider, null, h(Routes, { routes: manifest }))
+    );
+    await waitFor(() =>
+      expect(container.querySelector('[data-testid="route-A"]')).not.toBeNull()
+    );
+
+    // Navigate A -> B, then immediately B -> C before B settles.
+    setNavDirectionForTesting('push');
+    window.history.pushState(null, '', '/b');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.history.pushState(null, '', '/c');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    await waitFor(
+      () =>
+        expect(
+          container.querySelector('[data-testid="route-C"]')
+        ).not.toBeNull(),
+      { timeout: 3000 }
+    );
+    expect(container.querySelector('[data-testid="route-B"]')).toBeNull();
   });
 });
