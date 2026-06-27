@@ -227,12 +227,13 @@ CommentsSection.displayName = 'CommentsSection';
 // During `revalidating` the prior comments stay on screen (the union's
 // revalidating/success/error arms all carry `data`); the loading placeholder
 // shows only on the cold first load.
-const CommentsView = commentsLoader.View<{ taskId: string }>((s) =>
-  s.status === 'loading' ? (
-    <p class="text-sm text-muted">Loading comments…</p>
-  ) : (
-    <CommentsSection comments={s.data} taskId={s.taskId} />
-  )
+const CommentsView = commentsLoader.View<{ taskId: string }>(
+  ({ data, taskId }) =>
+    data ? (
+      <CommentsSection comments={data} taskId={taskId} />
+    ) : (
+      <p class="text-sm text-muted">Loading comments…</p>
+    )
 );
 
 // ---- Section: project activity feed ----
@@ -278,25 +279,26 @@ const ActivitySection: FunctionComponent<{ activity: ActivityItem[] }> = ({
 
 // Same shape: keep the prior activity during a background revalidation, show
 // the loading line only for the cold first load.
-const ActivityView = activityLoader.View((s) =>
-  s.status === 'loading' ? (
-    <p class="text-xs text-muted">Loading activity…</p>
+const ActivityView = activityLoader.View(({ data }) =>
+  data ? (
+    <ActivitySection activity={data} />
   ) : (
-    <ActivitySection activity={s.data} />
+    <p class="text-xs text-muted">Loading activity…</p>
   )
 );
 
 // ---- Page: task loads first, then comments + activity in parallel ----
 
-const TaskView = taskLoader.View((s) => {
+const TaskView = taskLoader.View(({ status, data }) => {
   // `useReload` runs unconditionally at the top of the render fn (it lives in
   // the loader boundary `.View` establishes). The loading arm shows the cold
   // placeholder; success/revalidating/error all carry the task, so the prior
-  // content stays put during a background reload.
+  // content stays put during a background reload. `data` can be falsy (the task
+  // was not found), distinct from `loading`, so keep the `status` check.
   const { reload: reloadTask } = useReload();
-  if (s.status === 'loading') return <p class="p-6">Loading task…</p>;
-  const task = s.data;
-  if (!task) return <p class="p-6">Task not found.</p>;
+  if (status === 'loading') return <p class="p-6">Loading task…</p>;
+  if (!data) return <p class="p-6">Task not found.</p>;
+  const task = data;
   return (
     <div class="mx-auto w-full max-w-5xl px-6 py-6">
       <div class="grid gap-6 lg:grid-cols-[1fr_280px]">

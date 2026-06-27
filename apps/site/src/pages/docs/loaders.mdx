@@ -35,11 +35,13 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View((s) => {
-  if (s.status === 'loading') return <p>Loading...</p>;
+const MoviesView = dataLoader.View(({ data }) => {
+  // `data` reads straight off the union: present in every arm but the cold
+  // `loading` one, so a truthy check doubles as the loading guard.
+  if (!data) return <p>Loading...</p>;
   return (
     <ul>
-      {s.data.movies.results.map((m) => (
+      {data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -185,11 +187,13 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View((s) => {
-  if (s.status === 'loading') return <p>Loading...</p>;
+const MoviesView = dataLoader.View(({ data }) => {
+  // `data` reads straight off the union: present in every arm but the cold
+  // `loading` one, so a truthy check doubles as the loading guard.
+  if (!data) return <p>Loading...</p>;
   return (
     <ul>
-      {s.data.movies.results.map((m) => (
+      {data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -202,14 +206,16 @@ export default definePage(MoviesView);
 **Prop passthrough** (using the generic `P`):
 
 ```tsx
-const MovieCard = dataLoader.View<{ highlight: boolean }>((s) => {
-  if (s.status === 'loading') return <MovieSkeleton />;
-  return (
-    <article class={s.highlight ? 'highlight' : undefined}>
-      <h2>{s.data.movie.title}</h2>
-    </article>
-  );
-});
+const MovieCard = dataLoader.View<{ highlight: boolean }>(
+  ({ data, highlight }) => {
+    if (!data) return <MovieSkeleton />;
+    return (
+      <article class={highlight ? 'highlight' : undefined}>
+        <h2>{data.movie.title}</h2>
+      </article>
+    );
+  }
+);
 
 // Use site:
 <MovieCard highlight={true} />;
@@ -222,11 +228,13 @@ When the loader rejects, the status is `error`; read `reload` from `useReload()`
 ```tsx
 import { useReload } from 'hono-preact';
 
-const StatsView = statsLoader.View((s) => {
+const StatsView = statsLoader.View(({ status, data }) => {
   const { reload } = useReload();
-  if (s.status === 'loading') return <StatsSkeleton />;
-  if (s.status === 'error') return <button onClick={reload}>Retry</button>;
-  return <p>Count: {s.data.count}</p>;
+  // `!data` is the cold-loading guard; after it, `data` is the value. Tell the
+  // remaining arms apart on `status` (the `error` arm still carries `data`).
+  if (!data) return <StatsSkeleton />;
+  if (status === 'error') return <button onClick={reload}>Retry</button>;
+  return <p>Count: {data.count}</p>;
 });
 ```
 
@@ -265,23 +273,19 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast, similar } = serverLoaders;
 
-const Summary = summary.View((s) => {
+const Summary = summary.View(({ status, data }) => {
   const { reload } = useReload();
-  if (s.status === 'loading') return <SummarySkeleton />;
-  if (s.status === 'error') return <ErrorBox onRetry={reload} />;
-  return <SummaryCard data={s.data} />;
+  if (!data) return <SummarySkeleton />;
+  if (status === 'error') return <ErrorBox onRetry={reload} />;
+  return <SummaryCard data={data} />;
 });
 
-const Cast = cast.View((s) =>
-  s.status === 'loading' ? <CastSkeleton /> : <CastList items={s.data} />
+const Cast = cast.View(({ data }) =>
+  data ? <CastList items={data} /> : <CastSkeleton />
 );
 
-const Similar = similar.View((s) =>
-  s.status === 'loading' ? (
-    <SimilarSkeleton />
-  ) : (
-    <SimilarCarousel items={s.data} />
-  )
+const Similar = similar.View(({ data }) =>
+  data ? <SimilarCarousel items={data} /> : <SimilarSkeleton />
 );
 
 function MovieDetail() {
@@ -313,11 +317,11 @@ function Header() {
 }
 
 function HeaderWithSummary() {
-  const s = summary.useData();
+  const { data } = summary.useData();
   return (
     <header>
       <BreadcrumbTrail />
-      {s.status === 'loading' ? <Skeleton /> : <h1>{s.data.title}</h1>}
+      {data ? <h1>{data.title}</h1> : <Skeleton />}
       <ActionsBar />
     </header>
   );
@@ -377,8 +381,8 @@ export const serverLoaders = {
 // src/pages/movies/layout.tsx
 import { serverLoaders } from './layout.server.js';
 
-const Feed = serverLoaders.activity.View((s) =>
-  s.status === 'loading' ? null : <ActivitySidebar events={s.data} />
+const Feed = serverLoaders.activity.View(({ data }) =>
+  data ? <ActivitySidebar events={data} /> : null
 );
 
 export default function MoviesLayout({
@@ -465,12 +469,8 @@ import { serverLoaders } from './movie.server.js';
 
 const { default: movieLoader } = serverLoaders;
 
-const MovieView = movieLoader.View((s) =>
-  s.status === 'loading' ? (
-    <MovieSkeleton />
-  ) : (
-    <article>{s.data.movie.title}</article>
-  )
+const MovieView = movieLoader.View(({ data }) =>
+  data ? <article>{data.movie.title}</article> : <MovieSkeleton />
 );
 
 function MovieWrapper(props: WrapperProps) {

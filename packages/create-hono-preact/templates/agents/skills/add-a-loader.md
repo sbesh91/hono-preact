@@ -44,7 +44,9 @@
 
 3. Read the data in `src/pages/<name>.tsx`. Import `serverLoaders` from the sibling
    `.server.js`, call `.useData()` in the component (it returns a `LoaderState` union),
-   and wrap it with `.View(...)`; branch on the loader's `status`:
+   and wrap it with `.View(...)`. `data` reads straight off the union (it is absent
+   only in the cold `loading` arm, so a truthy check doubles as the loading guard);
+   reach for `status` when you need to tell `revalidating` or `error` apart:
 
    ```tsx
    import { definePage } from 'hono-preact';
@@ -54,9 +56,9 @@
    const loader = serverLoaders.default;
 
    const ProfilePage: FunctionComponent = () => {
-     const s = loader.useData();
-     if (s.status === 'loading') return <p>Loading...</p>;
-     const { message, renderedAt } = s.data;
+     const { data } = loader.useData();
+     if (!data) return <p>Loading...</p>;
+     const { message, renderedAt } = data;
      return (
        <section>
          <p>{message}</p>
@@ -66,8 +68,8 @@
    };
    ProfilePage.displayName = 'ProfilePage';
 
-   const ProfileView = loader.View((s) =>
-     s.status === 'loading' ? <p>Loading...</p> : <ProfilePage />
+   const ProfileView = loader.View(({ data }) =>
+     data ? <ProfilePage /> : <p>Loading...</p>
    );
 
    export default definePage(ProfileView, {});

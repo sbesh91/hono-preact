@@ -88,12 +88,12 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast } = serverLoaders;
 
-const Summary = summary.View((s) =>
-  s.status === 'loading' ? <SummarySkeleton /> : <SummaryCard data={s.data} />
+const Summary = summary.View(({ data }) =>
+  data ? <SummaryCard data={data} /> : <SummarySkeleton />
 );
 
-const Cast = cast.View((s) =>
-  s.status === 'loading' ? <CastSkeleton /> : <CastList items={s.data} />
+const Cast = cast.View(({ data }) =>
+  data ? <CastList items={data} /> : <CastSkeleton />
 );
 
 function MovieDetail() {

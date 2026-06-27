@@ -8,9 +8,8 @@ import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
 const boardLoader = serverLoaders.default;
 
 const ProjectBoardPage: FunctionComponent = () => {
-  const s = boardLoader.useData();
-  if (s.status === 'loading') return <BoardSkeleton />;
-  const data = s.data;
+  const { status, data } = boardLoader.useData();
+  if (status === 'loading') return <BoardSkeleton />;
   if (!data) return <p class="p-6">Unknown project.</p>;
   const { project, tasks, users } = data;
   return (
@@ -28,8 +27,10 @@ const ProjectBoardPage: FunctionComponent = () => {
 };
 ProjectBoardPage.displayName = 'ProjectBoardPage';
 
-const ProjectBoardView = boardLoader.View((s) =>
-  s.status === 'loading' ? <BoardSkeleton /> : <ProjectBoardPage />
+// `data` can be legitimately falsy (a not-found project renders "Unknown
+// project" inside the page), so branch on `status`, not `data`-presence.
+const ProjectBoardView = boardLoader.View(({ status }) =>
+  status === 'loading' ? <BoardSkeleton /> : <ProjectBoardPage />
 );
 
 function BoardSkeleton() {

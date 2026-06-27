@@ -2,6 +2,26 @@ import type { ComponentChildren } from 'preact';
 import { useContext } from 'preact/hooks';
 import { LoaderDataContext } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
+import type { LoaderState, StreamState } from '../loader-state.js';
+
+/** The consumption union <Page> puts on `LoaderDataContext`. */
+type ConsumptionState = LoaderState<unknown> | StreamState<unknown>;
+
+/** The data-bearing arms: everything but the cold `loading` / `connecting`. */
+type DataBearing = Exclude<
+  ConsumptionState,
+  { status: 'loading' } | { status: 'connecting' }
+>;
+
+/**
+ * Structural value-presence test on the variant TAG, not a `data`-presence test:
+ * every arm now declares `data` (the cold arms as `data?: never`), so `'data' in
+ * ctx` would no longer exclude them. The cold `loading` / `connecting` arms carry
+ * no value; every other arm is data-bearing.
+ */
+function isDataBearing(s: ConsumptionState): s is DataBearing {
+  return s.status !== 'loading' && s.status !== 'connecting';
+}
 
 type OverlayProps<T, A> = {
   // `loader` binds the overlay's data type `T`. It is not read at runtime;
@@ -29,7 +49,7 @@ export function OptimisticOverlay<T, A>({
   // absent during a cold `loading` / `connecting` first load. `ctx.data` is the
   // erased context value (`unknown`); reading it as the overlay's bound `T` is
   // the pre-existing structural-read boundary (the `loader` prop binds `T`).
-  const base = ('data' in ctx ? ctx.data : undefined) as T;
+  const base = (isDataBearing(ctx) ? ctx.data : undefined) as T;
   const projected = pending.reduce<T>(
     (acc, action) => reducer(acc, action),
     base
@@ -37,7 +57,7 @@ export function OptimisticOverlay<T, A>({
 
   // Data-bearing arm (`success` / `revalidating` / `error`): re-provide the SAME
   // discriminated arm with the data replaced (load status unchanged).
-  if ('data' in ctx) {
+  if (isDataBearing(ctx)) {
     return (
       <LoaderDataContext.Provider value={{ ...ctx, data: projected }}>
         {children}

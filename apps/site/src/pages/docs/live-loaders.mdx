@@ -212,12 +212,12 @@ The render function receives a `StreamState<Acc>` discriminated union. Match on 
 
 | `status`       | Fields                       | When                                                                                                                                              |
 | -------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'connecting'` | (none)                       | SSR and before the first chunk arrives. No data yet.                                                                                              |
+| `'connecting'` | `data?: never`               | SSR and before the first chunk arrives. No data yet.                                                                                              |
 | `'open'`       | `data: Acc`                  | The stream is live; `data` is the folded accumulator, updated after each chunk.                                                                   |
 | `'closed'`     | `data: Acc`                  | The stream ended cleanly after at least one chunk; `data` is the last accumulator.                                                                |
 | `'error'`      | `error: Error`, `data?: Acc` | The stream errored (on the initial connect, or after a chunk). `data` is the last accumulator if a chunk had arrived, otherwise absent: guard it. |
 
-The imperative `reload()` (resubscribe: abort the current stream, reset `data` to `initial`, reconnect, and fold afresh) is read from `useReload()`, not passed as a render arg.
+The `connecting` arm declares `data?: never`, so `data` is readable on the un-narrowed union as `Acc | undefined` (`undefined` while `connecting`, or on a pre-chunk `error`) without narrowing on `status` first. The imperative `reload()` (resubscribe: abort the current stream, reset `data` to `initial`, reconnect, and fold afresh) is read from `useReload()`, not passed as a render arg.
 
 `StreamStatus` values:
 
