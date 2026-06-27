@@ -1,10 +1,6 @@
 import { type ComponentChildren, type FunctionComponent } from 'preact';
 import type { Context } from 'hono';
-import {
-  ErrorBoundary as PreactIsoErrorBoundary,
-  type RouteHook,
-  useLocation,
-} from 'preact-iso';
+import { type RouteHook, useLocation } from 'preact-iso';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { isRedirect, isRender, type Outcome } from '../outcomes.js';
@@ -16,7 +12,7 @@ import type {
 import type { StreamObserver } from '../define-stream-observer.js';
 import { dispatchServer, dispatchClient } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
-import wrapPromise from './wrap-promise.js';
+import wrapPromise, { type WrapStatus } from './wrap-promise.js';
 import { hasClientNavigated } from './history-shim.js';
 import { HonoRequestContext } from './contexts.js';
 
@@ -81,7 +77,10 @@ function startChain(
   );
 }
 
-type WrappedResult = { read: () => HostResult };
+type WrappedResult = {
+  read: () => HostResult;
+  peek: () => { status: WrapStatus; settled: Promise<void> };
+};
 type RefValue = { current: WrappedResult | null };
 
 /**
@@ -137,6 +136,20 @@ function HostConsumer({
   // resultRef.current is populated by the parent before this consumer
   // renders; the null branch is just a type-narrow guard.
   const wrapped = resultRef.current;
+  // Self-heal: chain suspension via wrapPromise has no self-update of its own,
+  // so when the Router is the boundary (it holds [cur, prev] but does not deeply
+  // re-render this suspended consumer) the incoming route would never commit.
+  // Subscribe to the chain promise's settlement and re-render THIS component on
+  // resolve, mirroring preact-iso `lazy`'s self-update. Re-subscribe whenever
+  // the wrapped result changes (a new path produces a fresh wrapPromise).
+  const [, force] = useState(0);
+  const subscribedTo = useRef<WrappedResult | null>(null);
+  if (wrapped && subscribedTo.current !== wrapped) {
+    subscribedTo.current = wrapped;
+    if (wrapped.peek().status === 'pending') {
+      wrapped.peek().settled.then(() => force((n) => n + 1));
+    }
+  }
   const { outcome } = wrapped ? wrapped.read() : { outcome: undefined };
   const { route } = useLocation();
 
@@ -238,13 +251,12 @@ function DeferredHost({
  * Suspense strategy wrapper. Lazily dispatches the chain once per path (see the
  * lazy-ref note below) and renders the outcome through HostConsumer.
  *
- * The boundary is preact-iso's public `ErrorBoundary`: it catches the promise
- * `HostConsumer` throws (via `wrapped.read()`) and re-renders on resolve, which
- * is the suspension support this path needs post-navigation. No `onError` is
- * passed, so genuine errors and thrown framework outcomes (render/deny) are NOT
- * a promise and propagate up to the outer framework `ErrorBoundary`
- * (route-boundary.tsx), which rethrows outcomes for the dispatcher / renderPage
- * to translate.
+ * There is no interposed boundary: the promise HostConsumer throws bubbles to
+ * the nearest preact-iso Router (the suspense boundary), which keeps the
+ * outgoing route mounted while the chain resolves. HostConsumer self-heals on
+ * resolve (it subscribes to the chain promise) so the incoming route commits;
+ * see HostConsumer. Thrown framework outcomes (render/deny) are not promises and
+ * propagate past the Router to the framework RouteBoundary / renderPage.
  */
 function SuspenseHost({
   use,
@@ -273,11 +285,16 @@ function SuspenseHost({
     prevPath.current = location.path;
     resultRef.current = wrapPromise(startChain(use, location, honoCtx));
   }
-  return (
-    <PreactIsoErrorBoundary>
-      <HostConsumer resultRef={resultRef}>{children}</HostConsumer>
-    </PreactIsoErrorBoundary>
-  );
+  // No interposed boundary. The promise HostConsumer throws bubbles to the
+  // nearest preact-iso Router, which holds [cur, prev] alive while the chain
+  // resolves instead of tearing the outgoing route to blank. Outcomes
+  // (render/deny/redirect) are not promises, so the Router ignores them: deny
+  // throws propagate (server: to renderPage; client: unchanged from before,
+  // since the old boundary had no onError and never caught outcomes either),
+  // redirect/render are handled inside HostConsumer. The server prerender
+  // catches suspensions globally; DeferredHost (initial load) never suspends.
+  // Contract: SuspenseHost now requires an ancestor Router as its boundary.
+  return <HostConsumer resultRef={resultRef}>{children}</HostConsumer>;
 }
 
 export const PageMiddlewareHost: FunctionComponent<{
