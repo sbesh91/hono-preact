@@ -148,6 +148,9 @@ function HostConsumer({
     subscribedTo.current = wrapped;
     const pending = wrapped.peek();
     if (pending.status === 'pending') {
+      // If this consumer was superseded/unmounted before settle, force() is a
+      // no-op in Preact; the read() below always reflects the current resultRef,
+      // so a late resume cannot commit stale data.
       pending.settled.then(() => force((n) => n + 1));
     }
   }
@@ -256,8 +259,10 @@ function DeferredHost({
  * the nearest preact-iso Router (the suspense boundary), which keeps the
  * outgoing route mounted while the chain resolves. HostConsumer self-heals on
  * resolve (it subscribes to the chain promise) so the incoming route commits;
- * see HostConsumer. Thrown framework outcomes (render/deny) are not promises and
- * propagate past the Router to the framework RouteBoundary / renderPage.
+ * see HostConsumer. Thrown framework outcomes (render/deny) are not promises,
+ * so the Router ignores them: on the server they reach renderPage's handler;
+ * on the client they propagate uncaught exactly as before (the removed boundary
+ * had no onError and never caught outcomes either).
  */
 function SuspenseHost({
   use,

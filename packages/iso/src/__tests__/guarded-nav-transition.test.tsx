@@ -7,7 +7,7 @@ import {
   fireEvent,
   findByTestId,
 } from '@testing-library/preact';
-import { LocationProvider } from 'preact-iso';
+import { LocationProvider, useLocation } from 'preact-iso';
 import { h, type ComponentType } from 'preact';
 import { defineClientMiddleware } from '../define-middleware.js';
 import { redirect } from '../outcomes.js';
@@ -175,58 +175,71 @@ describe('guarded nav edge cases', () => {
     expect(container.querySelector('[data-testid="route-B"]')).toBeNull();
   });
 
-  it('rapid double-nav lands on the final target, not a superseded one', async () => {
-    const mk = (id: string) => {
-      const mw = defineClientMiddleware(async (_c, next) => {
-        await Promise.resolve();
-        await Promise.resolve();
-        await next();
+  it('rapid double-nav supersedes an in-flight guarded route (stale resume)', async () => {
+    const gateB: { release?: () => void } = {};
+    const bMw = defineClientMiddleware(async (_c, next) => {
+      await new Promise<void>((r) => {
+        gateB.release = r;
       });
-      const View: ComponentType<ViewProps> = () =>
-        h(
-          'div',
-          null,
-          h('div', { 'data-testid': `route-${id}` }, `route-${id}`),
-          h('a', { href: '/c', 'data-testid': 'to-c' }, 'c')
-        );
-      return { mw, View };
+      await next();
+    });
+    const cMw = defineClientMiddleware(async (_c, next) => {
+      await next();
+    });
+    const AView: ComponentType<ViewProps> = () =>
+      h('div', { 'data-testid': 'route-A' }, 'route-A');
+    const BView: ComponentType<ViewProps> = () =>
+      h('div', { 'data-testid': 'route-B' }, 'route-B');
+    const CView: ComponentType<ViewProps> = () =>
+      h('div', { 'data-testid': 'route-C' }, 'route-C');
+
+    let nav!: (to: string) => void;
+    const Controller = () => {
+      const { route } = useLocation();
+      nav = route;
+      return null;
     };
-    const a = mk('A');
-    const b = mk('B');
-    const c = mk('C');
 
     const manifest = defineRoutes([
-      {
-        path: '/a',
-        view: () => Promise.resolve({ default: a.View }),
-        use: [a.mw],
-      },
+      { path: '/a', view: () => Promise.resolve({ default: AView }) },
       {
         path: '/b',
-        view: () => Promise.resolve({ default: b.View }),
-        use: [b.mw],
+        view: () => Promise.resolve({ default: BView }),
+        use: [bMw],
       },
       {
         path: '/c',
-        view: () => Promise.resolve({ default: c.View }),
-        use: [c.mw],
+        view: () => Promise.resolve({ default: CView }),
+        use: [cMw],
       },
     ]);
 
     window.history.replaceState({}, '', '/a');
     const { container } = rtlRender(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
+      h(
+        LocationProvider,
+        null,
+        h(Controller, null),
+        h(Routes, { routes: manifest })
+      )
     );
     await waitFor(() =>
       expect(container.querySelector('[data-testid="route-A"]')).not.toBeNull()
     );
 
-    // Navigate A -> B, then immediately B -> C before B settles.
+    // Navigate to B; its gated chain suspends and is genuinely in-flight.
     setNavDirectionForTesting('push');
-    window.history.pushState(null, '', '/b');
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    window.history.pushState(null, '', '/c');
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    nav('/b');
+    // Confirm the overlap precondition: B's middleware is running (gate set) but
+    // B is not shown (suspended). This is what makes the test exercise the
+    // stale-resume guard rather than a no-op A->C transition.
+    await waitFor(() => expect(gateB.release).toBeDefined());
+    expect(container.querySelector('[data-testid="route-B"]')).toBeNull();
+
+    // Supersede B with C before B settles, then release B's now-stale chain.
+    setNavDirectionForTesting('push');
+    nav('/c');
+    gateB.release?.();
 
     await waitFor(
       () =>
@@ -235,6 +248,8 @@ describe('guarded nav edge cases', () => {
         ).not.toBeNull(),
       { timeout: 3000 }
     );
+    // The superseded B resolved after being replaced; its self-heal must not
+    // resurrect it.
     expect(container.querySelector('[data-testid="route-B"]')).toBeNull();
   });
 });
