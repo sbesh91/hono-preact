@@ -67,7 +67,7 @@ export default definePage(MoviesView);
 
 ## Background refresh
 
-Reload is a background refresh. While `reloading` is `true`, the loader's previous value is retained so the current content stays visible; `reloading` reflects an explicit reload or revalidation only, never the cold initial load. Inside a `.View()` render function the same in-flight refresh surfaces as the `revalidating` status, whose arm still carries `data`. Use `reloading` (from `useReload`) or the `revalidating` status (from the `.View()` render arg) to reflect the in-progress state in your UI.
+Reload is a background refresh. While `reloading` is `true`, the loader's previous value is retained so the current content stays visible; `reloading` reflects an explicit reload or revalidation only, never the cold initial load. Inside a `.View()` render function the same in-flight refresh surfaces as the `revalidating` status, whose arm still carries `data`. Use `reloading` (from `useReload`) or the `revalidating` status (from the `.View()` render arg) to reflect the in-progress state in your UI. `reloading` is `true` only while revalidating a value that already exists; a reload or retry of a loader that has not produced a value yet (a failed first load, or a live reconnect after a cold pre-first-chunk error) is itself a cold load, so branch on `status === 'loading'` for that case, not `reloading`.
 
 ## Three knobs, three behaviors
 

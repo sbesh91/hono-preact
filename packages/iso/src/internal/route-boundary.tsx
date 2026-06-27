@@ -1,6 +1,7 @@
 import { Component } from 'preact';
 import type { ComponentChildren, FunctionComponent } from 'preact';
 import { isOutcome } from '../outcomes.js';
+import { toError } from './to-error.js';
 
 type ErrorFallback =
   | ComponentChildren
@@ -28,7 +29,7 @@ export class ErrorBoundary extends Component<
   // when the boundary catches; whichever fires first must not swallow.
   static getDerivedStateFromError(error: unknown) {
     if (isOutcome(error)) throw error;
-    return { error: error instanceof Error ? error : new Error(String(error)) };
+    return { error: toError(error) };
   }
 
   componentDidCatch(error: unknown) {

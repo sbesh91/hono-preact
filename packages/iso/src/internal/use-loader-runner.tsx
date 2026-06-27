@@ -14,13 +14,29 @@ import type {
   StreamStatus,
   SyncValue,
 } from '../loader-state.js';
-import { hasPhaseValue, toLoaderView, toStreamState } from '../loader-state.js';
+import {
+  hasPhaseValue,
+  phaseError,
+  resolveCurrentValue,
+  toLoaderView,
+  toStreamState,
+} from '../loader-state.js';
+import { toError } from './to-error.js';
 
 /** Streaming consumption: fold every chunk into accumulated state. */
 export type AccumulateOptions = {
   initial: unknown;
   reduce: (acc: unknown, chunk: unknown) => unknown;
 };
+
+/**
+ * The runner's renderable view: the single-value `LoaderView` (a `LoaderState`
+ * or a cold-error signal) OR a streaming `StreamState` wrapped in `render`.
+ * `loader.tsx` routes it; it never re-projects.
+ */
+export type RunnerView<T> =
+  | LoaderView<T>
+  | { kind: 'render'; state: StreamState<T> };
 
 export type LoaderRunnerState<T> = {
   /**
@@ -31,7 +47,7 @@ export type LoaderRunnerState<T> = {
    * `data` / `loading` / `settled` is re-derived downstream (no `data ===
    * undefined` heuristic anywhere).
    */
-  view: LoaderView<T> | { kind: 'render'; state: StreamState<T> };
+  view: RunnerView<T>;
   reload: () => void;
   /**
    * True ONLY while an explicit `reload()` / revalidation is in flight (the
@@ -123,20 +139,14 @@ export function useLoaderRunner<T>(
   // cold `error` (no value, routes to the boundary). No `?? syncDataRef.current`
   // value-presence test.
   const setError = (err: unknown) => {
-    const error = err instanceof Error ? err : new Error(String(err));
-    setPhase((p) =>
-      hasPhaseValue(p)
-        ? { tag: 'staleError', error, value: p.value }
-        : syncRef.current.present
-          ? { tag: 'staleError', error, value: syncRef.current.value }
-          : { tag: 'error', error }
-    );
+    const error = toError(err);
+    setPhase((p) => {
+      const current = resolveCurrentValue(p, syncRef.current);
+      return current.present
+        ? { tag: 'staleError', error, value: current.value }
+        : { tag: 'error', error };
+    });
   };
-
-  // The streaming `error` arm's error object, read off the variant tag (a
-  // structural `error !== null`-style read, not a value-presence test).
-  const phaseError = (p: LoaderPhase<T>): Error | null =>
-    p.tag === 'error' || p.tag === 'staleError' ? p.error : null;
 
   // Fold one chunk into the accumulator and surface it. Shared by the initial
   // subscribe and reload() so a streaming reload re-folds through `reduce`
@@ -184,13 +194,12 @@ export function useLoaderRunner<T>(
     // on `syncRef` (a preload/cache-hydrated loader keeps its phase at `loading`
     // while its value lives on `syncRef`). NOT `prior !== undefined`, so a reload
     // over a settled-`undefined` value still revalidates (review #2/#3).
-    setPhase((p) =>
-      hasPhaseValue(p)
-        ? { tag: 'revalidating', value: p.value }
-        : syncRef.current.present
-          ? { tag: 'revalidating', value: syncRef.current.value }
-          : { tag: 'loading' }
-    );
+    setPhase((p) => {
+      const current = resolveCurrentValue(p, syncRef.current);
+      return current.present
+        ? { tag: 'revalidating', value: current.value }
+        : { tag: 'loading' };
+    });
 
     if (accumulate) {
       // Streaming/live reload = resubscribe: `subscribeAccumulate` aborts the
@@ -454,19 +463,18 @@ export function useLoaderRunner<T>(
   // phase carries one). `loader.tsx` only ROUTES this; it never re-projects.
   const reloading = phase.tag === 'revalidating';
 
-  const view: LoaderView<T> | { kind: 'render'; state: StreamState<T> } =
-    accumulate
-      ? {
-          kind: 'render',
-          state: toStreamState(
-            status,
-            hasPhaseValue(phase)
-              ? { present: true, value: phase.value }
-              : syncRef.current,
-            phaseError(phase)
-          ),
-        }
-      : toLoaderView(phase, syncRef.current);
+  const view: RunnerView<T> = accumulate
+    ? {
+        kind: 'render',
+        state: toStreamState(
+          status,
+          hasPhaseValue(phase)
+            ? { present: true, value: phase.value }
+            : syncRef.current,
+          phaseError(phase)
+        ),
+      }
+    : toLoaderView(phase, syncRef.current);
 
   return {
     view,

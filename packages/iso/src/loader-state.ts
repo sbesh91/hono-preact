@@ -75,6 +75,33 @@ export function hasPhaseValue<T>(p: LoaderPhase<T>): p is ValuedPhase<T> {
 }
 
 /**
+ * The current value as a present/absent carrier: the phase's settled value if it
+ * carries one, else the synchronously-adopted preload/cache value if present,
+ * else absent. STRUCTURAL throughout (the phase branch is `hasPhaseValue`, the
+ * sync branch is the `present` flag); NEVER a `value !== undefined` test, so a
+ * settled / adopted value of `undefined` / `null` still counts as present. This
+ * is the shared three-way the runner's reload and error transitions and
+ * `toLoaderView`'s `loading` arm all branch on.
+ */
+export function resolveCurrentValue<T>(
+  phase: LoaderPhase<T>,
+  sync: SyncValue<T>
+): SyncValue<T> {
+  if (hasPhaseValue(phase)) return { present: true, value: phase.value };
+  return sync;
+}
+
+/**
+ * The error object an `error` / `staleError` phase carries, else `null`. A
+ * structural read off the variant tag (a `error !== null`-style read), NOT a
+ * value-presence test. Lives here with `hasPhaseValue` so all `LoaderPhase`
+ * variant-reads share one module.
+ */
+export function phaseError<T>(p: LoaderPhase<T>): Error | null {
+  return p.tag === 'error' || p.tag === 'staleError' ? p.error : null;
+}
+
+/**
  * Project the structural phase (plus any synchronously-adopted preload / cache
  * value) into the single-value view. Pure structural dispatch on the variant tag
  * and the `sync.present` flag: NO `data === undefined` / `value !== undefined`
@@ -105,13 +132,15 @@ export function toLoaderView<T>(
       };
     case 'error':
       return { kind: 'coldError', error: phase.error };
-    case 'loading':
+    case 'loading': {
       // A still-`loading` phase whose value is already available synchronously
       // (an SSR preload or browser-cache hit) renders as `success` from that
       // value; with no such value it is a genuine cold load.
-      return sync.present
-        ? { kind: 'render', state: { status: 'success', data: sync.value } }
+      const current = resolveCurrentValue(phase, sync);
+      return current.present
+        ? { kind: 'render', state: { status: 'success', data: current.value } }
         : { kind: 'render', state: { status: 'loading' } };
+    }
   }
 }
 
