@@ -1,18 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { readdir, mkdir } from 'node:fs/promises';
 import { spawn as realSpawn } from 'node:child_process';
-import readline from 'node:readline/promises';
-import { resolve, join, basename, dirname } from 'node:path';
+import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
 import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
-import {
-  copyTemplate,
-  renameDotfiles,
-  substituteName,
-  copyAgentGuidance,
-} from './template.mjs';
+import { copyAgentGuidance } from './template.mjs';
+import { scaffold } from './scaffold.mjs';
+import { resolveOptions, checkTargetDir } from './resolve.mjs';
+import { clackPrompts, brandBanner } from './prompts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const templatesRoot = resolve(here, '..', 'templates');
@@ -22,8 +18,10 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   argv: string[],
  *   cwd: string,
  *   env: Record<string, string | undefined>,
+ *   isTTY?: boolean,
+ *   prompts?: import('./prompts.mjs').PromptAdapter,
  *   spawnFn?: typeof realSpawn,
- *   prompt?: (message: string) => Promise<string>,
+ *   stdin?: import('node:stream').Readable & { isTTY?: boolean },
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
@@ -31,8 +29,10 @@ export async function run({
   argv,
   cwd,
   env,
+  isTTY = false,
+  prompts = clackPrompts,
   spawnFn = realSpawn,
-  prompt = defaultPrompt,
+  stdin = process.stdin,
 }) {
   const parsed = parseArgs(argv);
 
@@ -71,84 +71,177 @@ export async function run({
     return 2;
   }
 
-  let { targetDir, adapter, install, git } = parsed;
+  const interactive = Boolean(isTTY) && !parsed.yes;
+  if (interactive) prompts.intro(brandBanner);
 
-  if (!targetDir) {
-    const answer = (await prompt('Project directory name: ')).trim();
-    if (!answer) {
-      console.error('error: a project directory name is required');
+  // Non-interactive with a piped stdin and no positional dir: read the project
+  // directory from stdin (preserves `printf 'name' | npm create hono-preact`).
+  let targetDirArg = parsed.targetDir;
+  if (
+    targetDirArg === undefined &&
+    !interactive &&
+    stdin &&
+    stdin.isTTY === false
+  ) {
+    const line = (await readFirstLine(stdin)).trim();
+    if (line) targetDirArg = line;
+  }
+
+  // Validate a known target dir (positional or stdin) before prompting for
+  // anything else, so a wizard's worth of answers is never collected and then
+  // discarded. A prompted dir is validated inline by resolveOptions instead.
+  if (targetDirArg !== undefined) {
+    const reason = checkTargetDir(resolve(cwd, targetDirArg), targetDirArg);
+    if (reason) {
+      if (interactive) prompts.cancel(reason);
+      else console.error(`error: ${reason}`);
       return 1;
     }
-    targetDir = answer;
   }
+
+  /** @type {import('./resolve.mjs').ResolvedOptions} */
+  let options;
+  try {
+    options = await resolveOptions(
+      { ...parsed, targetDir: targetDirArg },
+      { interactive, prompts, cwd }
+    );
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return 1;
+  }
+  const { targetDir, adapter, ui, install, git, skipHints } = options;
 
   const targetPath = resolve(cwd, targetDir);
 
-  try {
-    const entries = await readdir(targetPath);
-    if (entries.length > 0) {
-      console.error(`error: target directory '${targetDir}' is not empty`);
-      return 1;
-    }
-  } catch (err) {
-    if (err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT') {
-      await mkdir(targetPath, { recursive: true });
-    } else {
-      throw err;
-    }
-  }
-
-  const sourceTemplate = join(templatesRoot, adapter);
-  await copyTemplate(sourceTemplate, targetPath);
-  await renameDotfiles(targetPath);
-  await substituteName(targetPath, basename(targetPath));
-  await copyAgentGuidance(join(templatesRoot, 'agents'), targetPath, {
-    force: true,
-  });
+  const spin = interactive ? prompts.spinner() : null;
+  spin?.start('Scaffolding project...');
+  await scaffold(targetPath, { adapter, ui }, templatesRoot);
+  spin?.stop('Project scaffolded');
 
   const pm = detectPackageManager(env);
 
   if (install) {
-    const installExit = await runChild(spawnFn, pm, ['install'], targetPath);
-    if (installExit !== 0) return 1;
+    spin?.start('Installing dependencies...');
+    // Interactive mode hides the child behind a spinner, so capture its output
+    // and surface it on failure; non-interactive inherits the terminal.
+    const { code, output } = await runChild(
+      spawnFn,
+      pm,
+      ['install'],
+      targetPath,
+      interactive ? 'capture' : 'inherit'
+    );
+    if (code !== 0) {
+      if (interactive) {
+        // clack status code 2 renders the error glyph (1 is the cancel glyph).
+        spin?.stop('Dependency install failed', 2);
+        const captured = output.trim();
+        if (captured) console.error(captured);
+      }
+      console.error(`error: '${pm} install' failed in ${targetDir}.`);
+      return 1;
+    }
+    spin?.stop('Dependencies installed');
   }
 
   if (git) {
-    const gitExit = await runChild(spawnFn, 'git', ['init'], targetPath);
-    if (gitExit !== 0) {
+    const { code } = await runChild(
+      spawnFn,
+      'git',
+      ['init'],
+      targetPath,
+      interactive ? 'ignore' : 'inherit'
+    );
+    if (code !== 0) {
       console.warn(
         'warning: git init failed (is git installed?); continuing without git'
       );
     }
   }
 
-  printNextSteps(targetDir, pm, install);
+  if (!skipHints) {
+    if (interactive) {
+      const dev = pm === 'npm' ? 'npm run dev' : `${pm} dev`;
+      const lines = [`cd ${targetDir}`];
+      if (!install) lines.push(pm === 'npm' ? 'npm install' : `${pm} install`);
+      lines.push(dev);
+      prompts.note(lines.map((l) => `  ${l}`).join('\n'), 'Next steps');
+    } else {
+      printNextSteps(targetDir, pm, install);
+    }
+  }
+
+  if (interactive) prompts.outro(pc.green("You're all set!"));
   return 0;
 }
 
 /**
+ * Run a child process. `mode` is 'inherit' (child writes to the terminal),
+ * 'ignore' (discard output), or 'capture' (collect stdout+stderr and return it
+ * in `output`). Resolves with the exit code and any captured output. A child
+ * terminated by a signal (close code null) is reported as a non-zero exit.
+ *
  * @param {typeof realSpawn} spawnFn
  * @param {string} cmd
  * @param {string[]} args
  * @param {string} cwd
- * @returns {Promise<number>}
+ * @param {'inherit' | 'ignore' | 'capture'} [mode]
+ * @returns {Promise<{ code: number, output: string }>}
  */
-function runChild(spawnFn, cmd, args, cwd) {
+function runChild(spawnFn, cmd, args, cwd, mode = 'inherit') {
+  const stdio = mode === 'capture' ? ['ignore', 'pipe', 'pipe'] : mode;
   return new Promise((res) => {
-    const child = spawnFn(cmd, args, { cwd, stdio: 'inherit' });
+    const child = spawnFn(cmd, args, { cwd, stdio });
+    let output = '';
+    const collect = (/** @type {Buffer} */ chunk) => {
+      output += chunk.toString();
+    };
+    child.stdout?.on?.('data', collect);
+    child.stderr?.on?.('data', collect);
     let settled = false;
     const settle = (/** @type {number} */ code) => {
       if (settled) return;
       settled = true;
-      res(code);
+      res({ code, output });
     };
-    child.on('close', (code) => settle(code ?? 0));
+    // A signal kill gives (null, signal); treat that as a failure, not success.
+    child.on('close', (code, signal) => settle(code ?? (signal ? 1 : 0)));
     // 'error' fires when the binary isn't found on PATH (ENOENT) etc.
     // Without this listener the Promise would hang and 'close' would never fire.
     child.on('error', (err) => {
       console.error(`error: failed to run '${cmd}': ${err.message}`);
       settle(127);
     });
+  });
+}
+
+/**
+ * Read the first line from a stream (used to accept a project directory from a
+ * piped stdin in non-interactive mode). Resolves with the line without its
+ * trailing newline, or whatever was buffered at end-of-stream.
+ *
+ * @param {import('node:stream').Readable & { off?: Function }} stream
+ * @returns {Promise<string>}
+ */
+function readFirstLine(stream) {
+  return new Promise((res) => {
+    let buf = '';
+    const done = (/** @type {string} */ value) => {
+      stream.off?.('data', onData);
+      stream.off?.('end', onEnd);
+      stream.off?.('error', onEnd);
+      res(value);
+    };
+    const onData = (/** @type {Buffer} */ chunk) => {
+      buf += chunk.toString();
+      const nl = buf.indexOf('\n');
+      if (nl !== -1) done(buf.slice(0, nl));
+    };
+    const onEnd = () => done(buf);
+    stream.on('data', onData);
+    stream.on('end', onEnd);
+    stream.on('error', onEnd);
   });
 }
 
@@ -171,22 +264,6 @@ function printNextSteps(targetDir, pm, installed) {
   console.log('');
 }
 
-/**
- * @param {string} message
- * @returns {Promise<string>}
- */
-async function defaultPrompt(message) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  try {
-    return await rl.question(message);
-  } finally {
-    rl.close();
-  }
-}
-
 function printHelp() {
   console.log(`Usage: create-hono-preact <target-dir> [options]
        create-hono-preact add-agents [--force]
@@ -197,9 +274,12 @@ Commands:
   add-agents [--force]          Add AGENTS.md, CLAUDE.md, and agent recipes to an existing project
 
 Options:
-  --adapter=<cloudflare|node>   pick the deployment target (default: cloudflare)
+  --adapter <cloudflare|node>   pick the deployment target (default: cloudflare)
+  --ui, --no-ui                 include or exclude hono-preact-ui components
   --no-install                  skip dependency install
   --no-git                      skip 'git init'
+  -y, --yes                     accept defaults for anything not specified
+  --skip-hints                  suppress the "Next steps" note
   -h, --help                    show this help
   -v, --version                 show version`);
 }

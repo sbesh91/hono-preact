@@ -13,7 +13,7 @@ describe('scaffolder template parity', () => {
     // wrangler config the scaffolder ships.
     const wranglerPath = resolve(
       here,
-      '../../../create-hono-preact/templates/cloudflare/wrangler.jsonc'
+      '../../../create-hono-preact/templates/adapter/cloudflare/wrangler.jsonc'
     );
     const raw = readFileSync(wranglerPath, 'utf8');
     const main = /"main"\s*:\s*"([^"]+)"/.exec(raw)?.[1];

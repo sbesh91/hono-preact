@@ -18,6 +18,7 @@ const repoRoot = resolve(here, '..', '..', '..');
 
 let workDir: string;
 let tarballPath: string;
+let uiTarballPath: string;
 
 beforeAll(() => {
   workDir = mkdtempSync(join(tmpdir(), 'chp-integration-'));
@@ -36,6 +37,8 @@ beforeAll(() => {
       '@hono-preact/vite',
       '--filter',
       'hono-preact',
+      '--filter',
+      'hono-preact-ui',
       'build',
     ],
     { cwd: repoRoot, stdio: 'inherit' }
@@ -57,6 +60,17 @@ beforeAll(() => {
   );
   if (!tgz) throw new Error('failed to locate packed hono-preact tarball');
   tarballPath = join(packDir, tgz);
+
+  execFileSync(
+    'pnpm',
+    ['pack', '--filter', 'hono-preact-ui', '--pack-destination', packDir],
+    { cwd: repoRoot, stdio: 'inherit' }
+  );
+  const uiTgz = readdirSync(packDir).find(
+    (f) => f.startsWith('hono-preact-ui-') && f.endsWith('.tgz')
+  );
+  if (!uiTgz) throw new Error('failed to locate packed hono-preact-ui tarball');
+  uiTarballPath = join(packDir, uiTgz);
 }, 180_000);
 
 afterAll(() => {
@@ -65,23 +79,20 @@ afterAll(() => {
 
 async function scaffold(
   name: string,
-  adapter: 'cloudflare' | 'node'
+  adapter: 'cloudflare' | 'node',
+  ui = false
 ): Promise<string> {
-  const code = await run({
-    argv: [name, `--adapter=${adapter}`, '--no-install', '--no-git'],
-    cwd: workDir,
-    env: {},
-  });
+  const argv = [name, `--adapter=${adapter}`, '--no-install', '--no-git'];
+  if (ui) argv.push('--ui');
+  const code = await run({ argv, cwd: workDir, env: {} });
   if (code !== 0) throw new Error(`scaffold failed with code ${code}`);
 
   const target = join(workDir, name);
-
-  // Point hono-preact at the local tarball so we don't depend on the registry.
   const pkgPath = join(target, 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   pkg.dependencies['hono-preact'] = `file:${tarballPath}`;
+  if (ui) pkg.dependencies['hono-preact-ui'] = `file:${uiTarballPath}`;
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-
   return target;
 }
 
@@ -109,7 +120,7 @@ describe('scaffold + install + build — node adapter', () => {
 
 describe('scaffold + install + build — cloudflare adapter', () => {
   it('produces a buildable Cloudflare app', async () => {
-    const target = await scaffold('integration-cf', 'cloudflare');
+    const target = await scaffold('integration-cf', 'cloudflare', true);
 
     execFileSync(
       'pnpm',
@@ -128,5 +139,8 @@ describe('scaffold + install + build — cloudflare adapter', () => {
     expect(existsSync(join(target, 'dist', 'integration_cf', 'index.js'))).toBe(
       true
     );
+
+    const home = readFileSync(join(target, 'src', 'pages', 'home.tsx'), 'utf8');
+    expect(home).toContain('hono-preact-ui');
   }, 180_000);
 });

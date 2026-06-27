@@ -7,7 +7,7 @@ import {
   mkdir,
   readdir,
 } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 
 /**
  * Recursively copy a template directory into the target.
@@ -17,6 +17,23 @@ import { join, dirname } from 'node:path';
  */
 export async function copyTemplate(source, target) {
   await cp(source, target, { recursive: true });
+}
+
+/**
+ * Recursively copy a template tree into the target, skipping files whose
+ * basename appears in `exclude`. Existing files are overwritten (overlay
+ * semantics); directories are always traversed.
+ *
+ * @param {string} source absolute path to the template tree
+ * @param {string} target absolute path to the destination dir
+ * @param {string[]} [exclude] basenames to skip (e.g. ['package.json'])
+ */
+export async function copyTreeExcept(source, target, exclude = []) {
+  const skip = new Set(exclude);
+  await cp(source, target, {
+    recursive: true,
+    filter: (src) => !skip.has(basename(src)),
+  });
 }
 
 /**
@@ -118,4 +135,49 @@ export async function copyAgentGuidance(agentsDir, targetDir, { force }) {
     results.push({ file: to, action: exists ? 'overwritten' : 'created' });
   }
   return results;
+}
+
+/**
+ * True for a non-null, non-array object.
+ *
+ * @param {unknown} v
+ * @returns {v is Record<string, unknown>}
+ */
+function isPlainObject(v) {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Deep-merge two plain objects. Nested objects merge recursively; arrays and
+ * scalars from `b` replace those in `a`. Neither input is mutated.
+ *
+ * @param {Record<string, unknown>} a
+ * @param {Record<string, unknown>} b
+ * @returns {Record<string, unknown>}
+ */
+export function deepMerge(a, b) {
+  /** @type {Record<string, unknown>} */
+  const out = { ...a };
+  for (const [key, bv] of Object.entries(b)) {
+    const av = out[key];
+    out[key] = isPlainObject(av) && isPlainObject(bv) ? deepMerge(av, bv) : bv;
+  }
+  return out;
+}
+
+/**
+ * Read and deep-merge an ordered list of package.json fragment files into one
+ * object. Earlier paths are the base; later paths overlay.
+ *
+ * @param {string[]} fragmentPaths absolute paths to package.json fragments
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function composePackageJson(fragmentPaths) {
+  /** @type {Record<string, unknown>} */
+  let merged = {};
+  for (const path of fragmentPaths) {
+    const fragment = JSON.parse(await readFile(path, 'utf8'));
+    merged = deepMerge(merged, fragment);
+  }
+  return merged;
 }

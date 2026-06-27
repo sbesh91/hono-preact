@@ -5,6 +5,7 @@ run({
   argv: process.argv.slice(2),
   cwd: process.cwd(),
   env: process.env,
+  isTTY: process.stdout.isTTY === true,
 }).then(
   (code) => process.exit(code ?? 0),
   (err) => {

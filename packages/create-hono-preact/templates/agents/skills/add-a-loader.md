@@ -43,8 +43,8 @@
    ```
 
 3. Read the data in `src/pages/<name>.tsx`. Import `serverLoaders` from the sibling
-   `.server.js`, call `.useData()` in the component, and wrap it with `.View(...)` so it
-   suspends until the data is ready:
+   `.server.js`, call `.useData()` in the component (it returns a `LoaderState` union),
+   and wrap it with `.View(...)`; branch on the loader's `status`:
 
    ```tsx
    import { definePage } from 'hono-preact';
@@ -54,7 +54,9 @@
    const loader = serverLoaders.default;
 
    const ProfilePage: FunctionComponent = () => {
-     const { message, renderedAt } = loader.useData();
+     const s = loader.useData();
+     if (s.status === 'loading') return <p>Loading...</p>;
+     const { message, renderedAt } = s.data;
      return (
        <section>
          <p>{message}</p>
@@ -64,9 +66,9 @@
    };
    ProfilePage.displayName = 'ProfilePage';
 
-   const ProfileView = loader.View(() => <ProfilePage />, {
-     fallback: <p>Loading...</p>,
-   });
+   const ProfileView = loader.View((s) =>
+     s.status === 'loading' ? <p>Loading...</p> : <ProfilePage />
+   );
 
    export default definePage(ProfileView, {});
    ```

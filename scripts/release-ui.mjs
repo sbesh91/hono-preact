@@ -38,6 +38,21 @@ if (pkg.private) {
 
 const [major, minor] = version.split('.');
 
+// The scaffolder's `--ui` overlay pins hono-preact-ui; gate the release so a ui
+// version bump cannot ship while the template still points at the old pin.
+const expectedPin = `^${major}.${minor}.0`;
+const tplUi = readPkg(
+  'packages/create-hono-preact/templates/feature/ui/package.json'
+);
+const uiPin = tplUi.dependencies?.['hono-preact-ui'];
+if (uiPin !== expectedPin) {
+  console.error(
+    `Release blocked: templates/feature/ui hono-preact-ui pin ${uiPin} != ${expectedPin}. ` +
+      `Update packages/create-hono-preact/templates/feature/ui/package.json.`
+  );
+  process.exit(1);
+}
+
 console.log(`Releasing ${name}@${version}${dryRun ? ' (dry-run)' : ''}`);
 
 const alreadyPublished = (name, ver) => {

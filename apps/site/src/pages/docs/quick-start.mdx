@@ -4,14 +4,18 @@ Build a movies list with a server loader and a form action. One example covers t
 
 ## Prerequisites
 
-Scaffold a new app:
+Scaffold a new app. Run it with no arguments to use the interactive wizard, or
+pass a directory:
 
 ```bash
 pnpm create hono-preact my-app
 cd my-app
 ```
 
-The scaffold runs `pnpm install` for you. Pass `--adapter=node` if you're targeting Node.js instead of Cloudflare Workers; see [Build & Deploy](./deployment) for the deployment side.
+The wizard asks for the adapter (Cloudflare Workers or Node), whether to add
+`hono-preact-ui` components, and whether to install dependencies and init git.
+To script it, pass flags instead (`--adapter node`, `--ui`, `--yes`); with npm,
+put them after `--`. See [Build & Deploy](./deployment) for the deployment side.
 
 ## Configure Vite
 

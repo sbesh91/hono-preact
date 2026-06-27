@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "preview": "vite preview",
+    "deploy": "wrangler deploy -c dist/{{name_underscore}}/wrangler.json"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "wrangler": "^4.92.0"
+  }
+}
