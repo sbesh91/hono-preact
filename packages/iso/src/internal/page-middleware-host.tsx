@@ -146,8 +146,9 @@ function HostConsumer({
   const subscribedTo = useRef<WrappedResult | null>(null);
   if (wrapped && subscribedTo.current !== wrapped) {
     subscribedTo.current = wrapped;
-    if (wrapped.peek().status === 'pending') {
-      wrapped.peek().settled.then(() => force((n) => n + 1));
+    const pending = wrapped.peek();
+    if (pending.status === 'pending') {
+      pending.settled.then(() => force((n) => n + 1));
     }
   }
   const { outcome } = wrapped ? wrapped.read() : { outcome: undefined };

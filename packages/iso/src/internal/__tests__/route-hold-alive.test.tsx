@@ -94,6 +94,10 @@ describe('guarded route hold-alive', () => {
     expect(container.querySelector('[data-testid="route-B"]')).toBeNull();
 
     gate.release?.();
+    await waitFor(() =>
+      expect(container.querySelector('[data-testid="route-B"]')).not.toBeNull()
+    );
+    expect(container.querySelector('[data-testid="route-A"]')).toBeNull();
   });
 
   it('commits the incoming guarded route after its chain resolves (real Routes)', async () => {
