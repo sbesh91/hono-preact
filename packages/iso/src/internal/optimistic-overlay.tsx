@@ -18,6 +18,14 @@ type DataBearing = Exclude<
  * every arm now declares `data` (the cold arms as `data?: never`), so `'data' in
  * ctx` would no longer exclude them. The cold `loading` / `connecting` arms carry
  * no value; every other arm is data-bearing.
+ *
+ * This treats the `error` arm as data-bearing. For a `LoaderState` that always
+ * holds (a render-time `error` carries the last-good `data`; a cold error routes
+ * to the boundary instead). It would NOT hold for a `StreamState` cold error,
+ * which carries no `data` key, but `OptimisticOverlay` binds only a non-live
+ * `LoaderRef<T>` (see `loader` below), so its context is always a `LoaderState`
+ * and that arm never reaches here. The status test and the prior `'data' in ctx`
+ * test therefore agree on every shape this overlay can actually receive.
  */
 function isDataBearing(s: ConsumptionState): s is DataBearing {
   return s.status !== 'loading' && s.status !== 'connecting';
