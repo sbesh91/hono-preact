@@ -19,6 +19,10 @@ import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
 } from '../internal/history-shim.js';
+import {
+  installNavTransitionScheduler,
+  __resetTransitionStateForTesting,
+} from '../internal/route-change.js';
 
 afterEach(() => {
   cleanup();
@@ -76,6 +80,52 @@ describe('cold guarded nav: no interactive duplicate content', () => {
     gate.release?.();
     await waitFor(() =>
       expect(container.querySelector('[data-testid="b-btn"]')).not.toBeNull()
+    );
+  });
+});
+
+describe('guarded cold nav under the nav-transition scheduler', () => {
+  afterEach(() => {
+    __resetTransitionStateForTesting();
+  });
+
+  it('completes a guarded navigation with the scheduler installed', async () => {
+    installNavTransitionScheduler();
+
+    const slowMw = defineClientMiddleware(async (_c, next) => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await next();
+    });
+    const AView: ComponentType<ViewProps> = () =>
+      h('a', { href: '/b', 'data-testid': 'to-b' }, 'go b');
+    const BView: ComponentType<ViewProps> = () =>
+      h('div', { 'data-testid': 'route-B' }, 'route-B');
+
+    const manifest = defineRoutes([
+      { path: '/a', view: () => Promise.resolve({ default: AView }) },
+      {
+        path: '/b',
+        view: () => Promise.resolve({ default: BView }),
+        use: [slowMw],
+      },
+    ]);
+
+    window.history.replaceState({}, '', '/a');
+    const { container } = rtlRender(
+      h(LocationProvider, null, h(Routes, { routes: manifest }))
+    );
+
+    const link = await findByTestId(container, 'to-b');
+    setNavDirectionForTesting('push');
+    fireEvent.click(link);
+
+    await waitFor(
+      () =>
+        expect(
+          container.querySelector('[data-testid="route-B"]')
+        ).not.toBeNull(),
+      { timeout: 3000 }
     );
   });
 });
