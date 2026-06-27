@@ -1,6 +1,0 @@
-# pnpm 11 aborts `install` when a dependency ships an unreviewed build script
-# (postinstall). This app's toolchain (esbuild, workerd, ...) ships its native
-# binaries via platform-specific packages, so those scripts are safe to skip.
-# Downgrade the abort to a warning; run `pnpm approve-builds` to opt a
-# dependency in if you ever need its build step to run.
-strictDepBuilds: false
