@@ -10,7 +10,7 @@ import type { Context } from 'hono';
 import { HonoRequestContext } from '../internal/contexts.js';
 
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => null),
+  getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
 }));
 
@@ -100,9 +100,9 @@ describe('Page errorFallback catches loader errors', () => {
     function PageContent() {
       // State-based: children render eagerly during the pending window, so
       // `useData()` returns undefined until the loader resolves. Guard for it.
-      const data = failing.useData() as { msg: string } | undefined;
-      if (data === undefined) return null;
-      return <p data-testid="content">{data.msg}</p>;
+      const s = failing.useData();
+      if (!('data' in s)) return null;
+      return <p data-testid="content">{s.data.msg}</p>;
     }
 
     render(
@@ -141,9 +141,9 @@ describe('Page renders loader content', () => {
     function PageContent() {
       // State-based: children render eagerly during the pending window, so
       // `useData()` returns undefined until the loader resolves. Guard for it.
-      const data = ok.useData() as { msg: string } | undefined;
-      if (data === undefined) return null;
-      return <p data-testid="content">{data.msg}</p>;
+      const s = ok.useData();
+      if (!('data' in s)) return null;
+      return <p data-testid="content">{s.data.msg}</p>;
     }
 
     render(

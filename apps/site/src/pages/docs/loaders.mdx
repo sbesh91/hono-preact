@@ -35,11 +35,11 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View(({ data, loading }) => {
-  if (loading) return <p>Loading...</p>;
+const MoviesView = dataLoader.View((s) => {
+  if (s.status === 'loading') return <p>Loading...</p>;
   return (
     <ul>
-      {data!.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -66,7 +66,7 @@ export default defineRoutes([
 
 `defineLoader(fn)` returns a typed `LoaderRef<T>`. The Vite `moduleKeyPlugin` rewrites the call at build time to inject `{ __moduleKey, __loaderName }` so the RPC handler can dispatch to the correct function. `definePage(Component)` returns a routable component that self-wraps in `<Page>` with any page-level bindings captured in a closure.
 
-On the client, loaders are state-based: the render function receives `{ data, loading, error, reload }` directly on every render rather than suspending. `data` is `undefined` on a cold load and retains the previous value during a reload (stale-while-revalidate). SSR still awaits each loader before rendering, so the initial HTML arrives with data present.
+On the client, loaders are state-based: the render function receives a `LoaderState<T>` discriminated union on every render rather than suspending. Match on `status` (`loading | success | revalidating | error`): the cold `loading` arm carries no data, while `revalidating` keeps the previous value during a reload (stale-while-revalidate). SSR still awaits each loader before rendering, so the initial HTML arrives in the `success` state. The imperative `reload()` is read via `useReload()`.
 
 ## Example: detail page (using route params)
 
@@ -171,11 +171,11 @@ A single-loader page conventionally uses the key `default`. Multi-loader pages g
 
 ```ts
 loader.View<P = {}>(
-  render: (args: P & { data: Serialize<T> | undefined; loading: boolean; error: Error | null; reload: () => void }) => ComponentChildren
+  render: (args: LoaderState<Serialize<T>> & P) => ComponentChildren
 ): FunctionComponent<P>
 ```
 
-The render function receives `{ data, loading, error, reload }` plus any props declared by the generic `P`. `data` is `undefined` on a cold load before the first response; during a reload it retains the previous value. Branch on `loading` and `error` to render all states yourself. Inside the render function's subtree, `loader.useData()` also works for descendants that need data without prop-drilling.
+The render function receives a `LoaderState<Serialize<T>>` discriminated union plus any props declared by the generic `P`. Switch on `status`: the `loading` arm carries no data, while `success`, `revalidating`, and `error` each carry `data` narrowed to `Serialize<T>` (`revalidating` keeps the previous value during a reload, `error` keeps the last good value). The imperative `reload()` is read via `useReload()`. Inside the render function's subtree, `loader.useData()` returns the same `LoaderState` for descendants that need it without prop-drilling.
 
 **Basic usage:**
 
@@ -185,11 +185,11 @@ import { serverLoaders } from './movies.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const MoviesView = dataLoader.View(({ data, loading }) => {
-  if (loading) return <p>Loading...</p>;
+const MoviesView = dataLoader.View((s) => {
+  if (s.status === 'loading') return <p>Loading...</p>;
   return (
     <ul>
-      {data!.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -202,16 +202,14 @@ export default definePage(MoviesView);
 **Prop passthrough** (using the generic `P`):
 
 ```tsx
-const MovieCard = dataLoader.View<{ highlight: boolean }>(
-  ({ data, loading, highlight }) => {
-    if (loading) return <MovieSkeleton />;
-    return (
-      <article class={highlight ? 'highlight' : undefined}>
-        <h2>{data!.movie.title}</h2>
-      </article>
-    );
-  }
-);
+const MovieCard = dataLoader.View<{ highlight: boolean }>((s) => {
+  if (s.status === 'loading') return <MovieSkeleton />;
+  return (
+    <article class={s.highlight ? 'highlight' : undefined}>
+      <h2>{s.data.movie.title}</h2>
+    </article>
+  );
+});
 
 // Use site:
 <MovieCard highlight={true} />;
@@ -219,15 +217,20 @@ const MovieCard = dataLoader.View<{ highlight: boolean }>(
 
 **Error handling inside the render function:**
 
-The `error` argument is non-null on a fetch error. Use `reload` to let the user retry:
+When the loader rejects, the status is `error`; read `reload` from `useReload()` to let the user retry:
 
 ```tsx
-const StatsView = statsLoader.View(({ data, loading, error, reload }) => {
-  if (loading) return <StatsSkeleton />;
-  if (error) return <button onClick={reload}>Retry</button>;
-  return <p>Count: {data!.count}</p>;
+import { useReload } from 'hono-preact';
+
+const StatsView = statsLoader.View((s) => {
+  const { reload } = useReload();
+  if (s.status === 'loading') return <StatsSkeleton />;
+  if (s.status === 'error') return <button onClick={reload}>Retry</button>;
+  return <p>Count: {s.data.count}</p>;
 });
 ```
+
+This inline `error` arm renders for a **reload that fails after the first load already succeeded** (stale-while-error: the prior `data` stays available alongside the error, so you can keep the last-good UI). A loader's **cold first-load** rejection is different: it fails before any value settles, so it routes to the loader's error boundary and the page-level `errorFallback` instead, and the render function is never called with that cold error. See [Loading States](/docs/loading-states) for the cold-error-versus-stale-error distinction.
 
 ## Composing multiple loaders per route
 
@@ -257,23 +260,28 @@ export const serverLoaders = {
 
 ```tsx
 // src/pages/movie.tsx
-import { definePage } from 'hono-preact';
+import { definePage, useReload } from 'hono-preact';
 import { serverLoaders } from './movie.server.js';
 
 const { summary, cast, similar } = serverLoaders;
 
-const Summary = summary.View(({ data, loading, error, reload }) => {
-  if (loading) return <SummarySkeleton />;
-  if (error) return <ErrorBox onRetry={reload} />;
-  return <SummaryCard data={data!} />;
+const Summary = summary.View((s) => {
+  const { reload } = useReload();
+  if (s.status === 'loading') return <SummarySkeleton />;
+  if (s.status === 'error') return <ErrorBox onRetry={reload} />;
+  return <SummaryCard data={s.data} />;
 });
 
-const Cast = cast.View(({ data, loading }) =>
-  loading ? <CastSkeleton /> : <CastList items={data!} />
+const Cast = cast.View((s) =>
+  s.status === 'loading' ? <CastSkeleton /> : <CastList items={s.data} />
 );
 
-const Similar = similar.View(({ data, loading }) =>
-  loading ? <SimilarSkeleton /> : <SimilarCarousel items={data!} />
+const Similar = similar.View((s) =>
+  s.status === 'loading' ? (
+    <SimilarSkeleton />
+  ) : (
+    <SimilarCarousel items={s.data} />
+  )
 );
 
 function MovieDetail() {
@@ -305,11 +313,11 @@ function Header() {
 }
 
 function HeaderWithSummary() {
-  const { data, loading } = summary.useData();
+  const s = summary.useData();
   return (
     <header>
       <BreadcrumbTrail />
-      {loading ? <Skeleton /> : <h1>{data!.title}</h1>}
+      {s.status === 'loading' ? <Skeleton /> : <h1>{s.data.title}</h1>}
       <ActionsBar />
     </header>
   );
@@ -369,8 +377,8 @@ export const serverLoaders = {
 // src/pages/movies/layout.tsx
 import { serverLoaders } from './layout.server.js';
 
-const Feed = serverLoaders.activity.View(({ data, loading }) =>
-  loading ? null : <ActivitySidebar events={data!} />
+const Feed = serverLoaders.activity.View((s) =>
+  s.status === 'loading' ? null : <ActivitySidebar events={s.data} />
 );
 
 export default function MoviesLayout({
@@ -457,8 +465,12 @@ import { serverLoaders } from './movie.server.js';
 
 const { default: movieLoader } = serverLoaders;
 
-const MovieView = movieLoader.View(({ data, loading }) =>
-  loading ? <MovieSkeleton /> : <article>{data!.movie.title}</article>
+const MovieView = movieLoader.View((s) =>
+  s.status === 'loading' ? (
+    <MovieSkeleton />
+  ) : (
+    <article>{s.data.movie.title}</article>
+  )
 );
 
 function MovieWrapper(props: WrapperProps) {
@@ -511,7 +523,7 @@ A page is a file pair:
 2. **Hydration (first load):** the client reads that embedded data. No fetch is fired.
 3. **Client-side navigation:** the Vite plugin replaces the `serverLoaders` import with a Proxy stub. Accessing `serverLoaders.name` returns a `LoaderRef` whose RPC stub POSTs `{ module, loader, location }` to `POST /__loaders`. The server runs the real function and returns JSON.
 
-Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: `loader.useData()` and the `.View()` render argument are typed `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error. The same `Serialize<T>` applies to action results (`useAction().data`, `<Form onSuccess>`, `useActionResult()`).
+Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: the value carried by `loader.useData()` and the `.View()` render argument (in the data-bearing arms of the `LoaderState` union) is `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error. The same `Serialize<T>` applies to action results (`useAction().data`, `<Form onSuccess>`, `useActionResult()`).
 
 ## Timeouts
 

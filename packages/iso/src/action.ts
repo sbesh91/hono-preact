@@ -14,6 +14,7 @@ import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
+import { toError } from './internal/to-error.js';
 
 export type ActionRef<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -495,7 +496,7 @@ export function useAction<
 
         applyInvalidate(currentOptions?.invalidate);
       } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
+        const e = toError(err);
         // Write to the store only for unclassified errors (network failures,
         // parse errors). Per-branch errors set outcomeRecorded before throwing.
         if (!outcomeRecorded) {

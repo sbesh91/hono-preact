@@ -1,8 +1,9 @@
 import type { ComponentChildren } from 'preact';
-import { createContext } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { useContext, useId } from 'preact/hooks';
+import { useContext, useId, useMemo } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
+import { toStreamState } from '../loader-state.js';
+import type { LoaderState, StreamState } from '../loader-state.js';
 import { ReloadContext } from '../reload-context.js';
 import {
   ActiveLoaderIdContext,
@@ -14,15 +15,12 @@ import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
+import type { HydrationAnchor } from './envelope.js';
 import {
   useLoaderRunner,
   type AccumulateOptions,
-  type StreamStatus,
 } from './use-loader-runner.js';
 export { serializeLocationForCache } from './cache-key.js';
-
-/** Streaming status for a `.View` consuming a streaming/`live` loader. */
-export const LoaderStatusContext = createContext<StreamStatus>('connecting');
 
 /**
  * SERVER-ONLY suspension carrier (Mechanism B, spike-verified in
@@ -53,15 +51,23 @@ function DataReader<T>({
   children: ComponentChildren;
 }) {
   const raw = reader.read();
-  // Match LoaderHost's client-side `viewData` coercion: an accumulating (`live`)
-  // consumer always expects a valid accumulator, but a live loader never runs on
-  // the server (its reader stub resolves to `undefined`), so surface
-  // `accumulate.initial` instead of `undefined` for that SSR shell.
-  const data =
-    accumulate && raw === undefined ? (accumulate.initial as T) : raw;
+  // Project to the same public union the client carries on context. The server
+  // render is always settled (the reader awaited the value): a non-live loader
+  // is `success`; a live loader's stub resolves to `undefined`, which projects
+  // to `connecting` (the client reconnects on mount). Built structurally, no
+  // `data === undefined` test.
+  const state: LoaderState<T> | StreamState<T> = accumulate
+    ? toStreamState('connecting', { present: false }, null)
+    : { status: 'success', data: raw };
+  // Live loaders never run on the server; their reader resolves to undefined.
+  // The client reconnects on mount, so there is no baked server value to
+  // anchor. Non-live loaders resolve and bake their value into data-loader.
+  const anchor: HydrationAnchor = accumulate
+    ? { kind: 'none' }
+    : { kind: 'data', value: raw };
   return (
-    <LoaderDataContext.Provider value={{ data, loading: false }}>
-      <Envelope>{children}</Envelope>
+    <LoaderDataContext.Provider value={state}>
+      <Envelope anchor={anchor}>{children}</Envelope>
     </LoaderDataContext.Provider>
   );
 }
@@ -108,41 +114,63 @@ export function LoaderHost<T>({
   // before the value lands. So the server path additionally suspends on the
   // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
   // letting `renderToStringAsync` await the loader and bake the resolved value.
-  const { data, loading, error, reload, status, reader } = useLoaderRunner<T>(
+  const { view, reloading, reload, reader } = useLoaderRunner<T>(
     loaderRef,
     location,
     id,
     accumulate
   );
 
-  // For an accumulating (`live`) consumer the render fn always expects a valid
-  // accumulator, so during the connecting window (before the first chunk, and on
-  // SSR where a live loader never runs) surface `accumulate.initial` rather than
-  // the runner's `undefined`. A non-accumulate loader surfaces `undefined` while
-  // it is loading, which the render fn reads alongside `loading === true`.
-  const viewData =
-    accumulate && data === undefined ? (accumulate.initial as T) : data;
+  // The runner builds the public union (or a cold-error signal) STRUCTURALLY;
+  // `loader.tsx` only ROUTES it (review #6). `ViewRenderer` / `useData()` READ
+  // the union off context; nothing re-projects. `error` for `LoaderErrorContext`
+  // / `errorFallback` is read off the view discriminant (cold error, or the
+  // stale-error arm), never re-derived from `data === undefined`.
+  const error: Error | null =
+    view.kind === 'coldError'
+      ? view.error
+      : view.state.status === 'error'
+        ? view.state.error
+        : null;
 
-  // A COLD error: the load failed before any data arrived (`data` is the RAW
-  // runner value, undefined here). The old Suspense path threw the reader so an
-  // error boundary caught it; the state path surfaces the error without throwing,
-  // so reproduce that propagation explicitly. A POST-first-chunk error (`data`
-  // present) is NOT cold: keep the last-good content visible and let the render
-  // fn read the error via `useError()`/`status === 'error'` (stale-while-error).
+  // Stabilize the renderable union's REFERENCE across re-renders that do not
+  // change the loader state, so memoized `useData()` consumers stay stable
+  // (review #7). The runner builds a fresh `view.state` each render; this
+  // `useMemo` keyed on its fields returns the cached reference when nothing
+  // changed. `null` on a cold error (which routes to the boundary, not context).
+  const renderState = view.kind === 'render' ? view.state : null;
+  const memoStatus = renderState ? renderState.status : null;
+  const memoData =
+    renderState && 'data' in renderState ? renderState.data : undefined;
+  const memoError =
+    renderState && 'error' in renderState ? renderState.error : null;
+  const viewState = useMemo(
+    () => renderState,
+    [memoStatus, memoData, memoError]
+  );
+
+  // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The
+  // old Suspense path threw the reader so an error boundary caught it; the state
+  // path surfaces the error without throwing, so reproduce that propagation
+  // explicitly. The runner already decided this STRUCTURALLY (the cold `error`
+  // phase -> `view.kind === 'coldError'`), so a real resolve-to-`undefined` (a
+  // value-bearing phase) is never mistaken for a cold failure, and a POST-settle
+  // (stale) error stays in-view via the `error` arm / `useError()`. Streaming
+  // (`accumulate`) cold errors are NEVER `coldError`; they surface in-view via
+  // the `StreamState.error` arm.
   //
-  // Server-only: `coldError` is always false on the first (and only) server
+  // Server-only: `view.kind` is always `render` on the first (and only) server
   // render of `LoaderHost`, because runner state has not updated yet. A cold
   // failure on the server surfaces by `reader.read()` rethrowing the rejection
   // from inside `DataReader`, which the `ErrorBoundary` wrap below (or an outer
-  // page boundary) catches, mirroring the client's `throw error` propagation.
-  const coldError = error != null && data === undefined;
+  // page boundary) catches, mirroring the client's `throw` propagation.
 
   // SERVER (`!isBrowser()`): suspend on the stable reader from a SEPARATE child
   // so render-to-string awaits the loader and bakes the resolved value. CLIENT:
   // render the view directly from runner state (never calls `reader.read()`).
   const content = isBrowser() ? (
-    <LoaderDataContext.Provider value={{ data: viewData, loading }}>
-      <Envelope>{children}</Envelope>
+    <LoaderDataContext.Provider value={viewState}>
+      <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
     </LoaderDataContext.Provider>
   ) : (
     <DataReader reader={reader} accumulate={accumulate}>
@@ -151,19 +179,19 @@ export function LoaderHost<T>({
   );
 
   let body: ComponentChildren;
-  if (coldError) {
+  if (view.kind === 'coldError') {
     if (errorFallback != null) {
       // Local error UI. `reset` re-enters the loader (clears the error and
       // refetches), mirroring the old ErrorBoundary `reset` semantics.
       body =
         typeof errorFallback === 'function'
-          ? errorFallback(error, reload)
+          ? errorFallback(view.error, reload)
           : errorFallback;
     } else {
       // No local handler: re-throw so an OUTER boundary (a page-level
       // `errorFallback` / `RouteBoundary`) catches it, exactly as the thrown
       // Suspense reader propagated up the tree before.
-      throw error;
+      throw view.error;
     }
   } else if (errorFallback != null) {
     // No cold error (loading, resolved, or a stale post-chunk error): render the
@@ -178,11 +206,9 @@ export function LoaderHost<T>({
   return (
     <LoaderIdContext.Provider value={id}>
       <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-        <ReloadContext.Provider value={{ reload, reloading: loading }}>
+        <ReloadContext.Provider value={{ reload, reloading }}>
           <LoaderErrorContext.Provider value={error}>
-            <LoaderStatusContext.Provider value={status}>
-              {body}
-            </LoaderStatusContext.Provider>
+            {body}
           </LoaderErrorContext.Provider>
         </ReloadContext.Provider>
       </ActiveLoaderIdContext.Provider>

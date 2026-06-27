@@ -1,6 +1,7 @@
 import { readSSE } from './sse-decoder.js';
 import { TimeoutError } from '../action.js';
 import { LOADERS_RPC_PATH } from './contract.js';
+import { toError } from './to-error.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -285,6 +286,6 @@ async function pumpStream<T>(
     }
   } catch (err) {
     if (signal.aborted) return;
-    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+    callbacks.onError(toError(err));
   }
 }

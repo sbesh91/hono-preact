@@ -64,9 +64,9 @@ describe('loader.View (accumulating / streaming form)', () => {
       live: true,
     });
     const Feed = ref.View<number[]>(
-      ({ data, status }) => (
+      (s) => (
         <p data-testid="out">
-          {data.join(',')}|{status}
+          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
         </p>
       ),
       {
@@ -105,21 +105,25 @@ describe('loader.View (accumulating / streaming form)', () => {
       live: true,
     });
     const Feed = ref.View<number[]>(
-      ({ data, status, reload }) => (
-        <div>
-          <p data-testid="out">
-            {/* If reload overwrote Acc with a raw chunk, `data` is an object,
-                not an array, and this surfaces it instead of crashing. */}
-            {Array.isArray(data)
-              ? data.join(',')
-              : `NOT-ARRAY:${JSON.stringify(data)}`}
-            |{status}
-          </p>
-          <button data-testid="reload" onClick={reload}>
-            reload
-          </button>
-        </div>
-      ),
+      (s) => {
+        const { reload } = useReload();
+        const data = s.status === 'connecting' ? [] : s.data;
+        return (
+          <div>
+            <p data-testid="out">
+              {/* If reload overwrote Acc with a raw chunk, `data` is an object,
+                  not an array, and this surfaces it instead of crashing. */}
+              {Array.isArray(data)
+                ? data.join(',')
+                : `NOT-ARRAY:${JSON.stringify(data)}`}
+              |{s.status}
+            </p>
+            <button data-testid="reload" onClick={reload}>
+              reload
+            </button>
+          </div>
+        );
+      },
       {
         initial: [],
         reduce: (acc, chunk) => [...acc, chunk.n],
@@ -149,6 +153,85 @@ describe('loader.View (accumulating / streaming form)', () => {
     );
     expect(screen.getByTestId('out').textContent).not.toContain('NOT-ARRAY');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('reload() reconnect projects connecting BEFORE the next chunk arrives', async () => {
+    // Finding 1: a live reload surfaces data = accumulate.initial ([]) together
+    // with status 'connecting'. The render fn must observe `connecting`
+    // (mirroring a fresh mount), not `open` with the empty seed. Hold the
+    // reload's fetch pending so the reconnect stays in the connecting window for
+    // a deterministic assertion.
+    const second = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      // First subscribe: folds to [1,2], then closes.
+      .mockResolvedValueOnce(
+        dripSseResponse(['data: {"n":1}\n\n', 'data: {"n":2}\n\n'])
+      )
+      // After reload: a stream we keep pending to hold the connecting window.
+      .mockImplementationOnce(() => second.promise);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
+      __moduleKey: 'test-view-reload-connecting',
+      live: true,
+    });
+    const Feed = ref.View<number[]>(
+      (s) => {
+        const { reload } = useReload();
+        const data = s.status === 'connecting' ? [] : s.data;
+        return (
+          <div>
+            <p data-testid="out">
+              {data.join(',')}|{s.status}
+            </p>
+            <button data-testid="reload" onClick={reload}>
+              reload
+            </button>
+          </div>
+        );
+      },
+      {
+        initial: [],
+        reduce: (acc, chunk) => [...acc, chunk.n],
+      }
+    );
+
+    render(
+      <LocationProvider>
+        <RouteLocationsProvider
+          moduleKey="test-view-reload-connecting"
+          location={LOC}
+        >
+          <Feed />
+        </RouteLocationsProvider>
+      </LocationProvider>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('1,2|closed')
+    );
+
+    // Reload: its fetch (second) stays pending, so the reconnect holds in the
+    // connecting window rather than racing to the next chunk.
+    await act(async () => {
+      screen.getByTestId('reload').click();
+    });
+
+    // The render fn observes status 'connecting' during the reconnect, BEFORE
+    // any chunk re-arrives. Without the projection fix this would read 'open'
+    // (the empty `initial` seed surfaced as data with no chunk yet).
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('|connecting')
+    );
+
+    // Resolve the held stream; the fresh fold wins and the stream closes.
+    await act(async () => {
+      second.resolve(dripSseResponse(['data: {"n":9}\n\n']));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('out')).toHaveTextContent('9|closed')
+    );
   });
 
   it('drains a reload() queued during the initial pre-first-chunk window', async () => {
@@ -185,10 +268,10 @@ describe('loader.View (accumulating / streaming form)', () => {
     }
 
     const Feed = ref.View<number[]>(
-      ({ data, status }) => (
+      (s) => (
         <p data-testid="out">
-          {data.join(',')}|{status}
-          {status === 'connecting' ? <ConnectingReloader /> : null}
+          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
+          {s.status === 'connecting' ? <ConnectingReloader /> : null}
         </p>
       ),
       {

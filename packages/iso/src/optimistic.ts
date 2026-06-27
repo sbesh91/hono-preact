@@ -1,4 +1,5 @@
-import { useCallback, useReducer, useRef } from 'preact/hooks';
+import { useCallback, useRef } from 'preact/hooks';
+import { useForceUpdate } from './internal/use-force-update.js';
 
 type Status = 'active' | 'ready';
 type Entry<TPayload> = { id: number; payload: TPayload; status: Status };
@@ -26,7 +27,7 @@ export function useOptimistic<TBase, TPayload>(
   const queueRef = useRef<Entry<TPayload>[]>([]);
   const lastBaseRef = useRef(base);
   const idRef = useRef(0);
-  const [, forceRender] = useReducer<number, void>((c) => c + 1, 0);
+  const forceRender = useForceUpdate();
   const transitionRef = useRef(options?.transition === true);
   transitionRef.current = options?.transition === true;
 

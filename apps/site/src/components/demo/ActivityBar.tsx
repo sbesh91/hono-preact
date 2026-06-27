@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
-import type { StreamStatus } from 'hono-preact';
+import type { StreamState, StreamStatus } from 'hono-preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
 import type { TaskStatus } from '../../demo/data.js';
 import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
@@ -47,6 +47,23 @@ export function ConnectingBar() {
         <span class="h-2 w-2 shrink-0 rounded-full bg-muted" aria-hidden />
         <span class="min-w-0 flex-1 truncate text-muted">
           Listening for activity…
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Cold-error affordance: the live stream's connect rejected before any chunk, so
+// there is no accumulated feed to show. Mirrors ConnectingBar's shell (a red dot
+// instead of muted) so the bar stays in place rather than dereferencing the
+// absent `events`. Exported for the error render test.
+export function ErrorBar() {
+  return (
+    <div class={SHELL}>
+      <div class="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13px]">
+        <span class="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden />
+        <span class="min-w-0 flex-1 truncate text-muted">
+          Activity stream disconnected.
         </span>
       </div>
     </div>
@@ -124,8 +141,34 @@ function Feed({
 // LoaderHost (Suspense + useId), so the bar hydrates cleanly inside the lazy
 // projects-shell layout (no orphan, no isBrowser guard). On SSR the loader
 // never runs and the fallback renders; the client connects and folds chunks.
+// The `.View` render fn, pulled out as a named export so the SSR regression
+// guard (ActivityBar.ssr.test.tsx) can drive the REAL render fn + Feed through
+// a real (keyed) live loader, exactly as ActivityBar does.
+//
+// `connecting` carries no data (SSR and pre-first-chunk) and a COLD `error`
+// (the connect rejected before any chunk) carries no data either, so both MUST
+// short-circuit before Feed: Feed dereferences `events[0]`/`events.map`, so
+// handing it `undefined` 500s the SSR. A POST-chunk `error` still carries the
+// last-good `data`, so it falls through to Feed (the muted status dot reflects
+// the disconnect). Feed therefore only ever sees a real accumulated
+// `ActivityEvent[]` (open/closed/error-with-data arms).
+export function renderActivityBar(s: StreamState<ActivityEvent[]>) {
+  if (s.status === 'open' || s.status === 'closed')
+    return <Feed events={s.data} status={s.status} />;
+  // A POST-chunk error keeps the last-good feed visible (the muted status dot
+  // reflects the disconnect); a COLD error carries no `data`, so show the error
+  // bar instead of handing Feed an `undefined` events array.
+  if (s.status === 'error')
+    return s.data !== undefined ? (
+      <Feed events={s.data} status={s.status} />
+    ) : (
+      <ErrorBar />
+    );
+  return <ConnectingBar />;
+}
+
 export const ActivityBar = activityLoader.View<ActivityEvent[]>(
-  ({ data, status }) => <Feed events={data} status={status} />,
+  renderActivityBar,
   {
     initial: [],
     reduce: accumulateActivity,

@@ -47,17 +47,19 @@ const countLoader = serverLoaders.count;
 // `initial` seeds the value before the first chunk arrives;
 // `reduce` folds each chunk. For a simple replace-on-every-push pattern,
 // reduce just returns the latest chunk.
-// Branch on `status === 'connecting'` for the pre-first-chunk affordance.
+// Branch on `status`: `connecting` (pre-first-chunk) and a cold `error` (the
+// connect failed before any chunk) carry no data, so guard them first.
 const CountDisplay = countLoader.View<number>(
-  ({ data, status }) =>
-    status === 'connecting' ? (
-      <p>Connecting...</p>
-    ) : (
+  (s) => {
+    if (s.status === 'error') return <p>Disconnected.</p>;
+    if (s.status === 'connecting') return <p>Connecting...</p>;
+    return (
       <div>
-        <p>Count: {data}</p>
-        <p>Status: {status}</p>
+        <p>Count: {s.data}</p>
+        <p>Status: {s.status}</p>
       </div>
-    ),
+    );
+  },
   {
     initial: 0,
     reduce: (_acc, chunk) => chunk,

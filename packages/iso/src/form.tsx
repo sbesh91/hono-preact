@@ -16,6 +16,7 @@ import {
 import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
+import { toError } from './internal/to-error.js';
 import { collectFormData } from './internal/form-data.js';
 import {
   setLastActionResult,
@@ -355,9 +356,7 @@ export function Form<TPayload, TResult>({
           message: err instanceof Error ? err.message : String(err),
           submittedPayload: payload,
         });
-        lifecycle.current.onError?.(
-          err instanceof Error ? err : new Error(String(err))
-        );
+        lifecycle.current.onError?.(toError(err));
       } finally {
         setPending(false);
         endSubmit(moduleKey, actionName);

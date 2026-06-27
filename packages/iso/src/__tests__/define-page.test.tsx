@@ -12,7 +12,7 @@ import { HonoRequestContext } from '../internal/contexts.js';
 const fakeC = {} as Context;
 
 vi.mock('../preload.js', () => ({
-  getPreloadedData: vi.fn(() => null),
+  getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
 }));
 
@@ -66,8 +66,8 @@ describe('definePage', () => {
 
     // State-based: the render fn runs eagerly during the pending window with
     // `data === undefined`, so guard for it (no separate Suspense fallback).
-    const Body = loader.View(({ data }) =>
-      data === undefined ? <p>loading</p> : <p data-testid="msg">{data.msg}</p>
+    const Body = loader.View((s) =>
+      'data' in s ? <p data-testid="msg">{s.data.msg}</p> : <p>loading</p>
     );
 
     function PageBody() {

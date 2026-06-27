@@ -42,9 +42,13 @@ For pages that need data, import `serverLoaders` from the sibling `.server.ts` a
 import { definePage } from 'hono-preact';
 import { serverLoaders } from './about.server.js';
 
-const AboutView = serverLoaders.default.View(({ data }) => (
-  <section>{/* ... */}</section>
-));
+const AboutView = serverLoaders.default.View((s) =>
+  s.status === 'loading' ? (
+    <p>Loading...</p>
+  ) : (
+    <section>{/* render s.data */}</section>
+  )
+);
 
 export default definePage(AboutView);
 ```

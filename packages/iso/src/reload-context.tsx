@@ -3,7 +3,7 @@ import { useContext } from 'preact/hooks';
 
 export type ReloadContextValue = {
   reload: () => void;
-  /** True while the loader is fetching (cold load or reload). */
+  /** True while an explicit reload/revalidation is in flight (not a cold initial load). */
   reloading: boolean;
 };
 

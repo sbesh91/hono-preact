@@ -34,7 +34,7 @@ For byte-level piping (e.g. forwarding a server-sent event feed without parsing)
 
 ### Consumer shape
 
-Use `.View()` to create a component that re-renders on each new chunk. The render function receives `{ data, loading, error, reload }`: `loading` is `true` before the first chunk arrives, and `data` holds the latest yielded value after that.
+Use `.View()` to create a component that re-renders on each new chunk. The render function receives a `LoaderState<T>` you switch on: the status is `loading` before the first chunk arrives, then `success` once `data` holds the latest yielded value (a fresh `success` per chunk), and `error` if the stream fails after a chunk (still carrying the last good `data`). `reload` is read via `useReload()`.
 
 ```tsx
 // src/pages/dashboard.tsx
@@ -43,13 +43,13 @@ import { serverLoaders } from './dashboard.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const DashboardView = dataLoader.View(({ data, loading, error, reload }) => {
-  if (loading) return <p>Loading...</p>;
+const DashboardView = dataLoader.View((s) => {
+  if (s.status === 'loading') return <p>Loading...</p>;
   return (
     <>
-      {error && <p>Live updates paused: {error.message}</p>}
+      {s.status === 'error' && <p>Live updates paused: {s.error.message}</p>}
       <p>
-        Count: {data!.count}, load: {data!.load}
+        Count: {s.data.count}, load: {s.data.load}
       </p>
     </>
   );
@@ -58,7 +58,7 @@ const DashboardView = dataLoader.View(({ data, loading, error, reload }) => {
 export default definePage(DashboardView);
 ```
 
-`loader.useData()` always returns the latest loader state. Components re-render on each new chunk automatically.
+`loader.useData()` always returns the latest `LoaderState`. Components re-render on each new chunk automatically.
 
 See `/demo/projects/:projectId/issues/:issueId` for a running example of multi-loader streaming: the issue detail page declares multiple loaders in `serverLoaders`, each with its own `.View()` component streaming independently.
 
@@ -88,12 +88,12 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast } = serverLoaders;
 
-const Summary = summary.View(({ data, loading }) =>
-  loading ? <SummarySkeleton /> : <SummaryCard data={data!} />
+const Summary = summary.View((s) =>
+  s.status === 'loading' ? <SummarySkeleton /> : <SummaryCard data={s.data} />
 );
 
-const Cast = cast.View(({ data, loading }) =>
-  loading ? <CastSkeleton /> : <CastList items={data!} />
+const Cast = cast.View((s) =>
+  s.status === 'loading' ? <CastSkeleton /> : <CastList items={s.data} />
 );
 
 function MovieDetail() {
@@ -120,17 +120,20 @@ The first-load experience is full SSR with progressive enhancement: the user see
 
 ## Errors
 
-**Before the first chunk:** `loading` is `true` and `error` is null. If the stream errors before yielding any value, `loading` becomes `false` and `error` is set. The error boundary above catches render-time throws.
+**Before the first chunk:** the status is `loading`. A stream that errors before yielding any value is a cold error: it surfaces through the loader's error boundary (and the page `errorFallback`), not the render function's `error` arm.
 
-**After the first chunk:** `error` in the `.View()` render function surfaces the error; `data` keeps returning the last good value. The page stays mounted with stale data visible.
+**After the first chunk:** the `error` status arm surfaces the error while still carrying the last good `data`, so the page stays mounted with stale data visible.
 
 ```tsx
-const StatsView = dataLoader.View(({ data, error }) => (
-  <>
-    {error && <p>Live updates paused: {error.message}</p>}
-    <p>Visitors: {data.visitors}</p>
-  </>
-));
+const StatsView = dataLoader.View((s) => {
+  if (s.status === 'loading') return <StatsSkeleton />;
+  return (
+    <>
+      {s.status === 'error' && <p>Live updates paused: {s.error.message}</p>}
+      <p>Visitors: {s.data.visitors}</p>
+    </>
+  );
+});
 ```
 
 ## Abort and cleanup
@@ -242,4 +245,4 @@ Each chunk arrives as a `data:` line followed by a blank line (standard SSE fram
 
 - [Server Loaders](/docs/loaders): non-streaming loaders.
 - [Server Actions](/docs/actions): streaming actions.
-- [Loading States](/docs/loading-states): branching on `loading` while a stream fills.
+- [Loading States](/docs/loading-states): switching on the `LoaderState` union while a stream fills.

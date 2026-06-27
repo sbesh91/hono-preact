@@ -1,6 +1,6 @@
 # Loading States
 
-Show a loading UI during client-side navigation by branching on the `loading` argument inside `loader.View()`. While a fetch is in flight, `loading` is `true` and `data` may be `undefined` (cold load) or the previous value (reload). Render your own loading affordance for each state; the framework supplies the state, not the UI.
+Show a loading UI during client-side navigation by switching on the `LoaderState` the `loader.View()` render function receives. It is a discriminated union with four `status` variants: `loading` (no data yet), `success`, `revalidating` (a background refresh with the prior data still present), and `error`. Match on `status` and render your own affordance for each; the framework supplies the state, not the UI.
 
 ## Basic usage
 
@@ -11,11 +11,12 @@ import { serverLoaders } from './movies.server.js';
 
 const moviesLoader = serverLoaders.default;
 
-const MoviesView = moviesLoader.View(({ data, loading }) => {
-  if (loading) return <p>Loading...</p>;
+const MoviesView = moviesLoader.View((s) => {
+  if (s.status === 'loading') return <p>Loading...</p>;
+  // success | revalidating | error all carry `data`, narrowed to the value type.
   return (
     <ul>
-      {data!.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -34,21 +35,21 @@ export default definePage(MoviesView);
 }
 ```
 
-`loading` is `true` only on client-side navigation; SSR and first-load hydration render with data already present, so `loading` is `false` on the initial paint.
+The `loading` status appears only on a client-side navigation with no cached value; SSR and first-load hydration render with data already present, so the initial paint is `success`, never `loading`.
 
-## When loading is true
+## When each status appears
 
-| Navigation                      | `loading` on entry                                  |
-| ------------------------------- | --------------------------------------------------- |
-| SSR (first load)                | `false`. Data is preloaded into the HTML.           |
-| Hydration                       | `false`. Client reads from `data-loader` attribute. |
-| Client-side nav (cache miss)    | `true`, until the loader resolves.                  |
-| Client-side nav (cache hit)     | `false`. Cached data renders immediately.           |
-| Reload (stale-while-revalidate) | `true`, but `data` retains the previous value.      |
+| Navigation                      | `status` on entry                                         |
+| ------------------------------- | --------------------------------------------------------- |
+| SSR (first load)                | `success`. Data is preloaded into the HTML.               |
+| Hydration                       | `success`. Client reads from the `data-loader` attribute. |
+| Client-side nav (cache miss)    | `loading`, until the loader resolves (then `success`).    |
+| Client-side nav (cache hit)     | `success`. Cached data renders immediately.               |
+| Reload (stale-while-revalidate) | `revalidating`. `data` retains the previous value.        |
 
 ## Using a skeleton
 
-Branch on `loading` and return a skeleton component:
+Match the `loading` status and return a skeleton component:
 
 ```tsx
 const MoviesSkeleton = () => (
@@ -59,11 +60,11 @@ const MoviesSkeleton = () => (
   </ul>
 );
 
-const MoviesView = moviesLoader.View(({ data, loading }) => {
-  if (loading) return <MoviesSkeleton />;
+const MoviesView = moviesLoader.View((s) => {
+  if (s.status === 'loading') return <MoviesSkeleton />;
   return (
     <ul>
-      {data!.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -73,38 +74,46 @@ const MoviesView = moviesLoader.View(({ data, loading }) => {
 
 ## Stale-while-revalidate
 
-During a reload, `loading` is `true` but `data` holds the previous value. This lets you keep content visible while refreshing:
+During a reload the status is `revalidating`: a refresh is in flight, but `data` still holds the previous value. Render the cold-load placeholder only for `loading`, and show a subtle indicator for `revalidating` so the current content stays visible:
 
 ```tsx
-const MoviesView = moviesLoader.View(({ data, loading }) => (
-  <div>
-    {loading && <span class="text-sm text-muted">Refreshing...</span>}
-    <ul>
-      {(data?.movies.results ?? []).map((m) => (
-        <li key={m.id}>{m.title}</li>
-      ))}
-    </ul>
-  </div>
-));
+const MoviesView = moviesLoader.View((s) => {
+  if (s.status === 'loading') return <MoviesSkeleton />;
+  return (
+    <div>
+      {s.status === 'revalidating' && (
+        <span class="text-sm text-muted">Refreshing...</span>
+      )}
+      <ul>
+        {s.data.movies.results.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+    </div>
+  );
+});
 ```
 
 ## Error handling inside the render function
 
-The `error` argument is non-null when the loader rejects (either on the initial load or on a re-fetch). Use `reload` to let the user retry:
+When the loader rejects, the status is `error`. That arm also carries the last good `data` (so prior content can stay visible), and `reload` from `useReload()` lets the user retry:
 
 ```tsx
-const MoviesView = moviesLoader.View(({ data, loading, error, reload }) => {
-  if (loading) return <p>Loading...</p>;
-  if (error)
+import { useReload } from 'hono-preact';
+
+const MoviesView = moviesLoader.View((s) => {
+  const { reload } = useReload();
+  if (s.status === 'loading') return <p>Loading...</p>;
+  if (s.status === 'error')
     return (
       <div role="alert">
-        <p>Couldn't load movies: {error.message}</p>
+        <p>Couldn't load movies: {s.error.message}</p>
         <button onClick={reload}>Retry</button>
       </div>
     );
   return (
     <ul>
-      {data!.movies.results.map((m) => (
+      {s.data.movies.results.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -112,18 +121,20 @@ const MoviesView = moviesLoader.View(({ data, loading, error, reload }) => {
 });
 ```
 
-## `.View()` render args reference
+A cold error (the very first load fails, with no prior data) is caught by the loader's error boundary and the page-level `errorFallback` before the render function runs, so the `error` arm always carries a `data` value.
 
-The render function receives these args on every render:
+## The `LoaderState` union
 
-| Arg       | Type                        | Description                                                                                                                               |
-| --------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `data`    | `Serialize<T> \| undefined` | The loader's last resolved value. `undefined` on a cold load before the first response. Retained from the previous fetch during a reload. |
-| `loading` | `boolean`                   | `true` while a fetch is in flight (cold load or reload).                                                                                  |
-| `error`   | `Error \| null`             | Non-null when the loader errored. Check this alongside `loading` to show a retry affordance.                                              |
-| `reload`  | `() => void`                | Re-runs the loader immediately.                                                                                                           |
+The render function receives a `LoaderState<T>` discriminated union. Match on `status`:
 
-Plus any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)).
+| `status`         | Fields                               | When                                                                                      |
+| ---------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `'loading'`      | (none)                               | Cold load before the first response. No data yet.                                         |
+| `'success'`      | `data: Serialize<T>`                 | The loader resolved; `data` is the value.                                                 |
+| `'revalidating'` | `data: Serialize<T>`                 | A background refresh is in flight; `data` is the previous value (stale-while-revalidate). |
+| `'error'`        | `error: Error`, `data: Serialize<T>` | The loader rejected; `data` is the last good value.                                       |
+
+In the `success`, `revalidating`, and `error` arms `data` is narrowed to `Serialize<T>`, so there is no `undefined` to guard. The render function also receives any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)). The imperative `reload()` callback is read from `useReload()`, not passed as a render arg (see [Reloading](/docs/reloading)).
 
 ## Page-level error fallback
 

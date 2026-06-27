@@ -6,7 +6,11 @@
 // runtime guard for the non-live + accumulate case (the client `serverLoaders`
 // stub does not carry `live`, so a runtime `!live` check is impossible there).
 import { expectTypeOf } from 'vitest';
-import { defineLoader, type LoaderRef } from '../define-loader.js';
+import {
+  defineLoader,
+  type LoaderRef,
+  type LoaderState,
+} from '../define-loader.js';
 
 async function* gen(): AsyncGenerator<number, void, unknown> {
   yield 1;
@@ -16,13 +20,16 @@ async function* gen(): AsyncGenerator<number, void, unknown> {
 function _liveProbes() {
   const live = defineLoader<number>(gen, { live: true });
 
-  // The accumulating form type-checks; `data` is the caller's Acc.
+  // The accumulating form type-checks; the render arg is the `StreamState<Acc>`
+  // union, whose data-carrying arms expose the caller's Acc.
   live.View<number[]>(
-    (args) => {
-      expectTypeOf(args.data).toEqualTypeOf<number[]>();
-      expectTypeOf(args.status).toEqualTypeOf<
+    (s) => {
+      expectTypeOf(s.status).toEqualTypeOf<
         'connecting' | 'open' | 'closed' | 'error'
       >();
+      if (s.status === 'open' || s.status === 'closed') {
+        expectTypeOf(s.data).toEqualTypeOf<number[]>();
+      }
       return null;
     },
     { initial: [], reduce: (acc) => acc }
@@ -40,30 +47,33 @@ function _liveProbes() {
 function _staticProbes() {
   const stat = defineLoader<{ at: Date }>(async () => ({ at: new Date() }));
 
-  // The single-value form type-checks; `data` is the wire shape `Serialize<T>`
-  // or `undefined` while loading.
-  stat.View((args) => {
-    expectTypeOf(args.data).toEqualTypeOf<{ at: string } | undefined>();
-    expectTypeOf(args.loading).toEqualTypeOf<boolean>();
+  // The single-value form type-checks; the render arg is the discriminated
+  // `LoaderState<Serialize<T>>`, whose data arms expose the wire shape.
+  stat.View((s) => {
+    if (s.status === 'success' || s.status === 'revalidating') {
+      expectTypeOf(s.data).toEqualTypeOf<{ at: string }>();
+    }
     return null;
   });
 
   // @ts-expect-error the accumulating `{ initial, reduce }` form is not available on a non-live loader
   stat.View(() => null, { initial: [] as number[], reduce: (acc) => acc });
 
-  // The single-value affordances are present.
-  expectTypeOf(stat.useData()).toEqualTypeOf<{ at: string }>();
+  // The single-value affordances are present; useData() is the discriminated state.
+  expectTypeOf(stat.useData()).toEqualTypeOf<LoaderState<{ at: string }>>();
 }
 
 // A bare `LoaderRef<T>` defaults to the non-live (single-value) form, so its
 // `.View` is callable directly (the common case, and what quick-start documents).
 // Code that must accept either liveness uses `LoaderRef<T, boolean>` instead.
 function _defaultRefProbes(loader: LoaderRef<{ n: number }>) {
-  loader.View((args) => {
-    expectTypeOf(args.data).toEqualTypeOf<{ n: number } | undefined>();
+  loader.View((s) => {
+    if (s.status === 'success' || s.status === 'revalidating') {
+      expectTypeOf(s.data).toEqualTypeOf<{ n: number }>();
+    }
     return null;
   });
-  expectTypeOf(loader.useData()).toEqualTypeOf<{ n: number }>();
+  expectTypeOf(loader.useData()).toEqualTypeOf<LoaderState<{ n: number }>>();
 }
 
 void _liveProbes;

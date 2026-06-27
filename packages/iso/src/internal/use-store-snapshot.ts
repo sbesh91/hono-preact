@@ -1,21 +1,37 @@
-import { useEffect, useReducer } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
+import { useForceUpdate } from './use-force-update.js';
 
 /**
- * Minimal compat-free `useSyncExternalStore(subscribe, getSnapshot)`. Hand-rolled
- * so the framework never imports preact/compat (which installs global options
- * patches). useReducer force-update driven by `subscribe`; snapshot read on render.
- * Deviation: does not re-read the snapshot at subscribe time. These are synchronous
- * in-memory stores written only by post-mount events, so the tear window is empty.
- *
- * Contract: `subscribe` must be a stable reference. The `useEffect(..., [subscribe])`
- * dep means an unstable `subscribe` (e.g. an inline closure) would re-subscribe every
- * render; both current callers pass module-level functions, which satisfies this.
+ * Compat-free `useSyncExternalStore(subscribe, getSnapshot)`. Hand-rolled so the
+ * framework never imports preact/compat (which installs global options patches).
+ * Faithful to useSyncExternalStore: re-renders only when the snapshot changes by
+ * Object.is, and re-reads at subscribe time to close the commit->effect tear
+ * window. `subscribe` must be a stable reference (both callers pass module-level
+ * functions); `getSnapshot` may be an inline closure (kept in a ref, out of the
+ * effect deps).
  */
 export function useStoreSnapshot<T>(
   subscribe: (onStoreChange: () => void) => () => void,
   getSnapshot: () => T
 ): T {
-  const [, forceUpdate] = useReducer((n: number, _action: void) => n + 1, 0);
-  useEffect(() => subscribe(() => forceUpdate()), [subscribe]);
-  return getSnapshot();
+  const value = getSnapshot();
+  const valueRef = useRef(value);
+  const getSnapshotRef = useRef(getSnapshot);
+  valueRef.current = value;
+  getSnapshotRef.current = getSnapshot;
+  const forceUpdate = useForceUpdate();
+
+  useEffect(() => {
+    const check = () => {
+      const next = getSnapshotRef.current();
+      if (!Object.is(next, valueRef.current)) {
+        valueRef.current = next;
+        forceUpdate();
+      }
+    };
+    check(); // subscribe-time re-read closes the commit->effect tear window
+    return subscribe(check);
+  }, [subscribe]);
+
+  return value;
 }

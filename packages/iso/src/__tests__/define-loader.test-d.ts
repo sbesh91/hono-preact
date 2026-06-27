@@ -1,7 +1,7 @@
 // Type-level assertions for the public `.View()` and `.Boundary` contracts.
 // Run under `pnpm test:types`.
 //
-// SingleValueView render arg: { data: Serialize<T> | undefined; loading: boolean; error: Error | null; reload: () => void }
+// SingleValueView render arg: LoaderState<Serialize<T>> (discriminated on `status`)
 // SingleValueView opts: { errorFallback? } (no `fallback`)
 // AccumulatingView opts: { initial; reduce; errorFallback? } (no `fallback`)
 // Boundary props: { errorFallback?; accumulate?; children } (no `fallback`)
@@ -14,14 +14,21 @@ import {
   type LoaderRef,
 } from '../define-loader.js';
 
-// 1. SingleValueView render arg includes `loading: boolean` and `data: Serialize<T> | undefined`.
+// 1. SingleValueView render arg is the discriminated `LoaderState<Serialize<T>>`.
 function _singleValueRenderArg() {
   const loader = defineLoader<{ n: number }>(async () => ({ n: 1 }));
-  loader.View((args) => {
-    expectTypeOf(args.loading).toEqualTypeOf<boolean>();
-    expectTypeOf(args.data).toEqualTypeOf<{ n: number } | undefined>();
-    expectTypeOf(args.error).toEqualTypeOf<Error | null>();
-    expectTypeOf(args.reload).toEqualTypeOf<() => void>();
+  loader.View((s) => {
+    expectTypeOf(s.status).toEqualTypeOf<
+      'loading' | 'success' | 'revalidating' | 'error'
+    >();
+    // The data-carrying arms expose `Serialize<T>`, narrowed with no cast.
+    if (s.status === 'success' || s.status === 'revalidating') {
+      expectTypeOf(s.data).toEqualTypeOf<{ n: number }>();
+    }
+    if (s.status === 'error') {
+      expectTypeOf(s.error).toEqualTypeOf<Error>();
+      expectTypeOf(s.data).toEqualTypeOf<{ n: number }>();
+    }
     return null;
   });
 }
