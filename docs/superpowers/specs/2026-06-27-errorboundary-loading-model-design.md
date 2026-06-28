@@ -38,22 +38,22 @@ Router (holds [cur, prev])            packages/iso/src/define-routes.tsx (top-le
             -> children = lazy(view)  (throws the module promise)
 ```
 
-- The interposed `PreactIsoErrorBoundary` sets its own `this.__c`, so it is the **nearest** suspense boundary. Both the chain promise (from `HostConsumer.read()`) and the inner lazy view's module promise are caught **here**, locally. preact-iso's `ErrorBoundary` resume is just `err.then(() => this.forceUpdate())` — no hold-alive. So the `Router` never sees the suspension and never holds the outgoing route. Result: tear-to-blank.
+- The interposed `PreactIsoErrorBoundary` sets its own `this.__c`, so it is the **nearest** suspense boundary. Both the chain promise (from `HostConsumer.read()`) and the inner lazy view's module promise are caught **here**, locally. preact-iso's `ErrorBoundary` resume is just `err.then(() => this.forceUpdate())`, no hold-alive. So the `Router` never sees the suspension and never holds the outgoing route. Result: tear-to-blank.
 - Routes **without** page middleware skip `PageMiddlewareHost` entirely (`define-routes.tsx:308`), so the lazy view's promise bubbles straight to the `Router`, which holds the outgoing route alive. This is why the behavior is inconsistent today: plain routes hold alive, guarded routes blank out.
 - **Loader data no longer suspends on the client** (state-based `LoaderState` union, #191). The only client-side suspension left is the middleware chain (and lazy module loads). So the blast radius of this change is the page-middleware suspend path, not the data path.
-- **`RouteBoundary`** (`internal/route-boundary.tsx`, the framework's own `ErrorBoundary`) is rendered **per route**, *inside* the Router: `definePage` wraps each page's `Component` in `<Page>` (which contains `RouteBoundary`), and that wrapped page is the route's lazy view (`define-page.tsx`, `page.tsx:36`). The client mounts only `LocationProvider > Routes(Router)` (`packages/vite/src/client-entry.ts`) — there is **no** `RouteBoundary` above the Router. `RouteBoundary` does **not** set `this.__c`, so it is transparent to thrown promises regardless; it catches real errors from the route's own subtree and rethrows framework outcomes (so the server's `renderPage` can translate them). Because it sits *below* `HostConsumer`, it never sees the chain promise (which originates at `HostConsumer` and bubbles up). It is unaffected by this change.
+- **`RouteBoundary`** (`internal/route-boundary.tsx`, the framework's own `ErrorBoundary`) is rendered **per route**, *inside* the Router: `definePage` wraps each page's `Component` in `<Page>` (which contains `RouteBoundary`), and that wrapped page is the route's lazy view (`define-page.tsx`, `page.tsx:36`). The client mounts only `LocationProvider > Routes(Router)` (`packages/vite/src/client-entry.ts`), there is **no** `RouteBoundary` above the Router. `RouteBoundary` does **not** set `this.__c`, so it is transparent to thrown promises regardless; it catches real errors from the route's own subtree and rethrows framework outcomes (so the server's `renderPage` can translate them). Because it sits *below* `HostConsumer`, it never sees the chain promise (which originates at `HostConsumer` and bubbles up). It is unaffected by this change.
 - **Server:** `renderPage` calls preact-iso `prerender`, which catches suspensions **globally** (awaits thrown promises and retries). The interposed boundary is not what makes SSR work, so removing it leaves SSR intact.
-- **Initial load / hydration:** `PageMiddlewareHost` picks `DeferredHost` (not `SuspenseHost`) on the first browser render (`page-middleware-host.tsx:304`). `DeferredHost` renders the SSR children during hydration and runs the chain in an effect afterward — it **never suspends**, so it sidesteps the hydration-orphan (preactjs/preact#4442) and is **unaffected** by this change.
+- **Initial load / hydration:** `PageMiddlewareHost` picks `DeferredHost` (not `SuspenseHost`) on the first browser render (`page-middleware-host.tsx:304`). `DeferredHost` renders the SSR children during hydration and runs the chain in an effect afterward, it **never suspends**, so it sidesteps the hydration-orphan (preactjs/preact#4442) and is **unaffected** by this change.
 
 ## Decision: Approach A + self-healing `HostConsumer`
 
-### Change 1 — remove the interposed boundary (`SuspenseHost`)
+### Change 1: remove the interposed boundary (`SuspenseHost`)
 
 `SuspenseHost` returns `HostConsumer` directly instead of wrapping it in `PreactIsoErrorBoundary`. The promise `HostConsumer` throws now bubbles to the nearest `Router`, which holds `[cur, prev]` alive while the chain resolves. Outcome handling is unchanged: `redirect` (client) and `render` are not thrown (`HostConsumer` routes them via an effect / renders `<Alt />`); only `deny` is thrown, as a **non-promise** object the `Router` ignores. On the **server**, a thrown chain outcome propagates to `renderPage`'s `try/catch` (`translateRootOutcome`), exactly as today. On the **client**, this propagation is identical to today's: the interposed `PreactIsoErrorBoundary` never caught outcomes either (it has no `onError`, so non-promise throws pass straight through it), so removing it changes nothing about client outcome propagation. (Verified: the deny-propagation path is unchanged in a real Router tree.)
 
-### Change 2 — self-heal `HostConsumer` on chain resolve
+### Change 2: self-heal `HostConsumer` on chain resolve
 
-Chain suspension via `wrapPromise` has **no self-update**: `wrapPromise.read()` throws the bare `suspender` promise (`internal/wrap-promise.ts`), and nothing re-renders `HostConsumer` when it resolves. Previously the interposed `PreactIsoErrorBoundary.forceUpdate()` provided that re-render. The `Router`'s resume holds `[cur, prev]` and re-renders the **Router**, but that does not reliably re-render the deep suspended `HostConsumer` — so the incoming route never commits.
+Chain suspension via `wrapPromise` has **no self-update**: `wrapPromise.read()` throws the bare `suspender` promise (`internal/wrap-promise.ts`), and nothing re-renders `HostConsumer` when it resolves. Previously the interposed `PreactIsoErrorBoundary.forceUpdate()` provided that re-render. The `Router`'s resume holds `[cur, prev]` and re-renders the **Router**, but that does not reliably re-render the deep suspended `HostConsumer`, so the incoming route never commits.
 
 The fix mirrors preact-iso's `lazy`, which self-updates: `r.current = p.then(() => update(1))`. `HostConsumer` registers a one-shot self re-render on the suspender's resolution, then re-throws so the `Router` still holds the outgoing route alive:
 
@@ -122,10 +122,10 @@ The spike applied the two changes above (Change 1 + the `try/catch` form of Chan
 | Configuration | Test 1 (hold-alive engages) | Test 2 (incoming route commits) |
 | --- | --- | --- |
 | Baseline (interposed boundary) | n/a (Router never catches) | **pass** (local boundary resumes; outgoing torn to blank) |
-| Approach A only (Change 1) | **pass** — `onLoadStart('/b')` fires, route A held in DOM, B not shown while pending | **fail** — B never commits (no self-heal) |
+| Approach A only (Change 1) | **pass**, `onLoadStart('/b')` fires, route A held in DOM, B not shown while pending | **fail**, B never commits (no self-heal) |
 | Approach A + self-heal (Change 1 + 2) | **pass** | **pass** (61ms, was a 3s timeout) |
 
-Full `@hono-preact/iso` suite under Approach A + self-heal: **756 passed, 3 failed** — the 3 failures are exactly the Router-less `page-middleware-host.test.tsx` tests described above; everything else (including the realistic `Routes`-based navigation, layout persistence, and SSR suites) is green. Test 1 proves the mechanism because preact-iso's `Router` fires `onLoadStart` **only** when its own `__c` catches a thrown promise.
+Full `@hono-preact/iso` suite under Approach A + self-heal: **756 passed, 3 failed**, the 3 failures are exactly the Router-less `page-middleware-host.test.tsx` tests described above; everything else (including the realistic `Routes`-based navigation, layout persistence, and SSR suites) is green. Test 1 proves the mechanism because preact-iso's `Router` fires `onLoadStart` **only** when its own `__c` catches a thrown promise.
 
 ## Recommendation
 

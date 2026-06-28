@@ -23,13 +23,13 @@
 
 ## File Structure
 
-- `packages/iso/src/internal/wrap-promise.ts` (modify) — add a typed `peek()` returning `{ status, settled }` so a consumer can subscribe to settlement without catching its own thrown suspender. Single responsibility: the suspense-resource wrapper.
-- `packages/iso/src/internal/page-middleware-host.tsx` (modify) — the two behavior changes (`HostConsumer` self-heal; `SuspenseHost` boundary removal) plus the local `WrappedResult` type update.
-- `packages/iso/src/internal/__tests__/wrap-promise.test.ts` (create) — unit test for `peek()`.
-- `packages/iso/src/internal/__tests__/route-hold-alive.test.tsx` (create) — keeper integration test: a guarded A->B navigation holds A alive and commits B (the spike probe, promoted to a permanent regression test).
-- `packages/iso/src/internal/__tests__/page-middleware-host.test.tsx` (modify) — rewrite the 3 tests that mounted the host without a `Router` ancestor; they now require one (the new contract).
-- `packages/iso/src/__tests__/guarded-nav-transition.test.tsx` (create) — validation tests for the spec's open risks (VT cold-flush timing on a guarded nav; guarded redirect-during-nav; rapid double-nav stale-resume).
-- `apps/site/src/pages/docs/**` and a release-note draft (modify/create) — document the new ancestor-`Router` contract for the `<Page>` escape hatch and the default-behavior change.
+- `packages/iso/src/internal/wrap-promise.ts` (modify), add a typed `peek()` returning `{ status, settled }` so a consumer can subscribe to settlement without catching its own thrown suspender. Single responsibility: the suspense-resource wrapper.
+- `packages/iso/src/internal/page-middleware-host.tsx` (modify), the two behavior changes (`HostConsumer` self-heal; `SuspenseHost` boundary removal) plus the local `WrappedResult` type update.
+- `packages/iso/src/internal/__tests__/wrap-promise.test.ts` (create), unit test for `peek()`.
+- `packages/iso/src/internal/__tests__/route-hold-alive.test.tsx` (create), keeper integration test: a guarded A->B navigation holds A alive and commits B (the spike probe, promoted to a permanent regression test).
+- `packages/iso/src/internal/__tests__/page-middleware-host.test.tsx` (modify), rewrite the 3 tests that mounted the host without a `Router` ancestor; they now require one (the new contract).
+- `packages/iso/src/__tests__/guarded-nav-transition.test.tsx` (create), validation tests for the spec's open risks (VT cold-flush timing on a guarded nav; guarded redirect-during-nav; rapid double-nav stale-resume).
+- `apps/site/src/pages/docs/**` and a release-note draft (modify/create), document the new ancestor-`Router` contract for the `<Page>` escape hatch and the default-behavior change.
 
 ---
 
@@ -86,7 +86,7 @@ describe('wrapPromise.peek', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/iso/src/internal/__tests__/wrap-promise.test.ts`
-Expected: FAIL — `w.peek is not a function`.
+Expected: FAIL, `w.peek is not a function`.
 
 - [ ] **Step 3: Implement `peek()`**
 
@@ -941,8 +941,8 @@ git push
 ## Self-Review
 
 **Spec coverage:**
-- Spec "Change 1 — remove the interposed boundary" -> Task 2 Step 3. Covered.
-- Spec "Change 2 — self-heal HostConsumer" (with the `wrapPromise.peek()` reshape it recommends over try/catch) -> Task 1 + Task 2 Step 4. Covered.
+- Spec "Change 1, remove the interposed boundary" -> Task 2 Step 3. Covered.
+- Spec "Change 2, self-heal HostConsumer" (with the `wrapPromise.peek()` reshape it recommends over try/catch) -> Task 1 + Task 2 Step 4. Covered.
 - Spec "boundary return shape + visibility mechanism" (Router `[cur, prev]`, no `display:none`) -> realized by Task 2 (no new component); asserted by Task 3. Covered.
 - Spec "Changes enumerated": `page-middleware-host.tsx` -> Task 2; `wrap-promise.ts` reshape -> Task 1; `route-change.ts` "no change but validate timing" -> Task 4; hydration path "no change" -> not touched (correct); rewrite 3 unit tests -> Task 2 Step 6; `<Page>` escape-hatch contract docs -> Task 6. Covered.
 - Spec "open risks": #1 VT timing -> Task 4; #3 stale resume -> Task 5; #4 redirect-in-effect -> Task 5; #5 default-behavior change release note -> Task 6. **#2 (inert overlap correctness) is deliberately descoped** from this plan: the prototype showed the cold-nav case has no incoming DOM during the hold (no interactive duplicate to `inert`), and a reliable "stale route" signal for the warm-overlap case is non-trivial (naive `useRoute().path !== useLocation().path` breaks for param routes). Task 3 pins the no-duplicate-interactive-content guarantee that actually matters; warm-overlap `inert` is left as a documented follow-up. This is called out here and to the user, not silently dropped.
