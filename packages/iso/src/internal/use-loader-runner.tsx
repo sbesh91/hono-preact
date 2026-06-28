@@ -351,8 +351,19 @@ export function useLoaderRunner<T>(
         );
       }
     } else {
-      const preloaded = getPreloadedData<T>(id);
+      // The SSR preload is a ONE-TIME hydration handoff: only this loader
+      // instance's FIRST render can legitimately adopt the server-baked
+      // `data-loader` attribute. On a later client navigation (`locationChanged`,
+      // so `readerRef.current` is already set) the same `<section>` is still
+      // mounted carrying the attribute the client `<Envelope>` re-wrote on the
+      // previous render (`"null"` for the state path). Re-reading it would adopt
+      // that stale value as a present preload and skip the fetch entirely (the
+      // navigation never shows `loading` and lands on stale/`null` data). Gate
+      // the read on first-render, exactly like the cache branch below.
       const isFirstRender = readerRef.current === null;
+      const preloaded: SyncValue<T> = isFirstRender
+        ? getPreloadedData<T>(id)
+        : { present: false };
       if (preloaded.present) {
         // Record that we consumed the SSR preload payload so the useEffect
         // below can clear the DOM attribute AFTER commit instead of mutating
