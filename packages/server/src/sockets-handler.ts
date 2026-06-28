@@ -379,7 +379,12 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // (larger) wiring to the room runtime to keep this file thin. The
       // pre-resolved room key is threaded in so onOpen does not re-parse.
       if ('channel' in def && roomKey) {
-        return createRoomWsEvents(def, { ctx, denied, roomKey, dev: opts.dev ?? false });
+        return createRoomWsEvents(def, {
+          ctx,
+          denied,
+          roomKey,
+          dev: opts.dev ?? false,
+        });
       }
 
       // --- Plain duplex socket wiring. ---

@@ -18,10 +18,7 @@ import {
   WS_DENY_CODE,
   type RealtimeConnector,
 } from '@hono-preact/iso/internal/runtime';
-import {
-  MAX_FORWARD_HEADER_BYTES,
-  byteLength,
-} from '../realtime-budget.js';
+import { MAX_FORWARD_HEADER_BYTES, byteLength } from '../realtime-budget.js';
 
 // Re-export so the DO and the door can pull the transport bits from one place.
 export { makeCfRoomTransport };

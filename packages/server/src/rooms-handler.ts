@@ -195,7 +195,12 @@ export function resolveRoomKey(
  */
 export function createRoomWsEvents(
   roomDef: AnyRoomDef,
-  args: { ctx: Context; denied: boolean; roomKey: RoomKeyResolution; dev: boolean }
+  args: {
+    ctx: Context;
+    denied: boolean;
+    roomKey: RoomKeyResolution;
+    dev: boolean;
+  }
 ): WSEvents {
   const { ctx, denied, roomKey, dev } = args;
 

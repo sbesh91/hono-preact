@@ -25,7 +25,8 @@ export function warnIfOverForwardBudget(
 ): void {
   if (!dev || data === undefined) return;
   const json = JSON.stringify(data);
-  if (json === undefined || byteLength(json) <= MAX_FORWARD_HEADER_BYTES) return;
+  if (json === undefined || byteLength(json) <= MAX_FORWARD_HEADER_BYTES)
+    return;
   console.warn(
     `hono-preact: ${kind} connection data exceeds the ` +
       `${MAX_FORWARD_HEADER_BYTES}-byte forward limit. It works on Node but will ` +

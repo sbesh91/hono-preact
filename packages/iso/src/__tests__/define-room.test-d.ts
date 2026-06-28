@@ -204,7 +204,9 @@ function _asyncRoomDataProbe() {
       return { name: 'async-user', role: 'user' };
     },
     onJoin(conn) {
-      expectTypeOf(conn.data).toEqualTypeOf<Readonly<{ name: string; role: string }>>();
+      expectTypeOf(conn.data).toEqualTypeOf<
+        Readonly<{ name: string; role: string }>
+      >();
     },
   });
 }
