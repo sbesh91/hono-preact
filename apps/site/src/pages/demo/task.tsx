@@ -14,6 +14,10 @@ import { ArrowLeft } from 'lucide-preact';
 import { serverLoaders, serverActions } from './task.server.js';
 import { serverLoaders as boardLoaders } from './project-board.server.js';
 import { StatusSelect } from '../../components/demo/pickers.js';
+import {
+  PRIORITY_BADGE,
+  PRIORITY_LABEL,
+} from '../../components/demo/priority.js';
 import CommentList from '../../components/demo/CommentList.js';
 import type {
   ActivityItem,
@@ -30,7 +34,7 @@ const {
 } = serverLoaders;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
-type TaskData = WithAuthor<Task>;
+type TaskData = WithAuthor<Task> & { assignee: User | null };
 type CommentData = WithAuthor<Comment>;
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -85,65 +89,94 @@ const TaskHeaderAndActions: FunctionComponent<{
     onError: (err) => setError(err.message),
   });
 
+  const done = status === 'done';
+
   return (
     <>
-      <header class="space-y-3">
-        <a
-          href={`/demo/projects/${projectSlug}`}
-          class="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground"
-        >
-          <ArrowLeft size={15} aria-hidden />
-          Back to {projectSlug.toUpperCase()}
-        </a>
-        <div class="flex flex-wrap items-center gap-3">
-          <ViewTransitionName
-            name={`task-title-${task.id}`}
-            groupClass="task-card"
-            render={
-              <h2 class="text-2xl font-semibold leading-tight text-foreground" />
-            }
-          >
+      <a
+        href={`/demo/projects/${projectSlug}`}
+        class="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground"
+      >
+        <ArrowLeft size={15} aria-hidden />
+        Back to {projectSlug.toUpperCase()}
+      </a>
+
+      {/* Card-hero: the morph counterpart of the board card (`task-card-${id}`).
+          It is the SAME card shape as TaskCard (border, radius, left priority
+          bar, title above a badge row with the assignee pinned right), just
+          larger, so the back-nav reads as that card growing into the page
+          rather than a cross-dissolve of two unlike layouts. View transitions
+          scale captured bitmaps, so keeping both ends card-shaped is what makes
+          the box resize cleanly (text still softens slightly mid-morph). */}
+      <ViewTransitionName
+        name={`task-card-${task.id}`}
+        groupClass="task-card"
+        render={
+          <article class="relative rounded-xl border border-border bg-background p-5 pl-6 shadow-[0_1px_2px_rgba(37,40,42,.05)]" />
+        }
+      >
+        <span
+          class="absolute inset-y-0 left-0 w-1 rounded-l-xl"
+          style={{ background: `var(--color-priority-${task.priority})` }}
+          aria-hidden
+        />
+        <h2 class="text-2xl font-semibold leading-tight text-foreground">
+          <span class={done ? 'line-through decoration-border' : ''}>
             {task.title}
-          </ViewTransitionName>
-          <ViewTransitionName
-            name={`task-status-${task.id}`}
-            groupClass="task-card"
-            render={
-              <span
-                class={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  status === 'done' ? 'badge-success' : 'badge-neutral'
-                }`}
-              />
-            }
+          </span>
+        </h2>
+        <div class="mt-3 flex items-center gap-2">
+          <span
+            class={`rounded-full px-2.5 py-1 text-xs font-bold ${PRIORITY_BADGE[task.priority]}`}
+          >
+            {PRIORITY_LABEL[task.priority]}
+          </span>
+          <span
+            class={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+              done ? 'badge-success' : 'badge-neutral'
+            }`}
           >
             {STATUS_LABEL[status]}
-          </ViewTransitionName>
+          </span>
+          {task.assignee && (
+            <span
+              class="ml-auto grid h-7 w-7 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground"
+              title={task.assignee.name}
+            >
+              {task.assignee.name.charAt(0).toUpperCase()}
+            </span>
+          )}
         </div>
-        <p class="text-sm text-muted">
-          Opened by <strong>{task.author?.name ?? 'someone'}</strong> on{' '}
-          {new Date(task.createdAt).toLocaleDateString()}
+        <p class="mt-3 text-sm text-muted">
+          Opened by{' '}
+          <strong class="font-medium text-foreground">
+            {task.author?.name ?? 'someone'}
+          </strong>{' '}
+          on {new Date(task.createdAt).toLocaleDateString()}
         </p>
-      </header>
+      </ViewTransitionName>
 
-      {task.body && (
-        <p class="whitespace-pre-wrap leading-relaxed text-foreground">
-          {task.body}
-        </p>
-      )}
+      <section class={`${PANEL} space-y-5`}>
+        {task.body && (
+          <p class="whitespace-pre-wrap leading-relaxed text-foreground">
+            {task.body}
+          </p>
+        )}
 
-      <div class="space-y-1.5">
-        <span class="block text-sm font-medium text-foreground">Status</span>
-        <div class="flex items-center gap-3">
-          <div class="w-48">
-            <StatusSelect
-              value={status}
-              onChange={(next) => mutate({ taskId: task.id, status: next })}
-            />
+        <div class="space-y-1.5">
+          <span class="block text-sm font-medium text-foreground">Status</span>
+          <div class="flex items-center gap-3">
+            <div class="w-48">
+              <StatusSelect
+                value={status}
+                onChange={(next) => mutate({ taskId: task.id, status: next })}
+              />
+            </div>
+            {pending && <span class="text-xs text-muted">Saving…</span>}
           </div>
-          {pending && <span class="text-xs text-muted">Saving…</span>}
+          {error && <p class="text-sm text-danger">{error}</p>}
         </div>
-        {error && <p class="text-sm text-danger">{error}</p>}
-      </div>
+      </section>
     </>
   );
 };
@@ -303,9 +336,7 @@ const TaskView = taskLoader.View(({ status, data }) => {
     <div class="mx-auto w-full max-w-5xl px-6 py-6">
       <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
         <main class="space-y-6">
-          <article class={`${PANEL} space-y-5`}>
-            <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
-          </article>
+          <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
           <CommentsView taskId={task.id} />
         </main>
         <ActivityView />

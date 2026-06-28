@@ -30,12 +30,20 @@ const withAuthor = <T extends { authorId: string }>(x: T): WithAuthor<T> => ({
   author: getUser(x.authorId),
 });
 
+// The detail hero mirrors the board card, which shows the assignee avatar, so
+// resolve the assignee alongside the author for the task loader.
+export type TaskDetail = WithAuthor<Task> & { assignee: User | null };
+
 export const serverLoaders = {
-  task: route.loader(async ({ location }): Promise<WithAuthor<Task> | null> => {
+  task: route.loader(async ({ location }): Promise<TaskDetail | null> => {
     const id = location.pathParams.taskId;
     if (!id) return null;
     const task = getTask(id);
-    return task ? withAuthor(task) : null;
+    if (!task) return null;
+    return {
+      ...withAuthor(task),
+      assignee: task.assigneeId ? (getUser(task.assigneeId) ?? null) : null,
+    };
   }),
 
   comments: route.loader(async function* ({
