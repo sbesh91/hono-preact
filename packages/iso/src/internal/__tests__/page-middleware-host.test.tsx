@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Component, h, type ComponentChildren } from 'preact';
+import { Component, h, type ComponentChildren, type VNode } from 'preact';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   render as rtlRender,
@@ -32,6 +32,30 @@ const loc = {
   pathParams: {},
   route: () => {},
 } as never;
+
+// Mount a PageMiddlewareHost (carrying `mw`, rendering `childText`) as the /x
+// route inside a Router, the post-navigation contract under test (the host needs
+// an ancestor Router as its suspense boundary). `wrap` injects an element
+// between the LocationProvider and the Router (e.g. an error boundary).
+function renderHostInRouter(
+  mw: ReturnType<typeof defineClientMiddleware>,
+  childText: string,
+  wrap?: (inner: VNode<any>) => VNode<any>
+) {
+  const HostRoute = () =>
+    h(
+      PageMiddlewareHost,
+      { use: [mw], location: loc },
+      h('div', null, childText)
+    );
+  window.history.replaceState({}, '', '/x');
+  const router = h(
+    Router,
+    null,
+    h(Route, { path: '/x', component: HostRoute as never })
+  );
+  return rtlRender(h(LocationProvider, null, wrap ? wrap(router) : router));
+}
 
 describe('PageMiddlewareHost', () => {
   it('renders children when no middleware short-circuits (client)', async () => {
@@ -80,20 +104,7 @@ describe('PageMiddlewareHost', () => {
       });
       await next();
     });
-    const HostRoute = () =>
-      h(
-        PageMiddlewareHost,
-        { use: [mw], location: loc },
-        h('div', null, 'page-content')
-      );
-    window.history.replaceState({}, '', '/x');
-    rtlRender(
-      <LocationProvider>
-        <Router>
-          <Route path="/x" component={HostRoute as never} />
-        </Router>
-      </LocationProvider>
-    );
+    renderHostInRouter(mw, 'page-content');
     expect(screen.queryByText('page-content')).toBeNull();
     resolve();
     await waitFor(() =>
@@ -281,20 +292,7 @@ describe('PageMiddlewareHost', () => {
       throw redirect('/login');
     });
 
-    const HostRoute = () =>
-      h(
-        PageMiddlewareHost,
-        { use: [mw], location: loc },
-        h('div', null, 'protected-content')
-      );
-    window.history.replaceState({}, '', '/x');
-    rtlRender(
-      <LocationProvider>
-        <Router>
-          <Route path="/x" component={HostRoute as never} />
-        </Router>
-      </LocationProvider>
-    );
+    renderHostInRouter(mw, 'protected-content');
 
     await waitFor(() => {
       expect(screen.queryByText('protected-content')).toBeNull();
@@ -329,21 +327,8 @@ describe('PageMiddlewareHost', () => {
       throw deny(403, 'nope');
     });
 
-    const HostRoute = () =>
-      h(
-        PageMiddlewareHost,
-        { use: [mw], location: loc },
-        h('div', null, 'protected-content')
-      );
-    window.history.replaceState({}, '', '/x');
-    rtlRender(
-      <LocationProvider>
-        <OuterCatch>
-          <Router>
-            <Route path="/x" component={HostRoute as never} />
-          </Router>
-        </OuterCatch>
-      </LocationProvider>
+    renderHostInRouter(mw, 'protected-content', (router) =>
+      h(OuterCatch, null, router)
     );
 
     await waitFor(() =>

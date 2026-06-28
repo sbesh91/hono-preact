@@ -5,13 +5,19 @@ import {
   cleanup,
   waitFor,
   fireEvent,
-  findByTestId,
+  screen,
 } from '@testing-library/preact';
-import { LocationProvider, useLocation } from 'preact-iso';
-import { h, type ComponentType } from 'preact';
+import { LocationProvider } from 'preact-iso';
+import { h, type ComponentChild, type ComponentType } from 'preact';
 import { defineClientMiddleware } from '../define-middleware.js';
 import { redirect } from '../outcomes.js';
-import { defineRoutes, Routes, type ViewProps } from '../define-routes.js';
+import {
+  defineRoutes,
+  Routes,
+  type RoutesManifest,
+  type ViewProps,
+} from '../define-routes.js';
+import { createRouteCapture } from './route-test-helpers.js';
 import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
@@ -27,6 +33,28 @@ afterEach(() => {
   resetHistoryShimForTesting();
   if (typeof window !== 'undefined') window.history.replaceState({}, '', '/');
 });
+
+// Render a route manifest under a LocationProvider, starting at /a. `top` injects
+// an extra child before <Routes> (e.g. a route-capture <Capture/>).
+function renderRoutesApp(manifest: RoutesManifest, top?: ComponentChild) {
+  window.history.replaceState({}, '', '/a');
+  return rtlRender(
+    h(
+      LocationProvider,
+      null,
+      ...(top ? [top] : []),
+      h(Routes, { routes: manifest })
+    )
+  );
+}
+
+// Find a link by testid (anywhere in the document) and click it as a push
+// navigation.
+async function clickTo(testid: string): Promise<void> {
+  const link = await screen.findByTestId(testid);
+  setNavDirectionForTesting('push');
+  fireEvent.click(link);
+}
 
 describe('cold guarded nav: no interactive duplicate content', () => {
   it('shows only the outgoing route while the incoming chain is pending', async () => {
@@ -56,14 +84,8 @@ describe('cold guarded nav: no interactive duplicate content', () => {
       },
     ]);
 
-    window.history.replaceState({}, '', '/a');
-    const { container } = rtlRender(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
-    );
-
-    const link = await findByTestId(container, 'to-b');
-    setNavDirectionForTesting('push');
-    fireEvent.click(link);
+    const { container } = renderRoutesApp(manifest);
+    await clickTo('to-b');
 
     // While B's chain is gated (pending): A's interactive content is present,
     // B's is not. Exactly one route's interactive content is in the DOM.
@@ -108,14 +130,8 @@ describe('guarded cold nav under the nav-transition scheduler', () => {
       },
     ]);
 
-    window.history.replaceState({}, '', '/a');
-    const { container } = rtlRender(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
-    );
-
-    const link = await findByTestId(container, 'to-b');
-    setNavDirectionForTesting('push');
-    fireEvent.click(link);
+    const { container } = renderRoutesApp(manifest);
+    await clickTo('to-b');
 
     await waitFor(
       () =>
@@ -157,13 +173,8 @@ describe('guarded nav edge cases', () => {
       },
     ]);
 
-    window.history.replaceState({}, '', '/a');
-    const { container } = rtlRender(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
-    );
-    const link = await findByTestId(container, 'to-b');
-    setNavDirectionForTesting('push');
-    fireEvent.click(link);
+    const { container } = renderRoutesApp(manifest);
+    await clickTo('to-b');
 
     await waitFor(
       () =>
@@ -193,12 +204,7 @@ describe('guarded nav edge cases', () => {
     const CView: ComponentType<ViewProps> = () =>
       h('div', { 'data-testid': 'route-C' }, 'route-C');
 
-    let nav!: (to: string) => void;
-    const Controller = () => {
-      const { route } = useLocation();
-      nav = route;
-      return null;
-    };
+    const { Capture, nav } = createRouteCapture();
 
     const manifest = defineRoutes([
       { path: '/a', view: () => Promise.resolve({ default: AView }) },
@@ -214,15 +220,7 @@ describe('guarded nav edge cases', () => {
       },
     ]);
 
-    window.history.replaceState({}, '', '/a');
-    const { container } = rtlRender(
-      h(
-        LocationProvider,
-        null,
-        h(Controller, null),
-        h(Routes, { routes: manifest })
-      )
-    );
+    const { container } = renderRoutesApp(manifest, h(Capture, null));
     await waitFor(() =>
       expect(container.querySelector('[data-testid="route-A"]')).not.toBeNull()
     );

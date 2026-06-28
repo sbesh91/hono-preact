@@ -5,7 +5,7 @@ import type {
   JSX,
 } from 'preact';
 import { h } from 'preact';
-import { useContext, useLayoutEffect, useRef } from 'preact/hooks';
+import { useCallback, useContext, useLayoutEffect, useRef } from 'preact/hooks';
 import type { WrapperProps } from '../page.js';
 import { isBrowser } from '../is-browser.js';
 import { LoaderIdContext } from './contexts.js';
@@ -47,14 +47,18 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
   // is the full `keyof JSX.IntrinsicElements` union, and a typed ref over that
   // union is "too complex to represent". A callback accepting `Element | null`
   // is assignable to every element's RefCallback (param contravariance).
-  const setLive = (node: Element | null) => {
+  // useCallback keeps its identity stable so Preact attaches the ref once rather
+  // than detaching/reattaching on every re-render.
+  const setLive = useCallback((node: Element | null) => {
     liveRef.current = node;
-  };
+  }, []);
   useLayoutEffect(() => {
     if (!isBrowser()) return;
     const live = liveRef.current;
     if (!live) return;
-    const dupes = live.ownerDocument.querySelectorAll(`[id="${id}"]`);
+    // An id selector (`#id`) hits the document's id index; an `[id="..."]`
+    // attribute selector would force a full-tree walk on every loader mount.
+    const dupes = live.ownerDocument.querySelectorAll(`#${CSS.escape(id)}`);
     if (dupes.length < 2) return;
     dupes.forEach((node) => {
       if (node !== live) node.remove();

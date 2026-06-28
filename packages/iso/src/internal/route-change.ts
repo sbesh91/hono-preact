@@ -45,25 +45,50 @@ function currentPath(): string {
     : '';
 }
 
-// The set of route URLs currently mid-suspense (via onLoadStart/onLoadEnd, which
-// the Router calls with its url). Non-empty means a navigation is cold and the
-// transition should wait for the suspended content.
+// The preact-iso <Router>s currently mid-suspense, each represented by an opaque
+// per-instance token. Non-empty means a navigation is cold and the transition
+// should wait for the suspended content. A Router is "loading" from its first
+// onLoadStart until its onLoadEnd.
 //
-// Keyed by url rather than a raw counter because a single guarded navigation to
-// an uncached route makes the Router fire onLoadStart TWICE for the same url
-// (once for the page-middleware chain promise, once for the lazy view module)
-// but onLoadEnd only ONCE (preact-iso skips a superseded suspension's onLoadEnd
-// via its monotonic count guard). A counter would leak +1 and the cold-flush
-// loop below would then wait out the full COLD_COMMIT_TIMEOUT_MS on every such
-// navigation, freezing the old page ~500ms after the new content rendered. A
-// set dedupes the double start, so the single end clears it; the cached-module
-// case (one start, one end) stays balanced too.
-const inFlightUrls = new Set<string>();
-export function __noteLoadStart(url?: string): void {
-  inFlightUrls.add(url ?? '');
+// Keyed by Router identity (a token), NOT by url or a raw counter. Two cases
+// break the simpler schemes:
+//   - A guarded navigation to an uncached route makes ONE Router fire
+//     onLoadStart TWICE before a single onLoadEnd (it suspends on its lazy view
+//     module AND on its page-middleware chain). A raw counter would leak +1 and
+//     the cold-flush loop below would wait out the full COLD_COMMIT_TIMEOUT_MS,
+//     freezing the old page ~500ms after the new content rendered.
+//   - The framework nests Routers (the top-level Routes Router plus a per-layout
+//     inner Router), all reading the SAME url from one LocationProvider. On a
+//     nested cold nav the outer (layout) Router commits and ends while the inner
+//     (leaf) Router is still loading; keying by url would let that first end
+//     empty the set early and release the transition before the leaf is ready.
+// A per-Router boolean (a token; onLoadStart adds it idempotently, onLoadEnd
+// removes it) handles both: the double start collapses to one token, and two
+// distinct Routers are two distinct tokens.
+const loadingRouters = new Set<object>();
+
+/**
+ * @internal Build the onLoadStart/onLoadEnd pair for ONE preact-iso `<Router>`.
+ * Memoize per Router instance (one tracker per mounted Router) so the token
+ * identity stays stable across renders.
+ */
+export function makeRouterLoadTracker(): {
+  onLoadStart: () => void;
+  onLoadEnd: () => void;
+} {
+  const token = {};
+  return {
+    onLoadStart: () => {
+      loadingRouters.add(token);
+    },
+    onLoadEnd: () => {
+      loadingRouters.delete(token);
+    },
+  };
 }
-export function __noteLoadEnd(url?: string): void {
-  inFlightUrls.delete(url ?? '');
+
+function anyRouterLoading(): boolean {
+  return loadingRouters.size > 0;
 }
 
 // The path the app is currently on (the previous navigation's `to`); seeds
@@ -83,13 +108,14 @@ let navGen = 0;
 // transition rather than freezing the page on a slow/stalled load.
 const COLD_COMMIT_TIMEOUT_MS = 500;
 // Extra grace, after the shell is ready, to let a morph partner that loads with
-// the route's DATA (behind inner Suspense, which doesn't move loadingDepth)
-// appear in the new snapshot before the transition captures it.
+// the route's DATA (behind inner Suspense, which is not a preact-iso Router and
+// so registers no in-flight load) appear in the new snapshot before the
+// transition captures it.
 const MORPH_PARTNER_GRACE_MS = 150;
 
 /** @internal Test-only reset for coordinator state. */
 export function __resetTransitionStateForTesting(): void {
-  inFlightUrls.clear();
+  loadingRouters.clear();
   navGen = 0;
   lastPath =
     typeof location !== 'undefined'
@@ -168,8 +194,8 @@ function buildEvent(from: string | undefined): ViewTransitionEvent {
 //
 // Cold (suspending) routes commit their content in a later, same-URL flush; the
 // in-flight transition routes that flush into itself so the new snapshot is the
-// loaded route. Uses only stock preact-iso props (onLoadStart/onLoadEnd via
-// `loadingDepth`).
+// loaded route. Uses only stock preact-iso props (per-Router onLoadStart/
+// onLoadEnd, tracked as in-flight Router tokens above).
 // ---------------------------------------------------------------------------
 
 type ProcessFn = () => void;
@@ -263,14 +289,14 @@ function scheduleRender(process: ProcessFn): void {
   }
 
   if (navigated) {
-    // Reset the in-flight set at the start of a navigation. A previous route's
-    // loads are abandoned by a new navigation, and preact-iso fires onLoadStart
-    // without a matching onLoadEnd when a still-suspended Router unmounts (it
-    // emits onLoadEnd only on a committed render, not on unmount). Left alone,
-    // those leaked entries would make this nav (and later ones) look perpetually
-    // cold and burn the cold-load timeout. This nav re-populates the set as its
-    // own route suspends.
-    inFlightUrls.clear();
+    // Reset the in-flight Router set at the start of a navigation. A previous
+    // route's loads are abandoned by a new navigation, and preact-iso fires
+    // onLoadStart without a matching onLoadEnd when a still-suspended Router
+    // unmounts (it emits onLoadEnd only on a committed render, not on unmount).
+    // Left alone, those leaked tokens would make this nav (and later ones) look
+    // perpetually cold and burn the cold-load timeout. This nav re-populates the
+    // set as its own Routers suspend.
+    loadingRouters.clear();
   }
 
   lastHref = href;
@@ -332,8 +358,9 @@ function collectVtNameElements(): Map<string, Element> {
 // persistent chrome (e.g. a parent layout's title that doesn't unmount across
 // the nav). Such a name pairs trivially on its own and must NOT satisfy the
 // grace: if it did, the grace would be skipped while the real data-loaded
-// partner (which loads behind inner Suspense, so it doesn't move loadingDepth)
-// is still pending, and the new snapshot would be captured without it.
+// partner (which loads behind inner Suspense, not a preact-iso Router, so it
+// registers no in-flight load) is still pending, and the new snapshot would be
+// captured without it.
 function hasFreshMorphPartner(oldNamed: Map<string, Element>): boolean {
   if (oldNamed.size === 0) return false;
   for (const el of queryVtNamedElements()) {
@@ -371,9 +398,9 @@ function runNavTransition(
       } else {
         for (const sub of phaseSubs.beforeSwap) sub(event);
         // Cold: the route suspended. Keep routing its content flushes into the
-        // transition until every route module has loaded (the in-flight set is
-        // empty) — the page-level shell.
-        while (inFlightUrls.size > 0) {
+        // transition until every suspended Router has loaded (no Router is still
+        // in flight), i.e. the page-level shell and its nested leaves are ready.
+        while (anyRouterLoading()) {
           const contentProcess = await waitForColdFlush(
             myGen,
             COLD_COMMIT_TIMEOUT_MS
@@ -384,8 +411,8 @@ function runNavTransition(
         }
         // If the outgoing route had named elements but none has a FRESH partner
         // in the new shell yet, the partner may load with the route's DATA
-        // (behind inner Suspense, which doesn't move loadingDepth — e.g. a list
-        // whose items come from a loader). Wait briefly for it so the morph can
+        // (behind inner Suspense, which registers no in-flight Router, e.g. a
+        // list whose items come from a loader). Wait briefly for it so the morph can
         // pair. "Fresh" ignores names that merely persisted on their original
         // element (parent-layout chrome); otherwise such a name would satisfy
         // the check immediately and the real partner would never be awaited.

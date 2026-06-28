@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { ComponentType, VNode } from 'preact';
 import { h } from 'preact';
 import { useState, useContext } from 'preact/hooks';
 import { fireEvent, render, waitFor } from '@testing-library/preact';
-import { LocationProvider, Router } from 'preact-iso';
+import { LocationProvider } from 'preact-iso';
 import {
   defineRoutes,
   Routes,
@@ -13,6 +13,7 @@ import {
   type ViewProps,
 } from '../define-routes.js';
 import { RouteManifestContext } from '../internal/route-manifest.js';
+import * as routeChange from '../internal/route-change.js';
 import { defineServerMiddleware } from '../define-middleware.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
@@ -497,21 +498,24 @@ describe('<Routes>', () => {
     expect(container.innerHTML).toBeDefined();
   });
 
-  it('wires the coordinator load hooks (onLoadStart / onLoadEnd) onto the Router', () => {
-    const m = defineRoutes([{ path: '/', view: noopView }]);
-    const result = (
-      Routes as unknown as (props: { routes: typeof m }) => VNode
-    )({ routes: m });
-    // Routes wraps the Router in a RouteManifestContext.Provider; the Router
-    // is the Provider's sole child.
-    const routerVNode = (result.props as { children: VNode }).children;
-    expect(routerVNode.type).toBe(Router);
-    const props = routerVNode.props as {
-      onLoadStart?: unknown;
-      onLoadEnd?: unknown;
-    };
-    expect(typeof props.onLoadStart).toBe('function');
-    expect(typeof props.onLoadEnd).toBe('function');
+  it('wires a per-Router load tracker (onLoadStart / onLoadEnd) onto the Router', () => {
+    // Routes creates a per-instance load tracker (makeRouterLoadTracker) and
+    // wires its coordinator hooks onto the top-level Router, so the cold-flush
+    // coordinator can tell this Router apart from nested layout Routers.
+    const spy = vi.spyOn(routeChange, 'makeRouterLoadTracker');
+    try {
+      const m = defineRoutes([{ path: '/', view: noopView }]);
+      render(h(LocationProvider, null, h(Routes, { routes: m })) as VNode);
+      expect(spy).toHaveBeenCalled();
+      const tracker = spy.mock.results[0]!.value as {
+        onLoadStart: unknown;
+        onLoadEnd: unknown;
+      };
+      expect(typeof tracker.onLoadStart).toBe('function');
+      expect(typeof tracker.onLoadEnd).toBe('function');
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('provides the route manifest via RouteManifestContext', async () => {

@@ -5,11 +5,12 @@
 // its (now stale) redirect, which would override the user's current navigation.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render as rtlRender, cleanup, waitFor } from '@testing-library/preact';
-import { LocationProvider, useLocation } from 'preact-iso';
+import { LocationProvider } from 'preact-iso';
 import { h, type ComponentType } from 'preact';
 import { defineClientMiddleware } from '../../define-middleware.js';
 import { defineRoutes, Routes, type ViewProps } from '../../define-routes.js';
 import { redirect } from '../../outcomes.js';
+import { createRouteCapture } from '../../__tests__/route-test-helpers.js';
 import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
@@ -43,12 +44,7 @@ describe('superseded guarded route does not fire its stale redirect', () => {
       await next();
     });
 
-    let nav!: (to: string) => void;
-    const Controller = () => {
-      const { route } = useLocation();
-      nav = route;
-      return null;
-    };
+    const { Capture, nav } = createRouteCapture();
     const AView: ComponentType<ViewProps> = () =>
       h('div', { 'data-testid': 'route-A' }, 'A');
     const CView: ComponentType<ViewProps> = () =>
@@ -78,7 +74,7 @@ describe('superseded guarded route does not fire its stale redirect', () => {
       h(
         LocationProvider,
         null,
-        h(Controller, null),
+        h(Capture, null),
         h(Routes, { routes: manifest })
       )
     );

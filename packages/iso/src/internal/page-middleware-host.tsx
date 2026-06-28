@@ -26,12 +26,16 @@ type UseEntry = Middleware | AnyObserver;
 
 type HostResult = { outcome: Outcome | undefined };
 
-// The live URL (path + query). Used to detect that a navigation has superseded
-// a route whose chain is still settling. Call only under isBrowser().
-function currentUrl(): string {
-  return typeof location !== 'undefined'
-    ? location.pathname + location.search
-    : '';
+// The live pathname (NO query string). Used to detect that a navigation has
+// superseded a route whose chain is still settling. Compared at PATHNAME
+// granularity on purpose: SuspenseHost re-dispatches the chain only when
+// `location.path` (pathname) changes, so a same-path, query-only navigation is
+// NOT a supersession of this route and must not trip the self-heal gate (a
+// pathname+query compare froze the route on query-only navs). Distinct from
+// route-change.ts's `currentPath()` (pathname+query), which keys the transition
+// from/to. Call only under isBrowser().
+function currentPathname(): string {
+  return typeof location !== 'undefined' ? location.pathname : '';
 }
 
 function startChain(
@@ -151,19 +155,25 @@ function HostConsumer({
   // the wrapped result changes (a new path produces a fresh wrapPromise).
   const force = useForceUpdate();
   const subscribedTo = useRef<WrappedResult | null>(null);
-  if (wrapped && subscribedTo.current !== wrapped) {
+  // Browser-only: on the server the prerender drives suspension resume by
+  // awaiting the thrown promise and re-rendering, so subscribing here would be
+  // dead work (and force() a retained no-op closure) on the SSR hot path.
+  if (isBrowser() && wrapped && subscribedTo.current !== wrapped) {
     subscribedTo.current = wrapped;
     const pending = wrapped.peek();
     if (pending.status === 'pending') {
-      // The URL this chain was dispatched for. If a newer navigation has moved
-      // the app elsewhere by the time the chain settles, this route is being
-      // held alive as the Router's `prev` (superseded). Re-rendering it then
-      // would commit stale content and, worse, fire its stale redirect effect
-      // (route() below), overriding the user's current navigation. Gate the
-      // self-heal on the live URL still matching the dispatch URL.
-      const dispatchedAt = isBrowser() ? currentUrl() : '';
+      // The PATHNAME this chain was dispatched for. If a newer navigation has
+      // moved the app to a different path by the time the chain settles, this
+      // route is being held alive as the Router's `prev` (superseded).
+      // Re-rendering it then would commit stale content and, worse, fire its
+      // stale redirect effect (route() below), overriding the user's current
+      // navigation. Gate the self-heal on the live pathname still matching the
+      // dispatch pathname. Pathname, not full URL: a query-only navigation
+      // re-renders this same route without re-dispatching (SuspenseHost keys on
+      // location.path), so it must still self-heal rather than be suppressed.
+      const dispatchedAt = currentPathname();
       pending.settled.then(() => {
-        if (isBrowser() && currentUrl() !== dispatchedAt) return;
+        if (currentPathname() !== dispatchedAt) return;
         // If this consumer unmounted before the chain settled, force() is a
         // harmless no-op in Preact; the closure (only `force` + `dispatchedAt`)
         // is retained until the chain settles, which is bounded by the request.
