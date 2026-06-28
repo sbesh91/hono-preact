@@ -29,7 +29,16 @@ export function wrapPromise<T>(promise: Promise<T>) {
     }
   };
 
-  const peek = () => ({ status, settled });
+  // `status` is exposed via a getter, not a by-value field, so a caller that
+  // holds the peek() result across a tick (e.g. `const p = peek(); await
+  // p.settled; p.status`) reads the LIVE status rather than a stale snapshot
+  // frozen at 'pending'.
+  const peek = () => ({
+    get status() {
+      return status;
+    },
+    settled,
+  });
 
   return { read, peek };
 }

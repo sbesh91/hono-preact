@@ -12,7 +12,8 @@ import type {
 import type { StreamObserver } from '../define-stream-observer.js';
 import { dispatchServer, dispatchClient } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
-import wrapPromise, { type WrapStatus } from './wrap-promise.js';
+import wrapPromise from './wrap-promise.js';
+import { useForceUpdate } from './use-force-update.js';
 import { hasClientNavigated } from './history-shim.js';
 import { HonoRequestContext } from './contexts.js';
 
@@ -85,10 +86,8 @@ function startChain(
   );
 }
 
-type WrappedResult = {
-  read: () => HostResult;
-  peek: () => { status: WrapStatus; settled: Promise<void> };
-};
+// Derived from the source of truth so the shape can't drift from wrapPromise.
+type WrappedResult = ReturnType<typeof wrapPromise<HostResult>>;
 type RefValue = { current: WrappedResult | null };
 
 /**
@@ -150,7 +149,7 @@ function HostConsumer({
   // Subscribe to the chain promise's settlement and re-render THIS component on
   // resolve, mirroring preact-iso `lazy`'s self-update. Re-subscribe whenever
   // the wrapped result changes (a new path produces a fresh wrapPromise).
-  const [, force] = useState(0);
+  const force = useForceUpdate();
   const subscribedTo = useRef<WrappedResult | null>(null);
   if (wrapped && subscribedTo.current !== wrapped) {
     subscribedTo.current = wrapped;
@@ -165,7 +164,10 @@ function HostConsumer({
       const dispatchedAt = isBrowser() ? currentUrl() : '';
       pending.settled.then(() => {
         if (isBrowser() && currentUrl() !== dispatchedAt) return;
-        force((n) => n + 1);
+        // If this consumer unmounted before the chain settled, force() is a
+        // harmless no-op in Preact; the closure (only `force` + `dispatchedAt`)
+        // is retained until the chain settles, which is bounded by the request.
+        force();
       });
     }
   }
