@@ -361,10 +361,34 @@ export function __dedupeOutgoingVtNames(
   }
 }
 
+// Before a transition starts, ensure no view-transition-name is on more than one
+// live element. Hold-alive can leave a superseded route mounted whose persistent
+// VT-named chrome (e.g. a layout's activity bar, which carries a stable
+// view-transition-name so it morphs in place across navigations) now coexists
+// with the current route's copy. Two live elements with one name make the
+// browser abort the whole transition ("Unexpected duplicate
+// view-transition-name") at snapshot capture, which __dedupeOutgoingVtNames
+// (run inside the callback, after the old snapshot) is too late to prevent. Keep
+// the LAST occurrence in document order (the most recently mounted, i.e. the
+// current route's element) and clear the earlier (stale) ones.
+export function __dedupePreexistingVtNames(): void {
+  const seen = new Map<string, HTMLElement>();
+  for (const el of queryVtNamedElements()) {
+    const n = el.style?.getPropertyValue?.('view-transition-name');
+    if (!n) continue;
+    const prior = seen.get(n);
+    if (prior) prior.style?.removeProperty?.('view-transition-name');
+    seen.set(n, el);
+  }
+}
+
 function runNavTransition(
   process: ProcessFn,
   start: (cb: () => void | Promise<void>) => ViewTransition
 ): void {
+  // Clear any pre-existing duplicate names before the old snapshot is captured,
+  // so a stale held route's chrome cannot abort this transition.
+  __dedupePreexistingVtNames();
   const from = lastPath;
   // The named elements present in the outgoing route, keyed by name. Used to
   // know when a morph partner has freshly appeared in the new route (see the

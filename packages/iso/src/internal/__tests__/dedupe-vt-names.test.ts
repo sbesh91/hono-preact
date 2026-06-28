@@ -5,7 +5,10 @@
 // clears the outgoing duplicate (keeping the incoming endpoint) so the new VT
 // snapshot has no "duplicate view-transition-name".
 import { describe, it, expect, afterEach } from 'vitest';
-import { __dedupeOutgoingVtNames } from '../route-change.js';
+import {
+  __dedupeOutgoingVtNames,
+  __dedupePreexistingVtNames,
+} from '../route-change.js';
 
 function named(name: string): HTMLElement {
   const el = document.createElement('div');
@@ -72,5 +75,43 @@ describe('__dedupeOutgoingVtNames', () => {
 
     expect(outA.style.getPropertyValue('view-transition-name')).toBe('');
     expect(outB.style.getPropertyValue('view-transition-name')).toBe('b');
+  });
+});
+
+describe('__dedupePreexistingVtNames', () => {
+  it('clears all but the last occurrence of a duplicated name', () => {
+    // Mirrors a stale held route + the current route both carrying the layout's
+    // persistent `demo-activity-bar` name before a transition starts.
+    const stale = named('demo-activity-bar');
+    const current = named('demo-activity-bar');
+
+    __dedupePreexistingVtNames();
+
+    expect(stale.style.getPropertyValue('view-transition-name')).toBe('');
+    expect(current.style.getPropertyValue('view-transition-name')).toBe(
+      'demo-activity-bar'
+    );
+  });
+
+  it('leaves unique names untouched', () => {
+    const a = named('sidebar');
+    const b = named('topbar');
+
+    __dedupePreexistingVtNames();
+
+    expect(a.style.getPropertyValue('view-transition-name')).toBe('sidebar');
+    expect(b.style.getPropertyValue('view-transition-name')).toBe('topbar');
+  });
+
+  it('handles three copies, keeping only the last', () => {
+    const first = named('x');
+    const second = named('x');
+    const third = named('x');
+
+    __dedupePreexistingVtNames();
+
+    expect(first.style.getPropertyValue('view-transition-name')).toBe('');
+    expect(second.style.getPropertyValue('view-transition-name')).toBe('');
+    expect(third.style.getPropertyValue('view-transition-name')).toBe('x');
   });
 });
