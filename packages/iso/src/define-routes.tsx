@@ -1,4 +1,5 @@
 import { h } from 'preact';
+import { useMemo } from 'preact/hooks';
 import type {
   AnyComponent,
   ComponentChildren,
@@ -9,7 +10,7 @@ import { lazy, Route, Router, useLocation } from 'preact-iso';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
-import { __noteLoadEnd, __noteLoadStart } from './internal/route-change.js';
+import { makeRouterLoadTracker } from './internal/route-change.js';
 import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
 
@@ -391,6 +392,10 @@ function makeLayoutGroupComponent(
       ]);
       const inner = buildInnerRoutes(children, viewCache);
       const Wrapper: ComponentType<ViewProps> = (location) => {
+        // One load tracker per mounted inner Router instance (stable across
+        // renders) so the cold-flush coordinator can tell this layout's leaf
+        // Router apart from the outer Routes Router even though they share a url.
+        const loadTracker = useMemo(makeRouterLoadTracker, []);
         const layoutLocation = deriveLayoutLocation(
           location,
           layoutPathPattern
@@ -401,8 +406,8 @@ function makeLayoutGroupComponent(
           h(
             asRouteComponent(Router),
             {
-              onLoadStart: __noteLoadStart,
-              onLoadEnd: __noteLoadEnd,
+              onLoadStart: loadTracker.onLoadStart,
+              onLoadEnd: loadTracker.onLoadEnd,
             },
             ...inner
           )
@@ -595,14 +600,17 @@ export type RoutesProps = {
 };
 
 export const Routes: ComponentType<RoutesProps> = ({ routes }) => {
+  // One load tracker for this top-level Router instance (stable across renders);
+  // see makeRouterLoadTracker. Nested layout Routers each get their own.
+  const loadTracker = useMemo(makeRouterLoadTracker, []);
   return h(
     RouteManifestContext.Provider,
     { value: routes.serverRoutes },
     h(
       asRouteComponent(Router),
       {
-        onLoadStart: __noteLoadStart,
-        onLoadEnd: __noteLoadEnd,
+        onLoadStart: loadTracker.onLoadStart,
+        onLoadEnd: loadTracker.onLoadEnd,
       },
       ...routes.flat.map((r) =>
         h(Route, {

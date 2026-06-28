@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Component, type ComponentChildren } from 'preact';
+import { Component, h, type ComponentChildren, type VNode } from 'preact';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   render as rtlRender,
@@ -7,7 +7,7 @@ import {
   cleanup,
   waitFor,
 } from '@testing-library/preact';
-import { LocationProvider, type RouteHook } from 'preact-iso';
+import { LocationProvider, Router, Route, type RouteHook } from 'preact-iso';
 import { defineClientMiddleware } from '../../define-middleware.js';
 import { PageMiddlewareHost } from '../page-middleware-host.js';
 import { render as renderOutcome } from '../../page-only.js';
@@ -32,6 +32,30 @@ const loc = {
   pathParams: {},
   route: () => {},
 } as never;
+
+// Mount a PageMiddlewareHost (carrying `mw`, rendering `childText`) as the /x
+// route inside a Router, the post-navigation contract under test (the host needs
+// an ancestor Router as its suspense boundary). `wrap` injects an element
+// between the LocationProvider and the Router (e.g. an error boundary).
+function renderHostInRouter(
+  mw: ReturnType<typeof defineClientMiddleware>,
+  childText: string,
+  wrap?: (inner: VNode<any>) => VNode<any>
+) {
+  const HostRoute = () =>
+    h(
+      PageMiddlewareHost,
+      { use: [mw], location: loc },
+      h('div', null, childText)
+    );
+  window.history.replaceState({}, '', '/x');
+  const router = h(
+    Router,
+    null,
+    h(Route, { path: '/x', component: HostRoute as never })
+  );
+  return rtlRender(h(LocationProvider, null, wrap ? wrap(router) : router));
+}
 
 describe('PageMiddlewareHost', () => {
   it('renders children when no middleware short-circuits (client)', async () => {
@@ -80,13 +104,7 @@ describe('PageMiddlewareHost', () => {
       });
       await next();
     });
-    rtlRender(
-      <LocationProvider>
-        <PageMiddlewareHost use={[mw]} location={loc}>
-          <div>page-content</div>
-        </PageMiddlewareHost>
-      </LocationProvider>
-    );
+    renderHostInRouter(mw, 'page-content');
     expect(screen.queryByText('page-content')).toBeNull();
     resolve();
     await waitFor(() =>
@@ -274,13 +292,7 @@ describe('PageMiddlewareHost', () => {
       throw redirect('/login');
     });
 
-    rtlRender(
-      <LocationProvider>
-        <PageMiddlewareHost use={[mw]} location={loc}>
-          <div>protected-content</div>
-        </PageMiddlewareHost>
-      </LocationProvider>
-    );
+    renderHostInRouter(mw, 'protected-content');
 
     await waitFor(() => {
       expect(screen.queryByText('protected-content')).toBeNull();
@@ -294,14 +306,10 @@ describe('PageMiddlewareHost', () => {
   });
 
   // M-5: a `deny` OUTCOME thrown by a page middleware chain is a control-flow
-  // signal, not a thenable. It must propagate OUT of SuspenseHost's preact-iso
-  // `ErrorBoundary` (which only intercepts thenables for suspension) to an
-  // OUTER boundary, so renderPage / the dispatcher can translate it to a 403.
-  // This pins that preact-iso's ErrorBoundary does NOT swallow the outcome.
-  it('propagates a thrown deny outcome out of the inner preact-iso ErrorBoundary to an outer boundary', async () => {
-    // Captures whatever the inner host (and its preact-iso ErrorBoundary) lets
-    // escape. If the inner boundary swallowed the deny, nothing would reach
-    // here and `caught` would stay null.
+  // signal, not a thenable. It must propagate past the Router (which only
+  // intercepts thenables for suspension) to an OUTER boundary, so renderPage /
+  // the dispatcher can translate it to a 403.
+  it('propagates a thrown deny outcome to an outer boundary (Router is the suspense boundary)', async () => {
     let caught: unknown = null;
     class OuterCatch extends Component<{ children: ComponentChildren }> {
       static getDerivedStateFromError(error: unknown) {
@@ -313,33 +321,20 @@ describe('PageMiddlewareHost', () => {
       }
     }
 
-    // Post-navigation so the host takes SuspenseHost (the preact-iso
-    // ErrorBoundary path), not DeferredHost.
     setNavDirectionForTesting('push');
 
     const mw = defineClientMiddleware(async () => {
       throw deny(403, 'nope');
     });
 
-    rtlRender(
-      <LocationProvider>
-        <OuterCatch>
-          <PageMiddlewareHost use={[mw]} location={loc}>
-            <div>protected-content</div>
-          </PageMiddlewareHost>
-        </OuterCatch>
-      </LocationProvider>
+    renderHostInRouter(mw, 'protected-content', (router) =>
+      h(OuterCatch, null, router)
     );
 
-    // The outer boundary catches the deny: the inner preact-iso ErrorBoundary
-    // did not swallow it.
     await waitFor(() =>
       expect(screen.queryByText('outer-caught')).not.toBeNull()
     );
-    // The protected content is never shown.
     expect(screen.queryByText('protected-content')).toBeNull();
-    // What reached the outer boundary is the deny outcome itself (a non-thenable
-    // control-flow object), not a coerced Error.
     expect(isDeny(caught)).toBe(true);
   });
 });

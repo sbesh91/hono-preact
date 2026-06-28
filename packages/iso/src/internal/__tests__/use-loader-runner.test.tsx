@@ -243,4 +243,51 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'B' }));
     expect(captured.reloading).toBe(false);
   });
+
+  it('does not re-read the SSR preload on a client navigation (gated on first render)', async () => {
+    // Regression: the SSR preload is a one-time hydration handoff. On a client
+    // navigation the loader's <section> is still mounted carrying the
+    // `data-loader` the client <Envelope> re-wrote on the previous render
+    // ("null" for the state path). Re-reading it would adopt that stale value as
+    // a present preload, skip the fetch, and land on null without ever showing
+    // loading (the second-nav bug). The runner must only consult the preload on
+    // the instance's FIRST render.
+    const fn = vi
+      .fn<() => Promise<Data>>()
+      .mockResolvedValueOnce({ msg: 'A' })
+      .mockResolvedValueOnce({ msg: 'B' });
+    const ref = defineLoader<Data>(fn);
+
+    const locA = {
+      ...stateLoc,
+      path: '/a',
+      url: 'http://localhost/a',
+    } as unknown as RouteHook;
+    const locB = {
+      ...stateLoc,
+      path: '/b',
+      url: 'http://localhost/b',
+    } as unknown as RouteHook;
+
+    // First mount: preload absent (default mock) -> cold fetch A.
+    const { rerender } = render(<Probe loaderRef={ref} location={locA} />);
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'A' }));
+    expect(preload.getPreloadedData).toHaveBeenCalledTimes(1);
+
+    // Now the persisted client-written attribute would report a present `null`
+    // IF the runner re-read it on the navigation.
+    vi.mocked(preload.getPreloadedData).mockReturnValue({
+      present: true,
+      value: null as unknown as Data,
+    });
+
+    // Navigate (location change): must cold-fetch B and surface loading, never
+    // adopt the stale `null`.
+    await act(async () => {
+      rerender(<Probe loaderRef={ref} location={locB} />);
+    });
+    await waitFor(() => expect(viewData(captured)).toEqual({ msg: 'B' }));
+    // The preload was NOT consulted again on the navigation.
+    expect(preload.getPreloadedData).toHaveBeenCalledTimes(1);
+  });
 });

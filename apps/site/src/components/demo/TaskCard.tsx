@@ -6,21 +6,8 @@ import { serverLoaders as taskLoaders } from '../../pages/demo/task.server.js';
 import { MoreHorizontal } from 'lucide-preact';
 import { TaskMenu, TaskContextMenu } from './TaskActions.js';
 import type { PatchFn, RemoveFn } from './Board.js';
+import { PRIORITY_BADGE, PRIORITY_LABEL } from './priority.js';
 import { Tooltip } from 'hono-preact-ui';
-
-const PRIORITY_LABEL: Record<Task['priority'], string> = {
-  urgent: 'Urgent',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-};
-
-const PRIORITY_BADGE: Record<Task['priority'], string> = {
-  urgent: 'badge-urgent',
-  high: 'badge-high',
-  medium: 'badge-medium',
-  low: 'badge-low',
-};
 
 type Props = {
   task: Task;
@@ -74,15 +61,15 @@ const TaskCard: FunctionComponent<Props> = ({
             style={{ background: `var(--color-priority-${task.priority})` }}
             aria-hidden
           />
-          <ViewTransitionName
-            name={`task-title-${task.id}`}
-            groupClass="task-card"
-            render={<p class="mb-2 pr-6 text-[12.5px] font-medium" />}
-          >
+          {/* The title is intentionally NOT a separate view-transition-name: it
+              rides inside the card container morph (the `task-card-${id}` name on
+              the <a> above). Naming it separately would lift it out of the card
+              snapshot and dissolve a big heading into a small title in place. */}
+          <p class="mb-2 pr-6 text-[12.5px] font-medium">
             <span class={done ? 'line-through decoration-border' : ''}>
               {task.title}
             </span>
-          </ViewTransitionName>
+          </p>
           <div class="flex items-center gap-1.5">
             <Tooltip.Root openDelay={300}>
               <Tooltip.Trigger

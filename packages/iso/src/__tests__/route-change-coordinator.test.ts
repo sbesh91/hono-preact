@@ -3,8 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { options } from 'preact';
 import {
   installNavTransitionScheduler,
-  __noteLoadStart,
-  __noteLoadEnd,
+  makeRouterLoadTracker,
   __subscribePhase,
   resetDefaultTypesForTesting,
   __resetTransitionStateForTesting,
@@ -150,28 +149,105 @@ describe('debounceRendering view-transition scheduler', () => {
   it('cold navigation: holds the transition until the route modules finish loading', async () => {
     const { startViewTransition } = installFakeVt();
     installNavTransitionScheduler();
+    const router = makeRouterLoadTracker();
     const ran: string[] = [];
     navigateTo('/b');
-    __noteLoadStart(); // the route suspended on a module load
-    flushRender(() => ran.push('nav'));
+    // The route suspends DURING the nav render (inside the flush, after the
+    // scheduler's per-nav reset), so the in-flight Router is tracked.
+    flushRender(() => {
+      ran.push('nav');
+      router.onLoadStart();
+    });
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
     // The nav render ran, but the transition is awaiting the content.
     expect(ran).toEqual(['nav']);
     // The module loads: its content flushes (same URL) and is routed into the
-    // transition.
-    __noteLoadEnd();
-    flushRender(() => ran.push('content'));
+    // transition, ending the Router's load.
+    flushRender(() => {
+      ran.push('content');
+      router.onLoadEnd();
+    });
     await tick();
     expect(ran).toEqual(['nav', 'content']);
+  });
+
+  it('a guarded cold nav (one Router, two onLoadStart, one onLoadEnd) holds then finishes promptly, not at the timeout', async () => {
+    // Regression: a guarded + uncached-lazy route makes ONE Router fire
+    // onLoadStart TWICE (it suspends on its page-middleware chain AND its lazy
+    // view module) but onLoadEnd ONLY ONCE (one commit). A raw counter would
+    // leak +1 and the cold-flush loop would wait out the full 500ms timeout. The
+    // per-Router token collapses the double start to one entry, so the single end
+    // clears it. The loads are raised INSIDE the nav flush (after the scheduler's
+    // per-nav reset) so the loop actually engages — raising them before the flush
+    // would let the reset wipe them and make this assertion vacuous.
+    installFakeVt();
+    installNavTransitionScheduler();
+    const router = makeRouterLoadTracker();
+    const phases: string[] = [];
+    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+    navigateTo('/b');
+    flushRender(() => {
+      router.onLoadStart(); // page-middleware chain suspends
+      router.onLoadStart(); // lazy view module suspends (same Router)
+    });
+    await tick();
+    // Held: the Router is still loading (its single onLoadEnd hasn't fired). A
+    // counter would also be held here, but it would NOT release below.
+    expect(phases).toEqual([]);
+
+    // Content commits; the Router's single onLoadEnd fires.
+    flushRender(() => router.onLoadEnd());
+    await tick();
+    // Released as soon as the content flushed, without advancing past
+    // COLD_COMMIT_TIMEOUT_MS. A counter (2 starts - 1 end = 1) would stay held
+    // here and only release at the 500ms timeout, failing this assertion.
+    expect(phases).toEqual(['afterSwap']);
+    u();
+  });
+
+  it('a nested-Router cold nav holds until BOTH the layout and the leaf Router finish', async () => {
+    // Regression for the inFlightUrls-Set collapse: the framework nests Routers
+    // (the outer Routes Router + a per-layout inner Router), all reading the SAME
+    // url from one LocationProvider. Keying in-flight loads by url would let the
+    // outer Router's onLoadEnd empty the set while the inner leaf is still
+    // loading, releasing the transition early and defeating hold-alive. Per-Router
+    // tokens keep the two apart.
+    installFakeVt();
+    installNavTransitionScheduler();
+    const outer = makeRouterLoadTracker(); // top-level layout Router
+    const inner = makeRouterLoadTracker(); // nested leaf Router (same url)
+    const phases: string[] = [];
+    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+    navigateTo('/b');
+    flushRender(() => {
+      outer.onLoadStart();
+      inner.onLoadStart();
+    });
+    await tick();
+    expect(phases).toEqual([]); // held: two Routers loading
+
+    // The layout shell loads and its Router commits FIRST; the leaf is still
+    // loading. A url-keyed set would be empty now and release the swap here.
+    flushRender(() => outer.onLoadEnd());
+    await tick();
+    expect(phases).toEqual([]); // still held — the leaf hasn't finished
+
+    // The leaf finally loads.
+    flushRender(() => inner.onLoadEnd());
+    await tick();
+    expect(phases).toEqual(['afterSwap']); // released only now
+    u();
   });
 
   it('a second navigation supersedes an in-flight cold one', async () => {
     const { startViewTransition } = installFakeVt();
     installNavTransitionScheduler();
+    const router = makeRouterLoadTracker();
     navigateTo('/b');
-    __noteLoadStart();
-    flushRender(() => {});
+    flushRender(() => router.onLoadStart());
     await tick();
     expect(startViewTransition).toHaveBeenCalledTimes(1);
     // A new navigation arrives before /b's content loaded; it abandons /b and
@@ -182,20 +258,22 @@ describe('debounceRendering view-transition scheduler', () => {
     expect(startViewTransition).toHaveBeenCalledTimes(2);
   });
 
-  it('a navigation resets a leaked loadingDepth so the next nav is not stuck cold', async () => {
+  it('a navigation resets a leaked in-flight Router so the next nav is not stuck cold', async () => {
     installFakeVt();
     installNavTransitionScheduler();
     const phases: string[] = [];
     const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
 
-    // Simulate a leaked load: a prior route suspended (onLoadStart) but
-    // unmounted before committing, so its onLoadEnd never fired.
-    __noteLoadStart();
+    // Simulate a leaked load: a prior route's Router suspended (onLoadStart) but
+    // unmounted before committing, so its onLoadEnd never fired and its token
+    // leaked into the in-flight set.
+    const stale = makeRouterLoadTracker();
+    stale.onLoadStart();
 
-    // A new warm navigation must reset that leaked depth and complete its
-    // transition immediately — not hang on the cold loop waiting for content
-    // that will never come (which would only resolve at the 500ms timeout, well
-    // past this `tick`).
+    // A new warm navigation must reset that leaked token and complete its
+    // transition immediately, not hang on the cold loop waiting for content that
+    // will never come (which would only resolve at the 500ms timeout, well past
+    // this `tick`).
     navigateTo('/b');
     flushRender(() => {});
     await tick();
@@ -301,10 +379,12 @@ describe('debounceRendering view-transition scheduler', () => {
       const phases: string[] = [];
       const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
 
-      // The route suspends during the nav render — so loadingDepth is raised
-      // inside the transition, after the navigation's reset — and never resolves.
+      // The route suspends during the nav render (so the in-flight Router is
+      // tracked inside the transition, after the navigation's reset) and never
+      // resolves.
+      const router = makeRouterLoadTracker();
       navigateTo('/b');
-      flushRender(() => __noteLoadStart());
+      flushRender(() => router.onLoadStart());
       await Promise.resolve();
       await Promise.resolve();
       // Held cold, waiting for content that never arrives.
