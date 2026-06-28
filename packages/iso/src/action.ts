@@ -230,6 +230,76 @@ function hasFileValues(payload: unknown): boolean {
   );
 }
 
+/**
+ * The terminal outcome of consuming a streaming action response: at most one
+ * `result` value and at most one `error`. The caller checks `error` first (a
+ * terminal `error` / `timeout` event, or a malformed `result`, supersedes any
+ * value), then surfaces `result` when present, then falls back to
+ * `data: undefined` for a stream that closed without a `result` event.
+ */
+type DecodedActionStream<TResult> = {
+  result: Serialize<TResult> | undefined;
+  error: Error | null;
+};
+
+/**
+ * Drain the SSE body of a streaming action to its terminal outcome. `message`
+ * events are forwarded to `onChunk` as they arrive; `result` / `timeout` /
+ * `error` events resolve into the returned `{ result, error }`. Keeping this off
+ * `useAction`'s mutate callback lets that callback read as request-build →
+ * dispatch → record without the event-decode loop inlined. The `sse-decoder`
+ * import stays dynamic here so it is only pulled in when a streaming response
+ * actually arrives.
+ */
+async function decodeActionStream<TResult, TChunk>(
+  body: NonNullable<Response['body']>,
+  onChunk: ((chunk: Serialize<TChunk>) => void) | undefined
+): Promise<DecodedActionStream<TResult>> {
+  const { readSSE } = await import('./internal/sse-decoder.js');
+  let result: Serialize<TResult> | undefined;
+  let error: Error | null = null;
+  for await (const ev of readSSE(body)) {
+    if (ev.event === 'message') {
+      try {
+        onChunk?.(JSON.parse(ev.data) as Serialize<TChunk>);
+      } catch {
+        // malformed JSON in stream: skip
+      }
+    } else if (ev.event === 'result') {
+      try {
+        result = JSON.parse(ev.data) as Serialize<TResult>;
+      } catch (e) {
+        error = new Error(
+          `Malformed result event in stream: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    } else if (ev.event === 'timeout') {
+      try {
+        const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
+        error = new TimeoutError(parsed.timeoutMs ?? 0);
+      } catch (e) {
+        error = new Error(
+          `Malformed timeout event in stream: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    } else if (ev.event === 'error') {
+      try {
+        const parsed = JSON.parse(ev.data) as {
+          message?: string;
+          name?: string;
+        };
+        error = new Error(parsed.message ?? 'Streamed error');
+        if (parsed.name) error.name = parsed.name;
+      } catch (e) {
+        error = new Error(
+          `Malformed error event in stream: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    }
+  }
+  return { result, error };
+}
+
 export function useAction<
   TPayload,
   TResult,
@@ -356,50 +426,11 @@ export function useAction<
 
         const contentType = response.headers.get('Content-Type') ?? '';
         if (contentType.includes('text/event-stream') && response.body) {
-          const { readSSE } = await import('./internal/sse-decoder.js');
-          let resultValue: Serialize<TResult> | undefined;
-          let streamError: Error | null = null;
-          for await (const ev of readSSE(response.body)) {
-            if (ev.event === 'message') {
-              try {
-                currentOptions?.onChunk?.(
-                  JSON.parse(ev.data) as Serialize<TChunk>
-                );
-              } catch {
-                // malformed JSON in stream: skip
-              }
-            } else if (ev.event === 'result') {
-              try {
-                resultValue = JSON.parse(ev.data) as Serialize<TResult>;
-              } catch (e) {
-                streamError = new Error(
-                  `Malformed result event in stream: ${e instanceof Error ? e.message : String(e)}`
-                );
-              }
-            } else if (ev.event === 'timeout') {
-              try {
-                const parsed = JSON.parse(ev.data) as { timeoutMs?: number };
-                streamError = new TimeoutError(parsed.timeoutMs ?? 0);
-              } catch (e) {
-                streamError = new Error(
-                  `Malformed timeout event in stream: ${e instanceof Error ? e.message : String(e)}`
-                );
-              }
-            } else if (ev.event === 'error') {
-              try {
-                const parsed = JSON.parse(ev.data) as {
-                  message?: string;
-                  name?: string;
-                };
-                streamError = new Error(parsed.message ?? 'Streamed error');
-                if (parsed.name) streamError.name = parsed.name;
-              } catch (e) {
-                streamError = new Error(
-                  `Malformed error event in stream: ${e instanceof Error ? e.message : String(e)}`
-                );
-              }
-            }
-          }
+          const { result: resultValue, error: streamError } =
+            await decodeActionStream<TResult, TChunk>(
+              response.body,
+              currentOptions?.onChunk
+            );
 
           if (streamError) {
             recordOutcome(currentStub.__module, currentStub.__action, {
