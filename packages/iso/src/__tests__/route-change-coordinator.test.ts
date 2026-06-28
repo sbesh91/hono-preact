@@ -166,6 +166,33 @@ describe('debounceRendering view-transition scheduler', () => {
     expect(ran).toEqual(['nav', 'content']);
   });
 
+  it('a guarded cold nav (two onLoadStart for one url, one onLoadEnd) finishes promptly, not at the timeout', async () => {
+    // Regression: a guarded + uncached-lazy route makes the Router fire
+    // onLoadStart TWICE for the same url (chain promise, then lazy view module)
+    // but onLoadEnd ONLY ONCE (preact-iso skips a superseded suspension's
+    // onLoadEnd). A counter would leak +1 and the cold-flush loop would wait out
+    // the full 500ms timeout; the url-keyed set dedupes the double start so the
+    // single end clears it and the transition completes as soon as the content
+    // flushes.
+    installFakeVt();
+    installNavTransitionScheduler();
+    const phases: string[] = [];
+    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+
+    navigateTo('/b');
+    __noteLoadStart('/b'); // page-middleware chain suspends
+    __noteLoadStart('/b'); // lazy view module suspends (same url)
+    flushRender(() => {});
+    await tick();
+    // Content commits; only the module's onLoadEnd fires (the chain's is skipped).
+    __noteLoadEnd('/b');
+    flushRender(() => {});
+    await tick();
+    // Completed immediately, without advancing past COLD_COMMIT_TIMEOUT_MS.
+    expect(phases).toEqual(['afterSwap']);
+    u();
+  });
+
   it('a second navigation supersedes an in-flight cold one', async () => {
     const { startViewTransition } = installFakeVt();
     installNavTransitionScheduler();

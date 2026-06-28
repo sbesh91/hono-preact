@@ -45,15 +45,25 @@ function currentPath(): string {
     : '';
 }
 
-// `loadingDepth`: how many Routers are mid-suspense (via onLoadStart/onLoadEnd).
-// Read right after a navigation commits to tell whether the route suspended (a
-// cold navigation), so the transition can wait for the suspended content.
-let loadingDepth = 0;
-export function __noteLoadStart(): void {
-  loadingDepth++;
+// The set of route URLs currently mid-suspense (via onLoadStart/onLoadEnd, which
+// the Router calls with its url). Non-empty means a navigation is cold and the
+// transition should wait for the suspended content.
+//
+// Keyed by url rather than a raw counter because a single guarded navigation to
+// an uncached route makes the Router fire onLoadStart TWICE for the same url
+// (once for the page-middleware chain promise, once for the lazy view module)
+// but onLoadEnd only ONCE (preact-iso skips a superseded suspension's onLoadEnd
+// via its monotonic count guard). A counter would leak +1 and the cold-flush
+// loop below would then wait out the full COLD_COMMIT_TIMEOUT_MS on every such
+// navigation, freezing the old page ~500ms after the new content rendered. A
+// set dedupes the double start, so the single end clears it; the cached-module
+// case (one start, one end) stays balanced too.
+const inFlightUrls = new Set<string>();
+export function __noteLoadStart(url?: string): void {
+  inFlightUrls.add(url ?? '');
 }
-export function __noteLoadEnd(): void {
-  loadingDepth = Math.max(0, loadingDepth - 1);
+export function __noteLoadEnd(url?: string): void {
+  inFlightUrls.delete(url ?? '');
 }
 
 // The path the app is currently on (the previous navigation's `to`); seeds
@@ -79,7 +89,7 @@ const MORPH_PARTNER_GRACE_MS = 150;
 
 /** @internal Test-only reset for coordinator state. */
 export function __resetTransitionStateForTesting(): void {
-  loadingDepth = 0;
+  inFlightUrls.clear();
   navGen = 0;
   lastPath =
     typeof location !== 'undefined'
@@ -253,14 +263,14 @@ function scheduleRender(process: ProcessFn): void {
   }
 
   if (navigated) {
-    // Reset the load counter at the start of a navigation. A previous route's
+    // Reset the in-flight set at the start of a navigation. A previous route's
     // loads are abandoned by a new navigation, and preact-iso fires onLoadStart
     // without a matching onLoadEnd when a still-suspended Router unmounts (it
     // emits onLoadEnd only on a committed render, not on unmount). Left alone,
-    // that leaked depth would make this nav (and later ones) look perpetually
-    // cold and burn the cold-load timeout. This nav re-increments it as its own
-    // route suspends.
-    loadingDepth = 0;
+    // those leaked entries would make this nav (and later ones) look perpetually
+    // cold and burn the cold-load timeout. This nav re-populates the set as its
+    // own route suspends.
+    inFlightUrls.clear();
   }
 
   lastHref = href;
@@ -361,9 +371,9 @@ function runNavTransition(
       } else {
         for (const sub of phaseSubs.beforeSwap) sub(event);
         // Cold: the route suspended. Keep routing its content flushes into the
-        // transition until every route module has loaded (loadingDepth back to
-        // 0) — the page-level shell.
-        while (loadingDepth > 0) {
+        // transition until every route module has loaded (the in-flight set is
+        // empty) — the page-level shell.
+        while (inFlightUrls.size > 0) {
           const contentProcess = await waitForColdFlush(
             myGen,
             COLD_COMMIT_TIMEOUT_MS
