@@ -307,8 +307,8 @@ function queryVtNamedElements(): HTMLElement[] {
 // element carrying each (first wins on the off-chance a name is duplicated).
 // Element identity is what lets the grace tell a persistent name (still on its
 // original node) from a freshly-materialised morph endpoint (see below).
-function collectVtNameElements(): Map<string, Element> {
-  const map = new Map<string, Element>();
+function collectVtNameElements(): Map<string, HTMLElement> {
+  const map = new Map<string, HTMLElement>();
   for (const el of queryVtNamedElements()) {
     const n = el.style?.getPropertyValue?.('view-transition-name');
     if (n && !map.has(n)) map.set(n, el);
@@ -324,13 +324,41 @@ function collectVtNameElements(): Map<string, Element> {
 // grace: if it did, the grace would be skipped while the real data-loaded
 // partner (which loads behind inner Suspense, so it doesn't move loadingDepth)
 // is still pending, and the new snapshot would be captured without it.
-function hasFreshMorphPartner(oldNamed: Map<string, Element>): boolean {
+function hasFreshMorphPartner(oldNamed: Map<string, HTMLElement>): boolean {
   if (oldNamed.size === 0) return false;
   for (const el of queryVtNamedElements()) {
     const n = el.style?.getPropertyValue?.('view-transition-name');
     if (n && oldNamed.has(n) && oldNamed.get(n) !== el) return true;
   }
   return false;
+}
+
+// Hold-alive keeps the OUTGOING route mounted through the swap, so an outgoing
+// element can still carry a view-transition-name that the INCOMING route has
+// re-claimed on a different element. Two live elements with one name is the
+// browser's "duplicate view-transition-name" error, which aborts the whole
+// transition (and breaks the morph). The old snapshot was already captured with
+// the outgoing name intact (so the morph SOURCE survives), so clearing the name
+// from the outgoing element now leaves the NEW snapshot carrying it only on the
+// incoming element: the morph pairs old -> new instead of erroring. A name that
+// merely persisted on its ORIGINAL element (parent-layout chrome, no second
+// claimant) is a single occurrence and is left untouched.
+export function __dedupeOutgoingVtNames(
+  oldNamed: Map<string, HTMLElement>
+): void {
+  if (oldNamed.size === 0) return;
+  const current = queryVtNamedElements();
+  for (const [name, oldEl] of oldNamed) {
+    if (!oldEl.isConnected) continue;
+    const claimedByOther = current.some(
+      (el) =>
+        el !== oldEl &&
+        el.style?.getPropertyValue?.('view-transition-name') === name
+    );
+    if (claimedByOther) {
+      oldEl.style?.removeProperty?.('view-transition-name');
+    }
+  }
 }
 
 function runNavTransition(
@@ -393,6 +421,11 @@ function runNavTransition(
       }
 
       if (navGen !== myGen) return;
+      // Clear any view-transition-name still held by the OUTGOING route that the
+      // incoming route has re-claimed, so the new snapshot (captured when this
+      // callback resolves) has no duplicate name. Runs after the cold/morph
+      // waits so the incoming endpoint is present to be detected.
+      __dedupeOutgoingVtNames(oldNamed);
       fireAfterSwap(event);
       transitionActive = false; // reached only when still current
     });
