@@ -172,13 +172,13 @@ function _dataFactoryProbe() {
       // ctx has params but NOT c.
       expectTypeOf(ctx.params).toEqualTypeOf<{ roomId: string }>();
       // conn.data is the Data type inferred from the data factory.
-      expectTypeOf(conn.data).toEqualTypeOf<UserData>();
+      expectTypeOf(conn.data).toEqualTypeOf<Readonly<UserData>>();
       // @ts-expect-error ctx.c does not exist: live Context is not passed to room callbacks
       ctx.c;
     },
     onMessage(conn) {
       // onMessage also sees conn.data typed as Data.
-      expectTypeOf(conn.data).toEqualTypeOf<UserData>();
+      expectTypeOf(conn.data).toEqualTypeOf<Readonly<UserData>>();
     },
   });
 }
@@ -189,7 +189,7 @@ function _noDataFactoryProbe() {
   defineRoom(roomChannel, {
     onJoin(conn, ctx) {
       // With no data factory, Data defaults to Record<string, unknown>.
-      expectTypeOf(conn.data).toEqualTypeOf<Record<string, unknown>>();
+      expectTypeOf(conn.data).toEqualTypeOf<Readonly<Record<string, unknown>>>();
       // ctx still has no c.
       // @ts-expect-error ctx.c does not exist
       ctx.c;
@@ -205,7 +205,7 @@ function _asyncRoomDataProbe() {
       return { name: 'async-user', role: 'user' };
     },
     onJoin(conn) {
-      expectTypeOf(conn.data).toEqualTypeOf<{ name: string; role: string }>();
+      expectTypeOf(conn.data).toEqualTypeOf<Readonly<{ name: string; role: string }>>();
     },
   });
 }

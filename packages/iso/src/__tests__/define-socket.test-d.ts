@@ -15,7 +15,7 @@ function _probes() {
   const ref = defineSocket<In, Out, { joinedAt: number }>({
     open(socket) {
       // socket.send is typed to Outgoing; socket.data to Data.
-      expectTypeOf(socket.data).toEqualTypeOf<{ joinedAt: number }>();
+      expectTypeOf(socket.data).toEqualTypeOf<Readonly<{ joinedAt: number }>>();
       socket.send({ kind: 'pong', at: 1 });
       // @ts-expect-error wrong outgoing shape
       socket.send({ kind: 'nope' });
@@ -42,7 +42,7 @@ function _routeSocketProbe() {
     },
     open(socket) {
       // open's only argument is the socket; its data is the factory result.
-      expectTypeOf(socket.data).toEqualTypeOf<{ joinedAt: number }>();
+      expectTypeOf(socket.data).toEqualTypeOf<Readonly<{ joinedAt: number }>>();
     },
   });
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();

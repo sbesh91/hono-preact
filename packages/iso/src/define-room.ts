@@ -32,12 +32,12 @@ export interface RoomConnection<Outgoing, State, Data> {
   setPresence(state: State): void;
   /**
    * Per-connection state, seeded once at the edge by the room's `data()`
-   * factory. Treat it as read-only connection metadata: an in-place mutation is
-   * NOT guaranteed to persist across events on every runtime (on Cloudflare each
-   * event reads a freshly deserialized attachment). Use `setPresence` for state
-   * that evolves during the connection.
+   * factory, read-only for cross-runtime portability. An in-place mutation is
+   * NOT guaranteed to persist across events (on Cloudflare each event reads a
+   * freshly deserialized attachment). Use `setPresence` for state that evolves;
+   * for Node-only mutable state, capture a closure variable in `onJoin()`.
    */
-  data: Data;
+  data: Readonly<Data>;
   /** Close this connection. */
   close(code?: number, reason?: string): void;
 }

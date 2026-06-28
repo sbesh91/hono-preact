@@ -11,11 +11,12 @@ import {
 export interface ServerSocket<Outgoing, Data> {
   send(message: Outgoing): void;
   close(code?: number, reason?: string): void;
-  /** Per-connection data seeded by the `data` factory at connect time. On Node
-   * the handler may mutate it across events. On Cloudflare it is the
-   * connect-time value (the DO is hibernatable); cross-event mutable state on
-   * Cloudflare belongs in external storage. */
-  data: Data;
+  /** Per-connection data seeded by the `data` factory at connect time, read-only
+   * for cross-runtime portability. On Cloudflare the DO is hibernatable, so each
+   * event re-reads the connect-time value and an in-place mutation does not
+   * persist. For Node-only mutable per-connection state, capture a closure
+   * variable in `open()` instead of writing to `data`. */
+  data: Readonly<Data>;
   /** The underlying runtime socket (escape hatch). */
   readonly raw: unknown;
 }
