@@ -3,6 +3,7 @@ import type { Middleware } from './define-middleware.js';
 import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
+import type { ReadonlyData } from './internal/readonly-data.js';
 import {
   useRoom,
   type UseRoomOptions,
@@ -37,7 +38,7 @@ export interface RoomConnection<Outgoing, State, Data> {
    * freshly deserialized attachment). Use `setPresence` for state that evolves;
    * for Node-only mutable state, capture a closure variable in `onJoin()`.
    */
-  data: Readonly<Data>;
+  data: ReadonlyData<Data>;
   /** Close this connection. */
   close(code?: number, reason?: string): void;
 }

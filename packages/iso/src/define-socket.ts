@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Middleware } from './define-middleware.js';
 import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from './internal/contract.js';
+import type { ReadonlyData } from './internal/readonly-data.js';
 import {
   useSocket,
   type UseSocketOptions,
@@ -16,7 +17,7 @@ export interface ServerSocket<Outgoing, Data> {
    * event re-reads the connect-time value and an in-place mutation does not
    * persist. For Node-only mutable per-connection state, capture a closure
    * variable in `open()` instead of writing to `data`. */
-  data: Readonly<Data>;
+  data: ReadonlyData<Data>;
   /** The underlying runtime socket (escape hatch). */
   readonly raw: unknown;
 }
