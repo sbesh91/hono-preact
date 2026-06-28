@@ -26,7 +26,17 @@ export function warnIfOverForwardBudget(
   kind: 'socket' | 'room'
 ): void {
   if (!dev || data === undefined) return;
-  const json = JSON.stringify(data);
+  let json: string;
+  try {
+    json = JSON.stringify(data);
+  } catch {
+    console.warn(
+      `hono-preact: ${kind} connection data is not JSON-serializable and will ` +
+        'fail the upgrade on Cloudflare (the data rides a JSON-stringified ' +
+        'header to the Durable Object).'
+    );
+    return;
+  }
   if (json === undefined || byteLength(json) <= MAX_FORWARD_HEADER_BYTES)
     return;
   console.warn(

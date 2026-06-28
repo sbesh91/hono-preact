@@ -33,4 +33,13 @@ describe('warnIfOverForwardBudget', () => {
     warnIfOverForwardBudget(undefined, true, 'socket');
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it('warns (not throws) when the data is not JSON-serializable (circular reference)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const c: any = {};
+    c.self = c;
+    expect(() => warnIfOverForwardBudget(c, true, 'socket')).not.toThrow();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]![0]).toMatch(/not JSON-serializable|Cloudflare/i);
+  });
 });
