@@ -16,6 +16,7 @@ import {
   makeRoomConnection,
   type RoomTransport,
 } from './room-engine.js';
+import { warnIfOverForwardBudget } from './realtime-budget.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -194,9 +195,9 @@ export function resolveRoomKey(
  */
 export function createRoomWsEvents(
   roomDef: AnyRoomDef,
-  args: { ctx: Context; denied: boolean; roomKey: RoomKeyResolution }
+  args: { ctx: Context; denied: boolean; roomKey: RoomKeyResolution; dev: boolean }
 ): WSEvents {
-  const { ctx, denied, roomKey } = args;
+  const { ctx, denied, roomKey, dev } = args;
 
   // Per-connection state populated in onOpen and read by onMessage/onClose.
   let connId: string | undefined;
@@ -261,6 +262,7 @@ export function createRoomWsEvents(
       // attachment, so an in-place mutation to conn.data is not guaranteed to
       // persist across events.
       const initialData: unknown = await roomDef.data?.(ctx);
+      warnIfOverForwardBudget(initialData, dev, 'room');
 
       // The Node transport: each engine primitive realized on the in-process bus
       // + the presence registry. `sendTo` is always this socket (the engine only

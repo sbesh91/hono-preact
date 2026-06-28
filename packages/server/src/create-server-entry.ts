@@ -144,6 +144,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         registry,
         rooms,
         appConfig,
+        dev,
         resolvePageUse: pageUseResolver.byPath,
         resolveRoutePath: routePathResolver.byModuleKey,
       })(c, next);

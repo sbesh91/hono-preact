@@ -18,14 +18,16 @@ import {
   WS_DENY_CODE,
   type RealtimeConnector,
 } from '@hono-preact/iso/internal/runtime';
+import {
+  MAX_FORWARD_HEADER_BYTES,
+  byteLength,
+} from '../realtime-budget.js';
 
 // Re-export so the DO and the door can pull the transport bits from one place.
 export { makeCfRoomTransport };
 export type { DOConnState, RoomConnAttachment };
 export { makeServerSocketHandle } from '../server-socket-handle.js';
-
-/** Connections whose forwarded context exceeds this byte budget are denied. */
-export const MAX_FORWARD_HEADER_BYTES = 6 * 1024;
+export { MAX_FORWARD_HEADER_BYTES, byteLength };
 
 // DO id namespace prefixes that keep rooms and pub/sub topics in DISJOINT
 // Durable Object instances even when a channel key is reused across both:
@@ -185,11 +187,6 @@ export function makeCfForwardConnector(
     // connector returns it directly. socketsHandler returns this Response as-is.
     return stub.fetch(fwd);
   };
-}
-
-/** UTF-8 byte length of a string (header size is measured in bytes, not chars). */
-export function byteLength(s: string): number {
-  return new TextEncoder().encode(s).length;
 }
 
 // ---------------------------------------------------------------------------
