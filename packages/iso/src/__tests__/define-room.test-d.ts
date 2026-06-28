@@ -171,7 +171,7 @@ function _dataFactoryProbe() {
     onJoin(conn, ctx) {
       // ctx has params but NOT c.
       expectTypeOf(ctx.params).toEqualTypeOf<{ roomId: string }>();
-      // conn.data is the Data type inferred from the data factory.
+      // conn.data is Readonly<Data> inferred from the data factory.
       expectTypeOf(conn.data).toEqualTypeOf<Readonly<UserData>>();
       // @ts-expect-error ctx.c does not exist: live Context is not passed to room callbacks
       ctx.c;

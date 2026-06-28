@@ -16,7 +16,9 @@ export function byteLength(s: string): number {
  * budget on Cloudflare. On Node the result never rides a header, so it works
  * locally and would only fail on deploy; this surfaces it early. A no-op unless
  * `dev` is true and the serialized result is over budget. `undefined` (a
- * factory-less connection) is never over budget.
+ * factory-less connection) is never over budget. Checks only the data factory
+ * result; the room params payload is budgeted on Cloudflare too but is out of
+ * scope here (params are small route-key interpolations).
  */
 export function warnIfOverForwardBudget(
   data: unknown,

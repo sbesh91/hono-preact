@@ -9,6 +9,7 @@ import type {
   ServerLoaderCtx,
   ServerActionCtx,
   ServerMiddleware,
+  StreamObserver,
 } from '@hono-preact/iso';
 
 // ServerCtx<S> narrows to exactly one ctx per scope.
@@ -38,6 +39,9 @@ function _chainShapeProbe() {
     AbortSignal | undefined
   >();
   expectTypeOf<LoaderChain['signal']>().toEqualTypeOf<AbortSignal>();
+  expectTypeOf<LoaderChain['observers']>().toEqualTypeOf<
+    ReadonlyArray<StreamObserver<unknown, never>>
+  >();
 
   // A middleware fn for the loader chain receives a ServerLoaderCtx, not the
   // wider union: the scope must flow through.

@@ -257,10 +257,7 @@ export function createRoomWsEvents(
       // Cloudflare, where an absent x-hp-data header resolves to undefined). An
       // intentional null/value factory result is honored verbatim. conn.data is
       // edge-seeded read-only metadata; use setPresence for evolving state.
-      // Sanctioned cast: the factory result seeds the per-connection bag
-      // (unknown-typed on the internal AnyRoomDef seam) with a user-defined
-      // serializable value; the user's own Data generic flows on the public
-      // RoomHandler type. Captured ONCE so the same bag reference is returned on
+      // Captured ONCE so the same bag reference is returned on
       // every `data(connId)` for the life of this Node process. That
       // single-reference behavior is a Node transport detail, NOT a cross-runtime
       // contract: on Cloudflare each event reads a freshly deserialized

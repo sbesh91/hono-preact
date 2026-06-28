@@ -32,13 +32,14 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
    * inside a Durable Object with no live Context, so read cookies, headers,
    * query, and middleware-set values here. Runs on both Node and Cloudflare.
    *
-   * `socket.data` is the connect-time seed: on Node the handler may mutate it
-   * across events (open/message/close see the same object). On Cloudflare each
-   * event gets the original factory value (the DO is hibernatable and does not
-   * share in-memory state across events), so per-connection state that must
-   * survive across messages on Cloudflare belongs in external storage (Durable
-   * Object storage, KV, etc.). Keep the factory result small: it rides a
-   * request header to the Durable Object, so large results can fail the upgrade.
+   * `socket.data` is the connect-time seed and is read-only: each event reads
+   * the original factory value (on Cloudflare the DO is hibernatable and does
+   * not share in-memory state across events). For per-connection state that
+   * evolves during the connection, capture a closure variable in `open()` on
+   * Node, or use external storage (Durable Object storage, KV, etc.) for state
+   * that must survive across messages on Cloudflare. Keep the factory result
+   * small: it rides a request header to the Durable Object, so large results
+   * can fail the upgrade.
    */
   data?: (c: Context) => Data | Promise<Data>;
   /**

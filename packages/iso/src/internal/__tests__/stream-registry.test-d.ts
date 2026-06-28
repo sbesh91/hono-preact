@@ -31,7 +31,7 @@ function _streamEventProbe() {
 // a LoaderState or StreamState (data erased to unknown at this internal seam)
 // plus the consumer's spread props index signature.
 function _viewStateProbe() {
-  expectTypeOf<ViewState>().toMatchTypeOf<
+  expectTypeOf<ViewState>().toExtend<
     LoaderState<unknown> | StreamState<unknown>
   >();
   // The index signature carries arbitrary spread props.
