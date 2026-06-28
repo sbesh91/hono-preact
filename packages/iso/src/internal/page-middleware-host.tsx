@@ -25,6 +25,14 @@ type UseEntry = Middleware | AnyObserver;
 
 type HostResult = { outcome: Outcome | undefined };
 
+// The live URL (path + query). Used to detect that a navigation has superseded
+// a route whose chain is still settling. Call only under isBrowser().
+function currentUrl(): string {
+  return typeof location !== 'undefined'
+    ? location.pathname + location.search
+    : '';
+}
+
 function startChain(
   use: ReadonlyArray<UseEntry>,
   location: RouteHook,
@@ -148,10 +156,17 @@ function HostConsumer({
     subscribedTo.current = wrapped;
     const pending = wrapped.peek();
     if (pending.status === 'pending') {
-      // If this consumer was superseded/unmounted before settle, force() is a
-      // no-op in Preact; the read() below always reflects the current resultRef,
-      // so a late resume cannot commit stale data.
-      pending.settled.then(() => force((n) => n + 1));
+      // The URL this chain was dispatched for. If a newer navigation has moved
+      // the app elsewhere by the time the chain settles, this route is being
+      // held alive as the Router's `prev` (superseded). Re-rendering it then
+      // would commit stale content and, worse, fire its stale redirect effect
+      // (route() below), overriding the user's current navigation. Gate the
+      // self-heal on the live URL still matching the dispatch URL.
+      const dispatchedAt = isBrowser() ? currentUrl() : '';
+      pending.settled.then(() => {
+        if (isBrowser() && currentUrl() !== dispatchedAt) return;
+        force((n) => n + 1);
+      });
     }
   }
   const { outcome } = wrapped ? wrapped.read() : { outcome: undefined };
