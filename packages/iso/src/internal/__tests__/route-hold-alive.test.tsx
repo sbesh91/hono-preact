@@ -3,19 +3,12 @@
 // alive while the incoming route's page-middleware chain resolves (the Router
 // is the suspense boundary), and commits the incoming route once it resolves.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import {
-  render as rtlRender,
-  cleanup,
-  waitFor,
-  fireEvent,
-  findByTestId,
-} from '@testing-library/preact';
+import { render as rtlRender, cleanup, waitFor } from '@testing-library/preact';
 import { LocationProvider, Router, Route, useLocation } from 'preact-iso';
-import { h, type ComponentType } from 'preact';
+import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { defineClientMiddleware } from '../../define-middleware.js';
 import { PageMiddlewareHost } from '../page-middleware-host.js';
-import { defineRoutes, Routes, type ViewProps } from '../../define-routes.js';
 import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
@@ -100,42 +93,10 @@ describe('guarded route hold-alive', () => {
     expect(container.querySelector('[data-testid="route-A"]')).toBeNull();
   });
 
-  it('commits the incoming guarded route after its chain resolves (real Routes)', async () => {
-    const slowMw = defineClientMiddleware(async (_c, next) => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await next();
-    });
-    const AView: ComponentType<ViewProps> = () =>
-      h('a', { href: '/b', 'data-testid': 'to-b' }, 'go b');
-    const BView: ComponentType<ViewProps> = () =>
-      h('div', { 'data-testid': 'route-B' }, 'route-B');
-
-    const manifest = defineRoutes([
-      { path: '/a', view: () => Promise.resolve({ default: AView }) },
-      {
-        path: '/b',
-        view: () => Promise.resolve({ default: BView }),
-        use: [slowMw],
-      },
-    ]);
-
-    window.history.replaceState({}, '', '/a');
-    const { container } = rtlRender(
-      h(LocationProvider, null, h(Routes, { routes: manifest }))
-    );
-
-    const link = await findByTestId(container, 'to-b');
-    setNavDirectionForTesting('push');
-    fireEvent.click(link);
-
-    await waitFor(
-      () =>
-        expect(
-          container.querySelector('[data-testid="route-B"]')
-        ).not.toBeNull(),
-      { timeout: 3000 }
-    );
-    expect(container.querySelector('[data-testid="to-b"]')).toBeNull();
-  });
+  // The "commits the incoming guarded route after its chain resolves (real
+  // Routes)" case lived here too, but it duplicated guarded-nav-transition.test
+  // (same defineRoutes + gated middleware + click flow). The resolve/commit path
+  // is covered there; this file stays focused on the raw-Router hold-alive
+  // mechanism (the test above), which the realistic Routes path can't observe
+  // (onLoadStart is wired internally).
 });
