@@ -474,7 +474,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // Context, since the room callbacks run without a Context inside the DO)
       // and forward to the connector. The connector returns the upgrade Response
       // (the forwarded 101); return it directly, NOT through upgrade().
-      const data = (await roomDef.data?.(c)) ?? {};
+      const data = await roomDef.data?.(c);
       return connector({
         c,
         kind: 'forward',

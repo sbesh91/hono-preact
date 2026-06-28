@@ -247,24 +247,20 @@ export function createRoomWsEvents(
         ws.send(JSON.stringify(env));
       });
 
-      // Run the edge data factory if provided. It runs here (at the edge, in the
-      // worker) with the live Context, before the room callbacks run. The result
-      // seeds conn.data, available to onJoin and onMessage. On Cloudflare the
-      // room callbacks run inside a Durable Object where no live Context exists,
-      // so this is the only place to capture it. Sanctioned cast: the factory
-      // result seeds the per-connection bag (unknown-typed on the internal
-      // AnyRoomDef seam) with a user-defined serializable value; the user's own
-      // Data generic flows on the public RoomHandler type. Captured ONCE so the
-      // same bag reference is returned on every `data(connId)` for the life of
-      // this Node process. That single-reference behavior is a Node transport
-      // detail, NOT a cross-runtime contract: on Cloudflare each event reads a
-      // freshly deserialized attachment, so an in-place mutation to conn.data is
-      // not guaranteed to persist across events. Treat conn.data as edge-seeded
-      // read-only metadata; use setPresence for state that evolves.
-      const initialData = ((await roomDef.data?.(ctx)) ?? {}) as Record<
-        string,
-        unknown
-      >;
+      // A factory-less room yields `undefined` (parity with sockets and with
+      // Cloudflare, where an absent x-hp-data header resolves to undefined). An
+      // intentional null/value factory result is honored verbatim. conn.data is
+      // edge-seeded read-only metadata; use setPresence for evolving state.
+      // Sanctioned cast: the factory result seeds the per-connection bag
+      // (unknown-typed on the internal AnyRoomDef seam) with a user-defined
+      // serializable value; the user's own Data generic flows on the public
+      // RoomHandler type. Captured ONCE so the same bag reference is returned on
+      // every `data(connId)` for the life of this Node process. That
+      // single-reference behavior is a Node transport detail, NOT a cross-runtime
+      // contract: on Cloudflare each event reads a freshly deserialized
+      // attachment, so an in-place mutation to conn.data is not guaranteed to
+      // persist across events.
+      const initialData: unknown = await roomDef.data?.(ctx);
 
       // The Node transport: each engine primitive realized on the in-process bus
       // + the presence registry. `sendTo` is always this socket (the engine only

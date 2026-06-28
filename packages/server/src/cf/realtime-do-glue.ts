@@ -144,10 +144,14 @@ export function makeCfForwardConnector(
     // are user/edge-derived JSON; bound their size so an oversized data bag (or
     // a hostile params payload) cannot blow the DO's request header budget.
     const paramsJson = JSON.stringify(params);
-    const dataJson = JSON.stringify(data ?? null);
+    // Only serialize when a data factory ran. An ABSENT x-hp-data lets the DO
+    // resolve conn.data to `undefined` (parity with Node and with the socket
+    // branch); an intentional `null` result rides as the string 'null'.
+    const dataJson = data === undefined ? undefined : JSON.stringify(data);
     const overBudget =
       byteLength(paramsJson) > MAX_FORWARD_HEADER_BYTES ||
-      byteLength(dataJson) > MAX_FORWARD_HEADER_BYTES;
+      (dataJson !== undefined &&
+        byteLength(dataJson) > MAX_FORWARD_HEADER_BYTES);
     if (overBudget) {
       throw new Error(
         'hono-preact: room connection context (params/data) exceeds the ' +
@@ -168,7 +172,7 @@ export function makeCfForwardConnector(
     fwd.headers.set('x-hp-module', moduleKey);
     fwd.headers.set('x-hp-name', name);
     fwd.headers.set('x-hp-params', paramsJson);
-    fwd.headers.set('x-hp-data', dataJson);
+    if (dataJson !== undefined) fwd.headers.set('x-hp-data', dataJson);
     // This room branch forwards room upgrades; the socket branch above handles
     // socket-forward, and the DO's pub/sub topic/publish kinds are invoked
     // separately by makeCfPubSubBackend, never here. Strip any client-supplied

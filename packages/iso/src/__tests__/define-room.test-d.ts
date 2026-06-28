@@ -183,13 +183,12 @@ function _dataFactoryProbe() {
   });
 }
 
-// Without a data factory, conn.data is `Record<string, unknown>` (matches the
-// `?? {}` runtime coercion in rooms-handler and sockets-handler).
+// A factory-less room defaults Data to `undefined` (parity with defineSocket),
+// so reading conn.data is `undefined`, not an object. This is the trap-1 fix.
 function _noDataFactoryProbe() {
   defineRoom(roomChannel, {
     onJoin(conn, ctx) {
-      // With no data factory, Data defaults to Record<string, unknown>.
-      expectTypeOf(conn.data).toEqualTypeOf<Readonly<Record<string, unknown>>>();
+      expectTypeOf(conn.data).toEqualTypeOf<Readonly<undefined>>();
       // ctx still has no c.
       // @ts-expect-error ctx.c does not exist
       ctx.c;
