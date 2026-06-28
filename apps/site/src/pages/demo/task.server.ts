@@ -42,7 +42,7 @@ export const serverLoaders = {
     if (!task) return null;
     return {
       ...withAuthor(task),
-      assignee: task.assigneeId ? (getUser(task.assigneeId) ?? null) : null,
+      assignee: task.assigneeId ? getUser(task.assigneeId) : null,
     };
   }),
 

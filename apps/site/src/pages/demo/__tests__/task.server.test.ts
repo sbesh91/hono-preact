@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { isDeny } from 'hono-preact';
-import { serverActions } from '../task.server.js';
+import type { LoaderCtx } from 'hono-preact';
+import {
+  serverActions,
+  serverLoaders,
+  type TaskDetail,
+} from '../task.server.js';
 import {
   resetDemoData,
   upsertUser,
@@ -116,5 +121,51 @@ describe('task setStatus action', () => {
 
     expect(error).toBe(null);
     expect(getTask(task.id)?.status).toBe('done');
+  });
+});
+
+// The detail hero mirrors the board card (assignee avatar included), so the task
+// loader must resolve the assignee User, not just the author.
+describe('task loader', () => {
+  beforeEach(() => resetDemoData());
+
+  const loadTask = (taskId: string): Promise<TaskDetail | null> => {
+    const ctx = {
+      c: {},
+      location: { path: '/', pathParams: { taskId }, searchParams: {} },
+      signal: new AbortController().signal,
+    } as unknown as LoaderCtx;
+    const fn = serverLoaders.task.fn as (
+      ctx: LoaderCtx
+    ) => Promise<TaskDetail | null>;
+    return fn(ctx);
+  };
+
+  it('resolves the assignee User alongside the author', async () => {
+    const inf = getProjectBySlug('inf')!;
+    const task = listTasksForProject(inf.id)[0];
+    const assignee = upsertUser('assignee@example.com', 'Assignee');
+    task.assigneeId = assignee.id;
+
+    const result = await loadTask(task.id);
+
+    expect(result?.assignee?.id).toBe(assignee.id);
+    expect(result?.assignee?.name).toBe('Assignee');
+    // The author is still resolved on the same value.
+    expect(result?.author?.id).toBe(task.authorId);
+  });
+
+  it('resolves a null assignee for an unassigned task', async () => {
+    const inf = getProjectBySlug('inf')!;
+    const task = listTasksForProject(inf.id)[0];
+    task.assigneeId = null;
+
+    const result = await loadTask(task.id);
+
+    expect(result?.assignee).toBeNull();
+  });
+
+  it('returns null for an unknown task id', async () => {
+    expect(await loadTask('does-not-exist')).toBeNull();
   });
 });

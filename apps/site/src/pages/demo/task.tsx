@@ -11,7 +11,11 @@ import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import { useTitle } from 'hoofd/preact';
 import { ArrowLeft } from 'lucide-preact';
-import { serverLoaders, serverActions } from './task.server.js';
+import {
+  serverLoaders,
+  serverActions,
+  type TaskDetail,
+} from './task.server.js';
 import { serverLoaders as boardLoaders } from './project-board.server.js';
 import { StatusSelect } from '../../components/demo/pickers.js';
 import {
@@ -22,7 +26,6 @@ import CommentList from '../../components/demo/CommentList.js';
 import type {
   ActivityItem,
   Comment,
-  Task,
   TaskStatus,
   User,
 } from '../../demo/data.js';
@@ -34,7 +37,7 @@ const {
 } = serverLoaders;
 
 type WithAuthor<T extends { authorId: string }> = T & { author: User | null };
-type TaskData = WithAuthor<Task> & { assignee: User | null };
+type TaskData = TaskDetail;
 type CommentData = WithAuthor<Comment>;
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
