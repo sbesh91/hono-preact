@@ -822,14 +822,14 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     expect(seenDataInMessage).toEqual({ tag: 'x' });
   });
 
-  it('data factory result defaults to {} when not provided', async () => {
+  it('data factory result defaults to undefined when not provided', async () => {
     const { upgrader, conns } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
     let seenData: unknown;
     const app = makeApp(
       makeRoomRegistry({
-        // No data factory: conn.data starts as {}.
+        // No data factory: conn.data starts as undefined.
         onJoin(conn) {
           seenData = conn.data;
         },
@@ -840,7 +840,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
     const a = conns()[0]!;
     await a.events.onOpen?.(new Event('open'), a.ws as never);
 
-    expect(seenData).toEqual({});
+    expect(seenData).toBeUndefined();
   });
 
   it('a well-formed {t:msg} frame still reaches onMessage (regression)', async () => {

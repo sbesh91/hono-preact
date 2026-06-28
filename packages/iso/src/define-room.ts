@@ -3,6 +3,7 @@ import type { Middleware } from './define-middleware.js';
 import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
+import type { ReadonlyData } from './internal/readonly-data.js';
 import {
   useRoom,
   type UseRoomOptions,
@@ -32,12 +33,12 @@ export interface RoomConnection<Outgoing, State, Data> {
   setPresence(state: State): void;
   /**
    * Per-connection state, seeded once at the edge by the room's `data()`
-   * factory. Treat it as read-only connection metadata: an in-place mutation is
-   * NOT guaranteed to persist across events on every runtime (on Cloudflare each
-   * event reads a freshly deserialized attachment). Use `setPresence` for state
-   * that evolves during the connection.
+   * factory, read-only for cross-runtime portability. An in-place mutation is
+   * NOT guaranteed to persist across events (on Cloudflare each event reads a
+   * freshly deserialized attachment). Use `setPresence` for state that evolves;
+   * for Node-only mutable state, capture a closure variable in `onJoin()`.
    */
-  data: Data;
+  data: ReadonlyData<Data>;
   /** Close this connection. */
   close(code?: number, reason?: string): void;
 }
@@ -152,7 +153,7 @@ export function defineRoom<
   Name extends string,
   Payload,
   State = void,
-  Data = Record<string, unknown>,
+  Data = undefined,
 >(
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>

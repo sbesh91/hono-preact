@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Middleware } from './define-middleware.js';
 import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from './internal/contract.js';
+import type { ReadonlyData } from './internal/readonly-data.js';
 import {
   useSocket,
   type UseSocketOptions,
@@ -11,11 +12,12 @@ import {
 export interface ServerSocket<Outgoing, Data> {
   send(message: Outgoing): void;
   close(code?: number, reason?: string): void;
-  /** Per-connection data seeded by the `data` factory at connect time. On Node
-   * the handler may mutate it across events. On Cloudflare it is the
-   * connect-time value (the DO is hibernatable); cross-event mutable state on
-   * Cloudflare belongs in external storage. */
-  data: Data;
+  /** Per-connection data seeded by the `data` factory at connect time, read-only
+   * for cross-runtime portability. On Cloudflare the DO is hibernatable, so each
+   * event re-reads the connect-time value and an in-place mutation does not
+   * persist. For Node-only mutable per-connection state, capture a closure
+   * variable in `open()` instead of writing to `data`. */
+  data: ReadonlyData<Data>;
   /** The underlying runtime socket (escape hatch). */
   readonly raw: unknown;
 }
@@ -30,13 +32,14 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
    * inside a Durable Object with no live Context, so read cookies, headers,
    * query, and middleware-set values here. Runs on both Node and Cloudflare.
    *
-   * `socket.data` is the connect-time seed: on Node the handler may mutate it
-   * across events (open/message/close see the same object). On Cloudflare each
-   * event gets the original factory value (the DO is hibernatable and does not
-   * share in-memory state across events), so per-connection state that must
-   * survive across messages on Cloudflare belongs in external storage (Durable
-   * Object storage, KV, etc.). Keep the factory result small: it rides a
-   * request header to the Durable Object, so large results can fail the upgrade.
+   * `socket.data` is the connect-time seed and is read-only: each event reads
+   * the original factory value (on Cloudflare the DO is hibernatable and does
+   * not share in-memory state across events). For per-connection state that
+   * evolves during the connection, capture a closure variable in `open()` on
+   * Node, or use external storage (Durable Object storage, KV, etc.) for state
+   * that must survive across messages on Cloudflare. Keep the factory result
+   * small: it rides a request header to the Durable Object, so large results
+   * can fail the upgrade.
    */
   data?: (c: Context) => Data | Promise<Data>;
   /**

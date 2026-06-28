@@ -14,6 +14,7 @@ import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
 import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
 import { assertPageUseResolver } from './page-use-guard.js';
+import { warnIfOverForwardBudget } from './realtime-budget.js';
 import { createRoomWsEvents, resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
 import { makeServerSocketHandle } from './server-socket-handle.js';
@@ -102,7 +103,13 @@ export interface SocketsHandlerOptions {
    */
   rooms?: Map<string, AnyRoomDef>;
   appConfig?: AppConfig;
-  // `dev` (registry freshness) is the caller's responsibility; not read here.
+  /**
+   * Dev mode. When true, the Node upgrade path warns (rather than silently
+   * accepting) a data-factory result that would exceed the 6KB forward budget
+   * on Cloudflare, surfacing a CF-only failure during local development. The
+   * generated server entry passes `{ dev: import.meta.env.DEV }`.
+   */
+  dev?: boolean;
   /**
    * Page-layer `use` resolver. The route-node `use` chain is composed as the
    * middle layer (outer -> inner: app-use, page-use, def.use), which is where
@@ -372,7 +379,12 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // (larger) wiring to the room runtime to keep this file thin. The
       // pre-resolved room key is threaded in so onOpen does not re-parse.
       if ('channel' in def && roomKey) {
-        return createRoomWsEvents(def, { ctx, denied, roomKey });
+        return createRoomWsEvents(def, {
+          ctx,
+          denied,
+          roomKey,
+          dev: opts.dev ?? false,
+        });
       }
 
       // --- Plain duplex socket wiring. ---
@@ -392,6 +404,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
         : socketDef!.data
           ? await socketDef!.data(ctx)
           : undefined;
+      warnIfOverForwardBudget(data, opts.dev ?? false, 'socket');
 
       return {
         async onOpen(_e, ws) {
@@ -474,7 +487,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // Context, since the room callbacks run without a Context inside the DO)
       // and forward to the connector. The connector returns the upgrade Response
       // (the forwarded 101); return it directly, NOT through upgrade().
-      const data = (await roomDef.data?.(c)) ?? {};
+      const data = await roomDef.data?.(c);
       return connector({
         c,
         kind: 'forward',

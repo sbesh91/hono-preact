@@ -143,7 +143,7 @@ describe('makeCfForwardConnector', () => {
     expect(fwd.headers.get('x-existing')).toBe('kept');
   });
 
-  it('serializes undefined data as null on the wire', async () => {
+  it('omits x-hp-data when the room has no data factory (undefined -> absent, Node parity)', async () => {
     const records: ForwardRecord[] = [];
     const { namespace } = makeFakeNamespace(records);
     const connector = makeCfForwardConnector(() => namespace as never);
@@ -153,7 +153,8 @@ describe('makeCfForwardConnector', () => {
       ...baseCtx({ data: undefined }),
     });
 
-    expect(records[0].request.headers.get('x-hp-data')).toBe('null');
+    // Absent header -> the DO resolves room conn.data to undefined, matching Node.
+    expect(records[0].request.headers.has('x-hp-data')).toBe(false);
   });
 
   it('throws a clear binding error when the namespace is missing', async () => {

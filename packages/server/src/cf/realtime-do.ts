@@ -229,7 +229,12 @@ export class HonoPreactRealtimeDO extends DurableObject {
     const params = parseHeaderJson(
       request.headers.get('x-hp-params')
     ) as Record<string, string>;
-    const data = parseHeaderJson(request.headers.get('x-hp-data'));
+    // An ABSENT x-hp-data means no room data factory ran -> `undefined` (parity
+    // with Node, where conn.data defaults to undefined). A present 'null' (an
+    // intentional null factory result) still parses to null.
+    const rawRoomData = request.headers.get('x-hp-data');
+    const data =
+      rawRoomData === null ? undefined : parseHeaderJson(rawRoomData);
 
     const def = await this.getDef(moduleKey, name);
 

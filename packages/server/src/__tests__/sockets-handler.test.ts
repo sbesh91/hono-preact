@@ -24,6 +24,7 @@ import {
   buildSocketRegistry,
   socketsHandler,
 } from '../sockets-handler.js';
+import { MAX_FORWARD_HEADER_BYTES } from '../realtime-budget.js';
 import { buildRoomRegistry } from '../rooms-handler.js';
 import type {
   WebSocketUpgrader,
@@ -1049,5 +1050,90 @@ describe('socketsHandler: realtime connector forwarding', () => {
     });
     const recorded = calls();
     expect(recorded[0]?.kind).toBe('socket-forward');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FIX 3: dev budget warning threads through socketsHandler -> warnIfOverForwardBudget
+//
+// These tests use the socket path (plain duplex socket, no room registry) because
+// the socket branch calls warnIfOverForwardBudget directly in createEvents before
+// returning WSEvents, making it straightforward to drive with the existing fake
+// upgrader harness. The helper is shared with the room path, so one path proves
+// the threading.
+// ---------------------------------------------------------------------------
+
+describe('socketsHandler: dev budget warning threads through to warnIfOverForwardBudget', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('warns when dev=true and the data factory result is over budget', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const def = defineSocket<never, never, { blob: string }>({
+      data: () => ({ blob: 'x'.repeat(MAX_FORWARD_HEADER_BYTES + 1) }),
+    }) as unknown as SocketDef<never, never, { blob: string }>;
+
+    const testApp = new Hono();
+    testApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry: new Map([['pages/chat::chatSocket', def]]),
+        resolvePageUse: () => [],
+        dev: true,
+      })
+    );
+
+    // warnIfOverForwardBudget fires during createEvents (the upgrade request),
+    // before onOpen; asserting after app.request is sufficient.
+    await testApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket`
+    );
+
+    expect(warn).toHaveBeenCalled();
+    expect(
+      warn.mock.calls.some((c) => /forward limit/i.test(String(c[0])))
+    ).toBe(true);
+
+    // Drive open to confirm the connection is otherwise healthy.
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes).toHaveLength(0);
+  });
+
+  it('does not warn when dev=false even with an over-budget data factory', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const def = defineSocket<never, never, { blob: string }>({
+      data: () => ({ blob: 'x'.repeat(MAX_FORWARD_HEADER_BYTES + 1) }),
+    }) as unknown as SocketDef<never, never, { blob: string }>;
+
+    const testApp = new Hono();
+    testApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry: new Map([['pages/chat::chatSocket', def]]),
+        resolvePageUse: () => [],
+        dev: false,
+      })
+    );
+
+    await testApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}?m=pages/chat&s=chatSocket`
+    );
+
+    // No forward-limit warning must fire when dev is false.
+    expect(
+      warn.mock.calls.some((c) => /forward limit/i.test(String(c[0])))
+    ).toBe(false);
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes).toHaveLength(0);
   });
 });
