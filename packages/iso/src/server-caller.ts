@@ -3,11 +3,10 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { LoaderRef } from './define-loader.js';
 import type { ActionRef } from './action.js';
 import { isOutcome, type Outcome } from './outcomes.js';
-import { coerceLoaderLocation } from './internal/loader-schema.js';
-import { validateWithSchema } from './validate.js';
-import { deny } from './outcomes.js';
-import { VALIDATION_ISSUES_KEY } from './internal/contract.js';
-import { partitionUse } from './internal/use-partitioner.js';
+import {
+  coerceLoaderLocation,
+  coerceActionInput,
+} from './internal/loader-schema.js';
 import { dispatchServer } from './internal/middleware-runner.js';
 import { runRequestScope, getRequestStore } from './cache.js';
 import type {
@@ -105,8 +104,7 @@ async function callLoader<T>(
   ref: LoaderRef<T, false>,
   location: CallLoaderLocation | undefined
 ): Promise<CallResult<T>> {
-  const { middleware } = partitionUse(ref.use);
-  const serverMw = serverMiddleware(middleware);
+  const serverMw = serverMiddleware(ref.use);
   const ctx: ServerLoaderCtx = {
     scope: 'loader',
     c,
@@ -169,16 +167,9 @@ async function callAction<TResult>(
       middleware: serverMw,
       ctx,
       inner: async () => {
-        let effective = payload;
-        if (ref.input) {
-          const validated = await validateWithSchema(ref.input, payload);
-          if (!validated.ok) {
-            throw deny(422, 'Validation failed', {
-              data: { [VALIDATION_ISSUES_KEY]: validated.issues },
-            });
-          }
-          effective = validated.value;
-        }
+        const effective = ref.input
+          ? await coerceActionInput(ref.input, payload)
+          : payload;
         const value = await ref(
           { c, signal: ctx.signal, call: caller.call },
           effective

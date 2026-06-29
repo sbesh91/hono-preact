@@ -64,3 +64,23 @@ export async function coerceLoaderLocation(
   }
   return { pathParams: p, searchParams: s };
 }
+
+/**
+ * Validate an action payload against its `input` schema. Returns the schema's
+ * validated output, or throws `deny(422, 'Validation failed')` carrying the
+ * normalized issues under VALIDATION_ISSUES_KEY. Mirrors coerceLoaderLocation
+ * for the action path; shared by the page-actions handler (HTTP) and the
+ * server caller (ctx.call) so the two cannot drift.
+ */
+export async function coerceActionInput(
+  input: StandardSchemaV1,
+  payload: unknown
+): Promise<unknown> {
+  const validated = await validateWithSchema(input, payload);
+  if (!validated.ok) {
+    throw deny(422, 'Validation failed', {
+      data: { [VALIDATION_ISSUES_KEY]: validated.issues },
+    });
+  }
+  return validated.value;
+}

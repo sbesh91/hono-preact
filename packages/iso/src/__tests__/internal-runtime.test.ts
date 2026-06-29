@@ -54,6 +54,7 @@ describe('iso /internal/runtime door', () => {
       'validateWithSchema',
       'normalizeIssues',
       'mapIssuesToFields',
+      'coerceActionInput',
       'coerceLoaderLocation',
       'collectFormData',
     ]);

@@ -58,6 +58,7 @@ export {
 export { env } from './is-browser.js';
 export {
   coerceLoaderLocation,
+  coerceActionInput,
   type LooseLoaderFn,
 } from './internal/loader-schema.js';
 export { collectFormData } from './internal/form-data.js';

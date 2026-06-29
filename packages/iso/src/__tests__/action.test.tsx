@@ -50,6 +50,7 @@ import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import { ActiveLoaderIdContext } from '../internal/contexts.js';
 import type { ActionRef, MutateResult } from '../action.js';
+import type { Serialize } from '../internal/serialize.js';
 import { defineLoader } from '../define-loader.js';
 import { subscribe } from '../internal/form-submit-store.js';
 import {
@@ -937,7 +938,7 @@ describe('useAction: streaming via SSE', () => {
         onChunk: (c) => {
           chunks.push(c);
         },
-        onSuccess: (r) => {
+        onSuccess: (r: Serialize<{ imported: number }>) => {
           final = r;
         },
       });
@@ -983,7 +984,7 @@ describe('useAction: streaming via SSE', () => {
         onChunk: () => {
           chunks++;
         },
-        onError: (err) => {
+        onError: (err: Error) => {
           caught = err;
         },
       });
@@ -1023,7 +1024,7 @@ describe('useAction: streaming via SSE', () => {
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
-        onError: (err) => {
+        onError: (err: Error) => {
           caught = err;
         },
       });
