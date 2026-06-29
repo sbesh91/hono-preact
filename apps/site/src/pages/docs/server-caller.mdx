@@ -1,0 +1,155 @@
+# Server Caller
+
+Loaders and actions can call each other server-side without an HTTP round-trip using `ctx.call`. The called procedure runs in the same request scope, its input is validated, and the result carries the authored type with no JSON serialization. For testing outside a live request, `createCaller(c)` binds the same mechanism to any Hono `Context` you provide.
+
+## Calling from inside a handler
+
+Every loader and action receives a `call` method on its context object. Pass another loader ref as the first argument to invoke it directly:
+
+```ts
+// src/pages/movie.server.ts
+import { defineLoader } from 'hono-preact';
+import { serverLoaders as reviewLoaders } from './reviews.server.js';
+
+const reviewsLoader = reviewLoaders.default;
+
+export const serverLoaders = {
+  default: defineLoader(async (ctx) => {
+    const movie = await fetchMovie(ctx.location.pathParams.id);
+    const reviewsResult = await ctx.call(reviewsLoader, {
+      location: { pathParams: ctx.location.pathParams },
+    });
+    if (!reviewsResult.ok) throw reviewsResult.outcome;
+    return { movie, reviews: reviewsResult.value };
+  }),
+};
+```
+
+`ctx.call` returns a `CallResult<T>` discriminated union. Narrow on `ok` before reading `value`. A `deny` or `redirect` from the inner procedure surfaces as `{ ok: false, outcome }` rather than throwing into the outer handler, so the caller decides whether to propagate or handle it:
+
+```ts
+const result = await ctx.call(anotherLoader, { location });
+if (result.ok) {
+  // result.value: T (the authored type, not Serialize<T>)
+  return { combined: result.value };
+} else {
+  // propagate any deny or redirect from the inner loader
+  throw result.outcome;
+}
+```
+
+Actions also receive `ctx.call`. Use it to delegate to a shared action from within another action:
+
+```ts
+// src/pages/orders.server.ts
+import { defineAction } from 'hono-preact';
+import { serverActions as notifyActions } from './notifications.server.js';
+
+export const serverActions = {
+  createOrder: defineAction(async (ctx, payload: { items: string[] }) => {
+    const order = await db.orders.create(payload);
+    const notifyResult = await ctx.call(notifyActions.sendConfirmation, {
+      orderId: order.id,
+    });
+    if (!notifyResult.ok) throw notifyResult.outcome;
+    return { orderId: order.id };
+  }),
+};
+```
+
+## Testing with `createCaller(c)`
+
+Outside a running request (in unit or integration tests), use `createCaller` to build a caller bound to a Hono `Context`:
+
+```ts
+import { createCaller } from 'hono-preact';
+import { serverLoaders } from './movie.server.js';
+
+it('returns the movie', async () => {
+  // obtain a Hono Context from your test app
+  const response = await app.request(new Request('https://app.test/movies/42'));
+  const c = /* Context from your test helper */;
+  const caller = createCaller(c);
+
+  const result = await caller.call(serverLoaders.default, {
+    location: { pathParams: { id: '42' } },
+  });
+
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.value.movie.id).toBe(42);
+  }
+});
+```
+
+`createCaller(c)` opens a fresh request scope per call (rather than inheriting an active one). Inside a live handler, `ctx.call` detects the active scope and reuses it automatically. `createCaller` is for the standalone path only.
+
+## How it works
+
+- **Runs the procedure's own `use` middleware.** The called procedure's per-unit `use` array is applied: auth guards, rate limits, and any observers declared on `defineLoader` or `defineAction`. The app-level chain and the page (route) middleware are not run for the call: the app chain already fired for the outer request, and the callee's own route-level middleware is bypassed entirely. So a guard placed only on a route node does not protect a procedure reached through `ctx.call` from a different route. Put any guard that must protect a procedure regardless of how it is entered on that procedure's own `defineLoader` / `defineAction({ use })`, not only on its route.
+- **Reuses the live request scope.** Inside a live handler, `ctx.call` inherits the outer request's async-local storage context, so the Hono `Context`, session state, and middleware side-effects are shared. `createCaller(c)` used outside a handler opens a fresh scope per call.
+- **Returns the authored type, not the wire shape.** No JSON round-trip occurs. The return type of `ctx.call(loader)` is `T` (the loader's declared return), not `Serialize<T>`. A `Date` field stays a `Date`.
+- **Does not share the loader result cache.** The loader result cache is populated on the SSR page-render path. `ctx.call` invokes the loader function directly, so the result is always freshly computed. Two calls to the same loader produce two executions.
+- **Validates inputs.** If the called loader has a `searchSchema` or `paramsSchema`, or the called action has an `input` schema, the caller validates the supplied location or payload before invoking the function. A validation failure surfaces as `{ ok: false, outcome }`, not a raw throw.
+- **Unexpected errors reject the promise.** `ctx.call` resolves a `redirect`, `deny`, or validation failure to `{ ok: false, outcome }`, but an unexpected thrown error (a bug or exception inside the callee) propagates as a rejected promise. Wrap the call in `try/catch` if you need to contain those.
+
+## Limitations
+
+- **Single-value loaders and actions only.** `ctx.call(loader)` is typed for `LoaderRef<T, false>` (non-live loaders). Passing a live (streaming) loader is a type error: a live loader produces a stream, not a single return value.
+- **No synthetic context minting.** `createCaller(c)` accepts a `Context` you supply. Obtain one from `app.request(new Request(...))` or your test helper. The framework does not mint a synthetic context.
+
+## API reference
+
+### `ctx.call(loader, opts?)`
+
+| Argument        | Type                            | Description                                                                                                             |
+| --------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `loader`        | `LoaderRef<T, false>`           | The single-value loader to call. Live loaders are excluded by the type.                                                 |
+| `opts.location` | `CallLoaderLocation` (optional) | Path, path params, and search params for the loader's location. Defaults to the current request path with empty params. |
+
+Returns `Promise<CallResult<T>>`.
+
+### `ctx.call(action, payload)`
+
+| Argument  | Type                                  | Description                                                                            |
+| --------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| `action`  | `ActionRef<TPayload, TResult, never>` | The single-value action to call. Streaming actions are excluded by the type.           |
+| `payload` | `TPayload`                            | The action payload. Validated against the action's `input` schema when one is present. |
+
+Returns `Promise<CallResult<TResult>>`.
+
+### `createCaller(c)`
+
+```ts
+import { createCaller } from 'hono-preact';
+
+const caller = createCaller(c: Context): ServerCaller;
+```
+
+Returns a `ServerCaller` with a `call` method that accepts the same arguments as `ctx.call`. Each call opens a fresh request scope bound to `c`. Use in tests and any context outside a live request handler.
+
+### `CallResult<T>`
+
+```ts
+type CallResult<T> = { ok: true; value: T } | { ok: false; outcome: Outcome };
+```
+
+Narrow on `ok` to access `value` or inspect `outcome`. The `outcome` type is `Outcome` (one of `redirect | deny | timeout | render`). Re-throw it to propagate to the outer handler, or inspect `outcome.__outcome` to handle specific cases.
+
+### `CallLoaderLocation`
+
+```ts
+type CallLoaderLocation = {
+  path?: string;
+  pathParams?: Record<string, string>;
+  searchParams?: Record<string, string>;
+};
+```
+
+Optional location shape for `ctx.call(loader, { location })`. All fields are optional; omitted fields default to the current request path and empty params.
+
+## See also
+
+- [Server Loaders](/docs/loaders): defining loaders and composing multiple loaders per route.
+- [Server Actions](/docs/actions): defining and calling actions.
+- [Middleware](/docs/middleware): the per-unit and app-level middleware model.

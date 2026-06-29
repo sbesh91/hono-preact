@@ -8,6 +8,33 @@ import type {
 export type ErrorStatusCode = ClientErrorStatusCode | ServerErrorStatusCode;
 export type { RedirectStatusCode };
 
+/**
+ * A named, statically-known deny code vocabulary. It decorates the numeric HTTP
+ * `status` so a client can `switch` on a typed code instead of sniffing the
+ * message string. `status` stays authoritative; `code` is optional decoration.
+ */
+export type DenyCode =
+  | 'BAD_REQUEST'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'UNPROCESSABLE'
+  | 'TOO_MANY_REQUESTS'
+  | 'INTERNAL';
+
+/** Default HTTP status for each code, used when `deny(code)` omits a status. */
+export const DENY_CODE_STATUS: Record<DenyCode, ErrorStatusCode> = {
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  UNPROCESSABLE: 422,
+  TOO_MANY_REQUESTS: 429,
+  INTERNAL: 500,
+};
+
 export type RedirectOutcome = {
   __outcome: 'redirect';
   to: string;
@@ -21,6 +48,7 @@ export type DenyOutcome = {
   message: string;
   headers: Record<string, string> | undefined;
   data?: unknown;
+  code?: DenyCode;
 };
 
 export type RenderOutcome = {
@@ -65,7 +93,8 @@ export function redirect(input: RedirectInput): RedirectOutcome {
 }
 
 type DenyInput = {
-  status: ErrorStatusCode;
+  status?: ErrorStatusCode;
+  code?: DenyCode;
   message?: string;
   headers?: Record<string, string>;
   data?: unknown;
@@ -81,9 +110,14 @@ export function deny(
   message?: string,
   opts?: DenyOptions
 ): DenyOutcome;
+export function deny(
+  code: DenyCode,
+  message?: string,
+  opts?: DenyOptions
+): DenyOutcome;
 export function deny(spec: DenyInput): DenyOutcome;
 export function deny(
-  a: ErrorStatusCode | DenyInput,
+  a: ErrorStatusCode | DenyCode | DenyInput,
   b?: string,
   c?: DenyOptions
 ): DenyOutcome {
@@ -94,13 +128,29 @@ export function deny(
   // so the wire envelope always carries something useful. Callers can still
   // pass a richer message; defense-in-depth on the client side fills in a
   // similar fallback if a hand-rolled envelope ships without `message`.
+  // Object form: status may be explicit or inferred from the code.
   if (typeof a === 'object') {
+    const status =
+      a.status ?? (a.code ? (DENY_CODE_STATUS[a.code] ?? 500) : 500);
     return {
       __outcome: 'deny',
-      status: a.status,
-      message: a.message ?? `Request denied (${a.status})`,
+      status,
+      message: a.message ?? `Request denied (${status})`,
       headers: a.headers,
+      ...(a.code !== undefined ? { code: a.code } : {}),
       ...(a.data !== undefined ? { data: a.data } : {}),
+    };
+  }
+  // Positional form: a string is a code, a number is a raw status.
+  if (typeof a === 'string') {
+    const status = DENY_CODE_STATUS[a] ?? 500;
+    return {
+      __outcome: 'deny',
+      status,
+      message: b ?? `Request denied (${status})`,
+      headers: c?.headers,
+      code: a,
+      ...(c?.data !== undefined ? { data: c.data } : {}),
     };
   }
   return {

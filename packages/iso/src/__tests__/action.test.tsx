@@ -49,7 +49,8 @@ import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import { ActiveLoaderIdContext } from '../internal/contexts.js';
-import type { ActionRef } from '../action.js';
+import type { ActionRef, MutateResult } from '../action.js';
+import type { Serialize } from '../internal/serialize.js';
 import { defineLoader } from '../define-loader.js';
 import { subscribe } from '../internal/form-submit-store.js';
 import {
@@ -138,6 +139,7 @@ describe('useAction', () => {
         action: 'create',
         payload: { title: 'Dune' },
       }),
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -454,9 +456,10 @@ describe('useAction', () => {
     type Result = { id: string };
     let captured: Awaited<ReturnType<typeof mutateRef.current>> | undefined;
     const mutateRef = {
-      current: null as unknown as (p: {
-        x: number;
-      }) => Promise<{ ok: true; data: Result } | { ok: false; error: Error }>,
+      current: null as unknown as (
+        p: { x: number },
+        opts?: { signal?: AbortSignal }
+      ) => Promise<MutateResult<Result>>,
     };
 
     function TestComponent() {
@@ -935,7 +938,7 @@ describe('useAction: streaming via SSE', () => {
         onChunk: (c) => {
           chunks.push(c);
         },
-        onSuccess: (r) => {
+        onSuccess: (r: Serialize<{ imported: number }>) => {
           final = r;
         },
       });
@@ -981,7 +984,7 @@ describe('useAction: streaming via SSE', () => {
         onChunk: () => {
           chunks++;
         },
-        onError: (err) => {
+        onError: (err: Error) => {
           caught = err;
         },
       });
@@ -1021,7 +1024,7 @@ describe('useAction: streaming via SSE', () => {
 
     function Probe() {
       const { mutate } = useAction(streamingStub, {
-        onError: (err) => {
+        onError: (err: Error) => {
           caught = err;
         },
       });

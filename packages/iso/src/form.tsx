@@ -152,6 +152,20 @@ export function Form<TPayload, TResult>({
     []
   );
 
+  // Tracks all in-flight submit controllers so unmount can abort each one.
+  // A Set (mirroring useAction's inflightRef) handles overlapping submits:
+  // an earlier controller is not replaced when a second submit starts, so
+  // a late-arriving response from the first cannot trigger window.location.reload
+  // after unmount.
+  const submitControllerRef = useRef<Set<AbortController>>(new Set());
+  useEffect(
+    () => () => {
+      for (const ctrl of submitControllerRef.current) ctrl.abort();
+      submitControllerRef.current.clear();
+    },
+    []
+  );
+
   const moduleKey = action.__module;
   const actionName = action.__action;
   const applyInvalidate = useInvalidate();
@@ -271,6 +285,9 @@ export function Form<TPayload, TResult>({
       let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);
 
+      const controller = new AbortController();
+      submitControllerRef.current.add(controller);
+
       setPending(true);
       beginSubmit(moduleKey, actionName);
       try {
@@ -283,6 +300,7 @@ export function Form<TPayload, TResult>({
           // `never` chunk-type pin on `FormActionInput` is sound: a streaming
           // action could not be consumed here even if the types allowed it.
           headers: { Accept: 'application/json' },
+          signal: controller.signal,
         });
         const decoded = await decodeActionResponse(res);
         // Every outcome records a result (or reloads) and returns; `<Form>`
@@ -316,13 +334,14 @@ export function Form<TPayload, TResult>({
               submittedPayload: payload,
             });
           },
-          deny: (status, message, data) => {
+          deny: (status, message, data, code) => {
             handle?.revert();
             setLastActionResult(moduleKey, actionName, {
               kind: 'deny',
               status,
               message,
               data,
+              ...(code !== undefined ? { code } : {}),
               submittedPayload: payload,
             });
           },
@@ -364,6 +383,13 @@ export function Form<TPayload, TResult>({
           },
         });
       } catch (err) {
+        if (controller.signal.aborted) {
+          // Cancelled (unmount). Revert any optimistic entry so it is not
+          // stranded; do not record a result or call onError (the component
+          // is gone).
+          handle?.revert();
+          return;
+        }
         handle?.revert();
         setLastActionResult(moduleKey, actionName, {
           kind: 'error',
@@ -372,6 +398,7 @@ export function Form<TPayload, TResult>({
         });
         lifecycle.current.onError?.(toError(err));
       } finally {
+        submitControllerRef.current.delete(controller);
         setPending(false);
         endSubmit(moduleKey, actionName);
       }

@@ -31,6 +31,14 @@ export type {
 } from './internal/typed-routes.js';
 export type { Serialize } from './internal/serialize.js';
 
+// Inference helpers over action/loader refs.
+export type {
+  InferActionPayload,
+  InferActionResult,
+  InferActionChunk,
+  InferLoaderData,
+} from './infer.js';
+
 // Server bindings.
 export { defineLoader } from './define-loader.js';
 export type {
@@ -44,6 +52,14 @@ export type {
 } from './define-loader.js';
 export { serverRoute } from './server-route.js';
 export type { RouteBinder } from './server-route.js';
+
+// Server-side caller (HTTP-free loader/action composition + testing).
+export { createCaller } from './server-caller.js';
+export type {
+  ServerCaller,
+  CallResult,
+  CallLoaderLocation,
+} from './server-caller.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
   ActionRef,
@@ -164,6 +180,7 @@ export {
   isDeny,
   isRender,
   isTimeout,
+  DENY_CODE_STATUS,
 } from './outcomes.js';
 export type {
   Outcome,
@@ -173,6 +190,7 @@ export type {
   TimeoutOutcome,
   RedirectStatusCode,
   ErrorStatusCode,
+  DenyCode,
 } from './outcomes.js';
 
 // Utilities.

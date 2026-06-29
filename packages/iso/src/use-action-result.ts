@@ -9,6 +9,7 @@ import {
 import { isBrowser } from './is-browser.js';
 import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
+import type { DenyCode } from './outcomes.js';
 
 export type ActionResult<TPayload, TResult> =
   | { kind: 'success'; data: Serialize<TResult>; submittedPayload: TPayload }
@@ -17,6 +18,7 @@ export type ActionResult<TPayload, TResult> =
       status: number;
       message: string;
       data?: unknown;
+      code?: DenyCode;
       /**
        * The payload as parsed from the request. For form submissions, this is
        * a `Record<string, FormDataEntryValue | FormDataEntryValue[]>` where
@@ -59,6 +61,7 @@ function projectActionResult<TPayload, TResult>(
       status: source.status,
       message: source.message,
       data: source.data,
+      ...(source.code !== undefined ? { code: source.code } : {}),
       submittedPayload: source.submittedPayload as TPayload,
     };
   }

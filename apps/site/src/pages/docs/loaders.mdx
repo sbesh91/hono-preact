@@ -578,6 +578,32 @@ Pass a second argument to `defineLoader` to configure a loader:
 
 Most options have a dedicated section above; this table is the at-a-glance summary.
 
+## Inference types
+
+`InferLoaderData<L>` extracts a loader ref's data type without re-importing the loader definition. It resolves to the authored server-side type, not the serialized wire shape.
+
+```ts
+import type { InferLoaderData, Serialize } from 'hono-preact';
+import type { serverLoaders } from './movies.server.js';
+
+const moviesLoader = serverLoaders.default;
+
+// The loader's return type as declared (server-side, pre-serialization)
+type Data = InferLoaderData<typeof moviesLoader>;
+// { movies: MovieList } (a Date field stays Date here)
+
+// The wire shape (JSON round-trip): Date degrades to string, etc.
+type WireData = Serialize<InferLoaderData<typeof moviesLoader>>;
+```
+
+`InferLoaderData<L>` is useful for code that only runs server-side (such as fixtures, adapters, and `createCaller` test helpers) where the pre-serialized type is the right type to work with. The client-facing hooks (`.View()`, `loader.useData()`) always carry `Serialize<T>`, because data crosses the server/client boundary as JSON.
+
+### API reference
+
+| Helper               | Resolves to                                     |
+| -------------------- | ----------------------------------------------- |
+| `InferLoaderData<L>` | The loader's data type (`T`), pre-serialization |
+
 ## See also
 
 - [Loading States](/docs/loading-states): the loading and error UI for a loader's data.

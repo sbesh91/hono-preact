@@ -58,7 +58,7 @@ describe('applyDecodedOutcome', () => {
       { kind: 'deny', status: 403, message: 'nope', data: { why: 1 } },
       sink
     );
-    expect(sink.deny).toHaveBeenCalledWith(403, 'nope', { why: 1 });
+    expect(sink.deny).toHaveBeenCalledWith(403, 'nope', { why: 1 }, undefined);
     assertOnlyCalled(sink, 'deny');
   });
 

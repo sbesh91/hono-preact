@@ -2,7 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import {
   isOutcome,
   timeoutOutcome,
-  deny,
+  createCaller,
   type AppConfig,
   type ServerActionCtx,
 } from '@hono-preact/iso';
@@ -18,8 +18,7 @@ import { assertPageUseResolver } from './page-use-guard.js';
 import {
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
-  VALIDATION_ISSUES_KEY,
-  validateWithSchema,
+  coerceActionInput,
   collectFormData,
 } from '@hono-preact/iso/internal/runtime';
 import { applyOutcomeHeaders } from './outcome-translation.js';
@@ -186,7 +185,7 @@ export function pageActionsHandler(
         path: urlPath,
         unitUse: actionUse,
       });
-    const actionCtx = { c, signal };
+    const actionCtx = { c, signal, call: createCaller(c).call };
     const ctx: ServerActionCtx = {
       scope: 'action',
       c,
@@ -208,20 +207,13 @@ export function pageActionsHandler(
           middleware: serverMw,
           ctx,
           inner: async () => {
-            let effectivePayload: unknown = payload;
-            if (entry.input) {
-              const validated = await validateWithSchema(entry.input, payload);
-              if (!validated.ok) {
-                // Schema failure: short-circuit to a 422 deny carrying the
-                // normalized issues under the reserved key. The handler never
-                // runs. Caught below by `isOutcome(err)`, serialized into the
-                // envelope (JSON) or the deny re-render (PE) like any deny.
-                throw deny(422, 'Validation failed', {
-                  data: { [VALIDATION_ISSUES_KEY]: validated.issues },
-                });
-              }
-              effectivePayload = validated.value;
-            }
+            // Schema failure: short-circuit to a 422 deny carrying the
+            // normalized issues under the reserved key. The handler never
+            // runs. Caught below by `isOutcome(err)`, serialized into the
+            // envelope (JSON) or the deny re-render (PE) like any deny.
+            const effectivePayload = entry.input
+              ? await coerceActionInput(entry.input, payload)
+              : payload;
             const inner = await fn(actionCtx, effectivePayload);
             // Normalize return-style outcomes to throw-style so the catch
             // path handles all outcomes uniformly.
