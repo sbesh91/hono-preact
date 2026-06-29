@@ -302,38 +302,44 @@ export function useLoaderRunner<T>(
     prevLocKey.current = locKey;
     prevLoaderId.current = loaderRef.__id;
     if (locationChanged || loaderChanged) setPhase({ tag: 'loading' });
-    // Default: no synchronous value. The non-throwing paths below set it when a
-    // value is available immediately (preload/cache); a cold fetch leaves it
-    // absent so the view stays `loading` until the phase settles.
+    // Default: no synchronous value. The non-throwing factories below set it
+    // when a value is available immediately (preload/cache); a cold fetch leaves
+    // it absent so the view stays `loading` until the phase settles.
     syncRef.current = { present: false };
 
+    // Shared post-suspend drain for the cold/streaming readers: clear the
+    // in-flight flag and run a reload() that was queued while suspended. One
+    // definition replaces the per-mode `settle`/`settleAcc` copies the
+    // reader-construction branches used to keep in lockstep by hand.
+    const settle = () => {
+      inFlightRef.current = false;
+      if (queuedReloadRef.current) {
+        queuedReloadRef.current = false;
+        runReloadRef.current();
+      }
+    };
+
+    // Each reader mode is one factory returning the stable `{ read }` carrier;
+    // the dispatch below picks one by mode. The factories own their side effects
+    // (syncRef adoption, subscriptions, in-flight tracking) and share `settle`.
     if (accumulate) {
-      // Streaming consumption: fold every chunk into accumulated state via the
-      // shared `subscribeAccumulate`/`applyChunk` helpers (also used by reload).
       // A live loader never runs on the server (its infinite generator would
       // hang renderToStringAsync); LoaderHost renders the fallback for
-      // live+server, so this reader is not consumed there.
-      if (loaderRef.live && !isBrowser()) {
+      // live+server, so this stub reader is not consumed there.
+      const buildLiveServerReader = (): { read: () => T } => {
         accRef.current = accumulate.initial;
-        readerRef.current = { read: () => undefined as unknown as T };
-      } else {
+        return { read: () => undefined as unknown as T };
+      };
+
+      // Streaming consumption: fold every chunk into accumulated state via the
+      // shared `subscribeAccumulate`/`applyChunk` helpers (also used by reload).
+      const buildStreamingReader = (): { read: () => T } => {
         inFlightRef.current = true;
-        const settleAcc = () => {
-          inFlightRef.current = false;
-          // Drain a reload() queued during the initial suspended window (e.g. a
-          // useReload() consumer in the fallback subtree fired it before the
-          // first chunk arrived). Mirrors the non-accumulate `settle()` below;
-          // without it the queued resubscribe is lost.
-          if (queuedReloadRef.current) {
-            queuedReloadRef.current = false;
-            runReloadRef.current();
-          }
-        };
-        readerRef.current = wrapPromise(
+        return wrapPromise(
           subscribeAccumulate(newAbortSignal())
             .then((firstChunk) => {
               applyChunk(firstChunk);
-              settleAcc();
+              settle();
               return accRef.current as T;
             })
             .catch((err: unknown) => {
@@ -345,33 +351,28 @@ export function useLoaderRunner<T>(
               // (streaming cold errors are never routed to the boundary).
               setError(err);
               setStatus('error');
-              settleAcc();
+              settle();
               throw err;
             })
         );
-      }
+      };
+
+      readerRef.current =
+        loaderRef.live && !isBrowser()
+          ? buildLiveServerReader()
+          : buildStreamingReader();
     } else {
-      // The SSR preload is a ONE-TIME hydration handoff: only this loader
-      // instance's FIRST render can legitimately adopt the server-baked
-      // `data-loader` attribute. On a later client navigation (`locationChanged`,
-      // so `readerRef.current` is already set) the same `<section>` is still
-      // mounted carrying the attribute the client `<Envelope>` re-wrote on the
-      // previous render (`"null"` for the state path). Re-reading it would adopt
-      // that stale value as a present preload and skip the fetch entirely (the
-      // navigation never shows `loading` and lands on stale/`null` data). Gate
-      // the read on first-render, exactly like the cache branch below.
-      const isFirstRender = readerRef.current === null;
-      const preloaded: SyncValue<T> = isFirstRender
-        ? getPreloadedData<T>(id)
-        : { present: false };
-      if (preloaded.present) {
+      // SSR preload hit: adopt the server-baked `data-loader` payload as the
+      // synchronous value and, in the browser, attach the live update channel.
+      const buildPreloadReader = (
+        preloaded: Extract<SyncValue<T>, { present: true }>
+      ): { read: () => T } => {
         // Record that we consumed the SSR preload payload so the useEffect
-        // below can clear the DOM attribute AFTER commit instead of mutating
+        // above can clear the DOM attribute AFTER commit instead of mutating
         // the DOM during render. A PRESENT preload value of `null` / `undefined`
         // is adopted exactly like any other (no `!== null` refetch).
         preloadConsumedRef.current = true;
         loaderRef.cache.set(preloaded.value, locKey);
-        readerRef.current = { read: () => preloaded.value };
         // Synchronously available (non-throwing): carry it structurally.
         syncRef.current = preloaded;
         if (isBrowser()) {
@@ -401,21 +402,22 @@ export function useLoaderRunner<T>(
             abortRef.current.signal.addEventListener('abort', unsub);
           }
         }
-      } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
+        return { read: () => preloaded.value };
+      };
+
+      // Browser cache hit: serve the cached value synchronously, no fetch.
+      const buildCacheReader = (): { read: () => T } => {
         const cached = loaderRef.cache.get(locKey)!;
-        readerRef.current = { read: () => cached };
         // Synchronously available (non-throwing): carry it structurally.
         syncRef.current = { present: true, value: cached };
-      } else {
-        inFlightRef.current = true;
-        const settle = () => {
-          inFlightRef.current = false;
-          if (queuedReloadRef.current) {
-            queuedReloadRef.current = false;
-            runReloadRef.current();
-          }
-        };
+        return { read: () => cached };
+      };
 
+      // Cold fetch (no preload, no cache): run the loader, suspend on it, and
+      // drive the resolved value into state so the view settles without reading
+      // the throwing reader.
+      const buildColdFetchReader = (): { read: () => T } => {
+        inFlightRef.current = true;
         const fetchPromise: Promise<T> = runLoader<T>(
           loaderRef,
           location,
@@ -433,7 +435,7 @@ export function useLoaderRunner<T>(
           }
         );
 
-        readerRef.current = wrapPromise(
+        return wrapPromise(
           fetchPromise
             .then((r) => {
               if (isBrowser()) loaderRef.cache.set(r, locKey);
@@ -461,6 +463,27 @@ export function useLoaderRunner<T>(
               throw err;
             })
         );
+      };
+
+      // The SSR preload is a ONE-TIME hydration handoff: only this loader
+      // instance's FIRST render can legitimately adopt the server-baked
+      // `data-loader` attribute. On a later client navigation (`locationChanged`,
+      // so `readerRef.current` is already set) the same `<section>` is still
+      // mounted carrying the attribute the client `<Envelope>` re-wrote on the
+      // previous render (`"null"` for the state path). Re-reading it would adopt
+      // that stale value as a present preload and skip the fetch entirely (the
+      // navigation never shows `loading` and lands on stale/`null` data). Gate
+      // the read on first-render, exactly like the cache branch.
+      const isFirstRender = readerRef.current === null;
+      const preloaded: SyncValue<T> = isFirstRender
+        ? getPreloadedData<T>(id)
+        : { present: false };
+      if (preloaded.present) {
+        readerRef.current = buildPreloadReader(preloaded);
+      } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
+        readerRef.current = buildCacheReader();
+      } else {
+        readerRef.current = buildColdFetchReader();
       }
     }
   }
