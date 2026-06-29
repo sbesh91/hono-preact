@@ -125,9 +125,9 @@ const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
 // Join a parent route path with a child segment, mirroring the tree walk:
 // a root parent ('') yields the child as-is; an empty child segment (a
 // layout-group wildcard leaf) contributes nothing; otherwise the child is
-// appended under a single '/'. Shared by the tree walkers that need a node's
-// absolute path. `validate` and `buildInnerRoutes` intentionally keep their
-// own join rules (display-path with leading slash, and grandchild prefixing).
+// appended under a single '/'. This is the join `walkRouteTree` threads through
+// both emitters, so flat (absolute) and inner (relative) paths stay consistent.
+// `validate` keeps its own join rule (display-path with a leading slash).
 function joinRoutePath(parentPath: string, childPath: string): string {
   if (parentPath === '') return childPath;
   return childPath === '' ? parentPath : parentPath + '/' + childPath;
@@ -474,6 +474,76 @@ function deriveLayoutLocation(
   };
 }
 
+// Per-walker emit hooks for `walkRouteTree`. The fold builds every component
+// and decides the branch; each walker supplies only how a built component
+// becomes its output entry. `layoutGroup` is handed the group component once
+// and must register it at BOTH the bare path and the `/*` wildcard (sharing the
+// one component reference) so a navigation crossing between them is a single
+// matched child, not a remount.
+type RouteEmitter = {
+  view: (component: ComponentType<ViewProps>, path: string) => void;
+  layoutGroup: (component: ComponentType<ViewProps>, path: string) => void;
+};
+
+/**
+ * The single tree-walk shared by `flattenTree` (absolute paths for the
+ * top-level Router) and `buildInnerRoutes` (paths relative to a layout group's
+ * inner Router). The two differ only in their emission target, so the
+ * divergence lives entirely in the `emit` callbacks; the walk itself is
+ * identical: join the path, compose the node's `use`, branch on
+ * view / layout-group / bare-grouping, and build the component.
+ *
+ * Recursion happens only through bare groupings. Layout-group children are NOT
+ * walked here -- `makeLayoutGroupComponent` defers them into a freshly mounted
+ * inner Router (via `buildInnerRoutes`) so they remain separate code-split
+ * chunks -- which is why both walkers share this single recursion shape.
+ *
+ * `inheritedUse` threads the composed page-layer `use` (ancestors outer-first)
+ * down the tree; bare groupings have no component of their own, so their `use`
+ * rides `inheritedUse` to the next node that actually renders one.
+ */
+function walkRouteTree(
+  routes: ReadonlyArray<RouteDef>,
+  viewCache: Map<unknown, ComponentType<ViewProps>>,
+  emit: RouteEmitter,
+  parentPath = '',
+  inheritedUse: PageUse = []
+): void {
+  for (const r of routes) {
+    const here = joinRoutePath(parentPath, r.path);
+    const ownUse: PageUse = composeUse(inheritedUse, r.use);
+    if (r.view) {
+      emit.view(
+        withLeafGuard(getOrCreateLazyView(r.view, r.server, viewCache), ownUse),
+        here
+      );
+    } else if (r.layout && r.children) {
+      emit.layoutGroup(
+        makeLayoutGroupComponent(
+          r.layout,
+          r.server,
+          here,
+          r.children,
+          viewCache,
+          ownUse
+        ),
+        here
+      );
+    } else if (r.children) {
+      // Bare grouping: thread the prefix down and carry `use`. Collapse a root
+      // '/' to '' so descendants don't pick up a doubled slash; only the
+      // absolute top-level walk can ever produce a bare '/' here.
+      walkRouteTree(
+        r.children,
+        viewCache,
+        emit,
+        here === '/' ? '' : here,
+        ownUse
+      );
+    }
+  }
+}
+
 /**
  * Build the inner <Route> children for a layout group's <Router>. Each child
  * is either a leaf (registered under its relative path) or another layout
@@ -482,61 +552,42 @@ function deriveLayoutLocation(
  * `pendingUse` carries the composed page-layer `use` from bare groupings (which
  * have no component of their own) down to the next node that actually renders a
  * component, where it is applied via a host wrapper.
+ *
+ * Exported for direct unit testing only. The package barrel (`index.ts`)
+ * re-exports named symbols, not `*`, so this stays off the public API surface.
  */
-function buildInnerRoutes(
+export function buildInnerRoutes(
   children: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
   pendingUse: PageUse = []
 ): VNode<any>[] {
   const nodes: VNode<any>[] = [];
-  for (const child of children) {
-    const ownUse: PageUse = composeUse(pendingUse, child.use);
-    if (child.view) {
-      const component = withLeafGuard(
-        getOrCreateLazyView(child.view, child.server, viewCache),
-        ownUse
-      );
-      nodes.push(
-        h(Route, { path: child.path, component: asRouteComponent(component) })
-      );
-    } else if (child.layout && child.children) {
-      const Group = makeLayoutGroupComponent(
-        child.layout,
-        child.server,
-        child.path,
-        child.children,
-        viewCache,
-        ownUse
-      );
-      // Same shared-component trick at this nesting level.
-      nodes.push(
-        h(Route, { path: child.path, component: asRouteComponent(Group) })
-      );
-      nodes.push(
-        h(Route, {
-          path: child.path + '/*',
-          component: asRouteComponent(Group),
-        })
-      );
-    } else if (child.children) {
-      // Bare grouping: prefix child paths and carry `use` down. A grouping
-      // may now contain nested layouts/groupings, not just view leaves.
-      const prefixed = child.children.map((grand) => ({
-        ...grand,
-        path: child.path === '' ? grand.path : child.path + '/' + grand.path,
-      }));
-      nodes.push(...buildInnerRoutes(prefixed, viewCache, ownUse));
-    }
-  }
+  walkRouteTree(
+    children,
+    viewCache,
+    {
+      view: (component, path) =>
+        nodes.push(h(Route, { path, component: asRouteComponent(component) })),
+      layoutGroup: (component, path) => {
+        nodes.push(h(Route, { path, component: asRouteComponent(component) }));
+        nodes.push(
+          h(Route, {
+            path: path + '/*',
+            component: asRouteComponent(component),
+          })
+        );
+      },
+    },
+    '',
+    pendingUse
+  );
   return nodes;
 }
 
 function flattenTree(
   routes: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
-  keyCache: Map<ComponentType<ViewProps>, string>,
-  parentPath = '',
-  pendingUse: PageUse = []
+  keyCache: Map<ComponentType<ViewProps>, string>
 ): FlatRoute[] {
   const keyFor = (c: ComponentType<ViewProps>): string => {
     let k = keyCache.get(c);
@@ -547,36 +598,15 @@ function flattenTree(
     return k;
   };
   const out: FlatRoute[] = [];
-  for (const r of routes) {
-    const here = joinRoutePath(parentPath, r.path);
-    const ownUse: PageUse = composeUse(pendingUse, r.use);
-
-    if (r.view) {
-      const component = withLeafGuard(
-        getOrCreateLazyView(r.view, r.server, viewCache),
-        ownUse
-      );
-      out.push({ path: here, component, key: keyFor(component) });
-    } else if (r.layout && r.children) {
-      const Group = makeLayoutGroupComponent(
-        r.layout,
-        r.server,
-        here,
-        r.children,
-        viewCache,
-        ownUse
-      );
-      const key = keyFor(Group);
-      out.push({ path: here, component: Group, key });
-      out.push({ path: here + '/*', component: Group, key });
-    } else if (r.children) {
-      // Path-grouping at top level: recurse with the prefix, carrying `use`.
-      const childParent = here === '/' ? '' : here;
-      out.push(
-        ...flattenTree(r.children, viewCache, keyCache, childParent, ownUse)
-      );
-    }
-  }
+  walkRouteTree(routes, viewCache, {
+    view: (component, path) =>
+      out.push({ path, component, key: keyFor(component) }),
+    layoutGroup: (component, path) => {
+      const key = keyFor(component);
+      out.push({ path, component, key });
+      out.push({ path: path + '/*', component, key });
+    },
+  });
   return out;
 }
 
