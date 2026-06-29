@@ -346,14 +346,10 @@ export function useAction<
     ): Promise<MutateResult<TResult>> => {
       const controller = new AbortController();
       inflightRef.current.add(controller);
+      const onCallerAbort = () => controller.abort();
       if (opts?.signal) {
-        if (opts.signal.aborted) {
-          controller.abort();
-        } else {
-          opts.signal.addEventListener('abort', () => controller.abort(), {
-            once: true,
-          });
-        }
+        if (opts.signal.aborted) controller.abort();
+        else opts.signal.addEventListener('abort', onCallerAbort);
       }
 
       setPending(true);
@@ -565,10 +561,11 @@ export function useAction<
       } catch (err) {
         const e = toError(err);
         if (controller.signal.aborted) {
-          // Quiet cancel (unmount or caller signal). Do not record an error
-          // outcome and do not write error state on a possibly-unmounted
-          // component. Clear pending so the hook does not stay in an
-          // indefinitely-loading state when the component is still mounted.
+          // Cancelled (unmount or caller signal). Do not persist an error
+          // outcome, but run onError so an optimistic wrapper reverts its
+          // pending entry instead of stranding it. setPending is a no-op
+          // after unmount.
+          invokeError(e);
           setPending(false);
           return { ok: false, error: e };
         }
@@ -587,6 +584,7 @@ export function useAction<
         return { ok: false, error: e };
       } finally {
         inflightRef.current.delete(controller);
+        opts?.signal?.removeEventListener('abort', onCallerAbort);
         endSubmit(currentStub.__module, currentStub.__action);
       }
       setPending(false);

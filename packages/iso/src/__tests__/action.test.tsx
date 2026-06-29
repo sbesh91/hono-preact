@@ -127,22 +127,19 @@ describe('useAction', () => {
       screen.getByRole('button').click();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      window.location.pathname,
-      expect.objectContaining({
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json, text/event-stream;q=0.9',
-        },
-        body: JSON.stringify({
-          module: 'movies',
-          action: 'create',
-          payload: { title: 'Dune' },
-        }),
-        signal: expect.any(AbortSignal),
-      })
-    );
+    expect(fetchMock).toHaveBeenCalledWith(window.location.pathname, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream;q=0.9',
+      },
+      body: JSON.stringify({
+        module: 'movies',
+        action: 'create',
+        payload: { title: 'Dune' },
+      }),
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('sets data on success and calls onSuccess', async () => {

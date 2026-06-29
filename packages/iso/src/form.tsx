@@ -152,9 +152,19 @@ export function Form<TPayload, TResult>({
     []
   );
 
-  // Tracks the most-recent in-flight submit controller so unmount can abort it.
-  const submitControllerRef = useRef<AbortController | null>(null);
-  useEffect(() => () => submitControllerRef.current?.abort(), []);
+  // Tracks all in-flight submit controllers so unmount can abort each one.
+  // A Set (mirroring useAction's inflightRef) handles overlapping submits:
+  // an earlier controller is not replaced when a second submit starts, so
+  // a late-arriving response from the first cannot trigger window.location.reload
+  // after unmount.
+  const submitControllerRef = useRef<Set<AbortController>>(new Set());
+  useEffect(
+    () => () => {
+      for (const ctrl of submitControllerRef.current) ctrl.abort();
+      submitControllerRef.current.clear();
+    },
+    []
+  );
 
   const moduleKey = action.__module;
   const actionName = action.__action;
@@ -276,7 +286,7 @@ export function Form<TPayload, TResult>({
       if (optimistic) handle = optimistic.addOptimistic(payload);
 
       const controller = new AbortController();
-      submitControllerRef.current = controller;
+      submitControllerRef.current.add(controller);
 
       setPending(true);
       beginSubmit(moduleKey, actionName);
@@ -374,8 +384,10 @@ export function Form<TPayload, TResult>({
         });
       } catch (err) {
         if (controller.signal.aborted) {
-          // Quiet cancel: the fetch was aborted (unmount). Do not record an
-          // error result or call onError.
+          // Cancelled (unmount). Revert any optimistic entry so it is not
+          // stranded; do not record a result or call onError (the component
+          // is gone).
+          handle?.revert();
           return;
         }
         handle?.revert();
@@ -386,6 +398,7 @@ export function Form<TPayload, TResult>({
         });
         lifecycle.current.onError?.(toError(err));
       } finally {
+        submitControllerRef.current.delete(controller);
         setPending(false);
         endSubmit(moduleKey, actionName);
       }

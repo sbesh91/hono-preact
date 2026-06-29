@@ -43,4 +43,20 @@ describe('deny() with a named code', () => {
     expect(DENY_CODE_STATUS.TOO_MANY_REQUESTS).toBe(429);
     expect(DENY_CODE_STATUS.INTERNAL).toBe(500);
   });
+
+  it('falls back to status 500 for an unrecognised code string and does not throw', () => {
+    // This covers a typo or a dynamically-constructed code that is not in
+    // the DenyCode vocabulary. The return must be a well-formed DenyOutcome
+    // with a numeric status rather than undefined.
+    const out = deny('NOT_A_CODE' as never);
+    expect(out.__outcome).toBe('deny');
+    expect(out.status).toBe(500);
+    expect(typeof out.message).toBe('string');
+  });
+
+  it('falls back to status 500 for an unrecognised code in object form and does not throw', () => {
+    const out = deny({ code: 'FORBIDEN' as never });
+    expect(out.__outcome).toBe('deny');
+    expect(out.status).toBe(500);
+  });
 });

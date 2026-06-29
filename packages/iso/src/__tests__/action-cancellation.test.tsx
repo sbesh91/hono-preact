@@ -128,9 +128,121 @@ describe('action cancellation', () => {
       await mutatePromise;
     });
 
-    // Quiet-cancel must clear pending and must not invoke onError.
+    // Caller-signal abort while mounted: pending must be cleared and onError
+    // must be called so that optimistic wrappers can revert their state.
     expect(pendingRef.current).toBe(false);
-    expect(onError).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    fetchSpy.mockRestore();
+  });
+
+  it('reverts an optimistic entry when a caller signal aborts', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError'))
+          );
+        })
+    );
+
+    // Simulate a useOptimisticAction-style onMutate + onError pair that
+    // takes a snapshot and reverts it on error.
+    let snapshotValue = 'original';
+    const onMutate = vi.fn(() => {
+      const snap = snapshotValue;
+      snapshotValue = 'optimistic';
+      return snap;
+    });
+    const onError = vi.fn((_err: Error, snap: string) => {
+      snapshotValue = snap;
+    });
+
+    const callerCtrl = new AbortController();
+    let mutateFn:
+      | ((
+          p: { x: number },
+          opts?: { signal?: AbortSignal }
+        ) => Promise<unknown>)
+      | undefined;
+
+    function Comp() {
+      const { mutate } = useAction(makeActionStub(), { onMutate, onError });
+      mutateFn = mutate;
+      return null;
+    }
+
+    render(h(Comp, {}));
+    await Promise.resolve();
+
+    const mutatePromise = mutateFn!({ x: 1 }, { signal: callerCtrl.signal });
+    await Promise.resolve();
+
+    // onMutate fires immediately; the value has been optimistically updated.
+    expect(snapshotValue).toBe('optimistic');
+
+    callerCtrl.abort();
+    await act(async () => {
+      await mutatePromise;
+    });
+
+    // onError must have been called with the snapshot so the caller reverted.
+    expect(onError).toHaveBeenCalled();
+    expect(snapshotValue).toBe('original');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('removes the caller-signal abort listener after the mutation resolves', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          { status: 200 }
+        )
+      );
+
+    const addSpy = vi.spyOn(AbortSignal.prototype, 'addEventListener');
+    const removeSpy = vi.spyOn(AbortSignal.prototype, 'removeEventListener');
+
+    const callerCtrl = new AbortController();
+    let mutateFn:
+      | ((
+          p: { x: number },
+          opts?: { signal?: AbortSignal }
+        ) => Promise<unknown>)
+      | undefined;
+
+    function Comp() {
+      const { mutate } = useAction(makeActionStub());
+      mutateFn = mutate;
+      return null;
+    }
+
+    render(h(Comp, {}));
+    await Promise.resolve();
+
+    // Call mutate 3 times on the SAME reused signal, letting each resolve.
+    await act(async () => {
+      await mutateFn!({ x: 1 }, { signal: callerCtrl.signal });
+    });
+    await act(async () => {
+      await mutateFn!({ x: 2 }, { signal: callerCtrl.signal });
+    });
+    await act(async () => {
+      await mutateFn!({ x: 3 }, { signal: callerCtrl.signal });
+    });
+
+    // Each resolved mutation must have added and then removed its listener.
+    const abortListenerAdds = addSpy.mock.calls.filter(
+      ([event]) => event === 'abort'
+    );
+    const abortListenerRemoves = removeSpy.mock.calls.filter(
+      ([event]) => event === 'abort'
+    );
+    expect(abortListenerAdds.length).toBe(3);
+    expect(abortListenerRemoves.length).toBe(3);
+
     fetchSpy.mockRestore();
   });
 });
