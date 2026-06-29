@@ -52,6 +52,14 @@ export type {
 } from './define-loader.js';
 export { serverRoute } from './server-route.js';
 export type { RouteBinder } from './server-route.js';
+
+// Server-side caller (HTTP-free loader/action composition + testing).
+export { createCaller } from './server-caller.js';
+export type {
+  ServerCaller,
+  CallResult,
+  CallLoaderLocation,
+} from './server-caller.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
   ActionRef,
