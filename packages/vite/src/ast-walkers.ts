@@ -38,6 +38,9 @@ export function findDynamicServerImports(
   });
 }
 
-export const isServerImport = (node: unknown): node is ImportDeclaration =>
-  (node as ImportDeclaration).type === 'ImportDeclaration' &&
-  /\.server(\.[jt]sx?)?$/.test((node as ImportDeclaration).source.value);
+// Typed against babel's `Node` (every caller already passes AST nodes, e.g.
+// `ast.program.body.filter(isServerImport)`), so the discriminant check narrows
+// `node` to `ImportDeclaration` and `node.source.value` reads without a cast.
+export const isServerImport = (node: Node): node is ImportDeclaration =>
+  node.type === 'ImportDeclaration' &&
+  /\.server(\.[jt]sx?)?$/.test(node.source.value);
