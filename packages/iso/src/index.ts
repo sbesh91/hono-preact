@@ -31,6 +31,14 @@ export type {
 } from './internal/typed-routes.js';
 export type { Serialize } from './internal/serialize.js';
 
+// Inference helpers over action/loader refs.
+export type {
+  InferActionPayload,
+  InferActionResult,
+  InferActionChunk,
+  InferLoaderData,
+} from './infer.js';
+
 // Server bindings.
 export { defineLoader } from './define-loader.js';
 export type {
