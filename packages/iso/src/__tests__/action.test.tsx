@@ -49,7 +49,7 @@ import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import { ActiveLoaderIdContext } from '../internal/contexts.js';
-import type { ActionRef } from '../action.js';
+import type { ActionRef, MutateResult } from '../action.js';
 import { defineLoader } from '../define-loader.js';
 import { subscribe } from '../internal/form-submit-store.js';
 import {
@@ -127,18 +127,22 @@ describe('useAction', () => {
       screen.getByRole('button').click();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(window.location.pathname, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream;q=0.9',
-      },
-      body: JSON.stringify({
-        module: 'movies',
-        action: 'create',
-        payload: { title: 'Dune' },
-      }),
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      window.location.pathname,
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream;q=0.9',
+        },
+        body: JSON.stringify({
+          module: 'movies',
+          action: 'create',
+          payload: { title: 'Dune' },
+        }),
+        signal: expect.any(AbortSignal),
+      })
+    );
   });
 
   it('sets data on success and calls onSuccess', async () => {
@@ -454,9 +458,10 @@ describe('useAction', () => {
     type Result = { id: string };
     let captured: Awaited<ReturnType<typeof mutateRef.current>> | undefined;
     const mutateRef = {
-      current: null as unknown as (p: {
-        x: number;
-      }) => Promise<{ ok: true; data: Result } | { ok: false; error: Error }>,
+      current: null as unknown as (
+        p: { x: number },
+        opts?: { signal?: AbortSignal }
+      ) => Promise<MutateResult<Result>>,
     };
 
     function TestComponent() {

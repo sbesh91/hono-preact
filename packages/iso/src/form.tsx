@@ -152,6 +152,13 @@ export function Form<TPayload, TResult>({
     []
   );
 
+  // Tracks the most-recent in-flight submit controller so unmount can abort it.
+  const submitControllerRef = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => submitControllerRef.current?.abort(),
+    []
+  );
+
   const moduleKey = action.__module;
   const actionName = action.__action;
   const applyInvalidate = useInvalidate();
@@ -271,6 +278,9 @@ export function Form<TPayload, TResult>({
       let handle: OptimisticHandle | undefined;
       if (optimistic) handle = optimistic.addOptimistic(payload);
 
+      const controller = new AbortController();
+      submitControllerRef.current = controller;
+
       setPending(true);
       beginSubmit(moduleKey, actionName);
       try {
@@ -283,6 +293,7 @@ export function Form<TPayload, TResult>({
           // `never` chunk-type pin on `FormActionInput` is sound: a streaming
           // action could not be consumed here even if the types allowed it.
           headers: { Accept: 'application/json' },
+          signal: controller.signal,
         });
         const decoded = await decodeActionResponse(res);
         // Every outcome records a result (or reloads) and returns; `<Form>`
@@ -365,6 +376,11 @@ export function Form<TPayload, TResult>({
           },
         });
       } catch (err) {
+        if (controller.signal.aborted) {
+          // Quiet cancel: the fetch was aborted (unmount). Do not record an
+          // error result or call onError.
+          return;
+        }
         handle?.revert();
         setLastActionResult(moduleKey, actionName, {
           kind: 'error',

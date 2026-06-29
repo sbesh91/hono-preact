@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { AnyLoaderRef } from './define-loader.js';
@@ -208,7 +208,10 @@ export type MutateResult<TResult> =
   | { ok: false; error: Error };
 
 export type UseActionResult<TPayload, TResult> = {
-  mutate: (payload: TPayload) => Promise<MutateResult<TResult>>;
+  mutate: (
+    payload: TPayload,
+    opts?: { signal?: AbortSignal }
+  ) => Promise<MutateResult<TResult>>;
   pending: boolean;
   error: Error | null;
   data: Serialize<TResult> | null;
@@ -321,8 +324,36 @@ export function useAction<
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  // In-flight AbortControllers for this hook instance. Unmount aborts all of
+  // them. We deliberately do NOT abort a prior controller when a new mutate
+  // starts: concurrent mutations are frequently intentional (a row of
+  // independent saves), so fire-many semantics are preserved.
+  const inflightRef = useRef<Set<AbortController>>(new Set());
+  useEffect(
+    () => () => {
+      for (const ctrl of inflightRef.current) ctrl.abort();
+      inflightRef.current.clear();
+    },
+    []
+  );
+
   const mutate = useCallback(
-    async (payload: TPayload): Promise<MutateResult<TResult>> => {
+    async (
+      payload: TPayload,
+      opts?: { signal?: AbortSignal }
+    ): Promise<MutateResult<TResult>> => {
+      const controller = new AbortController();
+      inflightRef.current.add(controller);
+      if (opts?.signal) {
+        if (opts.signal.aborted) {
+          controller.abort();
+        } else {
+          opts.signal.addEventListener('abort', () => controller.abort(), {
+            once: true,
+          });
+        }
+      }
+
       setPending(true);
       setError(null);
 
@@ -408,6 +439,7 @@ export function useAction<
             method: 'POST',
             headers: { Accept: 'application/json, text/event-stream;q=0.9' },
             body: fd,
+            signal: controller.signal,
           });
         } else {
           response = await fetch(target, {
@@ -421,6 +453,7 @@ export function useAction<
               action: currentStub.__action,
               payload,
             }),
+            signal: controller.signal,
           });
         }
 
@@ -529,6 +562,14 @@ export function useAction<
         applyInvalidate(currentOptions?.invalidate);
       } catch (err) {
         const e = toError(err);
+        if (controller.signal.aborted) {
+          // Quiet cancel (unmount or caller signal). Do not record an error
+          // outcome and do not write error state on a possibly-unmounted
+          // component. Clear pending so the hook does not stay in an
+          // indefinitely-loading state when the component is still mounted.
+          setPending(false);
+          return { ok: false, error: e };
+        }
         // Write to the store only for unclassified errors (network failures,
         // parse errors). Per-branch errors set outcomeRecorded before throwing.
         if (!outcomeRecorded) {
@@ -543,6 +584,7 @@ export function useAction<
         setPending(false);
         return { ok: false, error: e };
       } finally {
+        inflightRef.current.delete(controller);
         endSubmit(currentStub.__module, currentStub.__action);
       }
       setPending(false);
