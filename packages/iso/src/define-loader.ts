@@ -249,18 +249,21 @@ export type DefineLoaderOptions<T> = {
 // invalidation (movie.tsx invalidating `moviesListLoader` no longer flushes
 // the list page's cache).
 //
-// CAVEAT — process-global identity. `Symbol.for(...)` produces a key in the
-// process-wide Symbol registry, so this map is shared across every consumer
-// of @hono-preact/iso running in the same V8 isolate. On Cloudflare Workers
-// (process-per-isolate, short-lived) this is fine. On a long-lived Node
-// process serving multiple tenants from one JS realm, the registry IS
-// shared across tenants — a loader registered by tenant A's
-// `pages/movies.server.ts` and tenant B's are colocated. Per-loader cache
-// keys (the `__moduleKey` + cache identity symbol minted at defineLoader
-// time) prevent cross-tenant DATA leaks; what's shared is the cache
-// registry's identity, not the cache contents. Even so, v0.2 should move
-// this to a per-app registry (via runRequestScope or an explicit app
-// handle) so this is not an implicit footgun.
+// NOTE on process-global identity, and why it is safe. `Symbol.for(...)` keys
+// this map in the process-wide Symbol registry, so the REGISTRY is shared
+// across every consumer of @hono-preact/iso in the same V8 isolate, including a
+// long-lived Node process serving multiple tenants from one realm. What the
+// registry holds is the cache INSTANCE per loader id, never a cached value: the
+// instance is a set of closures over its own key, and on the server it reads
+// and writes cached values through the per-request AsyncLocalStorage store (see
+// `createCache` in cache.ts). So two concurrent requests, hence two tenants,
+// each get their own per-request store and never observe each other's cached
+// data even though they hold the same cache instance. The shared identity is
+// intentional: in the browser it is what lets sibling routes (and duplicate
+// hoisted copies of iso) share one cache, so a cross-route `ref.invalidate()`
+// is seen everywhere; on the server the per-request ALS store supplies the
+// isolation. There is no cross-tenant data leak here, so the registry stays a
+// process-global by design rather than being threaded per request.
 const SHARED_CACHES_KEY = Symbol.for('@hono-preact/iso/loaderCaches');
 
 type SharedCacheMap = Map<symbol, LoaderCache<unknown>>;
