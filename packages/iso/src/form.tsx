@@ -48,6 +48,15 @@ function logClientSchemaThrew(err: unknown): void {
  * returned by `useOptimisticAction`. The union lets `<Form>` discover the
  * optimistic apply via `OPTIMISTIC_BRAND in action` narrowing without
  * casting away the type.
+ *
+ * The `never` chunk-type argument on `ActionRef` pins out streaming actions:
+ * an action declared with a chunk type has `ActionRef<…, …, TChunk>` with
+ * `TChunk` not assignable to `never`, so it fails to satisfy this prop and is a
+ * compile error here. That is an honest guarantee, not an accident -- `<Form>`
+ * sends `Accept: application/json` (see the submit handler) and reads a single
+ * JSON outcome via `decodeActionResponse`; it has no SSE chunk sink, so a
+ * streaming action is structurally inadmissible. Streaming actions go through
+ * `useAction`, which carries the chunk type and an `onChunk` reader.
  */
 type FormActionInput<TPayload, TResult> =
   | ActionRef<TPayload, TResult, never>
@@ -268,6 +277,11 @@ export function Form<TPayload, TResult>({
         const res = await fetch(target, {
           method: 'POST',
           body: fd,
+          // `Accept: application/json` opts this submit into the action's
+          // single-JSON-outcome path; `decodeActionResponse` reads exactly one
+          // envelope. `<Form>` never negotiates an SSE stream, which is why the
+          // `never` chunk-type pin on `FormActionInput` is sound: a streaming
+          // action could not be consumed here even if the types allowed it.
           headers: { Accept: 'application/json' },
         });
         const decoded = await decodeActionResponse(res);

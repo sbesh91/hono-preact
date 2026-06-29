@@ -5,7 +5,10 @@ import type { Plugin } from 'vite';
 import { MODULE_KEY_EXPORT } from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
-import { RECOGNIZED_SERVER_EXPORTS } from './server-exports-contract.js';
+import {
+  RECOGNIZED_SERVER_EXPORTS,
+  type RecognizedServerExport,
+} from './server-exports-contract.js';
 import {
   findDynamicServerImports,
   isServerImport,
@@ -23,6 +26,70 @@ import {
 // export so a user can immediately see the valid set. The list is derived
 // from the shared contract so it cannot drift from the validation plugin.
 const ALLOWED_SPECIFIERS_LIST = RECOGNIZED_SERVER_EXPORTS.join(', ');
+
+// Which framework import a stub kind references once any specifier of that kind
+// is rewritten. One prepend per kind, regardless of how many specifiers use it.
+type StubImport = 'loaderStub' | 'useAction' | 'useSocket' | 'useRoom';
+
+// Per recognized `.server.*` export: the framework import its client stub
+// references, and how to build that stub for one imported specifier. Keyed on
+// the shared contract via `Record<RecognizedServerExport, …>`, so adding a new
+// recognized export is a compile error here until its stub is wired -- the
+// dispatch can no longer silently fall through to the unrecognized-export throw.
+const SERVER_EXPORT_STUBS: Record<
+  RecognizedServerExport,
+  {
+    needs: StubImport;
+    build: (
+      localName: string,
+      moduleKey: string,
+      absServerPath: string
+    ) => string;
+  }
+> = {
+  serverLoaders: {
+    needs: 'loaderStub',
+    build: (localName, moduleKey, absServerPath) =>
+      loaderStubSource(
+        localName,
+        moduleKey,
+        extractServerLoadersMeta(absServerPath)
+      ),
+  },
+  serverActions: {
+    needs: 'useAction',
+    build: (localName, moduleKey) => actionStubSource(localName, moduleKey),
+  },
+  serverSockets: {
+    needs: 'useSocket',
+    build: (localName, moduleKey) => socketStubSource(localName, moduleKey),
+  },
+  serverRooms: {
+    needs: 'useRoom',
+    build: (localName, moduleKey) => roomStubSource(localName, moduleKey),
+  },
+};
+
+// Cast-free string lookup over the exhaustive contract-keyed table above.
+const STUB_BY_EXPORT: ReadonlyMap<
+  string,
+  (typeof SERVER_EXPORT_STUBS)[RecognizedServerExport]
+> = new Map(Object.entries(SERVER_EXPORT_STUBS));
+
+// The framework import each stub kind prepends, applied in this fixed order so
+// the transformed module's leading imports are deterministic.
+const STUB_IMPORTS: Record<StubImport, string> = {
+  loaderStub: `import { __$createLoaderStub_hpiso } from 'hono-preact/internal/runtime';\n`,
+  useAction: `import { useAction as __$useAction_hpiso } from 'hono-preact';\n`,
+  useSocket: `import { useSocket as __$useSocket_hpiso } from 'hono-preact';\n`,
+  useRoom: `import { useRoom as __$useRoom_hpiso } from 'hono-preact';\n`,
+};
+const STUB_IMPORT_ORDER: readonly StubImport[] = [
+  'loaderStub',
+  'useAction',
+  'useSocket',
+  'useRoom',
+];
 
 // Symbol-keyed accessor used by unit tests to verify `configResolved` fires
 // and captures the root. Hidden behind a Symbol so it does not appear in IDE
@@ -86,10 +153,7 @@ export function serverOnlyPlugin(): Plugin {
       const importerDir = path.dirname(id);
 
       const s = new MagicString(code);
-      let needsCreateLoaderStubImport = false;
-      let needsUseActionImport = false;
-      let needsUseRoomImport = false;
-      let needsUseSocketImport = false;
+      const neededStubImports = new Set<StubImport>();
 
       for (const serverImport of [...serverImports].reverse()) {
         // `import type { … } from './x.server'` is erased entirely. @babel/types
@@ -127,51 +191,28 @@ export function serverOnlyPlugin(): Plugin {
             continue;
           }
           hasValueSpecifier = true;
-          if (
+          const importedName =
             specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'serverLoaders'
-          ) {
-            needsCreateLoaderStubImport = true;
-            const absServerPath = path.resolve(
-              importerDir,
-              serverImport.source.value
-            );
-            const loadersMeta = extractServerLoadersMeta(absServerPath);
+            specifier.imported.type === 'Identifier'
+              ? specifier.imported.name
+              : undefined;
+          const dispatch =
+            importedName !== undefined
+              ? STUB_BY_EXPORT.get(importedName)
+              : undefined;
+          if (dispatch) {
+            neededStubImports.add(dispatch.needs);
             stubs.push(
-              loaderStubSource(specifier.local.name, moduleKey, loadersMeta)
+              dispatch.build(specifier.local.name, moduleKey, absServerPath)
             );
-          } else if (
-            specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'serverActions'
-          ) {
-            needsUseActionImport = true;
-            stubs.push(actionStubSource(specifier.local.name, moduleKey));
-          } else if (
-            specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'serverSockets'
-          ) {
-            needsUseSocketImport = true;
-            stubs.push(socketStubSource(specifier.local.name, moduleKey));
-          } else if (
-            specifier.type === 'ImportSpecifier' &&
-            specifier.imported.type === 'Identifier' &&
-            specifier.imported.name === 'serverRooms'
-          ) {
-            needsUseRoomImport = true;
-            stubs.push(roomStubSource(specifier.local.name, moduleKey));
           } else {
-            const importedName =
-              specifier.type === 'ImportSpecifier' &&
-              specifier.imported.type === 'Identifier'
-                ? specifier.imported.name
-                : specifier.type === 'ImportNamespaceSpecifier'
-                  ? '* as ' + specifier.local.name
-                  : '<unknown>';
+            const reported =
+              importedName ??
+              (specifier.type === 'ImportNamespaceSpecifier'
+                ? '* as ' + specifier.local.name
+                : '<unknown>');
             throw new Error(
-              `${id}: \`${importedName}\` is not a recognized export from a *.server.* module. ` +
+              `${id}: \`${reported}\` is not a recognized export from a *.server.* module. ` +
                 `Allowed: ${ALLOWED_SPECIFIERS_LIST}.`
             );
           }
@@ -200,25 +241,10 @@ export function serverOnlyPlugin(): Plugin {
         s.overwrite(imp.start, imp.end, `Promise.resolve(${stubContent})`);
       }
 
-      if (needsCreateLoaderStubImport) {
-        s.prepend(
-          `import { __$createLoaderStub_hpiso } from 'hono-preact/internal/runtime';\n`
-        );
-      }
-      if (needsUseActionImport) {
-        s.prepend(
-          `import { useAction as __$useAction_hpiso } from 'hono-preact';\n`
-        );
-      }
-      if (needsUseSocketImport) {
-        s.prepend(
-          `import { useSocket as __$useSocket_hpiso } from 'hono-preact';\n`
-        );
-      }
-      if (needsUseRoomImport) {
-        s.prepend(
-          `import { useRoom as __$useRoom_hpiso } from 'hono-preact';\n`
-        );
+      // Prepend in a fixed order (each prepend goes to the front, so the last
+      // applied lands first) so the leading import block is deterministic.
+      for (const kind of STUB_IMPORT_ORDER) {
+        if (neededStubImports.has(kind)) s.prepend(STUB_IMPORTS[kind]);
       }
 
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
