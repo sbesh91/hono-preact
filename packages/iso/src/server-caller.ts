@@ -42,7 +42,10 @@ export interface ServerCaller {
 // these (they are server-only), so reading them off the imported value is the
 // sanctioned structural-read boundary for a user-defined module export.
 type ServerActionView = {
-  (ctx: { c: Context; signal: AbortSignal; call: ServerCaller['call'] }, payload: unknown): unknown;
+  (
+    ctx: { c: Context; signal: AbortSignal; call: ServerCaller['call'] },
+    payload: unknown
+  ): unknown;
   use?: ReadonlyArray<{ __kind: string; runs?: string }>;
   input?: StandardSchemaV1;
   __module?: string;
@@ -62,15 +65,27 @@ function serverMiddleware(
 }
 
 function isLoaderRef(ref: unknown): ref is LoaderRef<unknown, false> {
-  return typeof ref === 'object' && ref !== null && 'fn' in ref && '__id' in ref;
+  return (
+    typeof ref === 'object' && ref !== null && 'fn' in ref && '__id' in ref
+  );
 }
 
 export function createCaller(c: Context): ServerCaller {
   const caller: ServerCaller = {
     call: ((ref: unknown, arg?: unknown) =>
       isLoaderRef(ref)
-        ? callLoader(c, caller, ref, (arg as { location?: CallLoaderLocation })?.location)
-        : callAction(c, caller, ref as ServerActionView, arg)) as ServerCaller['call'],
+        ? callLoader(
+            c,
+            caller,
+            ref,
+            (arg as { location?: CallLoaderLocation })?.location
+          )
+        : callAction(
+            c,
+            caller,
+            ref as ServerActionView,
+            arg
+          )) as ServerCaller['call'],
   };
   return caller;
 }
@@ -79,7 +94,9 @@ export function createCaller(c: Context): ServerCaller {
 // and request-scoped state are shared with the outer request), else open a
 // fresh scope bound to `c` for the standalone (test) path.
 async function inScope<T>(c: Context, inner: () => Promise<T>): Promise<T> {
-  return getRequestStore() ? inner() : runRequestScope(inner, { honoContext: c });
+  return getRequestStore()
+    ? inner()
+    : runRequestScope(inner, { honoContext: c });
 }
 
 async function callLoader<T>(
@@ -114,7 +131,11 @@ async function callLoader<T>(
         );
         const value = await ref.fn({
           c,
-          location: { path: location?.path ?? c.req.path, pathParams, searchParams },
+          location: {
+            path: location?.path ?? c.req.path,
+            pathParams,
+            searchParams,
+          },
           signal: ctx.signal,
           call: caller.call,
         } as Parameters<typeof ref.fn>[0]);
@@ -158,7 +179,10 @@ async function callAction<TResult>(
           }
           effective = validated.value;
         }
-        const value = await ref({ c, signal: ctx.signal, call: caller.call }, effective);
+        const value = await ref(
+          { c, signal: ctx.signal, call: caller.call },
+          effective
+        );
         if (isOutcome(value)) throw value;
         return value as TResult;
       },

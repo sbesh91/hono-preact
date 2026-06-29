@@ -211,16 +211,16 @@ import { DENY_CODE_STATUS } from 'hono-preact';
 const status = DENY_CODE_STATUS['NOT_FOUND']; // 404
 ```
 
-| Code | Default status |
-| --- | --- |
-| `BAD_REQUEST` | 400 |
-| `UNAUTHORIZED` | 401 |
-| `FORBIDDEN` | 403 |
-| `NOT_FOUND` | 404 |
-| `CONFLICT` | 409 |
-| `UNPROCESSABLE` | 422 |
-| `TOO_MANY_REQUESTS` | 429 |
-| `INTERNAL` | 500 |
+| Code                | Default status |
+| ------------------- | -------------- |
+| `BAD_REQUEST`       | 400            |
+| `UNAUTHORIZED`      | 401            |
+| `FORBIDDEN`         | 403            |
+| `NOT_FOUND`         | 404            |
+| `CONFLICT`          | 409            |
+| `UNPROCESSABLE`     | 422            |
+| `TOO_MANY_REQUESTS` | 429            |
+| `INTERNAL`          | 500            |
 
 ### Reading the code client-side
 
@@ -574,11 +574,11 @@ type Chunk = InferActionChunk<AddMovie>;
 
 ### API reference
 
-| Helper | Resolves to |
-| --- | --- |
-| `InferActionPayload<A>` | The action's payload type (`TPayload`) |
-| `InferActionResult<A>` | The action's result type (`TResult`, server-side) |
-| `InferActionChunk<A>` | The streaming chunk type (`TChunk`), or `never` for non-streaming actions |
+| Helper                  | Resolves to                                                               |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `InferActionPayload<A>` | The action's payload type (`TPayload`)                                    |
+| `InferActionResult<A>`  | The action's result type (`TResult`, server-side)                         |
+| `InferActionChunk<A>`   | The streaming chunk type (`TChunk`), or `never` for non-streaming actions |
 
 ## How it works
 

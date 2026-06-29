@@ -11,9 +11,9 @@ import type { Serialize } from '../internal/serialize.js';
 
 describe('inference helpers', () => {
   it('extracts action payload, result, and chunk', () => {
-    const charge = defineAction(
-      async (_ctx, _payload: { cents: number }) => ({ at: new Date() })
-    );
+    const charge = defineAction(async (_ctx, _payload: { cents: number }) => ({
+      at: new Date(),
+    }));
     expectTypeOf<InferActionPayload<typeof charge>>().toEqualTypeOf<{
       cents: number;
     }>();
@@ -22,9 +22,9 @@ describe('inference helpers', () => {
       at: Date;
     }>();
     // Composing with the public Serialize<> degrades the Date to string.
-    expectTypeOf<
-      Serialize<InferActionResult<typeof charge>>
-    >().toEqualTypeOf<{ at: string }>();
+    expectTypeOf<Serialize<InferActionResult<typeof charge>>>().toEqualTypeOf<{
+      at: string;
+    }>();
   });
 
   it('extracts streaming chunk type', () => {
@@ -38,11 +38,16 @@ describe('inference helpers', () => {
     > {
       yield { n: 1 };
     });
-    expectTypeOf<InferActionChunk<typeof live>>().toEqualTypeOf<{ n: number }>();
+    expectTypeOf<InferActionChunk<typeof live>>().toEqualTypeOf<{
+      n: number;
+    }>();
   });
 
   it('extracts loader data as the authored T', () => {
-    const movie = defineLoader(async () => ({ title: 'Dune', seen: new Date() }));
+    const movie = defineLoader(async () => ({
+      title: 'Dune',
+      seen: new Date(),
+    }));
     expectTypeOf<InferLoaderData<typeof movie>>().toEqualTypeOf<{
       title: string;
       seen: Date;

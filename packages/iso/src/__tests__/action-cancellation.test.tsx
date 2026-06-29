@@ -26,7 +26,11 @@ function makeActionStub(): ActionRef<{ x: number }, { ok: boolean }, never> {
  * payload constraint.
  */
 function makeFormStub(): ActionRef<unknown, unknown, never> {
-  return { __module: 'm', __action: 'a' } as unknown as ActionRef<unknown, unknown, never>;
+  return { __module: 'm', __action: 'a' } as unknown as ActionRef<
+    unknown,
+    unknown,
+    never
+  >;
 }
 
 describe('action cancellation', () => {

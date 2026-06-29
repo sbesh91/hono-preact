@@ -5,7 +5,13 @@ import { DENY_CODE_STATUS } from '../outcomes.js';
 export type ActionEnvelope =
   | { __outcome: 'success'; data: unknown }
   | { __outcome: 'redirect'; to: string; status: number }
-  | { __outcome: 'deny'; status: number; message: string; data?: unknown; code?: DenyCode }
+  | {
+      __outcome: 'deny';
+      status: number;
+      message: string;
+      data?: unknown;
+      code?: DenyCode;
+    }
   | { __outcome: 'error'; message: string }
   | { __outcome: 'timeout'; timeoutMs: number };
 
@@ -45,7 +51,13 @@ export const RENDER_PAGE_SCOPE_MESSAGE = 'render outcome is page-scope only';
 export type DecodedEnvelope =
   | { kind: 'success'; data: unknown }
   | { kind: 'redirect'; to: string }
-  | { kind: 'deny'; status: number; message: string; data?: unknown; code?: DenyCode }
+  | {
+      kind: 'deny';
+      status: number;
+      message: string;
+      data?: unknown;
+      code?: DenyCode;
+    }
   | { kind: 'error'; message: string }
   | { kind: 'timeout'; timeoutMs: number }
   | {

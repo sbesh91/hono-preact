@@ -101,19 +101,19 @@ it('returns the movie', async () => {
 
 ### `ctx.call(loader, opts?)`
 
-| Argument | Type | Description |
-| --- | --- | --- |
-| `loader` | `LoaderRef<T, false>` | The single-value loader to call. Live loaders are excluded by the type. |
+| Argument        | Type                            | Description                                                                                                             |
+| --------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `loader`        | `LoaderRef<T, false>`           | The single-value loader to call. Live loaders are excluded by the type.                                                 |
 | `opts.location` | `CallLoaderLocation` (optional) | Path, path params, and search params for the loader's location. Defaults to the current request path with empty params. |
 
 Returns `Promise<CallResult<T>>`.
 
 ### `ctx.call(action, payload)`
 
-| Argument | Type | Description |
-| --- | --- | --- |
-| `action` | `ActionRef<TPayload, TResult, never>` | The single-value action to call. Streaming actions are excluded by the type. |
-| `payload` | `TPayload` | The action payload. Validated against the action's `input` schema when one is present. |
+| Argument  | Type                                  | Description                                                                            |
+| --------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| `action`  | `ActionRef<TPayload, TResult, never>` | The single-value action to call. Streaming actions are excluded by the type.           |
+| `payload` | `TPayload`                            | The action payload. Validated against the action's `input` schema when one is present. |
 
 Returns `Promise<CallResult<TResult>>`.
 
@@ -130,9 +130,7 @@ Returns a `ServerCaller` with a `call` method that accepts the same arguments as
 ### `CallResult<T>`
 
 ```ts
-type CallResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; outcome: Outcome };
+type CallResult<T> = { ok: true; value: T } | { ok: false; outcome: Outcome };
 ```
 
 Narrow on `ok` to access `value` or inspect `outcome`. The `outcome` type is `Outcome` (one of `redirect | deny | timeout | render`). Re-throw it to propagate to the outer handler, or inspect `outcome.__outcome` to handle specific cases.

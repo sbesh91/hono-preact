@@ -29,7 +29,11 @@ describe('deny code survives the action envelope round-trip', () => {
       headers: { 'Content-Type': 'application/json' },
     });
     const decoded = await decodeActionResponse(res);
-    expect(decoded).toMatchObject({ kind: 'deny', status: 409, code: 'CONFLICT' });
+    expect(decoded).toMatchObject({
+      kind: 'deny',
+      status: 409,
+      code: 'CONFLICT',
+    });
   });
 
   it('leaves code undefined for a legacy numeric deny', async () => {

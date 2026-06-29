@@ -21,7 +21,10 @@ async function ctx() {
 describe('createCaller', () => {
   it('calls a loader and returns the authored T (no Serialize)', async () => {
     const c = await ctx();
-    const movie = defineLoader(async () => ({ title: 'Dune', seen: new Date() }));
+    const movie = defineLoader(async () => ({
+      title: 'Dune',
+      seen: new Date(),
+    }));
     const r = await createCaller(c).call(movie);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.seen).toBeInstanceOf(Date);
@@ -60,17 +63,23 @@ describe('createCaller', () => {
       runs: 'server' as const,
       fn: async () => deny('FORBIDDEN'),
     };
-    const act = defineAction(async (_c, p: { x: number }) => ({ doubled: p.x * 2 }), {
-      use: [guard],
-    });
+    const act = defineAction(
+      async (_c, p: { x: number }) => ({ doubled: p.x * 2 }),
+      {
+        use: [guard],
+      }
+    );
     const r = await createCaller(c).call(act, { x: 21 });
     expect(r.ok).toBe(false);
-    if (!r.ok && r.outcome.__outcome === 'deny') expect(r.outcome.code).toBe('FORBIDDEN');
+    if (!r.ok && r.outcome.__outcome === 'deny')
+      expect(r.outcome.code).toBe('FORBIDDEN');
   });
 
   it('runs an action handler when middleware passes', async () => {
     const c = await ctx();
-    const act = defineAction(async (_c, p: { x: number }) => ({ doubled: p.x * 2 }));
+    const act = defineAction(async (_c, p: { x: number }) => ({
+      doubled: p.x * 2,
+    }));
     const r = await createCaller(c).call(act, { x: 21 });
     expect(r).toEqual({ ok: true, value: { doubled: 42 } });
   });

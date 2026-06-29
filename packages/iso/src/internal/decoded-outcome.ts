@@ -26,7 +26,12 @@ export interface OutcomeSink {
   navigated(): void;
   /** A redirect targeted another origin and was refused. */
   crossOriginRedirect(message: string): void;
-  deny(status: number, message: string, data: unknown, code: DenyCode | undefined): void;
+  deny(
+    status: number,
+    message: string,
+    data: unknown,
+    code: DenyCode | undefined
+  ): void;
   error(message: string): void;
   /** `message` is the canonical timed-out wording for `timeoutMs`. */
   timeout(timeoutMs: number, message: string): void;

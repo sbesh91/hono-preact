@@ -130,8 +130,7 @@ export function deny(
   // similar fallback if a hand-rolled envelope ships without `message`.
   // Object form: status may be explicit or inferred from the code.
   if (typeof a === 'object') {
-    const status =
-      a.status ?? (a.code ? DENY_CODE_STATUS[a.code] : 500);
+    const status = a.status ?? (a.code ? DENY_CODE_STATUS[a.code] : 500);
     return {
       __outcome: 'deny',
       status,

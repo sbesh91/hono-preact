@@ -13,7 +13,11 @@ describe('deny() with a named code', () => {
 
   it('keeps an explicit message alongside an inferred status', () => {
     const out = deny('FORBIDDEN', 'Members only');
-    expect(out).toMatchObject({ status: 403, code: 'FORBIDDEN', message: 'Members only' });
+    expect(out).toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN',
+      message: 'Members only',
+    });
   });
 
   it('carries code on the object form and infers status when omitted', () => {

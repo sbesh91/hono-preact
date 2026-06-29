@@ -154,10 +154,7 @@ export function Form<TPayload, TResult>({
 
   // Tracks the most-recent in-flight submit controller so unmount can abort it.
   const submitControllerRef = useRef<AbortController | null>(null);
-  useEffect(
-    () => () => submitControllerRef.current?.abort(),
-    []
-  );
+  useEffect(() => () => submitControllerRef.current?.abort(), []);
 
   const moduleKey = action.__module;
   const actionName = action.__action;
