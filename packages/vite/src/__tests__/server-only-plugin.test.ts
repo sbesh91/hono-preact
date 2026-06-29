@@ -85,6 +85,14 @@ describe('serverOnlyPlugin', () => {
     expect(result?.code).toContain('const serverLoaders = new Proxy(');
     expect(result?.code).toContain('const serverActions = new Proxy(');
     expect(result?.code).toContain('__module: "src/pages/movies"');
+    // Each stub kind also prepends the one framework import its stub references;
+    // a multi-export statement emits both, once each.
+    expect(result?.code).toContain(
+      `import { __\$createLoaderStub_hpiso } from 'hono-preact/internal/runtime';`
+    );
+    expect(result?.code).toContain(
+      `import { useAction as __\$useAction_hpiso } from 'hono-preact';`
+    );
   });
 
   it('derives module key from nested path correctly', () => {
