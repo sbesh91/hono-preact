@@ -178,6 +178,79 @@ export const serverActions = {
 
 `deny(status, message, opts?)` accepts an optional third argument: `opts.data` is any value serializable to JSON. It is available as `result.data` in `useActionResult()` after a deny.
 
+## Deny codes
+
+`deny()` accepts a named code string instead of a numeric status. Codes map to standard HTTP statuses by default, but the numeric `status` is always authoritative when both are given:
+
+```ts
+import { deny } from 'hono-preact';
+
+// Code only: status inferred from the code (404)
+throw deny('NOT_FOUND');
+
+// Code with a message
+throw deny('FORBIDDEN', 'Members only');
+
+// Code with structured data; status inferred from the code (409)
+throw deny({ code: 'CONFLICT', data: { field: 'title' } });
+
+// Explicit status overrides the code's default
+throw deny({ status: 403, code: 'UNAUTHORIZED' });
+
+// Numeric status form still works exactly as before (no code attached)
+throw deny(404, 'Not found');
+```
+
+### Code to status defaults
+
+The `DENY_CODE_STATUS` constant maps each code to its default HTTP status. Import it when you need to look up the status for a given code at runtime:
+
+```ts
+import { DENY_CODE_STATUS } from 'hono-preact';
+
+const status = DENY_CODE_STATUS['NOT_FOUND']; // 404
+```
+
+| Code | Default status |
+| --- | --- |
+| `BAD_REQUEST` | 400 |
+| `UNAUTHORIZED` | 401 |
+| `FORBIDDEN` | 403 |
+| `NOT_FOUND` | 404 |
+| `CONFLICT` | 409 |
+| `UNPROCESSABLE` | 422 |
+| `TOO_MANY_REQUESTS` | 429 |
+| `INTERNAL` | 500 |
+
+### Reading the code client-side
+
+`useActionResult()` exposes `result.code` when the action called `deny()` with a code. Switch on it instead of comparing message strings:
+
+```tsx
+import { useActionResult } from 'hono-preact';
+import { serverActions } from './movies.server.js';
+
+const ActionFeedback = () => {
+  const result = useActionResult(serverActions.addMovie);
+  if (result?.kind !== 'deny') return null;
+
+  switch (result.code) {
+    case 'NOT_FOUND':
+      return <p>Movie not found.</p>;
+    case 'FORBIDDEN':
+      return <p>You do not have permission.</p>;
+    case 'CONFLICT':
+      return <p>A movie with that title already exists.</p>;
+    default:
+      return <p>{result.message}</p>;
+  }
+};
+```
+
+`result.code` is `DenyCode | undefined`. It is `undefined` when the action used the numeric form `deny(status, message)`.
+
+Deny codes are on the action path only. Loader denies surface as an `Error` without a structured code, so `result.code` is not available from loader error boundaries.
+
 ## Calling programmatically: `useAction(stub)`
 
 `useAction` manages pending state, error handling, and optional cache invalidation after the action completes. Use it for programmatic mutations: button `onClick` handlers, conditional logic before submitting, or any case where you need to await the result.
@@ -245,6 +318,43 @@ async function submit(payload) {
 ```
 
 Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
+
+## Cancellation
+
+`mutate` and `<Form>` submit both manage their in-flight request lifetime automatically.
+
+**Unmount aborts the request.** If a component that called `mutate` unmounts while the request is in flight, the fetch is aborted. The abort is quiet: no error state is written, no `onError` fires. This prevents "setState after unmount" warnings without any cleanup code in the component.
+
+`<Form>` submit works the same way: unmounting the form while a submit is in flight aborts the underlying fetch.
+
+**Opt-in caller signal.** Pass `{ signal }` as the second argument to `mutate` to wire in your own `AbortSignal`. Either source (the caller signal or the unmount signal) aborts the request when triggered:
+
+```tsx
+const abortController = new AbortController();
+const { mutate } = useAction(serverActions.addMovie);
+
+// Start the mutation with a caller-owned signal
+mutate({ title: 'Dune' }, { signal: abortController.signal });
+
+// Cancel from anywhere in the component
+abortController.abort();
+```
+
+**Concurrent mutations are not auto-aborted.** Calling `mutate` again while a previous call is in flight does not cancel the earlier request. Each call owns its own `AbortController`. This is deliberate: when a row of table cells each has an independent save button, aborting the first save on the second click would lose work. A component that wants abort-previous behavior brings its own signal:
+
+```tsx
+const controllerRef = useRef<AbortController | null>(null);
+const { mutate } = useAction(serverActions.saveRow);
+
+const handleSave = (payload) => {
+  controllerRef.current?.abort();
+  const controller = new AbortController();
+  controllerRef.current = controller;
+  mutate(payload, { signal: controller.signal });
+};
+```
+
+**No-JS form posts cannot be cancelled.** The cancellation above applies to the JS-enhanced path only. When JavaScript is unavailable, `<Form>` submits a native HTML POST and there is no mechanism to abort it in flight.
 
 ## Pending state outside the form
 
@@ -429,6 +539,46 @@ export const serverActions = {
 ```
 
 For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model.
+
+## Inference types
+
+The inference helpers extract an action ref's type parameters without re-importing the action definition. They resolve to the authored server-side type, not the serialized wire shape.
+
+```ts
+import type {
+  InferActionPayload,
+  InferActionResult,
+  InferActionChunk,
+  Serialize,
+} from 'hono-preact';
+import type { serverActions } from './movies.server.js';
+
+type AddMovie = typeof serverActions.addMovie;
+
+// The payload type declared in defineAction
+type Payload = InferActionPayload<AddMovie>;
+// { title: string }
+
+// The result type declared in defineAction (server-side, pre-serialization)
+type Result = InferActionResult<AddMovie>;
+// { ok: boolean }
+
+// The wire shape (JSON round-trip); compose with Serialize for the client-visible type
+type WireResult = Serialize<InferActionResult<AddMovie>>;
+
+// The streaming chunk type; never for non-streaming actions
+type Chunk = InferActionChunk<AddMovie>;
+```
+
+`Serialize<InferActionResult<typeof action>>` is the correct type for the client-visible result. `InferActionResult` gives you the server-side type; `Serialize<T>` applies the JSON round-trip transformation (matching the type that `useAction().data` and `<Form onSuccess>` carry).
+
+### API reference
+
+| Helper | Resolves to |
+| --- | --- |
+| `InferActionPayload<A>` | The action's payload type (`TPayload`) |
+| `InferActionResult<A>` | The action's result type (`TResult`, server-side) |
+| `InferActionChunk<A>` | The streaming chunk type (`TChunk`), or `never` for non-streaming actions |
 
 ## How it works
 
