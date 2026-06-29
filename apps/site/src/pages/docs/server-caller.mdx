@@ -86,7 +86,7 @@ it('returns the movie', async () => {
 
 ## How it works
 
-- **Runs the procedure's own `use` middleware.** The called procedure's per-unit `use` array is applied: auth guards, rate limits, and any observers declared on `defineLoader` or `defineAction`. App-level and page-level middleware are not re-run; those already fired for the outer request.
+- **Runs the procedure's own `use` middleware.** The called procedure's per-unit `use` array is applied: auth guards, rate limits, and any observers declared on `defineLoader` or `defineAction`. The app-level chain and the page (route) middleware are not run for the call: the app chain already fired for the outer request, and the callee's own route-level middleware is bypassed entirely. So a guard placed only on a route node does not protect a procedure reached through `ctx.call` from a different route. Put any guard that must protect a procedure regardless of how it is entered on that procedure's own `defineLoader` / `defineAction({ use })`, not only on its route.
 - **Reuses the live request scope.** Inside a live handler, `ctx.call` inherits the outer request's async-local storage context, so the Hono `Context`, session state, and middleware side-effects are shared. `createCaller(c)` used outside a handler opens a fresh scope per call.
 - **Returns the authored type, not the wire shape.** No JSON round-trip occurs. The return type of `ctx.call(loader)` is `T` (the loader's declared return), not `Serialize<T>`. A `Date` field stays a `Date`.
 - **Does not share the loader result cache.** The loader result cache is populated on the SSR page-render path. `ctx.call` invokes the loader function directly, so the result is always freshly computed. Two calls to the same loader produce two executions.
