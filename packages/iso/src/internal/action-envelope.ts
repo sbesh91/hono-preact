@@ -1,12 +1,20 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import type { Outcome } from '../outcomes.js';
+import type { DenyCode, Outcome } from '../outcomes.js';
+import { DENY_CODE_STATUS } from '../outcomes.js';
 
 export type ActionEnvelope =
   | { __outcome: 'success'; data: unknown }
   | { __outcome: 'redirect'; to: string; status: number }
-  | { __outcome: 'deny'; status: number; message: string; data?: unknown }
+  | { __outcome: 'deny'; status: number; message: string; data?: unknown; code?: DenyCode }
   | { __outcome: 'error'; message: string }
   | { __outcome: 'timeout'; timeoutMs: number };
+
+// Derived from the canonical code->status map so the predicate's accepted set
+// cannot drift from the `DenyCode` union (single source of truth in outcomes.ts).
+const DENY_CODES = new Set<string>(Object.keys(DENY_CODE_STATUS));
+function isDenyCode(value: unknown): value is DenyCode {
+  return typeof value === 'string' && DENY_CODES.has(value);
+}
 
 export type ActionResolution =
   | { kind: 'success'; data: unknown }
@@ -37,7 +45,7 @@ export const RENDER_PAGE_SCOPE_MESSAGE = 'render outcome is page-scope only';
 export type DecodedEnvelope =
   | { kind: 'success'; data: unknown }
   | { kind: 'redirect'; to: string }
-  | { kind: 'deny'; status: number; message: string; data?: unknown }
+  | { kind: 'deny'; status: number; message: string; data?: unknown; code?: DenyCode }
   | { kind: 'error'; message: string }
   | { kind: 'timeout'; timeoutMs: number }
   | {
@@ -68,6 +76,7 @@ export async function decodeActionResponse(
     status?: unknown;
     message?: unknown;
     timeoutMs?: unknown;
+    code?: unknown;
   };
   switch (env.__outcome) {
     case 'success':
@@ -77,6 +86,7 @@ export async function decodeActionResponse(
       break;
     case 'deny': {
       const status = typeof env.status === 'number' ? env.status : res.status;
+      const code = isDenyCode(env.code) ? env.code : undefined;
       return {
         kind: 'deny',
         status,
@@ -85,6 +95,7 @@ export async function decodeActionResponse(
             ? env.message
             : `Request denied (${status})`,
         data: env.data,
+        ...(code !== undefined ? { code } : {}),
       };
     }
     case 'error':
@@ -138,6 +149,7 @@ export function serializeActionOutcome(
       message: outcome.message,
     };
     if (outcome.data !== undefined) body.data = outcome.data;
+    if (outcome.code !== undefined) body.code = outcome.code;
     return { body, status: outcome.status, headers: outcome.headers };
   }
   if (outcome.__outcome === 'timeout') {

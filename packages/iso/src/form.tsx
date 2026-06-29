@@ -316,13 +316,14 @@ export function Form<TPayload, TResult>({
               submittedPayload: payload,
             });
           },
-          deny: (status, message, data) => {
+          deny: (status, message, data, code) => {
             handle?.revert();
             setLastActionResult(moduleKey, actionName, {
               kind: 'deny',
               status,
               message,
               data,
+              ...(code !== undefined ? { code } : {}),
               submittedPayload: payload,
             });
           },

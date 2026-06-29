@@ -483,12 +483,13 @@ export function useAction<
             crossOriginRedirect: (message) => {
               throw new Error(message);
             },
-            deny: (status, message, data) => {
+            deny: (status, message, data, code) => {
               recordOutcome(currentStub.__module, currentStub.__action, {
                 kind: 'deny',
                 status,
                 message,
                 data,
+                ...(code !== undefined ? { code } : {}),
                 submittedPayload: payload,
               });
               outcomeRecorded = true;

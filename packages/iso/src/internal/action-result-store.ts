@@ -1,3 +1,5 @@
+import type { DenyCode } from '../outcomes.js';
+
 type Key = string; // `${module}::${action}`
 type Listener = () => void;
 
@@ -8,6 +10,7 @@ export type StoredActionResult =
       status: number;
       message: string;
       data?: unknown;
+      code?: DenyCode;
       submittedPayload: unknown;
     }
   | {

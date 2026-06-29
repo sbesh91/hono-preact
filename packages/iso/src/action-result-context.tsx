@@ -1,4 +1,5 @@
 import { createContext } from 'preact';
+import type { DenyCode } from './outcomes.js';
 
 export type ActionResultContextValue =
   | {
@@ -15,6 +16,7 @@ export type ActionResultContextValue =
       status: number;
       message: string;
       data?: unknown;
+      code?: DenyCode;
       submittedPayload: unknown;
     }
   | {

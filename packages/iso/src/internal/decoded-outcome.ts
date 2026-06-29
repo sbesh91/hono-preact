@@ -1,6 +1,7 @@
 import { assignSafeRedirect } from './safe-redirect.js';
 import { timeoutMessage } from './timeout.js';
 import type { DecodedEnvelope } from './action-envelope.js';
+import type { DenyCode } from '../outcomes.js';
 
 /**
  * The message surfaced when a `redirect()` outcome targets another origin.
@@ -25,7 +26,7 @@ export interface OutcomeSink {
   navigated(): void;
   /** A redirect targeted another origin and was refused. */
   crossOriginRedirect(message: string): void;
-  deny(status: number, message: string, data: unknown): void;
+  deny(status: number, message: string, data: unknown, code: DenyCode | undefined): void;
   error(message: string): void;
   /** `message` is the canonical timed-out wording for `timeoutMs`. */
   timeout(timeoutMs: number, message: string): void;
@@ -57,7 +58,7 @@ export function applyDecodedOutcome(
       sink.crossOriginRedirect(crossOriginRedirectMessage(decoded.to));
       return false;
     case 'deny':
-      sink.deny(decoded.status, decoded.message, decoded.data);
+      sink.deny(decoded.status, decoded.message, decoded.data, decoded.code);
       return false;
     case 'error':
       sink.error(decoded.message);

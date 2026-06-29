@@ -57,6 +57,7 @@ function buildActionResultContext(): ActionResultContextValue {
       status: outcome.status,
       message: outcome.message,
       data: outcome.data,
+      ...(outcome.code !== undefined ? { code: outcome.code } : {}),
       submittedPayload: slot.submittedPayload,
     };
   }
