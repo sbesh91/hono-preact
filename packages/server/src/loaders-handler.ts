@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import {
   isOutcome,
   timeoutOutcome,
+  createCaller,
   type AppConfig,
   type ServerLoaderCtx,
   type StandardSchemaV1,
@@ -277,6 +278,7 @@ export function loadersHandler(
                   searchParams,
                 },
                 signal,
+                call: createCaller(c).call,
               });
               // A loader that does `return redirect('/login')` instead of
               // `throw redirect('/login')` would otherwise ship the outcome

@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
+import type { ServerCaller } from '../server-caller.js';
 import { validateWithSchema } from '../validate.js';
 import { deny } from '../outcomes.js';
 import { VALIDATION_ISSUES_KEY } from './contract.js';
@@ -16,6 +17,11 @@ export type LooseLoaderFn = (props: {
   c: Context;
   location: { path: string; pathParams: unknown; searchParams: unknown };
   signal: AbortSignal;
+  // The server caller threaded onto LoaderCtx (`ctx.call`). Typed via a
+  // type-only import: it is erased at runtime, so the back-edge to
+  // server-caller.ts (which imports `coerceLoaderLocation` from this file) is a
+  // type-only cycle, not a runtime one.
+  call: ServerCaller['call'];
 }) => Promise<unknown> | AsyncGenerator<unknown, unknown, unknown>;
 
 /**

@@ -13,6 +13,7 @@ import { decodeActionResponse } from './internal/action-envelope.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
+import type { ServerCaller } from './server-caller.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
 
@@ -28,6 +29,7 @@ export type ActionRef<TPayload, TResult, TChunk = never> = {
 export type ActionCtx = {
   c: Context;
   signal: AbortSignal;
+  call: ServerCaller['call'];
 };
 
 export type ActionFn<TPayload, TResult, TChunk = never> =

@@ -3,6 +3,7 @@ import {
   isOutcome,
   timeoutOutcome,
   deny,
+  createCaller,
   type AppConfig,
   type ServerActionCtx,
 } from '@hono-preact/iso';
@@ -186,7 +187,7 @@ export function pageActionsHandler(
         path: urlPath,
         unitUse: actionUse,
       });
-    const actionCtx = { c, signal };
+    const actionCtx = { c, signal, call: createCaller(c).call };
     const ctx: ServerActionCtx = {
       scope: 'action',
       c,

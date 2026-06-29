@@ -75,3 +75,16 @@ describe('createCaller', () => {
     expect(r).toEqual({ ok: true, value: { doubled: 42 } });
   });
 });
+
+describe('ctx.call composition', () => {
+  it('lets a loader call another loader via ctx.call', async () => {
+    const c = await ctx();
+    const inner = defineLoader(async () => ({ n: 2 }));
+    const outer = defineLoader(async (lc) => {
+      const r = await lc.call(inner);
+      return { doubled: (r.ok ? r.value.n : 0) * 2 };
+    });
+    const r = await createCaller(c).call(outer);
+    expect(r).toEqual({ ok: true, value: { doubled: 4 } });
+  });
+});

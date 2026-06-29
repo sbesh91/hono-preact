@@ -13,6 +13,7 @@ import type {
 import { dispatchServer } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
 import { coerceLoaderLocation, type LooseLoaderFn } from './loader-schema.js';
+import { createCaller } from '../server-caller.js';
 import {
   fanStart,
   fanChunk,
@@ -186,11 +187,15 @@ export function runLoader<T>(
       // boundary shared by BOTH paths (SSR here + RPC loaders-handler).
       const invoke = loaderRef.fn as unknown as LooseLoaderFn;
       // Construct the arg explicitly rather than spreading `ctx` to avoid
-      // triggering the lazy `c` getter during object spread.
+      // triggering the lazy `c` getter during object spread. `call` is also
+      // lazy so test paths that never invoke it don't trip the scope guard.
       const result = await invoke({
         signal: ctx.signal,
         get c() {
           return ctx.c;
+        },
+        get call() {
+          return createCaller(ctx.c).call;
         },
         location: {
           ...location,

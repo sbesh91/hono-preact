@@ -21,6 +21,7 @@ import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
+import type { ServerCaller } from './server-caller.js';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
 export type LoaderCtx<
@@ -33,6 +34,12 @@ export type LoaderCtx<
     searchParams: TSearch;
   };
   signal: AbortSignal;
+  /**
+   * Invoke another loader or action server-side with no HTTP round-trip,
+   * reusing the current request scope. Returns a `CallResult` discriminated
+   * union; narrow on `ok`.
+   */
+  call: ServerCaller['call'];
 };
 
 export type Loader<
