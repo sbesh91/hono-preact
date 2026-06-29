@@ -356,6 +356,8 @@ const handleSave = (payload) => {
 
 **No-JS form posts cannot be cancelled.** The cancellation above applies to the JS-enhanced path only. When JavaScript is unavailable, `<Form>` submits a native HTML POST and there is no mechanism to abort it in flight.
 
+**Write-loss on navigation.** When a component that owns a `mutate` call or a `<Form>` submit unmounts mid-flight (for example, the user navigates away), the request is aborted and the write may not reach the server. If a mutation must always complete regardless of navigation, drive it outside the cancelling component, or do not depend on it finishing after the component unmounts.
+
 ## Pending state outside the form
 
 `useFormStatus(stub?)` reports whether a submission is currently in flight. It is JS-only (SSR always returns `{ pending: false }`). Use it for indicators outside the form's `<fieldset>`, such as a global spinner or a disabled navigation item.

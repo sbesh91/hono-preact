@@ -590,7 +590,7 @@ const moviesLoader = serverLoaders.default;
 
 // The loader's return type as declared (server-side, pre-serialization)
 type Data = InferLoaderData<typeof moviesLoader>;
-// { movies: MovieList } — a Date field stays Date here
+// { movies: MovieList } (a Date field stays Date here)
 
 // The wire shape (JSON round-trip): Date degrades to string, etc.
 type WireData = Serialize<InferLoaderData<typeof moviesLoader>>;
