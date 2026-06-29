@@ -182,6 +182,32 @@ export function findApiShadowingRoutes(source: string): ApiShadowingRoute[] {
   return found;
 }
 
+// Returns true if the parsed program contains a top-level
+// `export default ...`. The app-config diagnostic uses this to detect a
+// common mistake: writing `export const appConfig = defineApp(...)`
+// instead of `export default defineApp(...)`. Without a default the
+// generated `import appConfig from '...'` binds to undefined and the
+// app-level middleware chain silently never runs.
+function hasDefaultExport(source: string): boolean {
+  let ast: ReturnType<typeof parse>;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: BABEL_PARSER_PLUGINS,
+      errorRecovery: true,
+    });
+  } catch {
+    // Fall back to "true" on parse failure so we don't pile a misleading
+    // app-config error on top of an obvious syntax error elsewhere in the
+    // file. The real parse error surfaces from the Vite build itself.
+    return true;
+  }
+  for (const node of ast.program.body) {
+    if (node.type === 'ExportDefaultDeclaration') return true;
+  }
+  return false;
+}
+
 // Both generated files live in the Vite cache dir. The wrapper keeps the
 // `server-entry.tsx` name because that is the file the adapter's build/dev
 // plugins (and wrangler.jsonc `main`) point at; the core app module is a
@@ -217,32 +243,6 @@ export interface ServerEntryPluginOptions {
   adapter: HonoPreactAdapter;
   coreAppPath: string; // absolute path to write the core app module
   entryWrapperPath: string; // absolute path to write the adapter wrapper
-}
-
-// Returns true if the parsed program contains a top-level
-// `export default ...`. The app-config diagnostic uses this to detect a
-// common mistake: writing `export const appConfig = defineApp(...)`
-// instead of `export default defineApp(...)`. Without a default the
-// generated `import appConfig from '...'` binds to undefined and the
-// app-level middleware chain silently never runs.
-function hasDefaultExport(source: string): boolean {
-  let ast: ReturnType<typeof parse>;
-  try {
-    ast = parse(source, {
-      sourceType: 'module',
-      plugins: BABEL_PARSER_PLUGINS,
-      errorRecovery: true,
-    });
-  } catch {
-    // Fall back to "true" on parse failure so we don't pile a misleading
-    // app-config error on top of an obvious syntax error elsewhere in the
-    // file. The real parse error surfaces from the Vite build itself.
-    return true;
-  }
-  for (const node of ast.program.body) {
-    if (node.type === 'ExportDefaultDeclaration') return true;
-  }
-  return false;
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
