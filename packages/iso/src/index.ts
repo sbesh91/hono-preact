@@ -172,6 +172,7 @@ export {
   isDeny,
   isRender,
   isTimeout,
+  DENY_CODE_STATUS,
 } from './outcomes.js';
 export type {
   Outcome,
@@ -181,6 +182,7 @@ export type {
   TimeoutOutcome,
   RedirectStatusCode,
   ErrorStatusCode,
+  DenyCode,
 } from './outcomes.js';
 
 // Utilities.
