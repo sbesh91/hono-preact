@@ -174,6 +174,43 @@ describe('loadersHandler', () => {
     });
   });
 
+  it('attributes a non-serializable finite return to the loader (onError + Loader failed)', async () => {
+    // Serializing the value happens after the loader resolves; a BigInt (or a
+    // circular ref) makes c.json throw. That is a loader-data fault, so it must
+    // still fire onError and return the sanitized RPC envelope rather than fall
+    // through to the default error handler.
+    const onError = vi.fn();
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(
+        {
+          './pages/movies.server.ts': {
+            __moduleKey: 'pages/movies',
+            serverLoaders: {
+              default: async () => ({ big: 10n }),
+            },
+          },
+        },
+        { onError, resolvePageUse: async () => [] }
+      )
+    );
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    expect(res.status).toBe(500);
+    expect((await res.json()) as { error: string }).toEqual({
+      error: 'Loader failed',
+    });
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(expect.any(TypeError), {
+      module: 'pages/movies',
+      loader: 'default',
+    });
+  });
+
   it('preserves deny.data in the loader RPC envelope', async () => {
     const { deny } = await import('@hono-preact/iso');
     const app = makeApp({
