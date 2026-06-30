@@ -284,8 +284,14 @@ export function loadersHandler(
       loader: loaderName,
     };
 
+    // Scope the try to loader EXECUTION only. Response construction below runs
+    // outside it on purpose: the generic 'Loader failed' catch (and its
+    // onError call) must attribute only the loader's own throw, not a
+    // framework-level fault while building the SSE/JSON response, which would
+    // otherwise fire onError with the loader's name and mask the real cause.
+    let result: unknown;
     try {
-      const result = await runRequestScope(
+      result = await runRequestScope(
         async () => {
           const dispatch = await dispatchServer<unknown, 'loader'>({
             middleware: serverMw,
@@ -326,31 +332,6 @@ export function loadersHandler(
         },
         { honoContext: c }
       );
-
-      if (isAsyncGenerator(result)) {
-        return sseGeneratorResponse(c, result, {
-          emitResult: false,
-          observers,
-          observerCtx: ctx,
-          signal: timeoutSignal,
-          timeoutMs:
-            typeof resolvedTimeoutMs === 'number'
-              ? resolvedTimeoutMs
-              : undefined,
-        });
-      }
-      if (result instanceof ReadableStream) {
-        return sseReadableStreamResponse(c, result, {
-          observers,
-          observerCtx: ctx,
-          signal: timeoutSignal,
-          timeoutMs:
-            typeof resolvedTimeoutMs === 'number'
-              ? resolvedTimeoutMs
-              : undefined,
-        });
-      }
-      return c.json(result);
     } catch (err) {
       if (isOutcome(err)) {
         return translateOutcomeForLoader(c, err);
@@ -378,5 +359,26 @@ export function loadersHandler(
         dev && err instanceof Error ? err.message : 'Loader failed';
       return c.json({ error: message }, 500);
     }
+
+    if (isAsyncGenerator(result)) {
+      return sseGeneratorResponse(c, result, {
+        emitResult: false,
+        observers,
+        observerCtx: ctx,
+        signal: timeoutSignal,
+        timeoutMs:
+          typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+      });
+    }
+    if (result instanceof ReadableStream) {
+      return sseReadableStreamResponse(c, result, {
+        observers,
+        observerCtx: ctx,
+        signal: timeoutSignal,
+        timeoutMs:
+          typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+      });
+    }
+    return c.json(result);
   };
 }
