@@ -66,6 +66,30 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     expect(out).toContain("params: ['q']");
   });
 
+  it('serverRoute().loader: route id literal survives the transform (runtime sets __routeId)', () => {
+    // The plugin does NOT inject __routeId. The route id is set at runtime:
+    // `serverRoute('/movies/:id').loader(fn)` forwards the route string to
+    // `_defineRouteLoader`, which stamps `ref.__routeId`. So the transform only
+    // has to leave the `serverRoute('/movies/:id')` string literal intact so the
+    // runtime value is available when the module executes.
+    const code = `
+      import { serverRoute } from '@hono-preact/iso';
+      const route = serverRoute('/movies/:id');
+      export const serverLoaders = {
+        default: route.loader(async () => ({})),
+      };
+    `;
+    const out =
+      transform(code, '/Users/me/repo/src/pages/movie.server.ts') ?? '';
+    // The plugin must not remove or mangle the route string literal.
+    expect(out).toContain("serverRoute('/movies/:id')");
+    // __routeId is NOT injected by the plugin (set at runtime via serverRoute).
+    expect(out).not.toContain('__routeId');
+    // The plugin still injects __moduleKey and __loaderName as usual.
+    expect(out).toContain('__moduleKey: "src/pages/movie"');
+    expect(out).toContain('__loaderName: "default"');
+  });
+
   it('does not inject opts when defineLoader already has a second arg', () => {
     const code = `
       import { defineLoader } from '@hono-preact/iso';

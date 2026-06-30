@@ -50,7 +50,7 @@ export type {
   LoaderState,
   StreamState,
 } from './define-loader.js';
-export { serverRoute } from './server-route.js';
+export { serverRoute, liveStream } from './server-route.js';
 export type { RouteBinder } from './server-route.js';
 
 // Server-side caller (HTTP-free loader/action composition + testing).
@@ -117,7 +117,6 @@ export type { LoaderCache } from './cache.js';
 export { defineChannel } from './define-channel.js';
 export type { Channel, Topic } from './define-channel.js';
 export { publish } from './pubsub.js';
-export type { LiveLoaderOptions } from './server-route.js';
 
 // Duplex WebSocket sockets.
 export { defineSocket } from './define-socket.js';

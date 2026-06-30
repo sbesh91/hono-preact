@@ -27,13 +27,27 @@ export function readSourceWithExtensionFallback(
   return null;
 }
 
-// Reads a .server.* file synchronously and extracts the `params` option from
+/**
+ * Per-loader metadata threaded from a `.server.*` file into its client stub.
+ * `params` is the cache-key dependency list (omitted when default). `routeBound`
+ * marks a loader created via `serverRoute().loader` (omitted when false, i.e. a
+ * route-independent bare `defineLoader`) so the client `LoaderHost` guard can
+ * refuse it when consumed with no resolvable location.
+ */
+export type ServerLoaderMeta = {
+  params?: string[] | '*';
+  routeBound?: true;
+};
+
+// Reads a .server.* file synchronously and extracts per-loader metadata from
 // each entry in the `serverLoaders` ObjectExpression. Returns a map of
-// { loaderName -> params } for loaders that declare non-default params, or an
-// empty object if the file cannot be parsed or has no serverLoaders.
+// { loaderName -> ServerLoaderMeta }, with an entry ONLY for loaders that carry
+// something non-default (declared params and/or route-bound), or an empty object
+// if the file cannot be parsed or has no serverLoaders. A route-independent
+// param-less loader has no entry (both fields default).
 export function extractServerLoadersMeta(
   absServerPath: string
-): Record<string, string[] | '*'> {
+): Record<string, ServerLoaderMeta> {
   const src = readSourceWithExtensionFallback(absServerPath);
   if (src == null) return {};
 
@@ -49,11 +63,14 @@ export function extractServerLoadersMeta(
   }
 
   const entries = parseServerLoaders(ast.program);
-  const meta: Record<string, string[] | '*'> = {};
+  const meta: Record<string, ServerLoaderMeta> = {};
   for (const entry of entries) {
-    if (!entry.optsArg) continue;
-    const params = readParamsOption(entry.optsArg);
-    if (params !== undefined) meta[entry.name] = params;
+    const params = entry.optsArg ? readParamsOption(entry.optsArg) : undefined;
+    if (params === undefined && !entry.routeBound) continue;
+    const m: ServerLoaderMeta = {};
+    if (params !== undefined) m.params = params;
+    if (entry.routeBound) m.routeBound = true;
+    meta[entry.name] = m;
   }
 
   return meta;

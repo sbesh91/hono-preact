@@ -8,8 +8,8 @@ Validation covers four payload surfaces:
 
 - **Action payloads** via `defineAction(fn, { input })`: server-enforced; the handler receives the schema's output type.
 - **Form fields** via `<Form schema>`: opt-in client pre-validation before the POST fires.
-- **Loader search params** via `defineLoader(fn, { searchSchema })`: validates and coerces `ctx.location.searchParams`.
-- **Loader route params** via `defineLoader(fn, { paramsSchema })` (or `serverRoute(id).loader(fn, { paramsSchema })`): validates and coerces `ctx.location.pathParams`.
+- **Loader search params** via `serverRoute(path).loader(fn, { searchSchema })`: validates and coerces `ctx.location.searchParams`.
+- **Loader route params** via `serverRoute(path).loader(fn, { paramsSchema })`: validates and coerces `ctx.location.pathParams`.
 
 **The server is always authoritative.** Client-side validation (the `<Form schema>` prop) is an opt-in enhancement that only works when the schema is importable by the browser. Both paths surface through the same field-error rendering API.
 
@@ -176,7 +176,7 @@ Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues an
 
 ## Loader validation
 
-Pass `searchSchema` or `paramsSchema` to `defineLoader` to validate and coerce URL params.
+Pass `searchSchema` or `paramsSchema` to `serverRoute(path).loader(fn, opts)` to validate and coerce URL params. Validation schemas apply to route-bound loaders because they validate the URL's search and path params, which only route-bound loaders have.
 
 - **`searchSchema` failure** is a 400 (bad query string).
 - **`paramsSchema` failure** is a 404 (the URL does not name a valid resource).
@@ -212,24 +212,31 @@ function LoaderErrorFallback({ error }: { error: unknown }) {
 This fallback renders on client navigation. A direct/refreshed load of the same invalid URL returns a bare `400`/`404` instead (a bad URL is a status, not a field-error screen), so do not rely on it for first-paint rendering.
 
 ```ts
-import { defineLoader } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
 import { z } from 'zod';
 
 // Validate and coerce search params.
-const tasksLoader = defineLoader(
-  (ctx) => {
-    // ctx.location.searchParams: { page: number }
-    return getTasksPage(ctx.location.searchParams.page);
-  },
-  {
-    searchSchema: z.object({ page: z.coerce.number().min(1).default(1) }),
-    params: ['page'],
-  }
-);
+const route = serverRoute('/tasks');
+
+export const serverLoaders = {
+  list: route.loader(
+    (ctx) => {
+      // ctx.location.searchParams: { page: number }
+      return getTasksPage(ctx.location.searchParams.page);
+    },
+    {
+      searchSchema: z.object({ page: z.coerce.number().min(1).default(1) }),
+      params: ['page'],
+    }
+  ),
+};
+```
+
+```ts
+import { serverRoute } from 'hono-preact';
+import { z } from 'zod';
 
 // Validate and coerce route params.
-import { serverRoute } from 'hono-preact';
-
 const route = serverRoute('/tasks/:id');
 
 export const serverLoaders = {
@@ -253,7 +260,7 @@ The loader's `ctx.location.searchParams` and `ctx.location.pathParams` types nar
 
 Understanding when validation runs clarifies what each layer of the stack receives.
 
-**Handlers receive coerced output.** A declared `input`, `searchSchema`, or `paramsSchema` is validated and coerced before your `defineAction` or `defineLoader` function body runs. The handler receives the schema's output type, so coercions (like `z.coerce.number()`) are already applied by the time your code sees the value.
+**Handlers receive coerced output.** A declared `input` (on `defineAction`) or `searchSchema`/`paramsSchema` (on `serverRoute(path).loader`) is validated and coerced before the handler runs. The handler receives the schema's output type, so coercions (like `z.coerce.number()`) are already applied by the time your code sees the value.
 
 **Middleware and observers see the raw payload.** Auth guards, page-use middleware, and stream observers all run earlier in the request pipeline, before the validation step. They receive the raw, pre-validation payload or params, not the coerced values. If a middleware needs a typed value (for example, a numeric id), it should coerce that field itself. This ordering is intentional: auth gates reject unauthenticated requests before any validation work happens, so a malformed payload never reaches guarded logic.
 
@@ -269,14 +276,12 @@ A future option to configure validation position in the middleware chain is trac
 | ------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `input` | `StandardSchemaV1` | Schema applied to the action payload before the handler runs. Failure produces `deny(422)` with issues under a reserved key; the handler never runs. |
 
-### `defineLoader(fn, { searchSchema, paramsSchema })`
+### `serverRoute(id).loader(fn, { searchSchema, paramsSchema })`
 
 | Option         | Type               | Description                                                                                                                                                        |
 | -------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `searchSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.searchParams`. Failure is a 400: a bare status on direct load, a `LoaderValidationError` carrying issues on client navigation. |
 | `paramsSchema` | `StandardSchemaV1` | Validates and coerces `ctx.location.pathParams`. Failure is a 404: a bare status on direct load, a `LoaderValidationError` carrying issues on client navigation.   |
-
-`serverRoute(id).loader(fn, { paramsSchema, searchSchema })` accepts the same options.
 
 ### `<Form schema>`
 

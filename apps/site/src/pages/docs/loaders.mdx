@@ -1,54 +1,46 @@
 # Server Loaders
 
-Pages often need data. On the server, that data should come from a direct function call. In the browser during navigation, it goes through an RPC call to the server. Writing this branch manually is error-prone, so the loader system handles it automatically.
+Pages need data. Loaders run on the server: a direct function call during SSR, and an automatic RPC call during client-side navigation, so you never write the branch manually.
 
-If your loader produces values over time (dashboards, log tails, live feeds), see [Streaming](/docs/streaming).
+A loader is either route-bound (declared via `serverRoute(r).loader`) or route-independent (declared via `defineLoader`). Route-bound loaders receive a typed `location` with the route's path and search params. Route-independent loaders receive a lighter context without location, suitable for shared or reusable fetching logic.
 
-## Example: listing page
+## Route-bound loaders
 
-Snippets on this page assume:
-
-```ts
-type MovieList = { results: { id: number; title: string }[] };
-type Movie = { id: number; title: string };
-```
-
-**`src/pages/movies.server.ts`** holds the server-only data fetching:
+Bind a server module to its route with `serverRoute(r)`. Calling `.loader(fn)` on the result types `ctx.location.pathParams` from the route pattern automatically:
 
 ```ts
-import { getMovies } from '@/server/movies.js';
-import { defineLoader } from 'hono-preact';
+// src/pages/movie.server.ts
+import { serverRoute } from 'hono-preact';
+import { getMovie } from '@/server/movies.js';
+
+const route = serverRoute('/movies/:id');
 
 export const serverLoaders = {
-  default: defineLoader(async () => {
-    const movies = await getMovies(); // direct call; never runs in the browser
-    return { movies };
+  default: route.loader(async ({ location }) => {
+    // location.pathParams.id is typed `string` from the `/movies/:id` pattern
+    return getMovie(location.pathParams.id);
   }),
 };
 ```
 
-**`src/pages/movies.tsx`** creates a self-contained view component via `.View()`, then passes it to `definePage`:
+Then consume the data in the page component via `.View()`:
 
 ```tsx
+// src/pages/movie.tsx
 import { definePage } from 'hono-preact';
-import { serverLoaders } from './movies.server.js';
+import { serverLoaders } from './movie.server.js';
 
-const dataLoader = serverLoaders.default;
+const MovieView = serverLoaders.default.View(({ data }) =>
+  data ? (
+    <article>
+      <h1>{data.title}</h1>
+    </article>
+  ) : (
+    <p>Loading...</p>
+  )
+);
 
-const MoviesView = dataLoader.View(({ data }) => {
-  // `data` reads straight off the union: present in every arm but the cold
-  // `loading` one, so a truthy check doubles as the loading guard.
-  if (!data) return <p>Loading...</p>;
-  return (
-    <ul>
-      {data.movies.results.map((m) => (
-        <li key={m.id}>{m.title}</li>
-      ))}
-    </ul>
-  );
-});
-
-export default definePage(MoviesView);
+export default definePage(MovieView);
 ```
 
 **`src/routes.ts`** wires the URL to the view and its server module:
@@ -57,143 +49,145 @@ export default definePage(MoviesView);
 import { defineRoutes } from 'hono-preact';
 
 export default defineRoutes([
-  // ...
   {
-    path: '/movies',
-    view: () => import('./pages/movies.js'),
-    server: () => import('./pages/movies.server.js'),
+    path: '/movies/:id',
+    view: () => import('./pages/movie.js'),
+    server: () => import('./pages/movie.server.js'),
   },
 ]);
 ```
 
-`defineLoader(fn)` returns a typed `LoaderRef<T>`. The Vite `moduleKeyPlugin` rewrites the call at build time to inject `{ __moduleKey, __loaderName }` so the RPC handler can dispatch to the correct function. `definePage(Component)` returns a routable component that self-wraps in `<Page>` with any page-level bindings captured in a closure.
+### Validating params and search params
 
-On the client, loaders are state-based: the render function receives a `LoaderState<T>` discriminated union on every render rather than suspending. Match on `status` (`loading | success | revalidating | error`): the cold `loading` arm carries no data, while `revalidating` keeps the previous value during a reload (stale-while-revalidate). SSR still awaits each loader before rendering, so the initial HTML arrives in the `success` state. The imperative `reload()` is read via `useReload()`.
-
-## Example: detail page (using route params)
-
-The loader function receives `{ location }` which carries `location.pathParams`. Use this to load a record by ID. The function's return type is inferred and propagated through `defineLoader(fn)` to all consumption points.
-
-```ts
-// src/pages/movie.server.ts
-import { getMovie } from '@/server/movies.js';
-import { defineLoader } from 'hono-preact';
-
-export const serverLoaders = {
-  default: defineLoader(async ({ location }) => {
-    const movie = await getMovie(location.pathParams.id);
-    return { movie };
-  }),
-};
-```
-
-### Typed loader params
-
-After the one-time [route registration](/docs/layouts#typed-route-params), bind a server module to its route with `serverRoute`. `route.loader(fn)` types `ctx.location.pathParams` from the route's pattern (no annotation needed), and the route id autocompletes against your registered routes:
+Pass `paramsSchema` or `searchSchema` (any [Standard Schema](https://standardschema.dev) library) to validate and coerce the input before the loader runs. When validation fails, `paramsSchema` causes a 404; `searchSchema` causes a 400 and the loader's error boundary catches it:
 
 ```ts
 import { serverRoute } from 'hono-preact';
+import { z } from 'zod';
 
 const route = serverRoute('/movies/:id');
 
 export const serverLoaders = {
-  // location.pathParams.id is typed `string`
-  default: route.loader(async ({ location }) => {
-    const movie = await getMovie(location.pathParams.id);
-    return { movie };
-  }),
+  default: route.loader(
+    async ({ location }) => {
+      return getMovie(location.pathParams.id, location.searchParams.quality);
+    },
+    {
+      searchSchema: z.object({ quality: z.enum(['hd', 'sd']).default('hd') }),
+    }
+  ),
 };
 ```
 
-`serverRoute` names the route once for the whole module, the common one-module-one-route case. For a route-agnostic or shared-across-routes loader, use `defineLoader` directly: `defineLoader(routeId, fn)` types params the same way, while `defineLoader(fn)` leaves `pathParams` as `Record<string, string>`.
+## Route-independent loaders
 
-```ts
-// lower-level: route id per loader, or omit it for untyped params
-default: defineLoader('/movies/:id', async ({ location }) => {
-  const movie = await getMovie(location.pathParams.id);
-  return { movie };
-}),
-```
-
-### The loader context
-
-Every loader is called with a single context argument with the same three fields, regardless of whether it returns a value or streams:
-
-```ts
-type LoaderCtx = {
-  c: Context; // typed Hono Context, always available
-  location: RouteHook; // route-change location info
-  signal: AbortSignal; // aborts when the user navigates away
-};
-```
-
-| Field      | Description                                                                                                                                                    |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `c`        | The request's Hono `Context`. Use it for headers, cookies, KV/D1/env `Bindings`, the request URL, etc. With typed `Bindings`, narrow inside the function body. |
-| `location` | Current route navigation info (the same shape as `useLocation()`). Carries `pathParams`, `searchParams`, the resolved path, and the route's metadata.          |
-| `signal`   | An `AbortSignal` that aborts when the user navigates away mid-load. Forward it to `fetch` and any cancellable server work to short-circuit on navigation.      |
-
-Destructure whichever fields a loader needs:
-
-```ts
-defineLoader(async ({ c, location, signal }) => {
-  const token = getCookie(c, 'session');
-  const res = await fetch(`/api/movies/${location.pathParams.id}`, { signal });
-  return res.json();
-});
-```
-
-`ctx.c` is the request's Hono `Context`. A server loader can read cookies (`getCookie(ctx.c, …)`), reach app `Bindings` (`ctx.c.env.MY_KV`), or set a response header before yielding. The shape is `Context`; users with typed `Bindings` can narrow inside the function body.
-
-By convention, loaders read; actions write. Setting cookies/headers from a loader is allowed but discouraged.
-
-On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response. Streaming loaders can set cookies too, but only **before their first `yield`**: that part of the loader runs during the server render, while the response headers are still open. Anything written after the first `yield` runs while the stream is already in flight, with headers committed, and is dropped. When in doubt, rotate sessions from an action.
-
-## The `serverLoaders` container
-
-Loaders are exported in a named container symmetric with `serverActions`. Every `.server.*` file uses this shape, whether it has one loader or many:
+`defineLoader(fn)` defines a loader not tied to any specific route. The context carries `c` (the Hono Context), `signal`, and `call`; there is no `location`. Use this for shared utilities, loaders reused across multiple routes, or data that does not depend on the current URL:
 
 ```ts
 // src/pages/movies.server.ts
 import { defineLoader } from 'hono-preact';
+import { getMovies } from '@/server/movies.js';
 
 export const serverLoaders = {
-  default: defineLoader(async () => {
-    const movies = await getMovies();
+  default: defineLoader(async ({ c, signal }) => {
+    const token = getCookie(c, 'session');
+    const movies = await getMovies({ token, signal });
     return { movies };
   }),
 };
 ```
 
-A single-loader page conventionally uses the key `default`. Multi-loader pages give each loader a descriptive name. There is no special-cased single-loader export; the plugin treats all entries the same way.
+When path or search params are needed, use `serverRoute(r).loader()` instead.
 
-## The `.View()` factory
+## Streaming loaders
 
-`.View(render)` is the primary way to consume a loader. It returns a Preact component pre-wrapped in the loader's own error boundary, data context, and reload context:
+A loader whose function body is an `async function*` is a streaming loader. The framework infers this from the function shape at build time. Streaming loaders are SSR-pumped by default: the server starts writing the response immediately, flushing each yielded chunk as an inline `<script>` tag:
 
 ```ts
-loader.View<P = {}>(
-  render: (args: LoaderState<Serialize<T>> & P) => ComponentChildren
-): FunctionComponent<P>
+// src/pages/dashboard.server.ts
+import { defineLoader } from 'hono-preact';
+
+export const serverLoaders = {
+  metrics: defineLoader(async function* ({ signal }) {
+    while (!signal.aborted) {
+      yield await currentMetrics();
+      await delay(1000);
+    }
+  }),
+};
 ```
 
-The render function receives a `LoaderState<Serialize<T>>` discriminated union plus any props declared by the generic `P`. Switch on `status`: the `loading` arm carries no data, while `success`, `revalidating`, and `error` each carry `data` narrowed to `Serialize<T>` (`revalidating` keeps the previous value during a reload, `error` keeps the last good value). The imperative `reload()` is read via `useReload()`. Inside the render function's subtree, `loader.useData()` returns the same `LoaderState` for descendants that need it without prop-drilling.
+A streaming loader exposes the accumulating `.View(render, { initial, reduce })` form. See [Streaming](/docs/streaming) for the full consumption reference.
 
-**Basic usage:**
+### The `{ live }` flag
+
+By default, a streaming loader runs during SSR and pumps chunks into the HTML. Pass `{ live: true }` to skip SSR entirely, making the loader a client-only subscription. This is appropriate for unbounded generators that must not hang the document response:
+
+```ts
+import { defineLoader } from 'hono-preact';
+
+export const serverLoaders = {
+  activity: defineLoader(
+    async function* ({ signal }) {
+      for await (const event of subscribeToActivity(signal)) {
+        yield event;
+      }
+    },
+    { live: true }
+  ),
+};
+```
+
+### liveStream
+
+`liveStream({ topic, load })` is a generator helper that re-runs a loader on every publish to a channel topic. It yields `load(ctx)` on initial connect, then re-yields each time `publish()` fires on `topic(ctx)`. Because `liveStream` produces an inherently unbounded subscription, it is always live: no `{ live: true }` flag is required. Compose it with either `defineLoader` or `route.loader`:
+
+```ts
+import { serverRoute, liveStream } from 'hono-preact';
+import { tasksChannel, getTasks } from '@/server/tasks.js';
+
+const route = serverRoute('/projects/:id');
+
+export const serverLoaders = {
+  tasks: route.loader(
+    liveStream({
+      topic: ({ location }) => tasksChannel.key(location.pathParams.id),
+      load: ({ location }) => getTasks(location.pathParams.id),
+    })
+  ),
+};
+```
+
+See [Realtime Channels](/docs/realtime) for channel setup.
+
+## Streaming lifecycle
+
+| Loader type                     | `live` | Behavior                                                   |
+| ------------------------------- | ------ | ---------------------------------------------------------- |
+| Finite (`Promise<T>`)           | n/a    | SSR-awaited; arrives in the initial HTML as a static value |
+| Streaming (`AsyncGenerator<T>`) | false  | SSR-pumped; chunks flush inline into the HTML (default)    |
+| Streaming (`AsyncGenerator<T>`) | true   | Skipped on SSR; starts as a client-only subscription       |
+
+Both route-bound and route-independent loaders support the streaming and live forms.
+
+## Consuming loaders
+
+### `.View(render)`: single-value loaders
+
+`.View(render)` creates a component pre-wrapped in the loader's error boundary, data context, and reload context. The render function receives a `LoaderState<Serialize<T>>` discriminated union; switch on `status`:
 
 ```tsx
 import { definePage } from 'hono-preact';
 import { serverLoaders } from './movies.server.js';
 
-const dataLoader = serverLoaders.default;
-
-const MoviesView = dataLoader.View(({ data }) => {
-  // `data` reads straight off the union: present in every arm but the cold
-  // `loading` one, so a truthy check doubles as the loading guard.
+const MoviesView = serverLoaders.default.View(({ data, status }) => {
+  // `data` is absent on the cold `loading` arm; a truthy check is
+  // enough to guard it before reading sub-fields.
   if (!data) return <p>Loading...</p>;
+  if (status === 'error') return <p>Failed to load.</p>;
   return (
     <ul>
-      {data.movies.results.map((m) => (
+      {data.movies.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -203,15 +197,17 @@ const MoviesView = dataLoader.View(({ data }) => {
 export default definePage(MoviesView);
 ```
 
+The `loading` arm carries no data. `success`, `revalidating`, and `error` each carry `data` narrowed to `Serialize<T>`. The `revalidating` status is the stale-while-revalidate state during a reload; the `error` arm keeps the last good value. Call `useReload()` for the imperative `reload()`.
+
 **Prop passthrough** (using the generic `P`):
 
 ```tsx
-const MovieCard = dataLoader.View<{ highlight: boolean }>(
+const MovieCard = serverLoaders.default.View<{ highlight: boolean }>(
   ({ data, highlight }) => {
     if (!data) return <MovieSkeleton />;
     return (
       <article class={highlight ? 'highlight' : undefined}>
-        <h2>{data.movie.title}</h2>
+        <h2>{data.title}</h2>
       </article>
     );
   }
@@ -223,46 +219,109 @@ const MovieCard = dataLoader.View<{ highlight: boolean }>(
 
 **Error handling inside the render function:**
 
-When the loader rejects, the status is `error`; read `reload` from `useReload()` to let the user retry:
+When the loader rejects after already succeeding once, the status is `error` and the last good `data` is still available. Read `reload` from `useReload()` to let the user retry:
 
 ```tsx
 import { useReload } from 'hono-preact';
 
 const StatsView = statsLoader.View(({ status, data }) => {
   const { reload } = useReload();
-  // `!data` is the cold-loading guard; after it, `data` is the value. Tell the
-  // remaining arms apart on `status` (the `error` arm still carries `data`).
   if (!data) return <StatsSkeleton />;
   if (status === 'error') return <button onClick={reload}>Retry</button>;
   return <p>Count: {data.count}</p>;
 });
 ```
 
-This inline `error` arm renders for a **reload that fails after the first load already succeeded** (stale-while-error: the prior `data` stays available alongside the error, so you can keep the last-good UI). A loader's **cold first-load** rejection is different: it fails before any value settles, so it routes to the loader's error boundary and the page-level `errorFallback` instead, and the render function is never called with that cold error. See [Loading States](/docs/loading-states) for the cold-error-versus-stale-error distinction.
+This `error` arm handles a reload that fails after the first load succeeded. A cold first-load failure routes to the error boundary and `errorFallback` instead. See [Loading States](/docs/loading-states) for the distinction.
 
-## Composing multiple loaders per route
+### `.View(render, { initial, reduce })`: streaming loaders
 
-This is the supported pattern when a route needs more than one data source. Declare each source as its own loader in the same `serverLoaders` container; the framework wires each one independently. There is no separate "parallel fetch" or "loader group" API; composition is just adding another key.
+Streaming loaders use the accumulating form. Each chunk is folded into accumulated state and the render function receives a `StreamState<Acc>` discriminated union:
 
-Each loader gets its own independent error boundary, cache key, and streaming section, so a slow or failing source never blocks the rest of the page:
+```tsx
+const ActivityBar = serverLoaders.activity.View<ActivityEvent[]>(
+  (s) => {
+    if (s.status === 'connecting') return <p>Connecting...</p>;
+    if (s.status === 'error') return <p>Stream disconnected.</p>;
+    return (
+      <ul>
+        {s.data.map((e) => (
+          <li key={e.id}>{e.actor}</li>
+        ))}
+      </ul>
+    );
+  },
+  {
+    initial: [],
+    reduce: (acc, event) => [event, ...acc].slice(0, 50),
+  }
+);
+```
+
+See [Streaming](/docs/streaming) and [Live Loaders](/docs/live-loaders) for the full streaming consumption reference.
+
+### `loader.useData()` and `loader.Boundary`
+
+`loader.useData()` returns the same `LoaderState` for descendants that need it without prop-drilling. Call it inside a `.View()` render function or inside an explicit `loader.Boundary`:
+
+```tsx
+function HeaderWithSummary() {
+  const { data } = serverLoaders.summary.useData();
+  if (!data) return <Skeleton />;
+  return <h1>{data.title}</h1>;
+}
+
+function Header() {
+  return (
+    <serverLoaders.summary.Boundary>
+      <HeaderWithSummary />
+    </serverLoaders.summary.Boundary>
+  );
+}
+```
+
+`loader.useData()` is not available on streaming loaders (they have no single value). Calling it on a streaming loader throws with a clear error message; use the accumulating `.View` form instead.
+
+## The serverLoaders container
+
+Loaders are exported in a named `serverLoaders` container from a `.server.*` file. Whether a module has one loader or many, the shape is always the same:
 
 ```ts
-// src/pages/movie.server.ts
+// src/pages/movies.server.ts
 import { defineLoader } from 'hono-preact';
 
 export const serverLoaders = {
-  summary: defineLoader(async ({ location }) =>
+  default: defineLoader(async ({ c }) => {
+    const movies = await getMovies(c.env.MY_KV);
+    return { movies };
+  }),
+};
+```
+
+A single-loader page conventionally uses the key `default`. Multi-loader pages give each loader a descriptive name. The plugin treats all entries the same way.
+
+## Multiple loaders per route
+
+Declare each data source as its own loader in `serverLoaders`. Each one gets its own independent error boundary, cache key, and streaming section, so a slow source never blocks the rest of the page:
+
+```ts
+// src/pages/movie.server.ts
+import { serverRoute, defineLoader } from 'hono-preact';
+
+const route = serverRoute('/movies/:id');
+
+export const serverLoaders = {
+  summary: route.loader(async ({ location }) =>
     getMovie(location.pathParams.id)
   ),
 
-  cast: defineLoader(async function* ({ location }) {
-    for await (const member of streamCast(location.pathParams.id)) yield member;
+  cast: route.loader(async function* ({ location, signal }) {
+    for await (const member of streamCast(location.pathParams.id, signal)) {
+      yield member;
+    }
   }),
 
-  similar: defineLoader(
-    async ({ location }) => fetchSimilar(location.pathParams.id),
-    { params: ['genre'] }
-  ),
+  similar: defineLoader(async ({ c }) => getFeaturedMovies(c.env.MY_KV)),
 };
 ```
 
@@ -280,12 +339,13 @@ const Summary = summary.View(({ status, data }) => {
   return <SummaryCard data={data} />;
 });
 
-const Cast = cast.View(({ data }) =>
-  data ? <CastList items={data} /> : <CastSkeleton />
+const Cast = cast.View(
+  (s) => (s.status === 'open' ? <CastList items={s.data} /> : <CastSkeleton />),
+  { initial: [], reduce: (acc, m) => [...acc, m] }
 );
 
 const Similar = similar.View(({ data }) =>
-  data ? <SimilarCarousel items={data} /> : <SimilarSkeleton />
+  data ? <SimilarCarousel items={data} /> : null
 );
 
 function MovieDetail() {
@@ -301,79 +361,25 @@ function MovieDetail() {
 export default definePage(MovieDetail);
 ```
 
-Each `View` component loads independently. `<Summary />` can show content while `<Cast />` and `<Similar />` are still loading.
-
-## The `.Boundary` escape hatch
-
-When you need to interleave loader-aware UI with non-loader content, use `loader.Boundary` directly and call `loader.useData()` inside it:
-
-```tsx
-function Header() {
-  return (
-    <summary.Boundary>
-      <HeaderWithSummary />
-    </summary.Boundary>
-  );
-}
-
-function HeaderWithSummary() {
-  const { data } = summary.useData();
-  return (
-    <header>
-      <BreadcrumbTrail />
-      {data ? <h1>{data.title}</h1> : <Skeleton />}
-      <ActionsBar />
-    </header>
-  );
-}
-```
-
-`loader.useData()` must be called inside a matching `Boundary` (placed by `.View()` or explicitly via `loader.Boundary`). Calling it outside throws with a clear error message.
-
-## Search-param dependencies (`params`)
-
-By default, a loader's cache key includes only the path and path params. Search params that the loader doesn't use (analytics tags, UI state, tracking tokens) don't cause refetches.
-
-Declare search-param dependencies per loader with the `params` option:
-
-```ts
-export const serverLoaders = {
-  // path-only cache key (default); never refetches on search-param changes
-  summary: defineLoader(async ({ location }) =>
-    getMovie(location.pathParams.id)
-  ),
-
-  // refetches when ?genre changes, but not on ?modal or ?utm_source
-  similar: defineLoader(
-    async ({ location }) =>
-      fetchSimilar(location.pathParams.id, location.searchParams),
-    { params: ['genre'] }
-  ),
-
-  // refetches on any search-param change; for search/filter pages
-  results: defineLoader(
-    async ({ location }) => searchMovies(location.searchParams),
-    { params: '*' }
-  ),
-};
-```
-
-The RPC request always sends the full location to the server; `params` only narrows the client-side cache key.
+Each `.View` component loads independently. `<Summary />` can show content while `<Cast />` is still streaming.
 
 ## Layout-level loaders
 
-A loader declared in `layout.server.*` is automatically scoped to the layout's matched location, not the deepest child route. It does not re-fire when navigating between child routes under the same layout:
+A loader in `layout.server.*` is scoped to the layout's matched location. It does not re-fire when navigating between child routes:
 
 ```ts
 // src/pages/movies/layout.server.ts
 import { defineLoader } from 'hono-preact';
 
 export const serverLoaders = {
-  activity: defineLoader(async function* ({ signal }) {
-    for await (const event of subscribeToActivity(signal)) {
-      yield event;
-    }
-  }),
+  activity: defineLoader(
+    async function* ({ signal }) {
+      for await (const event of subscribeToActivity(signal)) {
+        yield event;
+      }
+    },
+    { live: true }
+  ),
 };
 ```
 
@@ -381,8 +387,9 @@ export const serverLoaders = {
 // src/pages/movies/layout.tsx
 import { serverLoaders } from './layout.server.js';
 
-const Feed = serverLoaders.activity.View(({ data }) =>
-  data ? <ActivitySidebar events={data} /> : null
+const Feed = serverLoaders.activity.View(
+  (s) => (s.status === 'open' ? <ActivitySidebar events={s.data} /> : null),
+  { initial: [], reduce: (acc, e) => [e, ...acc].slice(0, 50) }
 );
 
 export default function MoviesLayout({
@@ -401,26 +408,90 @@ export default function MoviesLayout({
 }
 ```
 
-Navigating `/movies` to `/movies/123` does not unmount the layout, does not change the layout's matched location, and therefore does not re-fire the `activity` loader. The streaming subscription continues across child route changes.
+Navigating between child routes does not unmount the layout, so the streaming subscription continues across those navigations.
 
-## Registering the loader endpoint
+## The loader context
 
-You do not wire `loadersHandler` directly. The framework's Vite plugin generates the server entry, which mounts `loadersHandler` on `POST /__loaders`, a page POST handler for actions, your optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. `loadersHandler` routes by `moduleKey::loaderName` (the path-derived key injected by `moduleKeyPlugin` combined with the loader's name in the container); modules without `__moduleKey` are silently skipped at map-build time.
+A route-bound loader (`serverRoute(r).loader(fn)`) receives:
 
-If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
+| Field      | Type                   | Description                                                                                                                                               |
+| ---------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c`        | `Context`              | The request's Hono Context. Use for cookies, headers, `Bindings`, the request URL, etc.                                                                   |
+| `location` | `RouteHook`            | The matched route's navigation info: typed `pathParams`, `searchParams`, path, and metadata. The same shape as `useLocation()` accessed from a component. |
+| `signal`   | `AbortSignal`          | Aborts when the user navigates away mid-load. Forward to `fetch` and cancellable work.                                                                    |
+| `call`     | `ServerCaller['call']` | Invoke another loader or action server-side without an HTTP round-trip.                                                                                   |
+
+A route-independent loader (`defineLoader(fn)`) receives the same fields except `location`.
+
+Pass the signal to upstream `fetch` calls and subscriptions so they clean up promptly:
+
+```ts
+defineLoader(async ({ c, signal }) => {
+  const token = getCookie(c, 'session');
+  const res = await fetch('/api/data', { signal });
+  return res.json();
+});
+```
+
+By convention, loaders read; actions write. Setting cookies or headers from a loader is allowed but discouraged. On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response. A streaming loader can set cookies only before its first `yield`; anything written after is dropped because the response headers are already committed.
+
+## Search-param dependencies (`params`)
+
+By default, a loader's cache key includes only the path and path params. Declare search-param dependencies per loader with the `params` option:
+
+```ts
+const route = serverRoute('/movies/:id');
+
+export const serverLoaders = {
+  // path-only cache key (default); never refetches on search-param changes
+  summary: route.loader(async ({ location }) =>
+    getMovie(location.pathParams.id)
+  ),
+
+  // refetches when ?genre changes, but not on other params
+  similar: route.loader(
+    async ({ location }) =>
+      fetchSimilar(location.pathParams.id, location.searchParams.genre),
+    { params: ['genre'] }
+  ),
+
+  // refetches on any search-param change; for search/filter pages
+  results: route.loader(
+    async ({ location }) => searchMovies(location.searchParams),
+    { params: '*' }
+  ),
+};
+```
+
+The RPC request always sends the full location to the server; `params` only narrows the client-side cache key.
+
+## Cross-page invalidation
+
+When a mutation on one page should refresh data on another, import the other page's loader ref and pass it to `useAction({ invalidate: [...] })`. Invalidation is by reference, not by name:
+
+```ts
+import { useAction } from 'hono-preact';
+import { serverLoaders as moviesLoaders } from './movies.server.js';
+import { serverActions } from './reviews.server.js';
+
+const { mutate } = useAction(serverActions.addReview, {
+  invalidate: [moviesLoaders.default],
+});
+```
+
+Pass `'auto'` to invalidate the current page's loader only. Use `loader.invalidate()` to clear the cache imperatively.
 
 ## Caching navigation results
 
-Every loader gets its own cache automatically. Repeated navigations to the same page (with the same cache key) hit the cache and skip the RPC call. To clear the cache, call `loader.invalidate()`. The next navigation re-runs the loader.
+Every loader gets its own cache automatically. Repeated navigations to the same route (with the same cache key) hit the cache and skip the RPC call. To clear the cache:
 
 ```ts
-// clear the cache on the current loader
-dataLoader.invalidate();
+serverLoaders.default.invalidate();
 ```
 
 ### Sharing a cache between loaders
 
-If two loaders need to share storage (for example, a detail page that should populate the same cache as a list page), construct a `LoaderCache` explicitly and pass it via the `cache` option:
+If two loaders need to share storage, construct a `LoaderCache` explicitly and pass it via the `cache` option:
 
 ```ts
 import { createCache, defineLoader } from 'hono-preact';
@@ -432,13 +503,32 @@ export const serverLoaders = {
 };
 ```
 
-`createCache<T>()` takes no arguments. Loader caches are referenced by the loader, not by name.
-
 ### Cache registry scope
 
-The loader-cache registry that lets `loader.invalidate()` work across importers is keyed off a global `Symbol.for('@hono-preact/iso/loaderCaches')`. The map is therefore shared across every consumer of `@hono-preact/iso` running in the same JavaScript realm.
+The loader-cache registry is keyed off `Symbol.for('@hono-preact/iso/loaderCaches')`, shared across every consumer of `@hono-preact/iso` in the same JavaScript realm. On Cloudflare Workers each request runs in a short-lived isolate, so this is effectively per-process. On a long-lived Node server hosting multiple tenants from one realm, the registry is shared. Cache contents are per-request via AsyncLocalStorage, so there is no cross-tenant data leak.
 
-On Cloudflare Workers (the framework's primary target) each request runs in a short-lived isolate, so this is effectively per-process and per-tenant. On a long-lived Node server hosting multiple tenants from one realm, the _registry_ is shared across tenants. The cache contents are NOT cross-leaking (each loader's cache is keyed by its own `__moduleKey` + a private symbol minted at `defineLoader` time), but multi-tenant operators should be aware that the framework assumes per-realm isolation.
+## Timeouts
+
+Loaders get a 30-second deadline by default. Override with `timeoutMs`:
+
+```ts
+export const serverLoaders = {
+  slowReport: defineLoader(
+    async () => {
+      /* ... */
+    },
+    { timeoutMs: 60_000 }
+  ),
+  liveStream: defineLoader(
+    async function* () {
+      /* yields indefinitely */
+    },
+    { timeoutMs: false }
+  ),
+};
+```
+
+Pass `timeoutMs: false` to opt out entirely. When the deadline fires, the loader's `ctx.signal` aborts, the server responds with 504, and the client receives a `TimeoutError`.
 
 ## Page bindings with `definePage`
 
@@ -452,129 +542,37 @@ export default definePage(Component, { Wrapper });
 
 Loader consumption (`.View()`) lives inside the page's JSX tree, not on `definePage`.
 
-A page with no loader simply skips `definePage` and exports the component directly:
+## Registering the loader endpoint
 
-```tsx
-// src/pages/home.tsx
-const Home = () => <main>Welcome.</main>;
-export default Home;
-```
-
-A `Wrapper` binding wraps the page in a custom element while keeping the SSR plumbing:
-
-```tsx
-// src/pages/movie.tsx
-import { definePage, type WrapperProps } from 'hono-preact';
-import { serverLoaders } from './movie.server.js';
-
-const { default: movieLoader } = serverLoaders;
-
-const MovieView = movieLoader.View(({ data }) =>
-  data ? <article>{data.movie.title}</article> : <MovieSkeleton />
-);
-
-function MovieWrapper(props: WrapperProps) {
-  return <article {...props} />;
-}
-
-export default definePage(MovieView, { Wrapper: MovieWrapper });
-```
-
-## Cross-page invalidation
-
-When a mutation on one page should refresh data on another, import the other page's loader ref and pass it to `useAction({ invalidate: [...] })`. Invalidation is by reference, not by name:
-
-```ts
-// movies.server.ts
-import { defineLoader } from 'hono-preact';
-
-export const serverLoaders = {
-  default: defineLoader(async () => ({ movies: await getMovies() })),
-};
-```
-
-```tsx
-// reviews.tsx: a different page whose action should also refresh the movie list
-import { useAction } from 'hono-preact';
-import { serverLoaders as moviesLoaders } from './movies.server.js';
-import { serverActions } from './reviews.server.js';
-
-const moviesLoader = moviesLoaders.default;
-
-const { mutate } = useAction(serverActions.addReview, {
-  invalidate: [moviesLoader], // clears moviesLoader's cache on success
-});
-```
-
-`invalidate` accepts an array of loader refs, so a single action can refresh multiple targets: `invalidate: [moviesLoader, ratingsLoader]`. Use `'auto'` instead of an array to invalidate the current page's loader only.
+You do not wire `loadersHandler` directly. The framework's Vite plugin generates the server entry, which mounts `loadersHandler` on `POST /__loaders`, a page POST handler for actions, your optional `api.ts`, and the SSR catch-all on one Hono app. If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
 
 ## How it works
 
-A page is a file pair:
-
-- `movies.server.ts`: the server loaders collected in a `serverLoaders` container. Never reaches the browser bundle.
-- `movies.tsx`: a pure component that consumes each loader's data via `.View()` (or `loader.useData()` inside a `loader.Boundary`) and is exported through `definePage(Component)`.
-
-`definePage(Component)` returns a routable component that self-wraps in `<Page>` with any page-level bindings. The route table in `routes.ts` declares which view and which `.server.ts` live at each URL via the `view` and `server` fields; the framework wires the rest.
+A page is a file pair: a `.server.ts` module that collects loaders in `serverLoaders`, and a `.tsx` component that consumes data through `.View()` or `useData()`.
 
 **At runtime:**
 
 1. **SSR:** each loader in `serverLoaders` runs directly during `prerender`. Its return value is JSON-serialized and embedded in the page's HTML.
-2. **Hydration (first load):** the client reads that embedded data. No fetch is fired.
-3. **Client-side navigation:** the Vite plugin replaces the `serverLoaders` import with a Proxy stub. Accessing `serverLoaders.name` returns a `LoaderRef` whose RPC stub POSTs `{ module, loader, location }` to `POST /__loaders`. The server runs the real function and returns JSON.
+2. **Hydration (first load):** the client reads that embedded data. No fetch fires.
+3. **Client-side navigation:** the Vite plugin replaces `.server.*` imports with Proxy stubs. Accessing `serverLoaders.name` returns a `LoaderRef` whose RPC stub POSTs `{ module, loader, location }` to `POST /__loaders`. The server runs the real function and returns JSON.
 
-Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: the value carried by `loader.useData()` and the `.View()` render argument (in the data-bearing arms of the `LoaderState` union) is `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error. The same `Serialize<T>` applies to action results (`useAction().data`, `<Form onSuccess>`, `useActionResult()`).
+Because every value crosses this boundary as JSON, the client receives the _serialized_ shape of a loader's return, not the server-side type. The data hooks reflect that honestly: the value carried by `loader.useData()` and the `.View()` render argument is `Serialize<T>`, the JSON round-trip of the loader's return `T`. A `Date` field is therefore typed (and arrives) as a `string`; values JSON cannot carry (functions, `bigint`, symbols) are dropped, or surface as `never` so a non-serializable return is a compile error.
 
-## Timeouts
-
-Loaders get a deadline. By default every call has 30 seconds to finish; the
-deadline starts when the handler receives the request. Pass `timeoutMs` on
-`defineLoader` to override:
-
-```ts
-export const slowReport = defineLoader(
-  async () => {
-    /* ... */
-  },
-  { timeoutMs: 60_000 }
-);
-```
-
-Pass `timeoutMs: false` to opt out entirely (useful for long-running streams):
-
-```ts
-export const longLivedStream = defineLoader(
-  async function* () {
-    /* yields indefinitely */
-  },
-  { timeoutMs: false }
-);
-```
-
-When a deadline fires, the loader's `ctx.signal` aborts with reason
-`DOMException('TimeoutError')`. The server responds with status 504 and a
-`{ __outcome: 'timeout', timeoutMs }` envelope. On the client, the failure
-surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
-`timeoutMs` as class properties).
-
-The framework default timeout is 30s. Override it per loader with
-`defineLoader({ timeoutMs })` (a number of milliseconds, or `false` to disable
-the timeout for that loader).
-
-## The server/client boundary
-
-Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. Any imported `serverActions` becomes a Proxy of action stubs. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
+Two Vite plugins enforce that `.server.*` code never reaches the browser. `serverOnlyPlugin` rewrites `*.server.*` imports in the client bundle: the `serverLoaders` named export becomes a Proxy whose `get(_, name)` returns a fresh `LoaderRef` stub for that name. `serverLoaderValidationPlugin` fails the build if a `.server.*` file has unrecognised named exports.
 
 ## Options
 
-Pass a second argument to `defineLoader` to configure a loader:
+Pass a second argument to `defineLoader` or `route.loader` to configure a loader:
 
-| Option      | Type              | Default | Description                                               |
-| ----------- | ----------------- | ------- | --------------------------------------------------------- |
-| `params`    | `string[] \| '*'` | `[]`    | Search params that change the cache key; `'*'` means any. |
-| `cache`     | `LoaderCache<T>`  | auto    | A shared cache; see Caching navigation results.           |
-| `timeoutMs` | `number \| false` | `30000` | Per-loader deadline; `false` disables it.                 |
-| `use`       | `LoaderUse`       | none    | Per-loader middleware and stream observers.               |
+| Option         | Type               | Default | Description                                                                 |
+| -------------- | ------------------ | ------- | --------------------------------------------------------------------------- |
+| `params`       | `string[] \| '*'`  | `[]`    | Search params that change the cache key; `'*'` means any. Route-bound only. |
+| `cache`        | `LoaderCache<T>`   | auto    | Shared cache; see Caching navigation results.                               |
+| `timeoutMs`    | `number \| false`  | `30000` | Per-loader deadline in milliseconds; `false` disables it.                   |
+| `live`         | `boolean`          | `false` | Skip SSR; start as a client-only subscription (streaming loaders only).     |
+| `use`          | `LoaderUse`        | none    | Per-loader middleware and stream observers.                                 |
+| `paramsSchema` | `StandardSchemaV1` | none    | Route-bound only: validates and coerces `pathParams`. Fails with 404.       |
+| `searchSchema` | `StandardSchemaV1` | none    | Route-bound only: validates and coerces `searchParams`. Fails with 400.     |
 
 Most options have a dedicated section above; this table is the at-a-glance summary.
 
@@ -586,14 +584,12 @@ Most options have a dedicated section above; this table is the at-a-glance summa
 import type { InferLoaderData, Serialize } from 'hono-preact';
 import type { serverLoaders } from './movies.server.js';
 
-const moviesLoader = serverLoaders.default;
-
 // The loader's return type as declared (server-side, pre-serialization)
-type Data = InferLoaderData<typeof moviesLoader>;
+type Data = InferLoaderData<typeof serverLoaders.default>;
 // { movies: MovieList } (a Date field stays Date here)
 
 // The wire shape (JSON round-trip): Date degrades to string, etc.
-type WireData = Serialize<InferLoaderData<typeof moviesLoader>>;
+type WireData = Serialize<InferLoaderData<typeof serverLoaders.default>>;
 ```
 
 `InferLoaderData<L>` is useful for code that only runs server-side (such as fixtures, adapters, and `createCaller` test helpers) where the pre-serialized type is the right type to work with. The client-facing hooks (`.View()`, `loader.useData()`) always carry `Serialize<T>`, because data crosses the server/client boundary as JSON.
@@ -606,7 +602,10 @@ type WireData = Serialize<InferLoaderData<typeof moviesLoader>>;
 
 ## See also
 
-- [Loading States](/docs/loading-states): the loading and error UI for a loader's data.
+- [Loading States](/docs/loading-states): the loading and error UI for loader data.
+- [Streaming](/docs/streaming): streaming loaders and their consumption API.
+- [Live Loaders](/docs/live-loaders): persistent live loaders on layouts, `{ live: true }`, and `StreamStatus`.
 - [Reloading Data](/docs/reloading): invalidating and re-running loaders.
 - [Prefetching](/docs/prefetch): warming a loader before navigation.
 - [Server Actions](/docs/actions): mutations that can invalidate loaders.
+- [Realtime Channels](/docs/realtime): channels and `publish()` used with `liveStream`.

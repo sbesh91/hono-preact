@@ -87,6 +87,11 @@ export {
   type StoredActionResult,
 } from './internal/action-result-store.js';
 
+// Route-binding helper: exported here (not from the main surface) for tests
+// and framework internals that need to create a route-bound LoaderRef directly
+// without going through the `serverRoute(r).loader(fn)` public API.
+export { _defineRouteLoader } from './define-loader.js';
+
 // Middleware dispatcher + observer fanout. Internal-stability subpath.
 export {
   dispatchServer,

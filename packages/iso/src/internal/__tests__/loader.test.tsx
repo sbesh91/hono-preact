@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
 import { useState } from 'preact/hooks';
 import { LocationProvider, type RouteHook } from 'preact-iso';
-import { defineLoader } from '../../define-loader.js';
+import {
+  defineLoader,
+  _defineRouteLoader,
+  type LoaderCtx,
+} from '../../define-loader.js';
 import { Loader } from '../loader.js';
 import { useReload } from '../../reload-context.js';
 import { LoaderDataContext, LoaderIdContext } from '../contexts.js';
@@ -162,7 +166,7 @@ describe('v3 <Loader> stability', () => {
     let resolveInitial!: (v: { msg: string }) => void;
     let resolveReload!: (v: { msg: string }) => void;
     const fn = vi
-      .fn()
+      .fn<() => Promise<{ msg: string }>>()
       .mockImplementationOnce(
         () =>
           new Promise<{ msg: string }>((r) => {
@@ -295,7 +299,7 @@ describe('v3 <Loader> stability', () => {
     let resolveInitial!: (v: { msg: string }) => void;
     let resolveReload!: (v: { msg: string }) => void;
     const fn = vi
-      .fn()
+      .fn<() => Promise<{ msg: string }>>()
       .mockImplementationOnce(
         () =>
           new Promise<{ msg: string }>((r) => {
@@ -362,10 +366,14 @@ describe('v3 <Loader> stability', () => {
 
   it('refetches when searchParams change even though path is stable', async () => {
     const fn = vi.fn(
-      ({ location }: { location: RouteHook; signal: AbortSignal }) =>
+      ({
+        location,
+      }: LoaderCtx<Record<string, string>, Record<string, string>>) =>
         Promise.resolve({ q: location.searchParams.q ?? '' })
     );
-    const ref = defineLoader<{ q: string }>(fn, { params: ['q'] });
+    const ref = _defineRouteLoader<{ q: string }>('/search', fn, {
+      params: ['q'],
+    });
 
     function Child() {
       const s = ref.useData();
@@ -462,9 +470,16 @@ describe('Loader: parametric loader cache should key on location', () => {
 });
 
 describe('Loader: no-location error message', () => {
-  it('throws with remediation naming the route server module when no location is provided', () => {
+  it('throws for a route-bound loader with no location (guards depend on the route)', () => {
     const ref = defineLoader(async () => ({ msg: 'hi' }));
-    // Suppress the expected React/Preact error console output from the throw.
+    // Simulate a route-bound loader. The guard reads `__routeBound` (set on both
+    // the server ref and the client stub); `serverRoute().loader` derives it from
+    // `__routeId`, so set both to mirror a real route-bound ref.
+    Object.assign(
+      ref as unknown as { __routeId: string; __routeBound: boolean },
+      { __routeId: '/test-route', __routeBound: true }
+    );
+    // Suppress the expected Preact error console output from the throw.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => {
       render(
@@ -474,10 +489,23 @@ describe('Loader: no-location error message', () => {
           </Loader>
         </LocationProvider>
       );
-    }).toThrow(
-      "wrap the page in a route whose server module includes this loader's .server.ts file"
-    );
+    }).toThrow('Route-bound loader for module');
     errorSpy.mockRestore();
+  });
+
+  it('does NOT throw for a route-independent loader (no __routeId) with no location', () => {
+    const ref = defineLoader(async () => ({ msg: 'hi' }));
+    // __routeId is absent (undefined) by default for route-independent loaders.
+    expect(() => {
+      render(
+        <LocationProvider>
+          <Loader loader={ref}>
+            <span />
+          </Loader>
+        </LocationProvider>
+      );
+    }).not.toThrow();
+    cleanup();
   });
 });
 

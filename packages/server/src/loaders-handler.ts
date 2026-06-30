@@ -46,6 +46,9 @@ type LoaderEntry = {
   timeoutMs?: number | false;
   searchSchema?: StandardSchemaV1;
   paramsSchema?: StandardSchemaV1;
+  /** Route pattern this loader is bound to (from `ref.__routeId`). `undefined`
+   * for route-independent loaders created with bare `defineLoader(fn)`. */
+  routeId?: string;
 };
 
 async function buildLoadersMap(
@@ -80,6 +83,7 @@ async function buildLoadersMap(
             timeoutMs?: number | false;
             searchSchema?: StandardSchemaV1;
             paramsSchema?: StandardSchemaV1;
+            __routeId?: string;
           };
           result[`${moduleKey}::${name}`] = {
             fn: ref.fn,
@@ -87,6 +91,7 @@ async function buildLoadersMap(
             timeoutMs: ref.timeoutMs,
             searchSchema: ref.searchSchema,
             paramsSchema: ref.paramsSchema,
+            routeId: ref.__routeId,
           };
         }
       }
@@ -133,18 +138,22 @@ export interface LoadersHandlerOptions {
    */
   appConfig?: AppConfig;
   /**
-   * Per-page layer lookup keyed by the matched route's location path.
-   * Returns the composed page-layer `use` for the matched route pattern,
-   * sourced from the route manifest's `routeUse` (which already folds in
-   * ancestor `use` outer-first). The lookup may be sync (an in-memory map)
-   * or async (loaded lazily on first request). The handler awaits the result
-   * either way.
+   * Page-layer `use` lookup keyed by a route-bound loader's OWN declared route
+   * PATTERN (`ref.__routeId`, e.g. `/movies/:id`), NOT a concrete URL. Returns
+   * the composed page-layer `use` for that pattern, sourced from the route
+   * manifest's `routeUse` (which already folds in ancestor `use` outer-first).
+   * The lookup may be sync (an in-memory map) or async (loaded lazily on first
+   * request). The handler awaits the result either way.
+   *
+   * Pass `pageUseResolver.byPattern` from makePageUseResolver: it resolves the
+   * pattern key exactly. Do NOT pass `byPath` here; that URL fuzzy-matcher can
+   * resolve a pattern to a sibling same-shaped pattern's guards (`/a/:x` vs
+   * `/a/:y`), applying the wrong page's auth chain.
    *
    * REQUIRED: page-level `use` is where route/layout auth gates live, so an
    * absent resolver would silently drop them on the loader RPC path, exposing
    * data the gate should protect. The handler validates this at construction
-   * and throws rather than fetching loaders through a guard-less chain. Pass
-   * `pageUseResolver.byPath` from makePageUseResolver.
+   * and throws rather than fetching loaders through a guard-less chain.
    */
   resolvePageUse: (
     path: string
@@ -232,20 +241,40 @@ export function loadersHandler(
       );
     }
 
-    // Chain ordering is app (outermost) -> page (loaders owned by the route)
-    // -> per-loader (`use`); composeServerChain owns the ordering, timeout
-    // derivation, partitioning, and the structural-read cast (shared with the
-    // action handler).
-    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
-      await composeServerChain<'loader'>({
+    // Chain ordering is app (outermost) -> page -> per-loader (`use`).
+    // Route-bound loaders (ref.__routeId set) resolve guards from their OWN
+    // declared route, not the client-sent path; route-independent loaders
+    // (bare defineLoader) receive no page tier. A route-bound loader whose
+    // declared route the resolver cannot handle is rejected immediately (500)
+    // rather than being run guard-less, which would silently drop auth gates.
+    const routeBound = typeof entry.routeId === 'string';
+    let composedChain: Awaited<ReturnType<typeof composeServerChain<'loader'>>>;
+    try {
+      composedChain = await composeServerChain<'loader'>({
         requestSignal: c.req.raw.signal,
         unitTimeoutMs: entry.timeoutMs,
         defaultTimeoutMs,
         appConfig,
-        resolvePageUse,
-        path: validatedLocation.path,
+        resolvePageUse: routeBound ? resolvePageUse : () => [],
+        path: routeBound ? entry.routeId! : '',
         unitUse: entry.use,
       });
+    } catch (err) {
+      if (routeBound) {
+        // resolvePageUse threw for the declared route id; fail closed so the
+        // loader never runs through a guard-less chain.
+        const msg = err instanceof Error ? err.message : String(err);
+        return c.json(
+          {
+            error: `Route-bound loader '${entry.routeId}' could not resolve its page-use chain: ${msg}`,
+          },
+          500
+        );
+      }
+      throw err;
+    }
+    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
+      composedChain;
     const ctx: ServerLoaderCtx = {
       scope: 'loader',
       c,

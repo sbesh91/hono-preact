@@ -6,6 +6,7 @@ import {
   defineLoader,
   type RoutesManifest,
 } from '@hono-preact/iso';
+import { _defineRouteLoader } from '@hono-preact/iso/internal';
 import { createServerEntry } from '../create-server-entry.js';
 
 // A minimal RoutesManifest sufficient for the loader RPC path. The SSR (GET)
@@ -37,7 +38,10 @@ describe('createServerEntry', () => {
       await next();
       calls.push('page:after');
     });
-    const loader = defineLoader<string>(
+    // _defineRouteLoader marks this as route-bound so the handler resolves its
+    // page guards from the declared route (/x) rather than skipping the page tier.
+    const loader = _defineRouteLoader(
+      '/x',
       async () => {
         calls.push('inner');
         return 'ok';

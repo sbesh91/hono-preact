@@ -108,13 +108,18 @@ export interface SocketsHandlerOptions {
    * middle layer (outer -> inner: app-use, page-use, def.use), which is where
    * route/layout auth gates live.
    *
+   * Called with the socket's OWN owning-route PATTERN (from `resolveRoutePath`),
+   * not a concrete URL, so pass `pageUseResolver.byPattern` (exact key lookup),
+   * NOT `byPath`: the URL fuzzy-matcher can resolve a pattern to a sibling
+   * same-shaped pattern's guards (`/a/:x` vs `/a/:y`), applying the wrong route's
+   * auth gates to the upgrade.
+   *
    * REQUIRED: page-level `use` is where route/layout auth gates live, so an
    * absent resolver would silently drop them on the socket-upgrade path,
    * letting a connection bypass the gate that protects the owning route. The
    * handler validates this at construction and throws rather than upgrading
    * through a guard-less chain, mirroring `loadersHandler` /
-   * `pageActionsHandler`. Pass `pageUseResolver.byPath` from
-   * `makePageUseResolver`.
+   * `pageActionsHandler`.
    */
   resolvePageUse: (
     path: string

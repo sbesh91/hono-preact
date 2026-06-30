@@ -1,26 +1,32 @@
 import { describe, it, expect } from 'vitest';
 import { serverRoute } from '../server-route.js';
-import { defineLoader, type LoaderCtx } from '../define-loader.js';
 
 describe('serverRoute', () => {
-  it('loader() returns a LoaderRef behaviorally identical to defineLoader(routeId, fn)', () => {
+  it('loader() returns a LoaderRef with the correct __routeId', () => {
     const route = serverRoute('/things/:id');
-    const fn = async (_ctx: LoaderCtx<{ id: string }>) => ({ ok: true });
-    const viaFactory = route.loader(fn);
-    const viaDirect = defineLoader('/things/:id', fn);
-
-    expect(typeof viaFactory.__id).toBe('symbol');
-    expect(viaFactory.fn).toBe(fn);
-    expect(viaFactory.params).toEqual(viaDirect.params);
-    expect(typeof viaFactory.invalidate).toBe('function');
+    const fn = async () => ({ ok: true });
+    const ref = route.loader(fn);
+    expect(typeof ref.__id).toBe('symbol');
+    expect(ref.fn).toBe(fn);
+    expect(ref.params).toEqual([]);
+    expect(ref.__routeId).toBe('/things/:id');
+    expect(typeof ref.invalidate).toBe('function');
   });
 
-  it('forwards opts through to defineLoader', () => {
+  it('forwards opts through to the loader ref', () => {
     const route = serverRoute('/things/:id');
-    const ref = route.loader(
-      async (_ctx: LoaderCtx<{ id: string }>) => ({ ok: true }),
-      { params: ['q'] }
-    );
+    const ref = route.loader(async () => ({ ok: true }), { params: ['q'] });
     expect(ref.params).toEqual(['q']);
+    expect(ref.__routeId).toBe('/things/:id');
+  });
+
+  it('loader() with a generator fn returns a streaming ref', () => {
+    const route = serverRoute('/things/:id');
+    async function* gen() {
+      yield { ok: true };
+    }
+    const ref = route.loader(gen);
+    expect(ref.fn).toBe(gen);
+    expect(ref.__routeId).toBe('/things/:id');
   });
 });

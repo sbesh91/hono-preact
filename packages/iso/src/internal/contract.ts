@@ -57,6 +57,14 @@ export const MODULE_KEY_EXPORT = '__moduleKey';
 export const LOADER_NAME_OPTION = '__loaderName';
 
 /**
+ * Name of the route-id option set by `serverRoute(r).loader/liveLoader` at
+ * runtime. Consumers: iso `server-route.ts` (set), iso `define-loader.ts`
+ * (stored on ref); server dispatcher (Tasks 3+) reads it to distinguish
+ * route-bound loaders from route-independent ones.
+ */
+export const ROUTE_ID_OPTION = '__routeId';
+
+/**
  * Form field names carrying the action identity in POSTs. Consumers: iso
  * `form.tsx` (FormData set/skip, hidden inputs) and `action.ts` (stub
  * property definition AND its own FormData append/skip when building

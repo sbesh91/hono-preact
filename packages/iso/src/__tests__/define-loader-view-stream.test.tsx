@@ -57,12 +57,18 @@ describe('loader.View (accumulating / streaming form)', () => {
           ])
         )
     );
-    // `live` + `__moduleKey` so the runner takes the client fetch path (the
-    // accumulating form requires a live loader; on the client `live` is inert).
-    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
-      __moduleKey: 'test-view-stream',
-      live: true,
-    });
+    // Generator fn + `__moduleKey` so the runner takes the client fetch path.
+    // The generator fn drives the LoaderRef<T, true> type discriminant so the
+    // accumulating .View form is available. On the client `live` is inert.
+    const ref = defineLoader<{ n: number }>(
+      async function* () {
+        yield { n: 0 };
+      },
+      {
+        __moduleKey: 'test-view-stream',
+        live: true,
+      }
+    );
     const Feed = ref.View<number[]>(
       (s) => (
         <p data-testid="out">
@@ -100,10 +106,15 @@ describe('loader.View (accumulating / streaming form)', () => {
       .mockResolvedValueOnce(dripSseResponse(['data: {"n":9}\n\n']));
     vi.stubGlobal('fetch', fetchMock);
 
-    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
-      __moduleKey: 'test-view-reload',
-      live: true,
-    });
+    const ref = defineLoader<{ n: number }>(
+      async function* () {
+        yield { n: 0 };
+      },
+      {
+        __moduleKey: 'test-view-reload',
+        live: true,
+      }
+    );
     const Feed = ref.View<number[]>(
       (s) => {
         const { reload } = useReload();
@@ -172,10 +183,15 @@ describe('loader.View (accumulating / streaming form)', () => {
       .mockImplementationOnce(() => second.promise);
     vi.stubGlobal('fetch', fetchMock);
 
-    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
-      __moduleKey: 'test-view-reload-connecting',
-      live: true,
-    });
+    const ref = defineLoader<{ n: number }>(
+      async function* () {
+        yield { n: 0 };
+      },
+      {
+        __moduleKey: 'test-view-reload-connecting',
+        live: true,
+      }
+    );
     const Feed = ref.View<number[]>(
       (s) => {
         const { reload } = useReload();
@@ -248,10 +264,15 @@ describe('loader.View (accumulating / streaming form)', () => {
       .mockResolvedValueOnce(dripSseResponse(['data: {"n":7}\n\n']));
     vi.stubGlobal('fetch', fetchMock);
 
-    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
-      __moduleKey: 'test-view-queued-reload',
-      live: true,
-    });
+    const ref = defineLoader<{ n: number }>(
+      async function* () {
+        yield { n: 0 };
+      },
+      {
+        __moduleKey: 'test-view-queued-reload',
+        live: true,
+      }
+    );
 
     // Fires reload() exactly once while the bar is still connecting (before the
     // first chunk arrives). Lives inside the eagerly-rendered view fn.

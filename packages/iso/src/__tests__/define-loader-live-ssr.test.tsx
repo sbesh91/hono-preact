@@ -3,27 +3,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, hydrate } from 'preact';
 import { act } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
+import { prerender } from 'preact-iso/prerender';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
 import { env } from '../is-browser.js';
-
-// Drip each SSE frame in its own microtask so Preact flushes between chunks.
-function dripSseResponse(chunks: string[]): Response {
-  const enc = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(enc.encode(chunk));
-        await Promise.resolve();
-      }
-      controller.close();
-    },
-  });
-  return new Response(stream, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-  });
-}
 
 const LOC = { path: '/', pathParams: {}, searchParams: {} } as never;
 const originalEnv = env.current;
@@ -194,5 +177,57 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
     expect(invoked).toBe(0);
 
     host.remove();
+  });
+});
+
+// Guards that streaming (accumulating) consumption projects the SAME union shape
+// on the server and the client, keyed on the CONSUMPTION FORM (accumulate), NOT
+// the `live` flag. A finite (non-live) streaming loader must render the
+// `connecting` StreamState on SSR and bake NO value (data-loader="null"): the
+// accumulating client consumer never adopts a baked streaming value (on mount it
+// re-subscribes via SSE), so its first render is also `connecting`. Baking a
+// single-value `success` LoaderState here (the prior bug) would mismatch the
+// StreamState the accumulating `.View` render fn reads, flashing/hydration-warning
+// on the client.
+describe('non-live streaming loader: SSR renders connecting (no bake)', () => {
+  it('projects the connecting StreamState and bakes data-loader="null"', async () => {
+    async function* finite() {
+      yield { n: 1 };
+      yield { n: 2 };
+    }
+    const ref = defineLoader<{ n: number }>(finite, {
+      __moduleKey: 'test-ssr-nonlive-acc',
+      live: false,
+    });
+
+    // The accumulating .View form is the only form for streaming/generator refs.
+    const Finite = ref.View<number[]>(
+      (s) => (
+        <p data-testid="state">
+          {s.status === 'open' || s.status === 'closed'
+            ? s.data.join(',')
+            : s.status}
+        </p>
+      ),
+      {
+        initial: [] as number[],
+        reduce: (acc, c: { n: number }) => [...acc, c.n],
+      }
+    );
+    const App = () => (
+      <LocationProvider>
+        <Finite />
+      </LocationProvider>
+    );
+
+    env.current = 'server';
+    const { html } = await prerender(<App />);
+
+    // No baked streaming value: the anchor is 'none' (data-loader="null"), and
+    // the rendered state is `connecting` (the StreamState the client also starts
+    // from), so SSR and the client's first render agree.
+    expect(html).toContain('data-loader="null"');
+    expect(html).toContain('connecting');
+    expect(html).not.toContain('data-loader="[1]"');
   });
 });

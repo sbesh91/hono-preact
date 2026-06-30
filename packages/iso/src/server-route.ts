@@ -1,5 +1,6 @@
 import {
-  defineLoader,
+  _defineRouteLoader,
+  LIVE_STREAM_MARKER,
   type DefineLoaderOptions,
   type Loader,
   type LoaderCtx,
@@ -8,7 +9,6 @@ import {
   type ParamsFromOptions,
   type SearchFromOptions,
 } from './define-loader.js';
-import type { LoaderCache } from './cache.js';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 import type { Topic } from './define-channel.js';
 import { subscribeTopic } from './internal/subscribe-topic.js';
@@ -20,44 +20,82 @@ import {
 import { defineRoom, type RoomHandler, type RoomRef } from './define-room.js';
 import type { Channel } from './define-channel.js';
 
-/** Options for a channel-driven live loader bound to a route. */
-export interface LiveLoaderOptions<T, TParams> {
+/**
+ * A pure generator helper for channel-driven live loaders. Yields `load(ctx)`
+ * once on connect, then re-runs and yields again on every `publish` to
+ * `topic(ctx)`. Compose it with `defineLoader` or `route.loader`:
+ *
+ * ```ts
+ * route.loader(liveStream({ topic, load }))
+ * ```
+ *
+ * `liveStream` is inherently live (unbounded channel subscription), so `live`
+ * is inferred automatically. No `{ live: true }` flag needed. The returned
+ * generator is an `AsyncGenerator<T>`, driving the `LoaderRef<T, true>` type
+ * discriminant.
+ *
+ * Implementation note: the function is tagged at runtime with `LIVE_STREAM_MARKER`
+ * via `Object.assign`. `makeLoaderRef` reads the marker via `isLiveStreamFn`
+ * (plain `in` check, cast-free) to auto-set `live: true`. The declared return
+ * type is the plain function type so TypeScript can propagate the contextual
+ * type from `route.loader` back to infer `C` from the callback usages.
+ */
+export function liveStream<T, C extends { signal: AbortSignal }>(opts: {
   /** The channel topic this loader re-runs on. Build it with `channel.key(...)`. */
-  topic: (ctx: LoaderCtx<TParams>) => Topic<unknown>;
+  topic: (ctx: C) => Topic<unknown>;
   /** Produce the data. Runs on first connect and on every publish to `topic`. */
-  load: (ctx: LoaderCtx<TParams>) => Promise<T>;
-  cache?: LoaderCache<T>;
-  use?: DefineLoaderOptions<T>['use'];
-  timeoutMs?: number | false;
-  // Threaded by the Vite module-key plugin; not set by hand.
-  __moduleKey?: string;
-  __loaderName?: string;
+  load: (ctx: C) => Promise<T>;
+}): (ctx: C) => AsyncGenerator<T, void, unknown> {
+  const gen = async function* (ctx: C) {
+    yield await opts.load(ctx);
+    for await (const _ of subscribeTopic(opts.topic(ctx), ctx.signal)) {
+      yield await opts.load(ctx);
+    }
+  };
+  // Stamp the marker on the function in place so isLiveStreamFn (which uses
+  // `LIVE_STREAM_MARKER in fn`) can detect it in makeLoaderRef. Object.assign
+  // mutates gen and returns the typed intersection, but the declared return
+  // type is the plain function type to preserve TypeScript's contextual
+  // inference of C at call sites (route.loader / defineLoader).
+  Object.assign(gen, { [LIVE_STREAM_MARKER]: true as const });
+  return gen;
 }
 
 export interface RouteBinder<RouteId extends string> {
   /**
-   * Define a non-live loader bound to this route. `ctx.location.pathParams` is
-   * typed from the route's pattern, so no per-loader route id or `LoaderCtx<...>`
-   * annotation is needed. For a channel-driven live subscription that re-pushes
-   * on publish, use `liveLoader` instead.
+   * Define a streaming loader bound to this route. `ctx.location.pathParams` is
+   * typed from the route's pattern. The fn returns an `AsyncGenerator<T>`, which
+   * drives the `LoaderRef<T, true>` type discriminant (accumulating `.View` only).
+   * Pass `{ live: true }` to opt out of SSR (client-only subscription that never
+   * runs during `renderToStringAsync`). When composing with `liveStream`, the
+   * flag is inferred automatically; no explicit `{ live: true }` is needed.
    */
   loader<T, O extends LoaderSchemaOptions = {}>(
-    fn: Loader<
-      T,
-      ParamsFromOptions<O, RouteParams<RouteId>>,
-      SearchFromOptions<O>
-    >,
-    opts?: Omit<DefineLoaderOptions<T>, 'live'> & O
-  ): LoaderRef<T, false>;
+    fn: (
+      ctx: LoaderCtx<
+        ParamsFromOptions<O, RouteParams<RouteId>>,
+        SearchFromOptions<O>
+      >
+    ) => AsyncGenerator<T, void, unknown>,
+    opts?: DefineLoaderOptions<T> & O
+  ): LoaderRef<T, true>;
 
   /**
-   * A channel-driven live loader. Yields `load(ctx)` once, then re-runs and
-   * pushes it on every `publish` to `topic(ctx)`. Consume it via the
-   * accumulating form: `ref.View(render, { initial, reduce })`.
+   * Define a single-value loader bound to this route. `ctx.location.pathParams`
+   * is typed from the route's pattern, so no per-loader route id or
+   * `LoaderCtx<...>` annotation is needed. The fn returns a `Promise<T>`, which
+   * drives the `LoaderRef<T, false>` type discriminant (single-value `.View`,
+   * `Boundary`, and `useData`). Pass `{ live: true }` to opt out of SSR.
    */
-  liveLoader<T>(
-    opts: LiveLoaderOptions<T, RouteParams<RouteId>>
-  ): LoaderRef<T, true>;
+  loader<T, O extends LoaderSchemaOptions = {}>(
+    fn: (
+      ctx: LoaderCtx<
+        ParamsFromOptions<O, RouteParams<RouteId>>,
+        SearchFromOptions<O>
+      >
+    ) => Promise<T>,
+    opts?: DefineLoaderOptions<T> & O
+  ): LoaderRef<T, false>;
 
   /**
    * Define a duplex WebSocket bound to this route. Consume with
@@ -91,58 +129,32 @@ export interface RouteBinder<RouteId extends string> {
 }
 
 /**
- * Bind a server module to its route once. `route.loader(fn)` and
- * `route.liveLoader({ topic, load })` then infer `ctx.location.pathParams` from
- * the route's pattern; the route id autocompletes and validates against your
- * registered routes.
+ * Bind a server module to its route once. `route.loader(fn)` then infers
+ * `ctx.location.pathParams` from the route's pattern; the route id
+ * autocompletes and validates against your registered routes. For a
+ * channel-driven live subscription that re-pushes on publish, compose with
+ * `liveStream`:
  *
  * ```ts
  * const route = serverRoute('/movies/:id');
  * export const serverLoaders = {
  *   default: route.loader(async ({ location }) => getMovie(location.pathParams.id)),
+ *   live: route.loader(liveStream({ topic, load })),
  * };
  * ```
  *
- * The route id is type-level only (inert at runtime). The Vite module-key plugin
- * recognizes `route.loader(...)` and `route.liveLoader(...)` calls in
- * `serverLoaders` and threads the module key just as it does for `defineLoader`.
+ * The route string is forwarded to `_defineRouteLoader` as its `__routeId`,
+ * which the server dispatcher uses to match route-bound loaders. The Vite
+ * module-key plugin recognizes `route.loader(...)` calls in `serverLoaders`
+ * and threads the module key just as it does for `defineLoader`.
  */
 export function serverRoute<const RouteId extends RegisteredPaths>(
   route: RouteId
 ): RouteBinder<RouteId> {
   return {
-    loader: (fn, opts) => defineLoader(route, fn, opts),
+    loader: (fn: Loader<unknown>, opts?: DefineLoaderOptions<unknown>) =>
+      _defineRouteLoader(route, fn, opts),
     socket: (handler) => defineSocket(handler),
     room: (channel, handler) => defineRoom(channel, handler),
-    liveLoader: <T>({
-      topic,
-      load,
-      cache,
-      use,
-      timeoutMs,
-      __moduleKey,
-      __loaderName,
-    }: LiveLoaderOptions<T, RouteParams<RouteId>>) => {
-      const gen: Loader<T, RouteParams<RouteId>> = async function* (
-        ctx
-      ): AsyncGenerator<T, void, unknown> {
-        yield await load(ctx);
-        const t = topic(ctx);
-        // Coarse re-run: the subscription starts here, after the initial load.
-        // A publish that races the initial load is not separately replayed; the
-        // next publish re-runs load and reads current state.
-        for await (const _ of subscribeTopic(t, ctx.signal)) {
-          yield await load(ctx);
-        }
-      };
-      return defineLoader(route, gen, {
-        live: true,
-        cache,
-        use,
-        timeoutMs,
-        __moduleKey,
-        __loaderName,
-      });
-    },
   };
 }

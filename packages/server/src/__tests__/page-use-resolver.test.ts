@@ -25,3 +25,37 @@ describe('makePageUseResolver', () => {
     expect(r.byPath('/nope')).toEqual([]);
   });
 });
+
+describe('makePageUseResolver.byPattern (exact-key lookup)', () => {
+  it('resolves a route PATTERN to its own use via exact key match', () => {
+    const r = makePageUseResolver(manifest);
+    expect(r.byPattern('/demo/projects/:projectId')).toEqual([a, b]);
+    expect(r.byPattern('/demo/login')).toEqual([]);
+  });
+
+  it('returns [] for a pattern with no exact entry', () => {
+    const r = makePageUseResolver(manifest);
+    // A concrete URL is not an exact pattern key, so it does NOT match here
+    // (that is what byPath is for).
+    expect(r.byPattern('/demo/projects/42')).toEqual([]);
+    expect(r.byPattern('/nope')).toEqual([]);
+  });
+
+  it('does NOT collide sibling same-shaped patterns the way byPath can', () => {
+    // Two registered patterns with identical segment shape at the same depth.
+    const siblings = {
+      routeUse: [
+        { path: '/items/:a', use: [a] },
+        { path: '/items/:b', use: [b] },
+      ],
+    } as never;
+    const r = makePageUseResolver(siblings);
+    // byPath fuzzy-matches a pattern string against both and the tiebreak picks
+    // the first in iteration order, so the SECOND sibling resolves to the wrong
+    // guards. This is the finding the loaders/sockets RPC paths hit.
+    expect(r.byPath('/items/:b')).toEqual([a]); // wrong, demonstrates the hazard
+    // byPattern resolves each sibling to its OWN use by exact key.
+    expect(r.byPattern('/items/:a')).toEqual([a]);
+    expect(r.byPattern('/items/:b')).toEqual([b]);
+  });
+});

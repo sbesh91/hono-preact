@@ -2,7 +2,7 @@
 
 Reach for streaming when the data changes while the user is looking at it: dashboards, log tails, chat token streams, progressive search results. If your data is stable for the lifetime of a request, a plain async function is simpler and should be your first choice.
 
-Streaming loaders and actions are async generators that yield values over time. The consumer API (`loader.useData()`, `useAction`) is the same as for static loaders; only the author shape changes.
+Streaming loaders and actions are async generators that yield values over time. A streaming loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form, which folds each chunk into a value and hands the render function a `StreamState` to switch on; a streaming action is consumed with `useAction`'s `onChunk` callback.
 
 ## Streaming loaders
 
@@ -34,31 +34,38 @@ For byte-level piping (e.g. forwarding a server-sent event feed without parsing)
 
 ### Consumer shape
 
-Use `.View()` to create a component that re-renders on each new chunk. The render function receives a `LoaderState<T>` you switch on: the status is `loading` before the first chunk arrives, then `success` once `data` holds the latest yielded value (a fresh `success` per chunk), and `error` if the stream fails after a chunk (still carrying the last good `data`). `reload` is read via `useReload()`.
+A streaming loader (its fn is an `async function*`) has the type `LoaderRef<T, true>`, so it is consumed with the accumulating `loader.View(render, { initial, reduce })` form only. `reduce` folds each yielded chunk into an accumulated value seeded by `initial`; the render function receives a `StreamState<Acc>` discriminated union you switch on (`connecting | open | closed | error`). The single-value `.View(render)` form and `loader.useData()` are not available on a streaming loader (it has no single value), so the wrong form is a compile error. `reload` is read via `useReload()`.
+
+For a dashboard that shows the **latest** snapshot, the accumulator is just that snapshot (`reduce` replaces it each chunk):
 
 ```tsx
 // src/pages/dashboard.tsx
 import { definePage } from 'hono-preact';
-import { serverLoaders } from './dashboard.server.js';
+import { serverLoaders, type Snapshot } from './dashboard.server.js';
 
 const dataLoader = serverLoaders.default;
 
-const DashboardView = dataLoader.View((s) => {
-  if (s.status === 'loading') return <p>Loading...</p>;
-  return (
-    <>
-      {s.status === 'error' && <p>Live updates paused: {s.error.message}</p>}
-      <p>
-        Count: {s.data.count}, load: {s.data.load}
-      </p>
-    </>
-  );
-});
+const DashboardView = dataLoader.View<Snapshot | null>(
+  (s) => {
+    if (s.status === 'connecting') return <p>Connecting...</p>;
+    return (
+      <>
+        {s.status === 'error' && <p>Live updates paused: {s.error.message}</p>}
+        {s.data && (
+          <p>
+            Count: {s.data.count}, load: {s.data.load}
+          </p>
+        )}
+      </>
+    );
+  },
+  { initial: null, reduce: (_acc, snap) => snap }
+);
 
 export default definePage(DashboardView);
 ```
 
-`loader.useData()` always returns the latest `LoaderState`. Components re-render on each new chunk automatically.
+To keep a growing log or progressive result list instead, accumulate into an array: `{ initial: [], reduce: (acc, chunk) => [...acc, chunk] }`. Components re-render on each new chunk automatically.
 
 See `/demo/projects/:projectId/issues/:issueId` for a running example of multi-loader streaming: the issue detail page declares multiple loaders in `serverLoaders`, each with its own `.View()` component streaming independently.
 
@@ -68,14 +75,16 @@ When a page declares multiple loaders in `serverLoaders`, each `.View()` compone
 
 ```ts
 // src/pages/movie.server.ts
-import { defineLoader } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/movie/:id');
 
 export const serverLoaders = {
-  summary: defineLoader(async ({ location }) =>
+  summary: route.loader(async ({ location }) =>
     getMovie(location.pathParams.id)
   ),
 
-  cast: defineLoader(async function* ({ location }) {
+  cast: route.loader(async function* ({ location }) {
     for await (const member of streamCast(location.pathParams.id)) yield member;
   }),
 };
@@ -88,12 +97,21 @@ import { serverLoaders } from './movie.server.js';
 
 const { summary, cast } = serverLoaders;
 
+// `summary` is a plain async loader (single value): the single-value `.View`.
 const Summary = summary.View(({ data }) =>
   data ? <SummaryCard data={data} /> : <SummarySkeleton />
 );
 
-const Cast = cast.View(({ data }) =>
-  data ? <CastList items={data} /> : <CastSkeleton />
+// `cast` is a streaming generator: the accumulating `.View`, folding members
+// into a list and switching on the StreamState `status`.
+const Cast = cast.View<CastMember[]>(
+  (s) =>
+    s.status === 'connecting' ? (
+      <CastSkeleton />
+    ) : (
+      <CastList items={s.data ?? []} />
+    ),
+  { initial: [], reduce: (acc, member) => [...acc, member] }
 );
 
 function MovieDetail() {
@@ -108,32 +126,39 @@ function MovieDetail() {
 export default definePage(MovieDetail);
 ```
 
-`<Summary />` and `<Cast />` each track their own `loading` state. `<Summary />` can paint immediately while `<Cast />` is still streaming. Each `.View()` component gets a separate streaming-SSR registry key so the server can flush chunks for both concurrently.
+`<Summary />` and `<Cast />` each track their own state. `<Summary />` can paint as soon as its value resolves while `<Cast />` is still streaming members into its list.
 
 ## What happens on first paint
 
-1. The server runs each `serverLoader` function and renders the page with first chunks for all loaders. The response stays open.
-2. As subsequent chunks arrive, the server flushes `<script>__HP_STREAM__.push(...)</script>` tags inline into the ongoing HTML response, keyed per loader.
-3. The browser receives and executes those tags as they arrive. On hydration, the client picks up from the latest pushed value for each loader and continues listening.
+A streaming loader does not bake chunk data into the SSR HTML; it reconnects on the client.
 
-The first-load experience is full SSR with progressive enhancement: the user sees real data immediately, and it keeps updating without a separate fetch or WebSocket.
+1. The server renders the page with each streaming loader in its `connecting` state: the render function runs with the `initial` accumulator and `status === 'connecting'`, and the loader's element carries no baked value (`data-loader="null"`).
+2. On hydration the client adopts that server-rendered node and opens the loader's stream (an SSE request). It then folds each arriving chunk through `reduce`, moving `status` from `connecting` to `open` and re-rendering as the accumulator fills.
+3. When the stream ends cleanly `status` becomes `closed`; if it drops, `status` becomes `error` (carrying the last accumulator, if any).
+
+The first paint shows the `connecting` affordance (the `initial` value), then the live data streams in. A plain async loader, by contrast, is fully server-rendered with its value baked in. For long-lived layout-scoped subscriptions, see [Live Loaders](/docs/live-loaders).
 
 ## Errors
 
-**Before the first chunk:** the status is `loading`. A stream that errors before yielding any value is a cold error: it surfaces through the loader's error boundary (and the page `errorFallback`), not the render function's `error` arm.
+A stream lifecycle event is data, not an exception: a stream failure travels through the render function's `status` field, never the loader's error boundary or `errorFallback`.
 
-**After the first chunk:** the `error` status arm surfaces the error while still carrying the last good `data`, so the page stays mounted with stale data visible.
+**Before the first chunk:** a stream that fails on the initial connect surfaces as `status === 'error'` with no accumulated value (`data` absent), exactly like a mid-stream drop. Guard `data` rather than handing your render an empty accumulator.
+
+**After a chunk:** the `error` arm surfaces the error while still carrying the last good `data`, so the view stays mounted with the last accumulator visible.
 
 ```tsx
-const StatsView = dataLoader.View((s) => {
-  if (s.status === 'loading') return <StatsSkeleton />;
-  return (
-    <>
-      {s.status === 'error' && <p>Live updates paused: {s.error.message}</p>}
-      <p>Visitors: {s.data.visitors}</p>
-    </>
-  );
-});
+const StatsView = dataLoader.View<Snapshot | null>(
+  (s) => {
+    if (s.status === 'connecting') return <StatsSkeleton />;
+    return (
+      <>
+        {s.status === 'error' && <p>Live updates paused: {s.error.message}</p>}
+        {s.data && <p>Count: {s.data.count}</p>}
+      </>
+    );
+  },
+  { initial: null, reduce: (_acc, snap) => snap }
+);
 ```
 
 ## Abort and cleanup
@@ -245,4 +270,5 @@ Each chunk arrives as a `data:` line followed by a blank line (standard SSE fram
 
 - [Server Loaders](/docs/loaders): non-streaming loaders.
 - [Server Actions](/docs/actions): streaming actions.
-- [Loading States](/docs/loading-states): switching on the `LoaderState` union while a stream fills.
+- [Live Loaders](/docs/live-loaders): long-lived, layout-scoped streaming subscriptions (same accumulating `.View` form).
+- [Loading States](/docs/loading-states): switching on the loader-state and stream-state unions.

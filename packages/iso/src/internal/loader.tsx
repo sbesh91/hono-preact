@@ -22,6 +22,15 @@ import {
 } from './use-loader-runner.js';
 export { serializeLocationForCache } from './cache-key.js';
 
+// A route-independent loader runs with no location. Its zero-value location is
+// invariant, so a single frozen module-level instance serves every render and
+// avoids the per-render object allocation a fresh literal would incur.
+const EMPTY_LOCATION: RouteHook = Object.freeze({
+  path: '',
+  pathParams: {},
+  searchParams: {},
+}) as RouteHook;
+
 /**
  * SERVER-ONLY suspension carrier (Mechanism B, spike-verified in
  * `.superpowers/spike/spike-b1-reader-prop.mjs`).
@@ -51,17 +60,25 @@ function DataReader<T>({
   children: ComponentChildren;
 }) {
   const raw = reader.read();
-  // Project to the same public union the client carries on context. The server
-  // render is always settled (the reader awaited the value): a non-live loader
-  // is `success`; a live loader's stub resolves to `undefined`, which projects
-  // to `connecting` (the client reconnects on mount). Built structurally, no
-  // `data === undefined` test.
+  // Project to the same public union the client carries on context, keyed on the
+  // CONSUMPTION FORM (`accumulate`), so SSR and the client's FIRST render agree
+  // (no hydration mismatch):
+  //
+  //  - Streaming (accumulate) consumption: the client never adopts a baked
+  //    streaming value; on mount it re-subscribes via SSE, so its first render is
+  //    a `connecting` StreamState with no value. SSR therefore renders that SAME
+  //    `connecting` StreamState and bakes NO value. (A live loader's stub reader
+  //    resolves to `undefined` here; a finite streaming loader's first chunk is
+  //    likewise not baked, because the accumulating consumer reconnects either
+  //    way.) Keying on the consumption form, not `live`, is what keeps the
+  //    server's projected union shape (`StreamState`) identical to the one the
+  //    accumulating `.View` render fn reads on the client.
+  //  - Single-value consumption: the server render is settled (the reader awaited
+  //    the value), so project a `success` `LoaderState` and bake the value into
+  //    `data-loader` for the client preload to adopt.
   const state: LoaderState<T> | StreamState<T> = accumulate
     ? toStreamState('connecting', { present: false }, null)
     : { status: 'success', data: raw };
-  // Live loaders never run on the server; their reader resolves to undefined.
-  // The client reconnects on mount, so there is no baked server value to
-  // anchor. Non-live loaders resolve and bake their value into data-loader.
   const anchor: HydrationAnchor = accumulate
     ? { kind: 'none' }
     : { kind: 'data', value: raw };
@@ -95,13 +112,24 @@ export function LoaderHost<T>({
   const ctxLocation = loaderRef.__moduleKey
     ? locMap?.get(loaderRef.__moduleKey)
     : undefined;
-  const location = (locationProp ?? ctxLocation) as RouteHook | undefined;
-  if (!location) {
+  const resolved = (locationProp ?? ctxLocation) as RouteHook | undefined;
+  if (!resolved && loaderRef.__routeBound) {
+    // Route-bound loader with no resolvable location: its page-tier guards and
+    // its `location.pathParams` depend on the route, so refuse rather than run
+    // with an empty location (which would silently yield wrong/empty data). The
+    // route-bound flag is set on BOTH the server ref (`serverRoute().loader`) and
+    // the client stub (threaded by the Vite plugin), so the guard fires on either
+    // side rather than only on the server.
     throw new Error(
-      `Loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' has no location: ` +
-        `wrap the page in a route whose server module includes this loader's .server.ts file, or pass location explicitly.`
+      `Route-bound loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' has no ` +
+        `location; it must be consumed under its bound route (render it within that ` +
+        `route's page tree).`
     );
   }
+  // Route-independent loader: run with the shared empty location (the runner
+  // tolerates empty pathParams/searchParams; the cache key becomes module::name
+  // only).
+  const location: RouteHook = resolved ?? EMPTY_LOCATION;
 
   // CLIENT: state-based rendering. The runner exposes `data`/`loading` directly,
   // so we render the `.View` render fn (the children) immediately rather than

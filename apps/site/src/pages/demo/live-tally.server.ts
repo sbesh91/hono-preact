@@ -1,4 +1,10 @@
-import { defineChannel, defineAction, serverRoute, publish } from 'hono-preact';
+import {
+  defineChannel,
+  defineAction,
+  serverRoute,
+  liveStream,
+  publish,
+} from 'hono-preact';
 
 // A signal-only live demo: `ping` publishes a bare wake (no payload, NO shared
 // server state), and every connected tab's live loader re-runs on that wake. So
@@ -12,12 +18,14 @@ const pingChannel = defineChannel('site-live-ping')();
 const route = serverRoute('/demo/live-tally');
 
 export const serverLoaders = {
-  pings: route.liveLoader<Record<string, never>>({
-    topic: () => pingChannel.key(),
-    // The wake is the whole signal; there is no shared value to read. An empty
-    // payload keeps the loader a pure pass-through (the client counts arrivals).
-    load: async () => ({}),
-  }),
+  pings: route.loader(
+    liveStream({
+      topic: () => pingChannel.key(),
+      // The wake is the whole signal; there is no shared value to read. An empty
+      // payload keeps the loader a pure pass-through (the client counts arrivals).
+      load: async (): Promise<Record<string, never>> => ({}),
+    })
+  ),
 };
 
 export const serverActions = {

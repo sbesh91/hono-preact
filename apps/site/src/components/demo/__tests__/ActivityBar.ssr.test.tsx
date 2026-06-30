@@ -7,6 +7,7 @@ import { RouteLocationsProvider } from 'hono-preact/internal';
 import { env } from 'hono-preact/internal/runtime';
 import { renderActivityBar, accumulateActivity } from '../ActivityBar.js';
 import type { ActivityEvent } from '../../../demo/activity-stream.js';
+import { serverLoaders } from '../../../pages/demo/projects-shell.server.js';
 
 // Regression guard for the live-loader SSR 500 (review #8 follow-up). On every
 // `/demo/projects*` request the projects shell SSRs `<ActivityBar />`. A live
@@ -75,5 +76,20 @@ describe('ActivityBar SSR (real .View path, connecting arm)', () => {
     expect(container.querySelector('button')).toBeNull();
 
     render(null, container);
+  });
+});
+
+// Route-independence contract: the activity loader must be a bare standalone
+// defineLoader (no __routeId) with { live: true } so it is never SSR-pumped
+// and never resolves against a route context. These assertions guard against
+// accidentally converting it to a serverRoute(r).loader(...) binding, which
+// would set __routeId and break the layout-host / outside-router consumption.
+describe('ActivityBar: activity loader route-independence contract', () => {
+  it('has no __routeId (is a standalone route-independent loader)', () => {
+    expect(serverLoaders.activity.__routeId).toBeUndefined();
+  });
+
+  it('carries live: true so it is never SSR-pumped', () => {
+    expect(serverLoaders.activity.live).toBe(true);
   });
 });

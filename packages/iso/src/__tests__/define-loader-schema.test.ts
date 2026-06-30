@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { defineLoader } from '../define-loader.js';
+import { serverRoute } from '../server-route.js';
 
 const s: StandardSchemaV1<unknown, unknown> = {
   '~standard': { version: 1, vendor: 'test', validate: (v) => ({ value: v }) },
 };
 
-describe('defineLoader schema options', () => {
+describe('serverRoute.loader schema options', () => {
   it('stores searchSchema and paramsSchema on the ref', () => {
-    const ref = defineLoader(async () => 1, {
+    const route = serverRoute('/items/:id');
+    const ref = route.loader(async () => 1, {
       searchSchema: s,
       paramsSchema: s,
     });
@@ -17,7 +18,8 @@ describe('defineLoader schema options', () => {
   });
 
   it('leaves them undefined when not provided', () => {
-    const ref = defineLoader(async () => 1);
+    const route = serverRoute('/items/:id');
+    const ref = route.loader(async () => 1);
     expect(ref.searchSchema).toBeUndefined();
     expect(ref.paramsSchema).toBeUndefined();
   });

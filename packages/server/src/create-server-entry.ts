@@ -120,7 +120,10 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       loadersHandler(serverModules, {
         dev,
         appConfig,
-        resolvePageUse: pageUseResolver.byPath,
+        // The loaders RPC resolves page-use from the loader's OWN declared route
+        // pattern (`ref.__routeId`), so it needs the exact pattern lookup, not
+        // the URL fuzzy-matcher: `byPath` could collide `/a/:x` with `/a/:y`.
+        resolvePageUse: pageUseResolver.byPattern,
       })
     )
     // The WebSocket upgrade endpoint must be registered before the SSR GET *
@@ -145,7 +148,11 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         rooms,
         appConfig,
         dev,
-        resolvePageUse: pageUseResolver.byPath,
+        // The socket-upgrade guard chain resolves page-use from the socket's
+        // OWN owning-route pattern (via resolveRoutePath), so it needs the exact
+        // pattern lookup, not the URL fuzzy-matcher: `byPath` could collide
+        // `/a/:x` with `/a/:y` and apply the wrong route's auth gates.
+        resolvePageUse: pageUseResolver.byPattern,
         resolveRoutePath: routePathResolver.byModuleKey,
       })(c, next);
     })
