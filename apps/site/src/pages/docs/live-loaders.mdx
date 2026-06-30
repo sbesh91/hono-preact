@@ -128,7 +128,7 @@ Two pieces of the same loader API drive this pattern:
 
 ## On Cloudflare
 
-`publish()` and `route.liveLoader` have the same API on Cloudflare Workers.
+`publish()` and `route.loader(liveStream({ topic, load }))` have the same cross-isolate fan-out API on Cloudflare Workers.
 Cross-isolate fan-out (a `publish()` in one request waking a live loader
 streaming in another isolate) is backed by the same `HONO_PREACT_REALTIME`
 Durable Object that powers rooms, so no extra setup is needed once that binding

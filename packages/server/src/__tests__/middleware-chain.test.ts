@@ -6,6 +6,7 @@ import {
   defineServerMiddleware,
   defineStreamObserver,
 } from '@hono-preact/iso';
+import { _defineRouteLoader } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
 import { pageActionsHandler } from '../page-actions-handler.js';
 import { makePageActionResolvers } from '../page-action-resolvers.js';
@@ -30,7 +31,11 @@ describe('loaders-handler dispatches the full chain (root -> page -> unit)', () 
       calls.push('unit:after');
     });
 
-    const loader = defineLoader<string>(
+    // _defineRouteLoader marks this as route-bound so the handler composes the
+    // page tier from the loader's declared route rather than treating it as a
+    // route-independent loader (which would skip the page layer entirely).
+    const loader = _defineRouteLoader(
+      '/x',
       async () => {
         calls.push('inner');
         return 'ok';

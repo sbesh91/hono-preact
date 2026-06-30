@@ -8,13 +8,11 @@ import { useContext } from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
-import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
 import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
-import { isBrowser } from './is-browser.js';
 import type { AccumulateOptions } from './internal/use-loader-runner.js';
 import type { LoaderState, StreamState, StreamStatus } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
@@ -24,15 +22,21 @@ import { validateTimeoutMs } from './internal/timeout.js';
 import type { ServerCaller } from './server-caller.js';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
-export type LoaderCtx<
-  TParams = Record<string, string>,
-  TSearch = Record<string, string>,
-> = {
+/**
+ * The marker that selects the STANDALONE shape of `LoaderCtx`. It is the
+ * default for `LoaderCtx`'s `TParams`, so a bare `LoaderCtx` (no route generic)
+ * is route-independent: it has no `location`. A real params type (supplied by
+ * `serverRoute(r).loader`, or written explicitly as `LoaderCtx<RouteParams<r>>`)
+ * is never this marker, so it selects the route-bound shape instead. Type-only
+ * (`declare const`), so it adds nothing to the runtime bundle, and unexported,
+ * so user code can never accidentally name it.
+ */
+declare const STANDALONE_CTX: unique symbol;
+type StandaloneCtxMarker = typeof STANDALONE_CTX;
+
+/** Fields every loader ctx carries, whether standalone or route-bound. */
+type LoaderCtxBase = {
   c: Context;
-  location: Omit<RouteHook, 'pathParams' | 'searchParams'> & {
-    pathParams: TParams;
-    searchParams: TSearch;
-  };
   signal: AbortSignal;
   /**
    * Invoke another loader or action server-side with no HTTP round-trip,
@@ -41,6 +45,37 @@ export type LoaderCtx<
    */
   call: ServerCaller['call'];
 };
+
+/** The `location` field a route-bound ctx adds, with its params typed. */
+type LoaderCtxLocation<TParams, TSearch> = {
+  location: Omit<RouteHook, 'pathParams' | 'searchParams'> & {
+    pathParams: TParams;
+    searchParams: TSearch;
+  };
+};
+
+/**
+ * The single loader ctx type. One surface, two shapes selected by its generic:
+ *
+ * - `LoaderCtx` (no generic) is STANDALONE: the shape a bare `defineLoader(fn)`
+ *   loader receives. No `location`, because a standalone loader is
+ *   route-independent.
+ * - `LoaderCtx<TParams, TSearch>` is ROUTE-BOUND: it adds a typed `location`
+ *   (path/search params). `serverRoute(r).loader(fn)` supplies this generic
+ *   automatically from the route pattern (and any param/search schema); write
+ *   it explicitly as `LoaderCtx<RouteParams<'/r/:id'>>` only when annotating a
+ *   callback TypeScript cannot contextually type (e.g. inside `liveStream`).
+ *
+ * The standalone-vs-route choice falls out of which constructor you call, so a
+ * loader author names just `LoaderCtx`; the generic is inferred for them.
+ */
+export type LoaderCtx<
+  TParams = StandaloneCtxMarker,
+  TSearch = Record<string, string>,
+> = LoaderCtxBase &
+  ([TParams] extends [StandaloneCtxMarker]
+    ? {}
+    : LoaderCtxLocation<TParams, TSearch>);
 
 export type Loader<
   T,
@@ -51,7 +86,7 @@ export type Loader<
   | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>)
   | ((ctx: LoaderCtx<TParams, TSearch>) => AsyncGenerator<T, void, unknown>);
 
-// The accumulating (streaming) `.View` form: live loaders only. The render fn
+// The accumulating (streaming) `.View` form: streaming loaders only. The render fn
 // receives the `StreamState<Acc>` discriminated union (pattern-match on
 // `status`); the folded accumulator rides the data-carrying arms. The chunk
 // handed to `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`). The
@@ -67,7 +102,7 @@ type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
   }
 ) => FunctionComponent<P>;
 
-// The single-value `.View` form: non-live loaders. The render fn receives the
+// The single-value `.View` form: non-streaming loaders. The render fn receives the
 // `LoaderState<Serialize<T>>` discriminated union (pattern-match on `status`);
 // the loader value (the JSON round-trip the client receives) rides the
 // data-carrying arms. The explicit reload callback is read via `useReload()`,
@@ -82,34 +117,42 @@ type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
 ) => FunctionComponent<P>;
 
 /**
- * A reference to a defined loader. `Live` (the liveness discriminant, fixed by
- * `defineLoader({ live })`) selects the consumption surface at the type level:
+ * A reference to a defined loader. `Live` (the streaming discriminant, fixed by
+ * the fn return type: `AsyncGenerator` -> `true`, `Promise` -> `false`) selects
+ * the consumption surface at the type level:
  *
- * - `LoaderRef<T, true>` (a `live` loader) exposes ONLY the accumulating
+ * - `LoaderRef<T, true>` (a streaming loader) exposes ONLY the accumulating
  *   `View(render, { initial, reduce })` form; `useData` and `Boundary` are
- *   `never` (a live loader has no single value).
+ *   `never` (a streaming loader has no single value).
  * - `LoaderRef<T, false>` exposes ONLY the single-value `View(render)` form,
  *   plus `useData()` and `Boundary`.
  *
  * Using the wrong form is therefore a compile error rather than a runtime throw.
- * `Live` defaults to `false` (the common, non-live case) so a bare `LoaderRef<T>`
- * has a callable single-value `.View`. Code that must accept either liveness
- * (internals, `AnyLoaderRef`) parameterizes it as `LoaderRef<T, boolean>`, whose
- * `View` is the union of both shapes (not directly callable; such code never
- * calls `.View`, it only holds/forwards the ref).
+ * `Live` defaults to `false` (the common, non-streaming case) so a bare
+ * `LoaderRef<T>` has a callable single-value `.View`. Code that must accept
+ * either form (internals, `AnyLoaderRef`) parameterizes it as
+ * `LoaderRef<T, boolean>`, whose `View` is the union of both shapes (not
+ * directly callable; such code never calls `.View`, it only holds/forwards the ref).
  */
 export interface LoaderRef<T, Live extends boolean = false> {
   readonly __id: symbol;
   readonly __moduleKey?: string;
   readonly __loaderName?: string;
+  /** The route pattern this loader is bound to (e.g. `/movies/:id`), set by
+   * `serverRoute(r).loader(fn)`. `undefined` for route-independent loaders
+   * created with bare `defineLoader(fn)`. Consumed by the server dispatcher
+   * to select the route-matched loader set. */
+  readonly __routeId?: string;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
-  /** Search-params schema, as authored on `defineLoader({ searchSchema })`. */
+  /** Search-params schema, as authored on `serverRoute(r).loader(fn, { searchSchema })`. */
   readonly searchSchema?: StandardSchemaV1;
-  /** Path-params schema, as authored on `defineLoader({ paramsSchema })`. */
+  /** Path-params schema, as authored on `serverRoute(r).loader(fn, { paramsSchema })`. */
   readonly paramsSchema?: StandardSchemaV1;
-  /** True for a `live` loader (client-only subscription, never runs on SSR). */
+  /** True when this loader opts out of SSR (client-only subscription). Set via
+   * `{ live: true }` in opts; runtime flag only (the streaming discriminant
+   * `Live` is driven by the fn return type). */
   readonly live: boolean;
   /**
    * Raw value as authored on `defineLoader({ timeoutMs })`. `undefined`
@@ -131,7 +174,7 @@ export interface LoaderRef<T, Live extends boolean = false> {
    * pattern-match on `status` (`loading` | `success` | `revalidating` |
    * `error`). The data-carrying arms expose `Serialize<T>`, the JSON round-trip
    * of the server-side return `T` (e.g. a `Date` field arrives as a string).
-   * `never` on a `live` loader (it has no single value).
+   * `never` on a streaming loader (it has no single value).
    */
   useData: Live extends true ? never : () => LoaderState<Serialize<T>>;
   useError(): Error | null;
@@ -139,7 +182,7 @@ export interface LoaderRef<T, Live extends boolean = false> {
   /**
    * The lower-level state-based boundary (single-value loaders): it renders its
    * children eagerly and provides the loader's state on context, which children
-   * read via `useData()` (pattern-match on `status`). `never` on a `live`
+   * read via `useData()` (pattern-match on `status`). `never` on a streaming
    * loader: consume it via the accumulating `.View` form instead.
    */
   Boundary: Live extends true
@@ -153,9 +196,10 @@ export interface LoaderRef<T, Live extends boolean = false> {
       }>;
   /**
    * Consume the loader through the framework's `.View` convention. The form is
-   * fixed by liveness: a `live` loader exposes only the accumulating
-   * `View(render, { initial, reduce })` form; a non-live loader exposes only the
-   * single-value `View(render)` form. The other form is a compile error.
+   * fixed by the fn return type: a streaming loader (AsyncGenerator fn) exposes
+   * only the accumulating `View(render, { initial, reduce })` form; a
+   * single-value loader (Promise fn) exposes only the single-value `View(render)`
+   * form. The other form is a compile error.
    */
   View: Live extends true ? AccumulatingView<T> : SingleValueView<T>;
 }
@@ -169,11 +213,11 @@ export interface LoaderRef<T, Live extends boolean = false> {
  * so a concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
  * sites never inspect the data with a meaningful type. `boolean` (not the default
- * `false`) erases liveness so a live `LoaderRef<T, true>` is also accepted.
+ * `false`) erases liveness so a streaming `LoaderRef<T, true>` is also accepted.
  */
 export type AnyLoaderRef = LoaderRef<any, boolean>;
 
-/** The two schema options a loader may carry. */
+/** The two schema options a route-bound loader may carry. */
 export type LoaderSchemaOptions = {
   paramsSchema?: StandardSchemaV1;
   searchSchema?: StandardSchemaV1;
@@ -201,15 +245,40 @@ export type SearchFromOptions<O> = O extends {
   : Record<string, string>;
 
 /**
+ * Full internal opts shared by `makeLoaderRef` and `_defineRouteLoader`.
  * Plugin-emitted opts for `defineLoader`. The `__moduleKey` field is threaded
  * in by the `moduleKeyPlugin` Vite transform; user code does not set it.
  * `cache` is an opt-in for sharing a cache instance across multiple loaders;
- * when omitted, `defineLoader` creates a fresh one.
+ * when omitted, `makeLoaderRef` creates a fresh one.
+ * Route-specific fields (`paramsSchema`, `searchSchema`, `params`) are
+ * present here but absent from `StandaloneOpts` (which is derived via `Omit`).
  */
 export type DefineLoaderOptions<T> = {
+  /**
+   * Marks this loader as a client-only subscription that never runs on SSR
+   * (the `{ live }` flag controls runtime SSR skip behavior; the streaming
+   * type discriminant is driven by the fn return type instead). Usually
+   * composed via `liveStream`; pass `true` when the generator is an unbounded
+   * subscription that must not hang `renderToStringAsync`.
+   */
+  live?: boolean;
+  cache?: LoaderCache<T>;
+  /**
+   * Per-loader timeout in milliseconds. When omitted, the handler applies
+   * its configured default (30s). Pass `false` to disable the timeout for
+   * this loader (rely solely on the request signal). `live: true` loaders
+   * default to `false` (no 30s cap) unless this is set explicitly.
+   */
+  timeoutMs?: number | false;
+  /**
+   * Per-loader middleware and (for streaming loaders) stream observers.
+   */
+  use?: LoaderUse<T, boolean>;
+  /** Set by the module-key Vite plugin; not intended for user code. */
   __moduleKey?: string;
   __loaderName?: string;
-  cache?: LoaderCache<T>;
+  /** Set by `_defineRouteLoader`; not intended for user code. */
+  __routeId?: string;
   params?: string[] | '*';
   /**
    * Standard Schema validating + coercing `ctx.location.searchParams`. NOTE:
@@ -222,35 +291,22 @@ export type DefineLoaderOptions<T> = {
    * the loader RPC responds 404. Non-live loaders only.
    */
   paramsSchema?: StandardSchemaV1;
-  /**
-   * Per-loader timeout in milliseconds. When omitted, the handler applies
-   * its configured default (30s). Pass `false` to disable the timeout for
-   * this loader (rely solely on the request signal).
-   */
-  timeoutMs?: number | false;
-  /**
-   * Per-loader middleware and (for streaming loaders) stream observers.
-   * The element type LoaderUse<T, Streaming> structurally gates stream
-   * observers off non-streaming loaders, but a tighter compile-time gate
-   * via defineLoader overloads can be added in a follow-up if needed.
-   */
-  use?: LoaderUse<T, boolean>;
-  /**
-   * Marks this loader as a long-lived client-only subscription. A `live`
-   * loader is consumed ONLY via `loader.View(render, { initial, reduce })`: it is never invoked
-   * during SSR (so an infinite generator cannot hang the document response),
-   * and its timeout defaults to `false` (no 30s cap) unless `timeoutMs` is set.
-   * `loader.View` / `loader.Boundary` / `loader.useData()` throw for live
-   * loaders.
-   */
-  live?: boolean;
 };
+
+/**
+ * Opts shape for a bare `defineLoader(fn, opts?)` call: `DefineLoaderOptions`
+ * minus the route-only fields. Derived so there is a single source of truth.
+ * Internal only; caller code relies on inference rather than naming this type.
+ */
+type StandaloneOpts<T> = Omit<
+  DefineLoaderOptions<T>,
+  'paramsSchema' | 'searchSchema' | 'params'
+>;
 
 // Stash a shared cache map on globalThis so duplicate copies of
 // @hono-preact/iso (workspace hoisting quirks) still see the same map.
 // The module-key plugin threads `{ __moduleKey }` into every `defineLoader`
-// call (both the `defineLoader(fn, opts)` and `defineLoader(routeId, fn, opts)`
-// forms) at EVERY importer of a `.server.*` module, so without this dedup each
+// call at EVERY importer of a `.server.*` module, so without this dedup each
 // importer would get its own private LoaderCache and `ref.invalidate()`
 // would only clear the calling importer's copy. That breaks cross-route
 // invalidation (movie.tsx invalidating `moviesListLoader` no longer flushes
@@ -301,11 +357,11 @@ const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
 
 /**
  * Narrow `LoaderDataContext`'s union to the single-value `LoaderState` half by
- * excluding the stream-only statuses. A non-live loader always carries a
+ * excluding the stream-only statuses. A non-streaming loader always carries a
  * `LoaderState` on context, so this lets `useData()` return the context value
  * directly (no re-projection, no cast). The shared `error` status stays on the
- * `LoaderState` side, which is correct: `useData()` is never called on a `live`
- * loader (it throws first).
+ * `LoaderState` side, which is correct: `useData()` is never called on a
+ * streaming loader (it throws first).
  */
 function isLoaderState(
   s: LoaderState<unknown> | StreamState<unknown>
@@ -313,53 +369,115 @@ function isLoaderState(
   return !(s.status in STREAM_ONLY_STATUSES);
 }
 
-// `{ live: true }` selects the accumulating-only `LoaderRef<T, true>`; these
-// overloads are listed first so the literal `live: true` matches before the
-// general (non-live) form. Omitting `live` (or `live: false`) yields the
-// single-value `LoaderRef<T, false>`.
+/**
+ * Symbol that `liveStream` stamps onto the generator function it returns.
+ * `makeLoaderRef` reads it via `isLiveStreamFn` (no cast; plain `in` check)
+ * to auto-set `live: true` without requiring callers to pass the flag.
+ * Exported so `server-route.ts` can import it for tagging without a cast.
+ */
+export const LIVE_STREAM_MARKER = Symbol('hono-preact/liveStream');
+
+/** Returns true when fn was produced by `liveStream` (carries the marker). */
+function isLiveStreamFn(fn: object): boolean {
+  return LIVE_STREAM_MARKER in fn;
+}
+
+// Detect whether a fn is an async generator function at runtime so we can
+// guard `.View`/`.Boundary`/`.useData()` without coupling the guard to the
+// `live` SSR flag (which is a separate concept after the redesign). The
+// prototype check is the standard V8/SpiderMonkey/JavaScriptCore idiom; it does
+// not rely on `.name`, which can be minified away.
+const ASYNC_GENERATOR_FN_PROTO = Object.getPrototypeOf(async function* () {});
+
+function isAsyncGeneratorFn(fn: unknown): boolean {
+  return (
+    typeof fn === 'function' &&
+    Object.getPrototypeOf(fn) === ASYNC_GENERATOR_FN_PROTO
+  );
+}
+
+// Overload ordering is load-bearing: the streaming (AsyncGenerator) overload is
+// listed FIRST, so a loosely-typed fn (any / union return type) resolves to the
+// streaming ref. Well-typed fns (clear Promise or AsyncGenerator return) resolve
+// correctly to the matching discriminant.
+//
+// `{ live }` is a RUNTIME SSR flag only (skip on server when true). The type
+// discriminant is driven solely by the fn return type: AsyncGenerator fn ->
+// LoaderRef<T, true> (accumulating .View only); Promise fn -> LoaderRef<T, false>
+// (single-value .View + Boundary + useData).
+
+// `defineLoader` infers the STANDALONE ctx: a bare `LoaderCtx` (no route
+// generic), which has no `location`. A standalone loader is route-independent;
+// reach for `serverRoute(r).loader` when path/search params are needed.
+
+/** Streaming / accumulating loader: fn returns an AsyncGenerator. */
 export function defineLoader<T>(
-  fn: Loader<T>,
-  opts: DefineLoaderOptions<T> & { live: true }
+  fn: (ctx: LoaderCtx) => AsyncGenerator<T, void, unknown>,
+  opts?: StandaloneOpts<T>
 ): LoaderRef<T, true>;
-export function defineLoader<RouteId extends RegisteredPaths, T>(
-  route: RouteId,
-  fn: Loader<T, RouteParams<RouteId>>,
-  opts: DefineLoaderOptions<T> & { live: true }
-): LoaderRef<T, true>;
-// Non-live bare form, with schema inference.
-export function defineLoader<T, O extends LoaderSchemaOptions = {}>(
-  fn: Loader<T, ParamsFromOptions<O>, SearchFromOptions<O>>,
-  opts?: DefineLoaderOptions<T> & O
-): LoaderRef<T, false>;
-// Non-live route form, with schema inference (params default to RouteParams).
-export function defineLoader<
-  RouteId extends RegisteredPaths,
-  T,
-  O extends LoaderSchemaOptions = {},
->(
-  route: RouteId,
-  fn: Loader<
-    T,
-    ParamsFromOptions<O, RouteParams<RouteId>>,
-    SearchFromOptions<O>
-  >,
-  opts?: DefineLoaderOptions<T> & O
+/** Single-value loader: fn returns a Promise. */
+export function defineLoader<T>(
+  fn: (ctx: LoaderCtx) => Promise<T>,
+  opts?: StandaloneOpts<T>
 ): LoaderRef<T, false>;
 export function defineLoader(
-  fnOrRoute: Loader<unknown> | string,
-  fnOrOpts?: Loader<unknown> | DefineLoaderOptions<unknown>,
-  maybeOpts?: DefineLoaderOptions<unknown>
+  fn: Loader<unknown>,
+  opts?: StandaloneOpts<unknown>
 ): LoaderRef<unknown, boolean> {
-  // Normalize the two overload forms. The route id is type-level only (it
-  // selects the param shape for the loader fn); it is not stored on the ref
-  // and does not affect cache/`params` behavior.
-  const isRouteForm = typeof fnOrRoute === 'string';
-  const fn = (isRouteForm ? fnOrOpts : fnOrRoute) as Loader<unknown>;
-  const opts = (isRouteForm ? maybeOpts : fnOrOpts) as
-    | DefineLoaderOptions<unknown>
-    | undefined;
+  return makeLoaderRef(fn, opts);
+}
 
-  const live = opts?.live ?? false;
+/**
+ * Internal route-binding helper used by `serverRoute(r).loader(fn, opts)`.
+ * Passes `__routeId` in opts so the ref knows which route it is bound to.
+ * NOT exported from `index.ts`; import directly from `define-loader.js` in
+ * server-route.ts and tests only.
+ *
+ * Overload ordering mirrors `defineLoader`: streaming (AsyncGenerator) first so
+ * loosely-typed fns resolve to the streaming ref. The third overload accepts the
+ * `Loader<unknown>` union used internally by `serverRoute`'s dispatch shim.
+ */
+/** Streaming route-bound loader: fn returns an AsyncGenerator. The ctx is the
+ * route-bound `LoaderCtx<Record<string, string>>` (has `location`); the precise
+ * param types are supplied by `serverRoute(r).loader`'s public overloads. */
+export function _defineRouteLoader<T>(
+  routeId: string,
+  fn: (
+    ctx: LoaderCtx<Record<string, string>>
+  ) => AsyncGenerator<T, void, unknown>,
+  opts?: DefineLoaderOptions<T>
+): LoaderRef<T, true>;
+/** Single-value route-bound loader: fn returns a Promise. */
+export function _defineRouteLoader<T>(
+  routeId: string,
+  fn: (ctx: LoaderCtx<Record<string, string>>) => Promise<T>,
+  opts?: DefineLoaderOptions<T>
+): LoaderRef<T, false>;
+/** Internal shim: accepts the `Loader<unknown>` union forwarded by `serverRoute`. */
+export function _defineRouteLoader(
+  routeId: string,
+  fn: Loader<unknown>,
+  opts?: DefineLoaderOptions<unknown>
+): LoaderRef<unknown, boolean>;
+export function _defineRouteLoader(
+  routeId: string,
+  fn: Loader<unknown>,
+  opts?: DefineLoaderOptions<unknown>
+): LoaderRef<unknown, boolean> {
+  return makeLoaderRef(fn, { ...opts, __routeId: routeId });
+}
+
+function makeLoaderRef(
+  fn: Loader<unknown>,
+  opts?: DefineLoaderOptions<unknown>
+): LoaderRef<unknown, boolean> {
+  // liveStream-tagged fns are inherently unbounded; always live regardless of
+  // opts. Honouring an explicit { live: false } on a liveStream fn would
+  // SSR-pump a never-completing generator, so the marker wins unconditionally.
+  const live = isLiveStreamFn(fn) ? true : (opts?.live ?? false);
+  // Runtime streaming discriminant: fn is an async generator function.
+  // Used for .View / .Boundary / useData() guards independent of the `live` SSR flag.
+  const isStreaming = isAsyncGeneratorFn(fn);
 
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
   const idKey = opts?.__moduleKey
@@ -397,6 +515,7 @@ export function defineLoader(
     __id,
     __moduleKey: opts?.__moduleKey,
     __loaderName: opts?.__loaderName,
+    __routeId: opts?.__routeId,
     fn,
     cache: cache!,
     params: opts?.params ?? [],
@@ -411,9 +530,9 @@ export function defineLoader(
       Middleware | StreamObserver<unknown, never>
     >,
     useData() {
-      if (live) {
+      if (isStreaming) {
         throw new Error(
-          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.useData()`.'
+          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.useData()`.'
         );
       }
       const ctx = useContext(LoaderDataContext);
@@ -425,12 +544,12 @@ export function defineLoader(
       // The context carries the already-projected union (built once in
       // `loader.tsx`); return it BY REFERENCE so consumers see a referentially
       // stable value across re-renders (review #7) rather than a fresh
-      // projection each call. A non-live loader always carries a `LoaderState`
+      // projection each call. A non-streaming loader always carries a `LoaderState`
       // (the runner never projects `toStreamState` for it); `isLoaderState`
       // narrows to that without a cast, and the throw is unreachable defense.
       if (!isLoaderState(ctx)) {
         throw new Error(
-          'loader.useData() read a streaming state on a non-live loader; this is an internal invariant violation.'
+          'loader.useData() read a streaming state on a non-streaming loader; this is an internal invariant violation.'
         );
       }
       return ctx;
@@ -445,32 +564,25 @@ export function defineLoader(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
-      // The same `accumulate` <-> `live` invariant `View` enforces, applied to
-      // the lower-level escape hatch (`View` delegates here, so these guards
-      // must allow live+accumulate, which is exactly what `View` passes).
-      if (live && !props.accumulate) {
-        // A live loader has no single value; a bare `.Boundary` would suspend
-        // forever on the infinite generator. Defense-in-depth for JS callers:
-        // the discriminated `LoaderRef<T, true>` already makes this a type error
-        // (and `Boundary` is `never` on a live loader). Keyed on `live === true`,
-        // which is only ever true on the server (the client `serverLoaders` stub
-        // does not carry `live`), so it never fires spuriously in the browser.
+      // The same `accumulate` <-> `isStreaming` invariant `View` enforces,
+      // applied to the lower-level escape hatch (`View` delegates here, so
+      // these guards must allow streaming+accumulate, which is exactly what
+      // `View` passes).
+      if (isStreaming && !props.accumulate) {
+        // A streaming loader has no single value; a bare `.Boundary` would
+        // suspend forever on the infinite generator. Defense-in-depth for JS
+        // callers: the discriminated `LoaderRef<T, true>` already makes this a
+        // type error (and `Boundary` is `never` on a streaming loader). Keyed
+        // on the fn prototype check, which is reliable across both SSR and
+        // client paths.
         throw new Error(
-          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
+          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
         );
       }
-      if (!isBrowser() && props.accumulate && !live) {
-        // The accumulating form is hydration-safe only for live loaders (which
-        // skip SSR). A non-live loader rendered through it runs during SSR and
-        // re-fetches on hydration (a content flash), or hangs renderToStringAsync
-        // if its generator is infinite. `LoaderRef<T, false>.View` already makes
-        // this a type error; the `.Boundary accumulate` escape hatch does not, so
-        // guard it server-side. Keyed on `!isBrowser()` so it never fires on the
-        // client stub (always browser, always `live: false`).
-        throw new Error(
-          'The accumulating `{ initial, reduce }` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
-        );
-      }
+      // Non-streaming + accumulate is valid on the server: the SSR run-vs-skip
+      // decision is keyed on the loader's `live` flag in `DataReader`, not on
+      // the consumption form. A finite (non-live) streaming loader bakes its
+      // first accumulated chunk during SSR; the client reconnects on mount.
       return h(LoaderHost<unknown>, {
         loader: ref,
         errorFallback: props.errorFallback,
@@ -493,33 +605,26 @@ export function defineLoader(
       }
     ) => {
       // The accumulating (streaming) form is selected by `initial` + `reduce`.
-      // A live loader has no single value, so it must use the accumulating form;
-      // conversely the accumulating form is hydration-safe only for live loaders.
+      // A streaming loader has no single value, so it must use the accumulating
+      // form; conversely the accumulating form is hydration-safe only for
+      // streaming loaders.
       const accumulate =
         viewOpts &&
         typeof viewOpts.reduce === 'function' &&
         'initial' in viewOpts
           ? { initial: viewOpts.initial, reduce: viewOpts.reduce }
           : undefined;
-      if (live && !accumulate) {
+      if (isStreaming && !accumulate) {
         // Defense-in-depth for JS callers; `LoaderRef<T, true>.View` is the
-        // accumulating form only, so this is already a type error in TS. Keyed
-        // on `live === true` (server-only; the client stub omits `live`), so it
-        // never fires in the browser where the discriminant is type-level.
+        // accumulating form only, so this is already a type error in TS.
         throw new Error(
-          'This is a `live` loader: consume it via `loader.View(render, { initial, reduce })`.'
+          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`.'
         );
       }
-      if (!isBrowser() && accumulate && !live) {
-        // Non-live + accumulate runs the loader during SSR (content flash on
-        // hydration, or a hang for an infinite generator). A type error for TS
-        // callers (`LoaderRef<T, false>.View` is single-value only); guarded
-        // server-side here for JS callers. `!isBrowser()` keeps it off the
-        // client stub (always browser, always `live: false`).
-        throw new Error(
-          'The accumulating `loader.View(render, { initial, reduce })` form requires a `live` loader. Consume a finite stream with the single-value `loader.View(render)` form.'
-        );
-      }
+      // Non-streaming + accumulate is now valid on the server: the SSR run-vs-skip
+      // decision is keyed on the loader's `live` flag in `DataReader`, not on
+      // the consumption form. A finite (non-live) streaming loader bakes its
+      // first accumulated chunk during SSR; the client reconnects on mount.
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           errorFallback: viewOpts?.errorFallback,

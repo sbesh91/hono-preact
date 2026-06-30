@@ -8,13 +8,14 @@ Every loader and action receives a `call` method on its context object. Pass ano
 
 ```ts
 // src/pages/movie.server.ts
-import { defineLoader } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
 import { serverLoaders as reviewLoaders } from './reviews.server.js';
 
 const reviewsLoader = reviewLoaders.default;
+const route = serverRoute('/movies/:id');
 
 export const serverLoaders = {
-  default: defineLoader(async (ctx) => {
+  default: route.loader(async (ctx) => {
     const movie = await fetchMovie(ctx.location.pathParams.id);
     const reviewsResult = await ctx.call(reviewsLoader, {
       location: { pathParams: ctx.location.pathParams },

@@ -119,7 +119,7 @@ describe('LoaderRef methods', () => {
 
 describe('defineLoader: streaming acceptance', () => {
   it('accepts an async-generator loader', () => {
-    const ref = defineLoader(async function* (_ctx) {
+    const ref = defineLoader(async function* () {
       yield { tick: 1 };
       yield { tick: 2 };
     });
@@ -128,7 +128,7 @@ describe('defineLoader: streaming acceptance', () => {
 
   it('accepts a ReadableStream<T>-returning loader', () => {
     const ref = defineLoader(
-      async (_ctx) =>
+      async () =>
         new ReadableStream<{ tick: number }>({
           start(c) {
             c.enqueue({ tick: 1 });
@@ -139,24 +139,15 @@ describe('defineLoader: streaming acceptance', () => {
     expect(typeof ref.fn).toBe('function');
   });
 
-  it('passes ctx with location and signal', async () => {
-    let seen: { hasLocation: boolean; hasSignal: boolean } | null = null;
+  it('passes signal in ctx', async () => {
+    let seen: { hasSignal: boolean } | null = null;
     const ref = defineLoader(async (ctx) => {
-      seen = {
-        hasLocation: typeof ctx.location === 'object',
-        hasSignal: ctx.signal instanceof AbortSignal,
-      };
+      seen = { hasSignal: ctx.signal instanceof AbortSignal };
       return {};
     });
     const ac = new AbortController();
-    const fn = ref.fn as (props: {
-      location: unknown;
-      signal: AbortSignal;
-    }) => Promise<unknown>;
-    await fn({
-      location: { path: '/', pathParams: {}, searchParams: {} },
-      signal: ac.signal,
-    });
-    expect(seen).toEqual({ hasLocation: true, hasSignal: true });
+    const fn = ref.fn as (props: { signal: AbortSignal }) => Promise<unknown>;
+    await fn({ signal: ac.signal });
+    expect(seen).toEqual({ hasSignal: true });
   });
 });

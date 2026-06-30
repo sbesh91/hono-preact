@@ -43,26 +43,29 @@ export { serializeLocationForCache } from './cache-key.js';
  */
 function DataReader<T>({
   reader,
-  accumulate,
+  live,
   children,
 }: {
   reader: { read: () => T };
-  accumulate?: AccumulateOptions;
+  live?: boolean;
   children: ComponentChildren;
 }) {
   const raw = reader.read();
   // Project to the same public union the client carries on context. The server
-  // render is always settled (the reader awaited the value): a non-live loader
-  // is `success`; a live loader's stub resolves to `undefined`, which projects
-  // to `connecting` (the client reconnects on mount). Built structurally, no
-  // `data === undefined` test.
-  const state: LoaderState<T> | StreamState<T> = accumulate
+  // render is always settled (the reader awaited the value). The SSR run-vs-skip
+  // decision is keyed on the loader's `live` flag, NOT the consumption form:
+  // a live loader renders `connecting` (the client reconnects on mount); a
+  // non-live loader is always `success` (the baked server value, whether from a
+  // single-value fetch or from the first accumulated chunk of a finite stream).
+  // `accumulate` stays for projecting the streamed value shape only.
+  const state: LoaderState<T> | StreamState<T> = live
     ? toStreamState('connecting', { present: false }, null)
     : { status: 'success', data: raw };
-  // Live loaders never run on the server; their reader resolves to undefined.
-  // The client reconnects on mount, so there is no baked server value to
-  // anchor. Non-live loaders resolve and bake their value into data-loader.
-  const anchor: HydrationAnchor = accumulate
+  // Live loaders never run on the server; their stub reader resolves to
+  // undefined. The client reconnects on mount, so there is no baked server
+  // value to anchor. Non-live loaders (including finite streaming ones consumed
+  // via accumulate) resolve and bake their value into data-loader.
+  const anchor: HydrationAnchor = live
     ? { kind: 'none' }
     : { kind: 'data', value: raw };
   return (
@@ -95,13 +98,22 @@ export function LoaderHost<T>({
   const ctxLocation = loaderRef.__moduleKey
     ? locMap?.get(loaderRef.__moduleKey)
     : undefined;
-  const location = (locationProp ?? ctxLocation) as RouteHook | undefined;
-  if (!location) {
+  const resolved = (locationProp ?? ctxLocation) as RouteHook | undefined;
+  if (!resolved && loaderRef.__routeId !== undefined) {
+    // Route-bound loader with no resolvable location: its page-tier guards depend
+    // on the route, so refuse rather than run without them.
     throw new Error(
-      `Loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' has no location: ` +
-        `wrap the page in a route whose server module includes this loader's .server.ts file, or pass location explicitly.`
+      `Route-bound loader for module '${loaderRef.__moduleKey ?? '<unkeyed>'}' (route ` +
+        `'${loaderRef.__routeId}') has no location; ensure it is consumed under its route.`
     );
   }
+  // Route-independent loader: synthesize an empty location (the runner tolerates
+  // empty pathParams/searchParams; the cache key becomes module::name only).
+  const location: RouteHook = (resolved ?? {
+    path: '',
+    pathParams: {},
+    searchParams: {},
+  }) as RouteHook;
 
   // CLIENT: state-based rendering. The runner exposes `data`/`loading` directly,
   // so we render the `.View` render fn (the children) immediately rather than
@@ -173,7 +185,7 @@ export function LoaderHost<T>({
       <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
     </LoaderDataContext.Provider>
   ) : (
-    <DataReader reader={reader} accumulate={accumulate}>
+    <DataReader reader={reader} live={loaderRef.live}>
       {children}
     </DataReader>
   );

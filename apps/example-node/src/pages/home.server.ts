@@ -3,6 +3,7 @@ import {
   defineLoader,
   defineAction,
   serverRoute,
+  liveStream,
   publish,
 } from 'hono-preact';
 
@@ -20,10 +21,12 @@ export const serverLoaders = {
     renderedAt: new Date().toISOString(),
   })),
   // New: a live loader that re-pushes the count on every publish.
-  count: route.liveLoader<{ count: number }>({
-    topic: () => counter.key(),
-    load: async () => ({ count }),
-  }),
+  count: route.loader(
+    liveStream({
+      topic: () => counter.key(),
+      load: async (): Promise<{ count: number }> => ({ count }),
+    })
+  ),
 };
 
 export const serverActions = {

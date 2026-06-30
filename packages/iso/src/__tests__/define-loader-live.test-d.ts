@@ -1,10 +1,10 @@
-// Type-level enforcement of the live/non-live `.View` discriminant. Run under
-// `pnpm test:types`. `defineLoader({ live: true })` returns a `LoaderRef<T, true>`
-// that exposes ONLY the accumulating `.View` form (no single-value `.View`, no
-// `useData`, no `Boundary`); a non-live loader exposes ONLY the single-value
-// form. Misusing the wrong form is a compile error, which is why there is no
-// runtime guard for the non-live + accumulate case (the client `serverLoaders`
-// stub does not carry `live`, so a runtime `!live` check is impossible there).
+// Type-level enforcement of the streaming/single-value `.View` discriminant.
+// Run under `pnpm test:types`. The discriminant is driven by the fn return type:
+// an AsyncGenerator fn produces `LoaderRef<T, true>` (accumulating `.View` only,
+// `useData` and `Boundary` are `never`); a Promise fn produces `LoaderRef<T, false>`
+// (single-value `.View`, `useData`, `Boundary`). `{ live: true }` is a runtime
+// SSR flag only; it no longer controls the type discriminant. Misusing the wrong
+// form is a compile error.
 import { expectTypeOf } from 'vitest';
 import {
   defineLoader,
@@ -16,7 +16,8 @@ async function* gen(): AsyncGenerator<number, void, unknown> {
   yield 1;
 }
 
-// A live loader: accumulating form only.
+// A streaming loader (generator fn): accumulating form only.
+// `{ live: true }` adds the SSR opt-out; the type discriminant comes from `gen`.
 function _liveProbes() {
   const live = defineLoader<number>(gen, { live: true });
 
@@ -43,7 +44,7 @@ function _liveProbes() {
   expectTypeOf(live.Boundary).toBeNever();
 }
 
-// A non-live loader: single-value form only.
+// A single-value loader (Promise fn): single-value form only.
 function _staticProbes() {
   const stat = defineLoader<{ at: Date }>(async () => ({ at: new Date() }));
 
@@ -56,16 +57,16 @@ function _staticProbes() {
     return null;
   });
 
-  // @ts-expect-error the accumulating `{ initial, reduce }` form is not available on a non-live loader
+  // @ts-expect-error the accumulating `{ initial, reduce }` form is not available on a single-value loader
   stat.View(() => null, { initial: [] as number[], reduce: (acc) => acc });
 
   // The single-value affordances are present; useData() is the discriminated state.
   expectTypeOf(stat.useData()).toEqualTypeOf<LoaderState<{ at: string }>>();
 }
 
-// A bare `LoaderRef<T>` defaults to the non-live (single-value) form, so its
+// A bare `LoaderRef<T>` defaults to the single-value form (Live=false), so its
 // `.View` is callable directly (the common case, and what quick-start documents).
-// Code that must accept either liveness uses `LoaderRef<T, boolean>` instead.
+// Code that must accept either form uses `LoaderRef<T, boolean>` instead.
 function _defaultRefProbes(loader: LoaderRef<{ n: number }>) {
   loader.View((s) => {
     if (s.status === 'success' || s.status === 'revalidating') {

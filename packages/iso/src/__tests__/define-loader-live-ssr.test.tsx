@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, hydrate } from 'preact';
 import { act } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
+import { prerender } from 'preact-iso/prerender';
 import { defineLoader } from '../define-loader.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
 import { env } from '../is-browser.js';
@@ -194,5 +195,56 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
     expect(invoked).toBe(0);
 
     host.remove();
+  });
+});
+
+// Guards that the SSR run-vs-skip decision is keyed on `live`, not on the
+// generator fn type. A streaming generator loader with `live: false` must RUN
+// its generator on SSR and bake the first accumulated chunk into the anchor.
+// Since Task 6 drives the streaming discriminant from the fn return type (an
+// AsyncGenerator fn -> LoaderRef<T, true>), the accumulating .View form is the
+// correct consumption surface; .Boundary is `never` on a streaming ref.
+describe('non-live streaming loader: SSR bakes first chunk (live-flag gate)', () => {
+  it('invokes the generator and bakes the accumulated value into data-loader', async () => {
+    let invoked = 0;
+    async function* finite() {
+      invoked++;
+      yield { n: 1 };
+      yield { n: 2 };
+    }
+    const ref = defineLoader<{ n: number }>(finite, {
+      __moduleKey: 'test-ssr-nonlive-acc',
+      live: false,
+    });
+
+    // Use the accumulating .View form (the only form for streaming/generator refs).
+    // The SSR run-vs-skip decision is keyed on the loader's `live` flag (false
+    // here), so the generator runs on SSR and bakes its first chunk.
+    const Finite = ref.View<number[]>(
+      (s) => (
+        <p data-testid="state">
+          {s.status === 'open' || s.status === 'closed'
+            ? s.data.join(',')
+            : s.status}
+        </p>
+      ),
+      {
+        initial: [] as number[],
+        reduce: (acc, c: { n: number }) => [...acc, c.n],
+      }
+    );
+    const App = () => (
+      <LocationProvider>
+        <Finite />
+      </LocationProvider>
+    );
+
+    env.current = 'server';
+    const { html } = await prerender(<App />);
+
+    // The generator was invoked on the server (live=false does not suppress SSR).
+    expect(invoked).toBeGreaterThan(0);
+    // The anchor carries the baked accumulated value, not null: data-loader="[1]".
+    expect(html).toContain('data-loader="[1]"');
   });
 });

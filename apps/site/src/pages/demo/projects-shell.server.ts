@@ -18,18 +18,9 @@ export type ShellData = {
   projects: (Project & { taskCount: number })[];
 };
 
-const shellLoader = async (ctx: LoaderCtx): Promise<ShellData> => {
-  const user = await currentUser(ctx.c);
-  const projects = listProjects().map((p) => ({
-    ...p,
-    taskCount: listTasksForProject(p.id).length,
-  }));
-  return { user, projects };
-};
-
-async function* activityStream(
-  ctx: LoaderCtx
-): AsyncGenerator<ActivityEvent, void, unknown> {
+async function* activityStream({
+  signal,
+}: LoaderCtx): AsyncGenerator<ActivityEvent, void, unknown> {
   for (const e of recentActivityEvents(5)) yield e;
 
   const queue: ActivityEvent[] = [];
@@ -43,14 +34,14 @@ async function* activityStream(
     unsub();
     wake();
   };
-  ctx.signal.addEventListener('abort', onAbort);
+  signal.addEventListener('abort', onAbort);
   // Tracked across iterations so it is cleared after each race wins and once more
   // in `finally`: on disconnect `wake()` resolves the race, but the pending
   // setTimeout would otherwise dangle until it fires (a harmless no-op here, but
   // a per-subscription timer leak if this pattern is copied to a long-lived server).
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    while (!ctx.signal.aborted) {
+    while (!signal.aborted) {
       while (queue.length) yield queue.shift()!;
       const tick = 4000 + Math.floor(Math.random() * 4000);
       await Promise.race([
@@ -61,7 +52,7 @@ async function* activityStream(
       ]);
       clearTimeout(timer);
       wakeP = new Promise<void>((r) => (wake = r));
-      if (ctx.signal.aborted) break;
+      if (signal.aborted) break;
       if (queue.length === 0) {
         const e = simulateActivity();
         if (e) yield e;
@@ -70,11 +61,18 @@ async function* activityStream(
   } finally {
     clearTimeout(timer);
     unsub();
-    ctx.signal.removeEventListener('abort', onAbort);
+    signal.removeEventListener('abort', onAbort);
   }
 }
 
 export const serverLoaders = {
-  default: defineLoader(shellLoader),
+  default: defineLoader(async (ctx) => {
+    const user = await currentUser(ctx.c);
+    const projects = listProjects().map((p) => ({
+      ...p,
+      taskCount: listTasksForProject(p.id).length,
+    }));
+    return { user, projects } satisfies ShellData;
+  }),
   activity: defineLoader(activityStream, { live: true }),
 };

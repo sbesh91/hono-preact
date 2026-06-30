@@ -260,16 +260,22 @@ const CommentsSection: FunctionComponent<{
 };
 CommentsSection.displayName = 'CommentsSection';
 
-// During `revalidating` the prior comments stay on screen (the union's
-// revalidating/success/error arms all carry `data`); the loading placeholder
-// shows only on the cold first load.
-const CommentsView = commentsLoader.View<{ taskId: string }>(
+// The comments loader streams the cumulative list (each chunk is the full
+// accumulated list so far). `reduce` takes the latest chunk as the new
+// accumulator value. The loading placeholder shows only during the initial
+// `connecting` phase (data is undefined); once `open`, even an empty list
+// renders the empty state via CommentsSection.
+const CommentsView = commentsLoader.View<CommentData[], { taskId: string }>(
   ({ data, taskId }) =>
     data ? (
       <CommentsSection comments={data} taskId={taskId} />
     ) : (
       <p class="text-sm text-muted">Loading comments…</p>
-    )
+    ),
+  {
+    initial: [],
+    reduce: (_acc, chunk) => chunk,
+  }
 );
 
 // ---- Section: project activity feed ----

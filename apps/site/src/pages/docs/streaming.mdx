@@ -68,14 +68,16 @@ When a page declares multiple loaders in `serverLoaders`, each `.View()` compone
 
 ```ts
 // src/pages/movie.server.ts
-import { defineLoader } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/movie/:id');
 
 export const serverLoaders = {
-  summary: defineLoader(async ({ location }) =>
+  summary: route.loader(async ({ location }) =>
     getMovie(location.pathParams.id)
   ),
 
-  cast: defineLoader(async function* ({ location }) {
+  cast: route.loader(async function* ({ location }) {
     for await (const member of streamCast(location.pathParams.id)) yield member;
   }),
 };
