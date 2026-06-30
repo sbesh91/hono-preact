@@ -148,7 +148,11 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         rooms,
         appConfig,
         dev,
-        resolvePageUse: pageUseResolver.byPath,
+        // The socket-upgrade guard chain resolves page-use from the socket's
+        // OWN owning-route pattern (via resolveRoutePath), so it needs the exact
+        // pattern lookup, not the URL fuzzy-matcher: `byPath` could collide
+        // `/a/:x` with `/a/:y` and apply the wrong route's auth gates.
+        resolvePageUse: pageUseResolver.byPattern,
         resolveRoutePath: routePathResolver.byModuleKey,
       })(c, next);
     })

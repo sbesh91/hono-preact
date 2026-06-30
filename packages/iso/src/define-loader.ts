@@ -477,6 +477,24 @@ export function _defineRouteLoader(
   return makeLoaderRef(fn, { ...opts, __routeId: routeId });
 }
 
+/**
+ * Internal constructor for the Vite plugin's client loader stub. Unlike public
+ * `defineLoader` (which infers the STANDALONE ctx, no `location`), the fn here
+ * receives the route-bound ctx, so the stub reads `ctx.location` to forward it
+ * to the loader RPC with NO cast. NOT exported from `index.ts`; imported
+ * directly by `internal/loader-stub.ts`.
+ */
+export function _defineLoaderStub<T>(
+  fn: (ctx: LoaderCtx<Record<string, string>>) => Promise<T>,
+  opts?: DefineLoaderOptions<T>
+): LoaderRef<T, false>;
+export function _defineLoaderStub(
+  fn: Loader<unknown>,
+  opts?: DefineLoaderOptions<unknown>
+): LoaderRef<unknown, boolean> {
+  return makeLoaderRef(fn, opts);
+}
+
 function makeLoaderRef(
   fn: Loader<unknown>,
   opts?: DefineLoaderOptions<unknown>

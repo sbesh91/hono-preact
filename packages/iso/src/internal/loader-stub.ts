@@ -1,5 +1,5 @@
 import {
-  defineLoader,
+  _defineLoaderStub,
   type DefineLoaderOptions,
   type LoaderRef,
 } from '../define-loader.js';
@@ -14,19 +14,6 @@ type StubOptions = {
    * a route-bound loader consumed with no resolvable location, matching the
    * server ref (which carries `__routeId`). */
   __routeBound?: boolean;
-};
-
-/** The route location the runner injects into every loader ctx at runtime. The
- * standalone `LoaderCtx` type omits `location` (a standalone loader is
- * route-independent), but this stub IS the Vite plugin shim that forwards the
- * active route location to the RPC, so it reads the field through this precise
- * structural type rather than `any` (keeping the field names checked). */
-type CtxWithLocation = {
-  location: {
-    path: string;
-    pathParams: Record<string, string>;
-    searchParams: Record<string, string>;
-  };
 };
 
 export function __$createLoaderStub_hpiso<T = unknown>(
@@ -44,21 +31,19 @@ export function __$createLoaderStub_hpiso<T = unknown>(
     params: opts.params,
     __routeBound: opts.__routeBound,
   };
-  // The async fn returns Promise<T>, so TypeScript selects the single-value
-  // overload of defineLoader (returning LoaderRef<T, false>). ctx is inferred
-  // as the standalone ctx shape (no `location`); the runner injects the real
-  // location at runtime, read here through `CtxWithLocation` (no `any`).
-  return defineLoader<T>(async (ctx) => {
-    const { location: loc } = ctx as unknown as CtxWithLocation;
+  // `_defineLoaderStub` types the ctx as route-bound, so `ctx.location` is read
+  // directly (no cast): the runner injects the real route location at runtime,
+  // which this Vite-plugin shim forwards to the loader RPC.
+  return _defineLoaderStub<T>(async ({ location, signal }) => {
     return fetchLoaderData<T>(
       opts.__moduleKey,
       opts.__loaderName,
       {
-        path: loc.path,
-        pathParams: loc.pathParams,
-        searchParams: loc.searchParams,
+        path: location.path,
+        pathParams: location.pathParams,
+        searchParams: location.searchParams,
       },
-      ctx.signal
+      signal
     ).first;
   }, refOpts);
 }
