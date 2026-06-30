@@ -9,6 +9,13 @@ export type ActionEntry = {
   timeoutMs?: number | false;
   moduleKey: string;
   input?: StandardSchemaV1;
+  /**
+   * The owning route pattern, present only for actions defined via
+   * `serverRoute(r).action(fn)`. When set, the handler resolves the action's
+   * page-level `use` chain by this EXACT pattern; when absent (bare
+   * `defineAction`), it falls back to fuzzy-matching the request URL.
+   */
+  routeId?: string;
 };
 
 type ServerModule = {
@@ -33,6 +40,7 @@ function extractActions(
       use?: ReadonlyArray<unknown>;
       timeoutMs?: number | false;
       input?: StandardSchemaV1;
+      __routeId?: string;
     };
     out.push({
       name,
@@ -42,6 +50,7 @@ function extractActions(
         timeoutMs: metadata.timeoutMs,
         moduleKey,
         input: metadata.input,
+        routeId: metadata.__routeId,
       },
     });
   }

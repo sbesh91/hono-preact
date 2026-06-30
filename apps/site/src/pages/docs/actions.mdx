@@ -42,6 +42,29 @@ Pass a second argument to `defineAction(fn, opts)` to configure per-action behav
 
 The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `AbortSignal` tied to the HTTP request) and `c` (the request's Hono `Context`). Use `ctx.c` to read cookies (`getCookie`), set response headers, or reach Hono `Bindings` via `ctx.c.env`.
 
+### Route-bound actions
+
+Like loaders, an action can be bound to its route with `serverRoute(r)`. Calling `.action(fn)` is otherwise identical to `defineAction` (an action reads its data from the payload, so there is no typed `location`), and it accepts the same options (`use`, `timeoutMs`, `input`):
+
+```ts
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/movies/:id');
+
+export const serverActions = {
+  rate: route.action<{ movieId: string; stars: number }, { ok: boolean }>(
+    async (_ctx, payload) => {
+      await db.rate(payload.movieId, payload.stars);
+      return { ok: true };
+    }
+  ),
+};
+```
+
+Binding the route makes the action resolve its page-level `use` chain from that exact route pattern. A bare `defineAction` resolves the chain by matching the POST URL, which is correct whenever the patterns are unambiguous. Reach for `route.action` when an action lives under an authenticated layout: the route-level gate (a `requireSession` on the parent route node, say) is then applied by the action's own pattern, closing the window where two overlapping patterns (`/a/:x` and `/a/:y`) match the same URL and the wrong route's gates run. The same `route` binder typically already defines the page's loaders, so its loaders and actions read as one route-bound unit.
+
+Bind an action to the route its module is registered on. Route-binding pins the `use` chain to the **declaring** route's gates, so the framework enforces that a route-bound action (or loader) names the route it is actually mounted on: a mismatch fails the request closed with a startup error rather than silently resolving the wrong route's gates. Using the same `route` binder for a module's loaders and actions keeps this correct by construction.
+
 ## Registering the handler
 
 You do not register the action handler directly. The framework's Vite plugin generates the server entry, which mounts a page POST handler alongside the loader RPC and SSR catch-all, and exports it as the worker's default. The handler routes by `mod.__moduleKey` (the path-derived key injected into each `.server.*` file by `moduleKeyPlugin`).
@@ -540,7 +563,7 @@ export const serverActions = {
 };
 ```
 
-For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model.
+For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model. To bind an action to that route node's gate by exact pattern, define it with [`route.action`](#route-bound-actions).
 
 ## Inference types
 

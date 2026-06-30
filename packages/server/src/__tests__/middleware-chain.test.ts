@@ -182,6 +182,7 @@ describe('stream observer fanout (E20)', () => {
       pageActionsHandler({
         resolverByPath: resolvers.byPath,
         resolvePageUseByPath: async () => [], // streaming-observer fixture, no page-level middleware
+        resolvePageUseByPattern: async () => [],
         renderPage: noopRender as never,
         resolvePageNode: () => null,
       })
@@ -282,6 +283,7 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
         return map;
       },
       resolvePageUseByPath: async () => [pageMw],
+      resolvePageUseByPattern: async () => [],
       renderPage: async () => new Response('', { status: 200 }),
       resolvePageNode: () => null,
       appConfig: { use: [] },
@@ -344,6 +346,7 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
         return map;
       },
       resolvePageUseByPath: async () => [pageMw],
+      resolvePageUseByPattern: async () => [],
       renderPage: async () => new Response('', { status: 200 }),
       resolvePageNode: () => null,
       appConfig: { use: [rootMw] },

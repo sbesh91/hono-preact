@@ -15,6 +15,7 @@ import {
   makePageUseResolver,
   makeSocketRoutePathResolver,
 } from './route-server-modules.js';
+import { assertRouteBindingsMatchMount } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
   buildSocketRegistry,
@@ -104,28 +105,69 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           routes.serverRoutes
         ));
 
+  // Boot-time guard: every route-bound loader/action must declare the route its
+  // module is mounted on (`route.path`), so a route-bound unit can never resolve
+  // its page-use (auth) chain from the wrong route. Awaited before the two
+  // `byPattern` surfaces (the loaders RPC and the action POST); a mismatch fails
+  // the request closed (500) rather than running through a wrong/empty gate
+  // chain. Cached like the socket registries: one walk at boot, per-request in
+  // dev for hot-reload parity.
+  let cachedRouteBindingCheck: Promise<void> | null = null;
+  const routeBindingCheck = () =>
+    dev
+      ? assertRouteBindingsMatchMount(routes.serverRoutes)
+      : (cachedRouteBindingCheck ??= assertRouteBindingsMatchMount(
+          routes.serverRoutes
+        ).catch((err) => {
+          cachedRouteBindingCheck = null;
+          throw err;
+        }));
+
   // Build the routed tree lazily: only the SSR (GET) and action-rerender paths
   // need it, and constructing per call keeps the two call sites from sharing a
   // mutable vnode.
   const pageTree = () =>
     h(Layout, null, h(LocationProvider, null, h(Routes, { routes })));
 
+  // Construct the route-bound handlers once (their internal registry caches must
+  // persist across requests); the binding guard wraps the two that dispatch
+  // route-bound units by pattern.
+  const loaders = loadersHandler(serverModules, {
+    dev,
+    appConfig,
+    // The loaders RPC resolves page-use from the loader's OWN declared route
+    // pattern (`ref.__routeId`), so it needs the exact pattern lookup, not the
+    // URL fuzzy-matcher: `byPath` could collide `/a/:x` with `/a/:y`.
+    resolvePageUse: pageUseResolver.byPattern,
+  });
+  const actions = pageActionsHandler({
+    resolverByPath: pageActionResolvers.byPath,
+    resolvePageUseByPath: pageUseResolver.byPath,
+    // Route-bound actions (serverRoute(r).action) resolve their page-use chain
+    // from their declared pattern, mirroring the loaders RPC. Same resolver,
+    // exact-pattern lookup: byPath could collide `/a/:x`/`/a/:y`.
+    resolvePageUseByPattern: pageUseResolver.byPattern,
+    renderPage,
+    resolvePageNode: pageTree,
+    appConfig,
+  });
+
   const app = new Hono();
   // Mount the user app first so middleware it registers (csrf, auth, etc.)
   // composes ahead of the framework's reserved /__loaders + catch-all routes.
   if (api) app.route('/', api);
   app
-    .post(
-      LOADERS_RPC_PATH,
-      loadersHandler(serverModules, {
-        dev,
-        appConfig,
-        // The loaders RPC resolves page-use from the loader's OWN declared route
-        // pattern (`ref.__routeId`), so it needs the exact pattern lookup, not
-        // the URL fuzzy-matcher: `byPath` could collide `/a/:x` with `/a/:y`.
-        resolvePageUse: pageUseResolver.byPattern,
-      })
-    )
+    .post(LOADERS_RPC_PATH, async (c, next) => {
+      try {
+        await routeBindingCheck();
+      } catch (err) {
+        return c.json(
+          { error: err instanceof Error ? err.message : String(err) },
+          500
+        );
+      }
+      return loaders(c, next);
+    })
     // The WebSocket upgrade endpoint must be registered before the SSR GET *
     // catch-all so it is not swallowed. The handler resolves the socket
     // registry and the moduleKey -> route path resolver lazily per request
@@ -156,16 +198,20 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         resolveRoutePath: routePathResolver.byModuleKey,
       })(c, next);
     })
-    .post(
-      '*',
-      pageActionsHandler({
-        resolverByPath: pageActionResolvers.byPath,
-        resolvePageUseByPath: pageUseResolver.byPath,
-        renderPage,
-        resolvePageNode: pageTree,
-        appConfig,
-      })
-    )
+    .post('*', async (c, next) => {
+      try {
+        await routeBindingCheck();
+      } catch (err) {
+        return c.json(
+          {
+            __outcome: 'error',
+            message: err instanceof Error ? err.message : String(err),
+          },
+          500
+        );
+      }
+      return actions(c, next);
+    })
     .get('*', (c) => renderPage(c, pageTree(), { appConfig }));
 
   return app;

@@ -1,4 +1,4 @@
-import { defineAction, serverRoute } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -78,7 +78,10 @@ export const serverLoaders = {
 };
 
 export const serverActions = {
-  addComment: defineAction<{ taskId: string; body: string }, { id: string }>(
+  // Route-bound like the loaders above: `route.action` resolves this action's
+  // page-use chain (the requireSession gate inherited from /demo/projects) by
+  // the exact route pattern rather than fuzzy-matching the POST URL.
+  addComment: route.action<{ taskId: string; body: string }, { id: string }>(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
       if (!user) throw new Error('not signed in');
@@ -92,7 +95,7 @@ export const serverActions = {
     }
   ),
 
-  setStatus: defineAction<{ taskId: string; status: TaskStatus }, { ok: true }>(
+  setStatus: route.action<{ taskId: string; status: TaskStatus }, { ok: true }>(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
       if (input.status === 'done') {

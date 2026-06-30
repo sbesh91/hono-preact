@@ -75,6 +75,7 @@ describe('PE form, no JS', () => {
         pageActionsHandler({
           resolverByPath: pageActionResolvers.byPath,
           resolvePageUseByPath: async () => [], // page guards not under test here
+          resolvePageUseByPattern: async () => [],
           renderPage,
           resolvePageNode: () => node,
         })

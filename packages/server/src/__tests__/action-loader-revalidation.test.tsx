@@ -93,6 +93,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
         pageActionsHandler({
           resolverByPath: pageActionResolvers.byPath,
           resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
+          resolvePageUseByPattern: async () => [],
           renderPage: noopRender as never,
           resolvePageNode: () => null,
         })

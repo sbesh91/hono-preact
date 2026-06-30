@@ -35,6 +35,7 @@ describe('Standard Schema end-to-end (Zod)', () => {
     const handler = pageActionsHandler({
       resolverByPath,
       resolvePageUseByPath: async () => [],
+      resolvePageUseByPattern: async () => [],
       renderPage: (async (c: { html: (s: string) => unknown }) =>
         c.html('<!doctype html>X')) as never,
       resolvePageNode: () => h('div', null),
