@@ -1,6 +1,6 @@
 # Server Loaders
 
-Pages need data. Loaders run on the server — as a direct function call during SSR, and as an automatic RPC call during client-side navigation — so you never write the branch manually.
+Pages need data. Loaders run on the server: a direct function call during SSR, and an automatic RPC call during client-side navigation, so you never write the branch manually.
 
 A loader is either route-bound (declared via `serverRoute(r).loader`) or route-independent (declared via `defineLoader`). Route-bound loaders receive a typed `location` with the route's path and search params. Route-independent loaders receive a lighter context without location, suitable for shared or reusable fetching logic.
 
@@ -172,7 +172,7 @@ Both route-bound and route-independent loaders support the streaming and live fo
 
 ## Consuming loaders
 
-### `.View(render)` — single-value loaders
+### `.View(render)`: single-value loaders
 
 `.View(render)` creates a component pre-wrapped in the loader's error boundary, data context, and reload context. The render function receives a `LoaderState<Serialize<T>>` discriminated union; switch on `status`:
 
@@ -234,7 +234,7 @@ const StatsView = statsLoader.View(({ status, data }) => {
 
 This `error` arm handles a reload that fails after the first load succeeded. A cold first-load failure routes to the error boundary and `errorFallback` instead. See [Loading States](/docs/loading-states) for the distinction.
 
-### `.View(render, { initial, reduce })` — streaming loaders
+### `.View(render, { initial, reduce })`: streaming loaders
 
 Streaming loaders use the accumulating form. Each chunk is folded into accumulated state and the render function receives a `StreamState<Acc>` discriminated union:
 

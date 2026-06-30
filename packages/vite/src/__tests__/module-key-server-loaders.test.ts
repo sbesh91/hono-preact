@@ -67,11 +67,11 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
   });
 
   it('serverRoute().loader: route id literal survives the transform (runtime sets __routeId)', () => {
-    // The plugin does NOT inject __routeId; defineLoader extracts the route string
-    // from its route-form first argument and sets ref.__routeId from it, so no
-    // plugin injection is needed. The transform must leave the
-    // `serverRoute('/movies/:id')` string literal intact so the runtime value is
-    // available when the module executes.
+    // The plugin does NOT inject __routeId. The route id is set at runtime:
+    // `serverRoute('/movies/:id').loader(fn)` forwards the route string to
+    // `_defineRouteLoader`, which stamps `ref.__routeId`. So the transform only
+    // has to leave the `serverRoute('/movies/:id')` string literal intact so the
+    // runtime value is available when the module executes.
     const code = `
       import { serverRoute } from '@hono-preact/iso';
       const route = serverRoute('/movies/:id');

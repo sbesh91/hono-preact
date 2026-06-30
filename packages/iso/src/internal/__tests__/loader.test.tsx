@@ -472,8 +472,13 @@ describe('Loader: parametric loader cache should key on location', () => {
 describe('Loader: no-location error message', () => {
   it('throws for a route-bound loader with no location (guards depend on the route)', () => {
     const ref = defineLoader(async () => ({ msg: 'hi' }));
-    // Simulate a route-bound loader by setting __routeId on the ref.
-    (ref as unknown as { __routeId: string }).__routeId = '/test-route';
+    // Simulate a route-bound loader. The guard reads `__routeBound` (set on both
+    // the server ref and the client stub); `serverRoute().loader` derives it from
+    // `__routeId`, so set both to mirror a real route-bound ref.
+    Object.assign(
+      ref as unknown as { __routeId: string; __routeBound: boolean },
+      { __routeId: '/test-route', __routeBound: true }
+    );
     // Suppress the expected Preact error console output from the throw.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => {

@@ -9,6 +9,12 @@ export type ParsedLoaderEntry = {
   optsArg: ObjectExpression | null;
   /** Whether this is a live loader (route.liveLoader) or a regular loader. */
   kind: 'loader' | 'liveLoader';
+  /** Whether the loader is bound to a route. True for the `route.loader(...)` /
+   * `serverRoute(...).loader(...)` member-call form (which threads a route id on
+   * the server); false for the bare `defineLoader(...)` identifier form (a
+   * route-independent loader). The client stub carries this so `LoaderHost` can
+   * refuse a route-bound loader consumed with no resolvable location. */
+  routeBound: boolean;
 };
 
 /**
@@ -93,11 +99,17 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
         const optsArg =
           optsCandidate?.type === 'ObjectExpression' ? optsCandidate : null;
 
+        // Route-bound iff the call is the member form (`route.loader(...)` /
+        // `route.liveLoader(...)`); the bare `defineLoader(...)` identifier form
+        // is route-independent.
+        const routeBound = call.callee.type === 'MemberExpression';
+
         entries.push({
           name: prop.key.name,
           call,
           optsArg,
           kind: live ? 'liveLoader' : 'loader',
+          routeBound,
         });
       }
     }

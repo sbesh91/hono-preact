@@ -9,6 +9,24 @@ type StubOptions = {
   __moduleKey: string;
   __loaderName: string;
   params?: string[] | '*';
+  /** Whether the source loader was bound to a route (`serverRoute().loader`).
+   * Threaded by the Vite plugin so the client-side `LoaderHost` guard can refuse
+   * a route-bound loader consumed with no resolvable location, matching the
+   * server ref (which carries `__routeId`). */
+  __routeBound?: boolean;
+};
+
+/** The route location the runner injects into every loader ctx at runtime. The
+ * standalone `LoaderCtx` type omits `location` (a standalone loader is
+ * route-independent), but this stub IS the Vite plugin shim that forwards the
+ * active route location to the RPC, so it reads the field through this precise
+ * structural type rather than `any` (keeping the field names checked). */
+type CtxWithLocation = {
+  location: {
+    path: string;
+    pathParams: Record<string, string>;
+    searchParams: Record<string, string>;
+  };
 };
 
 export function __$createLoaderStub_hpiso<T = unknown>(
@@ -24,19 +42,14 @@ export function __$createLoaderStub_hpiso<T = unknown>(
     __moduleKey: opts.__moduleKey,
     __loaderName: opts.__loaderName,
     params: opts.params,
+    __routeBound: opts.__routeBound,
   };
   // The async fn returns Promise<T>, so TypeScript selects the single-value
   // overload of defineLoader (returning LoaderRef<T, false>). ctx is inferred
-  // as the standalone ctx shape (no `location`). At runtime the loader runner
-  // always passes the full LoaderCtx (which carries location), so reading it
-  // via (ctx as any).location is safe: this stub is an internal Vite plugin
-  // shim that must read the current route location to call the RPC.
+  // as the standalone ctx shape (no `location`); the runner injects the real
+  // location at runtime, read here through `CtxWithLocation` (no `any`).
   return defineLoader<T>(async (ctx) => {
-    const loc = (ctx as any).location as {
-      path: string;
-      pathParams: Record<string, string>;
-      searchParams: Record<string, string>;
-    };
+    const { location: loc } = ctx as unknown as CtxWithLocation;
     return fetchLoaderData<T>(
       opts.__moduleKey,
       opts.__loaderName,

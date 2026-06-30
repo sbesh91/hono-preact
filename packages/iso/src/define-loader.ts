@@ -143,6 +143,12 @@ export interface LoaderRef<T, Live extends boolean = false> {
    * created with bare `defineLoader(fn)`. Consumed by the server dispatcher
    * to select the route-matched loader set. */
   readonly __routeId?: string;
+  /** Whether this loader is bound to a route (created via `serverRoute().loader`).
+   * Derived from `__routeId` on the server ref; threaded explicitly onto the
+   * client stub by the Vite plugin (which has no route string to set
+   * `__routeId`). `LoaderHost` reads it to refuse a route-bound loader consumed
+   * with no resolvable location on either side. */
+  readonly __routeBound: boolean;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
   readonly params: string[] | '*';
@@ -266,8 +272,9 @@ export type DefineLoaderOptions<T> = {
   /**
    * Per-loader timeout in milliseconds. When omitted, the handler applies
    * its configured default (30s). Pass `false` to disable the timeout for
-   * this loader (rely solely on the request signal). `live: true` loaders
-   * default to `false` (no 30s cap) unless this is set explicitly.
+   * this loader (rely solely on the request signal). Streaming loaders
+   * (AsyncGenerator fn, live or not) default to `false` (no 30s cap, since a
+   * stream legitimately runs long) unless this is set explicitly.
    */
   timeoutMs?: number | false;
   /**
@@ -279,6 +286,9 @@ export type DefineLoaderOptions<T> = {
   __loaderName?: string;
   /** Set by `_defineRouteLoader`; not intended for user code. */
   __routeId?: string;
+  /** Set by the Vite plugin's client loader stub to mark a route-bound loader
+   * when no `__routeId` string is available client-side; not for user code. */
+  __routeBound?: boolean;
   params?: string[] | '*';
   /**
    * Standard Schema validating + coercing `ctx.location.searchParams`. NOTE:
@@ -474,9 +484,15 @@ function makeLoaderRef(
   // liveStream-tagged fns are inherently unbounded; always live regardless of
   // opts. Honouring an explicit { live: false } on a liveStream fn would
   // SSR-pump a never-completing generator, so the marker wins unconditionally.
+  // `live` has exactly ONE runtime job: tell the SSR runner to SKIP this
+  // generator (an unbounded subscription must not run during renderToStringAsync
+  // / the streaming document drain). It does NOT drive the SSR state projection
+  // (that is keyed on the consumption form in `loader.tsx`) nor the timeout
+  // default (keyed on `isStreaming` below).
   const live = isLiveStreamFn(fn) ? true : (opts?.live ?? false);
   // Runtime streaming discriminant: fn is an async generator function.
-  // Used for .View / .Boundary / useData() guards independent of the `live` SSR flag.
+  // Used for .View / .Boundary / useData() guards and the timeout default,
+  // independent of the `live` SSR-skip flag.
   const isStreaming = isAsyncGeneratorFn(fn);
 
   validateTimeoutMs(opts?.timeoutMs, 'defineLoader');
@@ -522,7 +538,16 @@ function makeLoaderRef(
     searchSchema: opts?.searchSchema,
     paramsSchema: opts?.paramsSchema,
     live,
-    timeoutMs: opts?.timeoutMs ?? (live ? false : undefined),
+    // Route-bound iff created via `serverRoute().loader` (which threads a
+    // `__routeId`) or explicitly flagged by the client stub the Vite plugin
+    // emits. Read by `LoaderHost` to refuse a route-bound loader consumed with
+    // no resolvable location, on BOTH the server and the client.
+    __routeBound: opts?.__routeBound ?? opts?.__routeId !== undefined,
+    // Streaming loaders (bounded OR unbounded) legitimately run longer than the
+    // single-shot default; the handler's 30s cap would abort a long stream
+    // mid-flight. Keyed on `isStreaming`, NOT `live`, so a finite (non-live)
+    // streaming loader is exempt too. Single-value loaders keep the default.
+    timeoutMs: opts?.timeoutMs ?? (isStreaming ? false : undefined),
     // LoaderUse<T, boolean> structurally collapses to the same shape the
     // partitioner accepts; the cast hides only the generic narrowing on
     // StreamObserver's TChunk/TResult which is invariant. Identity-preserving.
@@ -579,10 +604,10 @@ function makeLoaderRef(
           'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
         );
       }
-      // Non-streaming + accumulate is valid on the server: the SSR run-vs-skip
-      // decision is keyed on the loader's `live` flag in `DataReader`, not on
-      // the consumption form. A finite (non-live) streaming loader bakes its
-      // first accumulated chunk during SSR; the client reconnects on mount.
+      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
+      // SSR projection on the consumption form (accumulate), so an accumulating
+      // consumer renders the `connecting` StreamState on the server, matching the
+      // client's first render (it reconnects on mount).
       return h(LoaderHost<unknown>, {
         loader: ref,
         errorFallback: props.errorFallback,
@@ -621,10 +646,10 @@ function makeLoaderRef(
           'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`.'
         );
       }
-      // Non-streaming + accumulate is now valid on the server: the SSR run-vs-skip
-      // decision is keyed on the loader's `live` flag in `DataReader`, not on
-      // the consumption form. A finite (non-live) streaming loader bakes its
-      // first accumulated chunk during SSR; the client reconnects on mount.
+      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
+      // SSR projection on the consumption form (accumulate), so an accumulating
+      // consumer renders the `connecting` StreamState on the server, matching the
+      // client's first render (it reconnects on mount).
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           errorFallback: viewOpts?.errorFallback,

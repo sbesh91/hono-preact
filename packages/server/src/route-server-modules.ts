@@ -18,21 +18,33 @@ export function routeServerModules(
 
 /**
  * Build the page-layer `use` resolver from the route manifest. The composed
- * `use` per pattern is static tree data (`manifest.routeUse`), so this is a
- * synchronous lookup: match the request URL to the most specific pattern and
- * return its array (empty when nothing matches or the route is unguarded).
+ * `use` per pattern is static tree data (`manifest.routeUse`), so lookup is a
+ * synchronous map read. Two lookup modes:
+ *
+ * - `byPath(url)`: resolve a CONCRETE URL (params substituted) to the most
+ *   specific matching pattern and return its `use`. Used by the page-actions /
+ *   SSR paths, which carry a real request URL.
+ * - `byPattern(pattern)`: resolve an EXACT route-pattern key directly (no
+ *   matching). Used by the loaders RPC path, which already knows the loader's
+ *   declared route pattern (`ref.__routeId`) and must NOT fuzzy-match it: a
+ *   pattern fed through `byPath` can collide with a sibling same-shaped pattern
+ *   (`/a/:x` vs `/a/:y`) and return the wrong page's guards.
  *
  * NOTE: framework-private. The only intended consumer is the generated server
  * entry.
  */
 export function makePageUseResolver(manifest: RoutesManifest): {
   byPath: (path: string) => ReadonlyArray<unknown>;
+  byPattern: (pattern: string) => ReadonlyArray<unknown>;
 } {
   const map = new Map(manifest.routeUse.map((r) => [r.path, r.use]));
   return {
     byPath(path: string) {
       const pattern = findBestPattern(map.keys(), path);
       return pattern === null ? [] : (map.get(pattern) ?? []);
+    },
+    byPattern(pattern: string) {
+      return map.get(pattern) ?? [];
     },
   };
 }

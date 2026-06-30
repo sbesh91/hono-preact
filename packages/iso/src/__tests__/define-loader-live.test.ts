@@ -17,11 +17,13 @@ describe('defineLoader({ live })', () => {
     expect(ref.timeoutMs).toBe(5000);
   });
 
-  it('leaves timeoutMs undefined for streaming loaders without live: true', () => {
-    // `gen` is a generator fn, driving LoaderRef<T, true>, but without { live: true }
-    // the SSR-opt-out flag is false, so timeoutMs stays undefined (not forced to false).
+  it('defaults timeoutMs to false for streaming loaders (live or not)', () => {
+    // `gen` is a generator fn, driving LoaderRef<T, true>. A stream legitimately
+    // runs longer than the single-shot 30s default, so the timeout default is
+    // keyed on streaming (isStreaming), not the `live` SSR flag: a finite,
+    // non-live streaming loader is exempt from the cap too.
     const ref = defineLoader<number>(gen);
-    expect(ref.timeoutMs).toBeUndefined();
+    expect(ref.timeoutMs).toBe(false);
   });
 
   it('requires the accumulating View form for a streaming (generator) loader', () => {

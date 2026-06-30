@@ -8,24 +8,6 @@ import { defineLoader } from '../define-loader.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
 import { env } from '../is-browser.js';
 
-// Drip each SSE frame in its own microtask so Preact flushes between chunks.
-function dripSseResponse(chunks: string[]): Response {
-  const enc = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(enc.encode(chunk));
-        await Promise.resolve();
-      }
-      controller.close();
-    },
-  });
-  return new Response(stream, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-  });
-}
-
 const LOC = { path: '/', pathParams: {}, searchParams: {} } as never;
 const originalEnv = env.current;
 
@@ -198,17 +180,18 @@ describe('live loader.View: SSR no-hang + single-node hydration', () => {
   });
 });
 
-// Guards that the SSR run-vs-skip decision is keyed on `live`, not on the
-// generator fn type. A streaming generator loader with `live: false` must RUN
-// its generator on SSR and bake the first accumulated chunk into the anchor.
-// Since Task 6 drives the streaming discriminant from the fn return type (an
-// AsyncGenerator fn -> LoaderRef<T, true>), the accumulating .View form is the
-// correct consumption surface; .Boundary is `never` on a streaming ref.
-describe('non-live streaming loader: SSR bakes first chunk (live-flag gate)', () => {
-  it('invokes the generator and bakes the accumulated value into data-loader', async () => {
-    let invoked = 0;
+// Guards that streaming (accumulating) consumption projects the SAME union shape
+// on the server and the client, keyed on the CONSUMPTION FORM (accumulate), NOT
+// the `live` flag. A finite (non-live) streaming loader must render the
+// `connecting` StreamState on SSR and bake NO value (data-loader="null"): the
+// accumulating client consumer never adopts a baked streaming value (on mount it
+// re-subscribes via SSE), so its first render is also `connecting`. Baking a
+// single-value `success` LoaderState here (the prior bug) would mismatch the
+// StreamState the accumulating `.View` render fn reads, flashing/hydration-warning
+// on the client.
+describe('non-live streaming loader: SSR renders connecting (no bake)', () => {
+  it('projects the connecting StreamState and bakes data-loader="null"', async () => {
     async function* finite() {
-      invoked++;
       yield { n: 1 };
       yield { n: 2 };
     }
@@ -217,9 +200,7 @@ describe('non-live streaming loader: SSR bakes first chunk (live-flag gate)', ()
       live: false,
     });
 
-    // Use the accumulating .View form (the only form for streaming/generator refs).
-    // The SSR run-vs-skip decision is keyed on the loader's `live` flag (false
-    // here), so the generator runs on SSR and bakes its first chunk.
+    // The accumulating .View form is the only form for streaming/generator refs.
     const Finite = ref.View<number[]>(
       (s) => (
         <p data-testid="state">
@@ -242,9 +223,11 @@ describe('non-live streaming loader: SSR bakes first chunk (live-flag gate)', ()
     env.current = 'server';
     const { html } = await prerender(<App />);
 
-    // The generator was invoked on the server (live=false does not suppress SSR).
-    expect(invoked).toBeGreaterThan(0);
-    // The anchor carries the baked accumulated value, not null: data-loader="[1]".
-    expect(html).toContain('data-loader="[1]"');
+    // No baked streaming value: the anchor is 'none' (data-loader="null"), and
+    // the rendered state is `connecting` (the StreamState the client also starts
+    // from), so SSR and the client's first render agree.
+    expect(html).toContain('data-loader="null"');
+    expect(html).toContain('connecting');
+    expect(html).not.toContain('data-loader="[1]"');
   });
 });

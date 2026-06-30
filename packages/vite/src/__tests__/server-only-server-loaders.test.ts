@@ -77,12 +77,14 @@ describe('serverOnlyPlugin: params threading from .server.ts to client Proxy', (
     expect(result?.code).toContain(`"*"`);
   });
 
-  it('passes params via the meta object into createLoaderStub', () => {
+  it('passes params and route-binding via the meta object into createLoaderStub', () => {
     const code = `import { serverLoaders } from './movies.server.ts';`;
     const importerId = path.join(fixtureDir, 'page.tsx');
     const result = transform(code, importerId, { root: fixtureRoot });
-    // The Proxy get() reads meta[name] and forwards it as `params`
-    expect(result?.code).toContain(`params: __meta`);
+    // The Proxy get() reads meta[name] and forwards its fields, guarding for the
+    // no-entry (route-independent, default-params) case with `__meta &&`.
+    expect(result?.code).toContain(`params: __meta && __meta.params`);
+    expect(result?.code).toContain(`__routeBound: __meta && __meta.routeBound`);
   });
 
   it('falls back gracefully when the .server.ts file does not exist', () => {

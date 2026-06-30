@@ -138,18 +138,22 @@ export interface LoadersHandlerOptions {
    */
   appConfig?: AppConfig;
   /**
-   * Per-page layer lookup keyed by the matched route's location path.
-   * Returns the composed page-layer `use` for the matched route pattern,
-   * sourced from the route manifest's `routeUse` (which already folds in
-   * ancestor `use` outer-first). The lookup may be sync (an in-memory map)
-   * or async (loaded lazily on first request). The handler awaits the result
-   * either way.
+   * Page-layer `use` lookup keyed by a route-bound loader's OWN declared route
+   * PATTERN (`ref.__routeId`, e.g. `/movies/:id`), NOT a concrete URL. Returns
+   * the composed page-layer `use` for that pattern, sourced from the route
+   * manifest's `routeUse` (which already folds in ancestor `use` outer-first).
+   * The lookup may be sync (an in-memory map) or async (loaded lazily on first
+   * request). The handler awaits the result either way.
+   *
+   * Pass `pageUseResolver.byPattern` from makePageUseResolver: it resolves the
+   * pattern key exactly. Do NOT pass `byPath` here; that URL fuzzy-matcher can
+   * resolve a pattern to a sibling same-shaped pattern's guards (`/a/:x` vs
+   * `/a/:y`), applying the wrong page's auth chain.
    *
    * REQUIRED: page-level `use` is where route/layout auth gates live, so an
    * absent resolver would silently drop them on the loader RPC path, exposing
    * data the gate should protect. The handler validates this at construction
-   * and throws rather than fetching loaders through a guard-less chain. Pass
-   * `pageUseResolver.byPath` from makePageUseResolver.
+   * and throws rather than fetching loaders through a guard-less chain.
    */
   resolvePageUse: (
     path: string

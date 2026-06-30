@@ -120,7 +120,10 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       loadersHandler(serverModules, {
         dev,
         appConfig,
-        resolvePageUse: pageUseResolver.byPath,
+        // The loaders RPC resolves page-use from the loader's OWN declared route
+        // pattern (`ref.__routeId`), so it needs the exact pattern lookup, not
+        // the URL fuzzy-matcher: `byPath` could collide `/a/:x` with `/a/:y`.
+        resolvePageUse: pageUseResolver.byPattern,
       })
     )
     // The WebSocket upgrade endpoint must be registered before the SSR GET *
