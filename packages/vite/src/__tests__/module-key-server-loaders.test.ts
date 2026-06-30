@@ -90,6 +90,31 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     expect(out).toContain('__loaderName: "default"');
   });
 
+  it('injects __moduleKey + __loaderName into the migrated route.loader(liveStream(...)) form', () => {
+    // liveStream(...) is itself the loader function argument, so `.loader` sees
+    // a single arg (the liveStream call) and the plugin appends opts AFTER it,
+    // rather than merging into liveStream's own options object. The liveStream
+    // call must survive intact so the runtime channel-rerun wiring is preserved.
+    const code = `
+      import { serverRoute, liveStream } from '@hono-preact/iso';
+      const route = serverRoute('/board/:projectId');
+      export const serverLoaders = {
+        feed: route.loader(liveStream({ topic: 'board', load: async () => ({ n: 1 }) })),
+      };
+    `;
+    const out =
+      transform(code, '/Users/me/repo/src/pages/board.server.ts') ?? '';
+    // opts appended as a 2nd arg to .loader(), not merged into liveStream(...).
+    expect(out).toContain(
+      '__moduleKey: "src/pages/board", __loaderName: "feed"'
+    );
+    // liveStream's own options object is left untouched.
+    expect(out).not.toMatch(/liveStream\(\{\s*__moduleKey:/);
+    // The liveStream call and the route literal survive the transform.
+    expect(out).toContain("liveStream({ topic: 'board'");
+    expect(out).toContain("serverRoute('/board/:projectId')");
+  });
+
   it('does not inject opts when defineLoader already has a second arg', () => {
     const code = `
       import { defineLoader } from '@hono-preact/iso';

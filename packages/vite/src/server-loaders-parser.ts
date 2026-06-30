@@ -7,8 +7,6 @@ export type ParsedLoaderEntry = {
   call: CallExpression;
   /** The opts ObjectExpression if the call has an opts arg; otherwise null. */
   optsArg: ObjectExpression | null;
-  /** Whether this is a live loader (route.liveLoader) or a regular loader. */
-  kind: 'loader' | 'liveLoader';
   /** Whether the loader is bound to a route. True for the `route.loader(...)` /
    * `serverRoute(...).loader(...)` member-call form (which threads a route id on
    * the server); false for the bare `defineLoader(...)` identifier form (a
@@ -34,17 +32,6 @@ export function isLoaderCall(call: CallExpression): boolean {
     !callee.computed &&
     callee.property.type === 'Identifier' &&
     callee.property.name === 'loader'
-  );
-}
-
-/** A `route.liveLoader({...})` / `serverRoute(...).liveLoader({...})` call. */
-export function isLiveLoaderCall(call: CallExpression): boolean {
-  const callee = call.callee;
-  return (
-    callee.type === 'MemberExpression' &&
-    !callee.computed &&
-    callee.property.type === 'Identifier' &&
-    callee.property.name === 'liveLoader'
   );
 }
 
@@ -82,33 +69,24 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
           continue;
 
         const call = prop.value;
-        const live = isLiveLoaderCall(call);
-        if (!isLoaderCall(call) && !live) continue;
+        if (!isLoaderCall(call)) continue;
 
-        // route.liveLoader takes a single options object as arg 0; a loader takes
-        // (fn, opts) or the route-id form ('/r/:id', fn, opts). Pick the candidate
-        // node, then narrow it (no cast: a `.type` check narrows the const binding
-        // to ObjectExpression).
-        const isRouteForm =
-          !live && call.arguments[0]?.type === 'StringLiteral';
-        const optsCandidate = live
-          ? call.arguments[0]
-          : isRouteForm
-            ? call.arguments[2]
-            : call.arguments[1];
+        // A loader takes (fn, opts?). The opts arg, when present, is the second
+        // argument; narrow it to an ObjectExpression (no cast: a `.type` check
+        // narrows the const binding).
+        const optsCandidate = call.arguments[1];
         const optsArg =
           optsCandidate?.type === 'ObjectExpression' ? optsCandidate : null;
 
         // Route-bound iff the call is the member form (`route.loader(...)` /
-        // `route.liveLoader(...)`); the bare `defineLoader(...)` identifier form
-        // is route-independent.
+        // `serverRoute(...).loader(...)`); the bare `defineLoader(...)` identifier
+        // form is route-independent.
         const routeBound = call.callee.type === 'MemberExpression';
 
         entries.push({
           name: prop.key.name,
           call,
           optsArg,
-          kind: live ? 'liveLoader' : 'loader',
           routeBound,
         });
       }

@@ -97,35 +97,4 @@ describe('moduleKeyPlugin defineLoader threading', () => {
       'defineLoader(serverLoader, { __moduleKey: "src/pages/movies" })'
     );
   });
-
-  it('threads __moduleKey into the route-id form (two args)', () => {
-    const plugin = makePlugin();
-    const code = [
-      `import { defineLoader } from '@hono-preact/iso';`,
-      `export const loader = defineLoader('/movies/:id', async () => ({}));`,
-    ].join('\n');
-    const result = plugin.transform.call(
-      {} as any,
-      code,
-      '/Users/me/repo/src/pages/movies.server.ts'
-    );
-    expect(result?.code).toContain(
-      `defineLoader('/movies/:id', async () => ({}), { __moduleKey: "src/pages/movies" })`
-    );
-  });
-
-  it('merges __moduleKey into the route-id form opts (three args)', () => {
-    const plugin = makePlugin();
-    const code = [
-      `import { defineLoader } from '@hono-preact/iso';`,
-      `export const loader = defineLoader('/movies/:id', async () => ({}), { params: ['q'] });`,
-    ].join('\n');
-    const result = plugin.transform.call(
-      {} as any,
-      code,
-      '/Users/me/repo/src/pages/movies.server.ts'
-    );
-    expect(result?.code).toContain('__moduleKey: "src/pages/movies"');
-    expect(result?.code).toContain(`params: ['q']`);
-  });
 });

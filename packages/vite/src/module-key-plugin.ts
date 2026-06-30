@@ -7,11 +7,7 @@ import {
   LOADER_NAME_OPTION,
 } from '@hono-preact/iso/internal/runtime';
 import { deriveModuleKey } from './module-key.js';
-import {
-  isLoaderCall,
-  isLiveLoaderCall,
-  parseServerLoaders,
-} from './server-loaders-parser.js';
+import { isLoaderCall, parseServerLoaders } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 // Built from MODULE_KEY_EXPORT so the already-transformed check cannot
@@ -81,8 +77,7 @@ export function moduleKeyPlugin(): Plugin {
         node: CallExpression,
         loaderName: string | undefined
       ) => {
-        const isLive = isLiveLoaderCall(node);
-        if (!isLoaderCall(node) && !isLive) return;
+        if (!isLoaderCall(node)) return;
         const args = node.arguments;
         if (args.length === 0) return;
 
@@ -106,28 +101,10 @@ export function moduleKeyPlugin(): Plugin {
           );
         };
 
-        // route.liveLoader({ topic, load, ... }) carries a single options object that
-        // IS the opts; merge the keys into it rather than appending a second arg.
-        if (isLive) {
-          mergeInto(args[0]);
-          return;
-        }
-
-        const isRouteForm = args[0].type === 'StringLiteral';
-        if (isRouteForm) {
-          // defineLoader('/r/:id', fn) | defineLoader('/r/:id', fn, opts)
-          if (args.length < 2 || args.length > 3) return;
-          if (args.length === 2) {
-            const fnEnd = args[1].end;
-            if (fnEnd == null) return;
-            appendOptsAfter(fnEnd);
-          } else {
-            mergeInto(args[2]);
-          }
-          return;
-        }
-
-        // fn-first form: defineLoader(fn) | defineLoader(fn, opts)
+        // fn-first form: defineLoader(fn) | defineLoader(fn, opts) and the
+        // member form route.loader(fn) | route.loader(fn, opts). A nested
+        // helper call like route.loader(liveStream({...})) is just `fn` here, so
+        // opts are appended after it rather than merged into the helper's object.
         if (args.length > 2) return;
         if (args.length === 1) {
           const fnEnd = args[0].end;

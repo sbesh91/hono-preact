@@ -41,6 +41,14 @@ export function makePageUseResolver(manifest: RoutesManifest): {
   return {
     byPath(path: string) {
       const pattern = findBestPattern(map.keys(), path);
+      // Fails open (no `use` chain) when nothing matches. This is safe because
+      // `map` is keyed by the COMPILE-TIME `manifest.routeUse`, so an unmatched
+      // path means a request URL for which no page route was registered at all
+      // -- there is no page (and so no page-tier guard) to drop. The two callers
+      // both add their own gate: the loaders RPC uses `byPattern` (an exact key
+      // lookup, never this fuzzy match), and the page-actions handler verifies
+      // the action exists on the resolved route before it runs. A real route
+      // always resolves to its own `use` here; only a no-such-page URL gets [].
       return pattern === null ? [] : (map.get(pattern) ?? []);
     },
     byPattern(pattern: string) {

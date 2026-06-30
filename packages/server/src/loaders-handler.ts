@@ -284,8 +284,26 @@ export function loadersHandler(
       loader: loaderName,
     };
 
+    // A loader-attributable failure: fire onError and return the RPC error
+    // envelope. In production we never leak the loader's error message (it may
+    // carry PII, internal stack hints, or probing signal); loader errors users
+    // want to surface should be returned as data, not thrown.
+    const loaderFailure = (err: unknown) => {
+      onError?.(err, { module, loader: loaderName });
+      const message =
+        dev && err instanceof Error ? err.message : 'Loader failed';
+      return c.json({ error: message }, 500);
+    };
+
+    // The try scopes loader EXECUTION. Building the SSE Response for a streaming
+    // result is kept OUTSIDE it (below): the generator/stream body runs lazily
+    // during the response, so a fault there is framework wiring, not the
+    // loader's throw, and must not be reported as 'Loader failed'. A finite
+    // value, by contrast, is serialized synchronously by c.json -- a
+    // non-serializable return is a loader-data fault, so that one IS attributed.
+    let result: unknown;
     try {
-      const result = await runRequestScope(
+      result = await runRequestScope(
         async () => {
           const dispatch = await dispatchServer<unknown, 'loader'>({
             middleware: serverMw,
@@ -326,31 +344,6 @@ export function loadersHandler(
         },
         { honoContext: c }
       );
-
-      if (isAsyncGenerator(result)) {
-        return sseGeneratorResponse(c, result, {
-          emitResult: false,
-          observers,
-          observerCtx: ctx,
-          signal: timeoutSignal,
-          timeoutMs:
-            typeof resolvedTimeoutMs === 'number'
-              ? resolvedTimeoutMs
-              : undefined,
-        });
-      }
-      if (result instanceof ReadableStream) {
-        return sseReadableStreamResponse(c, result, {
-          observers,
-          observerCtx: ctx,
-          signal: timeoutSignal,
-          timeoutMs:
-            typeof resolvedTimeoutMs === 'number'
-              ? resolvedTimeoutMs
-              : undefined,
-        });
-      }
-      return c.json(result);
     } catch (err) {
       if (isOutcome(err)) {
         return translateOutcomeForLoader(c, err);
@@ -369,14 +362,35 @@ export function loadersHandler(
       ) {
         return translateOutcomeForLoader(c, timeoutOutcome(resolvedTimeoutMs));
       }
-      onError?.(err, { module, loader: loaderName });
-      // In production we never leak the loader's error message: it may
-      // carry PII, internal stack hints, or details that help an attacker
-      // probe the system. Loader errors users want to surface should be
-      // returned as data, not thrown.
-      const message =
-        dev && err instanceof Error ? err.message : 'Loader failed';
-      return c.json({ error: message }, 500);
+      return loaderFailure(err);
+    }
+
+    if (isAsyncGenerator(result)) {
+      return sseGeneratorResponse(c, result, {
+        emitResult: false,
+        observers,
+        observerCtx: ctx,
+        signal: timeoutSignal,
+        timeoutMs:
+          typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+      });
+    }
+    if (result instanceof ReadableStream) {
+      return sseReadableStreamResponse(c, result, {
+        observers,
+        observerCtx: ctx,
+        signal: timeoutSignal,
+        timeoutMs:
+          typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+      });
+    }
+    // Serializing the finite value can throw (e.g. a BigInt or circular ref in
+    // the loader's return): that is a loader-data fault, attributed like any
+    // other loader throw rather than left to the default error handler.
+    try {
+      return c.json(result);
+    } catch (err) {
+      return loaderFailure(err);
     }
   };
 }
