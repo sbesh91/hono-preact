@@ -126,7 +126,7 @@ MoviesView.displayName = 'Movies';
 export default definePage(MoviesView);
 ```
 
-The route entry in `src/routes.ts` needs no `server` field: `movies.server.ts` sits next to `movies.js`, so the build auto-discovers the sibling and wires it in.
+Register the route in `src/routes.ts`; the colocated `movies.server.ts` is wired in with it:
 
 ```ts
 {

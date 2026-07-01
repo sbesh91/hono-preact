@@ -43,7 +43,7 @@ const MovieView = serverLoaders.default.View(({ data }) =>
 export default definePage(MovieView);
 ```
 
-**`src/routes.ts`** wires the URL to the view; the colocated `movie.server.ts` sibling is auto-discovered, so no `server:` field is needed ([details](/docs/routes#colocated-server-modules)):
+**`src/routes.ts`** wires the URL to the view; the colocated `movie.server.ts` is picked up with it:
 
 ```ts
 import { defineRoutes } from 'hono-preact';

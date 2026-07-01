@@ -1,6 +1,6 @@
 # The Route Table
 
-Declare every URL in your app in one place: `src/routes.ts`. A code-defined route table makes URL redesign a one-edit refactor and keeps URL structure independent of file layout, with no filesystem-based routing to work around. (URLs are always explicit; only a route's colocated `.server.ts` module is discovered by convention, see [Colocated server modules](#colocated-server-modules).)
+Declare every URL in your app in one place: `src/routes.ts`. A code-defined route table makes URL redesign a one-edit refactor and keeps URL structure independent of file layout, with no filesystem-based routing to work around.
 
 ## Why one file
 
@@ -19,8 +19,6 @@ export default defineRoutes([
     path: '/demo/projects',
     layout: () => import('./pages/projects-layout.js'),
     children: [
-      // No `server:` field: the colocated `./pages/projects-list.server.ts`
-      // sibling is auto-discovered. See "Colocated server modules" below.
       { path: '', view: () => import('./pages/projects-list.js') },
       {
         path: ':projectId/issues/:issueId',
@@ -68,21 +66,21 @@ That table covers four URL behaviours:
 
 ## Colocated server modules
 
-A route's server module (its `serverLoaders`, `serverActions`, rooms, and sockets) lives in a `.server.ts` file named after the route's `view`/`layout` file: `login.tsx` pairs with `login.server.ts`, `projects-shell.tsx` with `projects-shell.server.ts`. When that sibling exists, the build wires it automatically, so you do not write a `server:` field:
+A route's server module (its `serverLoaders`, `serverActions`, rooms, and sockets) lives in a `.server.ts` file named after the route's `view`/`layout` file: `login.tsx` pairs with `login.server.ts`, `projects-shell.tsx` with `projects-shell.server.ts`. The build finds that sibling and wires it to the route:
 
 ```ts
-// login.tsx + login.server.ts sit side by side; the server module is discovered.
+// login.tsx + login.server.ts sit side by side.
 { path: 'login', view: () => import('./pages/login.js') }
 ```
 
-The discovered thunk is exactly the `server: () => import('./login.server.js')` you would otherwise hand-write, so nothing else changes: middleware inheritance, the loader/action RPC map, and the boot-time route-binding check all behave identically. In `vite dev`, each auto-wired module is logged once (`auto-discovered server module for route '...'`).
+Middleware inheritance, the loader/action RPC map, and the boot-time route-binding check apply just as they do for an explicit `server:` thunk. In `vite dev`, each wired module is logged once.
 
-Two escape hatches:
+Two overrides:
 
-- **Non-sibling module:** write an explicit `server: () => import('./somewhere-else.server.js')`. An explicit thunk always wins over discovery.
-- **Opt out:** write `server: false` to keep a `.server.ts` sibling from being wired (e.g. a scratch file you are not ready to enable).
+- **Non-sibling module:** `server: () => import('./somewhere-else.server.js')` points the route at a specific module and wins over the sibling.
+- **`server: false`:** keeps a `.server.ts` sibling from being wired (e.g. a scratch file).
 
-Discovery keys off the `view`/`layout` file that sits next to the route literal, so it covers hand-written route tables. Routes generated at runtime (e.g. `contentRoutes(import.meta.glob(...))`) are not scanned; give those an explicit `server:` if they need one.
+Discovery reads the inline `() => import()` on the route, so it covers hand-written route tables. A route whose `view` is a hoisted const thunk, or one generated at runtime (e.g. `contentRoutes(import.meta.glob(...))`), takes an explicit `server:` if it needs one.
 
 ## Mounting
 
@@ -92,7 +90,7 @@ If you need to customize the client or server entry (rare), pass a path override
 
 ## Inline imports stay inline
 
-Every `view` and `layout` (and any explicit `server`) is `() => import('./path')`. The arrow shape is required for code-splitting: bundlers create a separate chunk per `import()` call site. A helper that takes a string (`view: lazy('./pages/home')`) would either lose splitting or require a transform plugin. The five characters of `() => ` per route is the trade for zero magic and full bundler support. Auto-discovered `server` modules are spliced in as the same `() => import('./x.server.js')` thunk at build time, so they code-split identically.
+Every `view` and `layout` (and any explicit `server`) is `() => import('./path')`. The arrow shape is required for code-splitting: bundlers create a separate chunk per `import()` call site. A helper that takes a string (`view: lazy('./pages/home')`) would either lose splitting or require a transform plugin. The five characters of `() => ` per route is the trade for zero magic and full bundler support.
 
 ## Sharing references for non-layout routes
 
@@ -144,16 +142,8 @@ export default defineRoutes([
     path: '/dashboard',
     use: [requireSession], // gates everything below
     children: [
-      {
-        path: '',
-        view: () => import('./pages/dashboard.js'),
-        server: () => import('./pages/dashboard.server.js'),
-      },
-      {
-        path: 'settings',
-        view: () => import('./pages/settings.js'),
-        server: () => import('./pages/settings.server.js'),
-      },
+      { path: '', view: () => import('./pages/dashboard.js') },
+      { path: 'settings', view: () => import('./pages/settings.js') },
     ],
   },
 ]);

@@ -57,7 +57,7 @@ export default definePage(AboutView);
 }
 ```
 
-No `server:` field is needed: `about.server.ts` sits next to `about.js`, so the build auto-discovers the sibling and wires it into the loader and action handlers (via the generated `server.tsx` / `createServerEntry`). Write an explicit `server: () => import(...)` only to point at a non-sibling module, or `server: false` to opt out. See [Colocated server modules](/docs/routes#colocated-server-modules).
+`about.server.ts` sits next to `about.tsx`, so its `serverLoaders` and `serverActions` are wired into the generated `server.tsx` (`createServerEntry`) automatically. See [Colocated server modules](/docs/routes#colocated-server-modules).
 
 ### Step 3: Link to it
 

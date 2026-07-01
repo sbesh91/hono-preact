@@ -26,10 +26,6 @@ const routeTree = [
   {
     path: '/demo',
     layout: () => import('./pages/demo/demo-layout.js'),
-    // A route's colocated `<name>.server.ts` module is auto-discovered from the
-    // sibling of its `view`/`layout` file, so these routes carry no explicit
-    // `server:` thunk (e.g. `login.tsx` -> `login.server.ts`). Write an explicit
-    // `server:` only to point at a non-sibling module.
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
       { path: 'login', view: () => import('./pages/demo/login.js') },
