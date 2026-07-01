@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import MagicString from 'magic-string';
@@ -25,7 +26,9 @@ const MODULE_EXT = /\.(jsx?|tsx?)$/;
 // Matches any `*.server.[jt]sx?` filename, for the orphan scan.
 const SERVER_FILE = /\.server\.[jt]sx?$/;
 
-// Directories the orphan scan never descends into.
+// Directories the orphan scan never descends into. These are always skipped
+// (for walk speed and as a safe fallback when git is unavailable); the
+// gitignore filter below additionally drops anything the user ignores.
 const ORPHAN_SCAN_SKIP = new Set([
   'node_modules',
   'dist',
@@ -34,9 +37,36 @@ const ORPHAN_SCAN_SKIP = new Set([
   '__tests__',
 ]);
 
+// Of `files` (paths relative to `root`), returns the subset the project's git
+// ignore rules exclude, using `git check-ignore` as the authoritative engine
+// (handles nested .gitignore, negations, and custom build dirs). Degrades to an
+// empty set when git is absent, the tree is not a repo, or nothing is ignored
+// (`check-ignore` exits non-zero in all three), so the orphan scan simply skips
+// the extra filtering rather than failing the build.
+function gitIgnored(root: string, files: string[]): Set<string> {
+  if (files.length === 0) return new Set();
+  try {
+    const out = execFileSync('git', ['check-ignore', '--stdin'], {
+      cwd: root,
+      input: files.join('\n'),
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    return new Set(
+      out
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 // Recursively list absolute paths of every `*.server.*` module under `root`,
-// skipping build output, deps, and test fixtures. The default source for the
-// orphan check; injectable so tests need no real filesystem.
+// skipping build output, deps, test fixtures, and anything gitignored. The
+// default source for the orphan check; injectable so tests need no real
+// filesystem.
 function defaultListServerModules(root: string): string[] {
   const out: string[] = [];
   const walk = (dir: string) => {
@@ -57,7 +87,10 @@ function defaultListServerModules(root: string): string[] {
     }
   };
   walk(root);
-  return out;
+
+  const relative = out.map((abs) => path.relative(root, abs));
+  const ignored = gitIgnored(root, relative);
+  return out.filter((_abs, i) => !ignored.has(relative[i]));
 }
 
 export interface RouteServerAutodiscoveryOptions {
