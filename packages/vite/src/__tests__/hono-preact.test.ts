@@ -29,13 +29,16 @@ describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in pipeline order, then the adapter plugins, then preact', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() }) as NamedPlugin[];
     const names = plugins.map((p) => p.name);
-    expect(names.slice(0, 8)).toEqual([
+    expect(names.slice(0, 9)).toEqual([
       'hono-preact:config',
       'hono-preact:client-shim',
       'hono-preact:client-entry',
       'hono-preact:server-entry',
       'server-loader-validation',
       'module-key',
+      // Runs before server-only so the injected `.server` import is present
+      // when server-only rewrites it to a client stub.
+      'route-server-autodiscovery',
       'server-only',
       'hono-preact:guard-strip',
     ]);
