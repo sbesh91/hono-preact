@@ -158,3 +158,76 @@ describe('routeServerAutodiscoveryPlugin', () => {
     expect(transform(plugin, code)).toBeUndefined();
   });
 });
+
+// Orphan check: buildEnd warns about a *.server.* file no route imports.
+type BuildEndFn = () => void;
+function makeOrphanPlugin(serverModules: string[], command = 'build') {
+  const plugin = routeServerAutodiscoveryPlugin({
+    listServerModules: () => serverModules,
+  }) as Plugin & {
+    configResolved: (c: {
+      command: string;
+      root: string;
+      logger: { info(m: string): void };
+    }) => void;
+    buildEnd: BuildEndFn;
+  };
+  plugin.configResolved({ command, root: '/repo', logger: { info() {} } });
+  return plugin;
+}
+
+function runBuildEnd(
+  plugin: Plugin & { buildEnd: BuildEndFn },
+  ctx: {
+    envName?: string;
+    graph: string[];
+  }
+) {
+  const warnings: string[] = [];
+  plugin.buildEnd.call({
+    environment: ctx.envName ? { name: ctx.envName } : undefined,
+    getModuleIds: () => ctx.graph,
+    warn: (m: string) => warnings.push(m),
+  } as never);
+  return warnings;
+}
+
+describe('routeServerAutodiscoveryPlugin orphan check', () => {
+  it('warns about a server file that no module in the graph imports', () => {
+    const plugin = makeOrphanPlugin([
+      '/repo/src/pages/login.server.ts',
+      '/repo/src/pages/orphan.server.ts',
+    ]);
+    const warnings = runBuildEnd(plugin, {
+      envName: 'ssr',
+      graph: ['/repo/src/pages/login.server.ts', '/repo/src/routes.ts'],
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('src/pages/orphan.server.ts');
+    expect(warnings[0]).toContain('no route imports it');
+  });
+
+  it('does not warn when every server file is in the graph (query-suffix tolerant)', () => {
+    const plugin = makeOrphanPlugin(['/repo/src/pages/login.server.ts']);
+    const warnings = runBuildEnd(plugin, {
+      envName: 'ssr',
+      graph: ['/repo/src/pages/login.server.ts?v=1'],
+    });
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('skips the client build (server imports are stubbed there)', () => {
+    const plugin = makeOrphanPlugin(['/repo/src/pages/orphan.server.ts']);
+    const warnings = runBuildEnd(plugin, { envName: 'client', graph: [] });
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('skips dev (the module graph is lazy during serve)', () => {
+    const plugin = makeOrphanPlugin(
+      ['/repo/src/pages/orphan.server.ts'],
+      'serve'
+    );
+    const warnings = runBuildEnd(plugin, { envName: 'ssr', graph: [] });
+    expect(warnings).toHaveLength(0);
+  });
+});

@@ -22,6 +22,44 @@ const SERVER_EXTENSIONS = [
 // so we can splice `.server` in front of it (`./x.js` -> `./x.server.js`).
 const MODULE_EXT = /\.(jsx?|tsx?)$/;
 
+// Matches any `*.server.[jt]sx?` filename, for the orphan scan.
+const SERVER_FILE = /\.server\.[jt]sx?$/;
+
+// Directories the orphan scan never descends into.
+const ORPHAN_SCAN_SKIP = new Set([
+  'node_modules',
+  'dist',
+  '.git',
+  '.wrangler',
+  '__tests__',
+]);
+
+// Recursively list absolute paths of every `*.server.*` module under `root`,
+// skipping build output, deps, and test fixtures. The default source for the
+// orphan check; injectable so tests need no real filesystem.
+function defaultListServerModules(root: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!ORPHAN_SCAN_SKIP.has(entry.name)) {
+          walk(path.join(dir, entry.name));
+        }
+      } else if (SERVER_FILE.test(entry.name)) {
+        out.push(path.join(dir, entry.name));
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
 export interface RouteServerAutodiscoveryOptions {
   /**
    * Existence probe for a candidate server-module path. Injected for tests;
@@ -29,6 +67,12 @@ export interface RouteServerAutodiscoveryOptions {
    * whether a file lives there.
    */
   fileExists?: (absPath: string) => boolean;
+  /**
+   * Lists absolute paths of every `*.server.*` module under the project root,
+   * for the orphan check (a server file no route imports). Injected for tests;
+   * defaults to a recursive filesystem scan.
+   */
+  listServerModules?: (root: string) => string[];
 }
 
 // Reads the static string name of an object property key, or undefined for
@@ -78,11 +122,14 @@ export function routeServerAutodiscoveryPlugin(
   options: RouteServerAutodiscoveryOptions = {}
 ): Plugin {
   const fileExists = options.fileExists ?? ((p: string) => fs.existsSync(p));
+  const listServerModules =
+    options.listServerModules ?? defaultListServerModules;
   // Dev-time observability: discovery is implicit, so announce each wired
   // module once. `announced` dedupes across the client/SSR passes and HMR
   // re-transforms; logging is gated to `vite dev` to keep build output quiet.
   let logger: { info(msg: string): void } | undefined;
   let isDev = false;
+  let root: string | undefined;
   const announced = new Set<string>();
 
   return {
@@ -90,10 +137,12 @@ export function routeServerAutodiscoveryPlugin(
     enforce: 'pre',
     configResolved(config: {
       command: string;
+      root: string;
       logger: { info(msg: string): void };
     }) {
       logger = config.logger;
       isDev = config.command === 'serve';
+      root = config.root;
     },
     // Intentionally ignores the `ssr` flag: the injected thunk must land in
     // both the SSR bundle (so the runtime manifest loads the real module) and
@@ -197,6 +246,29 @@ export function routeServerAutodiscoveryPlugin(
 
       if (!changed) return;
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
+    },
+    // Orphan check: warn about a `*.server.*` file that no route imports, so a
+    // misplaced or mis-wired server module is not a silent runtime 404. Runs at
+    // build time only (the dev graph is lazy) and only on a server build (on the
+    // client, `.server` imports are stubbed, so every server file would look
+    // orphaned). "Imported" is read straight off the module graph, which covers
+    // both auto-discovered and explicit `server:` wiring, and server-to-server
+    // imports (a shared `*.server.ts` util) too.
+    buildEnd() {
+      if (isDev || root === undefined) return;
+      if (!this.environment || this.environment.name === 'client') return;
+
+      const graph = new Set<string>();
+      for (const id of this.getModuleIds()) graph.add(id.split('?')[0]);
+
+      for (const file of listServerModules(root)) {
+        if (graph.has(file)) continue;
+        this.warn(
+          `${path.relative(root, file)} looks like a server module but no route imports it. ` +
+            `Colocate it next to a route's view/layout (e.g. \`foo.tsx\` -> \`foo.server.ts\`), ` +
+            `or add an explicit \`server:\` entry to a route. Its loaders/actions are not reachable.`
+        );
+      }
     },
   };
 }
