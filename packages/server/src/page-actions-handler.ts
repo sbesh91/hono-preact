@@ -13,7 +13,7 @@ import {
   serializeActionOutcome,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
-import { composeServerChain } from './compose-server-chain.js';
+import { composeServerChainOrFailClosed } from './compose-server-chain.js';
 import { assertPageUseResolver } from './page-use-guard.js';
 import {
   FORM_MODULE_FIELD,
@@ -53,6 +53,22 @@ export interface PageActionsHandlerOptions {
     path: string
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
+   * Per-route middleware resolver, keyed by EXACT route pattern. Used for
+   * actions defined via `serverRoute(r).action(fn)` (their `ActionEntry`
+   * carries `routeId`): the chain is composed from the action's OWN declared
+   * pattern rather than fuzzy-matching the POST URL, closing the `/a/:x` vs
+   * `/a/:y` collision window. Pass `pageUseResolver.byPattern` from
+   * makePageUseResolver (the same resolver the loaders handler uses for
+   * route-bound loaders).
+   *
+   * REQUIRED for the same auth-bypass reason as `resolvePageUseByPath`: a
+   * route-bound action with no pattern resolver would silently drop its
+   * route-level gates. The handler validates this at construction.
+   */
+  resolvePageUseByPattern: (
+    pattern: string
+  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+  /**
    * Re-renders the page after a deny or error outcome. The handler calls
    * this inside a fresh runRequestScope after injecting the action result
    * slot so the page tree can read it via useActionResult().
@@ -80,7 +96,10 @@ export interface PageActionsHandlerOptions {
    * your observability stack. The handler still responds with a sanitized
    * 500; this is a side channel only.
    */
-  onError?: (err: unknown, ctx: { module: string; action: string }) => void;
+  onError?: (
+    err: unknown,
+    ctx: { module: string; action: string; routeId?: string }
+  ) => void;
 }
 
 async function parseBody(
@@ -139,6 +158,7 @@ export function pageActionsHandler(
   const {
     resolverByPath,
     resolvePageUseByPath,
+    resolvePageUseByPattern,
     renderPage,
     resolvePageNode,
     appConfig,
@@ -150,6 +170,11 @@ export function pageActionsHandler(
     handler: 'pageActionsHandler',
     option: 'resolvePageUseByPath',
     surface: 'action POST path',
+  });
+  assertPageUseResolver(resolvePageUseByPattern, {
+    handler: 'pageActionsHandler',
+    option: 'resolvePageUseByPattern',
+    surface: 'route-bound action POST path',
   });
 
   return async (c) => {
@@ -170,21 +195,49 @@ export function pageActionsHandler(
         ? c.json({ __outcome: 'error', message: msg }, 404)
         : c.text(msg, 404);
     }
-    const { fn, use: actionUse, timeoutMs } = entry;
+    const { fn, use: actionUse, timeoutMs, routeId } = entry;
     // Chain order is app (outermost) -> page (route-node `use`) -> action
     // (defineAction's `use`); composeServerChain owns the ordering, timeout
     // derivation, partitioning, and the structural-read cast (shared with the
     // loader handler).
-    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
-      await composeServerChain<'action'>({
+    //
+    // Route-bound actions (serverRoute(r).action, `routeId` set) resolve their
+    // page tier from their OWN declared pattern, so a `/a/:x` vs `/a/:y` URL
+    // collision cannot apply the wrong route's gates. Bare actions keep
+    // resolving by the request URL (unchanged behavior). A route-bound action
+    // whose pattern resolver throws fails closed (500) rather than running
+    // through a guard-less chain (auth-gate bypass), mirroring loadersHandler.
+    //
+    // The resolver, its lookup key, and the fail-closed flag are all derived
+    // from ONE `typeof routeId` check so they cannot desync: a route-bound
+    // action pairs `byPattern` with its `routeId` (and fails closed on a resolver
+    // throw), a bare action pairs `byPath` with the request URL. The guard
+    // narrows `routeId` to `string` for the `key`, keeping the pairing cast-free.
+    const pageTier =
+      typeof routeId === 'string'
+        ? { resolve: resolvePageUseByPattern, key: routeId, routeBound: true }
+        : { resolve: resolvePageUseByPath, key: urlPath, routeBound: false };
+    const composed = await composeServerChainOrFailClosed<'action'>(
+      {
         requestSignal: c.req.raw.signal,
         unitTimeoutMs: timeoutMs,
         defaultTimeoutMs,
         appConfig,
-        resolvePageUse: resolvePageUseByPath,
-        path: urlPath,
+        resolvePageUse: pageTier.resolve,
+        path: pageTier.key,
         unitUse: actionUse,
-      });
+      },
+      pageTier.routeBound
+    );
+    if (!composed.ok) {
+      onError?.(composed.error, { module, action, routeId });
+      const message = `Route-bound action '${routeId}' could not resolve its page-use chain`;
+      return accept === 'json'
+        ? c.json({ __outcome: 'error', message }, 500)
+        : c.text(message, 500);
+    }
+    const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
+      composed.chain;
     const actionCtx = { c, signal, call: createCaller(c).call };
     const ctx: ServerActionCtx = {
       scope: 'action',
@@ -251,7 +304,7 @@ export function pageActionsHandler(
           outcome: timeoutOutcome(resolvedTimeoutMs),
         };
       } else {
-        onError?.(err, { module, action });
+        onError?.(err, { module, action, routeId });
         resolution = { kind: 'error', message: 'Action failed' };
       }
     }

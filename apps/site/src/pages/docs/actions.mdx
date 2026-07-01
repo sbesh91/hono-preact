@@ -31,6 +31,32 @@ export const serverActions = {
 
 `defineAction` is a no-op at runtime; it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` and `<Form>` can infer the payload and result types without codegen.
 
+### Typing the payload
+
+`defineAction` and `serverRoute(r).action` accept the payload type three ways; the explicit generics above are only one of them:
+
+- **Explicit generics** — `defineAction<Payload, Result>(fn)`, as shown above.
+- **Annotated parameters** — annotate the handler's payload argument and return type and drop the generics; the ref's types are inferred from the function:
+
+  ```ts
+  addMovie: defineAction(
+    async (_ctx, payload: { title: string }): Promise<{ ok: boolean }> => {
+      await db.insert({ title: payload.title });
+      return { ok: true };
+    }
+  );
+  ```
+
+- **A validation schema** — pass a [Standard Schema](/docs/validation) as `input`; the payload type is the schema's validated output, inferred with no generics, and enforced at runtime before the handler runs:
+
+  ```ts
+  addMovie: defineAction(async (_ctx, payload) => db.insert(payload), {
+    input: NewMovieSchema, // payload is InferOutput<typeof NewMovieSchema>
+  });
+  ```
+
+With none of these, `payload` is typed `unknown` (never `any`), so the type system makes you narrow it before use rather than letting an untyped value through.
+
 ### `defineAction` options
 
 Pass a second argument to `defineAction(fn, opts)` to configure per-action behavior:
@@ -41,6 +67,32 @@ Pass a second argument to `defineAction(fn, opts)` to configure per-action behav
 | `timeoutMs` | `number \| false` | `30000` | Per-action deadline; `false` disables it.   |
 
 The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `AbortSignal` tied to the HTTP request) and `c` (the request's Hono `Context`). Use `ctx.c` to read cookies (`getCookie`), set response headers, or reach Hono `Bindings` via `ctx.c.env`.
+
+### Route-bound actions
+
+Like loaders, an action can be bound to its route with `serverRoute(r)`. Calling `.action(fn)` is otherwise identical to `defineAction` (an action reads its data from the payload, so there is no typed `location`), and it accepts the same options (`use`, `timeoutMs`, `input`). It types the payload the same three ways too (see [Typing the payload](#typing-the-payload)) — the example below infers it from an `input` schema, so no `<Payload, Result>` generics are needed:
+
+```ts
+import { serverRoute } from 'hono-preact';
+import { RateSchema } from './movie-schema.js';
+
+const route = serverRoute('/movies/:id');
+
+export const serverActions = {
+  rate: route.action(
+    async (_ctx, payload) => {
+      // payload is InferOutput<typeof RateSchema>: { movieId: string; stars: number }
+      await db.rate(payload.movieId, payload.stars);
+      return { ok: true };
+    },
+    { input: RateSchema }
+  ),
+};
+```
+
+Binding the route makes the action resolve its page-level `use` chain from that exact route pattern. A bare `defineAction` resolves the chain by matching the POST URL, which is correct whenever the patterns are unambiguous. Reach for `route.action` when an action lives under an authenticated layout: the route-level gate (a `requireSession` on the parent route node, say) is then applied by the action's own pattern, closing the window where two overlapping patterns (`/a/:x` and `/a/:y`) match the same URL and the wrong route's gates run. The same `route` binder typically already defines the page's loaders, so its loaders and actions read as one route-bound unit.
+
+Bind an action to the route its module is registered on. Route-binding pins the `use` chain to the **declaring** route's gates, so the framework enforces that a route-bound action (or loader) names the route it is actually mounted on: a mismatch fails the request closed with a startup error rather than silently resolving the wrong route's gates. Using the same `route` binder for a module's loaders and actions keeps this correct by construction.
 
 ## Registering the handler
 
@@ -540,7 +592,7 @@ export const serverActions = {
 };
 ```
 
-For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model.
+For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model. To bind an action to that route node's gate by exact pattern, define it with [`route.action`](#route-bound-actions).
 
 ## Inference types
 

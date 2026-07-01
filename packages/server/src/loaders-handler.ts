@@ -12,7 +12,7 @@ import {
   coerceLoaderLocation,
   type LooseLoaderFn,
 } from '@hono-preact/iso/internal/runtime';
-import { composeServerChain } from './compose-server-chain.js';
+import { composeServerChainOrFailClosed } from './compose-server-chain.js';
 import { assertPageUseResolver } from './page-use-guard.js';
 import { translateOutcomeForLoader } from './outcome-translation.js';
 import {
@@ -248,9 +248,8 @@ export function loadersHandler(
     // declared route the resolver cannot handle is rejected immediately (500)
     // rather than being run guard-less, which would silently drop auth gates.
     const routeBound = typeof entry.routeId === 'string';
-    let composedChain: Awaited<ReturnType<typeof composeServerChain<'loader'>>>;
-    try {
-      composedChain = await composeServerChain<'loader'>({
+    const composed = await composeServerChainOrFailClosed<'loader'>(
+      {
         requestSignal: c.req.raw.signal,
         unitTimeoutMs: entry.timeoutMs,
         defaultTimeoutMs,
@@ -258,23 +257,26 @@ export function loadersHandler(
         resolvePageUse: routeBound ? resolvePageUse : () => [],
         path: routeBound ? entry.routeId! : '',
         unitUse: entry.use,
-      });
-    } catch (err) {
-      if (routeBound) {
-        // resolvePageUse threw for the declared route id; fail closed so the
-        // loader never runs through a guard-less chain.
-        const msg = err instanceof Error ? err.message : String(err);
-        return c.json(
-          {
-            error: `Route-bound loader '${entry.routeId}' could not resolve its page-use chain: ${msg}`,
-          },
-          500
-        );
-      }
-      throw err;
+      },
+      routeBound
+    );
+    if (!composed.ok) {
+      // resolvePageUse threw for the declared route id; fail closed so the
+      // loader never runs through a guard-less chain.
+      onError?.(composed.error, { module, loader: loaderName });
+      const msg =
+        composed.error instanceof Error
+          ? composed.error.message
+          : String(composed.error);
+      return c.json(
+        {
+          error: `Route-bound loader '${entry.routeId}' could not resolve its page-use chain: ${msg}`,
+        },
+        500
+      );
     }
     const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
-      composedChain;
+      composed.chain;
     const ctx: ServerLoaderCtx = {
       scope: 'loader',
       c,

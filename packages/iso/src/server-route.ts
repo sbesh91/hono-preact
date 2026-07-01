@@ -19,6 +19,13 @@ import {
 } from './define-socket.js';
 import { defineRoom, type RoomHandler, type RoomRef } from './define-room.js';
 import type { Channel } from './define-channel.js';
+import {
+  _defineRouteAction,
+  type ActionFn,
+  type ActionRef,
+  type DefineActionOptions,
+} from './action.js';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 /**
  * A pure generator helper for channel-driven live loaders. Yields `load(ctx)`
@@ -98,6 +105,27 @@ export interface RouteBinder<RouteId extends string> {
   ): LoaderRef<T, false>;
 
   /**
+   * Define a server action bound to this route. Consume with
+   * `useAction(serverActions.x)`. Binding the route lets the page-actions
+   * handler resolve this action's page-level `use` chain (auth gates) from this
+   * EXACT route pattern rather than fuzzy-matching the POST URL, closing the
+   * `/a/:x` vs `/a/:y` collision window that a bare `defineAction` is subject to.
+   *
+   * Unlike `.loader`, there is no `ctx.location`/param typing: an action's
+   * `ActionCtx` carries only `c`, `signal`, and `call`, and the action reads its
+   * data from the validated `payload`. The overloads therefore mirror
+   * `defineAction`: pass `{ input }` to validate and infer the payload type.
+   */
+  action<TInput extends StandardSchemaV1, TResult, TChunk = never>(
+    fn: ActionFn<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>,
+    opts: DefineActionOptions<TChunk, TResult> & { input: TInput }
+  ): ActionRef<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>;
+  action<TPayload, TResult, TChunk = never>(
+    fn: ActionFn<TPayload, TResult, TChunk>,
+    opts?: DefineActionOptions<TChunk, TResult>
+  ): ActionRef<TPayload, TResult, TChunk>;
+
+  /**
    * Define a duplex WebSocket bound to this route. Consume with
    * `useSocket(serverSockets.x)`. The handler receives `ctx.c` (the Hono
    * Context for the upgrade request); there is no `ctx.params` field because
@@ -154,6 +182,10 @@ export function serverRoute<const RouteId extends RegisteredPaths>(
   return {
     loader: (fn: Loader<unknown>, opts?: DefineLoaderOptions<unknown>) =>
       _defineRouteLoader(route, fn, opts),
+    action: (
+      fn: ActionFn<unknown, unknown, unknown>,
+      opts?: DefineActionOptions<unknown, unknown>
+    ) => _defineRouteAction(route, fn, opts),
     socket: (handler) => defineSocket(handler),
     room: (channel, handler) => defineRoom(channel, handler),
   };

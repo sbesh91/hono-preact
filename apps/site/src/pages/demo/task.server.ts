@@ -1,4 +1,4 @@
-import { defineAction, serverRoute } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -8,12 +8,12 @@ import {
   setTaskStatus,
   type Comment,
   type Task,
-  type TaskStatus,
   type User,
   type ActivityItem,
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
+import { AddCommentSchema, SetStatusSchema } from './task-schema.js';
 import {
   publishActivity,
   commentAddedEvent,
@@ -78,21 +78,24 @@ export const serverLoaders = {
 };
 
 export const serverActions = {
-  addComment: defineAction<{ taskId: string; body: string }, { id: string }>(
+  // Route-bound like the loaders above: `route.action` resolves this action's
+  // page-use chain (the requireSession gate inherited from /demo/projects) by
+  // the exact route pattern rather than fuzzy-matching the POST URL. Passing a
+  // schema as `input` infers the payload type (and validates it), so no manual
+  // `route.action<Payload, Result>` generics are needed.
+  addComment: route.action(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
       if (!user) throw new Error('not signed in');
-      const c = addComment(user, {
-        taskId: input.taskId,
-        body: input.body.trim(),
-      });
+      const c = addComment(user, { taskId: input.taskId, body: input.body });
       const task = getTask(input.taskId);
       if (task) publishActivity(commentAddedEvent(task, user.name));
       return { id: c.id };
-    }
+    },
+    { input: AddCommentSchema }
   ),
 
-  setStatus: defineAction<{ taskId: string; status: TaskStatus }, { ok: true }>(
+  setStatus: route.action(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
       if (input.status === 'done') {
@@ -106,6 +109,7 @@ export const serverActions = {
         );
       }
       return { ok: true };
-    }
+    },
+    { input: SetStatusSchema }
   ),
 };

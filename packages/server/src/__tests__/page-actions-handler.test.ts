@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
 import { pageActionsHandler } from '../page-actions-handler.js';
-import { deny, redirect, defineAction, isTimeout } from '@hono-preact/iso';
+import {
+  deny,
+  redirect,
+  defineAction,
+  isTimeout,
+  defineServerMiddleware,
+} from '@hono-preact/iso';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
 
@@ -23,6 +29,10 @@ const coercing: StandardSchemaV1<unknown, { count: number }> = {
   },
 };
 
+type PageUseResolver = (
+  path: string
+) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
+
 function buildHandler(
   actions: Record<
     string,
@@ -30,8 +40,11 @@ function buildHandler(
     | {
         fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
         input?: import('@standard-schema/spec').StandardSchemaV1;
+        use?: ReadonlyArray<unknown>;
+        routeId?: string;
       }
-  >
+  >,
+  pageUse?: { byPath?: PageUseResolver; byPattern?: PageUseResolver }
 ) {
   const resolverByPath = async () => {
     const map = new Map();
@@ -39,9 +52,10 @@ function buildHandler(
       const entry = typeof val === 'function' ? { fn: val } : val;
       map.set(name, {
         fn: entry.fn,
-        use: [],
+        use: 'use' in entry ? (entry.use ?? []) : [],
         moduleKey: 'pages/test.server',
-        input: entry.input,
+        input: 'input' in entry ? entry.input : undefined,
+        routeId: 'routeId' in entry ? entry.routeId : undefined,
       });
     }
     return map;
@@ -52,7 +66,10 @@ function buildHandler(
   );
   return pageActionsHandler({
     resolverByPath,
-    resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
+    // No page-level middleware in the default fixture; the byPattern/byPath
+    // branch tests below inject resolvers to observe which path is taken.
+    resolvePageUseByPath: pageUse?.byPath ?? (async () => []),
+    resolvePageUseByPattern: pageUse?.byPattern ?? (async () => []),
     renderPage: renderPage as never,
     resolvePageNode: () => h('div', null),
     appConfig: { use: [] },
@@ -80,6 +97,111 @@ describe('pageActionsHandler', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ __outcome: 'success', data: { id: 42 } });
+  });
+
+  // A page-use middleware that denies with a distinct status, so the response
+  // status reveals WHICH resolver (byPattern vs byPath) supplied the chain.
+  const denyGuard = (status: 401 | 403 | 418, message: string) =>
+    defineServerMiddleware<'action'>(async () => {
+      throw deny(status, message);
+    });
+
+  it('route-bound action resolves page-use by its pattern, not the request URL', async () => {
+    const byPath = vi.fn(async () => [denyGuard(418, 'via-path')]);
+    const byPattern = vi.fn(async () => [denyGuard(403, 'via-pattern')]);
+    const handler = buildHandler(
+      { submit: { fn: async () => ({ ok: true }), routeId: '/foo/:id' } },
+      { byPath, byPattern }
+    );
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo/42', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    // The byPattern guard for '/foo/:id' fired (403); the byPath guard for the
+    // concrete URL '/foo/42' (418) was NOT consulted.
+    expect(res.status).toBe(403);
+    expect(byPattern).toHaveBeenCalledWith('/foo/:id');
+    expect(byPath).not.toHaveBeenCalled();
+  });
+
+  it('bare (route-independent) action resolves page-use by the request URL', async () => {
+    const byPath = vi.fn(async () => [denyGuard(418, 'via-path')]);
+    const byPattern = vi.fn(async () => [denyGuard(403, 'via-pattern')]);
+    const handler = buildHandler(
+      { submit: async () => ({ ok: true }) }, // no routeId -> not route-bound
+      { byPath, byPattern }
+    );
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo/42', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    // The byPath guard for the concrete URL fired (418); byPattern untouched.
+    expect(res.status).toBe(418);
+    expect(byPath).toHaveBeenCalledWith('/foo/42');
+    expect(byPattern).not.toHaveBeenCalled();
+  });
+
+  it('fails closed (500) when a route-bound action cannot resolve its pattern chain', async () => {
+    const byPattern = vi.fn(async () => {
+      throw new Error('resolver boom');
+    });
+    const onError = vi.fn();
+    // Built inline (not via buildHandler) so we can wire onError and assert the
+    // fail-closed side channel fires.
+    const wrapped = pageActionsHandler({
+      resolverByPath: async () =>
+        new Map([
+          [
+            'submit',
+            {
+              fn: async () => ({ ok: true }),
+              use: [],
+              moduleKey: 'pages/test.server',
+              routeId: '/foo/:id',
+            },
+          ],
+        ]) as never,
+      resolvePageUseByPath: async () => [],
+      resolvePageUseByPattern: byPattern,
+      renderPage: (async () => new Response('x')) as never,
+      resolvePageNode: () => h('div', null),
+      appConfig: { use: [] },
+      onError,
+    });
+    const app = new Hono().post('*', wrapped);
+    const res = await app.request('/foo/42', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload: {},
+      }),
+    });
+    // Guard resolution threw: the action must NOT run guard-less; 500 + onError.
+    expect(res.status).toBe(500);
+    expect(onError).toHaveBeenCalled();
   });
 
   it('returns real 303 on Accept: text/html when action returns data', async () => {
@@ -287,6 +409,7 @@ function buildTimedApp(
   const handler = pageActionsHandler({
     resolverByPath,
     resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
+    resolvePageUseByPattern: async () => [],
     renderPage: noopRender as never,
     resolvePageNode: () => null,
     ...(opts.defaultTimeoutMs !== undefined

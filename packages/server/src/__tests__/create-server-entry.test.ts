@@ -154,4 +154,72 @@ describe('createServerEntry', () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toBe('ok');
   });
+
+  it('fails closed (500) when a route-bound unit declares a route other than its mount', async () => {
+    // A route-bound action stamped with a `__routeId` that does not match the
+    // route its module is registered on: the binding guard must reject the POST
+    // rather than let it resolve its page-use (auth) chain from the wrong route.
+    const action = Object.defineProperty(async () => 'ok', '__routeId', {
+      value: '/wrong',
+      enumerable: false,
+    });
+    const serverThunk = async () => ({
+      __moduleKey: 'test/m',
+      serverActions: { go: action },
+    });
+    const app = createServerEntry({
+      routes: manifest({
+        serverImports: [serverThunk],
+        routeUse: [{ path: '/right', use: [] }],
+        serverRoutes: [
+          { path: '/right', ancestors: [], server: serverThunk } as never,
+        ],
+      }),
+      layout: Layout,
+      dev: true,
+    });
+    const res = await app.request('/right', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module: 'test/m', action: 'go', payload: {} }),
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { message?: string };
+    expect(body.message).toContain("bound to route '/wrong'");
+    expect(body.message).toContain("registered on route '/right'");
+  });
+
+  it('passes the binding guard when a route-bound unit matches its mount', async () => {
+    const loader = _defineRouteLoader('/right', async () => 'ok', {
+      __moduleKey: 'test/m',
+      __loaderName: 'l',
+      use: [],
+    });
+    const serverThunk = async () => ({
+      __moduleKey: 'test/m',
+      serverLoaders: { l: loader },
+    });
+    const app = createServerEntry({
+      routes: manifest({
+        serverImports: [serverThunk],
+        routeUse: [{ path: '/right', use: [] }],
+        serverRoutes: [
+          { path: '/right', ancestors: [], server: serverThunk } as never,
+        ],
+      }),
+      layout: Layout,
+      dev: true,
+    });
+    const res = await app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'test/m',
+        loader: 'l',
+        location: { path: '/right', pathParams: {}, searchParams: {} },
+      }),
+    });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toBe('ok');
+  });
 });

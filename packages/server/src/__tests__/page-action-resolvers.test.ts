@@ -200,6 +200,49 @@ describe('makePageActionResolvers', () => {
     expect(entry?.input).toBe(schema);
   });
 
+  it('reads the __routeId off a route-bound action value into the entry', async () => {
+    // serverRoute(r).action attaches a non-enumerable __routeId on the fn; the
+    // resolver must surface it so the handler can resolve page-use by pattern.
+    const fn = async () => 'ok';
+    Object.defineProperty(fn, '__routeId', {
+      value: '/foo/:id',
+      enumerable: false,
+    });
+    const resolvers = makePageActionResolvers(
+      [
+        {
+          path: '/foo/:id',
+          ancestors: [],
+          server: async () => ({
+            __moduleKey: 'pages/foo.server',
+            serverActions: { submit: fn },
+          }),
+        } as never,
+      ],
+      { dev: true }
+    );
+    const entry = await resolvers.byModuleKey('pages/foo.server', 'submit');
+    expect(entry?.routeId).toBe('/foo/:id');
+  });
+
+  it('leaves routeId undefined for a bare (route-independent) action', async () => {
+    const resolvers = makePageActionResolvers(
+      [
+        {
+          path: '/foo',
+          ancestors: [],
+          server: async () => ({
+            __moduleKey: 'pages/foo.server',
+            serverActions: { submit: async () => 'ok' },
+          }),
+        } as never,
+      ],
+      { dev: true }
+    );
+    const entry = await resolvers.byModuleKey('pages/foo.server', 'submit');
+    expect(entry?.routeId).toBeUndefined();
+  });
+
   it('concurrent first calls share one in-flight build', async () => {
     let calls = 0;
     let release!: (mod: unknown) => void;

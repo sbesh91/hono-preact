@@ -95,3 +95,32 @@ export async function composeServerChain<S extends Scope = Scope>(
 
   return { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal };
 }
+
+/**
+ * Compose the chain with the route-bound fail-closed discipline shared by the
+ * loader and action handlers. A route-bound unit resolves its page tier from
+ * its OWN declared pattern; if that resolution throws, the unit MUST NOT run
+ * through a guard-less chain (an auth-gate bypass), so we surface the failure to
+ * the caller as `{ ok: false }` for it to translate into a fail-closed response.
+ * A route-independent (bare) unit has no page tier to fail closed on, so a throw
+ * propagates unchanged (preserving each handler's pre-existing behavior).
+ *
+ * This single-sources the security INVARIANT (route-bound + resolver throw =>
+ * do not run); each handler still owns its own response shape and observability
+ * on the `{ ok: false }` branch.
+ *
+ * NOTE: framework-private; consumers are loadersHandler and pageActionsHandler.
+ */
+export async function composeServerChainOrFailClosed<S extends Scope = Scope>(
+  args: ComposeServerChainArgs,
+  routeBound: boolean
+): Promise<
+  { ok: true; chain: ComposedServerChain<S> } | { ok: false; error: unknown }
+> {
+  try {
+    return { ok: true, chain: await composeServerChain<S>(args) };
+  } catch (error) {
+    if (routeBound) return { ok: false, error };
+    throw error;
+  }
+}

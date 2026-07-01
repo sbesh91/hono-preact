@@ -71,6 +71,14 @@ export type DefineActionOptions<TChunk = never, TResult = unknown> = {
    * does not coerce, the schema does (e.g. `z.coerce.number()`).
    */
   input?: StandardSchemaV1;
+  /**
+   * Set by `serverRoute(r).action(fn)` via `_defineRouteAction`; not intended
+   * for user code. Threads the action's owning route pattern so the page-actions
+   * handler resolves its page-level `use` chain by that EXACT pattern rather
+   * than fuzzy-matching the request URL. Read server-side off the function in
+   * `extractActions` (`packages/server/src/page-action-resolvers.ts`).
+   */
+  __routeId?: string;
 };
 
 export class TimeoutError extends Error {
@@ -119,7 +127,7 @@ export function defineAction(
   // The key union pins the form-field constants to the typed ActionRef
   // property names at compile time; a divergence fails here, not at runtime.
   const attach = (
-    key: 'use' | 'timeoutMs' | '__module' | '__action' | 'input',
+    key: 'use' | 'timeoutMs' | '__module' | '__action' | 'input' | '__routeId',
     value: unknown
   ) => {
     Object.defineProperty(fn, key, {
@@ -134,7 +142,28 @@ export function defineAction(
   if (opts?.input) attach('input', opts.input);
   if (opts?.__module !== undefined) attach(FORM_MODULE_FIELD, opts.__module);
   if (opts?.__action !== undefined) attach(FORM_ACTION_FIELD, opts.__action);
+  if (opts?.__routeId !== undefined) attach('__routeId', opts.__routeId);
   return fn as unknown as ActionRef<unknown, unknown, unknown>;
+}
+
+/**
+ * Internal route-binding helper used by `serverRoute(r).action(fn, opts)`.
+ * Threads `__routeId` into the action metadata. NOT exported from `index.ts`;
+ * imported directly from `action.js` by `server-route.ts` and tests only.
+ *
+ * A single signature (no public overloads) by design: unlike `_defineRouteLoader`
+ * (whose overloads thread `LoaderCtx<...>` param typing inferred from the route),
+ * an action's `ActionCtx` exposes no route params, so the route id is purely a
+ * server-side page-use binding with nothing to infer. The caller-facing payload /
+ * result / `input` typing lives on `RouteBinder.action`'s overloads
+ * (`server-route.ts`); this helper only forwards `fn` and the extra `__routeId`.
+ */
+export function _defineRouteAction(
+  routeId: string,
+  fn: ActionFn<unknown, unknown, unknown>,
+  opts?: DefineActionOptions<unknown, unknown>
+): ActionRef<unknown, unknown, unknown> {
+  return defineAction(fn, { ...opts, __routeId: routeId });
 }
 
 type UseActionOptionsCommon<TChunk = never> = {
