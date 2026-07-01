@@ -1,0 +1,202 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
+import MagicString from 'magic-string';
+import type { Plugin } from 'vite';
+import type { ObjectExpression, ObjectProperty } from '@babel/types';
+import { BABEL_PARSER_PLUGINS } from './parser-options.js';
+
+// Server-module extensions probed on disk, in precedence order. Source authors
+// import the `.js` specifier (TS NodeNext convention) even though the file is
+// `.ts`/`.tsx`, so we probe the TS extensions first and the literal JS ones as
+// a fallback for already-compiled trees.
+const SERVER_EXTENSIONS = [
+  '.server.ts',
+  '.server.tsx',
+  '.server.js',
+  '.server.jsx',
+] as const;
+
+// Matches the trailing module extension of a `view`/`layout` import specifier
+// so we can splice `.server` in front of it (`./x.js` -> `./x.server.js`).
+const MODULE_EXT = /\.(jsx?|tsx?)$/;
+
+export interface RouteServerAutodiscoveryOptions {
+  /**
+   * Existence probe for a candidate server-module path. Injected for tests;
+   * defaults to a synchronous filesystem check. Given an absolute path, returns
+   * whether a file lives there.
+   */
+  fileExists?: (absPath: string) => boolean;
+}
+
+// Reads the static string name of an object property key, or undefined for
+// computed / spread / method keys we don't recognize.
+function propKeyName(
+  prop: ObjectExpression['properties'][number]
+): string | undefined {
+  if (prop.type !== 'ObjectProperty' || prop.computed) return undefined;
+  if (prop.key.type === 'Identifier') return prop.key.name;
+  if (prop.key.type === 'StringLiteral') return prop.key.value;
+  return undefined;
+}
+
+// A route's `view`/`layout` is authored as a lazy thunk `() => import('...')`.
+// Recover the literal specifier string, or undefined when the value is not a
+// bare-import arrow (e.g. `() => import('x').then(wrap)` from contentRoutes,
+// which we deliberately skip: those routes carry no colocated server module).
+function bareImportSpecifier(prop: ObjectProperty): string | undefined {
+  const value = prop.value;
+  if (value.type !== 'ArrowFunctionExpression') return undefined;
+  const body = value.body;
+  if (body.type !== 'ImportExpression') return undefined;
+  if (body.source.type !== 'StringLiteral') return undefined;
+  return body.source.value;
+}
+
+/**
+ * Auto-discovers colocated `.server.*` modules so authors don't hand-write the
+ * `server:` thunk on every route.
+ *
+ * For each route object literal that carries a `path` and a `view`/`layout`
+ * lazy-import thunk but *no* `server` field, this looks on disk for a sibling
+ * server module named after the view/layout file (`login.tsx` ->
+ * `login.server.ts`). When one exists, it splices in a
+ * `server: () => import('./login.server.js')` thunk that is byte-identical to
+ * what an author would write by hand, so every downstream stage (the client
+ * stub rewrite in {@link serverOnlyPlugin}, SSR bundling, the runtime route
+ * manifest, page-use inheritance, and the boot-time route-binding guard) sees
+ * exactly the shape it sees today.
+ *
+ * An explicit `server:` always wins (discovery only fills an absent field), so
+ * this is fully backward compatible and non-sibling server locations stay
+ * expressible. Runs before {@link serverOnlyPlugin} in the pipeline, and on
+ * both the client and SSR passes (the injected thunk must reach both bundles).
+ */
+export function routeServerAutodiscoveryPlugin(
+  options: RouteServerAutodiscoveryOptions = {}
+): Plugin {
+  const fileExists = options.fileExists ?? ((p: string) => fs.existsSync(p));
+  // Dev-time observability: discovery is implicit, so announce each wired
+  // module once. `announced` dedupes across the client/SSR passes and HMR
+  // re-transforms; logging is gated to `vite dev` to keep build output quiet.
+  let logger: { info(msg: string): void } | undefined;
+  let isDev = false;
+  const announced = new Set<string>();
+
+  return {
+    name: 'route-server-autodiscovery',
+    enforce: 'pre',
+    configResolved(config: {
+      command: string;
+      logger: { info(msg: string): void };
+    }) {
+      logger = config.logger;
+      isDev = config.command === 'serve';
+    },
+    // Intentionally ignores the `ssr` flag: the injected thunk must land in
+    // both the SSR bundle (so the runtime manifest loads the real module) and
+    // the client bundle (where serverOnlyPlugin rewrites it to a stub).
+    transform(code: string, id: string) {
+      if (!/\.[jt]sx?$/.test(id)) return;
+      if (/\.server\.[jt]sx?$/.test(id)) return;
+      // Cheap pre-filter: a discoverable route needs a lazy import and a
+      // view/layout key. Skips the AST parse for the overwhelming majority of
+      // modules that are not route tables.
+      if (!code.includes('import(')) return;
+      if (!/\b(?:view|layout)\b/.test(code)) return;
+
+      let ast;
+      try {
+        ast = parse(code, {
+          sourceType: 'module',
+          plugins: BABEL_PARSER_PLUGINS,
+          errorRecovery: true,
+        });
+      } catch {
+        return;
+      }
+
+      const importerDir = path.dirname(id);
+      const s = new MagicString(code);
+      // `this` inside the babel visitor is the traversal context, not the
+      // Rollup plugin context, so capture the plugin context up here.
+      const ctx = this;
+      let changed = false;
+
+      traverse(ast, {
+        ObjectExpression(nodePath) {
+          const props = nodePath.node.properties;
+          const keys = new Set<string>();
+          for (const prop of props) {
+            const name = propKeyName(prop);
+            if (name !== undefined) keys.add(name);
+          }
+          // Route shape: has `path`, has no explicit `server`. An explicit
+          // `server` of any value (including `server: false`) opts the node
+          // out of discovery.
+          if (!keys.has('path') || keys.has('server')) return;
+
+          // Prefer `view`, fall back to `layout` (a branch route wraps its
+          // children with a layout and colocates its server module there).
+          let anchor: ObjectProperty | undefined;
+          let specifier: string | undefined;
+          for (const key of ['view', 'layout'] as const) {
+            const prop = props.find(
+              (p): p is ObjectProperty => propKeyName(p) === key
+            );
+            if (!prop) continue;
+            const spec = bareImportSpecifier(prop);
+            if (spec) {
+              anchor = prop;
+              specifier = spec;
+              break;
+            }
+          }
+          if (!anchor || specifier === undefined) return;
+
+          const ext = specifier.match(MODULE_EXT);
+          if (!ext) return; // no explicit extension to splice `.server` into
+          const base = specifier.slice(0, -ext[0].length);
+          const injectedSpecifier = `${base}.server${ext[0]}`;
+
+          const absBase = path.resolve(importerDir, base);
+          const existing = SERVER_EXTENSIONS.map((e) => absBase + e).find(
+            fileExists
+          );
+          // Watch the canonical candidate even when absent, so creating the
+          // server module in a running dev server re-triggers this transform.
+          ctx.addWatchFile?.(absBase + SERVER_EXTENSIONS[0]);
+          if (!existing) return;
+          ctx.addWatchFile?.(existing);
+
+          s.appendLeft(
+            anchor.end!,
+            `, server: () => import(${JSON.stringify(injectedSpecifier)})`
+          );
+          changed = true;
+
+          if (isDev && logger) {
+            const pathProp = props.find(
+              (p): p is ObjectProperty => propKeyName(p) === 'path'
+            );
+            const routePath =
+              pathProp && pathProp.value.type === 'StringLiteral'
+                ? pathProp.value.value
+                : injectedSpecifier;
+            if (!announced.has(routePath)) {
+              announced.add(routePath);
+              logger.info(
+                `[hono-preact] auto-discovered server module for route '${routePath}' (${injectedSpecifier})`
+              );
+            }
+          }
+        },
+      });
+
+      if (!changed) return;
+      return { code: s.toString(), map: s.generateMap({ hires: true }) };
+    },
+  };
+}

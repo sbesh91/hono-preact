@@ -126,13 +126,12 @@ MoviesView.displayName = 'Movies';
 export default definePage(MoviesView);
 ```
 
-Add the `server` field to the route entry in `src/routes.ts` so `server.tsx` finds the module:
+The route entry in `src/routes.ts` needs no `server` field: `movies.server.ts` sits next to `movies.js`, so the build auto-discovers the sibling and wires it in.
 
 ```ts
 {
   path: '/movies',
   view: () => import('./pages/movies.js'),
-  server: () => import('./pages/movies.server.js'),
 }
 ```
 

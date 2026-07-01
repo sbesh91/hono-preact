@@ -1,6 +1,6 @@
 # The Route Table
 
-Declare every URL in your app in one place: `src/routes.ts`. A code-defined route table makes URL redesign a one-edit refactor and keeps URL structure independent of file layout, with no filesystem-based discovery to work around.
+Declare every URL in your app in one place: `src/routes.ts`. A code-defined route table makes URL redesign a one-edit refactor and keeps URL structure independent of file layout, with no filesystem-based routing to work around. (URLs are always explicit; only a route's colocated `.server.ts` module is discovered by convention, see [Colocated server modules](#colocated-server-modules).)
 
 ## Why one file
 
@@ -19,22 +19,18 @@ export default defineRoutes([
     path: '/demo/projects',
     layout: () => import('./pages/projects-layout.js'),
     children: [
-      {
-        path: '',
-        view: () => import('./pages/projects-list.js'),
-        server: () => import('./pages/projects-list.server.js'),
-      },
+      // No `server:` field: the colocated `./pages/projects-list.server.ts`
+      // sibling is auto-discovered. See "Colocated server modules" below.
+      { path: '', view: () => import('./pages/projects-list.js') },
       {
         path: ':projectId/issues/:issueId',
         view: () => import('./pages/issue.js'),
-        server: () => import('./pages/issue.server.js'),
       },
     ],
   },
   {
     path: '/demo/projects/:projectId',
     view: () => import('./pages/project.js'),
-    server: () => import('./pages/project.server.js'),
   },
   { path: '*', view: () => import('./pages/not-found.js') },
 ]);
@@ -42,23 +38,23 @@ export default defineRoutes([
 
 That table covers four URL behaviours:
 
-| Path                                            | Behaviour                                                                                                            |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `/`, `/demo/login`, `/demo/projects/:projectId` | Plain leaves. The `view` resolves to the page component. `server` (when present) is the sibling `.server.ts` module. |
-| `/demo/projects`                                | An empty-path child of a layout group. Renders `<ProjectsLayout>` wrapping the list view.                            |
-| `/demo/projects/:projectId/issues/:issueId`     | A nested child of the same layout group. The same `ProjectsLayout` instance stays mounted across the navigation.     |
-| `*`                                             | Catch-all. Matches anything not matched above.                                                                       |
+| Path                                            | Behaviour                                                                                                        |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `/`, `/demo/login`, `/demo/projects/:projectId` | Plain leaves. The `view` resolves to the page component; a colocated `.server.ts` sibling is auto-discovered.    |
+| `/demo/projects`                                | An empty-path child of a layout group. Renders `<ProjectsLayout>` wrapping the list view.                        |
+| `/demo/projects/:projectId/issues/:issueId`     | A nested child of the same layout group. The same `ProjectsLayout` instance stays mounted across the navigation. |
+| `*`                                             | Catch-all. Matches anything not matched above.                                                                   |
 
 ## Route entry fields
 
-| Field      | Type                                                     | Required                    | What it is                                                                                                                                                                    |
-| ---------- | -------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `path`     | `string`                                                 | always                      | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings. |
-| `view`     | `() => Promise<{ default: ComponentType }>`              | for leaves                  | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.                                                              |
-| `layout`   | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups           | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts).                                                                                   |
-| `server`   | `() => Promise<unknown>`                                 | optional, leaves only       | The sibling `.server.ts` module behind a dynamic import. Carries `serverLoaders` and `serverActions`.                                                                         |
-| `use`      | `Middleware[]`                                           | optional                    | An array of page-layer middleware run for this node and all its descendants. See [Middleware](/docs/middleware#the-three-layers).                                             |
-| `children` | `RouteDef[]`                                             | for layouts and path groups | Nested routes.                                                                                                                                                                |
+| Field      | Type                                                     | Required                    | What it is                                                                                                                                                                                                                                                                                       |
+| ---------- | -------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `path`     | `string`                                                 | always                      | URL pattern. Top-level paths start with `/`. Child paths must NOT start with `/` (they're relative to the parent). The wildcard `*` matches anything not matched by siblings.                                                                                                                    |
+| `view`     | `() => Promise<{ default: ComponentType }>`              | for leaves                  | The page component, behind a dynamic import. The framework wraps it with preact-iso's `lazy` for code-splitting.                                                                                                                                                                                 |
+| `layout`   | `() => Promise<{ default: ComponentType<LayoutProps> }>` | for layout groups           | A wrapper component that receives `children`. See [Layouts & Nested Routes](/docs/layouts).                                                                                                                                                                                                      |
+| `server`   | `() => Promise<unknown>` \| `false`                      | optional                    | The sibling `.server.ts` module behind a dynamic import (carries `serverLoaders` / `serverActions`). Usually omitted: the colocated sibling is auto-discovered. Pass a thunk to point at a non-sibling module, or `false` to opt out. See [Colocated server modules](#colocated-server-modules). |
+| `use`      | `Middleware[]`                                           | optional                    | An array of page-layer middleware run for this node and all its descendants. See [Middleware](/docs/middleware#the-three-layers).                                                                                                                                                                |
+| `children` | `RouteDef[]`                                             | for layouts and path groups | Nested routes.                                                                                                                                                                                                                                                                                   |
 
 ## The three valid shapes
 
@@ -70,6 +66,24 @@ That table covers four URL behaviours:
 
 `defineRoutes` validates the tree at runtime and throws with the offending URL if the shape is wrong: `view` + `layout`, `view` + `children`, `layout` without `children`, child path starting with `/`, or a route declaring none of `view`/`layout`/`children`.
 
+## Colocated server modules
+
+A route's server module (its `serverLoaders`, `serverActions`, rooms, and sockets) lives in a `.server.ts` file named after the route's `view`/`layout` file: `login.tsx` pairs with `login.server.ts`, `projects-shell.tsx` with `projects-shell.server.ts`. When that sibling exists, the build wires it automatically, so you do not write a `server:` field:
+
+```ts
+// login.tsx + login.server.ts sit side by side; the server module is discovered.
+{ path: 'login', view: () => import('./pages/login.js') }
+```
+
+The discovered thunk is exactly the `server: () => import('./login.server.js')` you would otherwise hand-write, so nothing else changes: middleware inheritance, the loader/action RPC map, and the boot-time route-binding check all behave identically. In `vite dev`, each auto-wired module is logged once (`auto-discovered server module for route '...'`).
+
+Two escape hatches:
+
+- **Non-sibling module:** write an explicit `server: () => import('./somewhere-else.server.js')`. An explicit thunk always wins over discovery.
+- **Opt out:** write `server: false` to keep a `.server.ts` sibling from being wired (e.g. a scratch file you are not ready to enable).
+
+Discovery keys off the `view`/`layout` file that sits next to the route literal, so it covers hand-written route tables. Routes generated at runtime (e.g. `contentRoutes(import.meta.glob(...))`) are not scanned; give those an explicit `server:` if they need one.
+
 ## Mounting
 
 You do not write `iso.tsx` or `server.tsx`. The framework generates both as virtual modules from your `routes.ts` and `Layout.tsx`. The client entry hydrates `<Routes>` inside `<LocationProvider>`; the server entry calls `createServerEntry`, which builds the loaders RPC, the page-action POST handler, the realtime socket upgrade, your optional `api.ts`, and the SSR catch-all on one Hono app and exports it as the worker's default. See [Project Structure](/docs/structure) for the file layout the plugin assumes.
@@ -78,7 +92,7 @@ If you need to customize the client or server entry (rare), pass a path override
 
 ## Inline imports stay inline
 
-Every `view`, `layout`, and `server` is `() => import('./path')`. The arrow shape is required for code-splitting: bundlers create a separate chunk per `import()` call site. A helper that takes a string (`view: lazy('./pages/home')`) would either lose splitting or require a transform plugin. The five characters of `() => ` per route is the trade for zero magic and full bundler support.
+Every `view` and `layout` (and any explicit `server`) is `() => import('./path')`. The arrow shape is required for code-splitting: bundlers create a separate chunk per `import()` call site. A helper that takes a string (`view: lazy('./pages/home')`) would either lose splitting or require a transform plugin. The five characters of `() => ` per route is the trade for zero magic and full bundler support. Auto-discovered `server` modules are spliced in as the same `() => import('./x.server.js')` thunk at build time, so they code-split identically.
 
 ## Sharing references for non-layout routes
 

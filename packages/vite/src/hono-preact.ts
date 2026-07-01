@@ -5,6 +5,7 @@ import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
+import { routeServerAutodiscoveryPlugin } from './route-server-autodiscovery.js';
 import { serverOnlyPlugin } from './server-only.js';
 import { guardStripPlugin } from './guard-strip.js';
 import {
@@ -107,6 +108,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     }),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
+    routeServerAutodiscoveryPlugin(),
     serverOnlyPlugin(),
     guardStripPlugin(),
     ...adapter.vitePlugins(ctx),

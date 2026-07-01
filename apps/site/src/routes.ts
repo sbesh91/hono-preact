@@ -26,27 +26,18 @@ const routeTree = [
   {
     path: '/demo',
     layout: () => import('./pages/demo/demo-layout.js'),
+    // A route's colocated `<name>.server.ts` module is auto-discovered from the
+    // sibling of its `view`/`layout` file, so these routes carry no explicit
+    // `server:` thunk (e.g. `login.tsx` -> `login.server.ts`). Write an explicit
+    // `server:` only to point at a non-sibling module.
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
-      {
-        path: 'login',
-        view: () => import('./pages/demo/login.js'),
-        server: () => import('./pages/demo/login.server.js'),
-      },
-      {
-        path: 'cursors',
-        view: () => import('./pages/demo/cursors-demo.js'),
-        server: () => import('./pages/demo/cursors-demo.server.js'),
-      },
-      {
-        path: 'live-tally',
-        view: () => import('./pages/demo/live-tally.js'),
-        server: () => import('./pages/demo/live-tally.server.js'),
-      },
+      { path: 'login', view: () => import('./pages/demo/login.js') },
+      { path: 'cursors', view: () => import('./pages/demo/cursors-demo.js') },
+      { path: 'live-tally', view: () => import('./pages/demo/live-tally.js') },
       {
         path: 'projects',
         layout: () => import('./pages/demo/projects-shell.js'),
-        server: () => import('./pages/demo/projects-shell.server.js'),
         use: requireSession,
         children: [
           { path: '', view: () => import('./pages/demo/projects.js') },
@@ -57,12 +48,10 @@ const routeTree = [
               {
                 path: '',
                 view: () => import('./pages/demo/project-board.js'),
-                server: () => import('./pages/demo/project-board.server.js'),
               },
               {
                 path: 'tasks/:taskId',
                 view: () => import('./pages/demo/task.js'),
-                server: () => import('./pages/demo/task.server.js'),
               },
             ],
           },
