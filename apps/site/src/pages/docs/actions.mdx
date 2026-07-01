@@ -31,6 +31,32 @@ export const serverActions = {
 
 `defineAction` is a no-op at runtime; it just returns the function unchanged. Its only job is to brand the function with phantom types so `useAction` and `<Form>` can infer the payload and result types without codegen.
 
+### Typing the payload
+
+`defineAction` and `serverRoute(r).action` accept the payload type three ways; the explicit generics above are only one of them:
+
+- **Explicit generics** — `defineAction<Payload, Result>(fn)`, as shown above.
+- **Annotated parameters** — annotate the handler's payload argument and return type and drop the generics; the ref's types are inferred from the function:
+
+  ```ts
+  addMovie: defineAction(
+    async (_ctx, payload: { title: string }): Promise<{ ok: boolean }> => {
+      await db.insert({ title: payload.title });
+      return { ok: true };
+    }
+  );
+  ```
+
+- **A validation schema** — pass a [Standard Schema](/docs/validation) as `input`; the payload type is the schema's validated output, inferred with no generics, and enforced at runtime before the handler runs:
+
+  ```ts
+  addMovie: defineAction(async (_ctx, payload) => db.insert(payload), {
+    input: NewMovieSchema, // payload is InferOutput<typeof NewMovieSchema>
+  });
+  ```
+
+With none of these, `payload` is typed `unknown` (never `any`), so the type system makes you narrow it before use rather than letting an untyped value through.
+
 ### `defineAction` options
 
 Pass a second argument to `defineAction(fn, opts)` to configure per-action behavior:
@@ -44,19 +70,22 @@ The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `Abor
 
 ### Route-bound actions
 
-Like loaders, an action can be bound to its route with `serverRoute(r)`. Calling `.action(fn)` is otherwise identical to `defineAction` (an action reads its data from the payload, so there is no typed `location`), and it accepts the same options (`use`, `timeoutMs`, `input`):
+Like loaders, an action can be bound to its route with `serverRoute(r)`. Calling `.action(fn)` is otherwise identical to `defineAction` (an action reads its data from the payload, so there is no typed `location`), and it accepts the same options (`use`, `timeoutMs`, `input`). It types the payload the same three ways too (see [Typing the payload](#typing-the-payload)) — the example below infers it from an `input` schema, so no `<Payload, Result>` generics are needed:
 
 ```ts
 import { serverRoute } from 'hono-preact';
+import { RateSchema } from './movie-schema.js';
 
 const route = serverRoute('/movies/:id');
 
 export const serverActions = {
-  rate: route.action<{ movieId: string; stars: number }, { ok: boolean }>(
+  rate: route.action(
     async (_ctx, payload) => {
+      // payload is InferOutput<typeof RateSchema>: { movieId: string; stars: number }
       await db.rate(payload.movieId, payload.stars);
       return { ok: true };
-    }
+    },
+    { input: RateSchema }
   ),
 };
 ```

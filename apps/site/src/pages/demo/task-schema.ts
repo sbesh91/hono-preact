@@ -15,3 +15,17 @@ export const NewTaskSchema = v.object({
 });
 
 export type NewTaskInput = v.InferOutput<typeof NewTaskSchema>;
+
+// Adding a comment: the `<Form>` posts FormData, so both fields arrive as
+// strings (no coercion needed). The schema also trims the body server-side.
+export const AddCommentSchema = v.object({
+  taskId: v.pipe(v.string(), v.minLength(1)),
+  body: v.pipe(v.string(), v.trim()),
+});
+
+// Moving a task: `status` must be one of the known statuses. Passing the schema
+// as `input` lets `route.action` infer the payload type; no manual generics.
+export const SetStatusSchema = v.object({
+  taskId: v.pipe(v.string(), v.minLength(1)),
+  status: v.picklist(STATUSES, 'Status is required'),
+});
