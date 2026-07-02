@@ -1,6 +1,7 @@
 import type { JSX, VNode } from 'preact';
 import { useRouteActive } from './route-active.js';
 import type { RoutePattern } from './internal/typed-routes.js';
+import { skipNextNavTransition } from './internal/route-change.js';
 
 export type NavLinkProps = Omit<
   JSX.HTMLAttributes<HTMLAnchorElement>,
@@ -17,7 +18,26 @@ export type NavLinkProps = Omit<
   activeClass?: string;
   /** Merged in when not active. */
   inactiveClass?: string;
+  /** Set false to navigate without a view transition. Default: animate. */
+  transition?: boolean;
 };
+
+// A plain left-click with no modifiers on a same-tab link: the conditions under
+// which preact-iso will actually soft-navigate. Only then do we arm the
+// one-shot skip, so a modifier / new-tab click never leaves it armed.
+function isPlainLeftClick(
+  e: JSX.TargetedMouseEvent<HTMLAnchorElement>
+): boolean {
+  return (
+    e.button === 0 &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.shiftKey &&
+    !e.altKey &&
+    !e.defaultPrevented &&
+    !(e.currentTarget.target && e.currentTarget.target !== '_self')
+  );
+}
 
 export function NavLink(props: NavLinkProps): VNode {
   const {
@@ -27,6 +47,8 @@ export function NavLink(props: NavLinkProps): VNode {
     class: baseClass,
     activeClass,
     inactiveClass,
+    transition,
+    onClick: onClickProp,
     'aria-current': ariaCurrentProp,
     children,
     ...rest
@@ -41,8 +63,19 @@ export function NavLink(props: NavLinkProps): VNode {
 
   const ariaCurrent = ariaCurrentProp ?? (active ? 'page' : undefined);
 
+  const handleClick = (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => {
+    if (transition === false && isPlainLeftClick(e)) skipNextNavTransition();
+    onClickProp?.(e);
+  };
+
   return (
-    <a {...rest} href={href} class={className} aria-current={ariaCurrent}>
+    <a
+      {...rest}
+      href={href}
+      class={className}
+      aria-current={ariaCurrent}
+      onClick={handleClick}
+    >
       {children}
     </a>
   );

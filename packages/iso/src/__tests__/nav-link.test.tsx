@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, it, expect } from 'vitest';
-import { cleanup, render } from '@testing-library/preact';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { cleanup, render, fireEvent } from '@testing-library/preact';
+import { h } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { NavLink } from '../nav-link.js';
+import * as routeChange from '../internal/route-change.js';
 
 afterEach(() => {
   cleanup();
   history.replaceState(null, '', '/');
+  // The transition-arming tests below vi.spyOn the same module export in each
+  // test; without restoring, an earlier test's spy stays wrapped around the
+  // real function and each later spy call also re-invokes it.
+  vi.restoreAllMocks();
 });
 
 describe('NavLink', () => {
@@ -107,5 +113,61 @@ describe('NavLink', () => {
       </LocationProvider>
     );
     expect(getByText('Docs').getAttribute('aria-current')).toBe('false');
+  });
+
+  // These four wrap in <LocationProvider>, unlike the verbatim brief snippet,
+  // because NavLink's useRouteActive calls useLocation() and throws without a
+  // location context ancestor (see every other test in this file).
+
+  it('arms skipNextNavTransition on a plain left-click when transition is false', () => {
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/a', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('does not arm on a modifier-click', () => {
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/a', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0, metaKey: true });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('still invokes a caller-provided onClick', () => {
+    const onClick = vi.fn();
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/a', transition: false, onClick }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('does not arm when transition is omitted', () => {
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(LocationProvider, null, h(NavLink, { href: '/a' }, 'go'))
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
   });
 });
