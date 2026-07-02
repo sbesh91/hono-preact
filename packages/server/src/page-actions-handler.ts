@@ -39,6 +39,16 @@ export interface PageActionsHandlerOptions {
    */
   resolverByPath: (path: string) => Promise<Map<string, ActionEntry>>;
   /**
+   * Fallback resolver keyed by (moduleKey, actionName), for actions in the
+   * `src/server` registry that are not attached to any route URL. Tried only
+   * when the byPath lookup misses (or its moduleKey does not match the posted
+   * one). Optional: absent means no registry, and a byPath miss is a 404.
+   */
+  resolverByModuleKey?: (
+    moduleKey: string,
+    actionName: string
+  ) => Promise<ActionEntry | undefined>;
+  /**
    * Per-page middleware resolver, keyed by URL path. The handler composes the
    * chain as [appConfig.use, resolvePageUseByPath(path), action.use]. Pass
    * `pageUseResolver.byPath` from makePageUseResolver (the same resolver
@@ -157,6 +167,7 @@ export function pageActionsHandler(
 ): MiddlewareHandler {
   const {
     resolverByPath,
+    resolverByModuleKey,
     resolvePageUseByPath,
     resolvePageUseByPattern,
     renderPage,
@@ -188,7 +199,15 @@ export function pageActionsHandler(
     const { module, action, payload } = parsed;
     const urlPath = new URL(c.req.url).pathname;
     const map = await resolverByPath(urlPath);
-    const entry = map.get(action);
+    const byPathHit = map.get(action);
+    // A route-attached action resolves by URL; a src/server registry action is
+    // not on any route URL, so fall back to the moduleKey index. Both paths
+    // require the posted moduleKey to match, so a page cannot invoke another
+    // module's same-named action.
+    const entry =
+      byPathHit && byPathHit.moduleKey === module
+        ? byPathHit
+        : await resolverByModuleKey?.(module, action);
     if (!entry || entry.moduleKey !== module) {
       const msg = `Action '${action}' not found on '${urlPath}'`;
       return accept === 'json'

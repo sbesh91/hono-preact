@@ -24,6 +24,7 @@ export interface HonoPreactOptions {
   routes?: string; // default 'src/routes.ts'
   api?: string; // default 'src/api.ts' (only loaded if file exists)
   appConfig?: string; // default 'src/app-config.ts' (only loaded if file exists)
+  serverDir?: string; // default 'src/server' (registry glob; only if the dir exists)
   clientEntry?: string; // default 'virtual:hono-preact/client'
 }
 
@@ -38,6 +39,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     routes = 'src/routes.ts',
     api = 'src/api.ts',
     appConfig = 'src/app-config.ts',
+    serverDir = 'src/server',
     clientEntry = VIRTUAL_CLIENT_ENTRY_ID,
   } = options ?? {};
 
@@ -102,6 +104,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       routes,
       api,
       appConfig,
+      serverDir,
       adapter,
       coreAppPath,
       entryWrapperPath,

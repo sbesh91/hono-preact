@@ -70,3 +70,47 @@ export async function assertRouteBindingsMatchMount(
     })
   );
 }
+
+/**
+ * Fail closed at boot if a `src/server` registry module contains a route-bound
+ * (`serverRoute(r).loader` / `.action`) unit.
+ *
+ * A registry module is not attached to a route node, so a route-bound unit in
+ * it would resolve its page-level `use` (auth) chain by `byPattern(__routeId)`
+ * against a `routeUse` entry that only exists when that route carries its own
+ * server module, and otherwise resolves an EMPTY chain: a silently unguarded
+ * unit. Phase 1 of the server registry supports route-LESS units only (bare
+ * `defineLoader` / `defineAction`, which resolve page-use by request URL), so
+ * we reject route-bound ones loudly rather than let them run under no gates.
+ *
+ * NOTE: framework-private. Consumed by the generated server entry alongside
+ * {@link assertRouteBindingsMatchMount}.
+ */
+export async function assertNoRouteBoundRegistryUnits(
+  registry: ReadonlyArray<() => Promise<unknown>>
+): Promise<void> {
+  await Promise.all(
+    registry.map(async (load) => {
+      // Structural read of a user-defined module's exports (a sanctioned cast
+      // boundary); only the server-unit containers and their `__routeId` are read.
+      const mod = (await load()) as SelfModule;
+      for (const [container, kind] of CONTAINERS) {
+        const exports = readExports(mod[container]);
+        if (!exports) continue;
+        for (const [name, value] of Object.entries(exports)) {
+          const routeId = (value as RouteBoundExport).__routeId;
+          if (typeof routeId === 'string') {
+            throw new Error(
+              `Route-bound ${kind} '${name}' (serverRoute('${routeId}')) lives in the ` +
+                `src/server registry, which supports route-less units only. A route-bound ` +
+                `${kind} in the registry would run under no page-level \`use\` (auth) gates. ` +
+                `Use a bare ${kind === 'loader' ? 'defineLoader' : 'defineAction'} here, or ` +
+                `move this module next to route '${routeId}' (its \`.server.*\` sibling) so ` +
+                `the route wires it.`
+            );
+          }
+        }
+      }
+    })
+  );
+}
