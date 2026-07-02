@@ -28,25 +28,12 @@ const routeTree = [
     layout: () => import('./pages/demo/demo-layout.js'),
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
-      {
-        path: 'login',
-        view: () => import('./pages/demo/login.js'),
-        server: () => import('./pages/demo/login.server.js'),
-      },
-      {
-        path: 'cursors',
-        view: () => import('./pages/demo/cursors-demo.js'),
-        server: () => import('./pages/demo/cursors-demo.server.js'),
-      },
-      {
-        path: 'live-tally',
-        view: () => import('./pages/demo/live-tally.js'),
-        server: () => import('./pages/demo/live-tally.server.js'),
-      },
+      { path: 'login', view: () => import('./pages/demo/login.js') },
+      { path: 'cursors', view: () => import('./pages/demo/cursors-demo.js') },
+      { path: 'live-tally', view: () => import('./pages/demo/live-tally.js') },
       {
         path: 'projects',
         layout: () => import('./pages/demo/projects-shell.js'),
-        server: () => import('./pages/demo/projects-shell.server.js'),
         use: requireSession,
         children: [
           { path: '', view: () => import('./pages/demo/projects.js') },
@@ -57,12 +44,10 @@ const routeTree = [
               {
                 path: '',
                 view: () => import('./pages/demo/project-board.js'),
-                server: () => import('./pages/demo/project-board.server.js'),
               },
               {
                 path: 'tasks/:taskId',
                 view: () => import('./pages/demo/task.js'),
-                server: () => import('./pages/demo/task.server.js'),
               },
             ],
           },

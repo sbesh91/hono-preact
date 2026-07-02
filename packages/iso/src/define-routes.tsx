@@ -37,7 +37,15 @@ export type RouteDef = {
   path: string;
   view?: LazyImport<ComponentType<ViewProps>>;
   layout?: LazyImport<ComponentType<LayoutProps>>;
-  server?: LazyServerImport;
+  /**
+   * Advanced. Lazy `.server.*` module loader for this route. Usually omitted:
+   * the build auto-discovers the colocated sibling of the `view`/`layout` file
+   * (`login.tsx` -> `login.server.ts`). Set this only to point at a non-sibling
+   * module, or to `false` to opt this route out of auto-discovery (e.g. a
+   * scratch `*.server.ts` sibling you don't want wired). A falsy value is
+   * treated the same as no server module.
+   */
+  server?: LazyServerImport | false;
   children?: readonly RouteDef[];
   /**
    * Page-layer middleware/observers for this node and every descendant.

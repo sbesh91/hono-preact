@@ -43,7 +43,7 @@ const MovieView = serverLoaders.default.View(({ data }) =>
 export default definePage(MovieView);
 ```
 
-**`src/routes.ts`** wires the URL to the view and its server module:
+**`src/routes.ts`** wires the URL to the view; the colocated `movie.server.ts` is picked up with it:
 
 ```ts
 import { defineRoutes } from 'hono-preact';
@@ -52,7 +52,6 @@ export default defineRoutes([
   {
     path: '/movies/:id',
     view: () => import('./pages/movie.js'),
-    server: () => import('./pages/movie.server.js'),
   },
 ]);
 ```
