@@ -73,6 +73,7 @@ export type { ContentfulStatusCode } from 'hono/utils/http-status';
 // Hooks.
 export { useReload } from './reload-context.js';
 export {
+  useNavigationState,
   subscribeNavigationState,
   type NavigationState,
 } from './use-navigation-state.js';
