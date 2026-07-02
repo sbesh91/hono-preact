@@ -142,6 +142,26 @@ subscribeViewTransitionTypes((nav) => {
 It returns an unsubscribe and is a no-op on the server, so it is safe to register
 as a module side effect.
 
+## Opting out of the transition
+
+The transition is on by default for every URL change. Three opt-outs update the
+URL without animating (the render still commits):
+
+- `navigate(href, { transition: false })` from `useNavigate`, for programmatic
+  navigations (reflecting a tab, filter, or sort into the query string).
+- `<NavLink href="..." transition={false}>`: the declarative form of the same.
+- `skipNextNavTransition()`: a one-shot escape hatch for code that writes
+  history directly. Call it immediately before the write:
+
+  ```ts
+  import { skipNextNavTransition } from 'hono-preact';
+
+  skipNextNavTransition();
+  history.pushState(null, '', '#section-3'); // URL updates, no transition
+  ```
+
+Each opt-out applies to the next navigation only.
+
 ## See also
 
 - [Optimistic UI](/docs/optimistic-ui): the `transition` option on `useOptimistic` and `useOptimisticAction` wraps mutations in a view transition.
