@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   makeRouterLoadTracker,
   getNavPending,
@@ -86,5 +86,19 @@ describe('nav-pending notify layer', () => {
     makeRouterLoadTracker().onLoadStart();
     await microtask();
     expect(seen).toEqual([]);
+  });
+
+  it('isolates a throwing listener so other subscribers still receive the change', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seen: string[] = [];
+    subscribeNavState(() => {
+      throw new Error('boom');
+    });
+    subscribeNavState(() => seen.push('ok'));
+    makeRouterLoadTracker().onLoadStart();
+    await microtask();
+    expect(seen).toEqual(['ok']);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

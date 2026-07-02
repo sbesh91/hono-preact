@@ -117,7 +117,15 @@ function notifyNavState(): void {
     const now = getNavPending();
     if (now === lastNotifiedPending) return;
     lastNotifiedPending = now;
-    for (const l of navStateListeners) l();
+    for (const l of navStateListeners) {
+      try {
+        l();
+      } catch (err) {
+        // Isolate a misbehaving subscriber so the other navigation-state
+        // listeners still get notified.
+        console.error('hono-preact: a navigation-state listener threw', err);
+      }
+    }
   });
 }
 
