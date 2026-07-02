@@ -96,6 +96,25 @@ describe('routeUse', () => {
       1
     );
   });
+
+  it('emits an entry for a view-only leaf (no server module)', () => {
+    // Route-bound registry units can bind to a route whose logic is not
+    // colocated, so routeUse must cover every matchable route, not just
+    // server-bearing ones.
+    const m = defineRoutes([
+      { path: '/plain', view: noopView },
+      {
+        path: '/guarded',
+        use: [a],
+        children: [{ path: 'leaf', view: noopView }],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    expect(byPath.has('/plain')).toBe(true);
+    expect(byPath.get('/plain')).toEqual([]);
+    // The view-only leaf still inherits its ancestor's composed gate chain.
+    expect(byPath.get('/guarded/leaf')).toEqual([a]);
+  });
 });
 
 describe('defineRoutes: layout-level server plumbing', () => {

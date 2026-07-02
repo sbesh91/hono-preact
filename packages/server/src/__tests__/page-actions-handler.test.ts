@@ -183,6 +183,45 @@ describe('pageActionsHandler', () => {
     expect(res.status).toBe(404);
   });
 
+  it('gates a route-bound registry action by its pattern, not the request URL', async () => {
+    // A serverRoute()-bound registry action (routeId set) resolves via the
+    // moduleKey fallback but must gate on byPattern(routeId), independent of the
+    // page it was invoked from.
+    const entry = {
+      fn: async () => ({ ok: true }),
+      use: [] as ReadonlyArray<unknown>,
+      moduleKey: 'src/server/reports.server',
+      routeId: '/reports/:id',
+    };
+    const byPattern = vi.fn(async () => [denyGuard(403, 'via-pattern')]);
+    const byPath = vi.fn(async () => [denyGuard(418, 'via-path')]);
+    const handler = pageActionsHandler({
+      resolverByPath: async () => new Map(),
+      resolverByModuleKey: async () => entry,
+      resolvePageUseByPath: byPath,
+      resolvePageUseByPattern: byPattern,
+      renderPage: (async (c: { html: (s: string) => unknown }) =>
+        c.html('x')) as never,
+      resolvePageNode: () => h('div', null),
+      appConfig: { use: [] },
+    });
+    const res = await new Hono().post('*', handler).request('/anywhere', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'src/server/reports.server',
+        action: 'archive',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(403); // pattern guard fired
+    expect(byPattern).toHaveBeenCalledWith('/reports/:id');
+    expect(byPath).not.toHaveBeenCalled();
+  });
+
   it('404s a moduleKey miss (no registry entry)', async () => {
     const handler = pageActionsHandler({
       resolverByPath: async () => new Map(),

@@ -284,26 +284,37 @@ function collectServerRoutes(
 }
 
 function collectRouteUse(
-  routes: ReadonlyArray<RouteDef>,
-  parentPath = '',
-  inherited: PageUse = []
+  routes: ReadonlyArray<RouteDef>
 ): Array<{ path: string; use: PageUse }> {
-  const out: Array<{ path: string; use: PageUse }> = [];
-  for (const r of routes) {
-    const here = joinRoutePath(parentPath, r.path);
-    const composed: PageUse = composeUse(inherited, r.use);
-    // Emit one entry per server-bearing node (same key set as
-    // `collectServerRoutes`): those are the only RPC targets. Ancestor `use`
-    // from view/layout/grouping nodes with no server module is already folded
-    // into `composed`, so their guards still reach these descendants.
-    if (r.server) {
-      out.push({ path: here, use: composed });
+  // Emit one entry per matchable route pattern: a leaf `view`, or any node
+  // carrying its own `server` module. A route-bound unit resolves its
+  // page-layer `use` chain by `byPattern(routeId)`, so it needs an entry for
+  // every route it can bind to, not just server-bearing ones (that lets a
+  // `serverRoute('/x')` unit in the src/server registry gate to a route whose
+  // logic is not colocated). Ancestor `use` from layout/grouping nodes is
+  // already folded into each node's `composed` chain.
+  const ordered: Array<{ path: string; use: PageUse }> = [];
+  const walk = (
+    rs: ReadonlyArray<RouteDef>,
+    parentPath: string,
+    inherited: PageUse
+  ) => {
+    for (const r of rs) {
+      const here = joinRoutePath(parentPath, r.path);
+      const composed: PageUse = composeUse(inherited, r.use);
+      if (r.view || r.server) {
+        ordered.push({ path: here, use: composed });
+      }
+      if (r.children) walk(r.children, here, composed);
     }
-    if (r.children) {
-      out.push(...collectRouteUse(r.children, here, composed));
-    }
-  }
-  return out;
+  };
+  walk(routes, '', []);
+  // Dedup by pattern, deepest-wins: a `server` layout node and its empty-path
+  // index child share a pattern; parents are pushed before children, so the
+  // later (index child) entry carries the page's own `use` and wins.
+  const byPattern = new Map<string, PageUse>();
+  for (const entry of ordered) byPattern.set(entry.path, entry.use);
+  return [...byPattern].map(([path, use]) => ({ path, use }));
 }
 
 // Wrap a leaf view in a page-middleware host carrying the node's composed

@@ -72,22 +72,27 @@ export async function assertRouteBindingsMatchMount(
 }
 
 /**
- * Fail closed at boot if a `src/server` registry module contains a route-bound
- * (`serverRoute(r).loader` / `.action`) unit.
+ * Fail closed at boot if a `src/server` registry module has a route-bound
+ * (`serverRoute(r).loader` / `.action`) unit whose route is not real.
  *
  * A registry module is not attached to a route node, so a route-bound unit in
- * it would resolve its page-level `use` (auth) chain by `byPattern(__routeId)`
- * against a `routeUse` entry that only exists when that route carries its own
- * server module, and otherwise resolves an EMPTY chain: a silently unguarded
- * unit. Phase 1 of the server registry supports route-LESS units only (bare
- * `defineLoader` / `defineAction`, which resolve page-use by request URL), so
- * we reject route-bound ones loudly rather than let them run under no gates.
+ * it resolves its page-level `use` (auth) chain by `byPattern(__routeId)`. That
+ * lookup fails OPEN (empty chain) on a miss, so a `__routeId` that does not name
+ * a real route pattern would run the unit under NO gates. `routeUse` carries an
+ * entry for every matchable route (see iso `collectRouteUse`), so we require the
+ * `__routeId` to be one of those patterns; a real route always resolves its
+ * composed gate chain, and a typo / stale pattern fails loudly here instead of
+ * silently dropping auth at request time.
+ *
+ * Bare units (no `__routeId`) are route-less and skipped; they resolve page-use
+ * by request URL.
  *
  * NOTE: framework-private. Consumed by the generated server entry alongside
  * {@link assertRouteBindingsMatchMount}.
  */
-export async function assertNoRouteBoundRegistryUnits(
-  registry: ReadonlyArray<() => Promise<unknown>>
+export async function assertRegistryRouteBindingsValid(
+  registry: ReadonlyArray<() => Promise<unknown>>,
+  validRoutePatterns: ReadonlySet<string>
 ): Promise<void> {
   await Promise.all(
     registry.map(async (load) => {
@@ -99,14 +104,14 @@ export async function assertNoRouteBoundRegistryUnits(
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
           const routeId = (value as RouteBoundExport).__routeId;
-          if (typeof routeId === 'string') {
+          if (typeof routeId === 'string' && !validRoutePatterns.has(routeId)) {
             throw new Error(
-              `Route-bound ${kind} '${name}' (serverRoute('${routeId}')) lives in the ` +
-                `src/server registry, which supports route-less units only. A route-bound ` +
-                `${kind} in the registry would run under no page-level \`use\` (auth) gates. ` +
-                `Use a bare ${kind === 'loader' ? 'defineLoader' : 'defineAction'} here, or ` +
-                `move this module next to route '${routeId}' (its \`.server.*\` sibling) so ` +
-                `the route wires it.`
+              `Route-bound ${kind} '${name}' in the src/server registry is bound to ` +
+                `route '${routeId}', which is not a route in your route table. A ` +
+                `serverRoute('${routeId}') unit must target a real route pattern so it ` +
+                `resolves that route's page-level \`use\` (auth) chain; otherwise it would ` +
+                `run under no gates. Fix the pattern to match a route in routes.ts (an ` +
+                `exact pattern, e.g. '/movies/:id'), or move the unit to that route's module.`
             );
           }
         }

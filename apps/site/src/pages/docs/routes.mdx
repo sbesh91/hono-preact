@@ -88,13 +88,23 @@ Discovery reads the inline `() => import()` on the route, so it covers hand-writ
 
 Server modules that are not tied to a single page can live in `src/server/` instead of next to a view. Every `.server.*` file under it, at any folder depth, is globbed into the server build, so its units register without a `server:` route field. This is the place to organize route-less server code by domain (`src/server/billing/`, `src/server/audit/`).
 
-Put **route-less** units here: a bare `defineLoader` (addressed by module key over the loaders RPC) or `defineAction` (addressed by module key too; it still runs behind the `use` gates of whichever page invokes it), plus rooms and sockets. A page reaches them by importing their `serverLoaders` / `serverActions` exactly as it would a route-attached module.
+**Route-less** units are addressed by module key: a bare `defineLoader` (over the loaders RPC) or `defineAction` (via the handler's moduleKey fallback; it runs behind the `use` gates of whichever page invokes it), plus rooms and sockets. A page reaches them by importing their `serverLoaders` / `serverActions` exactly as it would a route-attached module.
 
 ```
 src/server/audit/log.server.ts   ->  export const serverLoaders = { recent: defineLoader(...) }
 ```
 
-A unit bound to a specific route with `serverRoute('/path')` belongs next to that route, not here; a route-bound unit placed in `src/server` fails loudly at startup, because it has no route node to inherit its page gates from. The folder is configurable via the Vite plugin's `serverDir` option (default `src/server`).
+**Route-bound** units work here too: bind one to a real route with `serverRoute('/path')` and it inherits that route's page-layer `use` (auth) chain, wherever the file lives. This lets you keep a gated route's server logic under `src/server/` organized by domain rather than beside its view.
+
+```ts
+// src/server/audit/project-activity.server.ts
+const route = serverRoute('/demo/projects/:projectId'); // inherits its requireSession gate
+export const serverLoaders = {
+  activity: route.loader(async () => ({ events: [] })),
+};
+```
+
+The bound pattern must be a real route in your table; a `serverRoute('/typo')` that matches no route fails loudly at startup rather than running under no gates. The folder is configurable via the Vite plugin's `serverDir` option (default `src/server`).
 
 ## Mounting
 
@@ -136,7 +146,7 @@ type RoutesManifest = {
   routeUse: ReadonlyArray<{
     path: string;
     use: ReadonlyArray<Middleware | StreamObserver>;
-  }>; // page-layer `use` chain per node
+  }>; // composed page-layer `use` chain, one per matchable route pattern
 };
 ```
 

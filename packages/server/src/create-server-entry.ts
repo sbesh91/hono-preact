@@ -17,7 +17,7 @@ import {
 } from './route-server-modules.js';
 import {
   assertRouteBindingsMatchMount,
-  assertNoRouteBoundRegistryUnits,
+  assertRegistryRouteBindingsValid,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -128,13 +128,16 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // chain. Cached like the socket registries: one walk at boot, per-request in
   // dev for hot-reload parity.
   //
-  // The registry check rides along: a src/server module may hold only route-
-  // less units in Phase 1, so a `serverRoute(...)`-bound loader/action there
-  // (which would silently resolve an empty gate chain) fails the boot closed.
+  // The registry check rides along: a `serverRoute(...)`-bound loader/action in
+  // a src/server module resolves its gate chain by `byPattern(__routeId)`, which
+  // fails open, so we require the bound route to be a real pattern (one every
+  // `routeUse` entry covers). A stale/typo'd pattern fails the boot closed
+  // rather than running the unit under no gates.
+  const validRoutePatterns = new Set(routes.routeUse.map((r) => r.path));
   const runBootChecks = () =>
     Promise.all([
       assertRouteBindingsMatchMount(routes.serverRoutes),
-      assertNoRouteBoundRegistryUnits(serverRegistry),
+      assertRegistryRouteBindingsValid(serverRegistry, validRoutePatterns),
     ]).then(() => undefined);
   let cachedRouteBindingCheck: Promise<void> | null = null;
   const routeBindingCheck = () =>
