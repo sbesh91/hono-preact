@@ -22,14 +22,16 @@ export type NavLinkProps = Omit<
   transition?: boolean;
 };
 
-// A plain left-click on a same-origin, non-hash-only, non-download link with no
-// modifiers and a self target: the cases where preact-iso performs a client
-// soft-navigation and a view transition would run. We arm the one-shot skip
-// only for these, so a click that does not soft-navigate (a new-tab, download,
-// cross-origin, or in-page hash click) can never leave the flag armed for a
-// later, unrelated navigation.
-function isPlainLeftClick(
-  e: JSX.TargetedMouseEvent<HTMLAnchorElement>
+// Whether a plain left-click on this link will trigger a preact-iso client
+// soft-navigation (and thus a view transition worth suppressing). Mirrors
+// preact-iso's handleNav link gate (same-origin, raw href not starting with #,
+// self/empty target, no download) so we arm the one-shot skip only when a
+// navigation will actually follow. Best-effort: preact-iso's optional router
+// `scope` is not mirrored (it is rarely set), so a link outside a scoped router
+// is the one residual case that could arm without navigating.
+function willSoftNavigate(
+  e: JSX.TargetedMouseEvent<HTMLAnchorElement>,
+  href: string
 ): boolean {
   if (
     e.button !== 0 ||
@@ -43,13 +45,9 @@ function isPlainLeftClick(
   }
   const a = e.currentTarget;
   if (a.hasAttribute('download')) return false;
-  if (a.target && a.target !== '_self') return false;
-  if (a.origin !== location.origin) return false;
-  // Same path and query means a hash-only (or identical) URL: an in-page jump,
-  // not a soft navigation.
-  if (a.pathname === location.pathname && a.search === location.search) {
-    return false;
-  }
+  if (!/^(_?self)?$/i.test(a.target)) return false; // non-self target = new context
+  if (href[0] === '#') return false; // bare in-page anchor: no soft-nav
+  if (a.origin !== location.origin) return false; // cross-origin = full load
   return true;
 }
 
@@ -78,7 +76,8 @@ export function NavLink(props: NavLinkProps): VNode {
   const ariaCurrent = ariaCurrentProp ?? (active ? 'page' : undefined);
 
   const handleClick = (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => {
-    if (transition === false && isPlainLeftClick(e)) skipNextNavTransition();
+    if (transition === false && willSoftNavigate(e, href))
+      skipNextNavTransition();
     onClickProp?.(e);
   };
 

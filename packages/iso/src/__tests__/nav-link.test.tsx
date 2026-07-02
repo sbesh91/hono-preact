@@ -171,13 +171,15 @@ describe('NavLink', () => {
     cleanup();
   });
 
-  // The four tests below cover the cases preact-iso does NOT client-side
-  // soft-navigate for: a hash-only link, a download link, and a cross-origin
-  // link. Arming the skip flag for any of these would leave it armed for a
-  // later, unrelated navigation since no route change consumes it. The last
-  // test confirms arming still happens for a real same-origin soft-nav.
+  // The tests below cover the cases preact-iso does NOT client-side
+  // soft-navigate for: a bare hash-only link, a download link, and a
+  // cross-origin link. Arming the skip flag for any of these would leave it
+  // armed for a later, unrelated navigation since no route change consumes
+  // it. The last two confirm arming still happens for a real same-origin
+  // soft-nav, including an href with a trailing hash fragment and a bare
+  // `self` target.
 
-  it('does not arm on a hash-only link (in-page jump)', () => {
+  it('does not arm on a bare hash-only link (in-page jump)', () => {
     history.replaceState(null, '', '/x');
     const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
     const { getByText } = render(
@@ -230,6 +232,43 @@ describe('NavLink', () => {
         LocationProvider,
         null,
         h(NavLink, { href: '/somewhere-else', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  // Regression: preact-iso's soft-nav gate only skips a link whose RAW href
+  // attribute starts with `#`. A same-path href with a trailing hash fragment
+  // still soft-navigates (the URL gains a hash), so the resolved-pathname
+  // comparison the old guard used was wrong: it would refuse to arm even
+  // though preact-iso does perform a soft-nav here.
+  it('arms on a same-path href with a trailing hash fragment', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/x#frag', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  // Minor: preact-iso treats a bare `self` target (no leading underscore) as
+  // eligible for soft-nav, same as `_self` or an absent target.
+  it('arms on a link with target="self"', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/y', target: 'self', transition: false }, 'go')
       )
     );
     fireEvent.click(getByText('go'), { button: 0 });
