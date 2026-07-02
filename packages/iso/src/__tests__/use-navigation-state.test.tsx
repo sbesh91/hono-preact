@@ -88,6 +88,7 @@ describe('useNavigationState', () => {
     const t = makeRouterLoadTracker();
     t.onLoadStart();
     await vi.advanceTimersByTimeAsync(100);
+    expect(getByTestId('p').textContent).toBe('idle'); // mid-flight: still gated, delay not elapsed
     t.onLoadEnd();
     await vi.advanceTimersByTimeAsync(200);
     expect(getByTestId('p').textContent).toBe('idle');
