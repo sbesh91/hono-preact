@@ -1,11 +1,18 @@
 import { useCallback } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
+import { skipNextNavTransition } from './internal/route-change.js';
 
 export interface NavigateOptions {
   /** Replace the current history entry instead of pushing a new one. */
   replace?: boolean;
   /** Do a full-page navigation (clean slate) instead of a client navigation. */
   reload?: boolean;
+  /**
+   * Set false to update the URL without a view transition (the render still
+   * commits). Default: animate. Ignored when `reload` is true (a full-page load
+   * has no transition to suppress).
+   */
+  transition?: boolean;
 }
 
 /**
@@ -26,6 +33,7 @@ export function useNavigate(): (
         if (typeof window !== 'undefined') window.location.assign(path);
         return;
       }
+      if (options?.transition === false) skipNextNavTransition();
       route(path, options?.replace ?? false);
     },
     [route]
