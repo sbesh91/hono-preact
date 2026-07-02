@@ -34,17 +34,21 @@ A module-level listener set plus a coalesced notifier:
 ```ts
 const navStateListeners = new Set<() => void>();
 let notifyScheduled = false;
+let lastNotifiedPending = false;
 
 // Coalesce synchronous churn (e.g. the scheduler's clear() immediately followed
 // by the new nav's onLoadStart, or a guarded route's double onLoadStart) into
-// one notification per microtask. Listeners re-read getNavPending() themselves,
-// so a net-unchanged burst collapses to a single (or zero) re-render via the
-// snapshot's Object.is check.
+// one microtask, and fire listeners only when the net pending value actually
+// changed. This makes the low-level subscribeNavState fire only on real
+// transitions, and a net-unchanged burst emits nothing at all.
 function notifyNavState(): void {
   if (notifyScheduled) return;
   notifyScheduled = true;
   queueMicrotask(() => {
     notifyScheduled = false;
+    const now = getNavPending();
+    if (now === lastNotifiedPending) return;
+    lastNotifiedPending = now;
     for (const l of navStateListeners) l();
   });
 }
@@ -66,7 +70,7 @@ call `notifyNavState()` after mutating the set. `getNavPending` reuses the same
 `loadingRouters.size > 0` condition `anyRouterLoading()` already uses (the
 scheduler keeps using `anyRouterLoading()` synchronously; the notify path is
 independent and does not change cold-flush timing). `__resetTransitionStateForTesting`
-clears `navStateListeners` and `notifyScheduled`.
+clears `navStateListeners`, `notifyScheduled`, and `lastNotifiedPending`.
 
 ## Public surface (from `hono-preact`)
 
