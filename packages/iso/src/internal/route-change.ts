@@ -127,6 +127,7 @@ export function __resetTransitionStateForTesting(): void {
     coldTimeout = null;
   }
   transitionActive = false;
+  skipNextTransition = false;
   // Uninstall the render scheduler (restoring Preact's debounceRendering) so
   // each test can install it fresh.
   if (schedulerInstalled) {
@@ -202,6 +203,22 @@ type ProcessFn = () => void;
 
 let schedulerInstalled = false;
 let lastHref = '';
+
+// One-shot: when set, the next navigated flush commits without a view
+// transition (see skipNextNavTransition). Consumed on that flush.
+let skipNextTransition = false;
+
+/**
+ * Suppress the view transition for the next client navigation, committing the
+ * render without animating. One-shot: applies to the next navigation only.
+ * Call it immediately before the URL write (a `navigate`, a history
+ * push/replace, or a `location.hash` assignment). `navigate(href, { transition:
+ * false })` and `<NavLink transition={false}>` call it for you.
+ */
+export function skipNextNavTransition(): void {
+  skipNextTransition = true;
+}
+
 let prevDebounce: ((process: ProcessFn) => void) | undefined;
 let unsubscribeNav: (() => void) | null = null;
 // True while a navigation's transition is in flight (its callback is pending or
@@ -299,8 +316,10 @@ function scheduleRender(process: ProcessFn): void {
     loadingRouters.clear();
   }
 
+  const skip = navigated && skipNextTransition;
+  if (navigated) skipNextTransition = false; // one-shot: consumed on the nav flush
   lastHref = href;
-  const start = navigated ? getStartViewTransition() : undefined;
+  const start = navigated && !skip ? getStartViewTransition() : undefined;
   if (!start) {
     defaultSchedule(process);
     return;

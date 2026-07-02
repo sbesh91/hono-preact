@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, it, expect } from 'vitest';
-import { cleanup, render } from '@testing-library/preact';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { cleanup, render, fireEvent } from '@testing-library/preact';
+import { h } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { NavLink } from '../nav-link.js';
+import * as routeChange from '../internal/route-change.js';
 
 afterEach(() => {
   cleanup();
   history.replaceState(null, '', '/');
+  // The transition-arming tests below vi.spyOn the same module export in each
+  // test; without restoring, an earlier test's spy stays wrapped around the
+  // real function and each later spy call also re-invokes it.
+  vi.restoreAllMocks();
 });
 
 describe('NavLink', () => {
@@ -107,5 +113,166 @@ describe('NavLink', () => {
       </LocationProvider>
     );
     expect(getByText('Docs').getAttribute('aria-current')).toBe('false');
+  });
+
+  // These four wrap in <LocationProvider>, unlike the verbatim brief snippet,
+  // because NavLink's useRouteActive calls useLocation() and throws without a
+  // location context ancestor (see every other test in this file).
+
+  it('arms skipNextNavTransition on a plain left-click when transition is false', () => {
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/a', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('does not arm on a modifier-click', () => {
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/a', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0, metaKey: true });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('still invokes a caller-provided onClick', () => {
+    const onClick = vi.fn();
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/a', transition: false, onClick }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('does not arm when transition is omitted', () => {
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(LocationProvider, null, h(NavLink, { href: '/a' }, 'go'))
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  // The tests below cover the cases preact-iso does NOT client-side
+  // soft-navigate for: a bare hash-only link, a download link, and a
+  // cross-origin link. Arming the skip flag for any of these would leave it
+  // armed for a later, unrelated navigation since no route change consumes
+  // it. The last two confirm arming still happens for a real same-origin
+  // soft-nav, including an href with a trailing hash fragment and a bare
+  // `self` target.
+
+  it('does not arm on a bare hash-only link (in-page jump)', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '#frag', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('does not arm on a download link', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/file', download: true, transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('does not arm on a cross-origin link', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: 'https://example.com/', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('arms on a real soft-navigation to a different same-origin path', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/somewhere-else', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  // Regression: preact-iso's soft-nav gate only skips a link whose RAW href
+  // attribute starts with `#`. A same-path href with a trailing hash fragment
+  // still soft-navigates (the URL gains a hash), so the resolved-pathname
+  // comparison the old guard used was wrong: it would refuse to arm even
+  // though preact-iso does perform a soft-nav here.
+  it('arms on a same-path href with a trailing hash fragment', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/x#frag', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  // Minor: preact-iso treats a bare `self` target (no leading underscore) as
+  // eligible for soft-nav, same as `_self` or an absent target.
+  it('arms on a link with target="self"', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/y', target: 'self', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
   });
 });

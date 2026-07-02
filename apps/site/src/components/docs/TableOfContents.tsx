@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { skipNextNavTransition } from 'hono-preact';
 import type { DocHeading } from '../../llms/docs-index.js';
 
 // Right-rail "On this page" nav. Reads the current route's headings (passed in
@@ -61,12 +62,10 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     };
   }, [headings]);
 
-  // Smooth-scroll in-page instead of letting the anchor do a hard jump. We
-  // deliberately do NOT update the URL hash: the framework's nav-transition
-  // scheduler starts a view transition on the next render whenever location.href
-  // changes (history.pushState/replaceState and direct hash writes all qualify),
-  // which would flash the whole page on a TOC click. Honors modifier-clicks so
-  // "open in new tab" still works.
+  // Smooth-scroll in-page AND put `#section` in the URL so it is shareable.
+  // The framework starts a view transition whenever location.href changes, which
+  // would flash the whole page; skipNextNavTransition() suppresses it for this
+  // one URL write. Honors modifier-clicks so "open in new tab" still works.
   const onLinkClick = (event: MouseEvent, id: string) => {
     if (
       event.metaKey ||
@@ -80,6 +79,16 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     const el = document.getElementById(id);
     if (!el) return;
     event.preventDefault();
+    // Write the hash so the section is shareable, and suppress the framework's
+    // view transition for that URL change. Only arm the one-shot skip when
+    // setActiveId will actually re-render (a section change): a no-op setActiveId
+    // schedules no render flush to consume the flag, so arming it then would
+    // strand it and suppress a later navigation's transition instead. When the
+    // hash is already current there is nothing to write.
+    if (location.hash !== `#${id}`) {
+      if (activeId !== id) skipNextNavTransition();
+      history.pushState(null, '', `#${id}`);
+    }
     setActiveId(id);
     // Lock the highlight to the clicked target until the smooth scroll settles.
     scrollLock.current = true;

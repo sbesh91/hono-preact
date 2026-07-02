@@ -106,10 +106,11 @@ function LogoutButton() {
 }
 ```
 
-| Option    | Type      | Default | Description                                                             |
-| --------- | --------- | ------- | ----------------------------------------------------------------------- |
-| `replace` | `boolean` | `false` | Replace the current history entry instead of pushing a new one.         |
-| `reload`  | `boolean` | `false` | Do a full-page navigation (clean slate) instead of a client navigation. |
+| Option       | Type      | Default | Description                                                             |
+| ------------ | --------- | ------- | ----------------------------------------------------------------------- |
+| `replace`    | `boolean` | `false` | Replace the current history entry instead of pushing a new one.         |
+| `reload`     | `boolean` | `false` | Do a full-page navigation (clean slate) instead of a client navigation. |
+| `transition` | `boolean` | `true`  | Set `false` to navigate without a view transition.                      |
 
 ## API reference
 
@@ -123,6 +124,7 @@ function LogoutButton() {
 | `class`         | `string`  | none     | Always applied.                                                 |
 | `activeClass`   | `string`  | none     | Merged in when the link is active.                              |
 | `inactiveClass` | `string`  | none     | Merged in when the link is not active.                          |
+| `transition`    | `boolean` | `true`   | Set `false` to navigate without a view transition.              |
 
 ## See also
 
