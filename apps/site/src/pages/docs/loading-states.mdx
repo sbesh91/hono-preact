@@ -150,6 +150,40 @@ export default definePage(MoviesView, {
 
 Loader-specific loading and error UI lives inside the `.View()` render function. The page-level `errorFallback` is the outer safety net.
 
+## Global loading indicator
+
+The per-loader `LoaderState` above tells you about one loader's data. For an
+app-wide affordance that reacts to any client navigation, regardless of which
+page or loader is involved, use `useNavigationState()`:
+
+```tsx
+import { useNavigationState } from 'hono-preact';
+
+function TopProgressBar() {
+  const { pending } = useNavigationState({ delayMs: 150 });
+  return pending ? <div class="top-progress" /> : null;
+}
+```
+
+`useNavigationState()` returns a `NavigationState` (`{ pending: boolean }`).
+`pending` is `false` on the server and on the initial load, and turns `true`
+while a client-side navigation is in flight. Pass `delayMs` to skip the
+indicator on fast, cache-hit navigations: `pending` only turns `true` once the
+navigation has been in flight that long, and turns `false` the instant it
+finishes.
+
+For code outside a component tree, `subscribeNavigationState(listener)` calls
+the listener once immediately with the current state and again on every
+change, and returns an unsubscribe function:
+
+```ts
+import { subscribeNavigationState } from 'hono-preact';
+
+const unsubscribe = subscribeNavigationState(({ pending }) => {
+  document.body.classList.toggle('is-navigating', pending);
+});
+```
+
 ## See also
 
 - [Server Loaders](/docs/loaders): where `.View()` comes from.
