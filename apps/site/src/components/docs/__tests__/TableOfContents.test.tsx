@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/preact';
+import * as hp from 'hono-preact';
 import { TableOfContents } from '../TableOfContents.js';
 import type { DocHeading } from '../../../llms/generate-docs-index.js';
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  history.replaceState(null, '', '/');
 });
 
 const headings: DocHeading[] = [
@@ -56,18 +59,59 @@ describe('TableOfContents', () => {
     target.remove();
   });
 
-  it('writes the section hash to the URL on a plain left-click', () => {
+  it('writes the section hash to the URL on a plain left-click of a different section', () => {
+    const skipSpy = vi.spyOn(hp, 'skipNextNavTransition');
+    // The scroll-spy's mount effect runs synchronously during render(). Its
+    // "at bottom" fallback treats happy-dom's all-zero layout metrics as
+    // "scrolled to the end of the page" and would force activeId to the last
+    // heading; stub scrollHeight so that fallback doesn't fire and activeId
+    // settles on headings[0] ('how-it-works'), same as fresh-mount state.
+    vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(
+      10000
+    );
+
+    const { getByRole } = render(<TableOfContents headings={headings} />);
+
+    // Only add the clicked target's element after the mount effect has
+    // settled, so it can't feed back into that initial computeActive() pass.
+    const target = document.createElement('h3');
+    target.id = 'options';
+    target.scrollIntoView = vi.fn();
+    document.body.appendChild(target);
+
+    // headings[0] ('how-it-works') is the settled active section, so clicking
+    // 'Options' is a real section change: setActiveId will re-render, so the
+    // one-shot skip is armed.
+    fireEvent.click(getByRole('link', { name: 'Options' }), { button: 0 });
+
+    expect(location.hash).toBe('#options');
+    expect(skipSpy).toHaveBeenCalled();
+    target.remove();
+  });
+
+  it('does not strand the skip flag when clicking the already-active section', () => {
+    // Regression guard: activeId defaults to headings[0].id, so clicking that
+    // same section's link is a no-op setActiveId. If the skip were armed here
+    // anyway, no render flush would consume it and it would silently suppress
+    // the *next* real navigation's view transition instead.
+    const skipSpy = vi.spyOn(hp, 'skipNextNavTransition');
+    vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(
+      10000
+    );
+
+    const { getByRole } = render(<TableOfContents headings={headings} />);
+
     const target = document.createElement('h2');
     target.id = 'how-it-works';
     target.scrollIntoView = vi.fn();
     document.body.appendChild(target);
 
-    const { getByRole } = render(<TableOfContents headings={headings} />);
     fireEvent.click(getByRole('link', { name: 'How it works' }), {
       button: 0,
     });
 
     expect(location.hash).toBe('#how-it-works');
+    expect(skipSpy).not.toHaveBeenCalled();
     target.remove();
   });
 

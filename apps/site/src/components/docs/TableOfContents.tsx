@@ -79,12 +79,16 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     const el = document.getElementById(id);
     if (!el) return;
     event.preventDefault();
-    // Arm the skip and write the hash BEFORE any state update: setActiveId
-    // triggers the framework's render scheduler synchronously, and it must see
-    // the new location.href and the armed flag together so the skip is consumed
-    // on this click's own flush (not left armed to suppress a later navigation).
-    skipNextNavTransition();
-    history.pushState(null, '', `#${id}`);
+    // Write the hash so the section is shareable, and suppress the framework's
+    // view transition for that URL change. Only arm the one-shot skip when
+    // setActiveId will actually re-render (a section change): a no-op setActiveId
+    // schedules no render flush to consume the flag, so arming it then would
+    // strand it and suppress a later navigation's transition instead. When the
+    // hash is already current there is nothing to write.
+    if (location.hash !== `#${id}`) {
+      if (activeId !== id) skipNextNavTransition();
+      history.pushState(null, '', `#${id}`);
+    }
     setActiveId(id);
     // Lock the highlight to the clicked target until the smooth scroll settles.
     scrollLock.current = true;
