@@ -146,7 +146,7 @@ type RoutesManifest = {
   routeUse: ReadonlyArray<{
     path: string;
     use: ReadonlyArray<Middleware | StreamObserver>;
-  }>; // page-layer `use` chain per node
+  }>; // composed page-layer `use` chain, one per matchable route pattern
 };
 ```
 
