@@ -22,21 +22,35 @@ export type NavLinkProps = Omit<
   transition?: boolean;
 };
 
-// A plain left-click with no modifiers on a same-tab link: the conditions under
-// which preact-iso will actually soft-navigate. Only then do we arm the
-// one-shot skip, so a modifier / new-tab click never leaves it armed.
+// A plain left-click on a same-origin, non-hash-only, non-download link with no
+// modifiers and a self target: the cases where preact-iso performs a client
+// soft-navigation and a view transition would run. We arm the one-shot skip
+// only for these, so a click that does not soft-navigate (a new-tab, download,
+// cross-origin, or in-page hash click) can never leave the flag armed for a
+// later, unrelated navigation.
 function isPlainLeftClick(
   e: JSX.TargetedMouseEvent<HTMLAnchorElement>
 ): boolean {
-  return (
-    e.button === 0 &&
-    !e.metaKey &&
-    !e.ctrlKey &&
-    !e.shiftKey &&
-    !e.altKey &&
-    !e.defaultPrevented &&
-    !(e.currentTarget.target && e.currentTarget.target !== '_self')
-  );
+  if (
+    e.button !== 0 ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.shiftKey ||
+    e.altKey ||
+    e.defaultPrevented
+  ) {
+    return false;
+  }
+  const a = e.currentTarget;
+  if (a.hasAttribute('download')) return false;
+  if (a.target && a.target !== '_self') return false;
+  if (a.origin !== location.origin) return false;
+  // Same path and query means a hash-only (or identical) URL: an in-page jump,
+  // not a soft navigation.
+  if (a.pathname === location.pathname && a.search === location.search) {
+    return false;
+  }
+  return true;
 }
 
 export function NavLink(props: NavLinkProps): VNode {

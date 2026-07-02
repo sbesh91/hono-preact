@@ -170,4 +170,70 @@ describe('NavLink', () => {
     expect(spy).not.toHaveBeenCalled();
     cleanup();
   });
+
+  // The four tests below cover the cases preact-iso does NOT client-side
+  // soft-navigate for: a hash-only link, a download link, and a cross-origin
+  // link. Arming the skip flag for any of these would leave it armed for a
+  // later, unrelated navigation since no route change consumes it. The last
+  // test confirms arming still happens for a real same-origin soft-nav.
+
+  it('does not arm on a hash-only link (in-page jump)', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '#frag', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('does not arm on a download link', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/file', download: true, transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('does not arm on a cross-origin link', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: 'https://example.com/', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('arms on a real soft-navigation to a different same-origin path', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/somewhere-else', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
 });
