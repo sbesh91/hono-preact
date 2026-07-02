@@ -205,6 +205,9 @@ importers:
       '@types/node':
         specifier: '*'
         version: 25.6.0
+      hono-preact:
+        specifier: workspace:*
+        version: link:../hono-preact
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

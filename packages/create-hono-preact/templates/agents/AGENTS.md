@@ -51,10 +51,10 @@ Import from these subpaths of the `hono-preact` package:
 - `hono-preact/server` - the page render entry point and Hono context access
   (`renderPage`, `useHonoContext`, `HonoContext`). The request handlers are
   internal; the generated server entry wires them for you.
-- `hono-preact/vite` - the `honoPreact()` Vite plugin. It requires an `adapter`:
+- `hono-preact/vite` - the `honoPreact` Vite plugin. It requires an adapter:
   `honoPreact({ adapter: cloudflareAdapter() })`.
-- `hono-preact/adapter-cloudflare` - `cloudflareAdapter()` for Cloudflare Workers.
-- `hono-preact/adapter-node` - `nodeAdapter()` for Node.
+- `hono-preact/adapter-cloudflare` - `cloudflareAdapter` for Cloudflare Workers.
+- `hono-preact/adapter-node` - `nodeAdapter` for Node.
 
 The UI component library is a separate package, `hono-preact-ui` (Dialog,
 Popover, Tooltip, Menu, Select, Combobox, plus headless hooks). It ships unstyled.
