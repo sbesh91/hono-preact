@@ -80,15 +80,51 @@ export function makeRouterLoadTracker(): {
   return {
     onLoadStart: () => {
       loadingRouters.add(token);
+      notifyNavState();
     },
     onLoadEnd: () => {
       loadingRouters.delete(token);
+      notifyNavState();
     },
   };
 }
 
 function anyRouterLoading(): boolean {
   return loadingRouters.size > 0;
+}
+
+// Public navigation-pending observation. `loadingRouters` above is the single
+// source of truth; this layer notifies subscribers when the derived "any Router
+// loading" boolean flips. Kept independent of the synchronous scheduler reads of
+// anyRouterLoading() so it cannot affect cold-flush timing.
+const navStateListeners = new Set<() => void>();
+let notifyScheduled = false;
+let lastNotifiedPending = false;
+
+/** @internal true while any Router is mid-suspense (a navigation is pending). */
+export function getNavPending(): boolean {
+  return loadingRouters.size > 0;
+}
+
+// Coalesce synchronous churn (the scheduler's clear() then the new nav's
+// onLoadStart, or a guarded route's double onLoadStart) into one microtask, and
+// fire only when the net pending value actually changed.
+function notifyNavState(): void {
+  if (notifyScheduled) return;
+  notifyScheduled = true;
+  queueMicrotask(() => {
+    notifyScheduled = false;
+    const now = getNavPending();
+    if (now === lastNotifiedPending) return;
+    lastNotifiedPending = now;
+    for (const l of navStateListeners) l();
+  });
+}
+
+/** @internal Subscribe to nav-pending transitions. Stable reference. */
+export function subscribeNavState(onChange: () => void): () => void {
+  navStateListeners.add(onChange);
+  return () => navStateListeners.delete(onChange);
 }
 
 // The path the app is currently on (the previous navigation's `to`); seeds
@@ -116,6 +152,9 @@ const MORPH_PARTNER_GRACE_MS = 150;
 /** @internal Test-only reset for coordinator state. */
 export function __resetTransitionStateForTesting(): void {
   loadingRouters.clear();
+  navStateListeners.clear();
+  notifyScheduled = false;
+  lastNotifiedPending = false;
   navGen = 0;
   lastPath =
     typeof location !== 'undefined'
@@ -314,6 +353,7 @@ function scheduleRender(process: ProcessFn): void {
     // perpetually cold and burn the cold-load timeout. This nav re-populates the
     // set as its own Routers suspend.
     loadingRouters.clear();
+    notifyNavState();
   }
 
   const skip = navigated && skipNextTransition;
