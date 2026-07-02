@@ -54,16 +54,47 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain('dev: import.meta.env.DEV,');
   });
 
-  it('re-exports serverImports for the Cloudflare DO room registry', () => {
+  it('re-exports serverImports (routes + registry) for the Cloudflare DO room registry', () => {
     // The Cloudflare worker entry installs the room registry inside the Durable
-    // Object isolate from this re-exported lazy-loader array.
+    // Object isolate from this re-exported lazy-loader array; it must include
+    // both route-attached and src/server rooms.
     const src = generateCoreAppModule({
       layoutAbsPath: '/p/src/Layout.tsx',
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
-    expect(src).toContain('export const serverImports = routes.serverImports;');
+    expect(src).toContain(
+      'export const serverImports = [...routes.serverImports, ...serverRegistry];'
+    );
+  });
+
+  it('emits an empty registry when serverRegistryGlob is undefined', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
+    });
+    expect(src).toContain('const serverRegistry = [];');
+    expect(src).not.toContain('import.meta.glob');
+    expect(src).toContain('serverRegistry,');
+  });
+
+  it('globs the server registry folder when serverRegistryGlob is set', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/p/src/Layout.tsx',
+      routesAbsPath: '/p/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+      serverRegistryGlob: '/src/server/**/*.server.{ts,tsx,js,jsx}',
+    });
+    expect(src).toContain(
+      `const serverRegistry = Object.values(import.meta.glob("/src/server/**/*.server.{ts,tsx,js,jsx}"));`
+    );
+    expect(src).toContain('serverRegistry,');
   });
 
   it('passes the user api app via the api option when present', () => {
@@ -326,6 +357,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts', // configured but does not exist on disk
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -380,6 +412,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts',
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -423,6 +456,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts',
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -482,6 +516,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts', // intentionally missing on disk
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -535,6 +570,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts', // intentionally missing on disk
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -580,6 +616,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts',
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,
@@ -629,6 +666,7 @@ describe('serverEntryPlugin', () => {
       routes: 'src/routes.ts',
       api: 'src/api.ts',
       appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
       adapter: stubAdapter,
       coreAppPath,
       entryWrapperPath,

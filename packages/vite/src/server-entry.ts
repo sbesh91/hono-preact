@@ -17,15 +17,38 @@ export interface GenerateCoreAppModuleOptions {
   routesAbsPath: string;
   apiAbsPath: string | undefined;
   appConfigAbsPath: string | undefined;
+  /**
+   * Root-relative `import.meta.glob` pattern for the server registry (the
+   * `src/server/**` blessed folder), or undefined when the folder does not
+   * exist. When present, every matched `.server.*` module is imported into the
+   * server build so its route-less loaders/actions, rooms, and sockets register
+   * without being attached to a route.
+   */
+  serverRegistryGlob: string | undefined;
 }
 
 export function generateCoreAppModule(
   opts: GenerateCoreAppModuleOptions
 ): string {
-  const { layoutAbsPath, routesAbsPath, apiAbsPath, appConfigAbsPath } = opts;
+  const {
+    layoutAbsPath,
+    routesAbsPath,
+    apiAbsPath,
+    appConfigAbsPath,
+    serverRegistryGlob,
+  } = opts;
 
   const apiImport = apiAbsPath ? `import userApp from '${apiAbsPath}';\n` : '';
   const apiOption = apiAbsPath ? `  api: userApp,\n` : '';
+
+  // The registry is a lazy `import.meta.glob` of the blessed server folder,
+  // reduced to the same `() => import(...)` thunk array shape as
+  // `routes.serverImports`. Empty when the folder is absent.
+  const registryDecl = serverRegistryGlob
+    ? `const serverRegistry = Object.values(import.meta.glob(${JSON.stringify(
+        serverRegistryGlob
+      )}));\n`
+    : `const serverRegistry = [];\n`;
 
   // appConfig is optional: when no app-config.ts file exists, fall back to an
   // empty config so the middleware chain still composes without the user
@@ -54,13 +77,17 @@ export function generateCoreAppModule(
     `import routes from '${routesAbsPath}';\n` +
     apiImport +
     appConfigImport +
+    registryDecl +
     `\n` +
-    `export const serverImports = routes.serverImports;\n` +
+    // Include the registry so the Cloudflare adapter's Durable Object builds its
+    // room registry from route-attached AND src/server rooms alike.
+    `export const serverImports = [...routes.serverImports, ...serverRegistry];\n` +
     `\n` +
     `export const app = createServerEntry({\n` +
     `  routes,\n` +
     `  layout: Layout,\n` +
     `  appConfig,\n` +
+    `  serverRegistry,\n` +
     apiOption +
     `  dev: import.meta.env.DEV,\n` +
     `});\n` +
@@ -240,6 +267,12 @@ export interface ServerEntryPluginOptions {
    * app), but the option name itself must be supplied.
    */
   appConfig: string;
+  /**
+   * Project-relative or absolute path to the blessed server-registry folder
+   * (default `src/server`). Every `.server.*` module under it is globbed into
+   * the server build. Absent-on-disk is fine: the registry is simply empty.
+   */
+  serverDir: string;
   adapter: HonoPreactAdapter;
   coreAppPath: string; // absolute path to write the core app module
   entryWrapperPath: string; // absolute path to write the adapter wrapper
@@ -276,11 +309,26 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         ? candidateAppConfig
         : undefined;
 
+      // Build the registry glob only when the folder exists, so a project
+      // without a `src/server` dir emits `serverRegistry = []` (no glob at all)
+      // rather than a glob that matches nothing. `import.meta.glob` needs a
+      // root-relative literal, so normalize to `/<dir>/**/*.server.{...}` with
+      // posix separators.
+      const serverDirAbsPath = path.isAbsolute(opts.serverDir)
+        ? opts.serverDir
+        : path.resolve(root, opts.serverDir);
+      const serverRegistryGlob = fs.existsSync(serverDirAbsPath)
+        ? '/' +
+          path.relative(root, serverDirAbsPath).split(path.sep).join('/') +
+          '/**/*.server.{ts,tsx,js,jsx}'
+        : undefined;
+
       const source = generateCoreAppModule({
         layoutAbsPath,
         routesAbsPath,
         apiAbsPath,
         appConfigAbsPath,
+        serverRegistryGlob,
       });
       fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
       fs.writeFileSync(opts.coreAppPath, source, 'utf8');

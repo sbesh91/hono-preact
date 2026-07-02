@@ -99,6 +99,75 @@ describe('pageActionsHandler', () => {
     expect(body).toEqual({ __outcome: 'success', data: { id: 42 } });
   });
 
+  // A src/server registry action is not in any route's byPath map; it resolves
+  // through the moduleKey fallback the handler tries when byPath misses.
+  const registryHandler = (pageUseByPath: PageUseResolver = async () => []) => {
+    const entry = {
+      fn: async () => ({ ran: 'registry' }),
+      use: [] as ReadonlyArray<unknown>,
+      moduleKey: 'src/server/reports.server',
+      routeId: undefined as string | undefined,
+    };
+    return pageActionsHandler({
+      resolverByPath: async () => new Map(), // no route action map
+      resolverByModuleKey: async (moduleKey, name) =>
+        moduleKey === entry.moduleKey && name === 'export' ? entry : undefined,
+      resolvePageUseByPath: pageUseByPath,
+      resolvePageUseByPattern: async () => [],
+      renderPage: (async (c: { html: (s: string) => unknown }) =>
+        c.html('x')) as never,
+      resolvePageNode: () => h('div', null),
+      appConfig: { use: [] },
+    });
+  };
+
+  const postRegistry = (handler: ReturnType<typeof pageActionsHandler>) =>
+    new Hono().post('*', handler).request('/some/page', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'src/server/reports.server',
+        action: 'export',
+        payload: {},
+      }),
+    });
+
+  it('dispatches a route-less src/server action via the byModuleKey fallback', async () => {
+    const res = await postRegistry(registryHandler());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      __outcome: 'success',
+      data: { ran: 'registry' },
+    });
+  });
+
+  it('runs a route-less registry action behind the invoking page gates', async () => {
+    // byPath (keyed on the POST URL) supplies the current page's use chain, so
+    // a route-less action inherits the gates of the page it is called from.
+    const res = await postRegistry(
+      registryHandler(async () => [denyGuard(401, 'page-gate')])
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('404s a moduleKey miss (no registry entry)', async () => {
+    const handler = pageActionsHandler({
+      resolverByPath: async () => new Map(),
+      resolverByModuleKey: async () => undefined,
+      resolvePageUseByPath: async () => [],
+      resolvePageUseByPattern: async () => [],
+      renderPage: (async (c: { html: (s: string) => unknown }) =>
+        c.html('x')) as never,
+      resolvePageNode: () => h('div', null),
+      appConfig: { use: [] },
+    });
+    const res = await postRegistry(handler);
+    expect(res.status).toBe(404);
+  });
+
   // A page-use middleware that denies with a distinct status, so the response
   // status reveals WHICH resolver (byPattern vs byPath) supplied the chain.
   const denyGuard = (status: 401 | 403 | 418, message: string) =>

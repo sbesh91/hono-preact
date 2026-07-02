@@ -15,7 +15,10 @@ import {
   makePageUseResolver,
   makeSocketRoutePathResolver,
 } from './route-server-modules.js';
-import { assertRouteBindingsMatchMount } from './route-binding-guard.js';
+import {
+  assertRouteBindingsMatchMount,
+  assertNoRouteBoundRegistryUnits,
+} from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
   buildSocketRegistry,
@@ -33,6 +36,13 @@ export interface CreateServerEntryOptions {
   appConfig?: AppConfig;
   /** Optional user-authored Hono app, mounted ahead of the reserved paths. */
   api?: Hono;
+  /**
+   * The `src/server/**` registry: lazy loaders for `.server.*` modules that
+   * live in the blessed server folder rather than being attached to a route.
+   * Their loaders (moduleKey RPC), rooms, and sockets register alongside the
+   * route-attached modules; their actions dispatch via the moduleKey fallback.
+   */
+  serverRegistry?: ReadonlyArray<() => Promise<unknown>>;
   /** Rebuild server-module maps per request so .server edits hot-reload. */
   dev?: boolean;
 }
@@ -55,6 +65,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     layout: Layout,
     appConfig = { use: [] },
     api,
+    serverRegistry = [],
     dev = false,
   } = opts;
 
@@ -63,10 +74,14 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // handlers (which run per request) can observe it.
   env.current = 'server';
 
-  const serverModules = routeServerModules(routes);
+  // Route-attached modules plus the src/server registry. Loaders, rooms, and
+  // sockets resolve by moduleKey / registry walk, so both sources feed the same
+  // flat module list.
+  const serverModules = [...routeServerModules(routes), ...serverRegistry];
   const pageUseResolver = makePageUseResolver(routes);
   const pageActionResolvers = makePageActionResolvers(routes.serverRoutes, {
     dev,
+    registryModules: serverRegistry,
   });
 
   // Build socket registry from the same server imports that build the loaders
@@ -112,13 +127,20 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // the request closed (500) rather than running through a wrong/empty gate
   // chain. Cached like the socket registries: one walk at boot, per-request in
   // dev for hot-reload parity.
+  //
+  // The registry check rides along: a src/server module may hold only route-
+  // less units in Phase 1, so a `serverRoute(...)`-bound loader/action there
+  // (which would silently resolve an empty gate chain) fails the boot closed.
+  const runBootChecks = () =>
+    Promise.all([
+      assertRouteBindingsMatchMount(routes.serverRoutes),
+      assertNoRouteBoundRegistryUnits(serverRegistry),
+    ]).then(() => undefined);
   let cachedRouteBindingCheck: Promise<void> | null = null;
   const routeBindingCheck = () =>
     dev
-      ? assertRouteBindingsMatchMount(routes.serverRoutes)
-      : (cachedRouteBindingCheck ??= assertRouteBindingsMatchMount(
-          routes.serverRoutes
-        ).catch((err) => {
+      ? runBootChecks()
+      : (cachedRouteBindingCheck ??= runBootChecks().catch((err) => {
           cachedRouteBindingCheck = null;
           throw err;
         }));
@@ -142,6 +164,11 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   });
   const actions = pageActionsHandler({
     resolverByPath: pageActionResolvers.byPath,
+    // src/server registry actions are not attached to a route URL, so a
+    // byPath miss falls back to a moduleKey lookup (the client always sends the
+    // action's moduleKey). Their page-use still resolves by the request URL,
+    // i.e. the gates of the page they are invoked from.
+    resolverByModuleKey: pageActionResolvers.byModuleKey,
     resolvePageUseByPath: pageUseResolver.byPath,
     // Route-bound actions (serverRoute(r).action) resolve their page-use chain
     // from their declared pattern, mirroring the loaders RPC. Same resolver,

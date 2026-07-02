@@ -38,6 +38,23 @@ describe('makePageActionResolvers', () => {
     expect(entry?.moduleKey).toBe('pages/foo.server');
   });
 
+  it('indexes src/server registry actions into byModuleKey but NOT byPath', async () => {
+    const registryThunk = async () => ({
+      __moduleKey: 'src/server/reports.server',
+      serverActions: { export: async () => 'exported' },
+    });
+    const { byPath, byModuleKey } = makePageActionResolvers(routes, {
+      dev: false,
+      registryModules: [registryThunk],
+    });
+    // Reachable by moduleKey (the handler's fallback path)...
+    const entry = await byModuleKey('src/server/reports.server', 'export');
+    expect(entry?.moduleKey).toBe('src/server/reports.server');
+    // ...but never folded into a route's URL action map.
+    const fooMap = await byPath('/foo');
+    expect(fooMap.get('export')).toBeUndefined();
+  });
+
   it('returns undefined when the action name does not exist on the chain', async () => {
     const { byPath } = makePageActionResolvers(routes, { dev: false });
     const map = await byPath('/foo');

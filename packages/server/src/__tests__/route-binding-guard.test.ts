@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { assertRouteBindingsMatchMount } from '../route-binding-guard.js';
+import {
+  assertRouteBindingsMatchMount,
+  assertNoRouteBoundRegistryUnits,
+} from '../route-binding-guard.js';
 import type { ServerRoute } from '@hono-preact/iso';
 
 // A route-bound export carries a non-enumerable `__routeId`; mirror that here.
@@ -66,5 +69,44 @@ describe('assertRouteBindingsMatchMount', () => {
     await expect(
       assertRouteBindingsMatchMount(routes)
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('assertNoRouteBoundRegistryUnits', () => {
+  const registryOf = (mod: Record<string, unknown>) => [async () => mod];
+
+  it('passes for route-less registry modules (bare units)', async () => {
+    const registry = registryOf({
+      __moduleKey: 'src/server/reports',
+      serverLoaders: { totals: async () => 'ok' },
+      serverActions: { export: async () => 'ok' },
+    });
+    await expect(
+      assertNoRouteBoundRegistryUnits(registry)
+    ).resolves.toBeUndefined();
+  });
+
+  it('passes for an empty registry', async () => {
+    await expect(assertNoRouteBoundRegistryUnits([])).resolves.toBeUndefined();
+  });
+
+  it('throws when a registry module has a route-bound loader', async () => {
+    const registry = registryOf({
+      __moduleKey: 'src/server/reports',
+      serverLoaders: { totals: bound('/reports') },
+    });
+    await expect(assertNoRouteBoundRegistryUnits(registry)).rejects.toThrow(
+      /Route-bound loader 'totals' \(serverRoute\('\/reports'\)\) lives in the src\/server registry/
+    );
+  });
+
+  it('throws when a registry module has a route-bound action', async () => {
+    const registry = registryOf({
+      __moduleKey: 'src/server/reports',
+      serverActions: { archive: bound('/reports/:id') },
+    });
+    await expect(assertNoRouteBoundRegistryUnits(registry)).rejects.toThrow(
+      /Route-bound action 'archive'.*supports route-less units only/s
+    );
   });
 });

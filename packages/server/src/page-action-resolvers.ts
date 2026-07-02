@@ -76,7 +76,15 @@ function extractActions(
  */
 export function makePageActionResolvers(
   serverRoutes: ReadonlyArray<ServerRoute>,
-  options: { dev?: boolean } = {}
+  options: {
+    dev?: boolean;
+    /**
+     * src/server registry modules. Their actions are indexed into `byModuleKey`
+     * only (they have no route path, so they never enter `byPath`); the handler
+     * falls back to `byModuleKey` when a byPath lookup misses.
+     */
+    registryModules?: ReadonlyArray<() => Promise<unknown>>;
+  } = {}
 ): {
   byPath: (path: string) => Promise<Map<string, ActionEntry>>;
   byModuleKey: (
@@ -85,6 +93,7 @@ export function makePageActionResolvers(
   ) => Promise<ActionEntry | undefined>;
 } {
   const dev = options.dev ?? false;
+  const registryModules = options.registryModules ?? [];
 
   type Built = {
     byPathMap: Map<string, Map<string, ActionEntry>>;
@@ -131,6 +140,23 @@ export function makePageActionResolvers(
         // .server.* files claiming the same route); the route validator is
         // the right place to surface that.
         byPathMap.set(route.path, merged);
+      })
+    );
+
+    // src/server registry modules have no route path, so index their actions
+    // into byModuleKey only. The action handler falls back here when the
+    // request URL's route map has no matching (name, moduleKey) entry.
+    await Promise.all(
+      registryModules.map(async (thunk) => {
+        const mod = await load(thunk);
+        for (const { name, entry } of extractActions(mod)) {
+          let m = byModuleKeyMap.get(entry.moduleKey);
+          if (!m) {
+            m = new Map();
+            byModuleKeyMap.set(entry.moduleKey, m);
+          }
+          m.set(name, entry);
+        }
       })
     );
 
