@@ -153,6 +153,36 @@ describe('pageActionsHandler', () => {
     expect(res.status).toBe(401);
   });
 
+  it('does not let the moduleKey fallback reach a route-attached action', async () => {
+    // byPath has the action for its route, but the client posts from a URL
+    // whose route map misses it; a registry-only byModuleKey must NOT rescue
+    // it (that would bypass the route's gates). Here byModuleKey returns
+    // undefined for the route module, so the miss is a 404.
+    const handler = pageActionsHandler({
+      resolverByPath: async () => new Map(), // wrong URL: no match
+      resolverByModuleKey: async () => undefined, // route actions are not indexed
+      resolvePageUseByPath: async () => [],
+      resolvePageUseByPattern: async () => [],
+      renderPage: (async (c: { html: (s: string) => unknown }) =>
+        c.html('x')) as never,
+      resolvePageNode: () => h('div', null),
+      appConfig: { use: [] },
+    });
+    const res = await new Hono().post('*', handler).request('/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/gated.server',
+        action: 'deleteProject',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(404);
+  });
+
   it('404s a moduleKey miss (no registry entry)', async () => {
     const handler = pageActionsHandler({
       resolverByPath: async () => new Map(),

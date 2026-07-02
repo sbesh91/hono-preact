@@ -31,11 +31,12 @@ describe('makePageActionResolvers', () => {
     expect(map.get('logout')?.moduleKey).toBe('pages/_layout.server');
   });
 
-  it('byModuleKey returns the per-action entry for that module', async () => {
+  it('does NOT expose route-attached actions via byModuleKey (auth safety)', async () => {
+    // A route-attached action is byPath-only; exposing it by module key would
+    // let a client invoke it from an ungated URL and bypass its route gates.
     const { byModuleKey } = makePageActionResolvers(routes, { dev: false });
-    const entry = await byModuleKey('pages/foo.server', 'submit');
-    expect(entry).toBeTruthy();
-    expect(entry?.moduleKey).toBe('pages/foo.server');
+    expect(await byModuleKey('pages/foo.server', 'submit')).toBeUndefined();
+    expect(await byModuleKey('pages/_layout.server', 'logout')).toBeUndefined();
   });
 
   it('indexes src/server registry actions into byModuleKey but NOT byPath', async () => {
@@ -213,7 +214,7 @@ describe('makePageActionResolvers', () => {
       ],
       { dev: true }
     );
-    const entry = await resolvers.byModuleKey('pages/foo.server', 'submit');
+    const entry = (await resolvers.byPath('/foo')).get('submit');
     expect(entry?.input).toBe(schema);
   });
 
@@ -238,7 +239,7 @@ describe('makePageActionResolvers', () => {
       ],
       { dev: true }
     );
-    const entry = await resolvers.byModuleKey('pages/foo.server', 'submit');
+    const entry = (await resolvers.byPath('/foo/42')).get('submit');
     expect(entry?.routeId).toBe('/foo/:id');
   });
 
