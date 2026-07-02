@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertRouteBindingsMatchMount,
-  assertNoRouteBoundRegistryUnits,
+  assertRegistryRouteBindingsValid,
 } from '../route-binding-guard.js';
 import type { ServerRoute } from '@hono-preact/iso';
 
@@ -72,8 +72,9 @@ describe('assertRouteBindingsMatchMount', () => {
   });
 });
 
-describe('assertNoRouteBoundRegistryUnits', () => {
+describe('assertRegistryRouteBindingsValid', () => {
   const registryOf = (mod: Record<string, unknown>) => [async () => mod];
+  const patterns = new Set(['/reports', '/reports/:id']);
 
   it('passes for route-less registry modules (bare units)', async () => {
     const registry = registryOf({
@@ -82,31 +83,48 @@ describe('assertNoRouteBoundRegistryUnits', () => {
       serverActions: { export: async () => 'ok' },
     });
     await expect(
-      assertNoRouteBoundRegistryUnits(registry)
+      assertRegistryRouteBindingsValid(registry, patterns)
     ).resolves.toBeUndefined();
   });
 
   it('passes for an empty registry', async () => {
-    await expect(assertNoRouteBoundRegistryUnits([])).resolves.toBeUndefined();
+    await expect(
+      assertRegistryRouteBindingsValid([], patterns)
+    ).resolves.toBeUndefined();
   });
 
-  it('throws when a registry module has a route-bound loader', async () => {
+  it('passes when a route-bound unit targets a real route pattern', async () => {
     const registry = registryOf({
       __moduleKey: 'src/server/reports',
       serverLoaders: { totals: bound('/reports') },
+      serverActions: { archive: bound('/reports/:id') },
     });
-    await expect(assertNoRouteBoundRegistryUnits(registry)).rejects.toThrow(
-      /Route-bound loader 'totals' \(serverRoute\('\/reports'\)\) lives in the src\/server registry/
+    await expect(
+      assertRegistryRouteBindingsValid(registry, patterns)
+    ).resolves.toBeUndefined();
+  });
+
+  it('throws when a route-bound loader targets a route not in the table', async () => {
+    const registry = registryOf({
+      __moduleKey: 'src/server/reports',
+      serverLoaders: { totals: bound('/nope') },
+    });
+    await expect(
+      assertRegistryRouteBindingsValid(registry, patterns)
+    ).rejects.toThrow(
+      /Route-bound loader 'totals' in the src\/server registry is bound to route '\/nope', which is not a route/
     );
   });
 
-  it('throws when a registry module has a route-bound action', async () => {
+  it('throws when a route-bound action targets a route not in the table', async () => {
     const registry = registryOf({
       __moduleKey: 'src/server/reports',
-      serverActions: { archive: bound('/reports/:id') },
+      serverActions: { archive: bound('/reports/:id/extra') },
     });
-    await expect(assertNoRouteBoundRegistryUnits(registry)).rejects.toThrow(
-      /Route-bound action 'archive'.*supports route-less units only/s
+    await expect(
+      assertRegistryRouteBindingsValid(registry, patterns)
+    ).rejects.toThrow(
+      /Route-bound action 'archive'.*is not a route in your route table/s
     );
   });
 });
