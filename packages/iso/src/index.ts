@@ -208,6 +208,7 @@ export {
   type ViewTransitionLifecycle,
   type ViewTransitionPhaseCallback,
 } from './view-transition-lifecycle.js';
+export { skipNextNavTransition } from './internal/route-change.js';
 export type {
   ViewTransitionEvent,
   NavDirection,
