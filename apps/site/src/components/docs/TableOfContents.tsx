@@ -79,6 +79,12 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     const el = document.getElementById(id);
     if (!el) return;
     event.preventDefault();
+    // Arm the skip and write the hash BEFORE any state update: setActiveId
+    // triggers the framework's render scheduler synchronously, and it must see
+    // the new location.href and the armed flag together so the skip is consumed
+    // on this click's own flush (not left armed to suppress a later navigation).
+    skipNextNavTransition();
+    history.pushState(null, '', `#${id}`);
     setActiveId(id);
     // Lock the highlight to the clicked target until the smooth scroll settles.
     scrollLock.current = true;
@@ -86,8 +92,6 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     lockTimer.current = setTimeout(() => {
       scrollLock.current = false;
     }, 700);
-    skipNextNavTransition();
-    history.pushState(null, '', `#${id}`);
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 

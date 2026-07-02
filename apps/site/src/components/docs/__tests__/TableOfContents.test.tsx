@@ -56,6 +56,21 @@ describe('TableOfContents', () => {
     target.remove();
   });
 
+  it('writes the section hash to the URL on a plain left-click', () => {
+    const target = document.createElement('h2');
+    target.id = 'how-it-works';
+    target.scrollIntoView = vi.fn();
+    document.body.appendChild(target);
+
+    const { getByRole } = render(<TableOfContents headings={headings} />);
+    fireEvent.click(getByRole('link', { name: 'How it works' }), {
+      button: 0,
+    });
+
+    expect(location.hash).toBe('#how-it-works');
+    target.remove();
+  });
+
   it('holds the highlight on the clicked target during the smooth scroll', () => {
     // Run the scroll-spy's rAF callback synchronously so a scroll tick resolves
     // within the test.
