@@ -57,6 +57,8 @@ import {
   getLastActionResult,
   clearLastActionResult,
 } from '../internal/action-result-store.js';
+import { getValidationIssues } from '../get-validation-issues.js';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 const stub = {
   __module: 'movies',
@@ -1137,5 +1139,232 @@ describe('useAction — client store writes', () => {
     if (stored?.kind === 'error') {
       expect(stored.message).toBe('DB error');
     }
+  });
+});
+
+// A hand-rolled Standard Schema: `title` must be a non-empty string.
+const titleSchema: StandardSchemaV1<unknown, { title: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (input: unknown) => {
+      const v = input as { title?: unknown };
+      return typeof v?.title === 'string' && v.title.length > 0
+        ? { value: { title: v.title } }
+        : { issues: [{ message: 'title is required', path: ['title'] }] };
+    },
+  },
+};
+
+const throwingSchema: StandardSchemaV1<unknown, { title: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: () => {
+      throw new Error('schema exploded');
+    },
+  },
+};
+
+const asyncRejectSchema: StandardSchemaV1<unknown, { title: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: () => Promise.reject(new Error('async schema exploded')),
+  },
+};
+
+describe('useAction client pre-validation (schema)', () => {
+  afterEach(() => clearLastActionResult('movies', 'create'));
+
+  it('rejects an invalid payload locally without a fetch, as a deny(422)+issues', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const onMutate = vi.fn(() => 'snap');
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema, onMutate, onError })
+    );
+
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: '' });
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error.message).toBe('Validation failed');
+    expect(result.current.pending).toBe(false);
+    expect(result.current.error?.message).toBe('Validation failed');
+    expect(onMutate).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    const recorded = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(recorded?.kind).toBe('deny');
+    if (recorded?.kind === 'deny') {
+      expect(recorded.status).toBe(422);
+    }
+    const issues = getValidationIssues(recorded);
+    expect(issues).toEqual([{ message: 'title is required', path: ['title'] }]);
+  });
+
+  it('sends the original payload when the schema passes', async () => {
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema })
+    );
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(
+      (fetchSpy.mock.calls[0][1] as RequestInit).body as string
+    );
+    expect(body.payload).toEqual({ title: 'Dune' });
+  });
+
+  it('fails open when the schema throws (request proceeds to the server)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: throwingSchema })
+    );
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
+  });
+
+  it('fails open when the schema returns a rejected promise (request proceeds to the server)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: asyncRejectSchema })
+    );
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
+  });
+
+  it('clears a stale gate error once a concurrent valid mutate succeeds (F1)', async () => {
+    // Mutate A: a valid payload whose fetch is held open until we resolve it
+    // manually (mirrors the "sets pending true during fetch" deferred-fetch
+    // pattern at the top of this describe block).
+    let resolveFetch!: (v: Response) => void;
+    const fetchSpy = vi.fn(
+      () =>
+        new Promise<Response>((r) => {
+          resolveFetch = r;
+        })
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema })
+    );
+
+    let mutateAPromise!: Promise<MutateResult<{ ok: boolean }>>;
+    await act(async () => {
+      mutateAPromise = result.current.mutate({ title: 'Valid' });
+      // Flush the gate's microtasks (schema validate + runClientSchemaGate)
+      // so the request is actually dispatched before we move on.
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Mutate B: a concurrent invalid payload, rejected locally by the gate
+    // (no fetch), which sets the hook's error.
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+    expect(result.current.error?.message).toBe('Validation failed');
+
+    // Resolve A successfully; its success branch must clear the stale error
+    // B left behind, alongside writing A's data.
+    await act(async () => {
+      resolveFetch(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+      await mutateAPromise;
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.data).toEqual({ ok: true });
+  });
+
+  it('skips the gate and records no validation deny for an already-aborted signal (F2)', async () => {
+    // A real fetch rejects an already-aborted signal with an AbortError; mimic
+    // that instead of relying on an untyped mock return so the mutate's own
+    // abort handling (not the mock) is what's under test.
+    const fetchSpy = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.signal?.aborted) {
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      }
+      return new Promise<Response>(() => {});
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema })
+    );
+
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate(
+        { title: '' },
+        { signal: AbortSignal.abort() }
+      );
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok)
+      expect(outcome.error.message).not.toBe('Validation failed');
+    expect(result.current.error?.message).not.toBe('Validation failed');
+
+    const recorded = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(getValidationIssues(recorded)).toBeNull();
   });
 });

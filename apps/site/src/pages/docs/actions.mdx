@@ -333,7 +333,7 @@ const Movies = () => {
 };
 ```
 
-`useAction` posts to the page URL with `Accept: application/json` and returns a discriminated result. The action body runs identically whether called from `<Form>` or `useAction`.
+`useAction` posts to the page URL with `Accept: application/json` and returns a discriminated result. The action body runs identically whether called from `<Form>` or `useAction`. `useAction` also accepts an opt-in `schema` option for client-side pre-validation; see [Validation](/docs/validation#pre-validating-an-imperative-action).
 
 ### Options
 

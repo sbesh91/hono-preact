@@ -83,6 +83,10 @@ export const FORM_ACTION_FIELD = '__action';
  */
 export const VALIDATION_ISSUES_KEY = '__hpValidationIssues';
 
+/** The `deny(422)` message for a schema-validation failure, on both the server
+ *  (coerceActionInput) and the client (useAction gate), so they stay identical. */
+export const VALIDATION_FAILED_MESSAGE = 'Validation failed';
+
 /**
  * The socket-upgrade endpoint (a header-only GET; selectors ride the query).
  * Consumers: iso `ws-upgrader.ts` (the seam reads this), server

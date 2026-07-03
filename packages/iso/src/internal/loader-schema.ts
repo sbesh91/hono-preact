@@ -3,7 +3,10 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ServerCaller } from '../server-caller.js';
 import { validateWithSchema } from '../validate.js';
 import { deny } from '../outcomes.js';
-import { VALIDATION_ISSUES_KEY } from './contract.js';
+import {
+  VALIDATION_ISSUES_KEY,
+  VALIDATION_FAILED_MESSAGE,
+} from './contract.js';
 
 /**
  * Loose view of a loader function for the post-coercion call seam: location
@@ -78,7 +81,7 @@ export async function coerceActionInput(
 ): Promise<unknown> {
   const validated = await validateWithSchema(input, payload);
   if (!validated.ok) {
-    throw deny(422, 'Validation failed', {
+    throw deny(422, VALIDATION_FAILED_MESSAGE, {
       data: { [VALIDATION_ISSUES_KEY]: validated.issues },
     });
   }
