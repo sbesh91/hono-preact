@@ -76,6 +76,7 @@ export {
   useNavigationState,
   subscribeNavigationState,
   type NavigationState,
+  type UseNavigationStateOptions,
 } from './use-navigation-state.js';
 export { useOptimistic } from './optimistic.js';
 export type { OptimisticHandle, UseOptimisticOptions } from './optimistic.js';

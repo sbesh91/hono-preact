@@ -7,6 +7,15 @@ export interface NavigationState {
   pending: boolean;
 }
 
+export interface UseNavigationStateOptions {
+  /**
+   * Report `pending: true` only after the navigation has stayed pending for
+   * `delayMs` (flash prevention for fast, cache-hit navigations). Flips back to
+   * false immediately when the navigation ends. Default 0 (report immediately).
+   */
+  delayMs?: number;
+}
+
 /**
  * Subscribe to navigation-pending changes without React. Calls `listener` once
  * immediately with the current state, then on every change. Returns an
@@ -26,9 +35,9 @@ export function subscribeNavigationState(
  * has stayed pending that long (flash prevention for fast, cache-hit
  * navigations); it drops to false immediately when the navigation ends.
  */
-export function useNavigationState(options?: {
-  delayMs?: number;
-}): NavigationState {
+export function useNavigationState(
+  options?: UseNavigationStateOptions
+): NavigationState {
   const raw = useStoreSnapshot(subscribeNavState, getNavPending);
   const delayMs = options?.delayMs ?? 0;
   const [delayed, setDelayed] = useState(false);
