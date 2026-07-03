@@ -1166,6 +1166,14 @@ const throwingSchema: StandardSchemaV1<unknown, { title: string }> = {
   },
 };
 
+const asyncRejectSchema: StandardSchemaV1<unknown, { title: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: () => Promise.reject(new Error('async schema exploded')),
+  },
+};
+
 describe('useAction client pre-validation (schema)', () => {
   afterEach(() => clearLastActionResult('movies', 'create'));
 
@@ -1242,6 +1250,30 @@ describe('useAction client pre-validation (schema)', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const { result } = renderHook(() =>
       useAction(stub, { schema: throwingSchema })
+    );
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
+  });
+
+  it('fails open when the schema returns a rejected promise (request proceeds to the server)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: asyncRejectSchema })
     );
     await act(async () => {
       await result.current.mutate({ title: '' });

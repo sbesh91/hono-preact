@@ -209,7 +209,7 @@ const CreateTaskButton = () => {
 };
 ```
 
-An invalid payload is rejected locally, no request goes out, and `mutate` surfaces the same `deny(422)` a server validation failure produces, so `getValidationIssues` decodes both the same way. If the schema's `validate` throws, the request proceeds and the server validates instead. The server always re-validates and coerces; the client gate never changes what is sent.
+An invalid payload is rejected locally, no request goes out, and `mutate` surfaces the same `deny(422)` a server validation failure produces, so `getValidationIssues` decodes both the same way. If the schema's `validate` throws, the request proceeds and the server validates instead. The server always re-validates and coerces; the client gate never changes what is sent. Because a client-caught rejection short-circuits before any request, the mutation lifecycle never starts, so `onMutate`/`onError` do not fire for it; the path-independent way to surface issues either way is `getValidationIssues(useActionResult(stub))`, which reads the same whether the client or the server rejected.
 
 ## Loader validation
 
