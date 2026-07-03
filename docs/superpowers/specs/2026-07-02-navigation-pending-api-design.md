@@ -150,7 +150,7 @@ server-snapshot path is needed.
 
 ## Naming
 
-`useNavigationState` / `subscribeNavigationState` / `NavigationState` — one
+`useNavigationState` / `subscribeNavigationState` / `NavigationState`: one
 concept, consistent verb. Returned as an object (not a bare boolean) so future
 fields (e.g. `from`/`to`) can be added without a breaking change. `from`/`to`
 are NOT added now (YAGNI; no concrete consumer).

@@ -22,9 +22,9 @@
 
 ## File structure
 
-- `packages/iso/src/internal/route-change.ts` — add the notify layer: `navStateListeners`, `notifyScheduled`, `lastNotifiedPending`, `notifyNavState()`, `getNavPending()`, `subscribeNavState()`; call `notifyNavState()` from the three `loadingRouters` mutation sites; reset the new state in `__resetTransitionStateForTesting`. (Task 1.)
-- `packages/iso/src/use-navigation-state.ts` — NEW public file: `NavigationState` type + `subscribeNavigationState` (Task 2) + `useNavigationState` hook (Task 3).
-- `packages/iso/src/index.ts` — re-export the three public names.
+- `packages/iso/src/internal/route-change.ts`: add the notify layer: `navStateListeners`, `notifyScheduled`, `lastNotifiedPending`, `notifyNavState()`, `getNavPending()`, `subscribeNavState()`; call `notifyNavState()` from the three `loadingRouters` mutation sites; reset the new state in `__resetTransitionStateForTesting`. (Task 1.)
+- `packages/iso/src/use-navigation-state.ts`: NEW public file: `NavigationState` type + `subscribeNavigationState` (Task 2) + `useNavigationState` hook (Task 3).
+- `packages/iso/src/index.ts`: re-export the three public names.
 - Tests: `packages/iso/src/__tests__/nav-state.test.ts` (Task 1 internal), `packages/iso/src/__tests__/use-navigation-state.test.tsx` (Tasks 2-3), `packages/iso/src/__tests__/use-navigation-state.test-d.ts` (Task 3 types).
 - Docs: a "Global loading indicator" section in an existing navigation docs page (Task 4).
 
@@ -38,8 +38,8 @@
 
 **Interfaces:**
 - Produces (from `packages/iso/src/internal/route-change.js`):
-  - `export function getNavPending(): boolean` — true while any Router is mid-suspense.
-  - `export function subscribeNavState(onChange: () => void): () => void` — stable-reference subscribe; `onChange` fires (coalesced to a microtask) only when the net pending value changes.
+  - `export function getNavPending(): boolean`: true while any Router is mid-suspense.
+  - `export function subscribeNavState(onChange: () => void): () => void`: stable-reference subscribe; `onChange` fires (coalesced to a microtask) only when the net pending value changes.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -141,7 +141,7 @@ describe('nav-pending notify layer', () => {
 - [ ] **Step 2: Run the test, verify it fails**
 
 Run: `pnpm vitest run packages/iso/src/__tests__/nav-state.test.ts`
-Expected: FAIL — `getNavPending` / `subscribeNavState` are not exported.
+Expected: FAIL: `getNavPending` / `subscribeNavState` are not exported.
 
 - [ ] **Step 3: Add the notify layer**
 
@@ -252,7 +252,7 @@ git commit -m "feat(#202): notify layer over the internal loadingRouters set"
 - Consumes: `getNavPending`, `subscribeNavState` from `./internal/route-change.js` (Task 1).
 - Produces:
   - `export interface NavigationState { pending: boolean }`
-  - `export function subscribeNavigationState(listener: (state: NavigationState) => void): () => void` — calls `listener` once immediately with the current state, then on each change; returns unsubscribe.
+  - `export function subscribeNavigationState(listener: (state: NavigationState) => void): () => void`: calls `listener` once immediately with the current state, then on each change; returns unsubscribe.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -300,7 +300,7 @@ describe('subscribeNavigationState', () => {
 - [ ] **Step 2: Run the test, verify it fails**
 
 Run: `pnpm vitest run packages/iso/src/__tests__/use-navigation-state.test.tsx`
-Expected: FAIL — module `../use-navigation-state.js` does not exist.
+Expected: FAIL: module `../use-navigation-state.js` does not exist.
 
 - [ ] **Step 3: Create the file with the type + imperative subscribe**
 
@@ -434,7 +434,7 @@ Note for the implementer: the notify path is a microtask and the store re-render
 - [ ] **Step 2: Run the tests, verify they fail**
 
 Run: `pnpm vitest run packages/iso/src/__tests__/use-navigation-state.test.tsx`
-Expected: FAIL — `useNavigationState` is not exported.
+Expected: FAIL: `useNavigationState` is not exported.
 
 - [ ] **Step 3: Implement the hook**
 
