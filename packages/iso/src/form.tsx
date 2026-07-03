@@ -29,7 +29,6 @@ import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
 import {
   validateWithSchema,
-  runClientSchemaGate,
   mapIssuesToFields,
   logClientSchemaThrew,
 } from './validate.js';
@@ -264,13 +263,20 @@ export function Form<TPayload, TResult>({
       const payload = collectFormData(fd) as TPayload;
 
       if (schemaRef.current) {
-        const gate = await runClientSchemaGate(schemaRef.current, payload);
-        if (gate.status === 'invalid') {
-          setClientErrors(mapIssuesToFields(gate.issues));
-          return; // block the POST; server never sees an invalid payload
+        try {
+          const result = await validateWithSchema(schemaRef.current, payload);
+          if (!result.ok) {
+            setClientErrors(mapIssuesToFields(result.issues));
+            return; // block the POST; server never sees an invalid payload
+          }
+          // Valid: clear any prior client errors and fall through to POST.
+          setClientErrors({});
+        } catch (err) {
+          // The schema's validate function threw or rejected. Fail open: let the
+          // server validate authoritatively rather than dead-ending the form.
+          logClientSchemaThrew(err);
+          // Fall through to POST below.
         }
-        if (gate.status === 'ok') setClientErrors({}); // clear prior client errors
-        // 'skip' (schema threw): fail open, fall through to POST
       }
 
       let handle: OptimisticHandle | undefined;

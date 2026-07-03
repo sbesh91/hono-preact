@@ -21,7 +21,11 @@ import {
   VALIDATION_FAILED_MESSAGE,
 } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
-import { runClientSchemaGate } from './validate.js';
+import {
+  validateWithSchema,
+  logClientSchemaThrew,
+  type ValidationResult,
+} from './validate.js';
 
 export type ActionRef<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -397,20 +401,24 @@ export function useAction<
       const gateStub = stubRef.current;
       const schema = optionsRef.current?.schema;
       if (schema && !opts?.signal?.aborted) {
-        const gate = await runClientSchemaGate(schema, payload);
-        if (gate.status === 'invalid') {
+        let validated: ValidationResult<TPayload> | undefined;
+        try {
+          validated = await validateWithSchema(schema, payload);
+        } catch (err) {
+          logClientSchemaThrew(err);
+        }
+        if (validated && !validated.ok) {
           const error = new Error(VALIDATION_FAILED_MESSAGE);
           recordOutcome(gateStub.__module, gateStub.__action, {
             kind: 'deny',
             status: 422,
             message: VALIDATION_FAILED_MESSAGE,
-            data: { [VALIDATION_ISSUES_KEY]: gate.issues },
+            data: { [VALIDATION_ISSUES_KEY]: validated.issues },
             submittedPayload: payload,
           });
           setError(error);
           return { ok: false, error };
         }
-        // 'ok' or 'skip': fall through to the request
       }
 
       const controller = new AbortController();

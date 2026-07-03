@@ -126,29 +126,3 @@ export function logClientSchemaThrew(err: unknown): void {
     err
   );
 }
-
-/**
- * Result of the client-side pre-validation gate: the schema passed (`ok`),
- * reported issues (`invalid`), or threw/rejected so the caller should fail open
- * and let the server validate (`skip`). Shared by `<Form schema>` and
- * `useAction({ schema })` so the fail-open flow cannot drift.
- */
-export type ClientSchemaGate<T> =
-  | { status: 'ok'; value: T }
-  | { status: 'invalid'; issues: ValidationIssue[] }
-  | { status: 'skip' };
-
-export async function runClientSchemaGate<T>(
-  schema: StandardSchemaV1<unknown, T>,
-  payload: unknown
-): Promise<ClientSchemaGate<T>> {
-  try {
-    const result = await validateWithSchema(schema, payload);
-    return result.ok
-      ? { status: 'ok', value: result.value }
-      : { status: 'invalid', issues: result.issues };
-  } catch (err) {
-    logClientSchemaThrew(err);
-    return { status: 'skip' };
-  }
-}
