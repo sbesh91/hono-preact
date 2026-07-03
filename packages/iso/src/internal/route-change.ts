@@ -397,7 +397,6 @@ function scheduleRender(process: ProcessFn): void {
     // perpetually cold and burn the cold-load timeout. This nav re-populates the
     // set as its own Routers suspend.
     loadingRouters.clear();
-    reconcileNavState();
   }
 
   const skip = navigated && skipNextTransition;
@@ -405,7 +404,14 @@ function scheduleRender(process: ProcessFn): void {
   lastHref = href;
   const start = navigated && !skip ? getStartViewTransition() : undefined;
   if (!start) {
-    defaultSchedule(process);
+    if (navigated) {
+      defaultSchedule(() => {
+        process();
+        reconcileNavState(); // read the new route's real suspend state post-render
+      });
+    } else {
+      defaultSchedule(process);
+    }
     return;
   }
   runNavTransition(process, start);
@@ -491,6 +497,7 @@ function runNavTransition(
     transition = start(async () => {
       // The old snapshot has been captured. Flush the navigation render.
       process();
+      reconcileNavState();
       if (navGen !== myGen) return;
       event = buildEvent(from);
       event.transition = transition;
