@@ -403,15 +403,22 @@ export function useAction<
       const gateStub = stubRef.current;
       const schema = optionsRef.current?.schema;
       if (schema && !opts?.signal?.aborted) {
-        // Only a schema-using mutate needs validate.js; import it lazily to keep
-        // it out of the base useAction chunk (mirrors the sse-decoder import).
-        const { validateWithSchema, logClientSchemaThrew } =
-          await import('./validate.js');
         let validated: ValidationResult<TPayload> | undefined;
         try {
-          validated = await validateWithSchema(schema, payload);
-        } catch (err) {
-          logClientSchemaThrew(err);
+          // Only a schema-using mutate needs validate.js; import it lazily to
+          // keep it out of the base useAction chunk (mirrors the sse-decoder
+          // import). Fail open if the chunk itself cannot load: the server
+          // validates authoritatively, so a validator that will not load must
+          // not block the request.
+          const { validateWithSchema, logClientSchemaThrew } =
+            await import('./validate.js');
+          try {
+            validated = await validateWithSchema(schema, payload);
+          } catch (err) {
+            logClientSchemaThrew(err);
+          }
+        } catch {
+          // validate.js failed to load; fail open (validated stays undefined).
         }
         if (validated && !validated.ok) {
           const error = new Error(VALIDATION_FAILED_MESSAGE);
