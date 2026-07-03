@@ -174,6 +174,43 @@ const TitleField = () => {
 
 Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues and server-returned `deny(422)` issues into the same field-error surface, so client-skipped and server-caught errors render identically. Client pre-validation errors clear as you type once a field has been shown an error; server-returned field errors (from a `deny(422)` response) clear on the next submit rather than on input.
 
+### Pre-validating an imperative action
+
+`useAction` takes the same opt-in `schema` as `<Form>`, so an action called from a click handler or other imperative code gets the same client-side gate.
+
+```tsx
+import { useAction, useActionResult, getValidationIssues } from 'hono-preact';
+import { serverActions } from './tasks.server.js';
+import { NewTaskSchema } from './tasks.schema.js';
+
+const CreateTaskButton = () => {
+  const { mutate, pending } = useAction(serverActions.createTask, {
+    schema: NewTaskSchema,
+  });
+  const issues = getValidationIssues(useActionResult(serverActions.createTask));
+
+  return (
+    <>
+      <button
+        onClick={() => mutate({ title: '', priority: 'medium' })}
+        disabled={pending}
+      >
+        Create
+      </button>
+      {issues && (
+        <ul role="alert">
+          {issues.map((issue, i) => (
+            <li key={i}>{issue.message}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+};
+```
+
+An invalid payload is rejected locally, no request goes out, and `mutate` surfaces the same `deny(422)` a server validation failure produces, so `getValidationIssues` decodes both the same way. If the schema's `validate` throws, the request proceeds and the server validates instead. The server always re-validates and coerces; the client gate never changes what is sent.
+
 ## Loader validation
 
 Pass `searchSchema` or `paramsSchema` to `serverRoute(path).loader(fn, opts)` to validate and coerce URL params. Validation schemas apply to route-bound loaders because they validate the URL's search and path params, which only route-bound loaders have.
@@ -288,6 +325,12 @@ A future option to configure validation position in the middleware chain is trac
 | Prop     | Type                                  | Description                                                                                                                                        |
 | -------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schema` | `StandardSchemaV1<unknown, TPayload>` | Schema for client-side pre-validation. Must live in a shared (non-`.server`) module. Typed to the action's payload; mismatches are compile errors. |
+
+### `useAction(stub, { schema })`
+
+| Option   | Type                                  | Description                                                                                                                                                     |
+| -------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema` | `StandardSchemaV1<unknown, TPayload>` | Same opt-in client-side pre-validation as `<Form schema>`, for imperative `mutate` calls. Fails open: a throwing schema lets the request through to the server. |
 
 ### `getValidationIssues(result)`
 
