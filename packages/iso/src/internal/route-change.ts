@@ -80,11 +80,11 @@ export function makeRouterLoadTracker(): {
   return {
     onLoadStart: () => {
       loadingRouters.add(token);
-      notifyNavState();
+      reconcileNavState();
     },
     onLoadEnd: () => {
       loadingRouters.delete(token);
-      notifyNavState();
+      reconcileNavState();
     },
   };
 }
@@ -93,39 +93,74 @@ function anyRouterLoading(): boolean {
   return loadingRouters.size > 0;
 }
 
-// Public navigation-pending observation. `loadingRouters` above is the single
-// source of truth; this layer notifies subscribers when the derived "any Router
-// loading" boolean flips. Kept independent of the synchronous scheduler reads of
-// anyRouterLoading() so it cannot affect cold-flush timing.
+// Public navigation-pending observation. `loadingRouters` above is the raw
+// suspense truth; this layer maintains an explicit `navPending` derived from it,
+// smoothed (emit only on real change) and self-healing (a watchdog). Kept
+// independent of the synchronous scheduler reads of anyRouterLoading() so it
+// cannot affect cold-flush timing.
 const navStateListeners = new Set<() => void>();
 let notifyScheduled = false;
-let lastNotifiedPending = false;
+let navPending = false;
+let navPendingWatchdog: ReturnType<typeof setTimeout> | null = null;
+// A leaked token (a suspended Router that unmounts without onLoadEnd, per the
+// per-nav clear comment below) would pin navPending true until the next
+// navigation. Cap it so a global loading indicator self-heals on, say, an error
+// page whose suspending route the ErrorBoundary unmounted.
+const NAV_PENDING_MAX_MS = 10_000;
 
-/** @internal true while any Router is mid-suspense (a navigation is pending). */
+/** @internal The smoothed, self-healing "a navigation is pending" signal. */
 export function getNavPending(): boolean {
-  return loadingRouters.size > 0;
+  return navPending;
 }
 
-// Coalesce synchronous churn (the scheduler's clear() then the new nav's
-// onLoadStart, or a guarded route's double onLoadStart) into one microtask, and
-// fire only when the net pending value actually changed.
-function notifyNavState(): void {
+function emitNavState(): void {
+  for (const l of navStateListeners) {
+    try {
+      l();
+    } catch (err) {
+      // Isolate a misbehaving subscriber so the other navigation-state
+      // listeners still get notified.
+      console.error('hono-preact: a navigation-state listener threw', err);
+    }
+  }
+}
+
+function disarmNavWatchdog(): void {
+  if (navPendingWatchdog !== null) {
+    clearTimeout(navPendingWatchdog);
+    navPendingWatchdog = null;
+  }
+}
+
+function armNavWatchdog(): void {
+  disarmNavWatchdog();
+  navPendingWatchdog = setTimeout(() => {
+    navPendingWatchdog = null;
+    if (!navPending) return;
+    // A leaked token has pinned pending past any real navigation. Reclaim the
+    // set (safe: a real nav's cold-flush wait ended long ago at
+    // COLD_COMMIT_TIMEOUT_MS) so it cannot immediately re-raise, and drop the
+    // public signal.
+    loadingRouters.clear();
+    navPending = false;
+    emitNavState();
+  }, NAV_PENDING_MAX_MS);
+}
+
+// Coalesce synchronous churn (a guarded route's double onLoadStart, nested
+// Routers) into one microtask, then reconcile navPending against the raw set and
+// emit only when it actually changed.
+function reconcileNavState(): void {
   if (notifyScheduled) return;
   notifyScheduled = true;
   queueMicrotask(() => {
     notifyScheduled = false;
-    const now = getNavPending();
-    if (now === lastNotifiedPending) return;
-    lastNotifiedPending = now;
-    for (const l of navStateListeners) {
-      try {
-        l();
-      } catch (err) {
-        // Isolate a misbehaving subscriber so the other navigation-state
-        // listeners still get notified.
-        console.error('hono-preact: a navigation-state listener threw', err);
-      }
-    }
+    const target = loadingRouters.size > 0;
+    if (target === navPending) return;
+    navPending = target;
+    if (target) armNavWatchdog();
+    else disarmNavWatchdog();
+    emitNavState();
   });
 }
 
@@ -162,7 +197,8 @@ export function __resetTransitionStateForTesting(): void {
   loadingRouters.clear();
   navStateListeners.clear();
   notifyScheduled = false;
-  lastNotifiedPending = false;
+  navPending = false;
+  disarmNavWatchdog();
   navGen = 0;
   lastPath =
     typeof location !== 'undefined'
@@ -361,7 +397,7 @@ function scheduleRender(process: ProcessFn): void {
     // perpetually cold and burn the cold-load timeout. This nav re-populates the
     // set as its own Routers suspend.
     loadingRouters.clear();
-    notifyNavState();
+    reconcileNavState();
   }
 
   const skip = navigated && skipNextTransition;
