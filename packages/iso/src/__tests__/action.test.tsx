@@ -1187,12 +1187,17 @@ describe('useAction client pre-validation (schema)', () => {
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.error.message).toBe('Validation failed');
     expect(result.current.pending).toBe(false);
+    expect(result.current.error?.message).toBe('Validation failed');
     expect(onMutate).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
     const recorded = getLastActionResult({
       __module: stub.__module,
       __action: stub.__action,
     });
+    expect(recorded?.kind).toBe('deny');
+    if (recorded?.kind === 'deny') {
+      expect(recorded.status).toBe(422);
+    }
     const issues = getValidationIssues(recorded);
     expect(issues).toEqual([{ message: 'title is required', path: ['title'] }]);
   });
