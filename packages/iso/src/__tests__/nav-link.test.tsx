@@ -275,4 +275,23 @@ describe('NavLink', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     cleanup();
   });
+
+  // Regression (#219 strand): a same-URL click (e.g. the already-active nav
+  // item) must NOT arm the one-shot skip. preact-iso produces no navigated
+  // flush for a same-URL push, so an armed flag would strand and suppress the
+  // transition on the next *real* navigation.
+  it('does not arm on a same-URL click (target equals the current URL)', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(NavLink, { href: '/x', transition: false }, 'go')
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+  });
 });

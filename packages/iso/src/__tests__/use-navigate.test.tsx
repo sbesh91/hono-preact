@@ -11,7 +11,13 @@ vi.mock('preact-iso', async (importOriginal) => {
 });
 
 beforeEach(() => mockRoute.mockClear());
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // Each transition test spies on the same skipNextNavTransition export; restore
+  // so a failing test's unrestored spy does not stay wrapped and leak into the
+  // next (mirrors nav-link.test.tsx).
+  vi.restoreAllMocks();
+});
 
 function Harness({
   path,
@@ -60,6 +66,20 @@ describe('useNavigate', () => {
     click();
     expect(spy).toHaveBeenCalledTimes(1);
     expect(mockRoute).toHaveBeenCalledWith('/x?tab=2', true);
+    spy.mockRestore();
+  });
+
+  // Regression (#219 strand): navigating to the current URL produces no
+  // navigated flush, so arming the one-shot skip would strand it onto the
+  // next real navigation. The navigation still fires; only the arming is
+  // suppressed.
+  it('does not arm when navigating to the current URL', () => {
+    history.replaceState(null, '', '/');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    render(<Harness path="/" options={{ transition: false }} />);
+    click();
+    expect(spy).not.toHaveBeenCalled();
+    expect(mockRoute).toHaveBeenCalledWith('/', false);
     spy.mockRestore();
   });
 
