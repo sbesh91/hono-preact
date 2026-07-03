@@ -27,7 +27,11 @@ import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
 import { useInvalidate } from './use-invalidate.js';
-import { validateWithSchema, mapIssuesToFields } from './validate.js';
+import {
+  validateWithSchema,
+  mapIssuesToFields,
+  logClientSchemaThrew,
+} from './validate.js';
 import { getValidationIssues } from './get-validation-issues.js';
 import { useActionResult } from './use-action-result.js';
 import {
@@ -35,13 +39,6 @@ import {
   FieldErrorPrefixContext,
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
-
-function logClientSchemaThrew(err: unknown): void {
-  console.error(
-    'hono-preact: client schema validation threw; proceeding to server-side validation.',
-    err
-  );
-}
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value

@@ -114,3 +114,15 @@ export function mapIssuesToFields(
   }
   return out;
 }
+
+/**
+ * Fail-open log for when a client-side schema's validate throws or rejects: the
+ * request proceeds to server-side validation rather than dead-ending. Shared by
+ * `<Form schema>` and `useAction({ schema })` so the message cannot drift.
+ */
+export function logClientSchemaThrew(err: unknown): void {
+  console.error(
+    'hono-preact: client schema validation threw; proceeding to server-side validation.',
+    err
+  );
+}
