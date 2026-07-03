@@ -23,10 +23,13 @@ export type NavLinkProps = Omit<
 };
 
 // Whether a plain left-click on this link will trigger a preact-iso client
-// soft-navigation (and thus a view transition worth suppressing). Mirrors
-// preact-iso's handleNav link gate (same-origin, raw href not starting with #,
-// self/empty target, no download) so we arm the one-shot skip only when a
-// navigation will actually follow. Best-effort: preact-iso's optional router
+// soft-navigation to a NEW url (and thus a view transition worth suppressing).
+// Mirrors preact-iso's handleNav link gate (same-origin, raw href not starting
+// with #, self/empty target, no download) so we arm the one-shot skip only when
+// a navigation will actually follow, and additionally refuses a same-url click:
+// preact-iso pushes the same url but Preact bails out with no navigated flush,
+// so the arm would never be consumed and would instead suppress the transition
+// of the NEXT real navigation. Best-effort: preact-iso's optional router
 // `scope` is not mirrored (it is rarely set), so a link outside a scoped router
 // is the one residual case that could arm without navigating.
 function willSoftNavigate(
@@ -48,6 +51,7 @@ function willSoftNavigate(
   if (!/^(_?self)?$/i.test(a.target)) return false; // non-self target = new context
   if (href[0] === '#') return false; // bare in-page anchor: no soft-nav
   if (a.origin !== location.origin) return false; // cross-origin = full load
+  if (a.href === location.href) return false; // same url: no navigated flush follows
   return true;
 }
 

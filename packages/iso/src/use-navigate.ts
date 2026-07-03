@@ -2,6 +2,19 @@ import { useCallback } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { skipNextNavTransition } from './internal/route-change.js';
 
+// A soft navigation to the url we are already on produces no navigated flush, so
+// arming the one-shot transition skip would strand it onto the next real
+// navigation. Only arm when the resolved target actually differs from the
+// current url. Unparseable input falls through to arming (the prior behavior).
+function resolvesToCurrentUrl(path: string): boolean {
+  if (typeof location === 'undefined') return false;
+  try {
+    return new URL(path, location.href).href === location.href;
+  } catch {
+    return false;
+  }
+}
+
 export interface NavigateOptions {
   /** Replace the current history entry instead of pushing a new one. */
   replace?: boolean;
@@ -33,7 +46,8 @@ export function useNavigate(): (
         if (typeof window !== 'undefined') window.location.assign(path);
         return;
       }
-      if (options?.transition === false) skipNextNavTransition();
+      if (options?.transition === false && !resolvesToCurrentUrl(path))
+        skipNextNavTransition();
       route(path, options?.replace ?? false);
     },
     [route]
