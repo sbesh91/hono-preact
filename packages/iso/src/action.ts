@@ -14,8 +14,17 @@ import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
 import type { ServerCaller } from './server-caller.js';
-import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
+import {
+  FORM_MODULE_FIELD,
+  FORM_ACTION_FIELD,
+  VALIDATION_ISSUES_KEY,
+} from './internal/contract.js';
 import { toError } from './internal/to-error.js';
+import {
+  validateWithSchema,
+  logClientSchemaThrew,
+  type ValidationResult,
+} from './validate.js';
 
 export type ActionRef<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -166,7 +175,7 @@ export function _defineRouteAction(
   return defineAction(fn, { ...opts, __routeId: routeId });
 }
 
-type UseActionOptionsCommon<TChunk = never> = {
+type UseActionOptionsCommon<TPayload, TChunk = never> = {
   /**
    * How to update loader caches after the action commits. Three modes:
    *
@@ -184,6 +193,15 @@ type UseActionOptionsCommon<TChunk = never> = {
   invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
   // Chunks arrive over the wire as JSON, so the client sees `Serialize<TChunk>`.
   onChunk?: (chunk: Serialize<TChunk>) => void;
+  /**
+   * Opt-in client-side Standard Schema pre-validation, the imperative parity of
+   * `<Form schema>`. When set, `mutate` validates the payload before the request
+   * and, on failure, rejects it locally as the same `deny(422)` the server would
+   * produce (no round-trip). Fails open: if the schema's validate throws, the
+   * request proceeds and the server validates authoritatively. The client never
+   * coerces the sent payload; the server re-validates and coerces.
+   */
+  schema?: StandardSchemaV1<unknown, TPayload>;
 };
 
 /**
@@ -192,7 +210,7 @@ type UseActionOptionsCommon<TChunk = never> = {
  * parameter, so concurrent calls can be paired with their own snapshot.
  */
 type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
-  UseActionOptionsCommon<TChunk> & {
+  UseActionOptionsCommon<TPayload, TChunk> & {
     onMutate: (payload: TPayload) => TSnapshot;
     onError?: (err: Error, snapshot: TSnapshot) => void;
     onSuccess?: (data: Serialize<TResult>, snapshot: TSnapshot) => void;
@@ -202,12 +220,14 @@ type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
  * Options when `onMutate` is not provided. `onSuccess` / `onError` take
  * only the result / error — there is no snapshot to thread through.
  */
-type UseActionWithoutMutate<TResult, TChunk> =
-  UseActionOptionsCommon<TChunk> & {
-    onMutate?: undefined;
-    onError?: (err: Error) => void;
-    onSuccess?: (data: Serialize<TResult>) => void;
-  };
+type UseActionWithoutMutate<TPayload, TResult, TChunk> = UseActionOptionsCommon<
+  TPayload,
+  TChunk
+> & {
+  onMutate?: undefined;
+  onError?: (err: Error) => void;
+  onSuccess?: (data: Serialize<TResult>) => void;
+};
 
 /**
  * Discriminated by `onMutate`. Providing `onMutate` requires the
@@ -221,7 +241,7 @@ export type UseActionOptions<
   TSnapshot = unknown,
 > =
   | UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot>
-  | UseActionWithoutMutate<TResult, TChunk>;
+  | UseActionWithoutMutate<TPayload, TResult, TChunk>;
 
 /**
  * The value `mutate` resolves to. A discriminated union so callers can
@@ -373,6 +393,33 @@ export function useAction<
       payload: TPayload,
       opts?: { signal?: AbortSignal }
     ): Promise<MutateResult<TResult>> => {
+      // Client pre-validation gate: reject a known-invalid payload before any
+      // side effect (no onMutate, no optimistic, no request), surfacing it as
+      // the same deny(422)+issues the server produces. Fail open on a throwing
+      // schema. pending never flips true on this path.
+      const gateStub = stubRef.current;
+      const schema = optionsRef.current?.schema;
+      if (schema) {
+        let validated: ValidationResult<TPayload> | undefined;
+        try {
+          validated = await validateWithSchema(schema, payload);
+        } catch (err) {
+          logClientSchemaThrew(err);
+        }
+        if (validated && !validated.ok) {
+          const error = new Error('Validation failed');
+          recordOutcome(gateStub.__module, gateStub.__action, {
+            kind: 'deny',
+            status: 422,
+            message: 'Validation failed',
+            data: { [VALIDATION_ISSUES_KEY]: validated.issues },
+            submittedPayload: payload,
+          });
+          setError(error);
+          return { ok: false, error };
+        }
+      }
+
       const controller = new AbortController();
       inflightRef.current.add(controller);
       const onCallerAbort = () => controller.abort();

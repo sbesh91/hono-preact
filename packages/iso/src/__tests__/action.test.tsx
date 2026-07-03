@@ -57,6 +57,8 @@ import {
   getLastActionResult,
   clearLastActionResult,
 } from '../internal/action-result-store.js';
+import { getValidationIssues } from '../get-validation-issues.js';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 const stub = {
   __module: 'movies',
@@ -1137,5 +1139,110 @@ describe('useAction — client store writes', () => {
     if (stored?.kind === 'error') {
       expect(stored.message).toBe('DB error');
     }
+  });
+});
+
+// A hand-rolled Standard Schema: `title` must be a non-empty string.
+const titleSchema: StandardSchemaV1<unknown, { title: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (input: unknown) => {
+      const v = input as { title?: unknown };
+      return typeof v?.title === 'string' && v.title.length > 0
+        ? { value: { title: v.title } }
+        : { issues: [{ message: 'title is required', path: ['title'] }] };
+    },
+  },
+};
+
+const throwingSchema: StandardSchemaV1<unknown, { title: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: () => {
+      throw new Error('schema exploded');
+    },
+  },
+};
+
+describe('useAction client pre-validation (schema)', () => {
+  afterEach(() => clearLastActionResult('movies', 'create'));
+
+  it('rejects an invalid payload locally without a fetch, as a deny(422)+issues', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const onMutate = vi.fn(() => 'snap');
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema, onMutate, onError })
+    );
+
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: '' });
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error.message).toBe('Validation failed');
+    expect(result.current.pending).toBe(false);
+    expect(onMutate).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    const recorded = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    const issues = getValidationIssues(recorded);
+    expect(issues).toEqual([{ message: 'title is required', path: ['title'] }]);
+  });
+
+  it('sends the original payload when the schema passes', async () => {
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema })
+    );
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(
+      (fetchSpy.mock.calls[0][1] as RequestInit).body as string
+    );
+    expect(body.payload).toEqual({ title: 'Dune' });
+  });
+
+  it('fails open when the schema throws (request proceeds to the server)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: throwingSchema })
+    );
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
   });
 });
