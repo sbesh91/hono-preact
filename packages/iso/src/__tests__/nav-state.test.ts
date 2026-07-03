@@ -108,7 +108,7 @@ describe('nav-pending notify layer', () => {
     makeRouterLoadTracker().onLoadStart();
     await flush();
     expect(seen).toEqual([]);
-    subscribeNavState(() => seen.push(true as unknown as boolean));
+    subscribeNavState(() => seen.push(true));
     __resetTransitionStateForTesting();
     makeRouterLoadTracker().onLoadStart();
     await flush();
@@ -137,6 +137,7 @@ describe('nav-pending notify layer', () => {
     t.onLoadEnd();
     await flush();
     expect(seen).toEqual([true, false]);
+    expect(vi.getTimerCount()).toBe(0); // disarmNavWatchdog actually cleared the timer
     await vi.advanceTimersByTimeAsync(10_000); // watchdog must have been disarmed
     expect(seen).toEqual([true, false]);
   });
