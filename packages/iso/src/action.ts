@@ -21,11 +21,10 @@ import {
   VALIDATION_FAILED_MESSAGE,
 } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
-import {
-  validateWithSchema,
-  logClientSchemaThrew,
-  type ValidationResult,
-} from './validate.js';
+// Type-only: the validate.js runtime is loaded lazily inside the schema gate
+// (see mutate) so useAction consumers without a `schema` do not pull it into
+// the base chunk.
+import type { ValidationResult } from './validate.js';
 
 export type ActionRef<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -196,7 +195,10 @@ type UseActionOptionsCommon<TPayload, TChunk = never> = {
   onChunk?: (chunk: Serialize<TChunk>) => void;
   /**
    * Opt-in client-side Standard Schema pre-validation, the imperative parity of
-   * `<Form schema>`. When set, `mutate` validates the payload before the request
+   * `<Form schema>`. Pass the SAME Standard Schema the action declares as its
+   * `input` (author it in a shared, non-`.server` module so the browser can
+   * import it); it is typed to the action's payload, so a mismatched schema is a
+   * compile error. When set, `mutate` validates the payload before the request
    * and, on failure, rejects it locally as the same `deny(422)` the server would
    * produce (no round-trip). Fails open: if the schema's validate throws, the
    * request proceeds and the server validates authoritatively. The client never
@@ -403,9 +405,20 @@ export function useAction<
       if (schema && !opts?.signal?.aborted) {
         let validated: ValidationResult<TPayload> | undefined;
         try {
-          validated = await validateWithSchema(schema, payload);
-        } catch (err) {
-          logClientSchemaThrew(err);
+          // Only a schema-using mutate needs validate.js; import it lazily to
+          // keep it out of the base useAction chunk (mirrors the sse-decoder
+          // import). Fail open if the chunk itself cannot load: the server
+          // validates authoritatively, so a validator that will not load must
+          // not block the request.
+          const { validateWithSchema, logClientSchemaThrew } =
+            await import('./validate.js');
+          try {
+            validated = await validateWithSchema(schema, payload);
+          } catch (err) {
+            logClientSchemaThrew(err);
+          }
+        } catch {
+          // validate.js failed to load; fail open (validated stays undefined).
         }
         if (validated && !validated.ok) {
           const error = new Error(VALIDATION_FAILED_MESSAGE);

@@ -113,7 +113,7 @@ async function callLoader<T>(
       path: location?.path ?? c.req.path,
       pathParams: location?.pathParams ?? {},
       searchParams: location?.searchParams ?? {},
-    } as ServerLoaderCtx['location'],
+    },
     module: ref.__moduleKey ?? '',
     loader: ref.__loaderName ?? '',
   };

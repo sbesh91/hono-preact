@@ -167,6 +167,11 @@ export interface LoadersHandlerOptions {
   defaultTimeoutMs?: number | false;
 }
 
+// Route-independent (bare) loaders have no page tier. Hoisted so the loader RPC
+// hot path does not mint a throwaway empty resolver per bare-loader request; the
+// result is only ever spread into the chain, never mutated.
+const EMPTY_PAGE_USE = (): ReadonlyArray<unknown> => [];
+
 export function loadersHandler(
   glob: LazyGlob | EagerGlob | LazyArray,
   opts: LoadersHandlerOptions
@@ -254,7 +259,7 @@ export function loadersHandler(
         unitTimeoutMs: entry.timeoutMs,
         defaultTimeoutMs,
         appConfig,
-        resolvePageUse: routeBound ? resolvePageUse : () => [],
+        resolvePageUse: routeBound ? resolvePageUse : EMPTY_PAGE_USE,
         path: routeBound ? entry.routeId! : '',
         unitUse: entry.use,
       },

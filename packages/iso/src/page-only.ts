@@ -25,12 +25,14 @@ export {
   isRedirect,
   isDeny,
   isRender,
+  DENY_CODE_STATUS,
 } from './outcomes.js';
 
 export type {
   Outcome,
   RedirectOutcome,
   DenyOutcome,
+  DenyCode,
   RenderOutcome,
   RedirectStatusCode,
   ErrorStatusCode,
