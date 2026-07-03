@@ -18,13 +18,10 @@ import {
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
   VALIDATION_ISSUES_KEY,
+  VALIDATION_FAILED_MESSAGE,
 } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
-import {
-  validateWithSchema,
-  logClientSchemaThrew,
-  type ValidationResult,
-} from './validate.js';
+import { runClientSchemaGate } from './validate.js';
 
 export type ActionRef<TPayload, TResult, TChunk = never> = {
   readonly __module: string;
@@ -399,25 +396,21 @@ export function useAction<
       // schema. pending never flips true on this path.
       const gateStub = stubRef.current;
       const schema = optionsRef.current?.schema;
-      if (schema) {
-        let validated: ValidationResult<TPayload> | undefined;
-        try {
-          validated = await validateWithSchema(schema, payload);
-        } catch (err) {
-          logClientSchemaThrew(err);
-        }
-        if (validated && !validated.ok) {
-          const error = new Error('Validation failed');
+      if (schema && !opts?.signal?.aborted) {
+        const gate = await runClientSchemaGate(schema, payload);
+        if (gate.status === 'invalid') {
+          const error = new Error(VALIDATION_FAILED_MESSAGE);
           recordOutcome(gateStub.__module, gateStub.__action, {
             kind: 'deny',
             status: 422,
-            message: 'Validation failed',
-            data: { [VALIDATION_ISSUES_KEY]: validated.issues },
+            message: VALIDATION_FAILED_MESSAGE,
+            data: { [VALIDATION_ISSUES_KEY]: gate.issues },
             submittedPayload: payload,
           });
           setError(error);
           return { ok: false, error };
         }
+        // 'ok' or 'skip': fall through to the request
       }
 
       const controller = new AbortController();
@@ -550,6 +543,7 @@ export function useAction<
           }
           if (resultValue !== undefined) {
             setData(resultValue);
+            setError(null);
             invokeSuccess(resultValue);
             finalResult = resultValue;
             recordOutcome(currentStub.__module, currentStub.__action, {
@@ -577,6 +571,7 @@ export function useAction<
             success: (data) => {
               const result = data as Serialize<TResult>;
               setData(result);
+              setError(null);
               invokeSuccess(result);
               finalResult = result;
               recordOutcome(currentStub.__module, currentStub.__action, {

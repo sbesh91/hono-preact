@@ -1282,4 +1282,89 @@ describe('useAction client pre-validation (schema)', () => {
     expect(errSpy).toHaveBeenCalledTimes(1);
     errSpy.mockRestore();
   });
+
+  it('clears a stale gate error once a concurrent valid mutate succeeds (F1)', async () => {
+    // Mutate A: a valid payload whose fetch is held open until we resolve it
+    // manually (mirrors the "sets pending true during fetch" deferred-fetch
+    // pattern at the top of this describe block).
+    let resolveFetch!: (v: Response) => void;
+    const fetchSpy = vi.fn(
+      () =>
+        new Promise<Response>((r) => {
+          resolveFetch = r;
+        })
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema })
+    );
+
+    let mutateAPromise!: Promise<MutateResult<{ ok: boolean }>>;
+    await act(async () => {
+      mutateAPromise = result.current.mutate({ title: 'Valid' });
+      // Flush the gate's microtasks (schema validate + runClientSchemaGate)
+      // so the request is actually dispatched before we move on.
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Mutate B: a concurrent invalid payload, rejected locally by the gate
+    // (no fetch), which sets the hook's error.
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+    expect(result.current.error?.message).toBe('Validation failed');
+
+    // Resolve A successfully; its success branch must clear the stale error
+    // B left behind, alongside writing A's data.
+    await act(async () => {
+      resolveFetch(
+        new Response(
+          JSON.stringify({ __outcome: 'success', data: { ok: true } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+      await mutateAPromise;
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.data).toEqual({ ok: true });
+  });
+
+  it('skips the gate and records no validation deny for an already-aborted signal (F2)', async () => {
+    // A real fetch rejects an already-aborted signal with an AbortError; mimic
+    // that instead of relying on an untyped mock return so the mutate's own
+    // abort handling (not the mock) is what's under test.
+    const fetchSpy = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.signal?.aborted) {
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      }
+      return new Promise<Response>(() => {});
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: titleSchema })
+    );
+
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate(
+        { title: '' },
+        { signal: AbortSignal.abort() }
+      );
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok)
+      expect(outcome.error.message).not.toBe('Validation failed');
+    expect(result.current.error?.message).not.toBe('Validation failed');
+
+    const recorded = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(getValidationIssues(recorded)).toBeNull();
+  });
 });
