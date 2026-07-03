@@ -267,15 +267,18 @@ export function loadersHandler(
     );
     if (!composed.ok) {
       // resolvePageUse threw for the declared route id; fail closed so the
-      // loader never runs through a guard-less chain.
+      // loader never runs through a guard-less chain. The raw resolver message
+      // may carry internal detail, so surface it only in dev (matching the
+      // loaderFailure path below); onError always receives the full error for
+      // the observability side channel. (The page-actions-handler twin masks
+      // unconditionally because it has no dev option; both mask in production.)
       onError?.(composed.error, { module, loader: loaderName });
-      const msg =
-        composed.error instanceof Error
-          ? composed.error.message
-          : String(composed.error);
+      const detail = dev
+        ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
+        : '';
       return c.json(
         {
-          error: `Route-bound loader '${entry.routeId}' could not resolve its page-use chain: ${msg}`,
+          error: `Route-bound loader '${entry.routeId}' could not resolve its page-use chain${detail}`,
         },
         500
       );

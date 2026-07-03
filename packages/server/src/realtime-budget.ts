@@ -12,37 +12,51 @@ export function byteLength(s: string): number {
 }
 
 /**
- * Dev-only warning for a data-factory result that would exceed the forward
- * budget on Cloudflare. On Node the result never rides a header, so it works
- * locally and would only fail on deploy; this surfaces it early. A no-op unless
- * `dev` is true and the serialized result is over budget. `undefined` (a
- * factory-less connection) is never over budget. Checks only the data factory
- * result; the room params payload is budgeted on Cloudflare too but is out of
- * scope here (params are small route-key interpolations).
+ * Dev-only warning for a connection whose forwarded context would exceed the
+ * Cloudflare forward budget at connect time. On Node the context never rides a
+ * header, so it works locally and would only fail on deploy; this surfaces it
+ * early. A no-op unless `dev` is true and a serialized segment is over budget.
+ *
+ * A room forwards BOTH its key `params` and its `data`, and Cloudflare budgets
+ * each independently (see `cf/realtime-do-glue.ts`), so pass `params` for the
+ * room path to warn on an over-budget key too. A socket has no params. An
+ * `undefined` segment (e.g. a factory-less connection) is never over budget.
  */
 export function warnIfOverForwardBudget(
   data: unknown,
   dev: boolean,
-  kind: 'socket' | 'room'
+  kind: 'socket' | 'room',
+  params?: unknown
 ): void {
-  if (!dev || data === undefined) return;
+  if (!dev) return;
+  if (kind === 'room') warnSegmentOverBudget(params, kind, 'params');
+  warnSegmentOverBudget(data, kind, 'data');
+}
+
+/** Warn if one forwarded segment (`params` or `data`) is over the byte budget. */
+function warnSegmentOverBudget(
+  value: unknown,
+  kind: 'socket' | 'room',
+  segment: 'params' | 'data'
+): void {
+  if (value === undefined) return;
   let json: string;
   try {
-    json = JSON.stringify(data);
+    json = JSON.stringify(value);
   } catch {
     console.warn(
-      `hono-preact: ${kind} connection data is not JSON-serializable and will ` +
-        'fail the upgrade on Cloudflare (the data rides a JSON-stringified ' +
-        'header to the Durable Object).'
+      `hono-preact: ${kind} connection ${segment} is not JSON-serializable and ` +
+        'will fail the upgrade on Cloudflare (it rides a JSON-stringified header ' +
+        'to the Durable Object).'
     );
     return;
   }
   if (json === undefined || byteLength(json) <= MAX_FORWARD_HEADER_BYTES)
     return;
   console.warn(
-    `hono-preact: ${kind} connection data exceeds the ` +
+    `hono-preact: ${kind} connection ${segment} exceeds the ` +
       `${MAX_FORWARD_HEADER_BYTES}-byte forward limit. It works on Node but will ` +
-      'throw at connect time on Cloudflare (the data rides a request header to ' +
-      'the Durable Object). Keep the data factory result small.'
+      'throw at connect time on Cloudflare (it rides a request header to the ' +
+      'Durable Object). Keep it small.'
   );
 }
