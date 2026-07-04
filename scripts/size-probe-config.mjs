@@ -2,9 +2,22 @@
 // bundles each entry in isolation (esbuild, peers external) and gzips it, so a
 // row reflects only the framework's own code on top of a runtime the consumer
 // already ships.
+//
+// Two properties of this probe to keep in mind when reading the numbers:
+//  - Marginals are NON-ADDITIVE UPPER BOUNDS. Each feature is bundled with
+//    `core` and its whole transitive graph, so two features that share an
+//    internal module both count those shared bytes. Summing rows over-states a
+//    real page (see the `ui-core` note below for the same effect on components).
+//  - It cannot see the app build's dynamic `import()` splits. The probe
+//    force-includes every module (measure script uses `export * as`), so a
+//    feature that lazy-loads part of itself in a real app (e.g. `actions`
+//    dynamically imports sse-decoder + validate) is reported here as if it
+//    shipped that code eagerly. Real per-route bytes are a separate measurement.
 
-// Framework base. Each feature's marginal cost over `core` is computed
-// directly by the measure script as gzip(core+feature) - gzip(core).
+// Framework base: what every route ships regardless of features used. `outcomes`
+// lives here (not under `actions`) because it ships on every route via
+// Routes -> define-routes -> page-middleware-host, independent of action usage.
+// Each feature's marginal cost over `core` is gzip(core+feature) - gzip(core).
 export const CORE_MODULES = [
   'define-app.js',
   'define-routes.js',
@@ -12,27 +25,50 @@ export const CORE_MODULES = [
   'page.js',
   'client-script.js',
   'is-browser.js',
+  'outcomes.js',
 ];
 
 export const FEATURE_MODULES = {
+  // Always-on, NOT opt-in: the generated client entry (client-entry.ts) calls
+  // installHistoryShim() + installNavTransitionScheduler() + installStreamRegistry()
+  // unconditionally, so every route pays this on top of `core`. Broken out as its
+  // own row (rather than folded into `core`) so a regression in the boot runtime
+  // is legible instead of hidden in the core total. `route-change` transitively
+  // pulls view-transition-event + history-shim.
+  runtime: [
+    'internal/history-shim.js',
+    'internal/route-change.js',
+    'internal/stream-registry.js',
+  ],
   loaders: ['define-loader.js', 'cache.js'],
   actions: [
     'action.js',
     'form.js',
     'optimistic.js',
     'optimistic-action.js',
-    'outcomes.js',
     'action-result-context.js',
     'use-action-result.js',
     'use-form-status.js',
   ],
+  // Client realtime cost: the WS room/socket hooks (which pull ws-lifecycle,
+  // room-envelope, contract) plus the reactive pubsub primitive. Deliberately
+  // excludes the server-side surface (define-room/socket/channel, upgrade-websocket,
+  // streaming-ssr) which never ships to the browser, so this stays a client number.
+  realtime: ['use-room.js', 'use-socket.js', 'pubsub.js'],
   transitions: [
     'view-transition-lifecycle.js',
     'view-transition-name.js',
     'view-transition-types.js',
   ],
   prefetch: ['prefetch.js'],
-  streaming: ['define-stream-observer.js'],
+  // The opt-in stream-observer API + its client runner. The always-on registry
+  // (stream-registry) is in `runtime`; the SSR path (streaming-ssr) is server-only
+  // (imports the request store), so neither belongs here. `define-stream-observer`
+  // alone is a ~40 B stub; the runner is where the real client bytes are.
+  streaming: [
+    'define-stream-observer.js',
+    'internal/stream-observer-runner.js',
+  ],
   head: ['head.js'],
   middleware: ['define-middleware.js', 'reload-context.js'],
 };
@@ -49,14 +85,35 @@ export const EXTERNAL = [
   'hono/*',
 ];
 
-// Per-component cost from packages/ui/dist. The shared primitives form the
-// `core` ui probe; each component lists the dist module(s) its public entry
-// pulls in.
+// Per-component cost from packages/ui/dist. `ui-core` is the shared substrate a
+// multi-component page loads once; each component row is its own unique bytes on
+// top of that base. To keep the rows additive, `ui-core` must hold every module
+// shared by >=3 of the 8 public components (the positioner + dismiss cluster,
+// collection-navigation, and safe-area/focus utilities). If a shared module is
+// omitted here it is re-counted in every component that uses it, which is how the
+// popover family and the menu family used to over-state by up to ~3.7x. Re-derive
+// the membership by resolving each component entry's transitive dist graph and
+// keeping modules with a >=3/8 import count.
 export const UI_CORE_MODULES = [
   'render-element.js',
   'merge-refs.js',
   'use-controllable-state.js',
   'use-presence.js',
+  // positioner + dismiss cluster (6/8)
+  'use-position.js',
+  'use-positioner.js',
+  'positioner.js',
+  'positioner-context.js',
+  'arrow.js',
+  'use-dismiss.js',
+  'dismiss-stack.js',
+  // collection navigation (4/8)
+  'list-navigation.js',
+  'use-typeahead.js',
+  // focus + safe-area utilities (3/8)
+  'use-focus-return.js',
+  'use-safe-area.js',
+  'safe-area.js',
 ];
 
 export const COMPONENT_MODULES = {

@@ -25,6 +25,25 @@ describe('renderComment', () => {
     expect(md).toContain('| dialog | 600 B | — |');
   });
 
+  it('frames the runtime section so always-on rows are not read as opt-in', () => {
+    const md = renderComment(
+      {
+        sectionA: {
+          core: { total: 4000, marginal: 4000 },
+          runtime: { total: 6400, marginal: 2400 },
+        },
+        sectionC: {},
+      },
+      { sectionA: {}, sectionC: {} }
+    );
+    // The caption must distinguish the always-on baseline (core + runtime) from
+    // the opt-in feature rows; `runtime` ships on every route despite sitting in
+    // the feature table.
+    expect(md).toMatch(/always-on/i);
+    expect(md).toContain('every route');
+    expect(md).toContain('| runtime | 2.4 KB | (new) |');
+  });
+
   it('renders increase, new, decrease and removed', () => {
     const fresh = {
       sectionA: {
