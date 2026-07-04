@@ -241,17 +241,26 @@ export function routeServerAutodiscoveryPlugin(
           const ext = specifier.match(MODULE_EXT);
           if (!ext) return; // no explicit extension to splice `.server` into
           const base = specifier.slice(0, -ext[0].length);
-          const injectedSpecifier = `${base}.server${ext[0]}`;
 
           const absBase = path.resolve(importerDir, base);
-          const existing = SERVER_EXTENSIONS.map((e) => absBase + e).find(
-            fileExists
+          const serverExt = SERVER_EXTENSIONS.find((e) =>
+            fileExists(absBase + e)
           );
           // Watch the canonical candidate even when absent, so creating the
           // server module in a running dev server re-triggers this transform.
           ctx.addWatchFile?.(absBase + SERVER_EXTENSIONS[0]);
-          if (!existing) return;
-          ctx.addWatchFile?.(existing);
+          if (serverExt === undefined) return;
+          ctx.addWatchFile?.(absBase + serverExt);
+
+          // Emit a specifier Vite can resolve to the DISCOVERED sibling, not one
+          // built from the view import's extension. Vite maps a `.js` import onto
+          // `.js`/`.ts`/`.tsx` but never `.jsx`, so a `.jsx` sibling keeps its
+          // literal extension while `.ts`/`.tsx`/`.js` siblings use the `.js`
+          // convention. (Copying the view extension would emit an unresolvable
+          // `.server.tsx` for a `.tsx` view beside a `.server.ts` sibling.)
+          const injectedExt =
+            serverExt === '.server.jsx' ? '.server.jsx' : '.server.js';
+          const injectedSpecifier = `${base}${injectedExt}`;
 
           s.appendLeft(
             anchor.end!,

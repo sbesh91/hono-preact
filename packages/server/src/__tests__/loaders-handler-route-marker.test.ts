@@ -173,5 +173,41 @@ describe('loadersHandler: route-marker chain composition', () => {
     expect(res.status).toBe(500);
     // The loader itself must never have run.
     expect(loaderFn).not.toHaveBeenCalled();
+    // In dev the raw resolver message is surfaced to aid debugging.
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('could not resolve its page-use chain');
+    expect(body.error).toContain('Route not registered: /protected');
+  });
+
+  it('masks the raw resolver error message in production (dev: false)', async () => {
+    const loaderFn = vi.fn().mockResolvedValue({ secret: 'data' });
+    const loader = _defineRouteLoader('/protected', loaderFn, {
+      __moduleKey: 'mod/c',
+      __loaderName: 'data',
+    });
+    const serverModules: Record<string, unknown> = {
+      'mod/c': { __moduleKey: 'mod/c', serverLoaders: { data: loader } },
+    };
+    const resolvePageUse = () => {
+      throw new Error('internal: dsn postgres://user:pw@host/db');
+    };
+    const app = new Hono().post(
+      '/__loaders',
+      loadersHandler(serverModules, { dev: false, resolvePageUse })
+    );
+
+    const res = await post(app, {
+      module: 'mod/c',
+      loader: 'data',
+      location: { path: '/protected', pathParams: {}, searchParams: {} },
+    });
+
+    expect(res.status).toBe(500);
+    expect(loaderFn).not.toHaveBeenCalled();
+    // The fixed message is present; the raw internal detail is NOT leaked.
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('could not resolve its page-use chain');
+    expect(body.error).not.toContain('postgres://');
+    expect(body.error).not.toContain('internal:');
   });
 });

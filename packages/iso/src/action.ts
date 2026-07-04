@@ -420,6 +420,13 @@ export function useAction<
         } catch {
           // validate.js failed to load; fail open (validated stays undefined).
         }
+        // If the caller aborted while an async schema was validating, the mutate
+        // is cancelled: do not record a deny or flip error state (mirrors the
+        // request path's post-await abort guard). A cold gate has no request in
+        // flight, so there is nothing else to unwind.
+        if (opts?.signal?.aborted) {
+          return { ok: false, error: toError(opts.signal.reason) };
+        }
         if (validated && !validated.ok) {
           const error = new Error(VALIDATION_FAILED_MESSAGE);
           recordOutcome(gateStub.__module, gateStub.__action, {

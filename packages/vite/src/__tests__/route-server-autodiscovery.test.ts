@@ -35,6 +35,21 @@ describe('routeServerAutodiscoveryPlugin', () => {
     );
   });
 
+  it('injects a resolvable .server.js when the view uses a non-.js extension differing from the sibling', () => {
+    // View imported as `.tsx`; sibling on disk is `.server.ts`. The injected
+    // specifier must be the resolvable `.server.js`, NOT `.server.tsx` copied
+    // from the view extension (Vite cannot resolve a nonexistent `.server.tsx`).
+    const plugin = makePlugin(['/repo/src/pages/login.server.ts']);
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login.tsx') },
+    ]);`;
+    const out = transform(plugin, code);
+    expect(out?.code).toContain(
+      `server: () => import("./pages/login.server.js")`
+    );
+    expect(out?.code).not.toContain('login.server.tsx');
+  });
+
   it('injects for a layout-anchored route (branch with colocated server)', () => {
     const plugin = makePlugin(['/repo/src/pages/projects.server.tsx']);
     const code = `export default defineRoutes([
@@ -130,14 +145,30 @@ describe('routeServerAutodiscoveryPlugin', () => {
     expect(transform(plugin, code)).toBeUndefined();
   });
 
-  it('probes tsx and jsx siblings, not just ts', () => {
+  it('injects the literal .server.jsx for a .jsx sibling (Vite cannot remap .js -> .jsx)', () => {
     const plugin = makePlugin(['/repo/src/pages/board.server.jsx']);
     const code = `export default defineRoutes([
       { path: 'board', view: () => import('./pages/board.js') },
     ]);`;
     const out = transform(plugin, code);
+    // A `.jsx` sibling keeps its literal extension: `.server.js` resolves only to
+    // `.js`/`.ts`/`.tsx`, never `.jsx`, so the discovered `.jsx` must be emitted.
     expect(out?.code).toContain(
-      `server: () => import("./pages/board.server.js")`
+      `server: () => import("./pages/board.server.jsx")`
+    );
+  });
+
+  it('injects a resolvable .server.jsx for a .jsx view beside a .jsx sibling', () => {
+    // Regression guard: a `.jsx` view whose sibling is `.server.jsx` must not
+    // collapse to an unresolvable `.server.js` (Vite maps `.js` only to
+    // `.js`/`.ts`/`.tsx`).
+    const plugin = makePlugin(['/repo/src/pages/board.server.jsx']);
+    const code = `export default defineRoutes([
+      { path: 'board', view: () => import('./pages/board.jsx') },
+    ]);`;
+    const out = transform(plugin, code);
+    expect(out?.code).toContain(
+      `server: () => import("./pages/board.server.jsx")`
     );
   });
 

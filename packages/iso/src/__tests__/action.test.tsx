@@ -1367,4 +1367,49 @@ describe('useAction client pre-validation (schema)', () => {
     });
     expect(getValidationIssues(recorded)).toBeNull();
   });
+
+  it('records no validation deny when the caller aborts DURING async validation', async () => {
+    // An async schema that resolves INVALID after a tick, so the caller can abort
+    // while validation is in flight (the gate's entry check has already passed).
+    const asyncInvalidSchema: StandardSchemaV1<unknown, { title: string }> = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: async () => {
+          await Promise.resolve();
+          return { issues: [{ message: 'too short', path: ['title'] }] };
+        },
+      },
+    };
+    const fetchSpy = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { result } = renderHook(() =>
+      useAction(stub, { schema: asyncInvalidSchema })
+    );
+
+    const controller = new AbortController();
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      const p = result.current.mutate(
+        { title: '' },
+        { signal: controller.signal }
+      );
+      controller.abort(); // lands while the async validate is still awaiting
+      outcome = await p;
+    });
+
+    // Cancelled: no spurious validation error, no deny recorded, no request.
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok)
+      expect(outcome.error.message).not.toBe('Validation failed');
+    expect(result.current.error?.message).not.toBe('Validation failed');
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    const recorded = getLastActionResult({
+      __module: stub.__module,
+      __action: stub.__action,
+    });
+    expect(getValidationIssues(recorded)).toBeNull();
+  });
 });

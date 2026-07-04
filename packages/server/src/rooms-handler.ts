@@ -264,7 +264,7 @@ export function createRoomWsEvents(
       // attachment, so an in-place mutation to conn.data is not guaranteed to
       // persist across events.
       const initialData: unknown = await roomDef.data?.(ctx);
-      warnIfOverForwardBudget(initialData, dev, 'room');
+      warnIfOverForwardBudget(initialData, dev, 'room', params);
 
       // The Node transport: each engine primitive realized on the in-process bus
       // + the presence registry. `sendTo` is always this socket (the engine only
