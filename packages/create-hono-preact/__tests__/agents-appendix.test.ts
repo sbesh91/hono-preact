@@ -49,12 +49,15 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 // hyphen/slash and usage examples carry punctuation, so neither matches
 // IDENTIFIER; only genuine export citations are collected. Names cited as bare
 // identifiers here MUST be real runtime exports of that subpath's barrel.
-function citedExportsBySubpath(): Array<{ subpath: string; names: string[] }> {
-  const section = agentsMd
-    .slice(agentsMd.indexOf('## Public entry points'))
+function citedExportsBySubpath(
+  md: string = agentsMd
+): Array<{ subpath: string; names: string[] }> {
+  const section = md
+    .slice(md.indexOf('## Public entry points'))
     .split(/\n## /)[0];
-  // Group each subpath bullet with its (indented) continuation lines. A new
-  // list item (`- `) ends the current bullet; anything else is continuation.
+  // Group each subpath bullet with its INDENTED continuation lines. A new list
+  // item (`- `), a blank line, or unindented prose ends the current bullet, so
+  // trailing section prose is never glued onto the last subpath's citations.
   const out: Array<{ subpath: string; lines: string[] }> = [];
   let current: { subpath: string; lines: string[] } | undefined;
   for (const line of section.split('\n')) {
@@ -64,8 +67,10 @@ function citedExportsBySubpath(): Array<{ subpath: string; names: string[] }> {
       out.push(current);
     } else if (line.startsWith('- ')) {
       current = undefined; // a non-subpath list item closes the group
-    } else if (current) {
-      current.lines.push(line);
+    } else if (current && /^\s/.test(line)) {
+      current.lines.push(line); // an indented continuation of the current bullet
+    } else {
+      current = undefined; // a blank line or unindented prose closes the group
     }
   }
   return out.map(({ subpath, lines }) => ({
@@ -119,5 +124,40 @@ describe('AGENTS.md public entry-point appendix', () => {
         ).toBe(true);
       }
     }
+  });
+
+  // Regression (#222 item 20): the section's trailing prose paragraph (today the
+  // "UI component library is a separate package" note) is NOT a bullet and is
+  // unindented, so it must not be glued onto the last subpath bullet. Only a
+  // subpath bullet's own line and its INDENTED continuation lines are its
+  // citations. Without the indent boundary, a future backticked identifier in
+  // that prose (e.g. `Dialog`) would be mis-cited as an export of the last
+  // subpath and wrongly fail (or, worse, wrongly pass) the gate above.
+  it('does not attribute a backticked identifier in trailing prose to the last subpath', () => {
+    const synthetic = [
+      '## Public entry points',
+      '',
+      '- `hono-preact` - routing',
+      '  (`defineRoutes`, `useParams`).',
+      '- `hono-preact/adapter-node` - `nodeAdapter` for Node.',
+      '',
+      'The UI component library is a separate package, `hono-preact-ui` (`Dialog`).',
+      '',
+      '## Recipes',
+    ].join('\n');
+    const parsed = citedExportsBySubpath(synthetic);
+    const rootNames =
+      parsed.find((c) => c.subpath === 'hono-preact')?.names ?? [];
+    const nodeNames =
+      parsed.find((c) => c.subpath === 'hono-preact/adapter-node')?.names ?? [];
+
+    // An indented continuation line IS part of its bullet's citations.
+    expect(rootNames).toEqual(
+      expect.arrayContaining(['defineRoutes', 'useParams'])
+    );
+    // The bullet's own line IS part of its citations.
+    expect(nodeNames).toContain('nodeAdapter');
+    // The unindented trailing prose is NOT glued onto the last bullet.
+    expect(nodeNames).not.toContain('Dialog');
   });
 });

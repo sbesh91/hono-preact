@@ -50,6 +50,13 @@ const ROOM_KEY = { id: 'demo' };
 const DENIED_ROOM_NAME = 'deniedRoom';
 const DENIED_ROOM_KEY = { id: 'demo' };
 
+// A third room in the same module with NO data factory. Its conn.data must
+// resolve to `undefined` on the CF DO (parity with Node), which the connector
+// achieves by omitting x-hp-data so realtime-do never coerces it to null. Its
+// channel is `probe/:id`, so the key params carry `{ id }`.
+const PROBE_ROOM_NAME = 'probe';
+const PROBE_ROOM_KEY = { id: 'demo' };
+
 // The deny close code (packages/iso/src/internal/contract.ts WS_DENY_CODE).
 const WS_DENY_CODE = 4403;
 
@@ -77,6 +84,15 @@ function deniedRoomUrl(port: number): string {
     `?m=${encodeURIComponent(MODULE_KEY)}` +
     `&s=${encodeURIComponent(DENIED_ROOM_NAME)}` +
     `&r=${encodeURIComponent(JSON.stringify(DENIED_ROOM_KEY))}`
+  );
+}
+
+function probeRoomUrl(port: number): string {
+  return (
+    `ws://localhost:${port}${SOCKETS_RPC_PATH}` +
+    `?m=${encodeURIComponent(MODULE_KEY)}` +
+    `&s=${encodeURIComponent(PROBE_ROOM_NAME)}` +
+    `&r=${encodeURIComponent(JSON.stringify(PROBE_ROOM_KEY))}`
   );
 }
 
@@ -241,6 +257,25 @@ function isPresenceLeave(v: unknown): v is PresenceEnvelope {
   );
 }
 
+// The probe room's self-reply: a `'msg'` envelope whose inner payload carries
+// the conn.data===undefined observation (send wraps the payload as
+// `{ from, t: 'msg', msg }`, room-engine.envMsg).
+type ProbeEnvelope = {
+  t: 'msg';
+  from: string;
+  msg: { dataIsUndefined: boolean };
+};
+
+function isProbeEnvelope(v: unknown): v is ProbeEnvelope {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    (v as { t?: unknown }).t === 'msg' &&
+    typeof (v as { msg?: { dataIsUndefined?: unknown } }).msg
+      ?.dataIsUndefined === 'boolean'
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -338,5 +373,28 @@ describe('Cloudflare adapter: DO room (two ws clients, intra-DO fan-out)', () =>
     // assertion here proves the deny path closes 4403 rather than 500-ing.
     const code = await waitForClose(denied);
     expect(code).toBe(WS_DENY_CODE);
+  }, 60_000);
+
+  it('a room without a data factory sees conn.data === undefined (Node parity)', async () => {
+    const port = serverPort(server);
+    // The `probe` room declares no data factory, so the connector omits
+    // x-hp-data and the DO must resolve conn.data to `undefined` (not the
+    // string-coerced null a `?? null` stamp would produce). This drives
+    // realtime-do's "absent x-hp-data -> undefined" branch through real
+    // workerd; the socket analog is locked in cf-socket.test.ts. onMessage
+    // replies to the sender, so this single client observes its own result.
+    const probe = connectWs(probeRoomUrl(port));
+    await waitForOpen(probe.ws);
+
+    // Any inbound app message triggers onMessage; the payload value is ignored.
+    probe.ws.send(
+      JSON.stringify({ t: 'msg', msg: { dataIsUndefined: false } })
+    );
+
+    const reply = await drainUntil(probe.waitForMessage, isProbeEnvelope);
+    expect(reply).toBeDefined();
+    expect(reply?.msg.dataIsUndefined).toBe(true);
+
+    probe.ws.close(1000);
   }, 60_000);
 });
