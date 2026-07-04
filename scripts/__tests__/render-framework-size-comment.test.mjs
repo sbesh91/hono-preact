@@ -44,6 +44,19 @@ describe('renderComment', () => {
     expect(md).toContain('| runtime | 2.4 KB | (new) |');
   });
 
+  it('renders the docs-site baseline section from real-build site data', () => {
+    const md = renderComment(base, base, undefined, {
+      fresh: { baseline: { gzip: 19285, raw: 48533, chunks: 14 } },
+      base: { baseline: { gzip: 19000, raw: 48000, chunks: 14 } },
+    });
+    expect(md).toContain('Docs-site shipped JS');
+    expect(md).toContain('| always-loaded | 19.3 KB | +285 B |');
+  });
+
+  it('omits the docs-site section when no site data is passed', () => {
+    expect(renderComment(base, base)).not.toContain('Docs-site shipped JS');
+  });
+
   it('renders increase, new, decrease and removed', () => {
     const fresh = {
       sectionA: {

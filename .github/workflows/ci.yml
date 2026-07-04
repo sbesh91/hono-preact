@@ -99,26 +99,36 @@ jobs:
       - name: Measure PR head
         run: node scripts/measure-framework-size.mjs --out /tmp/head.json
 
+      # Real-build baseline: the always-loaded client JS the docs site actually
+      # ships on every route (what the isolated probe above cannot show).
+      - name: Build docs site (PR head) and measure baseline
+        run: |
+          pnpm --filter site build
+          node scripts/measure-site-chunks.mjs --out /tmp/head-site.json
+
       # Build-both delta: measure the base ref in a worktree using THIS head's
-      # measure script (so the base never needs to carry the script), then diff.
+      # measure scripts (so the base never needs to carry them), then diff.
       # No committed baseline, so no metrics-commit merge conflicts.
-      - name: Build framework (base ref) and measure
+      - name: Build framework + site (base ref) and measure
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE"
           git worktree add /tmp/base "origin/$BASE"
-          (cd /tmp/base && pnpm install --frozen-lockfile && pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build)
+          (cd /tmp/base && pnpm install --frozen-lockfile && pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter site build)
           node scripts/measure-framework-size.mjs \
             --iso-dist /tmp/base/packages/iso/dist \
             --ui-dist /tmp/base/packages/ui/dist \
             --out /tmp/base.json
+          node scripts/measure-site-chunks.mjs \
+            --static-dir /tmp/base/apps/site/dist/client/static \
+            --out /tmp/base-site.json
 
       - name: Render comment
         env:
           SIZE_COMMENT_SHA: ${{ github.event.pull_request.head.sha }}
           SIZE_COMMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/render-framework-size-comment.mjs /tmp/head.json /tmp/base.json > /tmp/comment.md
+        run: node scripts/render-framework-size-comment.mjs /tmp/head.json /tmp/base.json /tmp/head-site.json /tmp/base-site.json > /tmp/comment.md
 
       - name: Post sticky comment
         uses: marocchino/sticky-pull-request-comment@v2

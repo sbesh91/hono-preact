@@ -54,7 +54,22 @@ function section(lines, title, sub, columnLabel, freshObj, baseObj, baseName) {
   lines.push('');
 }
 
-export function renderComment(fresh, base, meta) {
+// The real-build baseline from measure-site-chunks.mjs (optional): the JS every
+// route actually downloads, which the isolated feature probe above cannot show.
+function siteSection(lines, siteFresh, siteBase) {
+  const fresh = siteFresh?.baseline?.gzip;
+  if (fresh === undefined) return;
+  lines.push('### Docs-site shipped JS (real build, gzip)');
+  lines.push(
+    "<sub>The entry chunk + its static-import closure (framework runtime + preact/preact-iso vendor + site entry) downloaded on every route. The delta isolates framework changes; the site's own code is constant between refs.</sub>"
+  );
+  lines.push('| | Size | Δ vs base |');
+  lines.push('|---|---|---|');
+  lines.push(row('always-loaded', fresh, siteBase?.baseline?.gzip));
+  lines.push('');
+}
+
+export function renderComment(fresh, base, meta, site) {
   const lines = [COMMENT_HEADER, '## Framework JS size', ''];
   section(
     lines,
@@ -74,23 +89,35 @@ export function renderComment(fresh, base, meta) {
     base.sectionC ?? {},
     'ui-core'
   );
+  if (site) siteSection(lines, site.fresh, site.base);
   const footer = freshnessFooter(meta);
   if (footer) lines.push(footer);
   return lines.join('\n');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const [freshPath, basePath] = process.argv.slice(2);
+  // <fresh.json> <base.json> [siteHead.json siteBase.json]
+  const [freshPath, basePath, siteFreshPath, siteBasePath] =
+    process.argv.slice(2);
   if (!freshPath || !basePath) {
-    console.error('Usage: render-framework-size-comment.mjs <fresh.json> <base.json>');
+    console.error(
+      'Usage: render-framework-size-comment.mjs <fresh.json> <base.json> [siteHead.json siteBase.json]'
+    );
     process.exit(1);
   }
-  const fresh = JSON.parse(readFileSync(freshPath, 'utf8'));
-  const base = JSON.parse(readFileSync(basePath, 'utf8'));
+  const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
+  const fresh = read(freshPath);
+  const base = read(basePath);
+  const site = siteFreshPath
+    ? {
+        fresh: read(siteFreshPath),
+        base: siteBasePath ? read(siteBasePath) : {},
+      }
+    : undefined;
   const meta = {
     sha: process.env.SIZE_COMMENT_SHA,
     runUrl: process.env.SIZE_COMMENT_RUN_URL,
     generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   };
-  process.stdout.write(renderComment(fresh, base, meta) + '\n');
+  process.stdout.write(renderComment(fresh, base, meta, site) + '\n');
 }
