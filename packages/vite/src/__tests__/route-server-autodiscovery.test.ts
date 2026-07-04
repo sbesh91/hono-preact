@@ -188,6 +188,46 @@ describe('routeServerAutodiscoveryPlugin', () => {
     const code = `export const view = 1; export const layout = 2;`;
     expect(transform(plugin, code)).toBeUndefined();
   });
+
+  it('warns once when an extensionless view import has a colocated server sibling', () => {
+    // `import('./pages/login')` has no extension to splice `.server` into, so
+    // discovery declines. But a `login.server.ts` sibling exists, so the author
+    // almost certainly expected it wired. `this.warn` names the real cause and
+    // (unlike the build-only orphan scan) reaches `vite dev` too.
+    const plugin = makePlugin(['/repo/src/pages/login.server.ts']);
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login') },
+    ]);`;
+    const warnings: string[] = [];
+    const ctx = { warn: (m: string) => warnings.push(m) } as never;
+    // Two passes (client + SSR) must warn exactly once (deduped).
+    const a = plugin.transform.call(ctx, code, ROUTES_ID);
+    const b = plugin.transform.call(ctx, code, ROUTES_ID);
+    // Discovery still declines: there is no extension to splice `.server` into.
+    expect(a).toBeUndefined();
+    expect(b).toBeUndefined();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('./pages/login');
+    expect(warnings[0]).toContain('no file extension');
+    expect(warnings[0]).toContain('login.server.ts');
+  });
+
+  it('stays silent for an extensionless view import with no server sibling', () => {
+    // An ordinary extensionless view (no colocated server module) is a legitimate
+    // route; it must not be nagged.
+    const plugin = makePlugin([]); // nothing on disk
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login') },
+    ]);`;
+    const warnings: string[] = [];
+    const out = plugin.transform.call(
+      { warn: (m: string) => warnings.push(m) } as never,
+      code,
+      ROUTES_ID
+    );
+    expect(out).toBeUndefined();
+    expect(warnings).toHaveLength(0);
+  });
 });
 
 // Orphan check: buildEnd warns about a *.server.* file no route imports.
