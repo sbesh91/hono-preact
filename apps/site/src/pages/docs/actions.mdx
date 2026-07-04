@@ -340,9 +340,9 @@ const Movies = () => {
 | Option       | Type                                      | Description                                                                                                                                                                                                                                                       |
 | ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of [`LoaderRef`](/docs/loaders)s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
-| `onMutate`   | `(payload) => unknown`                    | Called before the request fires. Return value is passed to `onError` as `snapshot` for optimistic rollback.                                                                                                                                                       |
+| `onMutate`   | `(payload) => unknown`                    | Called before the request fires on a dispatched mutation. Return value is passed to `onError` as `snapshot` for optimistic rollback. A client `schema` rejection short-circuits before dispatch, so it does not fire (see the note below the tables).             |
 | `onSuccess`  | `(data) => void`                          | Called with the action's return value on success.                                                                                                                                                                                                                 |
-| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot on failure.                                                                                                                                                                                                     |
+| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot when a dispatched mutation fails: a server `deny`, error, or timeout. A client `schema` rejection does not fire it (see the note below the tables).                                                             |
 | `onChunk`    | `(chunk: string) => void`                 | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                                              |
 
 ### Return value
@@ -370,6 +370,8 @@ async function submit(payload) {
 ```
 
 Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
+
+`onMutate` and `onError` bracket a dispatched request. A server `deny`, error, or timeout rejects the in-flight mutation, so `onError` fires (with the `onMutate` snapshot for rollback). A client-side `schema` rejection is different: it short-circuits **before** any request, so neither `onMutate` nor `onError` fires. The failure is still surfaced every other way, as the returned `{ ok: false, error }`, the hook's `error` state, and a `deny(422)` on `useActionResult` (decode the issues with `getValidationIssues`), so it renders identically to a server-caught validation failure. See [Validation](/docs/validation#pre-validating-an-imperative-action).
 
 ## Cancellation
 
