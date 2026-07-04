@@ -592,7 +592,7 @@ export const serverActions = {
 };
 ```
 
-For route-wide gating (every action plus every loader under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model. To bind an action to that route node's gate by exact pattern, define it with [`route.action`](#route-bound-actions).
+For route-wide gating (every action, plus every route-bound loader, under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model, including why a bare `defineLoader` RPC is route-independent. To bind an action to that route node's gate by exact pattern, define it with [`route.action`](#route-bound-actions).
 
 ## Inference types
 
