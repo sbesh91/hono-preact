@@ -150,11 +150,11 @@ type RoutesManifest = {
 };
 ```
 
-`tree` is the original input retained for devtools and dev-time introspection. `flat` is what `<Routes>` registers with preact-iso. `serverImports` is what the generated server entry (through `createServerEntry`) adapts into the loader and action handler map. `serverRoutes` and `routeUse` are the introspection surfaces the page-action resolver and the page-layer `use` resolver read, so the render gate and the data gate cannot drift.
+`tree` is the original input retained for devtools and dev-time introspection. `flat` is what `<Routes>` registers with preact-iso. `serverImports` is what the generated server entry (through `createServerEntry`) adapts into the loader and action handler map. `serverRoutes` and `routeUse` are the introspection surfaces the page-action resolver and the page-layer `use` resolver read to apply a route node's `use` to its actions and route-bound loaders by exact pattern.
 
 ## Page-layer middleware on a route node
 
-A route entry can carry a `use` field to attach page-layer middleware to that node and all its descendants. The guard applies to the node's own view render (SSR and client navigation) and to every loader and action RPC under that subtree, so the render gate and the data gate cannot drift.
+A route entry can carry a `use` field to attach page-layer middleware to that node and all its descendants. The guard applies to the node's own view render (SSR and client navigation), to every action RPC, and to every route-bound loader RPC (`serverRoute(r).loader`) under that subtree. A bare `defineLoader` is the exception: its RPC is route-independent, so it inherits the guard on the SSR render but not on a direct `POST /__loaders` hit. Bind such a loader to its route (or give it a unit-level `use`) to gate it. See [Middleware](/docs/middleware) for the full model.
 
 ```ts
 import { defineRoutes } from 'hono-preact';

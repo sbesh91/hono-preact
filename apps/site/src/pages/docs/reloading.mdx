@@ -53,13 +53,12 @@ const MoviesView = dataLoader.View(({ data }) => {
 export default definePage(MoviesView);
 ```
 
-**`src/routes.ts`** wires the URL to the view and its server module:
+**`src/routes.ts`** wires the URL to the view; the colocated `movies.server.ts` is auto-discovered with it:
 
 ```ts
 {
   path: '/movies',
   view: () => import('./pages/movies.js'),
-  server: () => import('./pages/movies.server.js'),
 }
 ```
 

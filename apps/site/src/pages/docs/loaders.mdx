@@ -98,6 +98,8 @@ export const serverLoaders = {
 
 When path or search params are needed, use `serverRoute(r).loader()` instead.
 
+A route-independent loader is not route-gated. Its RPC endpoint (`POST /__loaders`) runs only the app-level `use` plus the loader's own unit-level `use`; it does not inherit a route node's page-layer `use`, even when the loader module is colocated under a guarded route. To gate a loader by a route's middleware chain, bind it with `serverRoute(r).loader` (the page-layer `use` then resolves from that exact route pattern) or attach a unit-level `use` to the loader itself. See [Middleware](/docs/middleware) for the three layers.
+
 ## Streaming loaders
 
 A loader whose function body is an `async function*` is a streaming loader. The framework infers this from the function shape at build time. Streaming loaders are SSR-pumped by default: the server starts writing the response immediately, flushing each yielded chunk as an inline `<script>` tag:
@@ -601,6 +603,7 @@ type WireData = Serialize<InferLoaderData<typeof serverLoaders.default>>;
 
 ## See also
 
+- [Middleware](/docs/middleware): the app, page, and unit `use` layers, and how each one gates a loader.
 - [Loading States](/docs/loading-states): the loading and error UI for loader data.
 - [Streaming](/docs/streaming): streaming loaders and their consumption API.
 - [Live Loaders](/docs/live-loaders): persistent live loaders on layouts, `{ live: true }`, and `StreamStatus`.
