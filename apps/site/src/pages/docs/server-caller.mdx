@@ -99,6 +99,7 @@ it('returns the movie', async () => {
 - **Does not share the loader result cache.** The loader result cache is populated on the SSR page-render path. `ctx.call` invokes the loader function directly, so the result is always freshly computed. Two calls to the same loader produce two executions.
 - **Validates inputs.** If the called loader has a `searchSchema` or `paramsSchema`, or the called action has an `input` schema, the caller validates the supplied location or payload before invoking the function. A validation failure surfaces as `{ ok: false, outcome }`, not a raw throw.
 - **Unexpected errors reject the promise.** `ctx.call` resolves a `redirect`, `deny`, or validation failure to `{ ok: false, outcome }`, but an unexpected thrown error (a bug or exception inside the callee) propagates as a rejected promise. Wrap the call in `try/catch` if you need to contain those.
+- **Does not apply the callee's `timeoutMs`.** A loader's or action's `timeoutMs` is a deadline the HTTP handler enforces at the request entrypoint; `ctx.call` runs the procedure in-process under the _outer_ request's `signal`, so the callee's own `timeoutMs` is not applied here. If an in-process call needs its own deadline, race the returned promise against one yourself.
 
 ## Limitations
 
