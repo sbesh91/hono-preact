@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { createCaller } from '../server-caller.js';
 import { defineLoader } from '../define-loader.js';
 import { defineAction } from '../action.js';
+import { defineServerMiddleware } from '../define-middleware.js';
+import { serverRoute } from '../server-route.js';
 import { deny } from '../outcomes.js';
 
 async function ctx() {
@@ -95,5 +97,80 @@ describe('ctx.call composition', () => {
     });
     const r = await createCaller(c).call(outer);
     expect(r).toEqual({ ok: true, value: { doubled: 4 } });
+  });
+
+  // The loader-side twin of the action middleware test above: ctx.call runs a
+  // loader's own unit `use`. (Only the action side was covered before.)
+  it("runs a loader's own unit middleware (a deny short-circuits before the loader body)", async () => {
+    const c = await ctx();
+    let loaderRan = false;
+    const guard = defineServerMiddleware(async () => deny('FORBIDDEN'));
+    const loader = defineLoader(
+      async () => {
+        loaderRan = true;
+        return 1;
+      },
+      { use: [guard] }
+    );
+    const r = await createCaller(c).call(loader);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.outcome.__outcome === 'deny')
+      expect(r.outcome.code).toBe('FORBIDDEN');
+    expect(loaderRan).toBe(false); // guard short-circuited; the body never ran
+  });
+
+  // Locks the unit-tier composition order: the `use` chain wraps the loader
+  // body outer-first, each middleware unwinding in reverse.
+  it("runs a loader's unit `use` chain in declared order around the loader body", async () => {
+    const c = await ctx();
+    const order: string[] = [];
+    const trace = (tag: string) =>
+      defineServerMiddleware(async (_lc, next) => {
+        order.push(`${tag}:before`);
+        await next();
+        order.push(`${tag}:after`);
+      });
+    const loader = defineLoader(
+      async () => {
+        order.push('loader');
+        return 7;
+      },
+      { use: [trace('a'), trace('b')] }
+    );
+    const r = await createCaller(c).call(loader);
+    expect(r).toEqual({ ok: true, value: 7 });
+    expect(order).toEqual([
+      'a:before',
+      'b:before',
+      'loader',
+      'b:after',
+      'a:after',
+    ]);
+  });
+
+  // The route-tier-skip invariant. A route-bound loader's page-layer `use`
+  // chain is resolved from its route pattern ONLY by the HTTP loader handler
+  // (byPattern __routeId). createCaller takes just a Context and has no
+  // page-use resolver, so a route node's page middleware is never composed
+  // here: a route-bound loader runs identically to a bare one through ctx.call,
+  // executing only its own unit `use`. (The page-tier skip itself is not
+  // directly observable through createCaller's surface, which has no way to
+  // register a page guard; this locks the observable half + the unit-use run.)
+  it("runs only a route-bound loader's own unit `use` (ctx.call composes no page/app tier)", async () => {
+    const c = await ctx();
+    let loaderRan = false;
+    const guard = defineServerMiddleware(async () => deny('FORBIDDEN'));
+    const loader = serverRoute('/x').loader(
+      async () => {
+        loaderRan = true;
+        return 1;
+      },
+      { use: [guard] }
+    );
+    const r = await createCaller(c).call(loader);
+    expect(r.ok).toBe(false); // the unit guard still runs
+    if (!r.ok && r.outcome.__outcome === 'deny')
+      expect(r.outcome.code).toBe('FORBIDDEN');
+    expect(loaderRan).toBe(false);
   });
 });
