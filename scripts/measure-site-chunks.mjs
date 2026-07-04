@@ -72,7 +72,9 @@ export function entryClosure(staticDir, entry) {
 
 // The always-loaded baseline: gzip (summed per-chunk, since each chunk is a
 // separate file the CDN gzips independently) + raw + chunk count. Returns null
-// when the dist is absent so a partial CI run degrades gracefully.
+// when the dist is absent so a partial CI run degrades gracefully. Uses zlib's
+// default gzip level, matching measure-framework-size.mjs so the two comment
+// sections share one gzip convention.
 export function measureSiteBaseline(staticDir) {
   if (!existsSync(staticDir)) return null;
   const closure = entryClosure(staticDir, findEntryChunk(staticDir));
@@ -81,7 +83,7 @@ export function measureSiteBaseline(staticDir) {
   for (const f of closure) {
     const buf = readFileSync(join(staticDir, f));
     raw += buf.length;
-    gzip += gzipSync(buf, { level: 9 }).length;
+    gzip += gzipSync(buf).length;
   }
   return { baseline: { gzip, raw, chunks: closure.size } };
 }
