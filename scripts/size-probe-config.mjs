@@ -17,6 +17,9 @@
 // Framework base: what every route ships regardless of features used. `outcomes`
 // lives here (not under `actions`) because it ships on every route via
 // Routes -> define-routes -> page-middleware-host, independent of action usage.
+// `page-only.js` is the `hono-preact/page` authoring surface (the `render`
+// outcome plus re-exports of `outcomes`); it ships client runtime, so it is
+// attributed here rather than excluded (its unique cost over `outcomes` is ~40 B).
 // Each feature's marginal cost over `core` is gzip(core+feature) - gzip(core).
 export const CORE_MODULES = [
   'define-app.js',
@@ -26,6 +29,7 @@ export const CORE_MODULES = [
   'client-script.js',
   'is-browser.js',
   'outcomes.js',
+  'page-only.js',
 ];
 
 export const FEATURE_MODULES = {
@@ -108,9 +112,8 @@ export const EXCLUDED_MODULES = [
   'index.js',
   'internal.js',
   'internal-runtime.js',
-  // Type-only / build-time helpers with no runtime client cost.
+  // Type-only helper: `export {}` after tsc strips its type-only exports.
   'infer.js',
-  'page-only.js',
 ];
 
 // Peers a consumer already has; excluded so a probe measures only the
