@@ -330,6 +330,11 @@ export function routeServerAutodiscoveryPlugin(
 
       for (const file of listServerModules(root)) {
         if (graph.has(file)) continue;
+        // Already flagged by the extensionless-decline warning (its route's
+        // view/layout import lacked an extension). That message is the more
+        // actionable of the two, so skip the generic orphan warn to avoid
+        // double-warning one root cause. `declined` is keyed by the sibling base.
+        if (declined.has(file.replace(SERVER_FILE, ''))) continue;
         this.warn(
           `${path.relative(root, file)} looks like a server module but no route imports it. ` +
             `Colocate it next to a route's view/layout (e.g. \`foo.tsx\` -> \`foo.server.ts\`), ` +
