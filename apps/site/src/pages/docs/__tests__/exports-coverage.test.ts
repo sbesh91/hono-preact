@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as root from 'hono-preact';
@@ -52,8 +52,7 @@ function runtimeNames(mod: Record<string, unknown>): string[] {
 // (`DialogClose`), and the docs cite parts in dot form (`Dialog.Close`). A
 // namespace root is a top-level component name that prefixes other exports;
 // deriving them from the barrel (rather than hardcoding) keeps this in sync as
-// components are added. A part `DialogClose` is documented if the corpus
-// mentions it flat OR as `Dialog.Close`.
+// components are added.
 function namespaceRoots(names: string[]): string[] {
   return names.filter(
     (n) =>
@@ -63,12 +62,57 @@ function namespaceRoots(names: string[]): string[] {
   );
 }
 
-function isDocumented(name: string, roots: string[]): boolean {
-  if (new RegExp(`\\b${name}\\b`).test(corpus)) return true;
+// `PascalCase`/`camelCase` -> `kebab-case` (`useControllableState` ->
+// `use-controllable-state`, `ContextMenu` -> `context-menu`), the naming
+// convention that maps a UI export to its dedicated `components/<kebab>.mdx`.
+const kebab = (s: string): string =>
+  s
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+
+// UI exports documented on a SHARED page instead of a dedicated
+// `components/<kebab>.mdx` one (submenus live on the menu page; a few filter /
+// positioning utils on a component / hook page). One stated home per entry;
+// add to this map ONLY with the page the export is actually documented on.
+const UI_SHARED_PAGE = new Map<string, string>([
+  ['SubmenuRoot', 'menu.mdx'],
+  ['SubmenuTrigger', 'menu.mdx'],
+  ['SubmenuPopup', 'menu.mdx'],
+  ['SubmenuPositioner', 'menu.mdx'],
+  ['matchSubstring', 'combobox.mdx'],
+  ['placementFor', 'use-position.mdx'],
+  ['sideAlignFromPlacement', 'use-position.mdx'],
+]);
+
+// The `components/<file>.mdx` page that OWNS a UI export's documentation: an
+// explicit shared page, else a namespace part on its root's page, else the
+// export's own dedicated kebab page.
+function owningPageFile(name: string, roots: string[]): string {
+  const shared = UI_SHARED_PAGE.get(name);
+  if (shared) return shared;
+  const root = roots.find((r) => name.startsWith(r) && name.length > r.length);
+  return `${kebab(root ?? name)}.mdx`;
+}
+
+// Is `name` documented on its OWNING page? The page must EXIST (a deleted page
+// reads as undocumented -- the gap this closes: a whole-corpus match passed
+// green when a single-symbol page was deleted but the symbol was still
+// name-dropped on a sibling page) and cite the symbol flat or, for a namespace
+// part, in `Root.Part` dot form. `readPage` is injected so the deleted-page
+// behavior is unit-testable without touching the filesystem.
+function isDocumented(
+  name: string,
+  roots: string[],
+  readPage: (file: string) => string | undefined
+): boolean {
+  const content = readPage(owningPageFile(name, roots));
+  if (content === undefined) return false;
+  if (new RegExp(`\\b${name}\\b`).test(content)) return true;
   const root = roots.find((r) => name.startsWith(r) && name.length > r.length);
   if (root) {
     const part = name.slice(root.length);
-    return new RegExp(`\\b${root}\\.${part}\\b`).test(corpus);
+    return new RegExp(`\\b${root}\\.${part}\\b`).test(content);
   }
   return false;
 }
@@ -90,6 +134,15 @@ function readCorpus(): string {
 }
 
 const corpus = readCorpus();
+
+// Reads a UI component doc page's content, or `undefined` if the page does not
+// exist. Injected into `isDocumented` so the deleted-page path is testable.
+const componentsDir = resolve(docsDir, 'components');
+const readComponentPage = (file: string): string | undefined => {
+  const p = resolve(componentsDir, file);
+  return existsSync(p) ? readFileSync(p, 'utf8') : undefined;
+};
+
 const allExports = [
   ...runtimeNames(root),
   ...runtimeNames(page),
@@ -119,9 +172,44 @@ describe('public UI exports are documented', () => {
     if (UI_INTENTIONALLY_UNDOCUMENTED.has(name)) continue;
     it(`documents ${name}`, () => {
       expect(
-        isDocumented(name, uiRoots),
-        `${name} not found in docs (checked flat and namespaced dot form)`
+        isDocumented(name, uiRoots, readComponentPage),
+        `${name} not documented on its owning components/ page ` +
+          `(${owningPageFile(name, uiRoots)})`
       ).toBe(true);
     });
   }
+});
+
+// Regression (#222 item 19): the UI gate must catch a DELETED owning page. The
+// previous whole-corpus match passed green when a single-symbol page was deleted
+// but the symbol was still name-dropped on a sibling page. These lock the
+// owning-page scoping via an injected `readPage` (no real filesystem mutation).
+describe('UI docs gate catches a deleted owning page', () => {
+  it('a standalone hook reads undocumented when its own page is deleted', () => {
+    const deleted = 'use-controllable-state.mdx';
+    const readWithout = (file: string) =>
+      file === deleted ? undefined : readComponentPage(file);
+    // Present -> documented (guards against a vacuous always-false).
+    expect(
+      isDocumented('useControllableState', uiRoots, readComponentPage)
+    ).toBe(true);
+    // Deleted -> undocumented, even though the symbol is still cited elsewhere.
+    expect(isDocumented('useControllableState', uiRoots, readWithout)).toBe(
+      false
+    );
+  });
+
+  it('a namespace part reads undocumented when its root page is deleted', () => {
+    const readWithout = (file: string) =>
+      file === 'dialog.mdx' ? undefined : readComponentPage(file);
+    expect(isDocumented('DialogClose', uiRoots, readComponentPage)).toBe(true);
+    expect(isDocumented('DialogClose', uiRoots, readWithout)).toBe(false);
+  });
+
+  it('a shared-page export reads undocumented when its shared page is deleted', () => {
+    const readWithout = (file: string) =>
+      file === 'menu.mdx' ? undefined : readComponentPage(file);
+    expect(isDocumented('SubmenuRoot', uiRoots, readComponentPage)).toBe(true);
+    expect(isDocumented('SubmenuRoot', uiRoots, readWithout)).toBe(false);
+  });
 });
