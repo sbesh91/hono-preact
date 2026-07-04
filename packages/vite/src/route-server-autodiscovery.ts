@@ -164,6 +164,9 @@ export function routeServerAutodiscoveryPlugin(
   let isDev = false;
   let root: string | undefined;
   const announced = new Set<string>();
+  // Dedupes the extensionless-decline warning across the client/SSR passes and
+  // HMR re-transforms, keyed by the resolved sibling base.
+  const declined = new Set<string>();
 
   return {
     name: 'route-server-autodiscovery',
@@ -239,7 +242,29 @@ export function routeServerAutodiscoveryPlugin(
           if (!anchor || specifier === undefined) return;
 
           const ext = specifier.match(MODULE_EXT);
-          if (!ext) return; // no explicit extension to splice `.server` into
+          if (!ext) {
+            // No extension to splice `.server` into, so discovery declines. If a
+            // colocated server sibling nonetheless exists, the author likely
+            // expected it wired, so name the real cause: the orphan scan below
+            // fires only on a build and never mentions the extension, whereas
+            // `this.warn` reaches `vite dev` too. Stay silent when no sibling
+            // exists so an ordinary extensionless view is not nagged.
+            const absBareBase = path.resolve(importerDir, specifier);
+            const declinedExt = SERVER_EXTENSIONS.find((e) =>
+              fileExists(absBareBase + e)
+            );
+            if (declinedExt && !declined.has(absBareBase)) {
+              declined.add(absBareBase);
+              ctx.warn?.(
+                `[hono-preact] route view/layout import ${JSON.stringify(specifier)} has no file ` +
+                  `extension, so its colocated server module ` +
+                  `(${path.basename(absBareBase + declinedExt)}) can't be auto-discovered. Add an ` +
+                  `explicit extension (e.g. ${JSON.stringify(specifier + '.js')}) or an explicit ` +
+                  `\`server:\` entry.`
+              );
+            }
+            return;
+          }
           const base = specifier.slice(0, -ext[0].length);
 
           const absBase = path.resolve(importerDir, base);
@@ -305,6 +330,11 @@ export function routeServerAutodiscoveryPlugin(
 
       for (const file of listServerModules(root)) {
         if (graph.has(file)) continue;
+        // Already flagged by the extensionless-decline warning (its route's
+        // view/layout import lacked an extension). That message is the more
+        // actionable of the two, so skip the generic orphan warn to avoid
+        // double-warning one root cause. `declined` is keyed by the sibling base.
+        if (declined.has(file.replace(SERVER_FILE, ''))) continue;
         this.warn(
           `${path.relative(root, file)} looks like a server module but no route imports it. ` +
             `Colocate it next to a route's view/layout (e.g. \`foo.tsx\` -> \`foo.server.ts\`), ` +

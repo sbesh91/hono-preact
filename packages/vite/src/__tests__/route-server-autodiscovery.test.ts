@@ -188,6 +188,69 @@ describe('routeServerAutodiscoveryPlugin', () => {
     const code = `export const view = 1; export const layout = 2;`;
     expect(transform(plugin, code)).toBeUndefined();
   });
+
+  it('warns once when an extensionless view import has a colocated server sibling', () => {
+    // `import('./pages/login')` has no extension to splice `.server` into, so
+    // discovery declines. But a `login.server.ts` sibling exists, so the author
+    // almost certainly expected it wired. `this.warn` names the real cause and
+    // (unlike the build-only orphan scan) reaches `vite dev` too.
+    const plugin = makePlugin(['/repo/src/pages/login.server.ts']);
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login') },
+    ]);`;
+    const warnings: string[] = [];
+    const ctx = { warn: (m: string) => warnings.push(m) } as never;
+    // Two passes (client + SSR) must warn exactly once (deduped).
+    const a = plugin.transform.call(ctx, code, ROUTES_ID);
+    const b = plugin.transform.call(ctx, code, ROUTES_ID);
+    // Discovery still declines: there is no extension to splice `.server` into.
+    expect(a).toBeUndefined();
+    expect(b).toBeUndefined();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('./pages/login');
+    expect(warnings[0]).toContain('no file extension');
+    expect(warnings[0]).toContain('login.server.ts');
+  });
+
+  it('stays silent for an extensionless view import with no server sibling', () => {
+    // An ordinary extensionless view (no colocated server module) is a legitimate
+    // route; it must not be nagged.
+    const plugin = makePlugin([]); // nothing on disk
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login') },
+    ]);`;
+    const warnings: string[] = [];
+    const out = plugin.transform.call(
+      { warn: (m: string) => warnings.push(m) } as never,
+      code,
+      ROUTES_ID
+    );
+    expect(out).toBeUndefined();
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('warns per distinct extensionless view (dedup is keyed per sibling, not global)', () => {
+    // Two different extensionless views, each with its own server sibling, must
+    // each warn: the dedup is keyed per resolved sibling base, not a single
+    // global "warned once" flag.
+    const plugin = makePlugin([
+      '/repo/src/pages/login.server.ts',
+      '/repo/src/pages/signup.server.ts',
+    ]);
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login') },
+      { path: 'signup', view: () => import('./pages/signup') },
+    ]);`;
+    const warnings: string[] = [];
+    plugin.transform.call(
+      { warn: (m: string) => warnings.push(m) } as never,
+      code,
+      ROUTES_ID
+    );
+    expect(warnings).toHaveLength(2);
+    expect(warnings.some((w) => w.includes('login.server.ts'))).toBe(true);
+    expect(warnings.some((w) => w.includes('signup.server.ts'))).toBe(true);
+  });
 });
 
 // Orphan check: buildEnd warns about a *.server.* file no route imports.
@@ -260,5 +323,49 @@ describe('routeServerAutodiscoveryPlugin orphan check', () => {
     );
     const warnings = runBuildEnd(plugin, { envName: 'ssr', graph: [] });
     expect(warnings).toHaveLength(0);
+  });
+
+  it('does not double-warn: an extensionless-declined sibling is skipped by the orphan scan', () => {
+    // The transform already warned (more actionably) that this sibling can't be
+    // auto-discovered because its view import lacks an extension; the generic
+    // orphan warn for the same file would be redundant, so buildEnd skips it.
+    const existing = '/repo/src/pages/login.server.ts';
+    const set = new Set([existing]);
+    const plugin = routeServerAutodiscoveryPlugin({
+      fileExists: (p) => set.has(p),
+      listServerModules: () => [existing],
+    }) as Plugin & {
+      transform: TransformFn;
+      configResolved: (c: {
+        command: string;
+        root: string;
+        logger: { info(m: string): void };
+      }) => void;
+      buildEnd: BuildEndFn;
+    };
+    plugin.configResolved({
+      command: 'build',
+      root: '/repo',
+      logger: { info() {} },
+    });
+
+    // Transform declines the extensionless view and records the sibling base.
+    const transformWarnings: string[] = [];
+    plugin.transform.call(
+      { warn: (m: string) => transformWarnings.push(m) } as never,
+      `export default defineRoutes([
+        { path: 'login', view: () => import('./pages/login') },
+      ]);`,
+      ROUTES_ID
+    );
+    expect(transformWarnings).toHaveLength(1);
+
+    // The orphan scan must NOT warn again about the same (now-declined) file,
+    // even though it is absent from the module graph.
+    const orphanWarnings = runBuildEnd(plugin, {
+      envName: 'ssr',
+      graph: ['/repo/src/routes.ts'],
+    });
+    expect(orphanWarnings).toHaveLength(0);
   });
 });
