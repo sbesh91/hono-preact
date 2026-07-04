@@ -199,6 +199,9 @@ describe('UI docs gate catches a deleted owning page', () => {
     );
   });
 
+  // Pins the namespace-part path specifically: `DialogClose` is cited on
+  // dialog.mdx in dot form (`Dialog.Close`), not flat, so this also exercises
+  // the `Root.Part` matcher, which the flat-only hook case above does not.
   it('a namespace part reads undocumented when its root page is deleted', () => {
     const readWithout = (file: string) =>
       file === 'dialog.mdx' ? undefined : readComponentPage(file);
@@ -211,5 +214,27 @@ describe('UI docs gate catches a deleted owning page', () => {
       file === 'menu.mdx' ? undefined : readComponentPage(file);
     expect(isDocumented('SubmenuRoot', uiRoots, readComponentPage)).toBe(true);
     expect(isDocumented('SubmenuRoot', uiRoots, readWithout)).toBe(false);
+  });
+});
+
+// The gate's core job: a symbol DROPPED from an existing owning page (page
+// present, symbol absent) must read undocumented. The deleted-page cases above
+// all return early on the missing page, so these lock the "page exists but does
+// not cite the symbol" branch -- flat AND `Root.Part` dot form both absent.
+describe('UI docs gate catches a symbol dropped from a present owning page', () => {
+  it('a standalone hook whose own page no longer cites it reads undocumented', () => {
+    const stubbed = (file: string) =>
+      file === 'use-controllable-state.mdx'
+        ? '# Some Page\n\nunrelated prose, no symbol here.'
+        : readComponentPage(file);
+    expect(isDocumented('useControllableState', uiRoots, stubbed)).toBe(false);
+  });
+
+  it('a namespace part absent from its root page (flat and dot form) reads undocumented', () => {
+    const stubbed = (file: string) =>
+      file === 'dialog.mdx'
+        ? '# Dialog\n\nno parts cited here.'
+        : readComponentPage(file);
+    expect(isDocumented('DialogClose', uiRoots, stubbed)).toBe(false);
   });
 });
