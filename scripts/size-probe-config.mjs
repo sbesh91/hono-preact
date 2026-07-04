@@ -17,6 +17,9 @@
 // Framework base: what every route ships regardless of features used. `outcomes`
 // lives here (not under `actions`) because it ships on every route via
 // Routes -> define-routes -> page-middleware-host, independent of action usage.
+// `page-only.js` is the `hono-preact/page` authoring surface (the `render`
+// outcome plus re-exports of `outcomes`); it ships client runtime, so it is
+// attributed here rather than excluded (its unique cost over `outcomes` is ~40 B).
 // Each feature's marginal cost over `core` is gzip(core+feature) - gzip(core).
 export const CORE_MODULES = [
   'define-app.js',
@@ -26,6 +29,7 @@ export const CORE_MODULES = [
   'client-script.js',
   'is-browser.js',
   'outcomes.js',
+  'page-only.js',
 ];
 
 export const FEATURE_MODULES = {
@@ -49,6 +53,7 @@ export const FEATURE_MODULES = {
     'action-result-context.js',
     'use-action-result.js',
     'use-form-status.js',
+    'use-field-errors.js',
   ],
   // Client realtime cost: the WS room/socket hooks (which pull ws-lifecycle,
   // room-envelope, contract) plus the reactive pubsub primitive. Deliberately
@@ -60,7 +65,21 @@ export const FEATURE_MODULES = {
     'view-transition-name.js',
     'view-transition-types.js',
   ],
-  prefetch: ['prefetch.js'],
+  // `prefetch.js` is the speculation-rules helper; `use-prefetch.js` is the hook
+  // a route calls. Both belong here so the hook is not an unmeasured entry point
+  // (it is a thin wrapper over prefetch.js, but it must stay attributed).
+  prefetch: ['prefetch.js', 'use-prefetch.js'],
+  // Client routing surface below core: the NavLink component, active-route and
+  // navigation/params hooks, typed path builder, and content-route helper. Each
+  // is small, but together ~1 KB that shipped attributed to no bucket.
+  routing: [
+    'nav-link.js',
+    'route-active.js',
+    'use-navigate.js',
+    'use-params.js',
+    'build-path.js',
+    'content-routes.js',
+  ],
   // The opt-in stream-observer API + its client runner. The always-on registry
   // (stream-registry) is in `runtime`; the SSR path (streaming-ssr) is server-only
   // (imports the request store), so neither belongs here. `define-stream-observer`
@@ -72,6 +91,30 @@ export const FEATURE_MODULES = {
   head: ['head.js'],
   middleware: ['define-middleware.js', 'reload-context.js'],
 };
+
+// Top-level dist modules intentionally NOT attributed to any bucket, so the
+// manifest-completeness gate (size-manifest-completeness.test.mjs) does not flag
+// them. Every entry is a public module that does not ship client bytes to a
+// route, so measuring it as a client feature would be misleading. A NEW
+// top-level client module is a deliberate omission from this list, which forces
+// the gate to fail until it is bucketed. Keep each entry justified:
+export const EXCLUDED_MODULES = [
+  // Server-authored realtime definitions: called in server room/socket modules
+  // to register handlers; never part of a client route's graph (the client uses
+  // the use-room / use-socket hooks, which are in the `realtime` bucket).
+  'define-channel.js',
+  'define-room.js',
+  'define-socket.js',
+  // Server-only.
+  'server-route.js', // server RPC route surface
+  'upgrade-websocket.js', // server-side WebSocket upgrade helper
+  // Re-export barrels: no bytes of their own; measuring one measures everything.
+  'index.js',
+  'internal.js',
+  'internal-runtime.js',
+  // Type-only helper: `export {}` after tsc strips its type-only exports.
+  'infer.js',
+];
 
 // Peers a consumer already has; excluded so a probe measures only the
 // framework's own bytes on top of preact. Anything NOT listed here (e.g. a
