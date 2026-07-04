@@ -29,21 +29,19 @@ export type NavLinkProps = Omit<
 // a navigation will actually follow, and additionally refuses a same-url click:
 // preact-iso pushes the same url but Preact bails out with no navigated flush,
 // so the arm would never be consumed and would instead suppress the transition
-// of the NEXT real navigation. Best-effort: preact-iso's optional router
-// `scope` is not mirrored (it is rarely set), so a link outside a scoped router
-// is the one residual case that could arm without navigating.
+// of the NEXT real navigation. It deliberately does NOT gate on
+// `e.defaultPrevented`: handleNav does not check it either (it soft-navigates
+// and calls preventDefault itself), so an upstream capture-phase preventDefault
+// still produces a navigation, and gating on it here would leave
+// `transition={false}` silently no-op'd for that navigation. Best-effort:
+// preact-iso's optional router `scope` is not mirrored (it is rarely set), so a
+// link outside a scoped router is the one residual case that could arm without
+// navigating.
 function willSoftNavigate(
   e: JSX.TargetedMouseEvent<HTMLAnchorElement>,
   href: string
 ): boolean {
-  if (
-    e.button !== 0 ||
-    e.metaKey ||
-    e.ctrlKey ||
-    e.shiftKey ||
-    e.altKey ||
-    e.defaultPrevented
-  ) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
     return false;
   }
   const a = e.currentTarget;

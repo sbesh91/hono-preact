@@ -294,4 +294,29 @@ describe('NavLink', () => {
     expect(spy).not.toHaveBeenCalled();
     cleanup();
   });
+
+  // Regression (#222 item 14): willSoftNavigate must mirror preact-iso's
+  // handleNav gate, which has NO `defaultPrevented` check. An upstream
+  // capture-phase preventDefault (e.g. an ancestor handler) does not stop
+  // preact-iso from soft-navigating, so the one-shot skip must still arm.
+  // Otherwise `transition={false}` silently no-ops and the view transition
+  // plays on the very navigation the user opted out of.
+  it('arms when an ancestor preventDefault-s the click in the capture phase', () => {
+    history.replaceState(null, '', '/x');
+    const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
+    const { getByText } = render(
+      h(
+        LocationProvider,
+        null,
+        h(
+          'div',
+          { onClickCapture: (e: Event) => e.preventDefault() },
+          h(NavLink, { href: '/somewhere-else', transition: false }, 'go')
+        )
+      )
+    );
+    fireEvent.click(getByText('go'), { button: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
 });
