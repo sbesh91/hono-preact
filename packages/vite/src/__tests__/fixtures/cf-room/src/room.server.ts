@@ -17,6 +17,10 @@ const roomChannel = defineChannel('room/:id')<RoomMsg>();
 // A second channel for the denied room (distinct topic space from the open one).
 const deniedChannel = defineChannel('denied/:id')<RoomMsg>();
 
+// A third channel for the factory-less probe room (distinct topic space).
+type ProbeReply = { dataIsUndefined: boolean };
+const probeChannel = defineChannel('probe/:id')<ProbeReply>();
+
 // A guard that ALWAYS denies. This is the canonical auth-deny shape (the same
 // `throw deny(...)` a `requireSession` gate uses). On Cloudflare the worker must
 // close the connection WS_DENY_CODE (4403) WITHOUT contacting the Durable
@@ -36,6 +40,16 @@ export const serverRooms = {
     // engine's job; broadcast skips the sender).
     onMessage(conn, msg) {
       conn.broadcast(msg);
+    },
+  }),
+  // No `data` factory: conn.data must resolve to `undefined` on the Cloudflare
+  // Durable Object (parity with Node, where a factory-less room defaults
+  // conn.data to undefined). The DO reaches this via realtime-do's "x-hp-data
+  // absent -> undefined" branch. onMessage replies to the SENDER (conn.send =
+  // sendTo self) so a single connected client observes its own probe result.
+  probe: defineRoom(probeChannel, {
+    onMessage(conn) {
+      conn.send({ dataIsUndefined: conn.data === undefined });
     },
   }),
   // A room whose guard denies every connection. The registry key is
