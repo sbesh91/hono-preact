@@ -59,7 +59,7 @@ export function renderComment(fresh, base, meta) {
   section(
     lines,
     'Framework runtime (gzip)',
-    '`core` is the base bundle; each feature is the extra it adds on top of core.',
+    '`core` is the always-on base; each row is the marginal gzip it adds on top. `core` and `runtime` ship on every route; the rest are opt-in features.',
     'Feature',
     fresh.sectionA,
     base.sectionA,
