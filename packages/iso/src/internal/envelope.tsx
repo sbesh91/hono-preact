@@ -1,12 +1,6 @@
-import type {
-  ComponentChildren,
-  ComponentType,
-  FunctionComponent,
-  JSX,
-} from 'preact';
+import type { ComponentChildren, FunctionComponent, JSX } from 'preact';
 import { h } from 'preact';
 import { useCallback, useContext, useLayoutEffect, useRef } from 'preact/hooks';
-import type { WrapperProps } from '../page.js';
 import { isBrowser } from '../is-browser.js';
 import { LoaderIdContext } from './contexts.js';
 
@@ -16,7 +10,12 @@ export type HydrationAnchor =
   | { kind: 'data'; value: unknown };
 
 type EnvelopeProps = {
-  as?: ComponentType<WrapperProps> | keyof JSX.IntrinsicElements;
+  // Intrinsic elements only. A custom-component wrapper cannot forward the ref
+  // the de-orphan effect below needs to identify its own DOM node, so the
+  // effect would silently no-op; restricting `as` to an intrinsic keeps that
+  // effect always correct. (Page's `Wrapper` prop is the public custom-wrapper
+  // knob; `Envelope` is loader-internal.)
+  as?: keyof JSX.IntrinsicElements;
   anchor: HydrationAnchor;
   children: ComponentChildren;
 };
@@ -65,16 +64,8 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
     });
   }, [id]);
 
-  if (typeof as === 'string') {
-    // `h()` rather than JSX: a `ref` on a `<Tag>` whose type is the full
-    // `keyof JSX.IntrinsicElements` union makes that union "too complex to
-    // represent". `h(string, props)` types props loosely and sidesteps it.
-    return h(as, { id, 'data-loader': dataLoader, ref: setLive }, children);
-  }
-  const Wrapper = as;
-  return (
-    <Wrapper id={id} data-loader={dataLoader}>
-      {children}
-    </Wrapper>
-  );
+  // `h()` rather than JSX: a `ref` on a `<Tag>` whose type is the full
+  // `keyof JSX.IntrinsicElements` union makes that union "too complex to
+  // represent". `h(string, props)` types props loosely and sidesteps it.
+  return h(as, { id, 'data-loader': dataLoader, ref: setLive }, children);
 };
