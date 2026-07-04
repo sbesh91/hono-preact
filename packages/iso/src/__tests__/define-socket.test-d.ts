@@ -29,6 +29,33 @@ function _probes() {
   expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
 }
 
+// Deep readonly (#222 item 9): socket.data is recursively readonly, so a NESTED
+// in-place mutation is a compile error too (it would silently vanish on a CF DO
+// re-read, like a top-level one).
+function _deepReadonlyDataProbe() {
+  const ref = defineSocket<
+    In,
+    Out,
+    { profile: { name: string; tags: string[] } }
+  >({
+    open(socket) {
+      expectTypeOf(socket.data).toEqualTypeOf<{
+        readonly profile: {
+          readonly name: string;
+          readonly tags: readonly string[];
+        };
+      }>();
+      // @ts-expect-error a top-level socket.data property is readonly
+      socket.data.profile = { name: 'b', tags: [] };
+      // @ts-expect-error a NESTED socket.data property is readonly (deep)
+      socket.data.profile.name = 'b';
+      // @ts-expect-error a nested socket.data array is a readonly array
+      socket.data.profile.tags.push('x');
+    },
+  });
+  void ref;
+}
+
 // route.socket's `data` factory receives the Hono Context; `open` receives
 // ONLY the socket (no Context), so a socket handler is portable to Cloudflare
 // where it runs inside a Durable Object with no live Context.
@@ -99,3 +126,4 @@ void _routeSocketProbe;
 void _openArityProbe;
 void _useSocketMethodProbe;
 void _asyncDataProbe;
+void _deepReadonlyDataProbe;

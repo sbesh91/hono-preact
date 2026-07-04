@@ -211,6 +211,32 @@ function _asyncRoomDataProbe() {
   });
 }
 
+// Deep readonly (#222 item 9): `.data` is JSON-serialized onto a forward header
+// and re-read fresh per event, so a NESTED in-place mutation silently vanishes
+// on a Cloudflare Durable Object just like a top-level one. ReadonlyData is
+// recursive, so nested `.data` is readonly too (a shallow Readonly only froze
+// the top level and let `conn.data.profile.name = ...` type-check).
+function _deepReadonlyDataProbe() {
+  type Nested = { profile: { name: string; tags: string[] } };
+  defineRoom(roomChannel, {
+    data: (): Nested => ({ profile: { name: 'a', tags: [] } }),
+    onJoin(conn) {
+      expectTypeOf(conn.data).toEqualTypeOf<{
+        readonly profile: {
+          readonly name: string;
+          readonly tags: readonly string[];
+        };
+      }>();
+      // @ts-expect-error a top-level `.data` property is readonly
+      conn.data.profile = { name: 'b', tags: [] };
+      // @ts-expect-error a NESTED `.data` property is readonly (the deep part)
+      conn.data.profile.name = 'b';
+      // @ts-expect-error a nested `.data` array is a readonly array
+      conn.data.profile.tags.push('x');
+    },
+  });
+}
+
 void _routeRoomProbes;
 void _bareRoomProbes;
 void _multiParamProbes;
@@ -221,3 +247,4 @@ void _keyOptionalProbe;
 void _dataFactoryProbe;
 void _noDataFactoryProbe;
 void _asyncRoomDataProbe;
+void _deepReadonlyDataProbe;
