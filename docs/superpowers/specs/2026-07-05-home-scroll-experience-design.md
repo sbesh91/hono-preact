@@ -46,6 +46,10 @@ chapters tell things Remix's page never could (view transitions, realtime socket
    (`--spring-soft`, view transitions). No Fakebooks, no Spinnageddon copy, no blue/green
    DevTools palette; our network wire uses brand hues plus a semantic done/in-flight/cancel
    set that clears WCAG AA in both themes.
+6. **Responsive by requirement.** Mobile and short viewports are a first-class target, not
+   an afterthought. Every chapter has a defined small-screen presentation (section 4.4);
+   nothing clips, tap targets are reachable, and the page body never scrolls horizontally at
+   any width.
 
 ## 3. The chapter arc (locked: "Arrangement A")
 
@@ -198,6 +202,35 @@ Each chapter is a single-responsibility component with its content (copy + code 
 device config) local to it, so chapters can be reordered, cut, or edited in isolation. The
 hero keeps the existing `HeroShader`.
 
+### 4.4 Small viewports (mobile and short screens)
+
+Mobile responsiveness is a design requirement, not a follow-up. The kit degrades on several
+axes, chosen per chapter:
+
+- **Reflow, don't shrink-to-fit.** The two-panel `browser | wire` layout stacks vertically
+  (browser above wire) below a ~48rem breakpoint. Chapter 4 (the A/B device, the only scene
+  with two browsers side by side) stacks "fetch in components" above "hono-preact SSR" so the
+  staircase-vs-block contrast reads top-to-bottom instead of being squeezed to unreadable.
+- **Fit the pinned scene to the real viewport.** Pinned stages are sized in `svh`
+  (small-viewport-height) units, not `vh`, so the mobile address-bar show/hide can't make a
+  scene overflow and clip. Type and padding shrink via `clamp()` at small sizes.
+- **Shorten the scrub.** `ScrollStage` takes a smaller `pages` count on narrow screens so
+  each device plays over less finger-scrolling (a 3.4-screen desktop stage need not be 3.4
+  screens on a phone).
+- **Last resort: unpin.** If a scene still cannot fit legibly at a target width, it drops
+  pinning below that breakpoint and falls back to the reveal-on-enter stepped presentation
+  (the same static-frame path as reduced motion, section 4.2). Correctness never depends on
+  the pin.
+- **Touch parity.** Every pointer interaction has a touch/tap equivalent: the routing
+  explorer (chapter 3) is tap- and focus-operable; the simulated cursor (chapter 8) is
+  autoplay and needs no real pointer. Interactive targets meet a >=44px tap-target size.
+- **No horizontal body scroll, ever.** Wide content (the A/B panels, code samples) lives in
+  its own `overflow-x: auto` container so the page body never scrolls sideways at any width.
+
+Target widths to verify in build: ~360px (small phone), ~768px (tablet / breakpoint edge),
+and a short-landscape phone (to exercise the `svh` fit). The realtime chapter's live clock
+must also stay cheap on mobile CPUs (see section 7).
+
 ## 5. Visual design language
 
 - **Color.** Existing tokens only (`root.css`): orangenta gradient for emphasis and "done/
@@ -211,8 +244,9 @@ hero keeps the existing `HeroShader`.
   hero backdrop. Keep flourishes tasteful; the network wire and browser previews carry the
   page, not gratuitous effects.
 - **Layout.** Content column `min(64rem, 100% - 3rem)`; pinned scenes center in the
-  viewport; wide devices (the A/B two-panel) get `overflow-x: auto` guards so the body never
-  scrolls sideways.
+  viewport and are sized in `svh` so mobile browser chrome cannot clip them; two-panel
+  devices stack vertically below ~48rem (section 4.4); wide devices (the A/B two-panel, code)
+  get `overflow-x: auto` guards so the body never scrolls sideways at any width.
 
 ## 6. Accessibility
 
@@ -256,6 +290,11 @@ tests assert the **static SSR structure and copy**, not animation):
 - Add: the routing explorer renders its default selected state and its route-node buttons
   are focusable.
 - Add: decorative layers are `aria-hidden`; claims are present as text.
+- Add: the responsive fallback is wired. At narrow widths the two-panel scenes carry their
+  stacked-layout markup, and a scene that unpins renders the reveal-on-enter static frame.
+  happy-dom cannot measure layout, so assert the structural branch/classes exist (the
+  responsive and unpinned code paths), not pixels. Real breakpoint behavior is verified by
+  hand at the section 4.4 target widths during build.
 
 Full pre-push CI parity per the repo runbook (`format:check`, `typecheck`, `test:types`,
 `test:coverage`, `test:integration`, `apps/site build`). No framework package changes, so no
@@ -263,10 +302,11 @@ package suites are affected, but the `apps/site` build and the home test must pa
 
 ## 9. Risks and open questions
 
-1. **Mobile pinned scrub.** Pinned 100vh scenes can overflow on small viewports (the
-   prototype clips). Required mitigation: below a breakpoint, either scale scene content to
-   fit or drop pinning and fall back to reveal-on-enter static frames (reuse the
-   reduced-motion path). Decide per chapter; the two-panel A/B (chapter 4) is the tightest.
+1. **Mobile pinned scrub.** Pinned scenes can overflow on small viewports (the prototypes
+   clipped). This is now a designed requirement, not an open risk: the responsive strategy in
+   section 4.4 (reflow, `svh` fit, shorter scrub, unpin-as-last-resort, touch parity, no
+   horizontal body scroll) covers it. Residual work is verification at the target widths
+   during build; the two-panel A/B (chapter 4) is the tightest and gets checked first.
 2. **Bundle budget.** Twelve chapters of bespoke devices could grow client JS. Mitigations:
    shared kit, lazy init, code-split, and reading the `client-size` PR comment. If the delta
    is large, tier the rollout (land core chapters first).
