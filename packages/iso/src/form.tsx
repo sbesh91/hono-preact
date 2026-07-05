@@ -9,10 +9,8 @@ import {
 } from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ActionRef } from './action.js';
-import {
-  OPTIMISTIC_BRAND,
-  type UseOptimisticActionResult,
-} from './optimistic-action.js';
+import { OPTIMISTIC_BRAND } from './internal/optimistic-brand.js';
+import type { UseOptimisticActionResult } from './optimistic-action.js';
 import type { OptimisticHandle } from './optimistic.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';

@@ -7,8 +7,12 @@ import {
 import { useOptimistic, type OptimisticHandle } from './optimistic.js';
 import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
+import { OPTIMISTIC_BRAND } from './internal/optimistic-brand.js';
 
-export const OPTIMISTIC_BRAND: unique symbol = Symbol('hono-preact.optimistic');
+// Re-exported for API stability: the brand's single definition lives in the
+// dependency-free leaf (so Form can import it without the optimistic runtime),
+// but consumers may still import it from here.
+export { OPTIMISTIC_BRAND };
 
 export type OptimisticBinding<TPayload, TBase> = {
   apply: (current: TBase, payload: TPayload) => TBase;
