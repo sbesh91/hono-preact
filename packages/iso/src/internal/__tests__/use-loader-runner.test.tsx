@@ -237,6 +237,11 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     });
     expect(captured.reloading).toBe(true);
     expect(viewLoading(captured)).toBe(true);
+    // The direct-fn (non-keyed) loader path is now async: the server dispatch
+    // lives behind a dynamic import (kept off client bundles), so the reload's
+    // loader invocation lands a microtask later. Wait for it before resolving,
+    // exactly as the cold load above waits for call #1.
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
     await act(async () => {
       resolveReload({ msg: 'B' });
     });
