@@ -89,6 +89,10 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     // (no Suspense fallback section swapped in/out).
     expect(container.querySelector('section')).not.toBeNull();
 
+    // The loader's direct-fn path is now async (its server dispatch is a dynamic
+    // import kept off client bundles), so the fn body captures `resolve` a
+    // microtask later than the `loading` state above. Wait for it.
+    await waitFor(() => expect(typeof resolve).toBe('function'));
     await act(async () => {
       resolve({ msg: 'ready' });
     });
@@ -233,6 +237,9 @@ describe('v3 <Loader> stability', () => {
     expect(screen.getByTestId('msg')).toHaveTextContent('initial');
     expect(screen.getByTestId('count')).toHaveTextContent('2');
 
+    // Reload's loader invocation (call #2) lands a microtask later now that the
+    // direct-fn path is dynamically imported; wait for it, as the cold load does.
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
     await act(async () => {
       resolveReload({ msg: 'reloaded' });
     });
