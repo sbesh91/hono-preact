@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { WorkerInMsg, WorkerOutMsg } from './shader-worker.ts';
 
-// Mask (not paint over) the shader's lower half to transparent, so it dissolves
+// Mask (not paint over) the shader's lower edge to transparent, so it dissolves
 // to reveal the same fixed atmospheric ground the chapters sit on. Painting an
 // opaque background fade instead left a white band that met the chapters'
 // tinted ground on a hard line; masking keeps the ground continuous across the
 // hero/chapter seam in both themes.
+// The opaque region has to reach past the hero copy: in dark mode the revealed
+// ground is dark, so any text sitting in the dissolve zone loses contrast. The
+// content is vertically centered, so holding full opacity to 68% keeps the
+// lede and CTAs on the bright shader and confines the dissolve to the empty
+// strip below them.
 const SHADER_MASK =
-  'linear-gradient(to bottom, #000 0%, #000 50%, transparent 88%)';
+  'linear-gradient(to bottom, #000 0%, #000 68%, transparent 94%)';
 
 // Always-on base layer. Visible before the first WebGL frame (no white flash on
 // load) and as the static fallback when the OffscreenCanvas worker path is

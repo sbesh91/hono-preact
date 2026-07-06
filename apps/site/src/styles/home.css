@@ -650,9 +650,14 @@
   padding-bottom: 0.34em;
 }
 .hx-hero__wm-base {
-  color: color-mix(in srgb, var(--color-brand-ink) 22%, transparent);
-  /* Hidden at rest so its glyph edges never ghost behind the gradient; only
-     shown as the unlit underlay while the fill sweeps across. */
+  /* Full ink (matching the "One framework," line), not a faint underlay: the
+     wordmark paints as solid text on the very first frame, so the headline is a
+     large, fully-painted LCP candidate at first paint and the gradient sweep
+     reads as filling real text rather than materializing from nothing. This
+     keeps the LCP element on the headline instead of the late-fading lede. */
+  color: var(--color-brand-ink);
+  /* Hidden at rest so its glyph edges never ghost behind the gradient; the load
+     animation reveals it (backwards fill) and fades it out as the fill lands. */
   opacity: 0;
 }
 .hx-hero__wm-fill {
@@ -751,14 +756,13 @@
   .hx-hero__browser {
     animation: hx-hero-browser 1.55s ease 0.3s backwards;
   }
-  /* The subtitle and CTAs rise in alongside the wordmark wipe. The lede is the
-     LCP element, so keep its delay tiny: a long delay held it at opacity 0 and
-     pushed LCP out ~0.8s past first paint. */
+  /* The subtitle and CTAs rise in after the wordmark wipe lands, so the hero
+     reads as one orchestrated entrance rather than everything arriving at once. */
   .hx-hero__lede {
-    animation: hx-hero-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
+    animation: hx-hero-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.05s backwards;
   }
   .hx-hero__cta {
-    animation: hx-hero-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.25s backwards;
+    animation: hx-hero-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.25s backwards;
   }
 }
 @keyframes hx-hero-rise {
@@ -874,6 +878,19 @@
     position: static;
     clip-path: none;
     animation: none;
+  }
+}
+/* On small screens the wordmark wipe is disabled (static gradient above), so the
+   lede has no entrance to wait for: its long delay would just hold the largest
+   element invisible, and on mobile the lede is the LCP element, so that delay
+   pushes LCP out by ~1s for no visual payoff. Bring the copy in promptly here;
+   the orchestrated stagger stays on wider screens where the wipe actually plays. */
+@media (max-width: 30rem) and (prefers-reduced-motion: no-preference) {
+  .hx-hero__lede {
+    animation-delay: 0.06s;
+  }
+  .hx-hero__cta {
+    animation-delay: 0.16s;
   }
 }
 /* The hero shader is an always-light asset, so hero text uses fixed dark ink to stay legible in both themes. */
