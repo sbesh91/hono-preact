@@ -17,12 +17,12 @@ export function ChapterOnePackage(): VNode {
     <section class="hx-chapter">
       <div class="hx-scene">
         <div class="hx-scene__head">
-          <span class="hx-scene__step">The whole surface</span>
+          <p class="hx-scene__step">The whole surface</p>
           <h2 class="hx-scene__title">One package, typed throughout.</h2>
           <p class="hx-scene__desc">
             A single hono-preact install gives you the runtime, /server, /vite,
             and both /adapter-* targets. Typed end to end, and every PR measures
-            each feature client-JS cost.
+            each feature's client-JS cost.
           </p>
         </div>
         <Reveal>
