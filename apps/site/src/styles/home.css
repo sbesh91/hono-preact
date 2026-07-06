@@ -1091,22 +1091,30 @@
   margin-top: 0.5rem;
   background: var(--surface-subtle);
 }
-/* Each newly-mounted layer eases in rather than snapping, so drilling deeper
-   reads as the child mounting. Only the fresh layer animates (existing ones are
-   updated, not re-created). */
+/* Each newly-mounted layer materializes rather than snapping, so drilling
+   deeper reads as the child mounting: it drops in from under the parent header,
+   softening from a blur. Only the fresh layer animates (existing ones are
+   updated, not re-created). A gentle, non-front-loaded ease over a longer
+   duration keeps it from reading as a quick pop. */
 @media (prefers-reduced-motion: no-preference) {
   .hx-route__layer {
-    animation: hx-route-layer-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation: hx-route-layer-in 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)
+      backwards;
   }
 }
 @keyframes hx-route-layer-in {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(-0.45rem) scale(0.985);
+    transform: translateY(-0.9rem) scale(0.96);
+    filter: blur(4px);
   }
-  to {
+  60% {
+    filter: blur(0);
+  }
+  100% {
     opacity: 1;
     transform: none;
+    filter: blur(0);
   }
 }
 .hx-route__layer-head {
