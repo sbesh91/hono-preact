@@ -24,6 +24,13 @@ describe('nodeAdapter', () => {
     expect(typeof nodeAdapter().vitePlugins).toBe('function');
   });
 
+  it('wrapEntry installs a preload-closure reader that fs-reads the build artifact', () => {
+    const tail = nodeAdapter().wrapEntry(ctx);
+    expect(tail).toContain('installPreloadModules');
+    expect(tail).toContain('__hp-preload.json');
+    expect(tail).toContain("from 'hono-preact/server/internal/runtime'");
+  });
+
   it('wrapEntry uses createNodeWebSocket and installWebSocketUpgrader', () => {
     const tail = nodeAdapter().wrapEntry(ctx);
     expect(tail).toContain("from '@hono/node-ws'");

@@ -4,7 +4,12 @@
   "compatibility_date": "2026-02-22",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "./dist/client"
+    "directory": "./dist/client",
+    // Binds the built client assets as `env.ASSETS` so the framework can read
+    // the modulepreload closure artifact at render time (the worker builds
+    // before the client, so it can't be baked in). Safe to keep; harmless if
+    // unused.
+    "binding": "ASSETS"
   }
 
   // Realtime rooms (defineRoom/useRoom) run inside a Durable Object on

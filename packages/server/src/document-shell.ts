@@ -1,5 +1,6 @@
 import type { AppConfig } from '@hono-preact/iso';
 import { speculationRulesTag } from './speculation-rules.js';
+import { preloadLinkTags } from './preload-modules.js';
 
 function escapeHtml(str: string): string {
   return str
@@ -41,8 +42,15 @@ export function assembleDocument(opts: {
   head: HeadStatic;
   defaultTitle?: string;
   appConfig?: AppConfig;
+  /**
+   * The client entry's static-import closure as root-relative URLs. Emitted as
+   * `<link rel="modulepreload">` hints so the browser fetches these boot chunks
+   * alongside the entry instead of after parsing it (see issue #249). Empty or
+   * omitted -> no hints.
+   */
+  preloadModules?: string[];
 }): string {
-  const { html, head, defaultTitle, appConfig } = opts;
+  const { html, head, defaultTitle, appConfig, preloadModules = [] } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
   // Only inject a <title> when hoofd produced one or the caller provided a
@@ -51,6 +59,9 @@ export function assembleDocument(opts: {
   // last <title> in <head>).
   const titleSource = title ?? defaultTitle;
   const headTags = [
+    // Preload hints first so the browser discovers the boot closure as early
+    // in the head as possible.
+    ...preloadLinkTags(preloadModules),
     titleSource != null ? `<title>${escapeHtml(titleSource)}</title>` : '',
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
