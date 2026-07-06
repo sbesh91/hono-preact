@@ -75,10 +75,10 @@
   opacity: 0.55;
 }
 .hx-scene__title {
-  font-size: clamp(1.4rem, 3vw, 2.1rem);
+  font-size: clamp(1.5rem, 3.2vw, 2.35rem);
   font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.015em;
+  line-height: 1.04;
+  letter-spacing: -0.028em;
   margin-top: 0.4rem;
   text-wrap: balance;
 }
@@ -622,18 +622,22 @@
 }
 .hx-hero__title {
   color: var(--color-brand-ink);
-  font-size: clamp(2.4rem, 6vw, 4.1rem);
+  font-size: clamp(2.6rem, 6.6vw, 4.7rem);
   font-weight: 700;
-  line-height: 1.03;
-  letter-spacing: -0.02em;
+  line-height: 1;
+  letter-spacing: -0.035em;
   margin-top: 1rem;
   text-wrap: balance;
 }
+/* Light, airy lede is the deliberate counterpoint to the heavy title: the
+   weight ladder is what carries the type, not a second face. */
 .hx-hero__lede {
-  color: color-mix(in srgb, var(--color-brand-ink) 78%, transparent);
-  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
-  max-width: 36rem;
-  margin: 1.25rem 0 0;
+  color: color-mix(in srgb, var(--color-brand-ink) 80%, transparent);
+  font-weight: 300;
+  font-size: clamp(1.1rem, 2.3vw, 1.4rem);
+  line-height: 1.45;
+  max-width: 34rem;
+  margin: 1.35rem 0 0;
 }
 .hx-hero__cta {
   display: flex;
