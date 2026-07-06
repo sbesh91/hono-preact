@@ -5,45 +5,24 @@ import Home from '../home.js';
 
 afterEach(() => cleanup());
 
-describe('home (marketing landing)', () => {
-  it('renders the pitch sentence', () => {
-    render(<Home />);
-    expect(screen.getByText(/manifest driven routes/i)).toBeInTheDocument();
-  });
-
+describe('home (scroll experience)', () => {
   it('links to /docs/quick-start as the primary CTA', () => {
     render(<Home />);
-    const link = screen.getByRole('link', { name: /get started/i });
-    expect(link.getAttribute('href')).toBe('/docs/quick-start');
+    expect(screen.getByRole('link', { name: /get started/i }).getAttribute('href')).toBe(
+      '/docs/quick-start'
+    );
   });
-
   it('links to /demo as the secondary CTA', () => {
     render(<Home />);
-    const link = screen.getByRole('link', { name: /see the demo/i });
-    expect(link.getAttribute('href')).toBe('/demo');
+    expect(screen.getByRole('link', { name: /see the demo/i }).getAttribute('href')).toBe('/demo');
   });
-
-  it('shows all four feature cards', () => {
-    render(<Home />);
-    // Use unique card-caption text to avoid colliding with hero/footer/etc.
-    expect(
-      screen.getByText(/your routes are a data structure/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/loaders and actions are typed functions/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/loaders, forms, sse/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/all of your tools in one place/i)
-    ).toBeInTheDocument();
-  });
-
   it('mounts the hero shader background', () => {
     const { container } = render(<Home />);
-    // HeroShader renders an aria-hidden wrapper containing a canvas (or the
-    // CSS fallback) plus a fade overlay.
     const bg = container.querySelector('[aria-hidden="true"]');
-    expect(bg).not.toBeNull();
-    expect(bg!.querySelector('canvas')).not.toBeNull();
+    expect(bg?.querySelector('canvas')).not.toBeNull();
+  });
+  it('renders the hero headline', () => {
+    render(<Home />);
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 });

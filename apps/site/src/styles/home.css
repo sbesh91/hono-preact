@@ -56,3 +56,13 @@
   .hx-region__skeleton { display: none; }
   .hx-region__content { position: static; opacity: 1; transform: none; }
 }
+
+.hx-hero { min-height: 92svh; display: flex; flex-direction: column; justify-content: center; padding: 5rem 0 3rem; }
+.hx-eyebrow { margin-top: 1.1rem; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.hx-hero__title { font-size: clamp(2.4rem, 6vw, 4.1rem); font-weight: 700; line-height: 1.03; letter-spacing: -0.02em; margin-top: 1rem; text-wrap: balance; }
+.hx-hero__lede { font-size: clamp(1.05rem, 2.2vw, 1.3rem); color: var(--muted); max-width: 36rem; margin: 1.25rem 0 0; }
+.hx-hero__cta { display: flex; gap: 0.75rem; padding-top: 1.5rem; flex-wrap: wrap; }
+.hx-btn { text-decoration: none; font-weight: 600; padding: 0.6rem 1.1rem; border-radius: 0.6rem; min-height: 44px; display: inline-flex; align-items: center; }
+.hx-btn--primary { background: var(--accent); color: var(--accent-foreground); }
+.hx-btn--primary:hover { background: var(--accent-hover); }
+.hx-btn--ghost { border: 1px solid var(--border-color); color: var(--foreground); background: color-mix(in srgb, var(--surface) 80%, transparent); }
