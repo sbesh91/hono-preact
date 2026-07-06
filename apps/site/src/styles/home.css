@@ -1079,8 +1079,32 @@
    layer transitions its own colors, so the accent highlight glides down the
    tree smoothly in both scroll directions. */
 .hx-route__nest {
+  position: relative;
   display: flex;
   flex-direction: column;
+}
+/* One accent ring that slides onto the active layer (positioned from JS in
+   RouteStack). Because every layer is laid out at a stable spot, moving one
+   ring between them reads as the highlight travelling route to route, zooming
+   inward as you drill deeper. */
+.hx-route__ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px var(--accent);
+  pointer-events: none;
+  z-index: 2;
+  transition:
+    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-route__ring {
+    transition: none;
+  }
 }
 .hx-route__layer {
   border: 1px solid var(--border-color);
@@ -1125,10 +1149,17 @@
   .hx-route__layer-name {
   color: var(--muted);
 }
-/* The active node carries the accent ring; its role reads in accent too. */
+/* The active node carries the accent ring (via the per-layer border as the
+   no-JS fallback); its role reads in accent too. */
 .hx-route__layer[data-state='active'] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
+}
+/* Once the sliding ring is positioned, drop the per-layer border so only the
+   travelling ring shows (otherwise the border would jump ahead of the slide). */
+.hx-route__nest[data-ring] .hx-route__layer[data-state='active'] {
+  border-color: var(--border-color);
+  box-shadow: none;
 }
 .hx-route__layer[data-state='active']
   > .hx-route__layer-head

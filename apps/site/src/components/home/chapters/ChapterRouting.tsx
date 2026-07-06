@@ -1,4 +1,5 @@
-import type { VNode } from 'preact';
+import type { VNode, RefObject } from 'preact';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
@@ -24,15 +25,17 @@ const SNIPPET = `defineRoutes([
 
 // The whole nested manifest is always on screen (no layers appear or collapse,
 // so nothing clips or jumps). `active` is the deepest node the URL has reached;
-// scrolling just moves the accent highlight down the tree. Nodes above it are
-// mounted parent layouts that stay put; nodes below it are code-split routes not
-// loaded yet. Only colors transition, so the reveal is smooth both directions.
+// nodes above it are mounted parent layouts, nodes below it are code-split
+// routes not loaded yet. A single accent ring (positioned in RouteStack) slides
+// onto whichever layer is active, zooming inward as you drill deeper.
 function RouteLayer({
   i,
   active,
+  refs,
 }: {
   i: number;
   active: number;
+  refs: RefObject<(HTMLDivElement | null)[]>;
 }): VNode | null {
   if (i >= LAYERS.length) return null;
   const layer = LAYERS[i];
@@ -47,7 +50,13 @@ function RouteLayer({
         ? `${layer.role} · stays mounted`
         : 'code-split · loads on demand';
   return (
-    <div class="hx-route__layer" data-state={state}>
+    <div
+      class="hx-route__layer"
+      data-state={state}
+      ref={(el) => {
+        if (refs.current) refs.current[i] = el;
+      }}
+    >
       <div class="hx-route__layer-head">
         <span class="hx-route__layer-name">{layer.name}</span>
         <span class="hx-route__layer-role">{role}</span>
@@ -58,31 +67,76 @@ function RouteLayer({
           <span class="hx-route__view-row hx-route__view-row--short" />
         </div>
       ) : (
-        <RouteLayer i={i + 1} active={active} />
+        <RouteLayer i={i + 1} active={active} refs={refs} />
       )}
     </div>
   );
 }
 
+type Ring = { x: number; y: number; w: number; h: number };
+
 // Reads the pinned playhead and moves the active node one layer deeper per
-// quarter of the scrub, growing the URL breadcrumb in step.
+// quarter of the scrub, growing the URL breadcrumb in step. A layout effect
+// measures the active layer and drives a single ring element that CSS-slides
+// between routes.
 function RouteStack(): VNode {
   const { progress } = useStageProgress();
   const active = Math.min(
     LAYERS.length - 1,
     Math.floor(progress * LAYERS.length)
   );
+  const nestRef = useRef<HTMLDivElement | null>(null);
+  const layerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [ring, setRing] = useState<Ring | null>(null);
+
+  useLayoutEffect(() => {
+    const nest = nestRef.current;
+    if (!nest) return;
+    const measure = () => {
+      const el = layerRefs.current[active];
+      if (!el) return;
+      const nr = nest.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      setRing({
+        x: er.left - nr.left,
+        y: er.top - nr.top,
+        w: er.width,
+        h: er.height,
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nest);
+    return () => ro.disconnect();
+  }, [active]);
+
   const url =
     'example.app' +
     LAYERS.slice(0, active + 1)
       .filter((l) => l.seg)
       .map((l) => ` / ${l.seg}`)
       .join('');
+
   return (
     <div class="hx-route">
       <BrowserFrame url={url}>
-        <div class="hx-route__nest">
-          <RouteLayer i={0} active={active} />
+        <div
+          class="hx-route__nest"
+          ref={nestRef}
+          data-ring={ring ? '' : undefined}
+        >
+          {ring ? (
+            <span
+              class="hx-route__ring"
+              aria-hidden="true"
+              style={{
+                transform: `translate(${ring.x}px, ${ring.y}px)`,
+                width: `${ring.w}px`,
+                height: `${ring.h}px`,
+              }}
+            />
+          ) : null}
+          <RouteLayer i={0} active={active} refs={layerRefs} />
         </div>
       </BrowserFrame>
     </div>
