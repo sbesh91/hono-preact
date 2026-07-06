@@ -751,12 +751,14 @@
   .hx-hero__browser {
     animation: hx-hero-browser 1.55s ease 0.3s backwards;
   }
-  /* The subtitle and CTAs rise in once the wordmark has assembled. */
+  /* The subtitle and CTAs rise in alongside the wordmark wipe. The lede is the
+     LCP element, so keep its delay tiny: a long delay held it at opacity 0 and
+     pushed LCP out ~0.8s past first paint. */
   .hx-hero__lede {
-    animation: hx-hero-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.05s backwards;
+    animation: hx-hero-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
   }
   .hx-hero__cta {
-    animation: hx-hero-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.25s backwards;
+    animation: hx-hero-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.25s backwards;
   }
 }
 @keyframes hx-hero-rise {
@@ -1702,7 +1704,9 @@
   top: 0.7rem;
   padding: 0.08rem 0.4rem;
   border-radius: 0.3rem;
-  background: var(--c);
+  /* Darkened peer colour so white text clears WCAG AA (the vibrant colours only
+     hit ~4.2:1 with white); the cursor arrow keeps the full-strength colour. */
+  background: color-mix(in srgb, var(--c) 68%, #000);
   color: #fff;
   font: 600 0.7rem/1.35 var(--font-sans);
   white-space: nowrap;

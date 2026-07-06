@@ -207,7 +207,7 @@
 
   /* Wire status colors (home scroll experience) */
   --wire-inflight: var(--accent);
-  --wire-done: #12855b; /* green, >= 4.5:1 on the code surface (light) */
+  --wire-done: #0f7350; /* green, >= 4.5:1 on the subtle + code surfaces (light) */
   --wire-cancel: #c2410c; /* amber, >= 4.5:1 on the code surface (light) */
   --glow: rgba(
     236,

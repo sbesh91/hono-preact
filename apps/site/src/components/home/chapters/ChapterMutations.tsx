@@ -59,37 +59,40 @@ export function ChapterMutations(): VNode {
                   Add
                 </button>
               </div>
-              <ul class="hx-mut-list">
-                <li class="hx-mut-row">Wire up the RPC client</li>
+              {/* A plain container, not <ul>/<li>: the Region wrappers sit
+                  between the rows, which would break real list semantics and
+                  fail the a11y list/listitem checks. */}
+              <div class="hx-mut-list">
+                <div class="hx-mut-row">Wire up the RPC client</div>
                 <Region
                   showAt={0.2}
                   skeleton={
-                    <li
+                    <div
                       class="hx-mut-row hx-mut-row--pending"
                       aria-hidden="true"
                     />
                   }
                 >
-                  <li class="hx-mut-row hx-mut-row--optimistic">
+                  <div class="hx-mut-row hx-mut-row--optimistic">
                     <span>Design the landing hero</span>
                     <span class="hx-mut-tag">saving</span>
-                  </li>
+                  </div>
                 </Region>
                 <Region
                   showAt={0.85}
                   skeleton={
-                    <li
+                    <div
                       class="hx-mut-row hx-mut-row--pending"
                       aria-hidden="true"
                     />
                   }
                 >
-                  <li class="hx-mut-row hx-mut-row--saved">
+                  <div class="hx-mut-row hx-mut-row--saved">
                     <span>Design the landing hero</span>
                     <span class="hx-mut-tag hx-mut-tag--ok">saved</span>
-                  </li>
+                  </div>
                 </Region>
-              </ul>
+              </div>
             </BrowserFrame>
             <Wire caption="network: mutation + revalidate">
               <Lane
