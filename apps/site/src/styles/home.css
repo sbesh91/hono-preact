@@ -593,18 +593,8 @@
   justify-content: center;
   padding: 5rem 0 4.5rem;
 }
-/* Dissolve the shader's bottom edge into the page background so the hero blends
-   into the first chapter instead of ending on a hard cut. Sits above the shader
-   (z-index:-10) and below the content (z-index:1), so only the shader fades. */
-.hx-hero::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0;
-  height: 55%;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--background) 96%);
-}
+/* The shader now dissolves via a mask in HeroShader (revealing the shared
+   atmospheric ground), so no opaque bottom fade is needed here. */
 .hx-hero .hx-wrap {
   position: relative;
   z-index: 1;
