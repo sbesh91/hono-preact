@@ -22,8 +22,8 @@ export function ChapterOnePackage(): VNode {
           <h2 class="hx-scene__title">One package, typed throughout.</h2>
           <p class="hx-scene__desc">
             A single hono-preact install gives you the runtime, /server, /vite,
-            and both /adapter-* targets. Typed end to end, and every PR measures
-            each feature's client-JS cost.
+            and both /adapter-* targets. One dependency, typed end to end, with
+            nothing to wire up between the pieces.
           </p>
         </div>
         <Reveal>
