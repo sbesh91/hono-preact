@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import MagicString from 'magic-string';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 import type { ObjectExpression, ObjectProperty } from '@babel/types';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
@@ -167,6 +167,15 @@ export function routeServerAutodiscoveryPlugin(
   // Dedupes the extensionless-decline warning across the client/SSR passes and
   // HMR re-transforms, keyed by the resolved sibling base.
   const declined = new Set<string>();
+  // Every route-table module discovery has transformed (keyed by its resolved
+  // id, query stripped). The `configureServer` watcher replays a change to
+  // these when a `.server.*` file is created or removed mid dev-session, so a
+  // new sibling gets wired (or a removed one dropped) without a manual restart.
+  // This is the pre-Vite-8 `addWatchFile`-of-the-absent-candidate DX, moved off
+  // the import graph: under Vite 8 `addWatchFile` also registers the path as a
+  // module import fed to import-analysis, so watching a not-yet-existent server
+  // file made the route table fail to resolve it and 500'd the dev server.
+  const routeTableIds = new Set<string>();
 
   return {
     name: 'route-server-autodiscovery',
@@ -179,6 +188,22 @@ export function routeServerAutodiscoveryPlugin(
       logger = config.logger;
       isDev = config.command === 'serve';
       root = config.root;
+    },
+    // Restores the "create the colocated `.server.*` file and it wires up
+    // without a restart" DX that `addWatchFile` used to provide, but off the
+    // import graph. When a `.server.*` module is added (or removed) while dev
+    // is running, replay it as a change to every known route table so Vite runs
+    // its own invalidate-and-reload path; the route table re-transforms and
+    // discovery re-evaluates the sibling. Creating a server module is rare, so
+    // re-triggering all known route tables (rather than mapping each candidate
+    // back to its importer) is a fine trade for the simpler bookkeeping.
+    configureServer(server: ViteDevServer) {
+      const retrigger = (file: string) => {
+        if (!SERVER_FILE.test(path.basename(file))) return;
+        for (const id of routeTableIds) server.watcher.emit('change', id);
+      };
+      server.watcher.on('add', retrigger);
+      server.watcher.on('unlink', retrigger);
     },
     // Intentionally ignores the `ssr` flag: the injected thunk must land in
     // both the SSR bundle (so the runtime manifest loads the real module) and
@@ -202,6 +227,12 @@ export function routeServerAutodiscoveryPlugin(
       } catch {
         return;
       }
+
+      // This module cleared the route-table pre-filters, so remember it for the
+      // dev-server watcher's create/remove re-trigger (below). Recorded even
+      // when nothing is injected (e.g. a serverless route), so creating its
+      // sibling later still re-runs discovery.
+      routeTableIds.add(id.split('?')[0]);
 
       const importerDir = path.dirname(id);
       const s = new MagicString(code);
@@ -271,11 +302,13 @@ export function routeServerAutodiscoveryPlugin(
           const serverExt = SERVER_EXTENSIONS.find((e) =>
             fileExists(absBase + e)
           );
-          // Watch the canonical candidate even when absent, so creating the
-          // server module in a running dev server re-triggers this transform.
-          ctx.addWatchFile?.(absBase + SERVER_EXTENSIONS[0]);
+          // No `addWatchFile` here (for present or absent siblings): under Vite
+          // 8 it doubles as an import registration, so an absent sibling 500s
+          // the route table and a present one leaks the real server path into
+          // the client import graph. An existing sibling is already watched via
+          // the injected `server: () => import(...)` thunk (a real edge in the
+          // SSR graph); a not-yet-existent one is handled by the watcher below.
           if (serverExt === undefined) return;
-          ctx.addWatchFile?.(absBase + serverExt);
 
           // Emit a specifier Vite can resolve to the DISCOVERED sibling, not one
           // built from the view import's extension. Vite maps a `.js` import onto
