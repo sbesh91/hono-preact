@@ -50,7 +50,9 @@ describe('home (scroll experience)', () => {
       /one package/i, // one package
       /feels alive/i, // cta
     ]) {
-      expect(screen.getByText(re)).toBeInTheDocument();
+      // The hero wordmark renders layered spans (base + gradient fill), so a
+      // heading may match more than once; assert presence, not uniqueness.
+      expect(screen.getAllByText(re).length).toBeGreaterThan(0);
     }
   });
 

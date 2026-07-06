@@ -605,10 +605,218 @@
   position: relative;
   z-index: 1;
 }
-/* The wordmark gradient stays on the fixed light values: the hero shader is
-   always light, so it must not follow the dark-mode brightened token. */
-.hx-hero .text-orangenta {
+/* ---- Hero wordmark: "edge to browser" travels a wire (the signature) ----
+   The finished gradient wordmark is the DEFAULT state, so no-JS and reduced
+   motion render it complete; the keyframes only play the fill-in on load.
+   The gradient stays on fixed light values (the shader is always light). */
+.hx-hero__wire {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  padding-bottom: 0.14em;
+}
+.hx-hero__wm-base {
+  color: color-mix(in srgb, var(--color-brand-ink) 22%, transparent);
+  /* Hidden at rest so its glyph edges never ghost behind the gradient; only
+     shown as the unlit underlay while the fill sweeps across. */
+  opacity: 0;
+}
+.hx-hero__wm-fill {
+  position: absolute;
+  inset: 0 auto auto 0;
   background-image: linear-gradient(90deg, #fe5000, #ec008c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* Top/bottom insets extend past the box so the wipe never clips ascenders or
+     the "g" descender; only the right inset does the left-to-right reveal. */
+  clip-path: inset(-0.3em 0 -0.3em -0.08em);
+}
+.hx-hero__wire-line {
+  position: absolute;
+  left: 0.03em;
+  right: 0.03em;
+  bottom: 0.03em;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand-ink) 14%, transparent);
+  overflow: hidden;
+  opacity: 0;
+}
+.hx-hero__wire-line::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  background: linear-gradient(90deg, #fe5000, #ec008c);
+}
+.hx-hero__edge {
+  position: absolute;
+  left: 0.03em;
+  bottom: 0.03em;
+  width: 0.24em;
+  height: 0.24em;
+  border-radius: 0.06em;
+  background: #fe5000;
+  transform: translate(-50%, 50%);
+  opacity: 0;
+}
+.hx-hero__packet {
+  position: absolute;
+  left: 100%;
+  bottom: 0.03em;
+  width: 0.26em;
+  height: 0.26em;
+  border-radius: 50%;
+  background: #ec008c;
+  box-shadow: 0 0 0.5em 0.12em rgba(236, 0, 140, 0.5);
+  transform: translate(-50%, 50%);
+  opacity: 0;
+}
+.hx-hero__browser {
+  position: absolute;
+  right: -0.06em;
+  bottom: 0.03em;
+  width: 0.82em;
+  height: 0.6em;
+  border-radius: 0.1em;
+  border: 0.05em solid #ec008c;
+  background: rgba(236, 0, 140, 0.08);
+  transform: translate(50%, 50%) scale(0.7);
+  opacity: 0;
+}
+.hx-hero__browser::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 0.14em;
+  border-bottom: 0.03em solid rgba(236, 0, 140, 0.55);
+}
+
+/* Opt in to the load animation only when motion is welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .hx-hero__wm-fill {
+    animation: hx-hero-fill 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s backwards;
+  }
+  .hx-hero__wm-base {
+    animation: hx-hero-base 1.3s ease 0.3s backwards;
+  }
+  .hx-hero__wire-line {
+    animation: hx-hero-wire 1.6s ease 0.3s backwards;
+  }
+  .hx-hero__wire-line::before {
+    animation: hx-hero-wirefill 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s
+      backwards;
+  }
+  .hx-hero__edge {
+    animation: hx-hero-edge 1.6s ease 0.3s backwards;
+  }
+  .hx-hero__packet {
+    animation: hx-hero-packet 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s backwards;
+  }
+  .hx-hero__browser {
+    animation: hx-hero-browser 1.55s ease 0.3s backwards;
+  }
+}
+@keyframes hx-hero-fill {
+  from {
+    clip-path: inset(-0.3em 100% -0.3em -0.08em);
+  }
+  to {
+    clip-path: inset(-0.3em 0 -0.3em -0.08em);
+  }
+}
+@keyframes hx-hero-base {
+  0%,
+  84% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-wirefill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes hx-hero-wire {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-packet {
+  0% {
+    left: 0.03em;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-edge {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-browser {
+  0%,
+  72% {
+    opacity: 0;
+    transform: translate(50%, 50%) scale(0.7);
+  }
+  86% {
+    opacity: 1;
+    transform: translate(50%, 50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(50%, 50%) scale(1);
+  }
+}
+/* Small screens: the wire needs one line, so wrap normally and show the plain
+   gradient wordmark instead. */
+@media (max-width: 30rem) {
+  .hx-hero__wire {
+    white-space: normal;
+    padding-bottom: 0;
+  }
+  .hx-hero__wm-base,
+  .hx-hero__wire-line,
+  .hx-hero__edge,
+  .hx-hero__packet,
+  .hx-hero__browser {
+    display: none;
+  }
+  .hx-hero__wm-fill {
+    position: static;
+    clip-path: none;
+    animation: none;
+  }
 }
 /* The hero shader is an always-light asset, so hero text uses fixed dark ink to stay legible in both themes. */
 .hx-eyebrow {

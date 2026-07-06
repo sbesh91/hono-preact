@@ -29,14 +29,28 @@ const Home: FunctionComponent = () => {
           <div class="hx-wrap">
             <span class="energy-bar w-16" aria-hidden="true" />
             <p class="hx-eyebrow">hono-preact v{__HONO_PREACT_VERSION__}</p>
+            {/* The wordmark is the wire: "edge to browser" fills with the
+                orangenta gradient as a packet travels a wire beneath it. Pure
+                CSS load animation; the finished wordmark is the default state,
+                so no-JS and reduced-motion render it complete. */}
             <h1 class="hx-hero__title">
-              One framework, <span class="text-orangenta">edge to browser</span>
-              .
+              One framework,
+              <br />
+              <span class="hx-hero__wire">
+                <span class="hx-hero__wm-base" aria-hidden="true">
+                  edge to browser
+                </span>
+                <span class="hx-hero__wm-fill">edge to browser</span>
+                <span class="hx-hero__wire-line" aria-hidden="true" />
+                <span class="hx-hero__edge" aria-hidden="true" />
+                <span class="hx-hero__packet" aria-hidden="true" />
+                <span class="hx-hero__browser" aria-hidden="true" />
+              </span>
             </h1>
             <p class="hx-hero__lede">
-              Scroll down and watch a request assemble itself into a live page:
-              routing, streaming, mutations, transitions, and realtime, all
-              typed.
+              Hono at the edge, Preact in the browser, and a single typed
+              connection between them, carrying routing, streaming, mutations,
+              transitions, and realtime.
             </p>
             <div class="hx-hero__cta">
               <a class="hx-btn hx-btn--primary" href="/docs/quick-start">
