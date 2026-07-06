@@ -161,6 +161,12 @@
 .hx-panels > * {
   min-width: 0;
 }
+/* A standalone wire panel beside a taller browser should wrap its lanes, not
+   stretch into a big empty bordered box. Top-align it so its border hugs the
+   content and the height difference reads as intentional whitespace. */
+.hx-panels > .hx-wire {
+  align-self: start;
+}
 
 .hx-browser {
   border: 1px solid var(--border-color);
@@ -1022,6 +1028,24 @@
   overflow-x: auto;
   font-size: 0.8rem;
 }
+/* Bottom-aligned concrete tags give the code-less cards the same filled base as
+   the adapter card, so the row reads as three parallel facets, not two hollow
+   cards beside a full one. */
+.hx-edge-card__meta {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.hx-edge-tag {
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.4rem;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
 
 /* Chapter: Routing is a manifest. A centered column: a tab row of route nodes
    above the app frame that renders the matching nested stack. */
@@ -1381,20 +1405,65 @@
   gap: 0.5rem;
 }
 .hx-res__pane {
-  min-height: 3rem;
+  min-height: 5.5rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.65rem;
   font-size: 0.8125rem;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   background: var(--surface);
   color: var(--foreground);
 }
+.hx-res__pane-head {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.hx-res__pane-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+/* Loaded data rows; while loading they shimmer as skeletons instead. */
+.hx-res__row {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--border-strong);
+}
+.hx-res__row--short {
+  width: 60%;
+}
+.hx-res__pane-body[data-loading] .hx-res__row {
+  background: linear-gradient(
+    90deg,
+    var(--surface-subtle),
+    var(--border-strong),
+    var(--surface-subtle)
+  );
+  background-size: 200% 100%;
+  animation: hx-shimmer 1.3s linear infinite;
+}
+/* The errored pane keeps its frame but swaps its body for a contained boundary
+   while the sibling panes keep rendering their data. */
 .hx-res__pane--error {
   border-color: var(--danger);
+}
+.hx-res__pane-fail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
   color: var(--danger);
+  font-size: 0.78rem;
+}
+.hx-res__retry {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--danger);
+  border-radius: 0.375rem;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 .hx-res__code {
   margin: 0;
@@ -1550,17 +1619,28 @@
   list-style: none;
 }
 .hx-rt-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
-  font: 600 0.75rem/1.4 var(--font-sans);
+  font: 600 0.75rem/1.4 var(--font-mono, ui-monospace, monospace);
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--border-color);
 }
-.hx-rt-chip[data-dir='up'] {
+.hx-rt-chip__dir {
+  font-weight: 700;
+  opacity: 0.75;
+}
+/* A frame lights up as it lands over the socket. */
+.hx-rt-chip[data-live] {
   color: var(--accent-foreground);
   background: var(--accent);
   border-color: transparent;
+}
+.hx-rt-chip[data-live] .hx-rt-chip__dir {
+  opacity: 1;
 }
 
 /* Chapter: One package, typed throughout */

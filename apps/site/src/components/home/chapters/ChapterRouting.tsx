@@ -1,5 +1,5 @@
 import type { VNode } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
@@ -19,6 +19,11 @@ function RouteStack(): VNode {
   const { progress } = useStageProgress();
   const scrubIndex = Math.min(3, Math.floor(progress * 4));
   const [override, setOverride] = useState<number | null>(null);
+  // A pill click previews a node, but the moment the playhead moves the scrub
+  // takes back control, so the demo can never get stuck on a clicked override.
+  useEffect(() => {
+    setOverride(null);
+  }, [scrubIndex]);
   const active = override ?? scrubIndex;
 
   return (

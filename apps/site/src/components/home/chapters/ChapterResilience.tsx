@@ -27,28 +27,57 @@ function statusFor(progress: number): Status {
 // Inner child: reads the stage playhead to drive the status chip and to flip
 // exactly one pane to a contained error boundary once the playhead reaches the
 // error window. The other two panes stay intact, which is the whole point.
+const NOTE: Record<Status, string> = {
+  loading: 'fetching the first frame',
+  success: 'fresh data',
+  revalidating: 'keeps the last good value while it refetches',
+  error: 'one pane failed, the rest stayed up',
+};
+
 function ResilienceApp(): VNode {
   const { progress } = useStageProgress();
   const status = statusFor(progress);
+  const loading = status === 'loading';
   const errored = status === 'error';
+  // Each surviving pane keeps its data rows; only the errored pane swaps to a
+  // contained boundary, which is the whole point of the chapter.
+  const body = () => (
+    <div class="hx-res__pane-body" data-loading={loading ? '' : undefined}>
+      <span class="hx-res__row" />
+      <span class="hx-res__row hx-res__row--short" />
+    </div>
+  );
   return (
     <div class="hx-res">
       <div class="hx-res__bar">
         <span class="hx-res__chip" data-state={status}>
           {status}
         </span>
-        <span class="hx-res__note">keeps last good value</span>
+        <span class="hx-res__note">{NOTE[status]}</span>
       </div>
       <div class="hx-res__panes">
-        <div class="hx-res__pane">Overview</div>
+        <div class="hx-res__pane">
+          <span class="hx-res__pane-head">Overview</span>
+          {body()}
+        </div>
         {errored ? (
           <div class="hx-res__pane hx-res__pane--error" role="status">
-            This pane hit an error
+            <span class="hx-res__pane-head">Tasks</span>
+            <div class="hx-res__pane-fail">
+              <span>Failed to load</span>
+              <span class="hx-res__retry">Retry</span>
+            </div>
           </div>
         ) : (
-          <div class="hx-res__pane">Tasks</div>
+          <div class="hx-res__pane">
+            <span class="hx-res__pane-head">Tasks</span>
+            {body()}
+          </div>
         )}
-        <div class="hx-res__pane">Activity</div>
+        <div class="hx-res__pane">
+          <span class="hx-res__pane-head">Activity</span>
+          {body()}
+        </div>
       </div>
     </div>
   );

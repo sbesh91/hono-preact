@@ -11,8 +11,16 @@ const CODE = `const chat = defineSocket({
 });
 const { send, lastMessage, status } = chat.useSocket();`;
 
-// Progress thresholds at which each frame chip flips from "down" to "up".
-const CHIP_THRESHOLDS = [0.2, 0.4, 0.6, 0.8];
+// Frames streaming both ways over the one duplex socket: a down-arrow is a
+// server push (roster, a peer's cursor), an up-arrow is the browser talking
+// back (its own cursor, a typing signal). Each lands at its threshold and the
+// looping playhead replays them, so the traffic reads as continuous.
+const FRAMES = [
+  { dir: '↓', label: 'roster', at: 0.15 },
+  { dir: '↑', label: 'cursor', at: 0.4 },
+  { dir: '↓', label: 'cursor', at: 0.65 },
+  { dir: '↑', label: 'typing', at: 0.85 },
+] as const;
 
 // Reads the LiveStage playhead (a looping 0..1 rAF clock) to animate two
 // presence cursors, a live tally, and up/down frame chips. Keeps moving
@@ -46,15 +54,18 @@ function LiveRoom(): VNode {
         {tally} in room
       </output>
       <ul class="hx-rt-chips">
-        {CHIP_THRESHOLDS.map((threshold, i) => {
-          const up = progress >= threshold;
+        {FRAMES.map((frame) => {
+          const live = progress >= frame.at;
           return (
             <li
-              key={threshold}
+              key={frame.dir + frame.label}
               class="hx-rt-chip"
-              data-dir={up ? 'up' : 'down'}
+              data-live={live ? '' : undefined}
             >
-              {up ? 'up' : 'down'} frame {i + 1}
+              <span class="hx-rt-chip__dir" aria-hidden="true">
+                {frame.dir}
+              </span>
+              {frame.label}
             </li>
           );
         })}

@@ -6,8 +6,8 @@ const EYEBROW = 'The platform';
 const TITLE = 'Runs on the platform, at the edge.';
 const DESC =
   'hono-preact is a Web Fetch app on Hono. The same source SSRs and serves realtime on Cloudflare Workers or Node; you pick the runtime with a one-line adapter.';
-const SNIPPET = `// vite.config.ts
-honoPreact({ adapter: cloudflareAdapter() }); // or nodeAdapter()`;
+const SNIPPET = `adapter: cloudflareAdapter()
+// or nodeAdapter()`;
 
 export function ChapterEdge(): VNode {
   return (
@@ -27,6 +27,10 @@ export function ChapterEdge(): VNode {
                 The same source SSRs and serves realtime on Cloudflare Workers
                 or Node.
               </p>
+              <div class="hx-edge-card__meta">
+                <span class="hx-edge-tag">Cloudflare Workers</span>
+                <span class="hx-edge-tag">Node</span>
+              </div>
             </article>
           </Reveal>
 
@@ -36,6 +40,10 @@ export function ChapterEdge(): VNode {
               <p class="hx-edge-card__line">
                 hono-preact is a Web Fetch app on Hono.
               </p>
+              <div class="hx-edge-card__meta">
+                <span class="hx-edge-tag">Request</span>
+                <span class="hx-edge-tag">Response</span>
+              </div>
             </article>
           </Reveal>
 
