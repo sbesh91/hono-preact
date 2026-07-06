@@ -1,6 +1,6 @@
 import type { VNode } from 'preact';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
-import { BrowserFrame, Region } from '../scroll/primitives.js';
+import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 import { clamp01 } from '../scroll/progress.js';
 
@@ -34,6 +34,52 @@ function DemoCursor(): VNode {
   );
 }
 
+// Reads the stage playhead and walks the cache through three clean, stacked
+// states (idle -> warming -> arrived) so nothing overlaps: a hover warms every
+// dependency in parallel, then the click opens instantly from cache.
+function PrefetchDemo(): VNode {
+  const { progress } = useStageProgress();
+  const warming = progress > 0.35;
+  const arrived = progress > 0.78;
+  return (
+    <div class="hx-prefetch">
+      <div class="hx-prefetch__nav">
+        <span class="hx-prefetch__brand">Acme</span>
+        <span class="hx-prefetch__link" data-warm={warming ? '' : undefined}>
+          Invoices
+        </span>
+      </div>
+      <DemoCursor />
+      <div class="hx-prefetch__panel" role="status">
+        <p class="hx-prefetch__panel-head">
+          {warming ? 'Prefetching in parallel' : 'Hover warms the cache'}
+        </p>
+        <ul class="hx-prefetch__rows">
+          {WARM_ROWS.map((name) => (
+            <li key={name} class="hx-prefetch__row">
+              <code>{name}</code>
+              <span
+                class="hx-prefetch__ready"
+                data-ready={warming ? '' : undefined}
+              >
+                {warming ? 'ready' : 'idle'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="hx-prefetch__dest" data-arrived={arrived ? '' : undefined}>
+        <p class="hx-prefetch__dest-title">Invoice INV-204</p>
+        <p class="hx-prefetch__dest-line">
+          {arrived
+            ? 'Opened from warm cache. No spinner.'
+            : 'The click lands instantly once warm.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ChapterPrefetch(): VNode {
   return (
     <section class="hx-chapter">
@@ -63,47 +109,7 @@ export function ChapterPrefetch(): VNode {
               </a>
             </div>
             <BrowserFrame url="example.app / dashboard">
-              <div class="hx-prefetch">
-                <div class="hx-prefetch__nav">
-                  <span class="hx-prefetch__brand">Acme</span>
-                  <span class="hx-prefetch__link">Invoices</span>
-                </div>
-                <DemoCursor />
-                <Region
-                  showAt={0.68}
-                  skeleton={
-                    <p class="hx-prefetch__hint">hover to warm the cache</p>
-                  }
-                >
-                  <div class="hx-prefetch__pop" role="status">
-                    <p class="hx-prefetch__pop-head">Prefetching in parallel</p>
-                    <ul class="hx-prefetch__rows">
-                      {WARM_ROWS.map((name) => (
-                        <li key={name} class="hx-prefetch__row">
-                          <code>{name}</code>
-                          <span class="hx-prefetch__ready">ready</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </Region>
-                <Region
-                  showAt={0.9}
-                  skeleton={
-                    <div
-                      class="hx-prefetch__dest hx-prefetch__dest--wait"
-                      aria-hidden="true"
-                    />
-                  }
-                >
-                  <div class="hx-prefetch__dest">
-                    <p class="hx-prefetch__dest-title">Invoice INV-204</p>
-                    <p class="hx-prefetch__dest-line">
-                      Rendered from warm cache. No spinner.
-                    </p>
-                  </div>
-                </Region>
-              </div>
+              <PrefetchDemo />
             </BrowserFrame>
           </div>
         </div>

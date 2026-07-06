@@ -1,33 +1,9 @@
-import { useState } from 'preact/hooks';
 import type { VNode } from 'preact';
-import { usePrefersReducedMotion } from '../scroll/motion.js';
 import { BrowserFrame } from '../scroll/primitives.js';
-
-type Card = { id: string; title: string; meta: string; body: string };
-
-const CARDS: Card[] = [
-  {
-    id: 'auth',
-    title: 'Ship the auth flow',
-    meta: 'Web, In progress',
-    body: 'Wire the session cookie, gate the dashboard, and add the sign-out route.',
-  },
-  {
-    id: 'search',
-    title: 'Fix search ranking',
-    meta: 'API, In review',
-    body: 'Boost exact-title matches and de-duplicate results before paging.',
-  },
-  {
-    id: 'billing',
-    title: 'Draft the billing page',
-    meta: 'Web, Backlog',
-    body: 'Lay out the plan cards, wire the upgrade action, and show the invoice list.',
-  },
-];
+import { Code } from '../scroll/code.js';
 
 const DESC =
-  'hono-preact wraps every client route change in a view transition automatically: no per-link opt-in, direction-aware slides, and shared-element morphs where a card grows into the page. Try it here, then feel the real thing in the demo.';
+  'hono-preact wraps every client route change in a view transition automatically: no per-link opt-in, direction-aware slides, and shared-element morphs where a card grows into the page it opens.';
 
 // Stored as plain single-quoted lines (not a template literal) so the backticks
 // and the `${task.id}` interpolation stay literal in the rendered code sample.
@@ -46,119 +22,86 @@ const SNIPPET = [
   '//   </ViewTransitionName>',
 ].join('\n');
 
+const IDEAS: { lead: string; body: string }[] = [
+  {
+    lead: 'Automatic',
+    body: 'Every client route change is wrapped in a view transition. No per-link opt-in, nothing to remember.',
+  },
+  {
+    lead: 'Direction-aware',
+    body: 'Forward navigations slide left, back slides right, keyed off nav types the framework adds for you.',
+  },
+  {
+    lead: 'Shared-element morph',
+    body: 'Tag an element with one name and it morphs from its list card straight into the detail page header.',
+  },
+];
+
 export function ChapterTransitions(): VNode {
-  const reduced = usePrefersReducedMotion();
-  const [view, setView] = useState<'list' | 'detail'>('list');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dir, setDir] = useState<'forward' | 'back'>('forward');
-
-  function go(next: 'list' | 'detail', id: string | null) {
-    const nextDir: 'forward' | 'back' = next === 'detail' ? 'forward' : 'back';
-    const apply = () => {
-      setDir(nextDir);
-      setSelectedId(id);
-      setView(next);
-    };
-    // Real view transition only when the platform supports it AND motion is
-    // allowed; otherwise flip state directly so the widget stays fully usable.
-    const canAnimate =
-      !reduced &&
-      typeof document !== 'undefined' &&
-      typeof document.startViewTransition === 'function';
-    if (canAnimate) {
-      // Drives the direction-aware ::view-transition slide in home.css.
-      document.documentElement.setAttribute('data-hx-dir', nextDir);
-      const transition = document.startViewTransition(async () => {
-        apply();
-        // Let Preact commit before the browser snapshots the "new" state.
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => resolve());
-        });
-      });
-      transition.finished.finally(() => {
-        document.documentElement.removeAttribute('data-hx-dir');
-      });
-    } else {
-      apply();
-    }
-  }
-
-  const selected = CARDS.find((c) => c.id === selectedId) ?? null;
-
   return (
     <section class="hx-chapter">
-      <div class="hx-scene__head">
-        <p class="hx-scene__step">Signature</p>
-        <h2 class="hx-scene__title">Transitions, for free.</h2>
-        <p class="hx-scene__desc">{DESC}</p>
-      </div>
-
-      <div class="hx-cols2">
-        <BrowserFrame url="/demo/projects">
-          {/* data-dir is declared here for readers; the global ::view-transition
-              pseudo-elements are keyed off html[data-hx-dir] set during go(). */}
-          <div class="hx-vt" data-dir={dir}>
-            {view === 'list' || selected === null ? (
-              <ul class="hx-vt__list">
-                {CARDS.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      class="hx-vt__card"
-                      style={{
-                        viewTransitionName: reduced
-                          ? undefined
-                          : `hx-card-${c.id}`,
-                        minHeight: 44,
-                      }}
-                      onClick={() => go('detail', c.id)}
-                    >
-                      <span class="hx-vt__card-title">{c.title}</span>
-                      <span class="hx-vt__card-meta">{c.meta}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div class="hx-vt__detail">
-                <div
-                  class="hx-vt__hero"
-                  style={{
-                    viewTransitionName: reduced
-                      ? undefined
-                      : `hx-card-${selected.id}`,
-                  }}
-                >
-                  <span class="hx-vt__card-title">{selected.title}</span>
-                  <span class="hx-vt__card-meta">{selected.meta}</span>
-                </div>
-                <p class="hx-vt__body">{selected.body}</p>
-                <button
-                  type="button"
-                  class="hx-vt__back"
-                  style={{ minHeight: 44 }}
-                  onClick={() => go('list', null)}
-                >
-                  Back to projects
-                </button>
-              </div>
-            )}
-          </div>
-        </BrowserFrame>
-
-        <div class="hx-panels">
-          <pre class="hx-code">
-            <code>{SNIPPET}</code>
-          </pre>
-          <p class="hx-scene__desc">
-            This widget calls <code>document.startViewTransition</code> by hand.
-            hono-preact does exactly this for you on every client navigation: no
-            opt-in, direction-aware, with shared-element morphs.
-          </p>
-          <a class="hx-vt__demo" href="/demo/projects">
-            Feel the real thing in the demo
-          </a>
+      <div class="hx-scene">
+        <div class="hx-scene__head">
+          <p class="hx-scene__step">Signature</p>
+          <h2 class="hx-scene__title">Transitions, for free.</h2>
+          <p class="hx-scene__desc">{DESC}</p>
         </div>
+
+        <div class="hx-vt2">
+          {/* Faked, illustrative: the highlighted list card is the same shared
+              element as the detail hero, so it reads as one morph. */}
+          <div class="hx-vt2__flow" aria-hidden="true">
+            <BrowserFrame url="/demo/projects">
+              <ul class="hx-vt2__list">
+                <li class="hx-vt2__row hx-vt2__row--morph">
+                  <span class="hx-vt2__row-title">Ship the auth flow</span>
+                  <span class="hx-vt2__row-meta">Web</span>
+                </li>
+                <li class="hx-vt2__row">Fix search ranking</li>
+                <li class="hx-vt2__row">Draft the billing page</li>
+              </ul>
+            </BrowserFrame>
+
+            <div class="hx-vt2__arrow">
+              <span class="hx-vt2__arrow-label">morphs into</span>
+              <svg viewBox="0 0 40 12" width="40" height="12">
+                <path
+                  d="M0 6 H34 M28 1 L34 6 L28 11"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+              </svg>
+            </div>
+
+            <BrowserFrame url="/demo/projects/auth">
+              <div class="hx-vt2__hero hx-vt2__row--morph">
+                <span class="hx-vt2__hero-title">Ship the auth flow</span>
+                <span class="hx-vt2__row-meta">Web · In progress</span>
+              </div>
+              <p class="hx-vt2__body">
+                The tapped card grows into the page header while the list slides
+                out beneath it, all from one shared name.
+              </p>
+            </BrowserFrame>
+          </div>
+
+          <ul class="hx-why">
+            {IDEAS.map((i) => (
+              <li key={i.lead} class="hx-why__item">
+                <b class="hx-why__lead">{i.lead}</b>
+                <span class="hx-why__body">{i.body}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <pre class="hx-code">
+          <Code source={SNIPPET} />
+        </pre>
+        <a class="hx-vt__demo" href="/demo/projects">
+          Feel the real thing in the demo
+        </a>
       </div>
     </section>
   );

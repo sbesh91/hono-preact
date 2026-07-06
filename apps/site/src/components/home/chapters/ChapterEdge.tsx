@@ -12,43 +12,45 @@ honoPreact({ adapter: cloudflareAdapter() }); // or nodeAdapter()`;
 export function ChapterEdge(): VNode {
   return (
     <section class="hx-chapter">
-      <div class="hx-scene__head">
-        <p class="hx-scene__step">{EYEBROW}</p>
-        <h2 class="hx-scene__title">{TITLE}</h2>
-        <p class="hx-scene__desc">{DESC}</p>
-      </div>
+      <div class="hx-scene">
+        <div class="hx-scene__head">
+          <p class="hx-scene__step">{EYEBROW}</p>
+          <h2 class="hx-scene__title">{TITLE}</h2>
+          <p class="hx-scene__desc">{DESC}</p>
+        </div>
 
-      <div class="hx-edge-cards">
-        <Reveal>
-          <article class="hx-edge-card">
-            <h3 class="hx-edge-card__title">Edge</h3>
-            <p class="hx-edge-card__line">
-              The same source SSRs and serves realtime on Cloudflare Workers or
-              Node.
-            </p>
-          </article>
-        </Reveal>
+        <div class="hx-edge-cards">
+          <Reveal>
+            <article class="hx-edge-card">
+              <h3 class="hx-edge-card__title">Edge</h3>
+              <p class="hx-edge-card__line">
+                The same source SSRs and serves realtime on Cloudflare Workers
+                or Node.
+              </p>
+            </article>
+          </Reveal>
 
-        <Reveal delayMs={80}>
-          <article class="hx-edge-card">
-            <h3 class="hx-edge-card__title">Web standards</h3>
-            <p class="hx-edge-card__line">
-              hono-preact is a Web Fetch app on Hono.
-            </p>
-          </article>
-        </Reveal>
+          <Reveal delayMs={80}>
+            <article class="hx-edge-card">
+              <h3 class="hx-edge-card__title">Web standards</h3>
+              <p class="hx-edge-card__line">
+                hono-preact is a Web Fetch app on Hono.
+              </p>
+            </article>
+          </Reveal>
 
-        <Reveal delayMs={160}>
-          <article class="hx-edge-card">
-            <h3 class="hx-edge-card__title">One-line adapter swap</h3>
-            <p class="hx-edge-card__line">
-              You pick the runtime with a one-line adapter.
-            </p>
-            <pre class="hx-edge-card__code">
-              <Code source={SNIPPET} />
-            </pre>
-          </article>
-        </Reveal>
+          <Reveal delayMs={160}>
+            <article class="hx-edge-card">
+              <h3 class="hx-edge-card__title">One-line adapter swap</h3>
+              <p class="hx-edge-card__line">
+                You pick the runtime with a one-line adapter.
+              </p>
+              <pre class="hx-edge-card__code">
+                <Code source={SNIPPET} />
+              </pre>
+            </article>
+          </Reveal>
+        </div>
       </div>
     </section>
   );

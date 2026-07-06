@@ -1,6 +1,7 @@
 import type { VNode } from 'preact';
 import { LiveStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
 // Rendered literally in a <pre>. Inner backticks and ${...} are escaped so the
 // template literal reproduces the framework snippet verbatim.
@@ -76,19 +77,19 @@ export function ChapterRealtime(): VNode {
             one framework-provided Durable Object.
           </p>
         </div>
-        <div class="hx-panels hx-cols2">
-          <LiveStage periodMs={4200} fallbackProgress={0.5}>
+        <LiveStage periodMs={4200} fallbackProgress={0.5}>
+          <div class="hx-rt-stack">
             <BrowserFrame url="/demo/cursors" live>
               <LiveRoom />
             </BrowserFrame>
             <Wire caption="network: WebSocket (duplex, ongoing)">
               <Lane label="WS /__sockets" start={0} size={0.12} tone="grad" />
             </Wire>
-          </LiveStage>
-          <pre class="hx-code">
-            <code>{CODE}</code>
-          </pre>
-        </div>
+          </div>
+        </LiveStage>
+        <pre class="hx-code">
+          <Code source={CODE} />
+        </pre>
       </div>
     </section>
   );

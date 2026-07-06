@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent } from '@testing-library/preact';
+import { cleanup, render, screen } from '@testing-library/preact';
 import { ChapterTransitions } from '../ChapterTransitions.js';
 
 afterEach(() => {
@@ -60,27 +60,20 @@ describe('ChapterTransitions', () => {
     ).toBeTruthy();
   });
 
-  it('transitions list to detail view on card click and back', () => {
-    stubMatchMedia(false);
+  it('renders the faked morph illustration and the ideas list', () => {
     const { container } = render(<ChapterTransitions />);
 
-    // Initially list is shown
-    expect(container.querySelector('.hx-vt__card')).toBeTruthy();
+    // Two browser frames: the list and the detail it morphs into.
+    expect(container.querySelectorAll('.hx-browser').length).toBe(2);
 
-    // Click first card to enter detail view
-    const firstCard = container.querySelector('.hx-vt__card') as HTMLElement;
-    fireEvent.click(firstCard);
+    // The shared-element pair (list card + detail hero) both carry the morph
+    // treatment, so the reader reads them as one element.
+    expect(container.querySelectorAll('.hx-vt2__row--morph').length).toBe(2);
 
-    // Detail view should appear
-    expect(screen.getByText('Back to projects')).toBeTruthy();
-    expect(container.querySelector('.hx-vt__detail')).toBeTruthy();
+    // The three ideas annotations are present.
+    expect(container.querySelectorAll('.hx-why__item').length).toBe(3);
 
-    // Click "Back to projects" to return to list
-    const backButton = screen.getByText('Back to projects') as HTMLElement;
-    fireEvent.click(backButton);
-
-    // List should be shown again
-    expect(container.querySelector('.hx-vt__card')).toBeTruthy();
-    expect(container.querySelector('.hx-vt__detail')).toBeFalsy();
+    // And a link out to the real demo.
+    expect(screen.getByText('Feel the real thing in the demo')).toBeTruthy();
   });
 });

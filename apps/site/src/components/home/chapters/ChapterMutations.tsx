@@ -6,7 +6,27 @@ import { Code } from '../scroll/code.js';
 const STEP = 'RPC 03 · Action';
 const TITLE = 'Mutations without the cliff.';
 const DESC =
-  'A mutation is a Form plus defineAction. The UI patches instantly, the server runs, a resubmission race is cancelled, then loaders revalidate by reference. The same markup works with JS off.';
+  'A mutation is a Form plus defineAction. The UI patches the instant you submit and the server reconciles behind it. Watch the list fill before the network settles, then read why that is worth doing.';
+
+// Payoff points, each tied to a moment in the demo above.
+const WHY: { lead: string; body: string }[] = [
+  {
+    lead: 'Optimistic',
+    body: 'The new row appears the instant you submit, then reconciles when the server responds. No spinner, no dead time.',
+  },
+  {
+    lead: 'Race-safe',
+    body: 'Submit again before the first finishes and the in-flight request is aborted, so you never write a duplicate.',
+  },
+  {
+    lead: 'Revalidate by reference',
+    body: 'The action re-runs exactly the loaders it invalidates. No cache keys to name, nothing stale left on screen.',
+  },
+  {
+    lead: 'Progressive',
+    body: 'It is a real Form bound to the action, so the same markup still submits with JavaScript disabled.',
+  },
+];
 
 const SNIPPET = `const { mutate, pending } = useAction(serverActions.addTask, {
   invalidate: 'auto',
@@ -91,6 +111,14 @@ export function ChapterMutations(): VNode {
               />
             </Wire>
           </div>
+          <ul class="hx-why">
+            {WHY.map((w) => (
+              <li key={w.lead} class="hx-why__item">
+                <b class="hx-why__lead">{w.lead}</b>
+                <span class="hx-why__body">{w.body}</span>
+              </li>
+            ))}
+          </ul>
           <pre class="hx-code">
             <Code source={SNIPPET} />
           </pre>

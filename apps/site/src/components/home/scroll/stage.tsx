@@ -83,10 +83,7 @@ export function ScrollStage({
       style={{ height: `calc(${activePages} * 100svh)` }}
       aria-label={label}
     >
-      <div class="hx-stage__pin" style={{ '--hx-p': progress }}>
-        {/* Ambient orange/magenta washes cross-fade with the playhead. */}
-        <div class="hx-amb hx-amb--o" aria-hidden="true" />
-        <div class="hx-amb hx-amb--m" aria-hidden="true" />
+      <div class="hx-stage__pin">
         <StageContext.Provider value={{ progress, pinned: true }}>
           {children}
         </StageContext.Provider>

@@ -22,21 +22,8 @@ function RouteStack(): VNode {
   const active = override ?? scrubIndex;
 
   return (
-    <div class="hx-cols2 hx-route">
-      <BrowserFrame url="example.app / projects / 102000">
-        <div class="hx-route__stack">
-          {NODES.map((label, i) => (
-            <div
-              key={label}
-              class="hx-route__box"
-              data-active={i === active ? '' : undefined}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
-      </BrowserFrame>
-      <div class="hx-route__pills" role="group" aria-label="Route nodes">
+    <div class="hx-route">
+      <div class="hx-route__tabs" role="group" aria-label="Route nodes">
         {NODES.map((label, i) => (
           <button
             key={label}
@@ -51,6 +38,22 @@ function RouteStack(): VNode {
           </button>
         ))}
       </div>
+      <BrowserFrame url="example.app / projects / 102000">
+        <div class="hx-route__stack">
+          {NODES.map((label, i) => (
+            <div
+              key={label}
+              class="hx-route__box"
+              data-active={i === active ? '' : undefined}
+            >
+              <span class="hx-route__box-label">{label}</span>
+              {i === active ? (
+                <span class="hx-route__box-tag">active</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </BrowserFrame>
     </div>
   );
 }

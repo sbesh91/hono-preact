@@ -4,8 +4,7 @@ import { render, cleanup } from '@testing-library/preact';
 import { ChapterMutations } from '../ChapterMutations.js';
 
 // A >=6-word exact substring of the real desc copy.
-const CLAIM =
-  'a resubmission race is cancelled, then loaders revalidate by reference';
+const CLAIM = 'The UI patches the instant you submit and the server reconciles';
 
 function stubMatchMedia(reduce: boolean) {
   window.matchMedia = ((query: string) => ({
@@ -55,6 +54,9 @@ describe('ChapterMutations', () => {
     expect(container.querySelector('.hx-mut-list')).not.toBeNull();
     expect(container.querySelector('.hx-mut-row')).not.toBeNull();
     expect(container.querySelector('.hx-mut-add')).not.toBeNull();
+
+    // The "why it matters" reasoning list is present.
+    expect(container.querySelectorAll('.hx-why__item').length).toBe(4);
   });
 
   it('still renders the heading, copy, and device frame with reduced motion (static frame)', () => {
