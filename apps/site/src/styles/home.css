@@ -1405,6 +1405,11 @@
   flex-direction: column;
   gap: 1.25rem;
 }
+/* Code + link that trail the pinned morph; the section is pinned, so this block
+   carries its own vertical rhythm. */
+.hx-vt-coda {
+  padding-block: clamp(2.5rem, 6vh, 4.5rem);
+}
 .hx-vt2__demo {
   display: flex;
   flex-direction: column;

@@ -103,15 +103,19 @@ export function ChapterTransitions(): VNode {
               ))}
             </ul>
           </div>
-
-          <pre class="hx-code">
-            <Code source={SNIPPET} />
-          </pre>
-          <a class="hx-vt__demo" href="/demo/projects">
-            Feel the real thing in the demo
-          </a>
         </div>
       </ScrollStage>
+
+      {/* Reference code + link flow after the pin, so the pinned scene stays
+          within one viewport and its heading is never clipped. */}
+      <div class="hx-scene hx-vt-coda">
+        <pre class="hx-code">
+          <Code source={SNIPPET} />
+        </pre>
+        <a class="hx-vt__demo" href="/demo/projects">
+          Feel the real thing in the demo
+        </a>
+      </div>
     </section>
   );
 }
