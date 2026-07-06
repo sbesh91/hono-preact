@@ -30,11 +30,6 @@ describe('ChapterCTA', () => {
     }) as HTMLAnchorElement;
     expect(start.getAttribute('href')).toBe('/docs/quick-start');
     expect(demo.getAttribute('href')).toBe('/demo');
-
-    // Dogfooding note (the docs site itself runs on the framework) is present.
-    expect(container.textContent).toMatch(
-      /the site you are reading is a hono-preact app/i
-    );
   });
 
   it('still renders heading + copy under prefers-reduced-motion (static fallback frame)', () => {

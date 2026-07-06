@@ -22,37 +22,56 @@ const FRAMES = [
   { dir: '↑', label: 'typing', at: 0.85 },
 ] as const;
 
-// Reads the LiveStage playhead (a looping 0..1 rAF clock) to animate two
-// presence cursors, a live tally, and up/down frame chips. Keeps moving
+// A small crowd sharing one room, each on its own drift path so the space reads
+// as populated and live rather than two lonely dots. The last is the local
+// user; the rest are peers the server pushes in over the socket.
+const PEERS = [
+  { name: 'Ana', color: '#ec008c', rx: 33, ry: 27, sx: 1, sy: 1.3, ph: 0 },
+  { name: 'Ben', color: '#fe5000', rx: 28, ry: 31, sx: 1.2, sy: 0.9, ph: 1.4 },
+  { name: 'Cy', color: '#0a9d78', rx: 24, ry: 22, sx: 0.8, sy: 1.5, ph: 2.7 },
+  { name: 'Devi', color: '#6b5cff', rx: 30, ry: 18, sx: 1.4, sy: 1.1, ph: 4.1 },
+  { name: 'You', color: '#25282a', rx: 20, ry: 28, sx: 1.1, sy: 0.7, ph: 5.5 },
+] as const;
+
+// Reads the LiveStage playhead (a looping 0..1 rAF clock) to drift each peer's
+// cursor, keep a presence roster, and light up/down frame chips. Keeps moving
 // without any scrolling because LiveStage drives it.
 function LiveRoom(): VNode {
   const { progress } = useStageProgress();
-  const angle = progress * 2 * Math.PI;
-  const ax = 50 + Math.sin(angle) * 34;
-  const ay = 50 + Math.cos(angle) * 30;
-  const bx = 50 + Math.sin(angle + Math.PI) * 34;
-  const by = 50 + Math.cos(angle + Math.PI) * 30;
-  const tally = Math.floor(progress * 47);
+  const t = progress * 2 * Math.PI;
 
   return (
     <div class="hx-rt-room">
-      <span
-        class="hx-rt-cursor"
-        style={{ left: `${ax}%`, top: `${ay}%` }}
-        aria-hidden="true"
-      >
-        A
-      </span>
-      <span
-        class="hx-rt-cursor hx-rt-cursor--b"
-        style={{ left: `${bx}%`, top: `${by}%` }}
-        aria-hidden="true"
-      >
-        B
-      </span>
-      <output class="hx-rt-tally" aria-hidden="true">
-        {tally} in room
-      </output>
+      {PEERS.map((p, i) => {
+        const x = 50 + Math.sin(t * p.sx + p.ph) * p.rx;
+        const y = 50 + Math.cos(t * p.sy + p.ph) * p.ry;
+        return (
+          <span
+            key={p.name}
+            class="hx-rt-peer"
+            data-self={i === PEERS.length - 1 ? '' : undefined}
+            style={{ left: `${x}%`, top: `${y}%`, '--c': p.color }}
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <path d="M2 1.5 L2 13 L5 10.2 L7.1 14.6 L9.1 13.7 L7 9.4 L11 9.4 Z" />
+            </svg>
+            <span class="hx-rt-peer__name">{p.name}</span>
+          </span>
+        );
+      })}
+
+      <div class="hx-rt-roster" aria-hidden="true">
+        <span class="hx-rt-roster__avatars">
+          {PEERS.map((p) => (
+            <span key={p.name} class="hx-rt-avatar" style={{ '--c': p.color }}>
+              {p.name[0]}
+            </span>
+          ))}
+        </span>
+        <span class="hx-rt-roster__count">{PEERS.length} in room</span>
+      </div>
+
       <ul class="hx-rt-chips">
         {FRAMES.map((frame) => {
           const live = progress >= frame.at;

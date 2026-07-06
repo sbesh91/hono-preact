@@ -62,10 +62,7 @@ function MorphDemo(): VNode {
             : 'Scroll to morph the card into its page ↓'}
         </span>
         <div class="hx-morph__scrub-track">
-          <div
-            class="hx-morph__scrub-fill"
-            style={{ transform: `scaleX(${m})` }}
-          />
+          <div class="hx-morph__scrub-fill" style={{ '--m': m }} />
         </div>
       </div>
       <BrowserFrame url={open ? '/demo/projects/auth' : '/demo/projects'}>

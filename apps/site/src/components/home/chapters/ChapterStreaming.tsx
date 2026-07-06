@@ -73,9 +73,9 @@ function StreamChart(): VNode {
       <line
         class="hx-chart__now"
         x1={revealW}
-        y1="0"
+        y1={PAD}
         x2={revealW}
-        y2={H}
+        y2={H - PAD}
         vector-effect="non-scaling-stroke"
       />
     </svg>

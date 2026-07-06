@@ -26,10 +26,6 @@ export function ChapterCTA(): VNode {
               See the demo
             </a>
           </div>
-          <p class="hx-cta__note">
-            The site you are reading is a hono-preact app, from the streaming
-            docs to the prefetched buttons above.
-          </p>
         </Reveal>
       </div>
     </section>

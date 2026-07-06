@@ -455,10 +455,17 @@
 .hx-prefetch__link {
   color: var(--muted);
   font-weight: 600;
-  transition: color 0.25s;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.4rem;
+  transition:
+    color 0.25s,
+    background 0.25s;
 }
+/* Hovering warms the route: give the link a clear highlight so the pointer
+   reads as actually hovering it, not floating near it. */
 .hx-prefetch__link[data-warm] {
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .hx-prefetch__cursor {
   position: absolute;
@@ -1084,6 +1091,24 @@
   margin-top: 0.5rem;
   background: var(--surface-subtle);
 }
+/* Each newly-mounted layer eases in rather than snapping, so drilling deeper
+   reads as the child mounting. Only the fresh layer animates (existing ones are
+   updated, not re-created). */
+@media (prefers-reduced-motion: no-preference) {
+  .hx-route__layer {
+    animation: hx-route-layer-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+}
+@keyframes hx-route-layer-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.45rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .hx-route__layer-head {
   display: flex;
   align-items: baseline;
@@ -1269,10 +1294,13 @@
   min-height: 6.4rem;
 }
 .hx-skel--head {
-  min-height: 2rem;
+  min-height: 1.4rem;
 }
+/* Tall enough to contain the whole chart figure (caption + 2.6rem svg + its own
+   border/padding); when it was shorter the svg and its "now" line overflowed
+   the region and poked out the bottom. */
 .hx-skel--chart {
-  min-height: 4.5rem;
+  min-height: 5.6rem;
 }
 .hx-scene__code {
   margin: 0;
@@ -1513,10 +1541,14 @@
   background: var(--border-color);
   overflow: hidden;
 }
+/* Full-width orangenta gradient revealed left-to-right, so the bar keeps the
+   brand gradient (orange -> magenta) fixed to the track instead of a squished,
+   scaled copy. */
 .hx-morph__scrub-fill {
   height: 100%;
-  background: var(--accent);
-  transform-origin: left center;
+  width: 100%;
+  background: var(--gradient-orangenta);
+  clip-path: inset(0 calc((1 - var(--m, 0)) * 100%) 0 0);
 }
 /* Opening the detail flips --m to 1; CSS transitions the accent card from a
    list row into the page header (sibling rows collapse, detail body fades in). */
@@ -1607,26 +1639,57 @@
   background: var(--surface-subtle);
   overflow: hidden;
 }
-.hx-rt-cursor {
+/* A peer cursor: a colored pointer with a name tag, like a multiplayer canvas. */
+.hx-rt-peer {
   position: absolute;
-  transform: translate(-50%, -50%);
-  min-width: 1.5rem;
-  min-height: 1.5rem;
+  transform: translate(-2px, -2px);
+  pointer-events: none;
+  color: var(--c);
+}
+.hx-rt-peer svg {
+  display: block;
+  fill: var(--c);
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
+}
+.hx-rt-peer__name {
+  position: absolute;
+  left: 0.7rem;
+  top: 0.7rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 0.3rem;
+  background: var(--c);
+  color: #fff;
+  font: 600 0.7rem/1.35 var(--font-sans);
+  white-space: nowrap;
+}
+/* Presence roster: overlapping avatars of everyone in the room. */
+.hx-rt-roster {
+  position: absolute;
+  left: 0.85rem;
+  bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.hx-rt-roster__avatars {
+  display: flex;
+}
+.hx-rt-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: -0.45rem;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
   display: grid;
   place-items: center;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-foreground);
-  font: 600 0.75rem/1 var(--font-sans);
+  font: 700 0.72rem/1 var(--font-sans);
+  border: 2px solid var(--surface-subtle);
 }
-.hx-rt-cursor--b {
-  background: var(--foreground);
-  color: var(--background);
+.hx-rt-avatar:first-child {
+  margin-left: 0;
 }
-.hx-rt-tally {
-  position: absolute;
-  left: 0.75rem;
-  bottom: 0.75rem;
+.hx-rt-roster__count {
   font: 600 0.8125rem/1 var(--font-sans);
   color: var(--muted);
 }
