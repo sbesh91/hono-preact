@@ -30,8 +30,23 @@
   src: url('./fonts/selawik-bold.woff2') format('woff2');
 }
 
+/* Editorial display voice for the home page's human narration (hero + chapter
+   titles). Variable, so one file covers every weight. `swap` so the brand face
+   actually shows on first paint (the display face is the point). */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('./fonts/bricolage-grotesque-variable.woff2') format('woff2');
+}
+
 @theme {
   --font-sans: 'Selawik', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* Human narration (titles) and the machine layer (markers, wires, code). */
+  --font-display: 'Bricolage Grotesque', 'Selawik', 'Segoe UI', sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
 
   /* Brand colors (sRGB equivalents of the guideline Pantone specs) */
   --color-brand-magenta: #ec008c; /* Pantone Process Magenta C */
