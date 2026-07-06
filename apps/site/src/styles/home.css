@@ -159,3 +159,36 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Chapter: SSR, no client waterfall (Task 9) */
+.hx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.hx-panel__cap {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hx-sk-line {
+  display: block;
+  height: 0.6rem;
+  border-radius: 0.3rem;
+  background: var(--surface-subtle);
+}
+.hx-code {
+  margin-top: 1.2rem;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.6rem;
+  background: var(--code-surface);
+  padding: 0.9rem 1rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--foreground);
+}
