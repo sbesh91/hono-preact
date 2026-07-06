@@ -368,4 +368,80 @@ describe('routeServerAutodiscoveryPlugin orphan check', () => {
     });
     expect(orphanWarnings).toHaveLength(0);
   });
+
+  // Under Vite 8, `this.addWatchFile(id)` also registers `id` as a module
+  // import (fed to import-analysis). Watching a *non-existent* server sibling
+  // therefore makes the route table fail to resolve it and 500s the dev server.
+  // Discovery must never hand a path to `addWatchFile`; re-triggering when a
+  // server file is created is done by the dev-server watcher instead (below).
+  it('never calls addWatchFile for an absent server sibling', () => {
+    const plugin = makePlugin([]); // nothing on disk
+    const watched: string[] = [];
+    const ctx = {
+      addWatchFile: (p: string) => watched.push(p),
+      warn: () => {},
+    } as never;
+    const code = `export default defineRoutes([
+      { path: '/', view: () => import('./pages/home.js') },
+    ]);`;
+    const out = plugin.transform.call(ctx, code, ROUTES_ID);
+    // No server thunk (no sibling), and crucially no watched (imported) path.
+    expect(out).toBeUndefined();
+    expect(watched).toHaveLength(0);
+  });
+
+  it('does not call addWatchFile even when the sibling exists (watch is via the dev-server watcher, not the import graph)', () => {
+    const plugin = makePlugin(['/repo/src/pages/login.server.ts']);
+    const watched: string[] = [];
+    const ctx = {
+      addWatchFile: (p: string) => watched.push(p),
+      warn: () => {},
+    } as never;
+    const code = `export default defineRoutes([
+      { path: 'login', view: () => import('./pages/login.js') },
+    ]);`;
+    const out = plugin.transform.call(ctx, code, ROUTES_ID);
+    expect(out?.code).toContain(
+      `server: () => import("./pages/login.server.js")`
+    );
+    expect(watched).toHaveLength(0);
+  });
+
+  it('re-triggers discovery on known route tables when a .server file is created mid dev-session', () => {
+    const plugin = makePlugin([]) as Plugin & {
+      transform: TransformFn;
+      configureServer: (server: never) => void;
+    };
+    // A route table with a serverless route is recorded when first transformed.
+    plugin.transform.call(
+      {} as never,
+      `export default defineRoutes([
+        { path: '/', view: () => import('./pages/home.js') },
+      ]);`,
+      ROUTES_ID
+    );
+
+    // Minimal chokidar-like watcher: records emits and dispatches to handlers.
+    const handlers: Record<string, ((f: string) => void)[]> = {};
+    const emitted: Array<[string, string]> = [];
+    const watcher = {
+      on(event: string, cb: (f: string) => void) {
+        (handlers[event] ??= []).push(cb);
+      },
+      emit(event: string, file: string) {
+        emitted.push([event, file]);
+        for (const h of handlers[event] ?? []) h(file);
+      },
+    };
+    plugin.configureServer({ watcher } as never);
+
+    // A non-server file being added must not re-trigger anything.
+    watcher.emit('add', '/repo/src/pages/about.tsx');
+    expect(emitted.filter(([e]) => e === 'change')).toHaveLength(0);
+
+    // Creating the colocated server module replays a change to the route table,
+    // so Vite invalidates + reloads and discovery re-runs (now finding it).
+    watcher.emit('add', '/repo/src/pages/home.server.ts');
+    expect(emitted).toContainEqual(['change', ROUTES_ID]);
+  });
 });
