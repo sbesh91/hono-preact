@@ -45,6 +45,10 @@
 .hx-reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
 .hx-reveal[data-shown='true'] { opacity: 1; transform: none; }
 
+@media (scripting: none) {
+  .hx-reveal { opacity: 1; transform: none; }
+}
+
 /* Shared code-sample style (used by every chapter's <pre class="hx-code">). */
 .hx-code { margin: 0; padding: 0.9rem 1.1rem; border: 1px solid var(--border-color); border-radius: 0.7rem; background: var(--code-surface); overflow-x: auto; font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.6; color: var(--foreground); }
 

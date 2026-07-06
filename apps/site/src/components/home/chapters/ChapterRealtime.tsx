@@ -41,7 +41,9 @@ function LiveRoom(): VNode {
       >
         B
       </span>
-      <output class="hx-rt-tally">{tally} in room</output>
+      <output class="hx-rt-tally" aria-hidden="true">
+        {tally} in room
+      </output>
       <ul class="hx-rt-chips">
         {CHIP_THRESHOLDS.map((threshold, i) => {
           const up = progress >= threshold;

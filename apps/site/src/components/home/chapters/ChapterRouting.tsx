@@ -64,7 +64,7 @@ export function ChapterRouting(): VNode {
           <p class="hx-scene__desc">
             Your routes are a data structure, not a folder tree. Nested layouts
             stay mounted while their child swaps, and every node owns its own
-            data and code-split.
+            data and is code-split.
           </p>
           <pre class="hx-route__code">
             <code>{SNIPPET}</code>
