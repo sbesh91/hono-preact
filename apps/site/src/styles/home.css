@@ -52,10 +52,9 @@
   margin-bottom: 1.4rem;
 }
 .hx-scene__step {
-  font-family: var(--font-mono);
   font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -76,11 +75,10 @@
   opacity: 0.55;
 }
 .hx-scene__title {
-  font-family: var(--font-display);
-  font-size: clamp(1.45rem, 3vw, 2.15rem);
+  font-size: clamp(1.4rem, 3vw, 2.1rem);
   font-weight: 700;
-  line-height: 1.06;
-  letter-spacing: -0.02em;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
   margin-top: 0.4rem;
   text-wrap: balance;
 }
@@ -615,21 +613,19 @@
 /* The hero shader is an always-light asset, so hero text uses fixed dark ink to stay legible in both themes. */
 .hx-eyebrow {
   margin-top: 1.1rem;
-  font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   /* Solid ink (not an alpha tint): clears AA over the light shader. */
   color: #43474a;
 }
 .hx-hero__title {
   color: var(--color-brand-ink);
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 6.2vw, 4.3rem);
+  font-size: clamp(2.4rem, 6vw, 4.1rem);
   font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.025em;
+  line-height: 1.03;
+  letter-spacing: -0.02em;
   margin-top: 1rem;
   text-wrap: balance;
 }
