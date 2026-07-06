@@ -22,59 +22,59 @@ const SNIPPET = `defineRoutes([
   ] },
 ]);`;
 
-// Every layer is always rendered inside a collapsible slot; `depth` only flips
-// which slots are open. A CSS transition on the slot animates the open/close,
-// so scrolling down mounts the child and scrolling back up unmounts it, both
-// smoothly, instead of a mount that pops in and an unmount that snaps out.
-function RouteLayer({ i, depth }: { i: number; depth: number }): VNode | null {
+// The whole nested manifest is always on screen (no layers appear or collapse,
+// so nothing clips or jumps). `active` is the deepest node the URL has reached;
+// scrolling just moves the accent highlight down the tree. Nodes above it are
+// mounted parent layouts that stay put; nodes below it are code-split routes not
+// loaded yet. Only colors transition, so the reveal is smooth both directions.
+function RouteLayer({
+  i,
+  active,
+}: {
+  i: number;
+  active: number;
+}): VNode | null {
   if (i >= LAYERS.length) return null;
   const layer = LAYERS[i];
-  const mounted = i < depth;
-  const isLeaf = i === depth - 1;
   const isView = i === LAYERS.length - 1;
+  const state = i < active ? 'mounted' : i === active ? 'active' : 'pending';
+  const role =
+    state === 'active'
+      ? isView
+        ? 'active view · owns its data'
+        : 'active'
+      : state === 'mounted'
+        ? `${layer.role} · stays mounted`
+        : 'code-split · loads on demand';
   return (
-    <div class="hx-route__slot" data-in={mounted ? '' : undefined}>
-      <div class="hx-route__slot-inner">
-        <div
-          class="hx-route__layer"
-          data-leaf={isLeaf ? '' : undefined}
-          data-view={isView && isLeaf ? '' : undefined}
-        >
-          <div class="hx-route__layer-head">
-            <span class="hx-route__layer-name">{layer.name}</span>
-            <span class="hx-route__layer-role">
-              {isView
-                ? 'active view · owns its data'
-                : isLeaf
-                  ? 'child mounts here'
-                  : `${layer.role} · stays mounted`}
-            </span>
-          </div>
-          {isView ? (
-            <div class="hx-route__view-body" aria-hidden="true">
-              <span class="hx-route__view-row" />
-              <span class="hx-route__view-row hx-route__view-row--short" />
-            </div>
-          ) : (
-            <RouteLayer i={i + 1} depth={depth} />
-          )}
-        </div>
+    <div class="hx-route__layer" data-state={state}>
+      <div class="hx-route__layer-head">
+        <span class="hx-route__layer-name">{layer.name}</span>
+        <span class="hx-route__layer-role">{role}</span>
       </div>
+      {isView ? (
+        <div class="hx-route__view-body" aria-hidden="true">
+          <span class="hx-route__view-row" />
+          <span class="hx-route__view-row hx-route__view-row--short" />
+        </div>
+      ) : (
+        <RouteLayer i={i + 1} active={active} />
+      )}
     </div>
   );
 }
 
-// Reads the pinned playhead and drills one layer deeper per quarter of the
-// scrub, growing the URL breadcrumb in step with the nesting.
+// Reads the pinned playhead and moves the active node one layer deeper per
+// quarter of the scrub, growing the URL breadcrumb in step.
 function RouteStack(): VNode {
   const { progress } = useStageProgress();
-  const depth = Math.min(
-    LAYERS.length,
-    Math.floor(progress * LAYERS.length) + 1
+  const active = Math.min(
+    LAYERS.length - 1,
+    Math.floor(progress * LAYERS.length)
   );
   const url =
     'example.app' +
-    LAYERS.slice(0, depth)
+    LAYERS.slice(0, active + 1)
       .filter((l) => l.seg)
       .map((l) => ` / ${l.seg}`)
       .join('');
@@ -82,7 +82,7 @@ function RouteStack(): VNode {
     <div class="hx-route">
       <BrowserFrame url={url}>
         <div class="hx-route__nest">
-          <RouteLayer i={0} depth={depth} />
+          <RouteLayer i={0} active={active} />
         </div>
       </BrowserFrame>
     </div>

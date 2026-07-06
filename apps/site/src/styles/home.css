@@ -1074,55 +1074,26 @@
   background: var(--code-surface);
   color: var(--foreground);
 }
-/* Nested layouts: each layer literally contains the next, so the containment
-   shows the route tree. Outer layers are muted (mounted, persistent); the
-   deepest carries the accent as the active node / where the child swaps in. */
+/* The whole nested manifest is always laid out; nothing mounts, collapses, or
+   clips. Scrolling only moves which layer is `data-state=active`, and every
+   layer transitions its own colors, so the accent highlight glides down the
+   tree smoothly in both scroll directions. */
 .hx-route__nest {
   display: flex;
   flex-direction: column;
-}
-/* Every layer sits in a slot that collapses to zero height when its route is
-   not mounted. `depth` toggles data-in; the transition eases the slot open when
-   the child mounts (scroll down) and closed when it unmounts (scroll up), so
-   the reveal is smooth and direction-driven both ways rather than a pop-in and
-   snap-out. Uses the grid 0fr->1fr technique so the parent grows with it. */
-.hx-route__slot {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  filter: blur(4px);
-  transition:
-    grid-template-rows 0.6s cubic-bezier(0.33, 0.02, 0.13, 1),
-    opacity 0.45s ease,
-    filter 0.45s ease;
-}
-.hx-route__slot[data-in] {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  filter: blur(0);
-}
-.hx-route__slot-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-/* Gap between a layer's header and its nested child sits on the child box,
-   inside the clipped/collapsing area, so it fully disappears when the child
-   closes (a slot padding would have left an 8px residual). */
-.hx-route__layer > .hx-route__slot > .hx-route__slot-inner > .hx-route__layer {
-  margin-top: 0.5rem;
-}
-@media (prefers-reduced-motion: reduce) {
-  .hx-route__slot {
-    transition: none;
-  }
 }
 .hx-route__layer {
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   padding: 0.55rem 0.6rem;
   background: var(--surface);
+  transition:
+    border-color 0.4s ease,
+    box-shadow 0.4s ease,
+    background-color 0.4s ease;
 }
 .hx-route__layer .hx-route__layer {
+  margin-top: 0.5rem;
   background: var(--surface-subtle);
 }
 .hx-route__layer-head {
@@ -1135,25 +1106,52 @@
   font-weight: 600;
   font-size: 0.85rem;
   color: var(--foreground);
+  transition: color 0.4s ease;
 }
 .hx-route__layer-role {
   font-family: ui-monospace, monospace;
   font-size: 0.68rem;
   color: var(--muted);
   white-space: nowrap;
+  transition: color 0.4s ease;
 }
-.hx-route__layer[data-leaf] {
+/* Deeper routes are defined in the manifest but not loaded yet: fainter box and
+   dimmed name, so the loaded region reads as "lit up" as you descend. */
+.hx-route__layer[data-state='pending'] {
+  border-color: color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+.hx-route__layer[data-state='pending']
+  > .hx-route__layer-head
+  .hx-route__layer-name {
+  color: var(--muted);
+}
+/* The active node carries the accent ring; its role reads in accent too. */
+.hx-route__layer[data-state='active'] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
-.hx-route__layer[data-view] .hx-route__layer-role {
+.hx-route__layer[data-state='active']
+  > .hx-route__layer-head
+  .hx-route__layer-role {
   color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-route__layer,
+  .hx-route__layer-name,
+  .hx-route__layer-role {
+    transition: none;
+  }
 }
 .hx-route__view-body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   margin-top: 0.5rem;
+  transition: opacity 0.4s ease;
+}
+/* The view's content only reads as loaded once the view is the active node. */
+.hx-route__layer[data-state='pending'] > .hx-route__view-body {
+  opacity: 0.4;
 }
 .hx-route__view-row {
   height: 0.5rem;
