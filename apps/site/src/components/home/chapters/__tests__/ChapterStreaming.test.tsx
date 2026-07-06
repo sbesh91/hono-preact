@@ -23,6 +23,7 @@ describe('ChapterStreaming', () => {
 
     // Device chapter: the streaming body mounts inside the BrowserFrame.
     expect(container.querySelector('.hx-stream')).not.toBeNull();
+    expect(container.querySelector('.hx-browser')).not.toBeNull();
   });
 
   it('still renders heading and copy with reduced motion (static frame)', () => {

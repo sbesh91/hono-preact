@@ -52,7 +52,7 @@ export function ChapterStreaming(): VNode {
             <div class="hx-stream">
               <LiveCount />
               <Region
-                showAt={0.35}
+                showAt={0.37}
                 skeleton={<div class="hx-skel hx-skel--list" />}
               >
                 <ul class="hx-stream__list">
@@ -62,13 +62,13 @@ export function ChapterStreaming(): VNode {
                 </ul>
               </Region>
               <Region
-                showAt={0.62}
+                showAt={0.9}
                 skeleton={<div class="hx-skel hx-skel--head" />}
               >
                 <header class="hx-stream__header">Live feed: open</header>
               </Region>
               <Region
-                showAt={0.92}
+                showAt={0.6}
                 skeleton={<div class="hx-skel hx-skel--chart" />}
               >
                 <div class="hx-stream__chart">Throughput trending up</div>
@@ -79,8 +79,8 @@ export function ChapterStreaming(): VNode {
           <Wire caption="network: SSE">
             <Lane label="GET /feed" start={0} size={0.1} tone="grad" />
             <Lane label="list" start={0.12} size={0.25} />
-            <Lane label="header" start={0.1} size={0.5} />
-            <Lane label="chart" start={0.14} size={0.76} />
+            <Lane label="header" start={0.1} size={0.8} />
+            <Lane label="chart" start={0.14} size={0.46} />
           </Wire>
         </div>
       </ScrollStage>
