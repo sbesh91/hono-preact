@@ -486,3 +486,129 @@
   font-size: 0.8125rem;
   line-height: 1.5;
 }
+
+/* ---- Chapter: Transitions, for free (interactive VT widget) ---- */
+.hx-vt {
+  display: grid;
+  gap: 8px;
+  view-transition-name: hx-vt-panel;
+}
+.hx-vt__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.hx-vt__card,
+.hx-vt__back,
+.hx-vt__demo {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.hx-vt__card {
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.hx-vt__card:hover {
+  background: var(--surface-subtle);
+}
+.hx-vt__card-title {
+  font-weight: 600;
+}
+.hx-vt__card-meta {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.hx-vt__detail {
+  display: grid;
+  gap: 10px;
+}
+.hx-vt__hero {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.hx-vt__hero .hx-vt__card-meta {
+  color: var(--accent-foreground);
+  opacity: 0.85;
+}
+.hx-vt__body {
+  margin: 0;
+  color: var(--foreground);
+}
+.hx-vt__back,
+.hx-vt__demo {
+  align-items: center;
+  justify-content: center;
+}
+.hx-vt__demo {
+  text-decoration: none;
+  background: var(--surface-subtle);
+}
+
+/* Shared-element morph is automatic: the tapped card and the detail hero share
+   view-transition-name hx-card-<id>. The panel slides, keyed by direction. */
+::view-transition-group(hx-vt-panel) {
+  animation-duration: 260ms;
+}
+html[data-hx-dir='forward']::view-transition-old(hx-vt-panel) {
+  animation: hx-vt-out-left 260ms both;
+}
+html[data-hx-dir='forward']::view-transition-new(hx-vt-panel) {
+  animation: hx-vt-in-right 260ms both;
+}
+html[data-hx-dir='back']::view-transition-old(hx-vt-panel) {
+  animation: hx-vt-out-right 260ms both;
+}
+html[data-hx-dir='back']::view-transition-new(hx-vt-panel) {
+  animation: hx-vt-in-left 260ms both;
+}
+@keyframes hx-vt-out-left {
+  to {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+@keyframes hx-vt-in-right {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes hx-vt-out-right {
+  to {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes hx-vt-in-left {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: strip the panel name so nothing is captured, and kill any
+   animation. The card/hero names are already withheld in JS when reduced, so
+   the list <-> detail widget stays fully usable as plain state. */
+@media (prefers-reduced-motion: reduce) {
+  .hx-vt {
+    view-transition-name: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
