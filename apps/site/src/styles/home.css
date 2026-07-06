@@ -662,3 +662,32 @@ html[data-hx-dir='back']::view-transition-new(hx-vt-panel) {
   background: var(--accent);
   border-color: transparent;
 }
+
+/* Chapter: One package, typed throughout */
+.hx-pkg-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hx-pkg-pill {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--foreground);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+}
+.hx-pkg-code {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--code-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
