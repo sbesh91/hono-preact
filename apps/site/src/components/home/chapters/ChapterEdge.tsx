@@ -14,7 +14,7 @@ export function ChapterEdge(): VNode {
     <section class="hx-chapter">
       <div class="hx-scene">
         <div class="hx-scene__head">
-          <p class="hx-scene__step">{EYEBROW}</p>
+          <p class="hx-scene__step hx-scene__step--muted">{EYEBROW}</p>
           <h2 class="hx-scene__title">{TITLE}</h2>
           <p class="hx-scene__desc">{DESC}</p>
         </div>

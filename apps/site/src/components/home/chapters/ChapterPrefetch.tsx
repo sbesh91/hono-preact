@@ -93,7 +93,9 @@ export function ChapterPrefetch(): VNode {
         <div class="hx-scene">
           <div class="hx-cols2">
             <div class="hx-prefetch__intro">
-              <p class="hx-scene__step">Navigation</p>
+              <p class="hx-scene__step">
+                <span class="hx-scene__num">06</span>Navigation
+              </p>
               <h2 class="hx-scene__title">Instant navigation.</h2>
               <p class="hx-scene__desc">
                 Hover warms the cache before the click. hono-preact hands

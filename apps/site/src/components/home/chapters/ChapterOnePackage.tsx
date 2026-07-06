@@ -18,7 +18,7 @@ export function ChapterOnePackage(): VNode {
     <section class="hx-chapter">
       <div class="hx-scene">
         <div class="hx-scene__head">
-          <p class="hx-scene__step">The whole surface</p>
+          <p class="hx-scene__step hx-scene__step--muted">The whole surface</p>
           <h2 class="hx-scene__title">One package, typed throughout.</h2>
           <p class="hx-scene__desc">
             A single hono-preact install gives you the runtime, /server, /vite,

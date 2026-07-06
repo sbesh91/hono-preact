@@ -58,9 +58,21 @@
   text-transform: uppercase;
   color: var(--accent);
 }
-/* Second eyebrow tier: same weight/tracking, muted color (keeps one ladder). */
+/* Framing bookends (Edge, One Package, Ready) use the muted tier and carry no
+   number, so the accent-numbered spine reads clearly as the request journey. */
 .hx-scene__step--muted {
   color: var(--muted);
+}
+/* Lifecycle position marker on the numbered spine chapters (01..08). The
+   running count is what tells the reader how far the request has assembled. */
+.hx-scene__num {
+  font-variant-numeric: tabular-nums;
+}
+.hx-scene__num::after {
+  content: '·';
+  margin: 0 0.5em;
+  font-weight: 400;
+  opacity: 0.55;
 }
 .hx-scene__title {
   font-size: clamp(1.4rem, 3vw, 2.1rem);

@@ -24,7 +24,9 @@ export function ChapterSSR(): VNode {
       >
         <div class="hx-scene">
           <div class="hx-scene__head">
-            <p class="hx-scene__step">RPC 01 · SSR</p>
+            <p class="hx-scene__step">
+              <span class="hx-scene__num">02</span>SSR
+            </p>
             <h2 class="hx-scene__title">SSR, no client waterfall.</h2>
             <p class="hx-scene__desc">
               Loaders run in parallel on the server and one HTML document

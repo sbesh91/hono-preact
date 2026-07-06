@@ -66,7 +66,9 @@ export function ChapterResilience(): VNode {
       >
         <div class="hx-scene">
           <div class="hx-scene__head">
-            <p class="hx-scene__step">Resilience</p>
+            <p class="hx-scene__step">
+              <span class="hx-scene__num">05</span>Resilience
+            </p>
             <h2 class="hx-scene__title">Built to degrade, not crash.</h2>
             <p class="hx-scene__desc">
               Loading, revalidating, and error are a discriminated union you

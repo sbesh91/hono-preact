@@ -3,7 +3,6 @@ import { ScrollStage } from '../scroll/stage.js';
 import { BrowserFrame, Region, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 
-const STEP = 'RPC 03 · Action';
 const TITLE = 'Mutations without the cliff.';
 const DESC =
   'A mutation is a Form plus defineAction. The UI patches the instant you submit and the server reconciles behind it. Watch the list fill before the network settles, then read why that is worth doing.';
@@ -46,7 +45,9 @@ export function ChapterMutations(): VNode {
       >
         <div class="hx-scene">
           <header class="hx-scene__head">
-            <p class="hx-scene__step">{STEP}</p>
+            <p class="hx-scene__step">
+              <span class="hx-scene__num">04</span>Action
+            </p>
             <h2 class="hx-scene__title">{TITLE}</h2>
             <p class="hx-scene__desc">{DESC}</p>
           </header>

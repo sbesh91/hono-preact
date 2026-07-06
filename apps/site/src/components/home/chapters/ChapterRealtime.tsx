@@ -68,7 +68,9 @@ export function ChapterRealtime(): VNode {
     <section class="hx-chapter">
       <div class="hx-scene">
         <div class="hx-scene__head">
-          <p class="hx-scene__step">Realtime</p>
+          <p class="hx-scene__step">
+            <span class="hx-scene__num">08</span>Realtime
+          </p>
           <h2 class="hx-scene__title">Live, both ways.</h2>
           <p class="hx-scene__desc">
             One typed duplex socket per client, with rooms and a presence

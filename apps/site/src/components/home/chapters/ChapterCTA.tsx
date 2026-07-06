@@ -7,7 +7,7 @@ export function ChapterCTA(): VNode {
       <div class="hx-scene hx-cta">
         <Reveal>
           <div class="hx-scene__head">
-            <p class="hx-scene__step">Ready?</p>
+            <p class="hx-scene__step hx-scene__step--muted">Ready?</p>
             <h2 class="hx-scene__title">Build something that feels alive.</h2>
             <p class="hx-scene__desc">
               You have seen the whole connection: fetch, stream, mutate,

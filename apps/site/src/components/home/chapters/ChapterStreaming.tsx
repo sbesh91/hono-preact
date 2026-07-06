@@ -87,7 +87,9 @@ export function ChapterStreaming(): VNode {
       >
         <div class="hx-scene">
           <div class="hx-scene__head">
-            <p class="hx-scene__step">RPC 02 · Stream</p>
+            <p class="hx-scene__step">
+              <span class="hx-scene__num">03</span>Stream
+            </p>
             <h2 class="hx-scene__title">Data that streams in.</h2>
             <p class="hx-scene__desc">
               A loader can be an async generator. Each yield frames over SSE (or

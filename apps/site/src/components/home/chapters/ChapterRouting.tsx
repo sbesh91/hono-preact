@@ -69,7 +69,9 @@ export function ChapterRouting(): VNode {
       >
         <div class="hx-scene">
           <div class="hx-scene__head">
-            <p class="hx-scene__step">Routing</p>
+            <p class="hx-scene__step">
+              <span class="hx-scene__num">01</span>Routing
+            </p>
             <h2 class="hx-scene__title">Routing is a manifest.</h2>
             <p class="hx-scene__desc">
               Your routes are a data structure, not a folder tree. Nested
