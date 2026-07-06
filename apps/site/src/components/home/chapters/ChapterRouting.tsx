@@ -2,6 +2,7 @@ import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
 const NODES = ['Root', 'Section', 'List', 'Detail'] as const;
 
@@ -57,30 +58,28 @@ function RouteStack(): VNode {
 export function ChapterRouting(): VNode {
   return (
     <section class="hx-chapter">
-      <div class="hx-scene">
-        <div class="hx-scene__head">
-          <p class="hx-scene__step">Routing</p>
-          <h2 class="hx-scene__title">Routing is a manifest.</h2>
-          <p class="hx-scene__desc">
-            Your routes are a data structure, not a folder tree. Nested layouts
-            stay mounted while their child swaps, and every node owns its own
-            data and is code-split.
-          </p>
+      <ScrollStage
+        pages={3}
+        pagesNarrow={2}
+        unpinOnNarrow
+        label="Routing is a manifest"
+      >
+        <div class="hx-scene">
+          <div class="hx-scene__head">
+            <p class="hx-scene__step">Routing</p>
+            <h2 class="hx-scene__title">Routing is a manifest.</h2>
+            <p class="hx-scene__desc">
+              Your routes are a data structure, not a folder tree. Nested
+              layouts stay mounted while their child swaps, and every node owns
+              its own data and is code-split.
+            </p>
+          </div>
+          <RouteStack />
           <pre class="hx-route__code">
-            <code>{SNIPPET}</code>
+            <Code source={SNIPPET} />
           </pre>
         </div>
-        <div class="hx-panels">
-          <ScrollStage
-            pages={3}
-            pagesNarrow={2}
-            unpinOnNarrow
-            label="Routing is a manifest"
-          >
-            <RouteStack />
-          </ScrollStage>
-        </div>
-      </div>
+      </ScrollStage>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import type { VNode } from 'preact';
 import { Reveal } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
 const SUBPATHS = [
   'hono-preact',
@@ -35,7 +36,7 @@ export function ChapterOnePackage(): VNode {
           </ul>
         </Reveal>
         <pre class="hx-pkg-code">
-          <code>{SNIPPET}</code>
+          <Code source={SNIPPET} />
         </pre>
       </div>
     </section>

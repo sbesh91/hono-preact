@@ -1,6 +1,7 @@
 import type { VNode } from 'preact';
 import { ScrollStage } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane, Region } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
 // Exact framework API snippet. Rendered verbatim inside <pre>; the JSX-looking
 // text is a string (no `${` sequences), so a template literal is safe.
@@ -23,7 +24,7 @@ export function ChapterSSR(): VNode {
       >
         <div class="hx-scene">
           <div class="hx-scene__head">
-            <p class="hx-scene__step">RPC 01 / SSR</p>
+            <p class="hx-scene__step">RPC 01 · SSR</p>
             <h2 class="hx-scene__title">SSR, no client waterfall.</h2>
             <p class="hx-scene__desc">
               Loaders run in parallel on the server and one HTML document
@@ -81,7 +82,7 @@ export function ChapterSSR(): VNode {
           </div>
 
           <pre class="hx-code">
-            <code>{snippet}</code>
+            <Code source={snippet} />
           </pre>
         </div>
       </ScrollStage>

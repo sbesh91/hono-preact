@@ -1,14 +1,9 @@
 import type { VNode } from 'preact';
 import { ScrollStage } from '../scroll/stage.js';
-import {
-  BrowserFrame,
-  Region,
-  Wire,
-  Lane,
-  Reveal,
-} from '../scroll/primitives.js';
+import { BrowserFrame, Region, Wire, Lane } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
-const STEP = 'RPC 03 / Action';
+const STEP = 'RPC 03 · Action';
 const TITLE = 'Mutations without the cliff.';
 const DESC =
   'A mutation is a Form plus defineAction. The UI patches instantly, the server runs, a resubmission race is cancelled, then loaders revalidate by reference. The same markup works with JS off.';
@@ -23,14 +18,19 @@ const SNIPPET = `const { mutate, pending } = useAction(serverActions.addTask, {
 export function ChapterMutations(): VNode {
   return (
     <section class="hx-chapter">
-      <div class="hx-scene">
-        <header class="hx-scene__head">
-          <p class="hx-scene__step">{STEP}</p>
-          <h2 class="hx-scene__title">{TITLE}</h2>
-          <p class="hx-scene__desc">{DESC}</p>
-        </header>
-        <div class="hx-panels hx-cols2">
-          <ScrollStage pages={3} pagesNarrow={2} label="Mutation lifecycle">
+      <ScrollStage
+        pages={3}
+        pagesNarrow={2}
+        unpinOnNarrow
+        label="Mutation lifecycle"
+      >
+        <div class="hx-scene">
+          <header class="hx-scene__head">
+            <p class="hx-scene__step">{STEP}</p>
+            <h2 class="hx-scene__title">{TITLE}</h2>
+            <p class="hx-scene__desc">{DESC}</p>
+          </header>
+          <div class="hx-panels">
             <BrowserFrame url="/projects/acme">
               <div class="hx-mut-form">
                 <span class="hx-mut-input">Design the landing hero</span>
@@ -90,14 +90,12 @@ export function ChapterMutations(): VNode {
                 tone="grad"
               />
             </Wire>
-          </ScrollStage>
-          <Reveal>
-            <pre class="hx-code">
-              <code>{SNIPPET}</code>
-            </pre>
-          </Reveal>
+          </div>
+          <pre class="hx-code">
+            <Code source={SNIPPET} />
+          </pre>
         </div>
-      </div>
+      </ScrollStage>
     </section>
   );
 }

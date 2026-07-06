@@ -98,9 +98,21 @@
 
 @utility bg-brand-cloud {
   background-image:
-    radial-gradient(60% 60% at 30% 20%, rgba(254, 80, 0, 0.18), transparent 70%),
-    radial-gradient(60% 60% at 75% 60%, rgba(236, 0, 140, 0.18), transparent 70%),
-    radial-gradient(50% 50% at 60% 90%, rgba(201, 125, 255, 0.16), transparent 70%);
+    radial-gradient(
+      60% 60% at 30% 20%,
+      rgba(254, 80, 0, 0.18),
+      transparent 70%
+    ),
+    radial-gradient(
+      60% 60% at 75% 60%,
+      rgba(236, 0, 140, 0.18),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 50% at 60% 90%,
+      rgba(201, 125, 255, 0.16),
+      transparent 70%
+    );
 }
 
 /* Status badges. Each utility sets BOTH the surface and a paired foreground so
@@ -167,6 +179,12 @@
   --surface-subtle: #f4f4f2;
   --code-surface: #fcfcfb; /* faint code-block surface on the white page */
   --border-color: rgba(37, 40, 42, 0.1);
+  --border-strong: rgba(
+    37,
+    40,
+    42,
+    0.22
+  ); /* window chrome dots, shimmer band */
   --accent: #c40076; /* magenta-600: AA as link text and as white-on-accent button */
   --accent-foreground: #ffffff;
   --accent-hover: #9b005d; /* magenta-700 */
@@ -191,6 +209,12 @@
   --wire-inflight: var(--accent);
   --wire-done: #12855b; /* green, >= 4.5:1 on the code surface (light) */
   --wire-cancel: #c2410c; /* amber, >= 4.5:1 on the code surface (light) */
+  --glow: rgba(
+    236,
+    0,
+    140,
+    0.32
+  ); /* packet glow behind gradient wires (light) */
 
   /* Solid priority colors for card stripes / dots */
   --priority-urgent: #dc2626;
@@ -203,8 +227,7 @@
 
   /* Card elevation (flipped in the dark media query below) */
   --shadow-card:
-    0 1px 2px rgba(16, 24, 40, 0.04),
-    0 6px 16px rgba(16, 24, 40, 0.08);
+    0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 16px rgba(16, 24, 40, 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -217,6 +240,12 @@
     --surface-subtle: #2f3234;
     --code-surface: #24292e; /* github-dark code background */
     --border-color: rgba(255, 255, 255, 0.12);
+    --border-strong: rgba(
+      255,
+      255,
+      255,
+      0.22
+    ); /* window chrome dots, shimmer band */
     --accent: #ff5fbf; /* brighter magenta: AA as link text on dark surfaces */
     --accent-foreground: #1b1d1e; /* dark text on the bright accent button */
     --accent-hover: #ff8ad2;
@@ -241,6 +270,16 @@
     --wire-inflight: var(--accent);
     --wire-done: #37c98b; /* green, >= 4.5:1 on the dark code surface */
     --wire-cancel: #fb923c; /* amber, >= 4.5:1 on the dark code surface */
+    --glow: rgba(
+      255,
+      95,
+      191,
+      0.42
+    ); /* packet glow behind gradient wires (dark) */
+
+    /* Brighter orangenta so gradient lanes read as vivid as the bright dark
+       accent (the light-mode token ends at the dim #ec008c). */
+    --gradient-orangenta: linear-gradient(90deg, #ff6a2b 0%, #ff5fbf 100%);
 
     /* Solid priority colors for card stripes / dots */
     --priority-urgent: #f87171;
@@ -250,8 +289,7 @@
 
     /* Deeper, darker elevation so cards keep depth on the dark surface */
     --shadow-card:
-      0 1px 2px rgba(0, 0, 0, 0.3),
-      0 6px 16px rgba(0, 0, 0, 0.45);
+      0 1px 2px rgba(0, 0, 0, 0.35), 0 18px 44px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -300,9 +338,7 @@
   --priority-low: #2dd4bf;
 
   /* Deeper, darker elevation so cards keep depth on the dark surface */
-  --shadow-card:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -625,12 +661,22 @@ html:active-view-transition-type(docs)::view-transition-new(root) {
    chrome is captured on only one side, so it keeps the default fade; pinning it
    to `animation: none` there would leave the old chrome frozen on screen for
    the duration of the transition. */
-html:active-view-transition-type(docs-within)::view-transition-group(docs-sidebar),
-html:active-view-transition-type(docs-within)::view-transition-old(docs-sidebar),
-html:active-view-transition-type(docs-within)::view-transition-new(docs-sidebar),
-html:active-view-transition-type(docs-within)::view-transition-group(docs-topbar),
+html:active-view-transition-type(docs-within)::view-transition-group(
+    docs-sidebar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-old(
+    docs-sidebar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-new(
+    docs-sidebar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-group(
+    docs-topbar
+  ),
 html:active-view-transition-type(docs-within)::view-transition-old(docs-topbar),
-html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) {
+html:active-view-transition-type(docs-within)::view-transition-new(
+    docs-topbar
+  ) {
   animation: none;
 }
 
@@ -641,9 +687,15 @@ html:active-view-transition-type(docs-within)::view-transition-new(docs-topbar) 
 }
 /* Within demo (sidebar present in both snapshots) freeze it: no fade, no zoom,
    no morph, so only the page content transitions. */
-html:active-view-transition-type(demo-within)::view-transition-group(demo-sidebar),
-html:active-view-transition-type(demo-within)::view-transition-old(demo-sidebar),
-html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar) {
+html:active-view-transition-type(demo-within)::view-transition-group(
+    demo-sidebar
+  ),
+html:active-view-transition-type(demo-within)::view-transition-old(
+    demo-sidebar
+  ),
+html:active-view-transition-type(demo-within)::view-transition-new(
+    demo-sidebar
+  ) {
   animation: none;
 }
 
@@ -656,9 +708,15 @@ html:active-view-transition-type(demo-within)::view-transition-new(demo-sidebar)
 /* Within the app (bar present in both snapshots) freeze it: only page content
    transitions. Scoped to demo-within only; on enter/leave the bar is in one
    snapshot and keeps the default fade. */
-html:active-view-transition-type(demo-within)::view-transition-group(demo-activity-bar),
-html:active-view-transition-type(demo-within)::view-transition-old(demo-activity-bar),
-html:active-view-transition-type(demo-within)::view-transition-new(demo-activity-bar) {
+html:active-view-transition-type(demo-within)::view-transition-group(
+    demo-activity-bar
+  ),
+html:active-view-transition-type(demo-within)::view-transition-old(
+    demo-activity-bar
+  ),
+html:active-view-transition-type(demo-within)::view-transition-new(
+    demo-activity-bar
+  ) {
   animation: none;
 }
 

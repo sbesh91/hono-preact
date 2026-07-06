@@ -1,6 +1,7 @@
 import type { VNode } from 'preact';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
 const SNIPPET = `serverLoaders.default.View((state) => {
   switch (state.status) {
@@ -56,35 +57,39 @@ function ResilienceApp(): VNode {
 export function ChapterResilience(): VNode {
   return (
     <section class="hx-chapter">
-      <div class="hx-scene">
-        <div class="hx-scene__head">
-          <p class="hx-scene__step">Resilience</p>
-          <h2 class="hx-scene__title">Built to degrade, not crash.</h2>
-          <p class="hx-scene__desc">
-            Loading, revalidating, and error are a discriminated union you match
-            on: stale-while-revalidate and keep-last-good-value are the default,
-            and a route error boundary contains a failure to its own pane.
-          </p>
+      <ScrollStage
+        pages={2.4}
+        pagesNarrow={2}
+        unpinOnNarrow
+        fallbackProgress={0.6}
+        label="Resilience: match on loading, revalidating, and error"
+      >
+        <div class="hx-scene">
+          <div class="hx-scene__head">
+            <p class="hx-scene__step">Resilience</p>
+            <h2 class="hx-scene__title">Built to degrade, not crash.</h2>
+            <p class="hx-scene__desc">
+              Loading, revalidating, and error are a discriminated union you
+              match on: stale-while-revalidate and keep-last-good-value are the
+              default, and a route error boundary contains a failure to its own
+              pane.
+            </p>
+          </div>
+          <div class="hx-panels">
+            <pre class="hx-res__code">
+              <Code source={SNIPPET} />
+            </pre>
+            <div class="hx-panel">
+              <BrowserFrame url="/demo/projects/:projectId/tasks/:taskId">
+                <ResilienceApp />
+              </BrowserFrame>
+              <Wire caption="reload()">
+                <Lane label="reload()" start={0.75} size={0.2} tone="accent" />
+              </Wire>
+            </div>
+          </div>
         </div>
-        <div class="hx-panels hx-cols2">
-          <pre class="hx-res__code">
-            <code>{SNIPPET}</code>
-          </pre>
-          <ScrollStage
-            pages={2.4}
-            pagesNarrow={2}
-            fallbackProgress={0.6}
-            label="Resilience: match on loading, revalidating, and error"
-          >
-            <BrowserFrame url="/demo/projects/:projectId/tasks/:taskId">
-              <ResilienceApp />
-            </BrowserFrame>
-            <Wire caption="reload()">
-              <Lane label="reload()" start={0.75} size={0.2} tone="accent" />
-            </Wire>
-          </ScrollStage>
-        </div>
-      </div>
+      </ScrollStage>
     </section>
   );
 }

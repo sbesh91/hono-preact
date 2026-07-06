@@ -21,11 +21,11 @@ const Home: FunctionComponent = () => {
       'Watch the connection come alive: hono-preact fetches, streams, mutates, transitions, and goes live, edge to browser.',
   });
   return (
-    <div class="hx-home relative isolate overflow-hidden">
-      <HeroShader />
+    <div class="hx-home">
       <main class="relative">
-        {/* Hero */}
+        {/* Hero (the shader is confined to the hero, not the whole page) */}
         <header class="hx-hero">
+          <HeroShader />
           <div class="hx-wrap">
             <span class="energy-bar w-16" aria-hidden="true" />
             <p class="hx-eyebrow">hono-preact v{__HONO_PREACT_VERSION__}</p>
@@ -47,6 +47,10 @@ const Home: FunctionComponent = () => {
               </a>
             </div>
           </div>
+          <p class="hx-hero__scroll" aria-hidden="true">
+            Scroll to assemble
+            <span class="hx-hero__scroll-arrow" />
+          </p>
         </header>
 
         {/* Chapters, in order */}

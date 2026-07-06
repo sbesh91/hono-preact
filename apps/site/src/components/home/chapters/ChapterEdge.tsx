@@ -1,5 +1,6 @@
 import type { VNode } from 'preact';
 import { Reveal } from '../scroll/primitives.js';
+import { Code } from '../scroll/code.js';
 
 const EYEBROW = 'The platform';
 const TITLE = 'Runs on the platform, at the edge.';
@@ -12,7 +13,7 @@ export function ChapterEdge(): VNode {
   return (
     <section class="hx-chapter">
       <div class="hx-scene__head">
-        <p class="hx-edge-eyebrow">{EYEBROW}</p>
+        <p class="hx-scene__step">{EYEBROW}</p>
         <h2 class="hx-scene__title">{TITLE}</h2>
         <p class="hx-scene__desc">{DESC}</p>
       </div>
@@ -44,7 +45,7 @@ export function ChapterEdge(): VNode {
               You pick the runtime with a one-line adapter.
             </p>
             <pre class="hx-edge-card__code">
-              <code>{SNIPPET}</code>
+              <Code source={SNIPPET} />
             </pre>
           </article>
         </Reveal>
