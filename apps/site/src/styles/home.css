@@ -450,8 +450,33 @@
 .hx-prefetch__cursor {
   position: absolute;
   z-index: 3;
-  color: var(--foreground);
   pointer-events: none;
+}
+.hx-prefetch__cursor svg {
+  display: block;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
+}
+/* Ripple that fires from the pointer tip as it lands on the link. */
+.hx-prefetch__click {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  transform: translate(-50%, -50%);
+  animation: hx-prefetch-click 0.55s ease-out forwards;
+}
+@keyframes hx-prefetch-click {
+  from {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0.25);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
 }
 .hx-prefetch__panel {
   padding: 0.75rem 0.85rem;

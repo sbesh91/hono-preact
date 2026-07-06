@@ -9,71 +9,87 @@ export default defineApp({ speculation: true });
 // or bind a specific link's loader to any intent (hover, focus, touch):
 const prefetchIssue = usePrefetch(href, serverLoaders.issue);`;
 
-const WARM_ROWS = ['sales.js', 'invoices.js', 'invoice.json', 'invoice.css'];
+// The Invoices route's resources, each warming at a slightly different point so
+// the "in parallel" fetch reads as several requests landing near-together.
+const WARM_ROWS = [
+  { name: 'invoices.route.js', at: 0.42 },
+  { name: 'invoices.data.json', at: 0.5 },
+  { name: 'table.css', at: 0.46 },
+  { name: 'chart.js', at: 0.56 },
+];
 
-// Reads the stage playhead and glides a decorative pointer toward the link.
-// Everything derives from progress; there is no real pointer input.
-function DemoCursor(): VNode {
-  const { progress } = useStageProgress();
-  const t = clamp01((progress - 0.1) / 0.55); // travels between .1 and .65
-  const left = 14 + t * 44; // 14% -> 58%
-  const top = 76 - t * 40; //  76% -> 36%
-  return (
-    <span
-      class="hx-prefetch__cursor"
-      aria-hidden="true"
-      style={{ left: `${left}%`, top: `${top}%` }}
-    >
-      <svg viewBox="0 0 12 12" width="18" height="18" aria-hidden="true">
-        <path
-          d="M1 1 L1 10 L4 7 L6 11 L8 10 L6 6 L10 6 Z"
-          fill="currentColor"
-        />
-      </svg>
-    </span>
-  );
-}
-
-// Reads the stage playhead and walks the cache through three clean, stacked
-// states (idle -> warming -> arrived) so nothing overlaps: a hover warms every
-// dependency in parallel, then the click opens instantly from cache.
+// One playhead drives the whole beat: a pointer glides to the "Invoices" link,
+// hovering warms that route's resources in parallel, then a click opens the
+// page instantly from cache. Every value derives from progress; there is no
+// real pointer input.
 function PrefetchDemo(): VNode {
   const { progress } = useStageProgress();
-  const warming = progress > 0.35;
-  const arrived = progress > 0.78;
+  const hovering = progress > 0.32;
+  const opened = progress > 0.78;
+
+  // Glide from lower-left up to the "Invoices" link, then a click pulse fires
+  // as the pointer lands on it.
+  const travel = clamp01((progress - 0.06) / 0.5);
+  const cursorLeft = 26 + travel * 58; // 26% -> 84%
+  const cursorTop = 84 - travel * 66; // 84% -> 18%
+  const clicking = progress > 0.7 && progress < 0.82;
+
   return (
     <div class="hx-prefetch">
       <div class="hx-prefetch__nav">
         <span class="hx-prefetch__brand">Acme</span>
-        <span class="hx-prefetch__link" data-warm={warming ? '' : undefined}>
+        <span class="hx-prefetch__link" data-warm={hovering ? '' : undefined}>
           Invoices
         </span>
       </div>
-      <DemoCursor />
+
+      <span
+        class="hx-prefetch__cursor"
+        aria-hidden="true"
+        style={{ left: `${cursorLeft}%`, top: `${cursorTop}%` }}
+      >
+        {clicking && <span class="hx-prefetch__click" />}
+        <svg viewBox="0 0 16 16" width="19" height="19" aria-hidden="true">
+          <path
+            d="M2 1.5 L2 13 L5 10.2 L7.1 14.6 L9.1 13.7 L7 9.4 L11 9.4 Z"
+            fill="var(--foreground)"
+            stroke="var(--surface)"
+            stroke-width="1.1"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+
       <div class="hx-prefetch__panel" role="status">
         <p class="hx-prefetch__panel-head">
-          {warming ? 'Prefetching in parallel' : 'Hover warms the cache'}
+          {hovering
+            ? 'Warming the Invoices route in parallel'
+            : 'Hover a link to warm its route'}
         </p>
         <ul class="hx-prefetch__rows">
-          {WARM_ROWS.map((name) => (
-            <li key={name} class="hx-prefetch__row">
-              <code>{name}</code>
-              <span
-                class="hx-prefetch__ready"
-                data-ready={warming ? '' : undefined}
-              >
-                {warming ? 'ready' : 'idle'}
-              </span>
-            </li>
-          ))}
+          {WARM_ROWS.map((row) => {
+            const ready = progress > row.at;
+            return (
+              <li key={row.name} class="hx-prefetch__row">
+                <code>{row.name}</code>
+                <span
+                  class="hx-prefetch__ready"
+                  data-ready={ready ? '' : undefined}
+                >
+                  {ready ? 'ready' : '…'}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </div>
-      <div class="hx-prefetch__dest" data-arrived={arrived ? '' : undefined}>
-        <p class="hx-prefetch__dest-title">Invoice INV-204</p>
+
+      <div class="hx-prefetch__dest" data-arrived={opened ? '' : undefined}>
+        <p class="hx-prefetch__dest-title">Invoices</p>
         <p class="hx-prefetch__dest-line">
-          {arrived
+          {opened
             ? 'Opened from warm cache. No spinner.'
-            : 'The click lands instantly once warm.'}
+            : 'Click lands instantly once warm.'}
         </p>
       </div>
     </div>
