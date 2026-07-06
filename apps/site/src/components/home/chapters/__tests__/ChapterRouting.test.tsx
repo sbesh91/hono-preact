@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/preact';
+import { cleanup, render, screen, fireEvent } from '@testing-library/preact';
 import { ChapterRouting } from '../ChapterRouting.js';
 
 afterEach(() => {
@@ -57,5 +57,21 @@ describe('ChapterRouting (Routing is a manifest)', () => {
     expect(
       screen.getByText(/nested layouts stay mounted while their child swaps/i)
     ).toBeInTheDocument();
+  });
+
+  it('exposes active route pill state via aria-pressed', () => {
+    render(<ChapterRouting />);
+
+    const rootButton = screen.getByRole('button', { name: 'Root' });
+    const detailButton = screen.getByRole('button', { name: 'Detail' });
+
+    // All buttons should have aria-pressed attributes.
+    expect(rootButton).toHaveAttribute('aria-pressed');
+    expect(detailButton).toHaveAttribute('aria-pressed');
+
+    // After clicking Detail, Detail should be active (aria-pressed="true").
+    fireEvent.click(detailButton);
+    expect(detailButton).toHaveAttribute('aria-pressed', 'true');
+    expect(rootButton).toHaveAttribute('aria-pressed', 'false');
   });
 });

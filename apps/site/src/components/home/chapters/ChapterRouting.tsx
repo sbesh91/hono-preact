@@ -42,6 +42,7 @@ function RouteStack(): VNode {
             type="button"
             class="hx-route__pill"
             data-active={i === active ? '' : undefined}
+            aria-pressed={i === active}
             onClick={() => setOverride(i)}
             onFocus={() => setOverride(i)}
           >
