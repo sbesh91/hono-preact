@@ -27,8 +27,8 @@ export function ChapterCTA(): VNode {
             </a>
           </div>
           <p class="hx-cta__note">
-            These buttons are already prefetched, hover them and the docs are
-            warming via the site's own Speculation Rules.
+            The site you are reading is a hono-preact app, from the streaming
+            docs to the prefetched buttons above.
           </p>
         </Reveal>
       </div>

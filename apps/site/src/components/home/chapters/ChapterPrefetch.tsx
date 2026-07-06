@@ -27,11 +27,12 @@ function PrefetchDemo(): VNode {
   const hovering = progress > 0.32;
   const opened = progress > 0.78;
 
-  // Glide from lower-left up to the "Invoices" link, then a click pulse fires
-  // as the pointer lands on it.
-  const travel = clamp01((progress - 0.06) / 0.5);
-  const cursorLeft = 26 + travel * 58; // 26% -> 84%
-  const cursorTop = 84 - travel * 66; // 84% -> 18%
+  // Glide up onto the "Invoices" link and settle there *before* warming starts,
+  // so the pointer is visibly hovering the link through the whole preload; a
+  // click pulse fires later as the page opens.
+  const travel = clamp01((progress - 0.04) / 0.24); // on the link by ~0.28
+  const cursorLeft = 33 + travel * 54; // 33% -> 87% (over "Invoices")
+  const cursorTop = 80 - travel * 70; // 80% -> 10% (the nav row)
   const clicking = progress > 0.7 && progress < 0.82;
 
   return (

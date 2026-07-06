@@ -1067,63 +1067,60 @@
   background: var(--code-surface);
   color: var(--foreground);
 }
-.hx-route__stack {
+/* Nested layouts: each layer literally contains the next, so the containment
+   shows the route tree. Outer layers are muted (mounted, persistent); the
+   deepest carries the accent as the active node / where the child swaps in. */
+.hx-route__nest {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
 }
-.hx-route__box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+.hx-route__layer {
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  padding: 0.6rem 0.8rem;
-  background: var(--code-surface);
-  color: var(--muted);
-  font-family: var(--font-sans);
-  transition:
-    color 0.2s,
-    border-color 0.2s;
+  padding: 0.55rem 0.6rem;
+  background: var(--surface);
 }
-.hx-route__box[data-active] {
+.hx-route__layer .hx-route__layer {
+  margin-top: 0.5rem;
+  background: var(--surface-subtle);
+}
+.hx-route__layer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.hx-route__layer-name {
+  font-weight: 600;
+  font-size: 0.85rem;
   color: var(--foreground);
+}
+.hx-route__layer-role {
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.hx-route__layer[data-leaf] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
-.hx-route__box-tag {
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.hx-route__layer[data-view] .hx-route__layer-role {
   color: var(--accent);
 }
-.hx-route__tabs {
+.hx-route__view-body {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
 }
-.hx-route__pill {
-  min-block-size: 44px;
-  padding: 0 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  font: inherit;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    color 0.2s,
-    border-color 0.2s,
-    background 0.2s;
+.hx-route__view-row {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--border-strong);
 }
-.hx-route__pill[data-active] {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--accent-foreground);
+.hx-route__view-row--short {
+  width: 55%;
 }
 
 /* Chapter: SSR, no client waterfall (Task 9) */
@@ -1236,8 +1233,8 @@
 }
 .hx-chart__now {
   stroke: var(--accent);
-  stroke-width: 1;
-  opacity: 0.45;
+  stroke-width: 1.5;
+  opacity: 0.55;
 }
 .hx-chart__stop-a {
   stop-color: var(--accent);
@@ -1495,6 +1492,31 @@
   gap: 0.85rem;
   width: min(40rem, 100%);
   margin-inline: auto;
+}
+/* Scrubber that names the scroll interaction and tracks its progress, so the
+   pinned morph never reads as an unexplained scroll hijack. */
+.hx-morph__scrub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+}
+.hx-morph__scrub-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.hx-morph__scrub-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+.hx-morph__scrub-fill {
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
 }
 /* Opening the detail flips --m to 1; CSS transitions the accent card from a
    list row into the page header (sibling rows collapse, detail body fades in). */

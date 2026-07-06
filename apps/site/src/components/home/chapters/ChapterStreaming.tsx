@@ -70,7 +70,14 @@ function StreamChart(): VNode {
         clip-path="url(#hx-chart-clip)"
         vector-effect="non-scaling-stroke"
       />
-      <line class="hx-chart__now" x1={revealW} y1="0" x2={revealW} y2={H} />
+      <line
+        class="hx-chart__now"
+        x1={revealW}
+        y1="0"
+        x2={revealW}
+        y2={H}
+        vector-effect="non-scaling-stroke"
+      />
     </svg>
   );
 }

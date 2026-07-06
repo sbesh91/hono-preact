@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent } from '@testing-library/preact';
+import { cleanup, render, screen } from '@testing-library/preact';
 import { ChapterRouting } from '../ChapterRouting.js';
 
 afterEach(() => {
@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe('ChapterRouting (Routing is a manifest)', () => {
-  it('renders the heading, the claim copy, the browser device, and the route pills', () => {
+  it('renders the heading, the claim copy, the browser device, and the nested route layers', () => {
     const { container } = render(<ChapterRouting />);
 
     // Heading.
@@ -25,11 +25,10 @@ describe('ChapterRouting (Routing is a manifest)', () => {
     // Device: BrowserFrame renders the .hx-browser shell.
     expect(container.querySelector('.hx-browser')).not.toBeNull();
 
-    // Four route-node pills prove the segment <-> component mapping.
-    expect(screen.getByRole('button', { name: 'Root' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Section' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'List' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Detail' })).toBeInTheDocument();
+    // The nested-layout stack renders at least the mounted root layer, which is
+    // the "routes are a manifest, not a folder tree" visualization.
+    expect(container.querySelector('.hx-route__layer')).not.toBeNull();
+    expect(screen.getByText('Root layout')).toBeInTheDocument();
 
     // The real code snippet renders in a <pre>.
     expect(container.querySelector('pre')?.textContent).toMatch(
@@ -57,21 +56,5 @@ describe('ChapterRouting (Routing is a manifest)', () => {
     expect(
       screen.getByText(/nested layouts stay mounted while their child swaps/i)
     ).toBeInTheDocument();
-  });
-
-  it('exposes active route pill state via aria-pressed', () => {
-    render(<ChapterRouting />);
-
-    const rootButton = screen.getByRole('button', { name: 'Root' });
-    const detailButton = screen.getByRole('button', { name: 'Detail' });
-
-    // All buttons should have aria-pressed attributes.
-    expect(rootButton).toHaveAttribute('aria-pressed');
-    expect(detailButton).toHaveAttribute('aria-pressed');
-
-    // After clicking Detail, Detail should be active (aria-pressed="true").
-    fireEvent.click(detailButton);
-    expect(detailButton).toHaveAttribute('aria-pressed', 'true');
-    expect(rootButton).toHaveAttribute('aria-pressed', 'false');
   });
 });

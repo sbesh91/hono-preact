@@ -46,10 +46,28 @@ const IDEAS: { lead: string; body: string }[] = [
 // render the settled (morphed) state via the stage fallback.
 function MorphDemo(): VNode {
   const { progress } = useStageProgress();
-  const m = clamp01((progress - 0.2) / 0.5); // morph across .2 -> .7
+  // Track almost the whole scrub so any scroll immediately moves the morph,
+  // instead of a long dead zone where the pin feels like an unexplained hijack.
+  const m = clamp01((progress - 0.08) / 0.78);
   const open = m > 0.5;
   return (
     <div class="hx-vt2__demo">
+      {/* An explicit scrubber up top makes it obvious the pinned scroll is
+          driving the morph: the label names the interaction and the fill tracks
+          progress. */}
+      <div class="hx-morph__scrub" aria-hidden="true">
+        <span class="hx-morph__scrub-label">
+          {open
+            ? 'One shared name, no keyframes'
+            : 'Scroll to morph the card into its page ↓'}
+        </span>
+        <div class="hx-morph__scrub-track">
+          <div
+            class="hx-morph__scrub-fill"
+            style={{ transform: `scaleX(${m})` }}
+          />
+        </div>
+      </div>
       <BrowserFrame url={open ? '/demo/projects/auth' : '/demo/projects'}>
         <div class="hx-morph" style={{ '--m': m }}>
           <div class="hx-morph__hero">
@@ -76,7 +94,7 @@ export function ChapterTransitions(): VNode {
   return (
     <section class="hx-chapter">
       <ScrollStage
-        pages={2.6}
+        pages={1.8}
         pagesNarrow={2}
         unpinOnNarrow
         fallbackProgress={0.9}
