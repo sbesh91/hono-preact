@@ -180,7 +180,10 @@ export async function renderPage(
   // Resolving is memoized, so the platform reader runs at most once per isolate.
   const preloadModules = await resolvePreloadModules();
   const linkHeader = preloadLinkHeader(preloadModules);
-  if (linkHeader) c.header('Link', linkHeader);
+  // Append rather than set: a user's middleware may already have written a
+  // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
+  // headers are valid (RFC 8288) and the browser merges them.
+  if (linkHeader) c.header('Link', linkHeader, { append: true });
 
   const fullHtml = assembleDocument({
     html,
