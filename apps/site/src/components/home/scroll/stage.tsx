@@ -45,7 +45,11 @@ export function ScrollStage({
       const el = ref.current;
       if (!el) return;
       setProgress(
-        computeProgress(el.getBoundingClientRect().top, el.offsetHeight, window.innerHeight)
+        computeProgress(
+          el.getBoundingClientRect().top,
+          el.offsetHeight,
+          window.innerHeight
+        )
       );
     };
     const onScroll = () => {
@@ -64,7 +68,9 @@ export function ScrollStage({
   if (unpinned) {
     return (
       <div class="hx-stage hx-stage--static" ref={ref} aria-label={label}>
-        <StageContext.Provider value={{ progress: fallbackProgress, pinned: false }}>
+        <StageContext.Provider
+          value={{ progress: fallbackProgress, pinned: false }}
+        >
           {children}
         </StageContext.Provider>
       </div>
@@ -98,7 +104,10 @@ export function Actor({
   const parent = useStageProgress();
   return (
     <StageContext.Provider
-      value={{ progress: sliceProgress(parent.progress, start, end), pinned: parent.pinned }}
+      value={{
+        progress: sliceProgress(parent.progress, start, end),
+        pinned: parent.pinned,
+      }}
     >
       {children}
     </StageContext.Provider>

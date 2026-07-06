@@ -22,7 +22,11 @@ describe('Lane', () => {
 
 describe('BrowserFrame', () => {
   it('renders chrome with the given url', () => {
-    render(<BrowserFrame url="example.app / projects"><p>body</p></BrowserFrame>);
+    render(
+      <BrowserFrame url="example.app / projects">
+        <p>body</p>
+      </BrowserFrame>
+    );
     expect(screen.getByText('example.app / projects')).toBeInTheDocument();
   });
 });
@@ -38,6 +42,8 @@ describe('Region', () => {
     );
     expect(screen.getByText('Invoice #102000')).toBeInTheDocument();
     // shown at fallback 1 (>= 0.5)
-    expect(document.querySelector('.hx-region')?.getAttribute('data-shown')).toBe('true');
+    expect(
+      document.querySelector('.hx-region')?.getAttribute('data-shown')
+    ).toBe('true');
   });
 });

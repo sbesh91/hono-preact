@@ -15,7 +15,11 @@ export function computeProgress(
   return clamp01(-rectTop / range);
 }
 
-export function sliceProgress(parent: number, start: number, end: number): number {
+export function sliceProgress(
+  parent: number,
+  start: number,
+  end: number
+): number {
   return clamp01((parent - start) / Math.max(end - start, 1e-6));
 }
 
@@ -31,5 +35,8 @@ export function barState(
     return { width: clamp01((cancelAt - start) / size), state: 'cancel' };
   }
   const width = clamp01((progress - start) / size);
-  return { width, state: width <= 0 ? 'idle' : width >= 1 ? 'done' : 'inflight' };
+  return {
+    width,
+    state: width <= 0 ? 'idle' : width >= 1 ? 'done' : 'inflight',
+  };
 }

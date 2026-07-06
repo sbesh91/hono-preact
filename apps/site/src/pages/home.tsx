@@ -19,11 +19,13 @@ const Home: FunctionComponent = () => {
             <span class="energy-bar w-16" aria-hidden="true" />
             <p class="hx-eyebrow">hono-preact v{__HONO_PREACT_VERSION__}</p>
             <h1 class="hx-hero__title">
-              One framework, <span class="text-orangenta">edge to browser</span>.
+              One framework, <span class="text-orangenta">edge to browser</span>
+              .
             </h1>
             <p class="hx-hero__lede">
-              Scroll down and watch a request assemble itself into a live page: routing,
-              streaming, mutations, transitions, and realtime, all typed.
+              Scroll down and watch a request assemble itself into a live page:
+              routing, streaming, mutations, transitions, and realtime, all
+              typed.
             </p>
             <div class="hx-hero__cta">
               <a class="hx-btn hx-btn--primary" href="/docs/quick-start">

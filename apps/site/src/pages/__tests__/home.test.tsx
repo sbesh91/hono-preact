@@ -8,13 +8,15 @@ afterEach(() => cleanup());
 describe('home (scroll experience)', () => {
   it('links to /docs/quick-start as the primary CTA', () => {
     render(<Home />);
-    expect(screen.getByRole('link', { name: /get started/i }).getAttribute('href')).toBe(
-      '/docs/quick-start'
-    );
+    expect(
+      screen.getByRole('link', { name: /get started/i }).getAttribute('href')
+    ).toBe('/docs/quick-start');
   });
   it('links to /demo as the secondary CTA', () => {
     render(<Home />);
-    expect(screen.getByRole('link', { name: /see the demo/i }).getAttribute('href')).toBe('/demo');
+    expect(
+      screen.getByRole('link', { name: /see the demo/i }).getAttribute('href')
+    ).toBe('/demo');
   });
   it('mounts the hero shader background', () => {
     const { container } = render(<Home />);

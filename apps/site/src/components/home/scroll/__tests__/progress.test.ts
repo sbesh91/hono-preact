@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { clamp01, computeProgress, sliceProgress, barState } from '../progress.js';
+import {
+  clamp01,
+  computeProgress,
+  sliceProgress,
+  barState,
+} from '../progress.js';
 
 describe('clamp01', () => {
   it('clamps to the 0..1 range', () => {

@@ -3,7 +3,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, cleanup } from '@testing-library/preact';
 import { usePrefersReducedMotion, useIsNarrow } from '../motion.js';
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function stubMatchMedia(matches: boolean) {
   vi.stubGlobal('matchMedia', (q: string) => ({

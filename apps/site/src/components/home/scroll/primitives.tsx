@@ -7,11 +7,21 @@ import { usePrefersReducedMotion } from './motion.js';
 export function Playhead(): VNode {
   const { progress } = useStageProgress();
   return (
-    <div class="hx-playhead" aria-hidden="true" style={{ left: `${progress * 100}%` }} />
+    <div
+      class="hx-playhead"
+      aria-hidden="true"
+      style={{ left: `${progress * 100}%` }}
+    />
   );
 }
 
-export function Wire({ caption, children }: { caption: string; children: ComponentChildren }): VNode {
+export function Wire({
+  caption,
+  children,
+}: {
+  caption: string;
+  children: ComponentChildren;
+}): VNode {
   return (
     <div class="hx-wire">
       <div class="hx-wire__cap">{caption}</div>
@@ -62,7 +72,9 @@ export function BrowserFrame({
   return (
     <div class="hx-browser">
       <div class="hx-browser__bar">
-        <i /><i /><i />
+        <i />
+        <i />
+        <i />
         <span class="hx-browser__url">{url}</span>
         {live ? (
           <span class="hx-live-tag">
