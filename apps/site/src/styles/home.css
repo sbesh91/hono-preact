@@ -691,3 +691,49 @@ html[data-hx-dir='back']::view-transition-new(hx-vt-panel) {
   font-size: 0.8125rem;
   line-height: 1.6;
 }
+
+/* Closing call to action (ChapterCTA): calm centered section, no pin. */
+.hx-cta {
+  max-width: 44rem;
+  margin-inline: auto;
+  text-align: center;
+}
+.hx-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.hx-cta__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.hx-cta__btn--primary {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.hx-cta__btn--primary:hover {
+  background: var(--accent-hover);
+}
+.hx-cta__btn--secondary {
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--border-color);
+}
+.hx-cta__btn--secondary:hover {
+  background: var(--surface-subtle);
+}
+.hx-cta__btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
