@@ -1,6 +1,17 @@
 import type { FunctionComponent } from 'preact';
 import { useMeta, useTitle } from 'hoofd/preact';
 import { HeroShader } from '../components/HeroShader.js';
+import { ChapterEdge } from '../components/home/chapters/ChapterEdge.js';
+import { ChapterRouting } from '../components/home/chapters/ChapterRouting.js';
+import { ChapterSSR } from '../components/home/chapters/ChapterSSR.js';
+import { ChapterStreaming } from '../components/home/chapters/ChapterStreaming.js';
+import { ChapterMutations } from '../components/home/chapters/ChapterMutations.js';
+import { ChapterResilience } from '../components/home/chapters/ChapterResilience.js';
+import { ChapterPrefetch } from '../components/home/chapters/ChapterPrefetch.js';
+import { ChapterTransitions } from '../components/home/chapters/ChapterTransitions.js';
+import { ChapterRealtime } from '../components/home/chapters/ChapterRealtime.js';
+import { ChapterOnePackage } from '../components/home/chapters/ChapterOnePackage.js';
+import { ChapterCTA } from '../components/home/chapters/ChapterCTA.js';
 
 const Home: FunctionComponent = () => {
   useTitle('hono-preact');
@@ -38,10 +49,18 @@ const Home: FunctionComponent = () => {
           </div>
         </header>
 
-        {/* Chapters are added by later tasks, in order:
-            <ChapterEdge /> <ChapterRouting /> <ChapterSSR /> <ChapterStreaming />
-            <ChapterMutations /> <ChapterResilience /> <ChapterPrefetch />
-            <ChapterTransitions /> <ChapterRealtime /> <ChapterOnePackage /> <ChapterCTA /> */}
+        {/* Chapters, in order */}
+        <ChapterEdge />
+        <ChapterRouting />
+        <ChapterSSR />
+        <ChapterStreaming />
+        <ChapterMutations />
+        <ChapterResilience />
+        <ChapterPrefetch />
+        <ChapterTransitions />
+        <ChapterRealtime />
+        <ChapterOnePackage />
+        <ChapterCTA />
       </main>
     </div>
   );
