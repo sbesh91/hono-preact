@@ -26,6 +26,10 @@ export function ChapterCTA(): VNode {
               See the demo
             </a>
           </div>
+          <p class="hx-cta__note">
+            These buttons are already prefetched, hover them and the docs are
+            warming via the site's own Speculation Rules.
+          </p>
         </Reveal>
       </div>
     </section>

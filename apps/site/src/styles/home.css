@@ -737,3 +737,8 @@ html[data-hx-dir='back']::view-transition-new(hx-vt-panel) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+.hx-cta__note {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}

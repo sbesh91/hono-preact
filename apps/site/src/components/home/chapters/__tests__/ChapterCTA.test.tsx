@@ -30,6 +30,9 @@ describe('ChapterCTA', () => {
     }) as HTMLAnchorElement;
     expect(start.getAttribute('href')).toBe('/docs/quick-start');
     expect(demo.getAttribute('href')).toBe('/demo');
+
+    // Speculation Rules dogfood note is present.
+    expect(container.textContent).toMatch(/Speculation Rules/i);
   });
 
   it('still renders heading + copy under prefers-reduced-motion (static fallback frame)', () => {
