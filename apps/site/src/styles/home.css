@@ -613,7 +613,8 @@
   position: relative;
   display: inline-block;
   white-space: nowrap;
-  padding-bottom: 0.14em;
+  /* Room for the wire to sit clear below the "g" descender. */
+  padding-bottom: 0.34em;
 }
 .hx-hero__wm-base {
   color: color-mix(in srgb, var(--color-brand-ink) 22%, transparent);
@@ -624,19 +625,25 @@
 .hx-hero__wm-fill {
   position: absolute;
   inset: 0 auto auto 0;
+  /* Bottom padding extends the gradient's paint box below the baseline; without
+     it, background-clip:text leaves the "g" descender with no gradient behind
+     it (it renders transparent). */
+  padding-bottom: 0.35em;
   background-image: linear-gradient(90deg, #fe5000, #ec008c);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  /* Top/bottom insets extend past the box so the wipe never clips ascenders or
-     the "g" descender; only the right inset does the left-to-right reveal. */
+  /* The right inset does the left-to-right reveal; top/bottom extend past the
+     box so the wipe itself never clips the glyphs. */
   clip-path: inset(-0.3em 0 -0.3em -0.08em);
 }
+/* The wire and its nodes sit on a baseline below the descenders (bottom: 0.04em
+   of the padded box), so the line never crosses the "g". */
 .hx-hero__wire-line {
   position: absolute;
-  left: 0.03em;
-  right: 0.03em;
-  bottom: 0.03em;
+  left: 0.05em;
+  right: 0.05em;
+  bottom: 0.04em;
   height: 2px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-brand-ink) 14%, transparent);
@@ -652,11 +659,11 @@
 }
 .hx-hero__edge {
   position: absolute;
-  left: 0.03em;
-  bottom: 0.03em;
-  width: 0.24em;
-  height: 0.24em;
-  border-radius: 0.06em;
+  left: 0.05em;
+  bottom: calc(0.04em + 1px);
+  width: 0.14em;
+  height: 0.14em;
+  border-radius: 0.035em;
   background: #fe5000;
   transform: translate(-50%, 50%);
   opacity: 0;
@@ -664,33 +671,34 @@
 .hx-hero__packet {
   position: absolute;
   left: 100%;
-  bottom: 0.03em;
-  width: 0.26em;
-  height: 0.26em;
+  bottom: calc(0.04em + 1px);
+  width: 0.16em;
+  height: 0.16em;
   border-radius: 50%;
   background: #ec008c;
-  box-shadow: 0 0 0.5em 0.12em rgba(236, 0, 140, 0.5);
+  box-shadow: 0 0 0.35em 0.07em rgba(236, 0, 140, 0.6);
   transform: translate(-50%, 50%);
   opacity: 0;
 }
+/* The arrival node reads as a tiny browser frame (a chrome bar over a body). */
 .hx-hero__browser {
   position: absolute;
-  right: -0.06em;
-  bottom: 0.03em;
-  width: 0.82em;
-  height: 0.6em;
-  border-radius: 0.1em;
-  border: 0.05em solid #ec008c;
-  background: rgba(236, 0, 140, 0.08);
-  transform: translate(50%, 50%) scale(0.7);
+  right: -0.02em;
+  bottom: calc(0.04em + 1px);
+  width: 0.42em;
+  height: 0.3em;
+  border-radius: 0.05em;
+  border: 1.5px solid #ec008c;
+  background: rgba(236, 0, 140, 0.1);
+  transform: translate(50%, 50%) scale(0.75);
   opacity: 0;
 }
 .hx-hero__browser::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
-  height: 0.14em;
-  border-bottom: 0.03em solid rgba(236, 0, 140, 0.55);
+  height: 0.08em;
+  border-bottom: 1px solid rgba(236, 0, 140, 0.6);
 }
 
 /* Opt in to the load animation only when motion is welcome. */
@@ -716,6 +724,23 @@
   }
   .hx-hero__browser {
     animation: hx-hero-browser 1.55s ease 0.3s backwards;
+  }
+  /* The subtitle and CTAs rise in once the wordmark has assembled. */
+  .hx-hero__lede {
+    animation: hx-hero-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.05s backwards;
+  }
+  .hx-hero__cta {
+    animation: hx-hero-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.25s backwards;
+  }
+}
+@keyframes hx-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 @keyframes hx-hero-fill {
@@ -943,9 +968,13 @@
    its wrapper so the code-bearing card does not leave the others short. */
 .hx-edge-cards > * {
   display: flex;
+  min-width: 0;
 }
 .hx-edge-card {
   flex: 1;
+  /* Let the card shrink below the code block's intrinsic width so the code
+     scrolls inside its own overflow-x:auto box instead of widening the page. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
