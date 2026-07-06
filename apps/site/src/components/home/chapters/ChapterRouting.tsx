@@ -22,37 +22,44 @@ const SNIPPET = `defineRoutes([
   ] },
 ]);`;
 
-// Renders layer i nested inside its parent, then recurses into its child. Outer
-// layers render their persistent chrome; the deepest one is the active node.
+// Every layer is always rendered inside a collapsible slot; `depth` only flips
+// which slots are open. A CSS transition on the slot animates the open/close,
+// so scrolling down mounts the child and scrolling back up unmounts it, both
+// smoothly, instead of a mount that pops in and an unmount that snaps out.
 function RouteLayer({ i, depth }: { i: number; depth: number }): VNode | null {
-  if (i >= depth) return null;
+  if (i >= LAYERS.length) return null;
   const layer = LAYERS[i];
+  const mounted = i < depth;
   const isLeaf = i === depth - 1;
   const isView = i === LAYERS.length - 1;
   return (
-    <div
-      class="hx-route__layer"
-      data-leaf={isLeaf ? '' : undefined}
-      data-view={isView && isLeaf ? '' : undefined}
-    >
-      <div class="hx-route__layer-head">
-        <span class="hx-route__layer-name">{layer.name}</span>
-        <span class="hx-route__layer-role">
-          {isLeaf
-            ? isView
-              ? 'active view · owns its data'
-              : 'child mounts here'
-            : `${layer.role} · stays mounted`}
-        </span>
-      </div>
-      {isView && isLeaf ? (
-        <div class="hx-route__view-body" aria-hidden="true">
-          <span class="hx-route__view-row" />
-          <span class="hx-route__view-row hx-route__view-row--short" />
+    <div class="hx-route__slot" data-in={mounted ? '' : undefined}>
+      <div class="hx-route__slot-inner">
+        <div
+          class="hx-route__layer"
+          data-leaf={isLeaf ? '' : undefined}
+          data-view={isView && isLeaf ? '' : undefined}
+        >
+          <div class="hx-route__layer-head">
+            <span class="hx-route__layer-name">{layer.name}</span>
+            <span class="hx-route__layer-role">
+              {isView
+                ? 'active view · owns its data'
+                : isLeaf
+                  ? 'child mounts here'
+                  : `${layer.role} · stays mounted`}
+            </span>
+          </div>
+          {isView ? (
+            <div class="hx-route__view-body" aria-hidden="true">
+              <span class="hx-route__view-row" />
+              <span class="hx-route__view-row hx-route__view-row--short" />
+            </div>
+          ) : (
+            <RouteLayer i={i + 1} depth={depth} />
+          )}
         </div>
-      ) : (
-        <RouteLayer i={i + 1} depth={depth} />
-      )}
+      </div>
     </div>
   );
 }

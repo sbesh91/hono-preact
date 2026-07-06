@@ -1081,6 +1081,41 @@
   display: flex;
   flex-direction: column;
 }
+/* Every layer sits in a slot that collapses to zero height when its route is
+   not mounted. `depth` toggles data-in; the transition eases the slot open when
+   the child mounts (scroll down) and closed when it unmounts (scroll up), so
+   the reveal is smooth and direction-driven both ways rather than a pop-in and
+   snap-out. Uses the grid 0fr->1fr technique so the parent grows with it. */
+.hx-route__slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  filter: blur(4px);
+  transition:
+    grid-template-rows 0.6s cubic-bezier(0.33, 0.02, 0.13, 1),
+    opacity 0.45s ease,
+    filter 0.45s ease;
+}
+.hx-route__slot[data-in] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  filter: blur(0);
+}
+.hx-route__slot-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+/* Gap between a layer's header and its nested child sits on the child box,
+   inside the clipped/collapsing area, so it fully disappears when the child
+   closes (a slot padding would have left an 8px residual). */
+.hx-route__layer > .hx-route__slot > .hx-route__slot-inner > .hx-route__layer {
+  margin-top: 0.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-route__slot {
+    transition: none;
+  }
+}
 .hx-route__layer {
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
@@ -1088,34 +1123,7 @@
   background: var(--surface);
 }
 .hx-route__layer .hx-route__layer {
-  margin-top: 0.5rem;
   background: var(--surface-subtle);
-}
-/* Each newly-mounted layer materializes rather than snapping, so drilling
-   deeper reads as the child mounting: it drops in from under the parent header,
-   softening from a blur. Only the fresh layer animates (existing ones are
-   updated, not re-created). A gentle, non-front-loaded ease over a longer
-   duration keeps it from reading as a quick pop. */
-@media (prefers-reduced-motion: no-preference) {
-  .hx-route__layer {
-    animation: hx-route-layer-in 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)
-      backwards;
-  }
-}
-@keyframes hx-route-layer-in {
-  0% {
-    opacity: 0;
-    transform: translateY(-0.9rem) scale(0.96);
-    filter: blur(4px);
-  }
-  60% {
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: none;
-    filter: blur(0);
-  }
 }
 .hx-route__layer-head {
   display: flex;
