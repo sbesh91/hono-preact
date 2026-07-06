@@ -299,3 +299,75 @@
   background: var(--badge-success-surface);
   color: var(--badge-success-foreground);
 }
+
+/* Chapter: Built to degrade, not crash (ChapterResilience) */
+.hx-res {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--surface-subtle);
+}
+.hx-res__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.hx-res__chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--foreground);
+  background: var(--surface);
+  text-transform: capitalize;
+}
+.hx-res__chip[data-state='success'] {
+  background: var(--badge-success-surface);
+  color: var(--badge-success-foreground);
+  border-color: transparent;
+}
+.hx-res__chip[data-state='revalidating'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: transparent;
+}
+.hx-res__chip[data-state='error'] {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--surface);
+}
+.hx-res__note {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.hx-res__panes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.hx-res__pane {
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.hx-res__pane--error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.hx-res__code {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  background: var(--code-surface);
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
