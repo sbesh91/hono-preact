@@ -66,3 +66,49 @@
 .hx-btn--primary { background: var(--accent); color: var(--accent-foreground); }
 .hx-btn--primary:hover { background: var(--accent-hover); }
 .hx-btn--ghost { border: 1px solid var(--border-color); color: var(--foreground); background: color-mix(in srgb, var(--surface) 80%, transparent); }
+
+/* Chapter: runs on the platform (edge). Calm three-card row. */
+.hx-edge-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.hx-edge-cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 48rem) {
+  .hx-edge-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.hx-edge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.hx-edge-card__title {
+  font-weight: 600;
+  color: var(--foreground);
+}
+.hx-edge-card__line {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.hx-edge-card__code {
+  margin-top: auto;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--code-surface);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+  font-size: 0.8rem;
+}
