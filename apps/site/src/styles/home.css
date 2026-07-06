@@ -46,10 +46,14 @@
   z-index: 2;
   width: min(64rem, 100% - 3rem);
   margin-inline: auto;
+  /* One consistent gap between every scene block (head, panels, code, notes)
+     instead of ad-hoc per-element margins that left some pairs touching. */
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 .hx-scene__head {
   text-align: center;
-  margin-bottom: 1.4rem;
 }
 .hx-scene__step {
   font-size: 0.72rem;
@@ -379,7 +383,7 @@
 /* "Why it matters" annotation list: ties demo moments to their payoff. */
 .hx-why {
   list-style: none;
-  margin: 1.2rem 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -661,9 +665,9 @@
   position: absolute;
   left: 0.05em;
   bottom: calc(0.04em + 1px);
-  width: 0.14em;
-  height: 0.14em;
-  border-radius: 0.035em;
+  width: 0.16em;
+  height: 0.16em;
+  border-radius: 50%;
   background: #fe5000;
   transform: translate(-50%, 50%);
   opacity: 0;
@@ -680,25 +684,18 @@
   transform: translate(-50%, 50%);
   opacity: 0;
 }
-/* The arrival node reads as a tiny browser frame (a chrome bar over a body). */
+/* The destination dot at the browser end, lit as the packet arrives. */
 .hx-hero__browser {
   position: absolute;
-  right: -0.02em;
+  left: 100%;
   bottom: calc(0.04em + 1px);
-  width: 0.42em;
-  height: 0.3em;
-  border-radius: 0.05em;
-  border: 1.5px solid #ec008c;
-  background: rgba(236, 0, 140, 0.1);
-  transform: translate(50%, 50%) scale(0.75);
+  width: 0.18em;
+  height: 0.18em;
+  border-radius: 50%;
+  background: #ec008c;
+  box-shadow: 0 0 0.45em 0.1em rgba(236, 0, 140, 0.55);
+  transform: translate(-50%, 50%) scale(0.6);
   opacity: 0;
-}
-.hx-hero__browser::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 0.08em;
-  border-bottom: 1px solid rgba(236, 0, 140, 0.6);
 }
 
 /* Opt in to the load animation only when motion is welcome. */
@@ -812,15 +809,20 @@
   0%,
   72% {
     opacity: 0;
-    transform: translate(50%, 50%) scale(0.7);
+    transform: translate(-50%, 50%) scale(0.6);
+    filter: blur(0);
   }
   86% {
     opacity: 1;
-    transform: translate(50%, 50%) scale(1);
+    transform: translate(-50%, 50%) scale(1.2);
+    filter: blur(0);
   }
   100% {
     opacity: 0;
-    transform: translate(50%, 50%) scale(1);
+    /* Scale further out and blur as it fades, so the dissolve reads as a soft
+       bloom rather than a hard pop-out. */
+    transform: translate(-50%, 50%) scale(1.9);
+    filter: blur(5px);
   }
 }
 /* Small screens: the wire needs one line, so wrap normally and show the plain
@@ -1124,7 +1126,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.42rem 0;
+  padding: 0.34rem 0;
   color: var(--foreground);
   font-size: 0.9rem;
 }
@@ -1225,7 +1227,7 @@
   }
 }
 .hx-skel--list {
-  min-height: 5.2rem;
+  min-height: 6.4rem;
 }
 .hx-skel--head {
   min-height: 2rem;
@@ -1234,9 +1236,10 @@
   min-height: 4.5rem;
 }
 .hx-scene__code {
-  margin: 1rem 0 0;
+  margin: 0;
   padding: 1rem;
   overflow-x: auto;
+  border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   background: var(--code-surface);
   color: var(--foreground);
@@ -1494,7 +1497,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  margin-top: 1rem;
+  margin-top: 0;
   padding: 0 1.1rem;
   border: 1px solid var(--border-color);
   border-radius: 0.55rem;
@@ -1575,7 +1578,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 1rem 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -1589,7 +1592,7 @@
   padding: 0.35rem 0.75rem;
 }
 .hx-pkg-code {
-  margin: 1rem 0 0;
+  margin: 0;
   padding: 1rem;
   overflow-x: auto;
   background: var(--code-surface);
