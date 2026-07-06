@@ -1,7 +1,11 @@
 import { createContext } from 'preact';
 import type { ComponentChildren, VNode } from 'preact';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
-import { computeProgress, sliceProgress } from './progress.js';
+import {
+  computeProgress,
+  computeScrollLinkedProgress,
+  sliceProgress,
+} from './progress.js';
 import { usePrefersReducedMotion, useIsNarrow } from './motion.js';
 
 export interface StageValue {
@@ -32,24 +36,28 @@ export function ScrollStage({
 }): VNode {
   const reduced = usePrefersReducedMotion();
   const narrow = useIsNarrow();
-  const unpinned = reduced || (unpinOnNarrow && narrow);
+  // Reduced motion is the only fully static case. On narrow screens we still
+  // drive the demo, but from a plain scroll-linked playhead instead of a tall
+  // sticky pin (which mobile Safari handles poorly).
+  const scrollLinked = !reduced && unpinOnNarrow && narrow;
   const activePages = narrow && pagesNarrow ? pagesNarrow : pages;
   const ref = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(fallbackProgress);
 
   useEffect(() => {
-    if (unpinned) return;
+    if (reduced) return;
     let raf = 0;
     const tick = () => {
       raf = 0;
       const el = ref.current;
       if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const h = el.offsetHeight;
+      const vh = window.innerHeight;
       setProgress(
-        computeProgress(
-          el.getBoundingClientRect().top,
-          el.offsetHeight,
-          window.innerHeight
-        )
+        scrollLinked
+          ? computeScrollLinkedProgress(top, h, vh)
+          : computeProgress(top, h, vh)
       );
     };
     const onScroll = () => {
@@ -63,9 +71,9 @@ export function ScrollStage({
       window.removeEventListener('resize', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [unpinned]);
+  }, [reduced, scrollLinked]);
 
-  if (unpinned) {
+  if (reduced) {
     return (
       <div class="hx-stage hx-stage--static" ref={ref} aria-label={label}>
         <StageContext.Provider
@@ -76,6 +84,9 @@ export function ScrollStage({
       </div>
     );
   }
+  // Same DOM whether pinned (desktop) or scroll-linked (narrow); the
+  // hx-stage--unpin-narrow class lets CSS flatten the pin on narrow at first
+  // paint, so there is no tall-pin layout shift before hydration.
   return (
     <div
       class={`hx-stage${unpinOnNarrow ? ' hx-stage--unpin-narrow' : ''}`}
@@ -84,7 +95,7 @@ export function ScrollStage({
       aria-label={label}
     >
       <div class="hx-stage__pin">
-        <StageContext.Provider value={{ progress, pinned: true }}>
+        <StageContext.Provider value={{ progress, pinned: !scrollLinked }}>
           {children}
         </StageContext.Provider>
       </div>

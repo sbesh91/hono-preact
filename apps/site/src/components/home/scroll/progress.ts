@@ -15,6 +15,19 @@ export function computeProgress(
   return clamp01(-rectTop / range);
 }
 
+// Non-pinned, scroll-linked playhead for narrow screens where the stage is not
+// pinned (mobile Safari handles a plain scroll listener far better than a tall
+// sticky pin). 0 when the element's center sits at the bottom of the viewport,
+// 1 when it reaches the top, so the demo still scrubs as it scrolls past.
+export function computeScrollLinkedProgress(
+  rectTop: number,
+  elHeight: number,
+  viewportH: number
+): number {
+  const center = rectTop + elHeight / 2;
+  return clamp01((viewportH - center) / Math.max(viewportH, 1));
+}
+
 export function sliceProgress(
   parent: number,
   start: number,
