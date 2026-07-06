@@ -60,15 +60,12 @@ describe('ChapterTransitions', () => {
     ).toBeTruthy();
   });
 
-  it('renders the faked morph illustration and the ideas list', () => {
+  it('renders the animated morph demo and the ideas list', () => {
     const { container } = render(<ChapterTransitions />);
 
-    // Two browser frames: the list and the detail it morphs into.
-    expect(container.querySelectorAll('.hx-browser').length).toBe(2);
-
-    // The shared-element pair (list card + detail hero) both carry the morph
-    // treatment, so the reader reads them as one element.
-    expect(container.querySelectorAll('.hx-vt2__row--morph').length).toBe(2);
+    // A single browser frame hosts the shared-element morph.
+    expect(container.querySelectorAll('.hx-browser').length).toBe(1);
+    expect(container.querySelector('.hx-morph')).toBeTruthy();
 
     // The three ideas annotations are present.
     expect(container.querySelectorAll('.hx-why__item').length).toBe(3);

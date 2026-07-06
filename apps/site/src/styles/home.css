@@ -571,6 +571,18 @@
   justify-content: center;
   padding: 5rem 0 4.5rem;
 }
+/* Dissolve the shader's bottom edge into the page background so the hero blends
+   into the first chapter instead of ending on a hard cut. Sits above the shader
+   (z-index:-10) and below the content (z-index:1), so only the shader fades. */
+.hx-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 55%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--background) 96%);
+}
 .hx-hero .hx-wrap {
   position: relative;
   z-index: 1;
@@ -1116,91 +1128,70 @@
   line-height: 1.5;
 }
 
-/* ---- Chapter: Transitions, for free (faked morph illustration) ---- */
+/* ---- Chapter: Transitions, for free (scrubbed shared-element morph) ---- */
 .hx-vt2 {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
-.hx-vt2__flow {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 1rem;
+.hx-vt2__demo {
+  width: min(40rem, 100%);
+  margin-inline: auto;
 }
-@media (max-width: 48rem) {
-  .hx-vt2__flow {
-    grid-template-columns: 1fr;
-  }
-}
-.hx-vt2__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.5rem;
-}
-.hx-vt2__row {
+/* The accent card grows from a list row into the page header (driven by --m,
+   0..1) while the sibling rows collapse and the detail body fades in. */
+.hx-morph {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 0.5rem;
+  min-height: 13rem;
+}
+.hx-morph__hero {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.05rem + var(--m, 0) * 0.2rem);
+  padding: calc(0.65rem + var(--m, 0) * 0.6rem)
+    calc(0.8rem + var(--m, 0) * 0.4rem);
+  border-radius: calc(0.55rem + var(--m, 0) * 0.25rem);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 calc(6px + var(--m, 0) * 14px) calc(16px + var(--m, 0) * 22px) -10px
+      var(--glow);
+}
+.hx-morph__title {
+  font-weight: 700;
+  font-size: calc(0.95rem + var(--m, 0) * 0.32rem);
+  letter-spacing: -0.01em;
+}
+.hx-morph__meta {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.hx-morph__rest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+  opacity: calc(1 - var(--m, 0) * 1.4);
+  max-height: calc((1 - var(--m, 0)) * 8rem);
+}
+.hx-morph__row {
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: 0.55rem;
   background: var(--surface-subtle);
   color: var(--foreground);
 }
-.hx-vt2__row-meta {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-/* The shared-element pair: same brand treatment on both ends of the morph, so
-   the reader reads the list card and the detail hero as one element. */
-.hx-vt2__row--morph {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--accent-foreground);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 10px 24px -10px var(--glow);
-}
-.hx-vt2__row--morph .hx-vt2__row-meta {
-  color: var(--accent-foreground);
-  opacity: 0.82;
-}
-.hx-vt2__arrow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--accent);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-@media (max-width: 48rem) {
-  .hx-vt2__arrow svg {
-    transform: rotate(90deg);
-  }
-}
-.hx-vt2__hero {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.9rem 1rem;
-  border-radius: 0.7rem;
-}
-.hx-vt2__hero-title {
-  font-weight: 700;
-  font-size: 1.05rem;
-}
-.hx-vt2__body {
-  margin: 0.7rem 0 0;
+.hx-morph__body {
+  margin: 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.5;
+  opacity: calc((var(--m, 0) - 0.6) * 3);
+  max-height: calc(var(--m, 0) * 6rem);
 }
 .hx-vt__demo {
   display: inline-flex;
