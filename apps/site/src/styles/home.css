@@ -180,3 +180,56 @@
   border-radius: 0.3rem;
   background: var(--surface-subtle);
 }
+
+/* Chapter: Streaming, live */
+.hx-stream {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.hx-stream__count {
+  font: 700 clamp(2.5rem, 8vw, 4rem) / 1 var(--font-sans);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.hx-stream__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.35rem;
+}
+.hx-stream__header {
+  font-weight: 600;
+  color: var(--accent);
+}
+.hx-stream__chart {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--surface-subtle);
+  color: var(--muted);
+}
+.hx-skel {
+  border-radius: 0.5rem;
+  background: var(--surface-subtle);
+  min-height: 1.5rem;
+}
+.hx-skel--list {
+  min-height: 4rem;
+}
+.hx-skel--head {
+  min-height: 2rem;
+}
+.hx-skel--chart {
+  min-height: 3rem;
+}
+.hx-scene__code {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  background: var(--code-surface);
+  color: var(--foreground);
+  font: 0.85rem / 1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
