@@ -607,3 +607,58 @@ html[data-hx-dir='back']::view-transition-new(hx-vt-panel) {
     view-transition-name: none;
   }
 }
+
+/* Realtime chapter (live clock) */
+.hx-rt-room {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+.hx-rt-cursor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font: 600 0.75rem/1 var(--font-sans);
+}
+.hx-rt-cursor--b {
+  background: var(--foreground);
+  color: var(--background);
+}
+.hx-rt-tally {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  font: 600 0.8125rem/1 var(--font-sans);
+  color: var(--muted);
+}
+.hx-rt-chips {
+  position: absolute;
+  right: 0.75rem;
+  top: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hx-rt-chip {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font: 600 0.75rem/1.4 var(--font-sans);
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+.hx-rt-chip[data-dir='up'] {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: transparent;
+}
