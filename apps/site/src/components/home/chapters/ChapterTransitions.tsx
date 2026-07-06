@@ -1,10 +1,10 @@
+import { useState } from 'preact/hooks';
 import type { VNode } from 'preact';
-import { LiveStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 
 const DESC =
-  'hono-preact wraps every client route change in a view transition automatically: no per-link opt-in, direction-aware slides, and shared-element morphs where a card grows into the page it opens. Watch it play below.';
+  'hono-preact wraps every client route change in a view transition automatically: no per-link opt-in, direction-aware slides, and shared-element morphs where a card grows into the page it opens. Open the card below to watch it.';
 
 // Stored as plain single-quoted lines (not a template literal) so the backticks
 // and the `${task.id}` interpolation stay literal in the rendered code sample.
@@ -38,48 +38,40 @@ const IDEAS: { lead: string; body: string }[] = [
   },
 ];
 
-// Shape the looping LiveStage clock (a 0..1 sawtooth) into a morph amount that
-// eases into the detail page, holds, eases back to the list, and holds, so the
-// card visibly grows into the header and back rather than snapping at the loop.
-function morphAmount(p: number): number {
-  if (p < 0.35) return p / 0.35; // list -> detail
-  if (p < 0.55) return 1; // hold on the detail page
-  if (p < 0.85) return 1 - (p - 0.55) / 0.3; // detail -> list
-  return 0; // hold on the list
-}
-
-// Reads the LiveStage playhead and drives a faked-but-real shared-element morph:
-// the accent card grows from a list row into the page header while the sibling
-// rows collapse and the detail body fades in. Everything derives from --m.
+// A user-driven, faked-but-real shared-element morph: opening the detail flips
+// --m to 1 and CSS transitions the accent card from a list row into the page
+// header (sibling rows collapse, detail body fades in). No autoplay loop; the
+// reader controls it and reduced motion drops the animation to an instant swap.
 function MorphDemo(): VNode {
-  const { progress } = useStageProgress();
-  const m = morphAmount(progress);
-  const onDetail = m > 0.5;
+  const [open, setOpen] = useState(false);
   return (
-    <BrowserFrame
-      url={onDetail ? '/demo/projects/auth' : '/demo/projects'}
-      live
-    >
-      <div class="hx-morph" style={{ '--m': m.toFixed(3) }}>
-        {/* The shared element: same accent card in both states. */}
-        <div class="hx-morph__hero">
-          <span class="hx-morph__title">Ship the auth flow</span>
-          <span class="hx-morph__meta">
-            {onDetail ? 'Web · In progress' : 'Web'}
-          </span>
+    <div class="hx-vt2__demo">
+      <BrowserFrame url={open ? '/demo/projects/auth' : '/demo/projects'}>
+        <div class="hx-morph" style={{ '--m': open ? 1 : 0 }}>
+          <div class="hx-morph__hero">
+            <span class="hx-morph__title">Ship the auth flow</span>
+            <span class="hx-morph__meta">
+              {open ? 'Web · In progress' : 'Web'}
+            </span>
+          </div>
+          <div class="hx-morph__rest" aria-hidden={open ? 'true' : undefined}>
+            <div class="hx-morph__row">Fix search ranking</div>
+            <div class="hx-morph__row">Draft the billing page</div>
+          </div>
+          <p class="hx-morph__body" aria-hidden={open ? undefined : 'true'}>
+            The tapped card grew into the page header. One shared name, no
+            hand-written animation.
+          </p>
         </div>
-        {/* Sibling rows collapse away as the card grows. */}
-        <div class="hx-morph__rest" aria-hidden="true">
-          <div class="hx-morph__row">Fix search ranking</div>
-          <div class="hx-morph__row">Draft the billing page</div>
-        </div>
-        {/* Detail body arrives once the morph settles. */}
-        <p class="hx-morph__body">
-          The tapped card grew into the page header. One shared name, no
-          hand-written animation.
-        </p>
-      </div>
-    </BrowserFrame>
+      </BrowserFrame>
+      <button
+        type="button"
+        class="hx-morph__toggle"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? '← Back to the list' : 'Open the detail page →'}
+      </button>
+    </div>
   );
 }
 
@@ -94,11 +86,7 @@ export function ChapterTransitions(): VNode {
         </div>
 
         <div class="hx-vt2">
-          <LiveStage periodMs={5200} fallbackProgress={0.45}>
-            <div class="hx-vt2__demo">
-              <MorphDemo />
-            </div>
-          </LiveStage>
+          <MorphDemo />
 
           <ul class="hx-why">
             {IDEAS.map((i) => (
