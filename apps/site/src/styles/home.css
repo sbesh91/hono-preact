@@ -154,6 +154,13 @@
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
+/* Let grid columns shrink below their content's intrinsic width so code blocks
+   (overflow-x:auto) scroll inside their box instead of widening the page. This
+   is what stops horizontal overflow when the columns stack on narrow screens. */
+.hx-cols2 > *,
+.hx-panels > * {
+  min-width: 0;
+}
 
 .hx-browser {
   border: 1px solid var(--border-color);
@@ -943,7 +950,9 @@
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #4a4d50;
+  /* The cue sits over the dissolved shader (the page ground), so it must track
+     the theme: a fixed dark ink failed WCAG contrast on the dark background. */
+  color: var(--muted);
 }
 .hx-hero__scroll-arrow {
   width: 0.5rem;
