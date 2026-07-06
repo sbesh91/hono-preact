@@ -112,3 +112,50 @@
   overflow-x: auto;
   font-size: 0.8rem;
 }
+
+/* Chapter: Routing is a manifest */
+.hx-route__code {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--code-surface);
+  color: var(--foreground);
+}
+.hx-route__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.hx-route__box {
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--code-surface);
+  color: var(--muted);
+  font-family: var(--font-sans);
+}
+.hx-route__box[data-active] {
+  color: var(--foreground);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.hx-route__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.hx-route__pill {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.hx-route__pill[data-active] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
