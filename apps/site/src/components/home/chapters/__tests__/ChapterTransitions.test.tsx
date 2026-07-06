@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/preact';
+import { cleanup, render, screen, fireEvent } from '@testing-library/preact';
 import { ChapterTransitions } from '../ChapterTransitions.js';
 
 afterEach(() => {
@@ -58,5 +58,29 @@ describe('ChapterTransitions', () => {
         /wraps every client route change in a view transition automatically/
       )
     ).toBeTruthy();
+  });
+
+  it('transitions list to detail view on card click and back', () => {
+    stubMatchMedia(false);
+    const { container } = render(<ChapterTransitions />);
+
+    // Initially list is shown
+    expect(container.querySelector('.hx-vt__card')).toBeTruthy();
+
+    // Click first card to enter detail view
+    const firstCard = container.querySelector('.hx-vt__card') as HTMLElement;
+    fireEvent.click(firstCard);
+
+    // Detail view should appear
+    expect(screen.getByText('Back to projects')).toBeTruthy();
+    expect(container.querySelector('.hx-vt__detail')).toBeTruthy();
+
+    // Click "Back to projects" to return to list
+    const backButton = screen.getByText('Back to projects') as HTMLElement;
+    fireEvent.click(backButton);
+
+    // List should be shown again
+    expect(container.querySelector('.hx-vt__card')).toBeTruthy();
+    expect(container.querySelector('.hx-vt__detail')).toBeFalsy();
   });
 });

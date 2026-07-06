@@ -599,16 +599,11 @@ html[data-hx-dir='back']::view-transition-new(hx-vt-panel) {
   }
 }
 
-/* Reduced motion: strip the panel name so nothing is captured, and kill any
-   animation. The card/hero names are already withheld in JS when reduced, so
-   the list <-> detail widget stays fully usable as plain state. */
+/* Reduced motion: strip the panel name so nothing is captured. The card/hero
+   names are already withheld in JS when reduced, so the list <-> detail
+   widget stays fully usable as plain state. */
 @media (prefers-reduced-motion: reduce) {
   .hx-vt {
     view-transition-name: none;
-  }
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
   }
 }

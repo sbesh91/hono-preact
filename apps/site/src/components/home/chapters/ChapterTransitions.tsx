@@ -36,7 +36,7 @@ const SNIPPET = [
   '// transition automatically. You do not opt in.',
   '//',
   '// Direction-aware, in CSS (framework adds nav-back / nav-forward types):',
-  '//   :active-view-transition-type(nav-back) ::view-transition-old(root) {',
+  '//   html:active-view-transition-type(nav-back)::view-transition-old(root) {',
   '//     animation: slide-right-out 0.3s ease;',
   '//   }',
   '//',
