@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './home.css';
 
 @font-face {
   font-family: 'Selawik';
@@ -186,6 +187,11 @@
   --badge-low-surface: #d1fae5;
   --badge-low-foreground: #047857;
 
+  /* Wire status colors (home scroll experience) */
+  --wire-inflight: var(--accent);
+  --wire-done: #12855b; /* green, >= 4.5:1 on the code surface (light) */
+  --wire-cancel: #c2410c; /* amber, >= 4.5:1 on the code surface (light) */
+
   /* Solid priority colors for card stripes / dots */
   --priority-urgent: #dc2626;
   --priority-high: #ea580c;
@@ -230,6 +236,11 @@
     --badge-medium-foreground: #fde68a;
     --badge-low-surface: #022c22;
     --badge-low-foreground: #a7f3d0;
+
+    /* Wire status colors (home scroll experience) */
+    --wire-inflight: var(--accent);
+    --wire-done: #37c98b; /* green, >= 4.5:1 on the dark code surface */
+    --wire-cancel: #fb923c; /* amber, >= 4.5:1 on the dark code surface */
 
     /* Solid priority colors for card stripes / dots */
     --priority-urgent: #f87171;
@@ -276,6 +287,11 @@
   --badge-medium-foreground: #fde68a;
   --badge-low-surface: #022c22;
   --badge-low-foreground: #a7f3d0;
+
+  /* Wire status colors (home scroll experience) */
+  --wire-inflight: var(--accent);
+  --wire-done: #37c98b; /* green, >= 4.5:1 on the dark code surface */
+  --wire-cancel: #fb923c; /* amber, >= 4.5:1 on the dark code surface */
 
   /* Solid priority colors for card stripes / dots */
   --priority-urgent: #f87171;
