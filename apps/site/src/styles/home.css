@@ -587,12 +587,6 @@
   .hx-skel {
     animation: none;
   }
-  .hx-morph__hero,
-  .hx-morph__title,
-  .hx-morph__rest,
-  .hx-morph__body {
-    transition: none;
-  }
   .hx-reveal {
     opacity: 1;
     transform: none;
@@ -1441,16 +1435,11 @@
     0 0 0 1px var(--accent),
     0 calc(6px + var(--m, 0) * 14px) calc(16px + var(--m, 0) * 22px) -10px
       var(--glow);
-  transition:
-    padding 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.45s ease;
 }
 .hx-morph__title {
   font-weight: 700;
   font-size: calc(0.95rem + var(--m, 0) * 0.32rem);
   letter-spacing: -0.01em;
-  transition: font-size 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hx-morph__meta {
   font-size: 0.8rem;
@@ -1463,9 +1452,6 @@
   overflow: hidden;
   opacity: calc(1 - var(--m, 0) * 1.4);
   max-height: calc((1 - var(--m, 0)) * 8rem);
-  transition:
-    opacity 0.35s ease,
-    max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hx-morph__row {
   padding: 0.65rem 0.8rem;
@@ -1482,31 +1468,6 @@
   line-height: 1.5;
   opacity: calc((var(--m, 0) - 0.6) * 3);
   max-height: calc(var(--m, 0) * 6rem);
-  transition:
-    opacity 0.4s ease,
-    max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.hx-morph__toggle {
-  min-height: 44px;
-  padding: 0 1.15rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--surface-subtle);
-  color: var(--foreground);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    border-color 0.2s;
-}
-.hx-morph__toggle:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-}
-.hx-morph__toggle:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }
 .hx-vt__demo {
   display: inline-flex;

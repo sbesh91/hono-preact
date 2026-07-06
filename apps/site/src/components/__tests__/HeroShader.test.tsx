@@ -12,10 +12,14 @@ describe('HeroShader without OffscreenCanvas worker support', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('renders the three aria-hidden layers', () => {
+  it('renders the base gradient and canvas layers', () => {
     const { container } = render(<HeroShader />);
-    const wrapper = container.querySelector('[aria-hidden="true"]')!;
-    expect(wrapper.children.length).toBe(3);
+    const wrapper = container.querySelector(
+      '[aria-hidden="true"]'
+    ) as HTMLElement;
+    // Two layers now (base gradient + canvas); the bottom dissolve is a mask on
+    // the wrapper, not a painted fade layer.
+    expect(wrapper.children.length).toBe(2);
   });
 
   it('keeps the canvas transparent so the base gradient shows', () => {
