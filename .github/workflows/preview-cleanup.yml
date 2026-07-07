@@ -1,0 +1,43 @@
+name: Preview cleanup
+
+# Tear down the per-PR preview worker (hono-preact-preview-pr-<N>) that
+# ci.yml's `preview` job deploys. `closed` fires for both merge and plain
+# close, so every PR exit path is covered. This lives in its own workflow
+# (not ci.yml) so the full test matrix does not run on close: the main CI
+# `on.pull_request` keeps its default types (opened/synchronize/reopened),
+# and only this cheap teardown reacts to `closed`.
+on:
+  pull_request:
+    types: [closed]
+
+# One teardown per PR; never cancel an in-flight delete.
+concurrency:
+  group: preview-cleanup-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  delete-preview-worker:
+    name: Delete PR preview worker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # No checkout: teardown needs no repo files, only node for `npx`.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      # No repo build needed to delete a worker; run wrangler pinned to the
+      # same major the site deploys with (apps/site devDependency ^4.92.0).
+      # GitHub Actions sets CI=true, so wrangler runs non-interactively and
+      # auto-confirms the delete prompt (no TTY to hang on). A PR that never
+      # deployed a preview (or a double-close) hits "worker not found"; the
+      # `|| echo` swallows that so teardown never red-Xes.
+      - name: Delete preview worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          worker="hono-preact-preview-pr-${{ github.event.pull_request.number }}"
+          npx --yes wrangler@^4.92.0 delete "$worker" \
+            || echo "Worker $worker already absent; nothing to delete."

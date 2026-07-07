@@ -238,8 +238,9 @@ jobs:
       - name: Build site
         run: pnpm --filter site build
 
-      # Deploy the PR preview as an ACTIVE deployment of a DEDICATED preview
-      # worker (hono-preact-preview), never the production hono-preact script.
+      # Deploy the PR preview as an ACTIVE deployment of a DEDICATED per-PR
+      # preview worker (hono-preact-preview-pr-<N>), never the production
+      # hono-preact script.
       # Why a real `wrangler deploy` and not `wrangler versions upload`:
       #   * Cloudflare does NOT generate preview URLs for Workers that use
       #     Durable Objects, so the non-active-version + --preview-alias model
@@ -250,8 +251,9 @@ jobs:
       # The production custom_domain route is stripped first, so the preview can
       # never claim framework.sbesh.com; with no route the deploy needs only the
       # account-level Workers Scripts permission the token already has, and the
-      # live site is untouched. NOTE: this is a single shared preview worker, so
-      # concurrent PRs share the one URL (last push wins).
+      # live site is untouched. Each PR gets its OWN worker keyed by PR number, so
+      # concurrent PRs no longer collide; preview-cleanup.yml deletes the worker
+      # when the PR closes.
       - name: Deploy preview
         id: deploy
         env:
@@ -259,7 +261,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -o pipefail
-          worker="hono-preact-preview"
+          worker="hono-preact-preview-pr-${{ github.event.pull_request.number }}"
           # Strip the production custom_domain route so the preview worker cannot
           # claim framework.sbesh.com. Write the copy alongside the generated
           # config so wrangler still resolves main/assets relative to that dir.
@@ -280,11 +282,11 @@ jobs:
           message: |
             ### Docs site preview
 
-            A non-production preview of this PR, deployed to a dedicated preview worker (not the live `framework.sbesh.com` site):
+            A non-production preview of this PR, deployed to a dedicated per-PR preview worker (not the live `framework.sbesh.com` site):
 
             ${{ steps.deploy.outputs.url }}
 
-            Built from ${{ github.event.pull_request.head.sha }}. Updates on every push.
+            Built from ${{ github.event.pull_request.head.sha }}. Updates on every push; removed when this PR closes.
 
   build-and-tag:
     name: Build and tag next
