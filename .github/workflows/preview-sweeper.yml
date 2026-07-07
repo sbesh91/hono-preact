@@ -1,0 +1,85 @@
+name: Preview sweeper
+
+# Reconciler / backstop for the per-PR preview workers that
+# preview-cleanup.yml deletes on PR close. A close-time teardown can be missed:
+# a transient Cloudflare error, a skipped/failed workflow run, or a straggler
+# `preview` deploy that recreated the worker just after the PR closed. Any such
+# orphan `hono-preact-preview-pr-<N>` worker then lingers against the account
+# worker cap.
+#
+# This scheduled job makes GitHub PR state the source of truth instead of the
+# teardown succeeding: it lists every preview worker, checks the owning PR, and
+# deletes the worker iff that PR is closed. Because it only ever deletes workers
+# for CLOSED PRs (which by definition are not deploying), it is safe against the
+# close-time deploy/cleanup race too. Manual `workflow_dispatch` runs it on demand.
+on:
+  schedule:
+    # Weekly, Monday 04:17 UTC. Off the hour to dodge top-of-hour cron congestion;
+    # orphans are rare and the worker cap is generous, so weekly is ample.
+    - cron: "17 4 * * 1"
+  workflow_dispatch: {}
+
+# Never run two sweeps at once, and never cancel an in-flight sweep mid-delete.
+concurrency:
+  group: preview-sweeper
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Reap closed-PR preview workers
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      # List all worker scripts (Cloudflare has no wrangler "list workers"
+      # command; the account API is the scriptable path). Keep only the
+      # hono-preact-preview-pr-<N> names, resolve each PR's state via the GitHub
+      # API, and delete the worker only when its PR is closed. A failed lookup
+      # (404/transient) is skipped, not deleted, so the next run retries rather
+      # than risk reaping a live preview. Wrangler is pinned to match the deploy
+      # and teardown side (bump all three in lockstep with apps/site's dep).
+      - name: Sweep orphaned preview workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # The account here has a handful of workers, so a single page suffices;
+          # revisit with ?page/&per_page if the preview-worker count ever nears 100.
+          workers="$(curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" \
+            | jq -r '.result[].id | select(test("^hono-preact-preview-pr-[0-9]+$"))')"
+          if [ -z "$workers" ]; then
+            echo "No hono-preact-preview-pr-* workers found; nothing to sweep."
+            exit 0
+          fi
+          reaped=0
+          while read -r worker; do
+            [ -n "$worker" ] || continue
+            n="${worker##*-}"
+            state="$(gh api "repos/$REPO/pulls/$n" --jq .state 2>/dev/null || echo unknown)"
+            case "$state" in
+              closed)
+                echo "PR #$n closed -> deleting $worker"
+                if npx --yes wrangler@4.92.0 delete "$worker"; then
+                  reaped=$((reaped + 1))
+                else
+                  echo "  delete failed for $worker; next sweep retries."
+                fi
+                ;;
+              open)
+                echo "PR #$n open -> keeping $worker"
+                ;;
+              *)
+                echo "PR #$n state '$state' (lookup failed) -> skipping $worker this run"
+                ;;
+            esac
+          done <<< "$workers"
+          echo "Sweep complete; reaped $reaped orphan(s)."
