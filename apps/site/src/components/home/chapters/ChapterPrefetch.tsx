@@ -103,7 +103,6 @@ export function ChapterPrefetch(): VNode {
       <ScrollStage
         pages={2.6}
         pagesNarrow={2}
-        unpinOnNarrow
         fallbackProgress={0.95}
         label="Instant navigation demo"
       >

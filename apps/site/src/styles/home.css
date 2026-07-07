@@ -96,6 +96,10 @@
 
 .hx-stage {
   position: relative;
+  /* Pin scrub length. CSS-driven (set per stage via --stage-pages) so the height
+     is identical on server and client; the narrow override lives in the 48rem
+     media query below. Reduced motion forces height:auto (see that block). */
+  height: calc(var(--stage-pages, 1) * 100svh);
 }
 .hx-stage__pin {
   position: sticky;
@@ -133,20 +137,11 @@
   .hx-cols2 {
     grid-template-columns: 1fr !important;
   }
-  /* Neutralize the pin on phones even before JS flips useIsNarrow: the pinned
-     branch is SSR'd (narrow starts false for hydration parity), so without this
-     a phone would render a multi-hundred-svh pin and then collapse (CLS). The
-     stable class lets the pin degrade to a stacked, scrollable scene at first
-     paint; block flow also stops two-child stages cramming into a clipped row. */
-  .hx-stage--unpin-narrow {
-    height: auto !important;
-  }
-  .hx-stage--unpin-narrow .hx-stage__pin {
-    position: static;
-    display: block;
-    height: auto;
-    overflow: visible;
-    padding: 2.5rem 0;
+  /* Phones scrub the same sticky pin as desktop, just over a shorter spacer
+     (--stage-pages-narrow). CSS-driven so it matches the SSR height with no
+     hydration shift. */
+  .hx-stage {
+    height: calc(var(--stage-pages-narrow, var(--stage-pages, 1)) * 100svh);
   }
 }
 .hx-cols2 {
@@ -889,39 +884,6 @@
     filter: blur(5px);
   }
 }
-/* Small screens: the wire needs one line, so wrap normally and show the plain
-   gradient wordmark instead. */
-@media (max-width: 30rem) {
-  .hx-hero__wire {
-    white-space: normal;
-    padding-bottom: 0;
-  }
-  .hx-hero__wm-base,
-  .hx-hero__wire-line,
-  .hx-hero__edge,
-  .hx-hero__packet,
-  .hx-hero__browser {
-    display: none;
-  }
-  .hx-hero__wm-fill {
-    position: static;
-    clip-path: none;
-    animation: none;
-  }
-}
-/* On small screens the wordmark wipe is disabled (static gradient above), so the
-   lede has no entrance to wait for: its long delay would just hold the largest
-   element invisible, and on mobile the lede is the LCP element, so that delay
-   pushes LCP out by ~1s for no visual payoff. Bring the copy in promptly here;
-   the orchestrated stagger stays on wider screens where the wipe actually plays. */
-@media (max-width: 30rem) and (prefers-reduced-motion: no-preference) {
-  .hx-hero__lede {
-    animation-delay: 0.06s;
-  }
-  .hx-hero__cta {
-    animation-delay: 0.16s;
-  }
-}
 /* Hero text tracks the theme: dark ink on the light-mode sunset, light on the
    dark-mode twilight. --hero-eyebrow keeps the AA-safe solid value per mode. */
 .hx-eyebrow {
@@ -935,7 +897,12 @@
 }
 .hx-hero__title {
   color: var(--foreground);
-  font-size: clamp(2.6rem, 6.6vw, 4.7rem);
+  /* The clamp holds down to ~360px, where "edge to browser" still fits one line
+     at the 2.6rem floor; below that the 11.5vw cap takes over so the wordmark
+     scales with the viewport and stays single-line, which is what lets the wire
+     animation run on phones instead of falling back to a static wordmark. Above
+     ~360px the clamp always wins, so wider screens are unchanged. */
+  font-size: min(clamp(2.6rem, 6.6vw, 4.7rem), 11.5vw);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.035em;

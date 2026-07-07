@@ -18,7 +18,6 @@ export function ChapterSSR(): VNode {
       <ScrollStage
         pages={3.4}
         pagesNarrow={2.4}
-        unpinOnNarrow
         fallbackProgress={0.45}
         label="SSR, no client waterfall"
       >

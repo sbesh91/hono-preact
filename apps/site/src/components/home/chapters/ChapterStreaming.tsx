@@ -88,7 +88,6 @@ export function ChapterStreaming(): VNode {
       <ScrollStage
         pages={2.6}
         pagesNarrow={2}
-        unpinOnNarrow
         fallbackProgress={1}
         label="Streaming loader feed"
       >

@@ -75,7 +75,6 @@ export function ChapterTransitions(): VNode {
       <ScrollStage
         pages={1.8}
         pagesNarrow={2}
-        unpinOnNarrow
         fallbackProgress={0.9}
         label="View transition morph"
       >

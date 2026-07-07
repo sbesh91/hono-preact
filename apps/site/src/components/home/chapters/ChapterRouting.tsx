@@ -146,12 +146,7 @@ function RouteStack(): VNode {
 export function ChapterRouting(): VNode {
   return (
     <section class="hx-chapter">
-      <ScrollStage
-        pages={3}
-        pagesNarrow={2}
-        unpinOnNarrow
-        label="Routing is a manifest"
-      >
+      <ScrollStage pages={3} pagesNarrow={2} label="Routing is a manifest">
         <div class="hx-scene">
           <div class="hx-scene__head">
             <p class="hx-scene__step">

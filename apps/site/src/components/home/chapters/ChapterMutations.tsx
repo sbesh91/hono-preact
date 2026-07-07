@@ -37,12 +37,7 @@ const SNIPPET = `const { mutate, pending } = useAction(serverActions.addTask, {
 export function ChapterMutations(): VNode {
   return (
     <section class="hx-chapter">
-      <ScrollStage
-        pages={3}
-        pagesNarrow={2}
-        unpinOnNarrow
-        label="Mutation lifecycle"
-      >
+      <ScrollStage pages={3} pagesNarrow={2} label="Mutation lifecycle">
         <div class="hx-scene">
           <header class="hx-scene__head">
             <p class="hx-scene__step">

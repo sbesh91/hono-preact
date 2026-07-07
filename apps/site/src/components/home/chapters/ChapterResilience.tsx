@@ -89,7 +89,6 @@ export function ChapterResilience(): VNode {
       <ScrollStage
         pages={2.4}
         pagesNarrow={2}
-        unpinOnNarrow
         fallbackProgress={0.6}
         label="Resilience: match on loading, revalidating, and error"
       >
