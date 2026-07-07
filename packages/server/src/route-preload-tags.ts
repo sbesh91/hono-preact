@@ -69,29 +69,32 @@ export function selectRoutePreload(
 }
 
 /**
- * `<link rel="modulepreload">` tags for the chunks the matched route needs, so
- * the browser fetches the route's layout/view chunks in parallel with the
- * client entry instead of discovering them several hops into the module graph.
- * Returns '' when there is nothing to preload, so the head injection degrades to
- * current behavior.
+ * `<link rel="modulepreload">` tags for a `selectRoutePreload` result, so the
+ * browser fetches the route's layout/view chunks in parallel with the client
+ * entry instead of discovering them several hops into the module graph. Returns
+ * '' when the selection is empty, so the head injection degrades to current
+ * behavior.
  *
- * `crossorigin` is required: module scripts are fetched in CORS mode, and a
- * `modulepreload` without it would prime a second, separately-keyed request.
+ * Takes the pre-computed selection (not the map + path) so the caller can match
+ * once and reuse it for both the head tags and the `Link` header. No
+ * `crossorigin` attribute: the chunks are same-origin, and the entry script and
+ * #250's closure hints omit it too, so this keeps the emitted head uniform (for
+ * same-origin modules the attribute is a no-op; it would only matter if chunks
+ * were ever served cross-origin, which would need it on the closure hints too).
  */
-export function routePreloadTags(
-  map: RoutePreloadMap | undefined,
-  urlPath: string
+export function renderRoutePreloadTags(
+  selected: { high: readonly string[]; low: readonly string[] } | undefined
 ): string {
-  const selected = selectRoutePreload(map, urlPath);
   if (!selected) return '';
   const tags = [
+    // Layout-chain chunks gate the hydration shell -> default (High) priority.
     ...selected.high.map(
-      (href) =>
-        `<link rel="modulepreload" href="${escapeAttr(href)}" crossorigin />`
+      (href) => `<link rel="modulepreload" href="${escapeAttr(href)}" />`
     ),
+    // The leaf view's content is already SSR'd -> yield to render-critical work.
     ...selected.low.map(
       (href) =>
-        `<link rel="modulepreload" href="${escapeAttr(href)}" crossorigin fetchpriority="low" />`
+        `<link rel="modulepreload" href="${escapeAttr(href)}" fetchpriority="low" />`
     ),
   ];
   return tags.join('\n        ');

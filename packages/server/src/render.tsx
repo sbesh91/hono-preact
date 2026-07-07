@@ -28,7 +28,10 @@ import {
   resolvePreloadManifest,
   preloadLinkHeader,
 } from './preload-modules.js';
-import { routePreloadTags, selectRoutePreload } from './route-preload-tags.js';
+import {
+  renderRoutePreloadTags,
+  selectRoutePreload,
+} from './route-preload-tags.js';
 import { streamDocumentResponse } from './stream-pump.js';
 import { translateRootOutcome } from './outcome-translation.js';
 
@@ -205,7 +208,7 @@ export async function renderPage(
     defaultTitle: options?.defaultTitle,
     appConfig: options?.appConfig,
     preloadModules: closure,
-    routePreloadTags: routePreloadTags(routes, routePath),
+    routePreloadTags: renderRoutePreloadTags(routePreload),
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   selectRoutePreload,
-  routePreloadTags,
+  renderRoutePreloadTags,
   type RoutePreloadMap,
 } from '../route-preload-tags.js';
+
+const tagsFor = (map: RoutePreloadMap | undefined, path: string) =>
+  renderRoutePreloadTags(selectRoutePreload(map, path));
 
 const MAP: RoutePreloadMap = {
   '/': { high: [], low: ['/static/home-AAAA.js'] },
@@ -63,28 +66,29 @@ describe('selectRoutePreload', () => {
   });
 });
 
-describe('routePreloadTags', () => {
+describe('renderRoutePreloadTags', () => {
   it('emits high chunks at default priority and low chunks with fetchpriority=low', () => {
-    const tags = routePreloadTags(MAP, '/docs/quick-start');
+    const tags = tagsFor(MAP, '/docs/quick-start');
     expect(tags).toContain(
-      '<link rel="modulepreload" href="/static/DocsLayout-BBBB.js" crossorigin />'
+      '<link rel="modulepreload" href="/static/DocsLayout-BBBB.js" />'
     );
     expect(tags).toContain(
-      '<link rel="modulepreload" href="/static/quick-start-DDDD.js" crossorigin fetchpriority="low" />'
+      '<link rel="modulepreload" href="/static/quick-start-DDDD.js" fetchpriority="low" />'
     );
+  });
+
+  it('omits crossorigin, matching the entry script and closure hints', () => {
+    expect(tagsFor(MAP, '/docs/quick-start')).not.toContain('crossorigin');
   });
 
   it('returns "" when there is no match, no map, or no chunks', () => {
-    expect(routePreloadTags(MAP, '/nope')).toBe('');
-    expect(routePreloadTags(undefined, '/')).toBe('');
-    expect(routePreloadTags({ '/x': { high: [], low: [] } }, '/x')).toBe('');
+    expect(tagsFor(MAP, '/nope')).toBe('');
+    expect(tagsFor(undefined, '/')).toBe('');
+    expect(tagsFor({ '/x': { high: [], low: [] } }, '/x')).toBe('');
   });
 
   it('escapes reserved characters in hrefs', () => {
-    const tags = routePreloadTags(
-      { '/': { high: [], low: ['/static/a"b&c.js'] } },
-      '/'
-    );
+    const tags = tagsFor({ '/': { high: [], low: ['/static/a"b&c.js'] } }, '/');
     expect(tags).toContain('href="/static/a&quot;b&amp;c.js"');
   });
 });

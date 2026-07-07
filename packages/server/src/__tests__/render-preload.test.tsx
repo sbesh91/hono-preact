@@ -68,10 +68,10 @@ describe('renderPage: modulepreload closure', () => {
 
     // Layout chunk keeps default priority; view chunk is fetchpriority=low.
     expect(html).toContain(
-      '<link rel="modulepreload" href="/static/layout.js" crossorigin />'
+      '<link rel="modulepreload" href="/static/layout.js" />'
     );
     expect(html).toContain(
-      '<link rel="modulepreload" href="/static/home.js" crossorigin fetchpriority="low" />'
+      '<link rel="modulepreload" href="/static/home.js" fetchpriority="low" />'
     );
     // The other route's chunk must not leak into the / render.
     expect(html).not.toContain('/static/other.js');
