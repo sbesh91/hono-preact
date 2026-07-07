@@ -156,6 +156,12 @@ export function ChapterStreaming(): VNode {
           </pre>
         </div>
       </ScrollStage>
+      {/* Phone-only copy of the code (see .hx-chapter__coda). */}
+      <div class="hx-chapter__coda">
+        <pre class="hx-scene__code">
+          <Code source={FEED_SNIPPET} />
+        </pre>
+      </div>
     </section>
   );
 }

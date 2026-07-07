@@ -34,7 +34,7 @@ export function ChapterSSR(): VNode {
             </p>
           </div>
 
-          <div class="hx-cols2">
+          <div class="hx-cols2 hx-cols2--compare">
             {/* LEFT: fetch in components (the staircase). Chained bars; the UI
                 regions only fill late, after the last request lands. */}
             <div class="hx-panel">
@@ -87,6 +87,12 @@ export function ChapterSSR(): VNode {
           </pre>
         </div>
       </ScrollStage>
+      {/* Phone-only copy of the code (see .hx-chapter__coda). */}
+      <div class="hx-chapter__coda">
+        <pre class="hx-code">
+          <Code source={snippet} />
+        </pre>
+      </div>
     </section>
   );
 }

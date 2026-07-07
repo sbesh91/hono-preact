@@ -110,6 +110,9 @@ export function ChapterMutations(): VNode {
               />
             </Wire>
           </div>
+          {/* Desktop composes the notes + code into the pinned frame. On phones
+              the pinned scene would overflow one viewport, so this copy hides and
+              the .hx-chapter__coda copy below shows instead. */}
           <ul class="hx-why">
             {WHY.map((w) => (
               <li key={w.lead} class="hx-why__item">
@@ -123,6 +126,20 @@ export function ChapterMutations(): VNode {
           </pre>
         </div>
       </ScrollStage>
+      {/* Phone-only copy of the notes + code (see .hx-chapter__coda). */}
+      <div class="hx-chapter__coda">
+        <ul class="hx-why">
+          {WHY.map((w) => (
+            <li key={w.lead} class="hx-why__item">
+              <b class="hx-why__lead">{w.lead}</b>
+              <span class="hx-why__body">{w.body}</span>
+            </li>
+          ))}
+        </ul>
+        <pre class="hx-code">
+          <Code source={SNIPPET} />
+        </pre>
+      </div>
     </section>
   );
 }

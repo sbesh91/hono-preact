@@ -120,6 +120,21 @@
 .hx-stage--static {
   padding: 3rem 0;
 }
+/* Phone-only copy of a chapter's notes + code, placed after the pin. Desktop
+   keeps that content inside the composed pinned frame (this is display:none and
+   the in-pin copy shows); on phones the stacked pinned scene would overflow one
+   viewport and clip, so the in-pin copy hides and this one flows below instead.
+   Same width and rhythm as a scene, with its own vertical padding. */
+.hx-chapter__coda {
+  display: none;
+  position: relative;
+  z-index: 2;
+  width: min(64rem, 100% - 3rem);
+  margin-inline: auto;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-block: clamp(2.5rem, 6vh, 4.5rem);
+}
 .hx-live {
   position: relative;
 }
@@ -135,13 +150,42 @@
     grid-template-columns: 1fr;
   }
   .hx-cols2 {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
+  }
+  /* SSR's staircase-vs-parallel comparison stays side-by-side even on phones:
+     stacking it doubles the pinned height (clips) and loses the whole point of a
+     side-by-side comparison. Tighter gap to fit two narrow columns. */
+  .hx-cols2--compare {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
   }
   /* Phones scrub the same sticky pin as desktop, just over a shorter spacer
      (--stage-pages-narrow). CSS-driven so it matches the SSR height with no
      hydration shift. */
   .hx-stage {
     height: calc(var(--stage-pages-narrow, var(--stage-pages, 1)) * 100svh);
+  }
+  /* Move notes + code out of the one-viewport pin so the pinned scene fits:
+     hide the in-pin copy and reveal the after-pin coda. */
+  .hx-stage__pin .hx-why,
+  .hx-stage__pin .hx-code,
+  .hx-stage__pin .hx-scene__code {
+    display: none;
+  }
+  .hx-chapter__coda {
+    display: flex;
+  }
+  /* Tighten pinned scenes on phones so tall ones (SSR's two stacked wire panels)
+     fit one viewport without clipping. */
+  .hx-scene {
+    gap: 1rem;
+  }
+  .hx-cols2 {
+    gap: 0.7rem;
+  }
+  .hx-browser__body {
+    min-height: 8.5rem;
+    padding: 0.7rem;
   }
 }
 .hx-cols2 {

@@ -55,8 +55,12 @@ describe('ChapterMutations', () => {
     expect(container.querySelector('.hx-mut-row')).not.toBeNull();
     expect(container.querySelector('.hx-mut-add')).not.toBeNull();
 
-    // The "why it matters" reasoning list is present.
-    expect(container.querySelectorAll('.hx-why__item').length).toBe(4);
+    // The "why it matters" reasoning list is present in the pinned frame. (A
+    // duplicate copy renders in the phone-only .hx-chapter__coda after the pin,
+    // so scope the count to the pin to assert the four items once.)
+    expect(
+      container.querySelectorAll('.hx-stage__pin .hx-why__item').length
+    ).toBe(4);
   });
 
   it('still renders the heading, copy, and device frame with reduced motion (static frame)', () => {
