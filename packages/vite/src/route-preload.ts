@@ -56,6 +56,8 @@ export interface RouteBundleChunkLike {
   moduleIds?: string[];
   /** File names of the chunks this one statically imports. */
   imports?: string[];
+  /** Vite's per-chunk CSS metadata: the CSS asset file names this chunk pulls in. */
+  viteMetadata?: { importedCss?: Set<string> };
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +444,72 @@ export function resolvePreloadMap(
     const pattern = chain.pattern === '' ? '/' : chain.pattern;
     // Two chains can resolve to the same pattern (e.g. a contentRoutes index
     // and a sibling leaf); union their chunks rather than letting the last win.
+    const prior = map[pattern];
+    map[pattern] = prior
+      ? [...prior, ...urls.filter((u) => !prior.includes(u))]
+      : urls;
+  }
+  return map;
+}
+
+/**
+ * Build-generated map from route pattern to the CSS asset URLs that route needs,
+ * the render-critical sibling of {@link RoutePreloadMap}. Serialized into the
+ * client build artifact; the server injects the matched route's sheets as
+ * `<link rel="stylesheet">` into the SSR head.
+ */
+export type RouteCssMap = Record<string, string[]>;
+
+/** The distinct CSS asset file names a set of chunks import, in first-seen order. */
+function cssOfChunks(
+  files: Iterable<string>,
+  bundle: Record<string, RouteBundleChunkLike>
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const file of files) {
+    const importedCss = bundle[file]?.viteMetadata?.importedCss;
+    if (!importedCss) continue;
+    for (const css of importedCss) {
+      if (seen.has(css)) continue;
+      seen.add(css);
+      out.push(css);
+    }
+  }
+  return out;
+}
+
+/**
+ * Resolve route module chains to a pattern -> CSS-URL map against the Rollup
+ * output bundle. For each chain, collect the CSS imported by the chain's static
+ * chunk closure (layouts + view), minus the client entry's CSS (loaded eagerly
+ * on every route via the entry). Mirrors `resolvePreloadMap`'s dedup, empty-path
+ * -> '/' keying, and pattern-collision union, so the two maps stay consistent.
+ */
+export function resolveRouteCssMap(
+  chains: readonly RouteModuleChain[],
+  bundle: Record<string, RouteBundleChunkLike>
+): RouteCssMap {
+  const bySource = indexBySource(bundle);
+  const eagerCss = new Set(cssOfChunks(entryClosure(bundle), bundle));
+  const href = (file: string): string => '/' + file;
+
+  const map: RouteCssMap = {};
+  for (const chain of chains) {
+    const files = new Set<string>();
+    for (const src of chain.sources) {
+      const fileName = bySource.get(stripExt(src));
+      if (fileName) collectStaticChunks(fileName, bundle, files, new Set());
+    }
+    const seen = new Set<string>();
+    const urls: string[] = [];
+    for (const css of cssOfChunks(files, bundle)) {
+      if (eagerCss.has(css) || seen.has(css)) continue;
+      seen.add(css);
+      urls.push(href(css));
+    }
+    if (urls.length === 0) continue;
+    const pattern = chain.pattern === '' ? '/' : chain.pattern;
     const prior = map[pattern];
     map[pattern] = prior
       ? [...prior, ...urls.filter((u) => !prior.includes(u))]
