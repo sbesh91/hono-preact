@@ -181,7 +181,7 @@ export async function renderPage(
   // The client entry's static-import closure plus the matched route's own
   // chunks, hinted as `modulepreload` in the document head. Resolving is
   // memoized, so the platform reader runs at most once per isolate.
-  const { closure, routes } = await resolvePreloadManifest();
+  const { closure, routes, routeCss } = await resolvePreloadManifest();
   // Decode the path so it matches the build-time pattern keys, which are decoded
   // source-derived slugs (a `%20`/unicode segment would otherwise never match).
   // `decodeURI` keeps `/` intact (unlike decodeURIComponent) and can't throw on
@@ -193,6 +193,9 @@ export async function renderPage(
     // keep the raw, encoded path
   }
   const routePreload = selectRoutePreload(routes, routePath) ?? [];
+  // The matched route's own render-critical stylesheets, injected into the head
+  // (not the Link header). Reuses the exact-key-then-findBestPattern matcher.
+  const routeStyleSheets = selectRoutePreload(routeCss, routePath) ?? [];
   // Only the entry closure goes in the `Link` header. The header is honored
   // before body parse (and promotable to 103 Early Hints), but it cannot carry
   // `fetchpriority`, so a route chunk placed there would preload at default
@@ -212,6 +215,7 @@ export async function renderPage(
     appConfig: options?.appConfig,
     preloadModules: closure,
     routePreloadModules: routePreload,
+    routeStyleSheets,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

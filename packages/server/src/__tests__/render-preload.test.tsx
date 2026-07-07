@@ -111,4 +111,25 @@ describe('renderPage: modulepreload closure', () => {
     // A streaming response goes through c.body(); assert before draining.
     expect(res.headers.get('Link')).toBe('</static/a.js>; rel=modulepreload');
   });
+
+  it("injects the matched route's stylesheet into <head> and not another route's", async () => {
+    installPreloadModules(() => ({
+      closure: [],
+      routes: {},
+      routeCss: {
+        '/': ['/static/home.css'],
+        '/other': ['/static/other.css'],
+      },
+    }));
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Page />));
+
+    const res = await app.request('http://localhost/');
+    const html = await res.text();
+
+    expect(html).toContain('<link rel="stylesheet" href="/static/home.css" />');
+    expect(html).not.toContain('/static/other.css');
+    // Route stylesheets are document-only, never in the Link header.
+    expect(res.headers.get('Link')).toBeNull();
+  });
 });
