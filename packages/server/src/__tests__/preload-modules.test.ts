@@ -2,70 +2,92 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   preloadLinkHeader,
   installPreloadModules,
-  resolvePreloadModules,
+  resolvePreloadManifest,
   __resetPreloadModulesForTests,
 } from '../preload-modules.js';
 
 afterEach(() => __resetPreloadModulesForTests());
 
-describe('installPreloadModules / resolvePreloadModules', () => {
-  it('resolves to [] when no reader is installed', async () => {
-    expect(await resolvePreloadModules()).toEqual([]);
+const EMPTY = { closure: [], routes: {} };
+
+describe('installPreloadModules / resolvePreloadManifest', () => {
+  it('resolves to an empty manifest when no reader is installed', async () => {
+    expect(await resolvePreloadManifest()).toEqual(EMPTY);
   });
 
-  it("resolves to the reader's list (sync reader)", async () => {
-    installPreloadModules(() => ['/static/a.js', '/static/b.js']);
-    expect(await resolvePreloadModules()).toEqual([
-      '/static/a.js',
-      '/static/b.js',
-    ]);
+  it("resolves the reader's artifact (sync reader)", async () => {
+    installPreloadModules(() => ({
+      closure: ['/static/a.js', '/static/b.js'],
+      routes: { '/': { high: [], low: ['/static/home.js'] } },
+    }));
+    expect(await resolvePreloadManifest()).toEqual({
+      closure: ['/static/a.js', '/static/b.js'],
+      routes: { '/': { high: [], low: ['/static/home.js'] } },
+    });
   });
 
   it('awaits an async reader', async () => {
-    installPreloadModules(async () => ['/static/a.js']);
-    expect(await resolvePreloadModules()).toEqual(['/static/a.js']);
+    installPreloadModules(async () => ({
+      closure: ['/static/a.js'],
+      routes: {},
+    }));
+    expect(await resolvePreloadManifest()).toEqual({
+      closure: ['/static/a.js'],
+      routes: {},
+    });
   });
 
   it('memoizes: the reader runs once across many resolves', async () => {
     let calls = 0;
     installPreloadModules(() => {
       calls++;
-      return ['/static/a.js'];
+      return { closure: ['/static/a.js'], routes: {} };
     });
     await Promise.all([
-      resolvePreloadModules(),
-      resolvePreloadModules(),
-      resolvePreloadModules(),
+      resolvePreloadManifest(),
+      resolvePreloadManifest(),
+      resolvePreloadManifest(),
     ]);
-    await resolvePreloadModules();
+    await resolvePreloadManifest();
     expect(calls).toBe(1);
   });
 
-  it('degrades to [] (never throws) when the reader returns a non-array', async () => {
-    // A corrupt/partial artifact can JSON.parse to a non-array; the resolver
+  it('degrades to an empty manifest (never throws) on a non-object artifact', async () => {
+    // A corrupt/partial artifact can JSON.parse to a non-object; the resolver
     // must not let that spread-throw and poison every later render.
-    installPreloadModules(() => ({}) as unknown as string[]);
-    expect(await resolvePreloadModules()).toEqual([]);
+    installPreloadModules(() => 42);
+    expect(await resolvePreloadManifest()).toEqual(EMPTY);
   });
 
-  it('drops non-string entries from the reader result', async () => {
-    installPreloadModules(
-      () => ['/static/a.js', 42, null] as unknown as string[]
-    );
-    expect(await resolvePreloadModules()).toEqual(['/static/a.js']);
+  it('defaults missing parts and drops malformed entries', async () => {
+    installPreloadModules(() => ({
+      closure: ['/static/a.js', 42, null],
+      routes: {
+        '/ok': { high: ['/static/l.js'], low: ['/static/v.js', 7] },
+        '/empty': { high: [], low: [] },
+        '/bad': null,
+      },
+    }));
+    expect(await resolvePreloadManifest()).toEqual({
+      closure: ['/static/a.js'],
+      routes: { '/ok': { high: ['/static/l.js'], low: ['/static/v.js'] } },
+    });
   });
 
-  it('does not poison the memo: a rejecting read degrades to [] and retries next call', async () => {
+  it('does not poison the memo: a rejecting read degrades then retries next call', async () => {
     let attempt = 0;
     installPreloadModules(() => {
       attempt++;
       if (attempt === 1) return Promise.reject(new Error('transient'));
-      return ['/static/a.js'];
+      return { closure: ['/static/a.js'], routes: {} };
     });
     // First call sees the failure and degrades, without throwing.
-    expect(await resolvePreloadModules()).toEqual([]);
+    expect(await resolvePreloadManifest()).toEqual(EMPTY);
     // A failed read is not memoized, so the next request retries and succeeds.
-    expect(await resolvePreloadModules()).toEqual(['/static/a.js']);
+    expect(await resolvePreloadManifest()).toEqual({
+      closure: ['/static/a.js'],
+      routes: {},
+    });
   });
 });
 

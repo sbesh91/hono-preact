@@ -115,7 +115,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     configPlugin,
     clientShimPlugin(clientEntry),
     clientEntryPlugin({ routes }),
-    preloadManifestPlugin(),
+    preloadManifestPlugin({ routes }),
     serverEntryPlugin({
       layout,
       routes,

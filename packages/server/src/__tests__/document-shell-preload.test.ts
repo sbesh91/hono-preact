@@ -44,6 +44,31 @@ describe('assembleDocument: modulepreload hints', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('injects the pre-rendered routePreloadTags string alongside the closure hints', () => {
+    const routeTag =
+      '<link rel="modulepreload" href="/static/home.js" crossorigin fetchpriority="low" />';
+    const out = assembleDocument({
+      html: shell,
+      head: {},
+      preloadModules: ['/static/a.js'],
+      routePreloadTags: routeTag,
+    });
+    expect(out).toContain(routeTag);
+    // Both closure and route hints land inside <head>.
+    expect(out.indexOf('/static/home.js')).toBeLessThan(out.indexOf('</head>'));
+  });
+
+  it('does NOT warn about a missing </head> when only route preload tags would be dropped', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: noHeadShell,
+      head: {},
+      routePreloadTags:
+        '<link rel="modulepreload" href="/static/home.js" crossorigin />',
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("still warns when the Layout would drop the user's own head content", () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     assembleDocument({

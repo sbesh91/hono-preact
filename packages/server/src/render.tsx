@@ -24,7 +24,11 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
-import { resolvePreloadModules, preloadLinkHeader } from './preload-modules.js';
+import {
+  resolvePreloadManifest,
+  preloadLinkHeader,
+} from './preload-modules.js';
+import { routePreloadTags, selectRoutePreload } from './route-preload-tags.js';
 import { streamDocumentResponse } from './stream-pump.js';
 import { translateRootOutcome } from './outcome-translation.js';
 
@@ -174,12 +178,22 @@ export async function renderPage(
   html = rootResult.html;
   streamingLoaders = rootResult.streamingLoaders;
 
-  // The client entry's static-import closure, hinted as `modulepreload` both in
-  // the document head and as a `Link` response header (the header is honored
-  // before body parse and is promotable to 103 Early Hints by the CDN/adapter).
-  // Resolving is memoized, so the platform reader runs at most once per isolate.
-  const preloadModules = await resolvePreloadModules();
-  const linkHeader = preloadLinkHeader(preloadModules);
+  // The client entry's static-import closure plus the matched route's own
+  // chunks, hinted as `modulepreload` both in the document head and as a `Link`
+  // response header (the header is honored before body parse and is promotable
+  // to 103 Early Hints by the CDN/adapter). Resolving is memoized, so the
+  // platform reader runs at most once per isolate.
+  const { closure, routes } = await resolvePreloadManifest();
+  const routePath = new URL(c.req.url).pathname;
+  const routePreload = selectRoutePreload(routes, routePath);
+  // Closure first (needed by every route), then the active route's chunks
+  // (layout `high` before leaf `low`) so the header preserves priority order.
+  const headerUrls = [
+    ...closure,
+    ...(routePreload?.high ?? []),
+    ...(routePreload?.low ?? []),
+  ];
+  const linkHeader = preloadLinkHeader(headerUrls);
   // Append rather than set: a user's middleware may already have written a
   // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
   // headers are valid (RFC 8288) and the browser merges them.
@@ -190,7 +204,8 @@ export async function renderPage(
     head: dispatcher.toStatic(),
     defaultTitle: options?.defaultTitle,
     appConfig: options?.appConfig,
-    preloadModules,
+    preloadModules: closure,
+    routePreloadTags: routePreloadTags(routes, routePath),
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

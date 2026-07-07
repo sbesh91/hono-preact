@@ -48,8 +48,21 @@ export function assembleDocument(opts: {
    * omitted -> no hints.
    */
   preloadModules?: string[];
+  /**
+   * Pre-rendered `<link rel="modulepreload">` tags for the matched route's own
+   * chunks (self-escaped by `routePreloadTags`), injected alongside the closure
+   * hints. Empty string -> nothing added. See issue #249.
+   */
+  routePreloadTags?: string;
 }): string {
-  const { html, head, defaultTitle, appConfig, preloadModules = [] } = opts;
+  const {
+    html,
+    head,
+    defaultTitle,
+    appConfig,
+    preloadModules = [],
+    routePreloadTags = '',
+  } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
   // Only inject a <title> when hoofd produced one or the caller provided a
@@ -82,7 +95,16 @@ export function assembleDocument(opts: {
       `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`
   );
 
-  const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
+  // The matched route's own chunks (already-escaped tags from routePreloadTags),
+  // grouped with the closure hints so both are framework-injected preloads that
+  // don't count toward the missing-</head> warning below.
+  const frameworkPreloadTags = routePreloadTags
+    ? [...preloadTags, routePreloadTags]
+    : preloadTags;
+
+  const headTags = [...frameworkPreloadTags, ...userHeadTags].join(
+    '\n        '
+  );
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd

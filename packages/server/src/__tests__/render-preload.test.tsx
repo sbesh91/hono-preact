@@ -31,7 +31,10 @@ afterEach(() => __resetPreloadModulesForTests());
 
 describe('renderPage: modulepreload closure', () => {
   it('injects modulepreload <link>s and a matching Link header from the installed closure', async () => {
-    installPreloadModules(() => ['/static/a.js', '/static/b.js']);
+    installPreloadModules(() => ({
+      closure: ['/static/a.js', '/static/b.js'],
+      routes: {},
+    }));
     const app = new Hono();
     app.get('*', (c) => renderPage(c, <Page />));
 
@@ -49,6 +52,37 @@ describe('renderPage: modulepreload closure', () => {
     );
   });
 
+  it("injects the matched route's chunks (layout High, view low) and appends them to the Link header", async () => {
+    installPreloadModules(() => ({
+      closure: ['/static/a.js'],
+      routes: {
+        '/': { high: ['/static/layout.js'], low: ['/static/home.js'] },
+        '/other': { high: [], low: ['/static/other.js'] },
+      },
+    }));
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Page />));
+
+    const res = await app.request('http://localhost/');
+    const html = await res.text();
+
+    // Layout chunk keeps default priority; view chunk is fetchpriority=low.
+    expect(html).toContain(
+      '<link rel="modulepreload" href="/static/layout.js" crossorigin />'
+    );
+    expect(html).toContain(
+      '<link rel="modulepreload" href="/static/home.js" crossorigin fetchpriority="low" />'
+    );
+    // The other route's chunk must not leak into the / render.
+    expect(html).not.toContain('/static/other.js');
+    // Header: closure first, then the route's high then low.
+    expect(res.headers.get('Link')).toBe(
+      '</static/a.js>; rel=modulepreload, ' +
+        '</static/layout.js>; rel=modulepreload, ' +
+        '</static/home.js>; rel=modulepreload'
+    );
+  });
+
   it('emits no hints and no Link header when no closure is installed', async () => {
     const app = new Hono();
     app.get('*', (c) => renderPage(c, <Page />));
@@ -61,7 +95,7 @@ describe('renderPage: modulepreload closure', () => {
   });
 
   it('sets the Link header on the streaming path too (c.body merges prepared headers)', async () => {
-    installPreloadModules(() => ['/static/a.js']);
+    installPreloadModules(() => ({ closure: ['/static/a.js'], routes: {} }));
     const streaming = defineLoader(async function* () {
       yield { n: 1 };
     });

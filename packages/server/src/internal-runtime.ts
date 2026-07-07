@@ -10,9 +10,10 @@ export {
   type CreateServerEntryOptions,
 } from './create-server-entry.js';
 
-// The modulepreload closure reader seam. The adapter's generated entry installs
+// The modulepreload artifact reader seam. The adapter's generated entry installs
 // a platform reader (Node `fs`, Cloudflare `ASSETS`); `renderPage` resolves it
-// to emit `modulepreload` hints + a `Link` header (see issue #249).
+// to emit `modulepreload` hints (entry closure + matched route) + a `Link`
+// header (see issue #249).
 export {
   installPreloadModules,
   type PreloadModulesReader,
