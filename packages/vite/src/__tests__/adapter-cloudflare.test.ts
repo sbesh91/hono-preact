@@ -12,6 +12,12 @@ describe('cloudflareAdapter', () => {
     expect(cloudflareAdapter().name).toBe('cloudflare');
   });
 
+  it('wrapEntry installs the ASSETS-backed preload-closure reader', () => {
+    const tail = cloudflareAdapter().wrapEntry(ctx);
+    expect(tail).toContain('installPreloadModules');
+    expect(tail).toContain('makeAssetsPreloadReader');
+  });
+
   it('wrapEntry re-exports the core app module default', () => {
     const tail = cloudflareAdapter().wrapEntry(ctx);
     // The worker's default export is a fetch handler delegating to the core Hono

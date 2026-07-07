@@ -86,13 +86,16 @@ Runs `vite preview`, which serves the production build through `workerd` again.
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist/client",
+    "binding": "ASSETS",
   },
 }
 ```
 
 `main` points at the server entry the framework generates into the Vite cache
 directory; the framework writes that file before the build starts. `assets`
-points at the client build output. No `run_worker_first` list is needed: the
+points at the client build output; `assets.binding` exposes those files to the
+Worker as `env.ASSETS`, which the framework reads at render time to emit
+`modulepreload` hints for the client entry's boot chunks. No `run_worker_first` list is needed: the
 client assets and the Worker bundle land in separate directories, so the Worker
 source is never exposed through the asset store. The build also writes a
 `.assetsignore` into `dist/client/` that excludes the generated config from the

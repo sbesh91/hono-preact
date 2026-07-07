@@ -31,3 +31,4 @@ export {
   runWithRealtimeRuntime,
   getRealtimeRuntime,
 } from './cf/cf-pubsub.js';
+export { makeAssetsPreloadReader } from './cf/preload-reader.js';

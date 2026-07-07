@@ -4,6 +4,9 @@
   "compatibility_date": "2026-02-22",
   "assets": {
     "directory": "./dist/client",
+    // Binds client assets as `env.ASSETS` so the framework reads the
+    // modulepreload closure artifact at render time (see #249).
+    "binding": "ASSETS",
   },
   "compatibility_flags": ["nodejs_compat"],
   "preview_urls": true,

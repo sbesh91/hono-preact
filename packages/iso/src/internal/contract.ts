@@ -25,6 +25,17 @@ export const CLIENT_ENTRY_FILE = 'static/client.js';
 export const CLIENT_ENTRY_URL = `/${CLIENT_ENTRY_FILE}`;
 
 /**
+ * Build artifact listing the client entry's static-import closure (root-relative
+ * URLs) for `modulepreload` hinting (see #249). Emitted into the client output
+ * by vite `preload-manifest.ts` (`preloadManifestPlugin`); read at runtime by
+ * the adapter closure readers (Node `fs` at boot, Cloudflare `ASSETS` at first
+ * render). `_FILE` is the bundle/fs name; `_URL` is its served path. Not under
+ * a hash: the readers reference a fixed name.
+ */
+export const PRELOAD_MANIFEST_FILE = '__hp-preload.json';
+export const PRELOAD_MANIFEST_URL = `/${PRELOAD_MANIFEST_FILE}`;
+
+/**
  * Virtual client-entry module id and its Vite dev-server URL. Consumers:
  * vite `client-entry.ts` (resolveId), iso `client-script.tsx` (the dev
  * script src). Vite's exported VIRTUAL_CLIENT_ENTRY_ID and the

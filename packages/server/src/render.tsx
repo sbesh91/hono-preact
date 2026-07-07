@@ -24,6 +24,7 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
+import { resolvePreloadModules, preloadLinkHeader } from './preload-modules.js';
 import { streamDocumentResponse } from './stream-pump.js';
 import { translateRootOutcome } from './outcome-translation.js';
 
@@ -173,11 +174,23 @@ export async function renderPage(
   html = rootResult.html;
   streamingLoaders = rootResult.streamingLoaders;
 
+  // The client entry's static-import closure, hinted as `modulepreload` both in
+  // the document head and as a `Link` response header (the header is honored
+  // before body parse and is promotable to 103 Early Hints by the CDN/adapter).
+  // Resolving is memoized, so the platform reader runs at most once per isolate.
+  const preloadModules = await resolvePreloadModules();
+  const linkHeader = preloadLinkHeader(preloadModules);
+  // Append rather than set: a user's middleware may already have written a
+  // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
+  // headers are valid (RFC 8288) and the browser merges them.
+  if (linkHeader) c.header('Link', linkHeader, { append: true });
+
   const fullHtml = assembleDocument({
     html,
     head: dispatcher.toStatic(),
     defaultTitle: options?.defaultTitle,
     appConfig: options?.appConfig,
+    preloadModules,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.
