@@ -173,6 +173,17 @@
 
   /* Semantic theme tokens (light) - flipped in the dark media query below */
   --background: #ffffff;
+  /* Hero dark treatment. All values are identity/inert in light (the veil is
+     white, so its multiply is a no-op, and the ghost/eyebrow values equal the
+     old fixed light-shader ones); the dark blocks below turn the hero into a
+     dark twilight so it belongs in dark mode instead of being a light island. */
+  --hero-veil-1: #ffffff;
+  --hero-veil-2: #ffffff;
+  --hero-veil-3: #ffffff;
+  --hero-eyebrow: #43474a;
+  --hero-ghost-bg: color-mix(in srgb, #ffffff 68%, transparent);
+  --hero-ghost-bg-hover: color-mix(in srgb, #ffffff 85%, transparent);
+  --hero-ghost-border: rgba(37, 40, 42, 0.18);
   --foreground: #25282a;
   --muted: #63666a; /* Cool Gray 10C */
   --surface: #ffffff;
@@ -234,6 +245,14 @@
   :root:not([data-theme]) {
     color-scheme: dark;
     --background: #1b1d1e;
+    /* Deep plum multiplied over the sunset shader (see the light block). */
+    --hero-veil-1: #3a2438;
+    --hero-veil-2: #2a1c30;
+    --hero-veil-3: #1b1420;
+    --hero-eyebrow: #c9cbc9;
+    --hero-ghost-bg: rgba(255, 255, 255, 0.06);
+    --hero-ghost-bg-hover: rgba(255, 255, 255, 0.1);
+    --hero-ghost-border: rgba(255, 255, 255, 0.22);
     --foreground: #e9eae8;
     --muted: #bbbcbc; /* Cool Gray 4C */
     --surface: #25282a; /* Pantone 426C */
@@ -300,6 +319,14 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
   --background: #1b1d1e;
+  /* Deep plum multiplied over the sunset shader (see the light block). */
+  --hero-veil-1: #3a2438;
+  --hero-veil-2: #2a1c30;
+  --hero-veil-3: #1b1420;
+  --hero-eyebrow: #c9cbc9;
+  --hero-ghost-bg: rgba(255, 255, 255, 0.06);
+  --hero-ghost-bg-hover: rgba(255, 255, 255, 0.1);
+  --hero-ghost-border: rgba(255, 255, 255, 0.22);
   --foreground: #e9eae8;
   --muted: #bbbcbc; /* Cool Gray 4C */
   --surface: #25282a; /* Pantone 426C */

@@ -12,14 +12,16 @@ describe('HeroShader without OffscreenCanvas worker support', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('renders the base gradient and canvas layers', () => {
+  it('renders the base gradient, canvas, and twilight veil layers', () => {
     const { container } = render(<HeroShader />);
     const wrapper = container.querySelector(
       '[aria-hidden="true"]'
     ) as HTMLElement;
-    // Two layers now (base gradient + canvas); the bottom dissolve is a mask on
-    // the wrapper, not a painted fade layer.
-    expect(wrapper.children.length).toBe(2);
+    // Three layers: base gradient + canvas + the dark-mode veil (inert white
+    // multiply in light). The bottom dissolve is a mask on the wrapper, so the
+    // veil dissolves with the shader rather than being a separate fade layer.
+    expect(wrapper.children.length).toBe(3);
+    expect(wrapper.querySelector('.hx-hero__veil')).toBeTruthy();
   });
 
   it('keeps the canvas transparent so the base gradient shows', () => {

@@ -244,13 +244,21 @@
     var(--shadow-card),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   padding: 0.8rem 0.9rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  /* One shared grid for the whole wire so every lane's track starts at the same
+     x: the label column is sized (via subgrid below) to the widest label in
+     THIS wire, so short-label wires don't get over-padded and long ones don't
+     clip. A per-lane grid would size each label column independently and the
+     bars would step in and out. */
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.5rem;
   position: relative;
   overflow: hidden;
 }
 .hx-wire__cap {
+  grid-column: 1 / -1;
   font-family: ui-monospace, monospace;
   font-size: 0.64rem;
   letter-spacing: 0.05em;
@@ -259,9 +267,10 @@
 }
 .hx-lane {
   display: grid;
-  grid-template-columns: minmax(5rem, max-content) 1fr;
+  grid-column: 1 / -1;
+  /* Inherit the wire's two columns so all lanes share one label column. */
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 0.5rem;
 }
 .hx-lane__label {
   font-family: ui-monospace, monospace;
@@ -632,8 +641,27 @@
   justify-content: center;
   padding: 5rem 0 4.5rem;
 }
-/* The shader now dissolves via a mask in HeroShader (revealing the shared
-   atmospheric ground), so no opaque bottom fade is needed here. */
+/* Dark mode only (--hero-veil-* are white in light, so the multiply is a no-op):
+   multiply a deep plum over the always-light sunset shader so the hero reads as
+   a dark twilight native to dark mode rather than a bright light island. Multiply
+   scales every pole down (even the near-white one), so the hue life survives
+   where a screen/opacity blend would smear the light pole to grey.
+   This lives INSIDE the shader wrapper (HeroShader), so the wrapper's dissolve
+   mask clips the darkened shader as one unit: the hero fades to the single shared
+   atmospheric ground the chapters sit on, keeping the fixed background glow
+   continuous across the seam. A veil layered over the isolated hero instead
+   could not reveal that ground, so its lower edge popped against the chapters. */
+.hx-hero__veil {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+  background: linear-gradient(
+    160deg,
+    var(--hero-veil-1) 0%,
+    var(--hero-veil-2) 50%,
+    var(--hero-veil-3) 100%
+  );
+}
 .hx-hero .hx-wrap {
   position: relative;
   z-index: 1;
@@ -654,8 +682,9 @@
      wordmark paints as solid text on the very first frame, so the headline is a
      large, fully-painted LCP candidate at first paint and the gradient sweep
      reads as filling real text rather than materializing from nothing. This
-     keeps the LCP element on the headline instead of the late-fading lede. */
-  color: var(--color-brand-ink);
+     keeps the LCP element on the headline instead of the late-fading lede.
+     Theme foreground so it flips to light on the dark-mode hero ground. */
+  color: var(--foreground);
   /* Hidden at rest so its glyph edges never ghost behind the gradient; the load
      animation reveals it (backwards fill) and fades it out as the fill lands. */
   opacity: 0;
@@ -684,7 +713,7 @@
   bottom: 0.04em;
   height: 2px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-brand-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
   overflow: hidden;
   opacity: 0;
 }
@@ -893,18 +922,19 @@
     animation-delay: 0.16s;
   }
 }
-/* The hero shader is an always-light asset, so hero text uses fixed dark ink to stay legible in both themes. */
+/* Hero text tracks the theme: dark ink on the light-mode sunset, light on the
+   dark-mode twilight. --hero-eyebrow keeps the AA-safe solid value per mode. */
 .hx-eyebrow {
   margin-top: 1.1rem;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  /* Solid ink (not an alpha tint): clears AA over the light shader. */
-  color: #43474a;
+  /* Solid (not an alpha tint): clears AA on the shader in both modes. */
+  color: var(--hero-eyebrow);
 }
 .hx-hero__title {
-  color: var(--color-brand-ink);
+  color: var(--foreground);
   font-size: clamp(2.6rem, 6.6vw, 4.7rem);
   font-weight: 700;
   line-height: 1;
@@ -915,7 +945,7 @@
 /* Light, airy lede is the deliberate counterpoint to the heavy title: the
    weight ladder is what carries the type, not a second face. */
 .hx-hero__lede {
-  color: color-mix(in srgb, var(--color-brand-ink) 80%, transparent);
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
   font-weight: 300;
   font-size: clamp(1.1rem, 2.3vw, 1.4rem);
   line-height: 1.45;
@@ -949,8 +979,9 @@
   color: var(--foreground);
   background: color-mix(in srgb, var(--surface) 80%, transparent);
 }
-/* The hero sits on an always-light shader, so its controls stay on fixed
-   light-surface values in both themes (no dark-mode "inversion island"). */
+/* Primary keeps the fixed brand magenta (reads on both the light sunset and the
+   dark twilight); the ghost tracks the theme via tokens so it sits on the right
+   surface in each mode. */
 .hx-hero .hx-btn--primary {
   background: #c40076;
   color: #ffffff;
@@ -959,12 +990,12 @@
   background: #9b005d;
 }
 .hx-hero .hx-btn--ghost {
-  border-color: rgba(37, 40, 42, 0.18);
-  color: var(--color-brand-ink);
-  background: color-mix(in srgb, #ffffff 68%, transparent);
+  border-color: var(--hero-ghost-border);
+  color: var(--foreground);
+  background: var(--hero-ghost-bg);
 }
 .hx-hero .hx-btn--ghost:hover {
-  background: color-mix(in srgb, #ffffff 85%, transparent);
+  background: var(--hero-ghost-bg-hover);
 }
 /* Scroll cue: gives the lower third a purpose and points into chapter one. */
 .hx-hero__scroll {
@@ -1572,11 +1603,6 @@
   flex-direction: column;
   gap: 1.25rem;
 }
-/* Code + link that trail the pinned morph; the section is pinned, so this block
-   carries its own vertical rhythm. */
-.hx-vt-coda {
-  padding-block: clamp(2.5rem, 6vh, 4.5rem);
-}
 .hx-vt2__demo {
   display: flex;
   flex-direction: column;
@@ -1670,23 +1696,6 @@
   opacity: calc((var(--m, 0) - 0.6) * 3);
   max-height: calc(var(--m, 0) * 6rem);
 }
-.hx-vt__demo {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  margin-top: 0;
-  padding: 0 1.1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.55rem;
-  background: var(--surface-subtle);
-  color: var(--foreground);
-  font-weight: 600;
-  text-decoration: none;
-}
-.hx-vt__demo:hover {
-  background: var(--surface);
-}
-
 /* Realtime chapter (live clock). The cursor room and its wire stack in a
    centered column, with the code below, so there is no empty stretched panel. */
 .hx-rt-stack {

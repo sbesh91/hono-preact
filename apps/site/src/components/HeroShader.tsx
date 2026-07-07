@@ -109,6 +109,10 @@ export function HeroShader() {
           transition: 'opacity 700ms ease-out',
         }}
       />
+      {/* Dark-mode twilight veil. Lives inside the masked wrapper so it dissolves
+          with the shader at the lower edge (see .hx-hero__veil); white in light
+          mode, so its multiply is a no-op there. */}
+      <div class="hx-hero__veil" />
     </div>
   );
 }

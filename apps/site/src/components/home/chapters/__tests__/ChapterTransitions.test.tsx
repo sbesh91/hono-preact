@@ -69,8 +69,5 @@ describe('ChapterTransitions', () => {
 
     // The three ideas annotations are present.
     expect(container.querySelectorAll('.hx-why__item').length).toBe(3);
-
-    // And a link out to the real demo.
-    expect(screen.getByText('Feel the real thing in the demo')).toBeTruthy();
   });
 });

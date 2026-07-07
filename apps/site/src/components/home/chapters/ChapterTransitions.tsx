@@ -1,28 +1,10 @@
 import type { VNode } from 'preact';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
-import { Code } from '../scroll/code.js';
 import { clamp01 } from '../scroll/progress.js';
 
 const DESC =
   'hono-preact wraps every client route change in a view transition automatically: no per-link opt-in, direction-aware slides, and shared-element morphs where a card grows into the page it opens. Scroll to watch one morph.';
-
-// Stored as plain single-quoted lines (not a template literal) so the backticks
-// and the `${task.id}` interpolation stay literal in the rendered code sample.
-const SNIPPET = [
-  '// You write nothing: every client route change is wrapped in a view',
-  '// transition automatically. You do not opt in.',
-  '//',
-  '// Direction-aware, in CSS (framework adds nav-back / nav-forward types):',
-  '//   html:active-view-transition-type(nav-back)::view-transition-old(root) {',
-  '//     animation: slide-right-out 0.3s ease;',
-  '//   }',
-  '//',
-  '// Morph a card into its detail page (shared element):',
-  '//   <ViewTransitionName name={`task-${task.id}`} render={<header />}>',
-  '//     <h1>{task.title}</h1>',
-  '//   </ViewTransitionName>',
-].join('\n');
 
 const IDEAS: { lead: string; body: string }[] = [
   {
@@ -120,17 +102,6 @@ export function ChapterTransitions(): VNode {
           </div>
         </div>
       </ScrollStage>
-
-      {/* Reference code + link flow after the pin, so the pinned scene stays
-          within one viewport and its heading is never clipped. */}
-      <div class="hx-scene hx-vt-coda">
-        <pre class="hx-code">
-          <Code source={SNIPPET} />
-        </pre>
-        <a class="hx-vt__demo" href="/demo/projects">
-          Feel the real thing in the demo
-        </a>
-      </div>
     </section>
   );
 }
