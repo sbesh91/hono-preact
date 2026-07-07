@@ -4,8 +4,28 @@
 // list flattens the first-load request waterfall (see issue #249). Pure over a
 // Rollup output bundle so it is unit-testable without a real build.
 
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
 import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
+import {
+  extractRouteChains,
+  resolvePreloadMap,
+  expandGlobFs,
+  type RoutePreloadMap,
+} from './route-preload.js';
+
+/**
+ * The client build artifact read at runtime by the adapter's manifest reader.
+ * `closure` is the client entry's static-import closure (#250); `routes` maps
+ * each route pattern to the chunks its matched layout/view need (#249). Both are
+ * `modulepreload` hints emitted into the SSR head; the route map is also matched
+ * against the request path at render time.
+ */
+export interface PreloadArtifact {
+  closure: string[];
+  routes: RoutePreloadMap;
+}
 
 /** The subset of a Rollup output-bundle entry this collector reads. */
 export interface BundleChunkLike {
@@ -47,26 +67,80 @@ export function collectEntryPreloadModules(
   return out;
 }
 
+export interface PreloadManifestPluginOptions {
+  /** Path to the app's `routes.ts` (project-relative or absolute). */
+  routes: string;
+}
+
 /**
- * Client-build plugin that writes the entry closure to
+ * Client-build plugin that writes the {@link PreloadArtifact} to
  * {@link PRELOAD_MANIFEST_FILE} in the client output, for the adapter readers to
  * pick up at runtime. Scoped to the `client` environment: the worker/ssr builds
  * ship no browser closure. Runs in `generateBundle` (not `writeBundle`) so the
  * artifact is part of the emitted bundle and moves with the other client assets.
+ *
+ * The entry closure comes from the bundle alone; the route map additionally
+ * AST-walks `routes.ts` (read here from disk) into per-pattern module chains and
+ * resolves them against the same bundle. Building the map is best-effort: if the
+ * routes file is unreadable or its shape is exotic, the map is empty and preload
+ * degrades to entry-closure-only, never an error.
  */
-export function preloadManifestPlugin(): Plugin {
+export function preloadManifestPlugin(
+  opts: PreloadManifestPluginOptions
+): Plugin {
+  let routesAbsPath = '';
   return {
     name: 'hono-preact:preload-manifest',
+    configResolved(config) {
+      routesAbsPath = path.isAbsolute(opts.routes)
+        ? opts.routes
+        : path.resolve(config.root, opts.routes);
+    },
     generateBundle(_options, bundle) {
       // Client environment only; fail closed if the environment is unknown so
       // we never emit a wrong-closure artifact into a server/worker build.
       if (this.environment?.name !== 'client') return;
-      const urls = collectEntryPreloadModules(bundle);
+      const closure = collectEntryPreloadModules(bundle);
+      const routes = buildRouteMap(routesAbsPath, bundle, (msg) =>
+        this.warn(`[preload] ${msg}`)
+      );
+      const artifact: PreloadArtifact = { closure, routes };
       this.emitFile({
         type: 'asset',
         fileName: PRELOAD_MANIFEST_FILE,
-        source: JSON.stringify(urls),
+        source: JSON.stringify(artifact),
       });
     },
   };
+}
+
+/**
+ * Read `routes.ts` and resolve its per-pattern module chains against the bundle.
+ * Any failure (missing file, parse error) yields an empty map, so route preload
+ * degrades to entry-closure-only rather than failing the build.
+ */
+function buildRouteMap(
+  routesAbsPath: string,
+  bundle: Parameters<typeof resolvePreloadMap>[1],
+  warn: (msg: string) => void
+): RoutePreloadMap {
+  if (!routesAbsPath) return {};
+  let source: string;
+  try {
+    source = fs.readFileSync(routesAbsPath, 'utf8');
+  } catch {
+    return {};
+  }
+  try {
+    const chains = extractRouteChains(
+      source,
+      routesAbsPath,
+      expandGlobFs,
+      warn
+    );
+    return resolvePreloadMap(chains, bundle);
+  } catch (e) {
+    warn(`route map generation failed: ${(e as Error).message}`);
+    return {};
+  }
 }

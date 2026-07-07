@@ -36,15 +36,16 @@ export function nodeAdapter(): HonoPreactAdapter {
         `import { readFileSync } from 'node:fs';\n` +
         `import coreApp from ${JSON.stringify(ctx.coreAppModuleId)};\n` +
         `\n` +
-        // The client entry's modulepreload closure, written to the client build
-        // output by the framework's preload-manifest plugin. Read from disk once
-        // (resolvePreloadModules memoizes), so the file is loaded lazily at the
-        // first render, not at import time. Missing/unreadable -> no hints.
+        // The modulepreload artifact (entry closure + per-route chunk map),
+        // written to the client build output by the framework's preload-manifest
+        // plugin. Read from disk once (resolvePreloadManifest memoizes), so the
+        // file is loaded lazily at the first render, not at import time.
+        // Missing/unreadable -> empty artifact -> no hints.
         `installPreloadModules(() => {\n` +
         `  try {\n` +
         `    return JSON.parse(readFileSync('./dist/client/${PRELOAD_MANIFEST_FILE}', 'utf8'));\n` +
         `  } catch {\n` +
-        `    return [];\n` +
+        `    return {};\n` +
         `  }\n` +
         `});\n` +
         `\n` +
