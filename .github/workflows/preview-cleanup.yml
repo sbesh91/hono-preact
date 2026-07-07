@@ -28,7 +28,10 @@ jobs:
           node-version: lts/*
 
       # No repo build needed to delete a worker; run wrangler pinned to the
-      # same major the site deploys with (apps/site devDependency ^4.92.0).
+      # exact version the site deploys with (apps/site resolves ^4.92.0 to
+      # 4.92.0 via the lockfile) so delete behavior matches deploy and cannot
+      # drift to a later 4.x on a fresh npx resolve. Bump this in lockstep with
+      # the apps/site wrangler dep.
       # GitHub Actions sets CI=true, so wrangler runs non-interactively and
       # auto-confirms the delete prompt (no TTY to hang on). A PR that never
       # deployed a preview (or a double-close) hits "worker not found"; the
@@ -39,5 +42,5 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           worker="hono-preact-preview-pr-${{ github.event.pull_request.number }}"
-          npx --yes wrangler@^4.92.0 delete "$worker" \
+          npx --yes wrangler@4.92.0 delete "$worker" \
             || echo "Worker $worker already absent; nothing to delete."
