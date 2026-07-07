@@ -87,6 +87,7 @@ describe('preloadManifestPlugin', () => {
     expect(JSON.parse(emitted[0].source)).toEqual({
       closure: ['/static/a.js'],
       routes: {},
+      routeCss: {},
     });
   });
 
@@ -119,7 +120,9 @@ describe('preloadManifestPlugin', () => {
         isEntry: false,
         imports: [],
         moduleIds: [path.join(dir, 'src', 'pages', 'home.tsx')],
+        viteMetadata: { importedCss: new Set(['static/home-XX.css']) },
       },
+      'static/home-XX.css': { type: 'asset', fileName: 'static/home-XX.css' },
     };
 
     const plugin = preloadManifestPlugin({ routes: 'src/routes.ts' });
@@ -136,6 +139,10 @@ describe('preloadManifestPlugin', () => {
 
     expect(JSON.parse(emitted[0].source).routes).toEqual({
       '/': ['/static/home-XX.js'],
+    });
+
+    expect(JSON.parse(emitted[0].source).routeCss).toEqual({
+      '/': ['/static/home-XX.css'],
     });
   });
 });
