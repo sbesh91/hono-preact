@@ -107,7 +107,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     // per-adapter code and without knowing the adapter's env name.
     configEnvironment(name: string) {
       if (name === 'client') return;
-      return { optimizeDeps: { entries: [resolve(process.cwd(), routes)] } };
+      return { optimizeDeps: { entries: [resolve(ctx.root, routes)] } };
     },
   };
 
