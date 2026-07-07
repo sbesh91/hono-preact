@@ -82,14 +82,27 @@ export function HeroShader() {
     });
     observer.observe(canvas);
 
-    const onVisibility = () => {
-      if (!stopped) send({ type: 'visibility', hidden: document.hidden });
+    // Pause the render loop when the tab is hidden OR the hero has scrolled out
+    // of view. The shader is a continuous WebGL animation; left running while the
+    // reader is deep in the chapters it keeps the GPU busy for nothing and
+    // contends with scroll compositing, a stutter source on iOS. onScreen starts
+    // true so the first frames paint before the observer's first callback.
+    let onScreen = true;
+    const pushVisibility = () => {
+      if (!stopped)
+        send({ type: 'visibility', hidden: document.hidden || !onScreen });
     };
-    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('visibilitychange', pushVisibility);
+    const viewObserver = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      pushVisibility();
+    });
+    viewObserver.observe(canvas);
 
     return () => {
       observer.disconnect();
-      document.removeEventListener('visibilitychange', onVisibility);
+      viewObserver.disconnect();
+      document.removeEventListener('visibilitychange', pushVisibility);
       stop();
     };
   }, []);

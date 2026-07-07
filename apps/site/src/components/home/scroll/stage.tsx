@@ -34,25 +34,57 @@ export function ScrollStage({
 
   useEffect(() => {
     if (reduced) return;
+    const el = ref.current;
+    if (!el) return;
     let raf = 0;
+    let active = false;
+    // Cached geometry so the per-frame tick reads only window.scrollY, never
+    // layout. Reading getBoundingClientRect/offsetHeight inside the scroll
+    // handler forces a synchronous reflow every frame, which is a major stutter
+    // source on iOS Safari during momentum scrolling. Refreshed only when the
+    // stage enters view and on resize, which is when its position can change.
+    let docTop = 0;
+    let height = 0;
+    let viewportH = 0;
+    const measure = () => {
+      docTop = el.getBoundingClientRect().top + window.scrollY;
+      height = el.offsetHeight;
+      viewportH = window.innerHeight;
+    };
     const tick = () => {
       raf = 0;
-      const el = ref.current;
-      if (!el) return;
-      const top = el.getBoundingClientRect().top;
-      const h = el.offsetHeight;
-      const vh = window.innerHeight;
-      setProgress(computeProgress(top, h, vh));
+      setProgress(computeProgress(docTop - window.scrollY, height, viewportH));
     };
     const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(tick);
+      if (active && !raf) raf = requestAnimationFrame(tick);
+    };
+    // Only stages in (or near) the viewport run the scroll math; the rest stay
+    // idle instead of computing and re-rendering to a clamped 0/1 every frame.
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        active = entry.isIntersecting;
+        if (active) {
+          measure();
+          tick();
+        } else if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      },
+      { rootMargin: '100px' }
+    );
+    io.observe(el);
+    const onResize = () => {
+      if (!active) return;
+      measure();
+      onScroll();
     };
     window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    raf = requestAnimationFrame(tick);
+    window.addEventListener('resize', onResize, { passive: true });
     return () => {
+      io.disconnect();
       window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [reduced]);
