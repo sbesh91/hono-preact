@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { honoPreact } from '../hono-preact.js';
 import type { HonoPreactAdapter } from '../adapter.js';
@@ -110,5 +111,74 @@ describe('honoPreact config plugin', () => {
     expect(ro.input).toEqual(['virtual:hono-preact/client']);
     expect(ro.output.entryFileNames).toBe('static/client.js');
     expect(ro.output.chunkFileNames).toBe('static/[name]-[hash].js');
+  });
+
+  it('seeds non-client environments with the routes manifest as an optimizeDeps scan entry', () => {
+    const plugins = honoPreact({ adapter: fakeAdapter() });
+    const cfg = plugins.find((p) => p.name === 'hono-preact:config');
+    if (!cfg || typeof cfg.configEnvironment !== 'function') {
+      throw new Error('config plugin has no configEnvironment hook');
+    }
+    const expected = resolve(process.cwd(), 'src/routes.ts');
+
+    // The worker/SSR environment (any non-client name) gets the scan entry.
+    const ssr = cfg.configEnvironment(
+      'ssr',
+      {},
+      {
+        command: 'serve',
+        mode: 'development',
+      }
+    );
+    expect(ssr).toEqual({ optimizeDeps: { entries: [expected] } });
+
+    const worker = cfg.configEnvironment(
+      'hono_preact',
+      {},
+      {
+        command: 'serve',
+        mode: 'development',
+      }
+    );
+    expect(worker).toEqual({ optimizeDeps: { entries: [expected] } });
+  });
+
+  it('does not seed the client environment (no SSR prerender there)', () => {
+    const plugins = honoPreact({ adapter: fakeAdapter() });
+    const cfg = plugins.find((p) => p.name === 'hono-preact:config');
+    if (!cfg || typeof cfg.configEnvironment !== 'function') {
+      throw new Error('config plugin has no configEnvironment hook');
+    }
+    const client = cfg.configEnvironment(
+      'client',
+      {},
+      {
+        command: 'serve',
+        mode: 'development',
+      }
+    );
+    expect(client).toBeUndefined();
+  });
+
+  it('honors a custom routes path in the scan entry', () => {
+    const plugins = honoPreact({
+      adapter: fakeAdapter(),
+      routes: 'app/routing.ts',
+    });
+    const cfg = plugins.find((p) => p.name === 'hono-preact:config');
+    if (!cfg || typeof cfg.configEnvironment !== 'function') {
+      throw new Error('config plugin has no configEnvironment hook');
+    }
+    const ssr = cfg.configEnvironment(
+      'ssr',
+      {},
+      {
+        command: 'serve',
+        mode: 'development',
+      }
+    );
+    expect(ssr).toEqual({
+      optimizeDeps: { entries: [resolve(process.cwd(), 'app/routing.ts')] },
+    });
   });
 });

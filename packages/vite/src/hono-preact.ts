@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import preact from '@preact/preset-vite';
 import { type Plugin } from 'vite';
 import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/runtime';
@@ -93,6 +94,20 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
           },
         },
       };
+    },
+    // Seed every non-client environment's dep optimizer with the routes
+    // manifest as a scan entry, so esbuild crawls the full route graph at
+    // startup and pre-bundles every dep the routes reach (framework and app
+    // alike). Without this, deps behind the route views' dynamic imports and
+    // the docs content-glob are discovered at request time; the resulting
+    // re-optimize + program-reload races the async prerender and swaps the
+    // Preact module instance mid-render (the `__H` crash). `configEnvironment`
+    // is called once per environment with its name, so `name !== 'client'`
+    // covers the Node `ssr` env and the Cloudflare worker env alike, with no
+    // per-adapter code and without knowing the adapter's env name.
+    configEnvironment(name: string) {
+      if (name === 'client') return;
+      return { optimizeDeps: { entries: [resolve(process.cwd(), routes)] } };
     },
   };
 
