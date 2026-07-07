@@ -14,8 +14,12 @@ describe('assembleDocument: modulepreload hints', () => {
       head: {},
       preloadModules: ['/static/a.js', '/static/b.js'],
     });
-    expect(out).toContain('<link rel="modulepreload" href="/static/a.js" />');
-    expect(out).toContain('<link rel="modulepreload" href="/static/b.js" />');
+    expect(out).toContain(
+      '<link rel="modulepreload" href="/static/a.js" fetchpriority="low" />'
+    );
+    expect(out).toContain(
+      '<link rel="modulepreload" href="/static/b.js" fetchpriority="low" />'
+    );
     // Hints must land inside <head>, before the closing tag.
     expect(out.indexOf('/static/a.js')).toBeLessThan(out.indexOf('</head>'));
   });

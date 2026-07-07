@@ -69,8 +69,17 @@ export function assembleDocument(opts: {
 
   // Preload hints go first (earliest discovery) and reuse toAttrs so their href
   // is escaped by the same policy as every other injected <link>.
+  //
+  // fetchpriority="low": the boot closure is for hydration, not first paint (the
+  // SSR content paints from the render-blocking CSS + fonts without it). Left at
+  // the default "High", the preloads contend with those VeryHigh render-critical
+  // resources for early bandwidth and nudge FCP/LCP later. Low priority keeps the
+  // early discovery (fills the connection's idle window) while yielding the pipe
+  // to CSS/fonts, so first paint is protected. Degrades gracefully (unknown attr
+  // is ignored). See issue #249.
   const preloadTags = preloadModules.map(
-    (href) => `<link ${toAttrs({ rel: 'modulepreload', href })} />`
+    (href) =>
+      `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`
   );
 
   const headTags = [...preloadTags, ...userHeadTags].join('\n        ');

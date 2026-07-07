@@ -38,8 +38,12 @@ describe('renderPage: modulepreload closure', () => {
     const res = await app.request('http://localhost/');
     const html = await res.text();
 
-    expect(html).toContain('<link rel="modulepreload" href="/static/a.js" />');
-    expect(html).toContain('<link rel="modulepreload" href="/static/b.js" />');
+    expect(html).toContain(
+      '<link rel="modulepreload" href="/static/a.js" fetchpriority="low" />'
+    );
+    expect(html).toContain(
+      '<link rel="modulepreload" href="/static/b.js" fetchpriority="low" />'
+    );
     expect(res.headers.get('Link')).toBe(
       '</static/a.js>; rel=modulepreload, </static/b.js>; rel=modulepreload'
     );
