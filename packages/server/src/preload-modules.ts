@@ -9,7 +9,7 @@
 // `preloadLinkHeader` builds a `Link:` response header (honored before body
 // parse, and promotable to 103 Early Hints by the CDN/adapter).
 
-import type { RoutePreloadMap } from './route-preload-tags.js';
+import type { RoutePreloadMap } from './route-preload-match.js';
 
 /**
  * The build artifact the adapter reader returns, once resolved and normalized:
@@ -49,13 +49,11 @@ function isString(v: unknown): v is string {
 /** Coerce the raw route map, dropping any malformed entries. */
 function normalizeRoutes(raw: unknown): RoutePreloadMap {
   if (typeof raw !== 'object' || raw === null) return {};
-  const out: Record<string, { high: string[]; low: string[] }> = {};
+  const out: RoutePreloadMap = {};
   for (const [pattern, v] of Object.entries(raw)) {
-    if (typeof v !== 'object' || v === null) continue;
-    const rec = v as { high?: unknown; low?: unknown };
-    const high = Array.isArray(rec.high) ? rec.high.filter(isString) : [];
-    const low = Array.isArray(rec.low) ? rec.low.filter(isString) : [];
-    if (high.length > 0 || low.length > 0) out[pattern] = { high, low };
+    if (!Array.isArray(v)) continue;
+    const chunks = v.filter(isString);
+    if (chunks.length > 0) out[pattern] = chunks;
   }
   return out;
 }

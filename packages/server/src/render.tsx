@@ -28,10 +28,7 @@ import {
   resolvePreloadManifest,
   preloadLinkHeader,
 } from './preload-modules.js';
-import {
-  renderRoutePreloadTags,
-  selectRoutePreload,
-} from './route-preload-tags.js';
+import { selectRoutePreload } from './route-preload-match.js';
 import { streamDocumentResponse } from './stream-pump.js';
 import { translateRootOutcome } from './outcome-translation.js';
 
@@ -182,21 +179,27 @@ export async function renderPage(
   streamingLoaders = rootResult.streamingLoaders;
 
   // The client entry's static-import closure plus the matched route's own
-  // chunks, hinted as `modulepreload` both in the document head and as a `Link`
-  // response header (the header is honored before body parse and is promotable
-  // to 103 Early Hints by the CDN/adapter). Resolving is memoized, so the
-  // platform reader runs at most once per isolate.
+  // chunks, hinted as `modulepreload` in the document head. Resolving is
+  // memoized, so the platform reader runs at most once per isolate.
   const { closure, routes } = await resolvePreloadManifest();
-  const routePath = new URL(c.req.url).pathname;
-  const routePreload = selectRoutePreload(routes, routePath);
-  // Closure first (needed by every route), then the active route's chunks
-  // (layout `high` before leaf `low`) so the header preserves priority order.
-  const headerUrls = [
-    ...closure,
-    ...(routePreload?.high ?? []),
-    ...(routePreload?.low ?? []),
-  ];
-  const linkHeader = preloadLinkHeader(headerUrls);
+  // Decode the path so it matches the build-time pattern keys, which are decoded
+  // source-derived slugs (a `%20`/unicode segment would otherwise never match).
+  // `decodeURI` keeps `/` intact (unlike decodeURIComponent) and can't throw on
+  // valid input; fall back to the raw path on a malformed sequence.
+  let routePath = new URL(c.req.url).pathname;
+  try {
+    routePath = decodeURI(routePath);
+  } catch {
+    // keep the raw, encoded path
+  }
+  const routePreload = selectRoutePreload(routes, routePath) ?? [];
+  // Only the entry closure goes in the `Link` header. The header is honored
+  // before body parse (and promotable to 103 Early Hints), but it cannot carry
+  // `fetchpriority`, so a route chunk placed there would preload at default
+  // priority and defeat the head tag's `fetchpriority="low"`. The closure is
+  // the small, universal boot runtime (worth the earliest hint); the route
+  // chunks are hinted low-priority via the head tags only.
+  const linkHeader = preloadLinkHeader(closure);
   // Append rather than set: a user's middleware may already have written a
   // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
   // headers are valid (RFC 8288) and the browser merges them.
@@ -208,7 +211,7 @@ export async function renderPage(
     defaultTitle: options?.defaultTitle,
     appConfig: options?.appConfig,
     preloadModules: closure,
-    routePreloadTags: renderRoutePreloadTags(routePreload),
+    routePreloadModules: routePreload,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

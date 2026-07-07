@@ -44,16 +44,16 @@ describe('assembleDocument: modulepreload hints', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('injects the pre-rendered routePreloadTags string alongside the closure hints', () => {
-    const routeTag =
-      '<link rel="modulepreload" href="/static/home.js" crossorigin fetchpriority="low" />';
+  it('injects the route chunks as fetchpriority=low hints alongside the closure', () => {
     const out = assembleDocument({
       html: shell,
       head: {},
       preloadModules: ['/static/a.js'],
-      routePreloadTags: routeTag,
+      routePreloadModules: ['/static/home.js'],
     });
-    expect(out).toContain(routeTag);
+    expect(out).toContain(
+      '<link rel="modulepreload" href="/static/home.js" fetchpriority="low" />'
+    );
     // Both closure and route hints land inside <head>.
     expect(out.indexOf('/static/home.js')).toBeLessThan(out.indexOf('</head>'));
   });
@@ -63,8 +63,7 @@ describe('assembleDocument: modulepreload hints', () => {
     assembleDocument({
       html: noHeadShell,
       head: {},
-      routePreloadTags:
-        '<link rel="modulepreload" href="/static/home.js" crossorigin />',
+      routePreloadModules: ['/static/home.js'],
     });
     expect(warn).not.toHaveBeenCalled();
   });

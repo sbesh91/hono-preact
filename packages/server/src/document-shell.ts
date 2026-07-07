@@ -49,11 +49,12 @@ export function assembleDocument(opts: {
    */
   preloadModules?: string[];
   /**
-   * Pre-rendered `<link rel="modulepreload">` tags for the matched route's own
-   * chunks (self-escaped by `routePreloadTags`), injected alongside the closure
-   * hints. Empty string -> nothing added. See issue #249.
+   * The matched route's own chunk URLs (`selectRoutePreload` output), injected
+   * as `<link rel="modulepreload">` hints alongside the closure ones and with
+   * the same `fetchpriority="low"`, since they are hydration-only like the
+   * closure. Empty or omitted -> nothing added. See issue #249.
    */
-  routePreloadTags?: string;
+  routePreloadModules?: string[];
 }): string {
   const {
     html,
@@ -61,7 +62,7 @@ export function assembleDocument(opts: {
     defaultTitle,
     appConfig,
     preloadModules = [],
-    routePreloadTags = '',
+    routePreloadModules = [],
   } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
@@ -90,21 +91,18 @@ export function assembleDocument(opts: {
   // early discovery (fills the connection's idle window) while yielding the pipe
   // to CSS/fonts, so first paint is protected. Degrades gracefully (unknown attr
   // is ignored). See issue #249.
-  const preloadTags = preloadModules.map(
-    (href) =>
-      `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`
-  );
+  // The client entry's closure first, then the matched route's own chunks; both
+  // are hydration-only, so both are hinted at fetchpriority="low" (see the note
+  // above) and both count as framework-injected preloads that must not trigger
+  // the missing-</head> warning below.
+  const preloadTag = (href: string): string =>
+    `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`;
+  const preloadTags = [
+    ...preloadModules.map(preloadTag),
+    ...routePreloadModules.map(preloadTag),
+  ];
 
-  // The matched route's own chunks (already-escaped tags from routePreloadTags),
-  // grouped with the closure hints so both are framework-injected preloads that
-  // don't count toward the missing-</head> warning below.
-  const frameworkPreloadTags = routePreloadTags
-    ? [...preloadTags, routePreloadTags]
-    : preloadTags;
-
-  const headTags = [...frameworkPreloadTags, ...userHeadTags].join(
-    '\n        '
-  );
+  const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd

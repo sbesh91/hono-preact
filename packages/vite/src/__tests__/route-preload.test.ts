@@ -139,7 +139,7 @@ function chunk(
 }
 
 describe('resolvePreloadMap', () => {
-  it('resolves a chain to high (layout) + low (view), subtracting the entry closure', () => {
+  it('resolves a chain to an ordered list (layout first, view last), subtracting the entry closure', () => {
     const bundle: Record<string, RouteBundleChunkLike> = {
       'static/client.js': chunk('static/client.js', {
         isEntry: true,
@@ -163,16 +163,12 @@ describe('resolvePreloadMap', () => {
         sources: ['/proj/src/DocsLayout.js', '/proj/src/pages/intro.js'],
       },
     ];
-    const map = resolvePreloadMap(chains, bundle);
-    expect(map).toEqual({
-      '/docs/intro': {
-        high: ['/static/DocsLayout-BBBB.js'],
-        low: ['/static/intro-CCCC.js'],
-      },
+    expect(resolvePreloadMap(chains, bundle)).toEqual({
+      '/docs/intro': ['/static/DocsLayout-BBBB.js', '/static/intro-CCCC.js'],
     });
   });
 
-  it('does not duplicate a chunk shared by layout and view (kept in high only)', () => {
+  it('lists a chunk shared by layout and view once, at its first (layout) position', () => {
     const bundle: Record<string, RouteBundleChunkLike> = {
       'static/client.js': chunk('static/client.js', { isEntry: true }),
       'static/shared-SH.js': chunk('static/shared-SH.js', {
@@ -188,15 +184,13 @@ describe('resolvePreloadMap', () => {
       }),
     };
     const chains = [
-      {
-        pattern: '/x',
-        sources: ['/proj/src/Layout.js', '/proj/src/view.js'],
-      },
+      { pattern: '/x', sources: ['/proj/src/Layout.js', '/proj/src/view.js'] },
     ];
-    const map = resolvePreloadMap(chains, bundle);
-    expect(map['/x'].high).toContain('/static/shared-SH.js');
-    expect(map['/x'].low).not.toContain('/static/shared-SH.js');
-    expect(map['/x'].low).toEqual(['/static/view-VV.js']);
+    expect(resolvePreloadMap(chains, bundle)['/x']).toEqual([
+      '/static/layout-LL.js',
+      '/static/shared-SH.js',
+      '/static/view-VV.js',
+    ]);
   });
 
   it('omits a pattern whose chunks are entirely in the entry closure', () => {
@@ -211,5 +205,37 @@ describe('resolvePreloadMap', () => {
     };
     const chains = [{ pattern: '/e', sources: ['/proj/src/eager.js'] }];
     expect(resolvePreloadMap(chains, bundle)).toEqual({});
+  });
+
+  it("keys a top-level empty-path index route ('') under '/'", () => {
+    const bundle: Record<string, RouteBundleChunkLike> = {
+      'static/client.js': chunk('static/client.js', { isEntry: true }),
+      'static/home-HH.js': chunk('static/home-HH.js', {
+        moduleIds: ['/proj/src/home.tsx'],
+      }),
+    };
+    const chains = [{ pattern: '', sources: ['/proj/src/home.js'] }];
+    expect(resolvePreloadMap(chains, bundle)).toEqual({
+      '/': ['/static/home-HH.js'],
+    });
+  });
+
+  it('unions two chains that resolve to the same pattern (last does not win)', () => {
+    const bundle: Record<string, RouteBundleChunkLike> = {
+      'static/client.js': chunk('static/client.js', { isEntry: true }),
+      'static/a-AA.js': chunk('static/a-AA.js', {
+        moduleIds: ['/proj/src/a.tsx'],
+      }),
+      'static/b-BB.js': chunk('static/b-BB.js', {
+        moduleIds: ['/proj/src/b.tsx'],
+      }),
+    };
+    const chains = [
+      { pattern: '/dup', sources: ['/proj/src/a.js'] },
+      { pattern: '/dup', sources: ['/proj/src/b.js'] },
+    ];
+    expect(resolvePreloadMap(chains, bundle)).toEqual({
+      '/dup': ['/static/a-AA.js', '/static/b-BB.js'],
+    });
   });
 });

@@ -52,12 +52,12 @@ describe('renderPage: modulepreload closure', () => {
     );
   });
 
-  it("injects the matched route's chunks (layout High, view low) and appends them to the Link header", async () => {
+  it("injects the matched route's chunks (fetchpriority=low) but keeps them out of the Link header", async () => {
     installPreloadModules(() => ({
       closure: ['/static/a.js'],
       routes: {
-        '/': { high: ['/static/layout.js'], low: ['/static/home.js'] },
-        '/other': { high: [], low: ['/static/other.js'] },
+        '/': ['/static/layout.js', '/static/home.js'],
+        '/other': ['/static/other.js'],
       },
     }));
     const app = new Hono();
@@ -66,21 +66,19 @@ describe('renderPage: modulepreload closure', () => {
     const res = await app.request('http://localhost/');
     const html = await res.text();
 
-    // Layout chunk keeps default priority; view chunk is fetchpriority=low.
+    // Route chunks are hinted low-priority in the head (uniform with the
+    // closure), with no crossorigin (matching the entry script + closure hints).
     expect(html).toContain(
-      '<link rel="modulepreload" href="/static/layout.js" />'
+      '<link rel="modulepreload" href="/static/layout.js" fetchpriority="low" />'
     );
     expect(html).toContain(
       '<link rel="modulepreload" href="/static/home.js" fetchpriority="low" />'
     );
     // The other route's chunk must not leak into the / render.
     expect(html).not.toContain('/static/other.js');
-    // Header: closure first, then the route's high then low.
-    expect(res.headers.get('Link')).toBe(
-      '</static/a.js>; rel=modulepreload, ' +
-        '</static/layout.js>; rel=modulepreload, ' +
-        '</static/home.js>; rel=modulepreload'
-    );
+    // The Link header carries the closure only: it cannot express
+    // fetchpriority, so route chunks stay head-only to preserve their low prio.
+    expect(res.headers.get('Link')).toBe('</static/a.js>; rel=modulepreload');
   });
 
   it('emits no hints and no Link header when no closure is installed', async () => {

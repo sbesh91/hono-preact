@@ -135,7 +135,7 @@ describe('preloadManifestPlugin', () => {
     (plugin.generateBundle as any).call(ctx, {}, routeBundle);
 
     expect(JSON.parse(emitted[0].source).routes).toEqual({
-      '/': { high: [], low: ['/static/home-XX.js'] },
+      '/': ['/static/home-XX.js'],
     });
   });
 });

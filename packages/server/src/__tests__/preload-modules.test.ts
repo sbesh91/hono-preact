@@ -18,11 +18,11 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
   it("resolves the reader's artifact (sync reader)", async () => {
     installPreloadModules(() => ({
       closure: ['/static/a.js', '/static/b.js'],
-      routes: { '/': { high: [], low: ['/static/home.js'] } },
+      routes: { '/': ['/static/home.js'] },
     }));
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js', '/static/b.js'],
-      routes: { '/': { high: [], low: ['/static/home.js'] } },
+      routes: { '/': ['/static/home.js'] },
     });
   });
 
@@ -63,14 +63,14 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     installPreloadModules(() => ({
       closure: ['/static/a.js', 42, null],
       routes: {
-        '/ok': { high: ['/static/l.js'], low: ['/static/v.js', 7] },
-        '/empty': { high: [], low: [] },
+        '/ok': ['/static/l.js', '/static/v.js', 7],
+        '/empty': [],
         '/bad': null,
       },
     }));
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
-      routes: { '/ok': { high: ['/static/l.js'], low: ['/static/v.js'] } },
+      routes: { '/ok': ['/static/l.js', '/static/v.js'] },
     });
   });
 

@@ -27,13 +27,18 @@ import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 /**
  * Build-generated map from route pattern to the client chunk URLs that route
- * needs, split by fetch priority (`high` = layout chain, `low` = leaf view).
+ * needs, in discovery order (outer layout chunks first, leaf view last).
  * Serialized into the client build artifact; the server's `route-preload-tags`
  * declares the structurally identical consumer type. Kept in sync by the
  * artifact round-trip (a JSON contract between this package's build output and
  * the server runtime), not a shared import (the packages don't share runtime).
+ *
+ * A flat list (not a priority split): like the entry closure, every route chunk
+ * is hydration-only and yields to render-critical CSS/fonts, so the server hints
+ * them all at `fetchpriority="low"`. Order is preserved only so the head tags
+ * read outer-to-inner.
  */
-export type RoutePreloadMap = Record<string, { high: string[]; low: string[] }>;
+export type RoutePreloadMap = Record<string, string[]>;
 
 /** A leaf route and the source modules it pulls in (outer layout -> leaf view). */
 export interface RouteModuleChain {
@@ -54,9 +59,14 @@ export interface RouteBundleChunkLike {
 }
 
 // ---------------------------------------------------------------------------
-// Route-path joining + content-route slug rules. Kept byte-compatible with
-// `joinRoutePath` (define-routes) and `commonDirPrefix`/`defaultSlug`
-// (content-routes) so build-time patterns match the runtime registrations.
+// Route-path joining + content-route slug rules. These are byte-for-byte copies
+// of the runtime's private helpers: `joinRoutePath` (iso `define-routes.tsx`)
+// and `commonDirPrefix`/`defaultSlug` (iso `content-routes.tsx`). They must stay
+// in sync so build-time patterns match the runtime registrations; if the runtime
+// rule changes, a divergent copy silently emits wrong/no preload hints for the
+// affected routes (an optimization degrades, not a correctness bug).
+// TODO(#249): extract the three into a preact-free iso leaf and import here, so
+// there is one source of truth instead of a comment-synced copy.
 // ---------------------------------------------------------------------------
 
 function joinRoutePath(parentPath: string, childPath: string): string {
@@ -303,6 +313,14 @@ export function extractRouteChains(
           : undefined;
 
       if (viewSpec) {
+        // `view` + `children` is rejected by defineRoutes at runtime; if it ever
+        // reaches here, warn rather than silently dropping the child subtree's
+        // hints (this branch treats the node as a leaf and ignores `children`).
+        if (children) {
+          warn(
+            `route ${here}: node has both \`view\` and \`children\`; preloading only the view chunk`
+          );
+        }
         chains.push({
           pattern: here,
           sources: [...layoutStack, toAbs(viewSpec)],
@@ -406,22 +424,28 @@ export function resolvePreloadMap(
 
   const map: RoutePreloadMap = {};
   for (const chain of chains) {
-    const layoutSources = chain.sources.slice(0, -1);
-    const viewSource = chain.sources[chain.sources.length - 1];
-    const highFiles = chunksOf(layoutSources);
-    const viewFiles = viewSource ? chunksOf([viewSource]) : new Set<string>();
-
-    const high: string[] = [];
-    for (const file of highFiles) {
-      if (!eager.has(file)) high.push(href(file));
+    // Walk sources outer-to-inner (layout ancestors first, leaf view last) so
+    // the resulting list reads in discovery order. A Set dedupes a chunk shared
+    // across the chain; the entry closure is subtracted (fetched eagerly).
+    const seen = new Set<string>();
+    const urls: string[] = [];
+    for (const src of chain.sources) {
+      for (const file of chunksOf([src])) {
+        if (eager.has(file) || seen.has(file)) continue;
+        seen.add(file);
+        urls.push(href(file));
+      }
     }
-    const low: string[] = [];
-    for (const file of viewFiles) {
-      if (!eager.has(file) && !highFiles.has(file)) low.push(href(file));
-    }
-    if (high.length > 0 || low.length > 0) {
-      map[chain.pattern] = { high, low };
-    }
+    if (urls.length === 0) continue;
+    // A top-level index route (`{ path: '' }`) yields an empty pattern; the
+    // runtime serves it at '/', so key it there to match the request path.
+    const pattern = chain.pattern === '' ? '/' : chain.pattern;
+    // Two chains can resolve to the same pattern (e.g. a contentRoutes index
+    // and a sibling leaf); union their chunks rather than letting the last win.
+    const prior = map[pattern];
+    map[pattern] = prior
+      ? [...prior, ...urls.filter((u) => !prior.includes(u))]
+      : urls;
   }
   return map;
 }
