@@ -114,9 +114,10 @@ export function cloudflareAdapter(
         `} from 'hono-preact/internal/runtime';\n` +
         `import { installPreloadModules } from 'hono-preact/server/internal/runtime';\n` +
         `\n` +
-        `// The client entry's modulepreload closure is read at runtime via the\n` +
-        `// ASSETS binding (the worker builds before the client, so it can't be\n` +
-        `// baked in). resolvePreloadModules memoizes, so this runs once per isolate.\n` +
+        `// The modulepreload artifact (entry closure + per-route chunk map) is\n` +
+        `// read at runtime via the ASSETS binding (the worker builds before the\n` +
+        `// client, so it can't be baked in). resolvePreloadManifest memoizes, so\n` +
+        `// this runs once per isolate.\n` +
         `installPreloadModules(makeAssetsPreloadReader());\n` +
         `\n` +
         `installRoomRegistry(() => buildRoomRegistry(__hpServerImports));\n` +

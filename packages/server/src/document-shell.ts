@@ -48,8 +48,22 @@ export function assembleDocument(opts: {
    * omitted -> no hints.
    */
   preloadModules?: string[];
+  /**
+   * The matched route's own chunk URLs (`selectRoutePreload` output), injected
+   * as `<link rel="modulepreload">` hints alongside the closure ones and with
+   * the same `fetchpriority="low"`, since they are hydration-only like the
+   * closure. Empty or omitted -> nothing added. See issue #249.
+   */
+  routePreloadModules?: string[];
 }): string {
-  const { html, head, defaultTitle, appConfig, preloadModules = [] } = opts;
+  const {
+    html,
+    head,
+    defaultTitle,
+    appConfig,
+    preloadModules = [],
+    routePreloadModules = [],
+  } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
   // Only inject a <title> when hoofd produced one or the caller provided a
@@ -77,10 +91,16 @@ export function assembleDocument(opts: {
   // early discovery (fills the connection's idle window) while yielding the pipe
   // to CSS/fonts, so first paint is protected. Degrades gracefully (unknown attr
   // is ignored). See issue #249.
-  const preloadTags = preloadModules.map(
-    (href) =>
-      `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`
-  );
+  // The client entry's closure first, then the matched route's own chunks; both
+  // are hydration-only, so both are hinted at fetchpriority="low" (see the note
+  // above) and both count as framework-injected preloads that must not trigger
+  // the missing-</head> warning below.
+  const preloadTag = (href: string): string =>
+    `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`;
+  const preloadTags = [
+    ...preloadModules.map(preloadTag),
+    ...routePreloadModules.map(preloadTag),
+  ];
 
   const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
 

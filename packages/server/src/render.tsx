@@ -24,7 +24,11 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
-import { resolvePreloadModules, preloadLinkHeader } from './preload-modules.js';
+import {
+  resolvePreloadManifest,
+  preloadLinkHeader,
+} from './preload-modules.js';
+import { selectRoutePreload } from './route-preload-match.js';
 import { streamDocumentResponse } from './stream-pump.js';
 import { translateRootOutcome } from './outcome-translation.js';
 
@@ -174,12 +178,28 @@ export async function renderPage(
   html = rootResult.html;
   streamingLoaders = rootResult.streamingLoaders;
 
-  // The client entry's static-import closure, hinted as `modulepreload` both in
-  // the document head and as a `Link` response header (the header is honored
-  // before body parse and is promotable to 103 Early Hints by the CDN/adapter).
-  // Resolving is memoized, so the platform reader runs at most once per isolate.
-  const preloadModules = await resolvePreloadModules();
-  const linkHeader = preloadLinkHeader(preloadModules);
+  // The client entry's static-import closure plus the matched route's own
+  // chunks, hinted as `modulepreload` in the document head. Resolving is
+  // memoized, so the platform reader runs at most once per isolate.
+  const { closure, routes } = await resolvePreloadManifest();
+  // Decode the path so it matches the build-time pattern keys, which are decoded
+  // source-derived slugs (a `%20`/unicode segment would otherwise never match).
+  // `decodeURI` keeps `/` intact (unlike decodeURIComponent) and can't throw on
+  // valid input; fall back to the raw path on a malformed sequence.
+  let routePath = new URL(c.req.url).pathname;
+  try {
+    routePath = decodeURI(routePath);
+  } catch {
+    // keep the raw, encoded path
+  }
+  const routePreload = selectRoutePreload(routes, routePath) ?? [];
+  // Only the entry closure goes in the `Link` header. The header is honored
+  // before body parse (and promotable to 103 Early Hints), but it cannot carry
+  // `fetchpriority`, so a route chunk placed there would preload at default
+  // priority and defeat the head tag's `fetchpriority="low"`. The closure is
+  // the small, universal boot runtime (worth the earliest hint); the route
+  // chunks are hinted low-priority via the head tags only.
+  const linkHeader = preloadLinkHeader(closure);
   // Append rather than set: a user's middleware may already have written a
   // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
   // headers are valid (RFC 8288) and the browser merges them.
@@ -190,7 +210,8 @@ export async function renderPage(
     head: dispatcher.toStatic(),
     defaultTitle: options?.defaultTitle,
     appConfig: options?.appConfig,
-    preloadModules,
+    preloadModules: closure,
+    routePreloadModules: routePreload,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

@@ -1,11 +1,11 @@
 // Cloudflare closure reader for the modulepreload feature (issue #249).
 //
 // The worker environment builds BEFORE the client on Cloudflare, so the hashed
-// closure filenames don't exist when the worker is bundled and can't be baked
-// in as a constant. Workerd also has no `fs`. So the worker reads the closure
+// chunk filenames don't exist when the worker is bundled and can't be baked in
+// as a constant. Workerd also has no `fs`. So the worker reads the preload
 // artifact (written into the client output by the vite preload-manifest plugin)
 // at runtime through the `ASSETS` binding, on the first render. The result is
-// memoized by `resolvePreloadModules`, so this runs at most once per isolate.
+// memoized by `resolvePreloadManifest`, so this runs at most once per isolate.
 //
 // Requires the worker to bind its assets as `ASSETS`
 // (`assets.binding` in wrangler). Absent binding or any read failure -> `[]`
@@ -33,21 +33,19 @@ function isFetcher(value: unknown): value is Fetcher {
  * worker's `ASSETS` binding (read off the per-request realtime runtime, which
  * the generated worker entry installs for every request).
  */
-export function makeAssetsPreloadReader(): () => Promise<string[]> {
+export function makeAssetsPreloadReader(): () => Promise<unknown> {
   return async () => {
     const assets = getRealtimeRuntime()?.env.ASSETS;
-    if (!isFetcher(assets)) return [];
+    if (!isFetcher(assets)) return {};
     try {
       const res = await assets.fetch(
         new Request('https://assets.invalid' + PRELOAD_MANIFEST_URL)
       );
-      if (!res.ok) return [];
-      const data: unknown = await res.json();
-      return Array.isArray(data)
-        ? data.filter((u): u is string => typeof u === 'string')
-        : [];
+      if (!res.ok) return {};
+      // Raw parsed artifact; resolvePreloadManifest validates + normalizes it.
+      return await res.json();
     } catch {
-      return [];
+      return {};
     }
   };
 }

@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   collectEntryPreloadModules,
   preloadManifestPlugin,
@@ -60,11 +63,12 @@ describe('preloadManifestPlugin', () => {
   };
 
   function run(envName: string) {
-    const plugin = preloadManifestPlugin();
+    const plugin = preloadManifestPlugin({ routes: 'src/routes.ts' });
     const emitted: Array<{ type: string; fileName: string; source: string }> =
       [];
     const ctx = {
       environment: { name: envName },
+      warn: () => {},
       emitFile: (f: { type: string; fileName: string; source: string }) =>
         emitted.push(f),
     };
@@ -73,15 +77,65 @@ describe('preloadManifestPlugin', () => {
     return emitted;
   }
 
-  it('emits the closure as a JSON asset during the client build', () => {
+  it('emits the { closure, routes } artifact as a JSON asset during the client build', () => {
     const emitted = run('client');
     expect(emitted).toHaveLength(1);
     expect(emitted[0].type).toBe('asset');
     expect(emitted[0].fileName).toBe(PRELOAD_MANIFEST_FILE);
-    expect(JSON.parse(emitted[0].source)).toEqual(['/static/a.js']);
+    // No configResolved was run, so routesAbsPath is unset -> empty route map,
+    // but the closure is still computed from the bundle.
+    expect(JSON.parse(emitted[0].source)).toEqual({
+      closure: ['/static/a.js'],
+      routes: {},
+    });
   });
 
   it('emits nothing for non-client environments', () => {
     expect(run('ssr')).toHaveLength(0);
+  });
+
+  it('populates the route map from routes.ts once configResolved sets its path', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-preload-'));
+    const routesPath = path.join(dir, 'src', 'routes.ts');
+    fs.mkdirSync(path.dirname(routesPath), { recursive: true });
+    fs.writeFileSync(
+      routesPath,
+      `export default defineRoutes([
+         { path: '/', view: () => import('./pages/home.js') },
+       ]);`
+    );
+
+    const routeBundle = {
+      'static/client.js': {
+        type: 'chunk',
+        fileName: 'static/client.js',
+        isEntry: true,
+        imports: [],
+        moduleIds: [],
+      },
+      'static/home-XX.js': {
+        type: 'chunk',
+        fileName: 'static/home-XX.js',
+        isEntry: false,
+        imports: [],
+        moduleIds: [path.join(dir, 'src', 'pages', 'home.tsx')],
+      },
+    };
+
+    const plugin = preloadManifestPlugin({ routes: 'src/routes.ts' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plugin.configResolved as any)({ root: dir });
+    const emitted: Array<{ source: string }> = [];
+    const ctx = {
+      environment: { name: 'client' },
+      warn: () => {},
+      emitFile: (f: { source: string }) => emitted.push(f),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plugin.generateBundle as any).call(ctx, {}, routeBundle);
+
+    expect(JSON.parse(emitted[0].source).routes).toEqual({
+      '/': ['/static/home-XX.js'],
+    });
   });
 });
