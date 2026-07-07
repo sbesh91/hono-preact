@@ -41,8 +41,15 @@ export function assembleDocument(opts: {
   head: HeadStatic;
   defaultTitle?: string;
   appConfig?: AppConfig;
+  /**
+   * The client entry's static-import closure as root-relative URLs. Emitted as
+   * `<link rel="modulepreload">` hints so the browser fetches these boot chunks
+   * alongside the entry instead of after parsing it (see issue #249). Empty or
+   * omitted -> no hints.
+   */
+  preloadModules?: string[];
 }): string {
-  const { html, head, defaultTitle, appConfig } = opts;
+  const { html, head, defaultTitle, appConfig, preloadModules = [] } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
   // Only inject a <title> when hoofd produced one or the caller provided a
@@ -50,14 +57,32 @@ export function assembleDocument(opts: {
   // would otherwise be overridden by an empty injected one (browsers use the
   // last <title> in <head>).
   const titleSource = title ?? defaultTitle;
-  const headTags = [
+  // The Layout/user's own head tags, kept separate from framework-injected
+  // preload hints so the latter can't manufacture the missing-</head> warning
+  // below (see the guard).
+  const userHeadTags = [
     titleSource != null ? `<title>${escapeHtml(titleSource)}</title>` : '',
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
     speculationRulesTag(appConfig ?? {}),
-  ]
-    .filter(Boolean)
-    .join('\n        ');
+  ].filter(Boolean);
+
+  // Preload hints go first (earliest discovery) and reuse toAttrs so their href
+  // is escaped by the same policy as every other injected <link>.
+  //
+  // fetchpriority="low": the boot closure is for hydration, not first paint (the
+  // SSR content paints from the render-blocking CSS + fonts without it). Left at
+  // the default "High", the preloads contend with those VeryHigh render-critical
+  // resources for early bandwidth and nudge FCP/LCP later. Low priority keeps the
+  // early discovery (fills the connection's idle window) while yielding the pipe
+  // to CSS/fonts, so first paint is protected. Degrades gracefully (unknown attr
+  // is ignored). See issue #249.
+  const preloadTags = preloadModules.map(
+    (href) =>
+      `<link ${toAttrs({ rel: 'modulepreload', href, fetchpriority: 'low' })} />`
+  );
+
+  const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
@@ -66,7 +91,11 @@ export function assembleDocument(opts: {
   // <html lang> wrapper for backward compatibility.
   const startsWithHtml = /^\s*<html(\s|>)/i.test(html);
 
-  if (startsWithHtml && headTags && !html.includes('</head>')) {
+  // Warn only when the Layout would drop the USER's head content. Framework
+  // preload hints don't count: dropping them when there's no </head> is
+  // acceptable (the Link response header still carries the closure), so they
+  // must not fire a spurious warning on every render.
+  if (startsWithHtml && userHeadTags.length > 0 && !html.includes('</head>')) {
     warnMissingMarker(
       '</head>',
       'the Layout owns the document (<html>…) but emitted no </head>; ' +

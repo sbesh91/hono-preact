@@ -106,11 +106,18 @@ export function cloudflareAdapter(
         `  buildRoomRegistry,\n` +
         `  installSocketRegistry,\n` +
         `  buildSocketRegistry,\n` +
+        `  makeAssetsPreloadReader,\n` +
         `} from 'hono-preact/server/internal/cloudflare';\n` +
         `import {\n` +
         `  installRealtimeConnector,\n` +
         `  installPubSubBackend,\n` +
         `} from 'hono-preact/internal/runtime';\n` +
+        `import { installPreloadModules } from 'hono-preact/server/internal/runtime';\n` +
+        `\n` +
+        `// The client entry's modulepreload closure is read at runtime via the\n` +
+        `// ASSETS binding (the worker builds before the client, so it can't be\n` +
+        `// baked in). resolvePreloadModules memoizes, so this runs once per isolate.\n` +
+        `installPreloadModules(makeAssetsPreloadReader());\n` +
         `\n` +
         `installRoomRegistry(() => buildRoomRegistry(__hpServerImports));\n` +
         `installSocketRegistry(() => buildSocketRegistry(__hpServerImports));\n` +

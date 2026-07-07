@@ -4,6 +4,7 @@
 // must never pull in `@hono/node-server`. Only importing
 // `hono-preact/adapter-node` loads this file.
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
+import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
 import { nodeBuildPlugin, nodeDevServerPlugin } from './node-dev-server.js';
 
 export function nodeAdapter(): HonoPreactAdapter {
@@ -31,7 +32,21 @@ export function nodeAdapter(): HonoPreactAdapter {
         `import { Hono } from 'hono';\n` +
         `import { createNodeWebSocket } from '@hono/node-ws';\n` +
         `import { installWebSocketUpgrader } from 'hono-preact/internal/runtime';\n` +
+        `import { installPreloadModules } from 'hono-preact/server/internal/runtime';\n` +
+        `import { readFileSync } from 'node:fs';\n` +
         `import coreApp from ${JSON.stringify(ctx.coreAppModuleId)};\n` +
+        `\n` +
+        // The client entry's modulepreload closure, written to the client build
+        // output by the framework's preload-manifest plugin. Read from disk once
+        // (resolvePreloadModules memoizes), so the file is loaded lazily at the
+        // first render, not at import time. Missing/unreadable -> no hints.
+        `installPreloadModules(() => {\n` +
+        `  try {\n` +
+        `    return JSON.parse(readFileSync('./dist/client/${PRELOAD_MANIFEST_FILE}', 'utf8'));\n` +
+        `  } catch {\n` +
+        `    return [];\n` +
+        `  }\n` +
+        `});\n` +
         `\n` +
         `const app = new Hono()\n` +
         `  .use('/static/*', serveStatic({ root: './dist/client' }))\n` +

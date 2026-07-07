@@ -29,10 +29,11 @@ describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in pipeline order, then the adapter plugins, then preact', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() }) as NamedPlugin[];
     const names = plugins.map((p) => p.name);
-    expect(names.slice(0, 9)).toEqual([
+    expect(names.slice(0, 10)).toEqual([
       'hono-preact:config',
       'hono-preact:client-shim',
       'hono-preact:client-entry',
+      'hono-preact:preload-manifest',
       'hono-preact:server-entry',
       'server-loader-validation',
       'module-key',
