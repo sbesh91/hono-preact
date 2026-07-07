@@ -66,24 +66,26 @@ On client-side navigation the route's CSS ships as part of its JS chunk (the bun
 
 ## Keep centering in one `transform`
 
-A route sheet is plain CSS, so ordinary CSS gotchas still apply. The one that bites most often is centering: keep translation, scaling, and rotation in a single `transform` declaration rather than splitting them across `transform` and the standalone `translate` / `scale` / `rotate` properties. The production CSS minifier (Lightning CSS, used by Tailwind v4) drops a standalone `translate` / `scale` / `rotate` declared next to a `transform` on the same rule, which silently un-centers the element in production while `vite dev` still looks correct.
+A route sheet is plain CSS, so ordinary CSS gotchas still apply. The one that bites most often is centering. When a rule declares a standalone `translate` / `scale` / `rotate` property alongside a `transform` property, the production CSS minifier (Lightning CSS, used by Tailwind v4) keeps only the `transform` and drops the standalone one. So a rule that centers with `translate: -50% -50%` and animates with `transform: scale(...)` loses its centering in the production build, while `vite dev` (which does not run the minifier) still looks correct. Fold every component into a single `transform` so there is nothing for the minifier to drop.
 
 ```css
-/* Correct: one transform carries every component */
-.centered {
-  position: absolute;
+/* Correct: translate and scale live in one transform, nothing is dropped */
+.dialog {
+  position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(0.98);
 }
 ```
 
 ```css
-/* Wrong: the minifier drops the standalone translate in production */
-.centered {
-  position: absolute;
+/* Wrong: the minifier drops the standalone translate (a transform is
+   present in the same rule), so only scale survives and centering is lost */
+.dialog {
+  position: fixed;
   top: 50%;
   left: 50%;
   translate: -50% -50%;
+  transform: scale(0.98);
 }
 ```
