@@ -1,0 +1,89 @@
+# Styling
+
+hono-preact ships CSS in two tiers: one global stylesheet you link yourself in the root Layout, and a stylesheet per route that you author as a plain CSS file and the framework discovers, builds, and injects into the SSR head for you. You never hand-write a `<link>` for a route's own styles.
+
+## The global stylesheet
+
+Design tokens, Tailwind, `@font-face`, and any rules that apply across every route (shared view-transition animations, for example) belong in one stylesheet linked from your root Layout. Import it with Vite's `?url` suffix so you get a hashed asset URL, then link it in `<Head>`:
+
+```tsx
+// src/Layout.tsx
+import { ClientScript, Head } from 'hono-preact';
+import root from '@/styles/root.css?url';
+import type { ComponentChildren } from 'preact';
+
+export default function Layout({ children }: { children: ComponentChildren }) {
+  return (
+    <html lang="en">
+      <Head defaultTitle="My App">
+        <link rel="stylesheet" href={root} />
+      </Head>
+      <body>
+        <main id="app">{children}</main>
+        <ClientScript />
+      </body>
+    </html>
+  );
+}
+```
+
+This sheet loads on every request, so its cost is paid by every page in the app.
+
+## Route-scoped CSS
+
+A route's own styles belong in their own file, imported for its side effect from that route's view or layout module:
+
+```tsx
+// src/pages/home.tsx
+import '@/styles/home.css';
+
+export default function Home() {
+  return <section class="hero">...</section>;
+}
+```
+
+The same pattern works on a layout module, which scopes the sheet to every route under that layout:
+
+```tsx
+// src/components/DocsLayout.tsx
+import '@/styles/docs.css';
+import type { LayoutProps } from 'hono-preact';
+
+export default function DocsLayout({ children }: LayoutProps) {
+  return <div class="docs-shell">{children}</div>;
+}
+```
+
+No `?url` suffix and no manual `<link>`: a bare side-effect `import` is the whole contract. The framework follows each route's build-time import graph to find the CSS it pulls in and associates that stylesheet with the route.
+
+## How it works
+
+At request time, the SSR handler looks up the matched route's stylesheet and injects a `<link rel="stylesheet">` tag into `<head>`, after your Layout's own head tags (including the global sheet). Route rules therefore come later in source order than the global sheet, so they win equal-specificity cascade ties against it.
+
+The injected tag is a real stylesheet link, not a hint: it is render-blocking like any other `<link rel="stylesheet">`, so the route's styles are present for first paint with no flash of unstyled content. You don't opt into this per route; it happens for every route that has CSS in its import graph, and routes with none simply get no extra tag.
+
+On client-side navigation the route's CSS ships as part of its JS chunk (the bundler keeps the CSS import attached to the module that imports it), so switching routes loads the incoming route's stylesheet without any extra wiring on your part.
+
+## Keep centering in one `transform`
+
+A route sheet is plain CSS, so ordinary CSS gotchas still apply. The one that bites most often is centering: keep translation, scaling, and rotation in a single `transform` declaration rather than splitting them across `transform` and the standalone `translate` / `scale` / `rotate` properties. The production CSS minifier (Lightning CSS, used by Tailwind v4) drops a standalone `translate` / `scale` / `rotate` declared next to a `transform` on the same rule, which silently un-centers the element in production while `vite dev` still looks correct.
+
+```css
+/* Correct: one transform carries every component */
+.centered {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+```
+
+```css
+/* Wrong: the minifier drops the standalone translate in production */
+.centered {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+}
+```
