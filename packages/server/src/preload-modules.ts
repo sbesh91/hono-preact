@@ -19,6 +19,8 @@ import type { RoutePreloadMap } from './route-preload-match.js';
 export interface PreloadManifest {
   closure: string[];
   routes: RoutePreloadMap;
+  /** Per-route render-critical stylesheet URLs (same shape/matching as routes). */
+  routeCss: RoutePreloadMap;
 }
 
 /**
@@ -34,7 +36,7 @@ export type PreloadModulesReader = () => unknown | Promise<unknown>;
 let reader: PreloadModulesReader | undefined;
 let pending: Promise<PreloadManifest> | undefined;
 
-const EMPTY: PreloadManifest = { closure: [], routes: {} };
+const EMPTY: PreloadManifest = { closure: [], routes: {}, routeCss: {} };
 
 /** Install the platform reader (see {@link PreloadModulesReader}). */
 export function installPreloadModules(r: PreloadModulesReader): void {
@@ -62,12 +64,16 @@ function normalizeRoutes(raw: unknown): RoutePreloadMap {
 function normalizeManifest(raw: unknown): PreloadManifest {
   const obj =
     typeof raw === 'object' && raw !== null
-      ? (raw as { closure?: unknown; routes?: unknown })
+      ? (raw as { closure?: unknown; routes?: unknown; routeCss?: unknown })
       : {};
   const closure = Array.isArray(obj.closure)
     ? obj.closure.filter(isString)
     : [];
-  return { closure, routes: normalizeRoutes(obj.routes) };
+  return {
+    closure,
+    routes: normalizeRoutes(obj.routes),
+    routeCss: normalizeRoutes(obj.routeCss),
+  };
 }
 
 /**

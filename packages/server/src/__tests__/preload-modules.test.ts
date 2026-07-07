@@ -8,7 +8,7 @@ import {
 
 afterEach(() => __resetPreloadModulesForTests());
 
-const EMPTY = { closure: [], routes: {} };
+const EMPTY = { closure: [], routes: {}, routeCss: {} };
 
 describe('installPreloadModules / resolvePreloadManifest', () => {
   it('resolves to an empty manifest when no reader is installed', async () => {
@@ -23,6 +23,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js', '/static/b.js'],
       routes: { '/': ['/static/home.js'] },
+      routeCss: {},
     });
   });
 
@@ -34,6 +35,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
       routes: {},
+      routeCss: {},
     });
   });
 
@@ -71,6 +73,24 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
       routes: { '/ok': ['/static/l.js', '/static/v.js'] },
+      routeCss: {},
+    });
+  });
+
+  it('normalizes routeCss and drops malformed entries, like routes', async () => {
+    installPreloadModules(() => ({
+      closure: [],
+      routes: {},
+      routeCss: {
+        '/': ['/static/home.css', 9],
+        '/empty': [],
+        '/bad': null,
+      },
+    }));
+    expect(await resolvePreloadManifest()).toEqual({
+      closure: [],
+      routes: {},
+      routeCss: { '/': ['/static/home.css'] },
     });
   });
 
@@ -87,6 +107,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
       routes: {},
+      routeCss: {},
     });
   });
 });
