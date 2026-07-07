@@ -182,21 +182,45 @@
   .hx-chapter__coda {
     display: flex;
   }
-  /* Tighten pinned scenes on phones so tall ones (SSR's two stacked wire panels)
-     fit one viewport without clipping. */
+  /* Vertical density. iOS Safari sizes the pin to 100svh, the toolbar-visible
+     small viewport (~745px on an iPhone 15, less on smaller phones), so the
+     pinned scene must be compact to clear it. Trim the head, the gaps, and the
+     demo chrome so the tallest chapters fit a short viewport instead of clipping.
+     Taller phones just get a little more breathing room. */
   .hx-scene {
-    gap: 1rem;
+    gap: 0.75rem;
+  }
+  .hx-scene__desc {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin-top: 0.3rem;
+  }
+  .hx-scene__title {
+    margin-top: 0.25rem;
   }
   .hx-cols2 {
     gap: 0.7rem;
   }
   .hx-browser__body {
-    min-height: 8.5rem;
-    padding: 0.7rem;
+    min-height: 7rem;
+    padding: 0.6rem;
+    gap: 0.4rem;
+  }
+  .hx-wire {
+    padding: 0.6rem;
+    row-gap: 0.4rem;
+  }
+  .hx-lane__track {
+    height: 0.78rem;
+  }
+  .hx-region {
+    padding: 0.5rem 0.55rem;
+  }
+  .hx-browser__bar {
+    padding: 0.45rem 0.6rem;
   }
   /* Reclaim width on phones: the 3rem desktop side gutter wastes ~24px at 360px
-     and squeezes the demos. Halve it, and trim the panel chrome that stacks up
-     (browser bar, wire, region) so content is not boxed in by padding. */
+     and squeezes the demos. */
   .hx-scene,
   .hx-stage__pin > *,
   .hx-chapter__coda {
@@ -204,15 +228,6 @@
   }
   .hx-wrap {
     width: min(64rem, 100% - 1.75rem);
-  }
-  .hx-wire {
-    padding: 0.65rem 0.6rem;
-  }
-  .hx-region {
-    padding: 0.5rem 0.55rem;
-  }
-  .hx-browser__bar {
-    padding: 0.45rem 0.6rem;
   }
 }
 /* Let grid columns shrink below their content's intrinsic width so code blocks
