@@ -80,6 +80,33 @@ describe('resolveRouteCssMap', () => {
     expect(resolveRouteCssMap(chains, b)['/']).toBeUndefined();
   });
 
+  it('orders distinct layout and view CSS outer-to-inner', () => {
+    const b = bundle();
+    b['docs-layout.js'] = {
+      type: 'chunk',
+      fileName: 'docs-layout.js',
+      isEntry: false,
+      imports: [],
+      moduleIds: ['/app/components/DocsLayout.tsx'],
+      viteMetadata: { importedCss: new Set(['layout.css']) },
+    };
+    b['docs-page.js'] = {
+      type: 'chunk',
+      fileName: 'docs-page.js',
+      isEntry: false,
+      imports: [],
+      moduleIds: ['/app/pages/docs/x.mdx'],
+      viteMetadata: { importedCss: new Set(['view.css']) },
+    };
+    b['layout.css'] = { type: 'asset', fileName: 'layout.css' };
+    b['view.css'] = { type: 'asset', fileName: 'view.css' };
+    delete b['docs.css'];
+    expect(resolveRouteCssMap(chains, b)['/docs/x']).toEqual([
+      '/layout.css',
+      '/view.css',
+    ]);
+  });
+
   it('unions CSS when two chains resolve to the same pattern', () => {
     const b = bundle();
     b['home-alt.js'] = {

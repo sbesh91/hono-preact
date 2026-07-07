@@ -14,7 +14,8 @@ import type { RoutePreloadMap } from './route-preload-match.js';
 /**
  * The build artifact the adapter reader returns, once resolved and normalized:
  * `closure` is the client entry's static-import closure (root-relative URLs),
- * `routes` maps each route pattern to the chunks its matched layout/view need.
+ * `routes` maps each route pattern to the chunks its matched layout/view need,
+ * `routeCss` maps each route pattern to its render-critical stylesheet URLs.
  */
 export interface PreloadManifest {
   closure: string[];

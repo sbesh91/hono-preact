@@ -57,6 +57,36 @@ describe('renderComment', () => {
     expect(renderComment(base, base)).not.toContain('Docs-site shipped JS');
   });
 
+  it('renders the docs-site CSS section from real-build site data', () => {
+    const md = renderComment(base, base, undefined, {
+      fresh: {
+        baseline: { gzip: 19285, raw: 48533, chunks: 14 },
+        css: {
+          global: { gzip: 1200, raw: 4000, files: 1 },
+          routes: { '/docs/x': { gzip: 300, raw: 900 } },
+        },
+      },
+      base: {
+        baseline: { gzip: 19000, raw: 48000, chunks: 14 },
+        css: {
+          global: { gzip: 1100, raw: 3800, files: 1 },
+          routes: { '/docs/x': { gzip: 300, raw: 900 } },
+        },
+      },
+    });
+    expect(md).toContain('Docs-site CSS');
+    expect(md).toContain('| global (always-loaded) | 1.2 KB | +100 B |');
+    expect(md).toContain('/docs/x');
+  });
+
+  it('omits the docs-site CSS section when the site report has no css block', () => {
+    const md = renderComment(base, base, undefined, {
+      fresh: { baseline: { gzip: 19285, raw: 48533, chunks: 14 } },
+      base: { baseline: { gzip: 19000, raw: 48000, chunks: 14 } },
+    });
+    expect(md).not.toContain('Docs-site CSS');
+  });
+
   it('renders increase, new, decrease and removed', () => {
     const fresh = {
       sectionA: {

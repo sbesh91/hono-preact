@@ -111,9 +111,6 @@ export function assembleDocument(opts: {
     ...routePreloadModules.map(preloadTag),
   ];
 
-  // Route stylesheets are render-critical (not hints): emit as real stylesheet
-  // links, after the user's head tags so route rules win equal-specificity ties
-  // against the global sheet (matching the pre-split monolith order).
   const styleTag = (href: string): string =>
     `<link ${toAttrs({ rel: 'stylesheet', href })} />`;
   const routeStyleTags = routeStyleSheets.map(styleTag);

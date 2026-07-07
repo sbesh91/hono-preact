@@ -352,6 +352,16 @@ function stripExt(p: string): string {
   return p.replace(/\.[^./]+$/, '');
 }
 
+// Root-relative href for a build output file name, shared by resolvePreloadMap
+// (JS chunks) and resolveRouteCssMap (CSS assets). Ignores a configured Vite
+// `base` (hardcoded '/' + fileName); for the JS preload hints a wrong href is
+// only a lost optimization (the browser falls back to normal discovery), but
+// for route CSS a wrong href is a broken first paint (the stylesheet 404s), so
+// this must be base-prefixed first if base support is ever added.
+function toRootRelative(file: string): string {
+  return '/' + file;
+}
+
 /** Index every chunk by each of its source module ids (extension-stripped). */
 function indexBySource(
   bundle: Record<string, RouteBundleChunkLike>
@@ -413,7 +423,6 @@ export function resolvePreloadMap(
 ): RoutePreloadMap {
   const bySource = indexBySource(bundle);
   const eager = entryClosure(bundle);
-  const href = (file: string): string => '/' + file;
 
   const chunksOf = (sources: readonly string[]): Set<string> => {
     const files = new Set<string>();
@@ -435,7 +444,7 @@ export function resolvePreloadMap(
       for (const file of chunksOf([src])) {
         if (eager.has(file) || seen.has(file)) continue;
         seen.add(file);
-        urls.push(href(file));
+        urls.push(toRootRelative(file));
       }
     }
     if (urls.length === 0) continue;
@@ -492,7 +501,6 @@ export function resolveRouteCssMap(
 ): RouteCssMap {
   const bySource = indexBySource(bundle);
   const eagerCss = new Set(cssOfChunks(entryClosure(bundle), bundle));
-  const href = (file: string): string => '/' + file;
 
   const map: RouteCssMap = {};
   for (const chain of chains) {
@@ -506,7 +514,7 @@ export function resolveRouteCssMap(
     for (const css of cssOfChunks(files, bundle)) {
       if (eagerCss.has(css) || seen.has(css)) continue;
       seen.add(css);
-      urls.push(href(css));
+      urls.push(toRootRelative(css));
     }
     if (urls.length === 0) continue;
     const pattern = chain.pattern === '' ? '/' : chain.pattern;
