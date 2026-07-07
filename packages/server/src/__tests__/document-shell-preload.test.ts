@@ -78,3 +78,42 @@ describe('assembleDocument: modulepreload hints', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 });
+
+describe('assembleDocument: route stylesheets', () => {
+  it('injects a <link rel="stylesheet"> for each route sheet, after the user head tags', () => {
+    const out = assembleDocument({
+      html: '<html><head><link rel="stylesheet" href="/global.css" /></head><body>x</body></html>',
+      head: {},
+      routeStyleSheets: ['/static/home.css'],
+    });
+    expect(out).toContain('<link rel="stylesheet" href="/static/home.css" />');
+    // Route sheet lands inside <head> and AFTER the global sheet (cascade order).
+    expect(out.indexOf('/static/home.css')).toBeLessThan(
+      out.indexOf('</head>')
+    );
+    expect(out.indexOf('/global.css')).toBeLessThan(
+      out.indexOf('/static/home.css')
+    );
+  });
+
+  it('injects nothing when routeStyleSheets is empty or omitted', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: {},
+      routeStyleSheets: [],
+    });
+    expect(out).not.toContain('rel="stylesheet"');
+    const out2 = assembleDocument({ html: shell, head: {} });
+    expect(out2).not.toContain('rel="stylesheet"');
+  });
+
+  it('WARNS about a missing </head> when route stylesheets would be dropped (render-critical, unlike preload hints)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: noHeadShell,
+      head: {},
+      routeStyleSheets: ['/static/home.css'],
+    });
+    expect(warn).toHaveBeenCalledOnce();
+  });
+});

@@ -55,6 +55,14 @@ export function assembleDocument(opts: {
    * closure. Empty or omitted -> nothing added. See issue #249.
    */
   routePreloadModules?: string[];
+  /**
+   * The matched route's own stylesheet URLs (`selectRoutePreload` over the CSS
+   * map). Injected as `<link rel="stylesheet">` after the app's own head tags so
+   * route rules keep their cascade position over the global sheet. Unlike the
+   * modulepreload hints these are render-critical: a dropped route sheet is a
+   * broken page, so they count toward the missing-</head> warning below.
+   */
+  routeStyleSheets?: string[];
 }): string {
   const {
     html,
@@ -63,6 +71,7 @@ export function assembleDocument(opts: {
     appConfig,
     preloadModules = [],
     routePreloadModules = [],
+    routeStyleSheets = [],
   } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
@@ -102,7 +111,16 @@ export function assembleDocument(opts: {
     ...routePreloadModules.map(preloadTag),
   ];
 
-  const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
+  // Route stylesheets are render-critical (not hints): emit as real stylesheet
+  // links, after the user's head tags so route rules win equal-specificity ties
+  // against the global sheet (matching the pre-split monolith order).
+  const styleTag = (href: string): string =>
+    `<link ${toAttrs({ rel: 'stylesheet', href })} />`;
+  const routeStyleTags = routeStyleSheets.map(styleTag);
+
+  const headTags = [...preloadTags, ...userHeadTags, ...routeStyleTags].join(
+    '\n        '
+  );
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
@@ -111,11 +129,14 @@ export function assembleDocument(opts: {
   // <html lang> wrapper for backward compatibility.
   const startsWithHtml = /^\s*<html(\s|>)/i.test(html);
 
-  // Warn only when the Layout would drop the USER's head content. Framework
-  // preload hints don't count: dropping them when there's no </head> is
-  // acceptable (the Link response header still carries the closure), so they
-  // must not fire a spurious warning on every render.
-  if (startsWithHtml && userHeadTags.length > 0 && !html.includes('</head>')) {
+  // Warn when the Layout would drop render-critical head content: the user's own
+  // head tags OR the route stylesheets. Framework preload hints still don't count
+  // (dropping a hint is acceptable; the Link header carries the closure).
+  if (
+    startsWithHtml &&
+    (userHeadTags.length > 0 || routeStyleTags.length > 0) &&
+    !html.includes('</head>')
+  ) {
     warnMissingMarker(
       '</head>',
       'the Layout owns the document (<html>…) but emitted no </head>; ' +
