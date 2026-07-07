@@ -1,5 +1,6 @@
 import type { LayoutProps } from 'hono-preact';
 import { useViewTransitionTypes } from 'hono-preact';
+import '@/styles/demo.css';
 
 // Thin layout wrapping every /demo route. Its only job is to host the
 // view-transition direction hook on a node that stays mounted across all demo
