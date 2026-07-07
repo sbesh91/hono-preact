@@ -100,23 +100,48 @@ so the entry is absolute and independent of the optimizer's cwd assumptions.
 
 ## Risks and validation
 
-- **CF plugin clobbering `optimizeDeps.entries`.** If `@cloudflare/vite-plugin`
-  overrides rather than merges the injected entries for its worker env, the hook
-  is a no-op there. Validation: the cold-start integration test below. Fallback:
-  move the same `configEnvironment` hook into each adapter's own plugin (the
-  originally-approved per-adapter placement), same logic, different seam.
-- **Scanner reach.** The fix assumes the esbuild scanner follows the route
-  views' dynamic imports and the docs `import.meta.glob` from `routes.ts`. This
-  is standard Vite scan behavior for static-string dynamic imports and
-  `import.meta.glob`, and is exactly what the integration test exercises.
+- **CF plugin clobbering `optimizeDeps.entries`.** Resolved. Verified the hook's
+  injected entries are honored for the Cloudflare worker env: with the fix the
+  worker optimizer pre-bundles the route-graph deps at startup and the crash is
+  gone (see Validation below). The `configEnvironment` return merges with the CF
+  plugin's own worker-env `optimizeDeps` rather than being overridden.
+- **Scanner reach.** Confirmed. With `routes.ts` as an explicit scan entry, the
+  esbuild scanner follows the route views' dynamic imports and the docs
+  `import.meta.glob` down into the demo components, so `lucide-preact`,
+  `@floating-ui/dom`, and `preact/jsx-runtime` are pre-bundled at startup. The CF
+  plugin's default entry (the generated `server-entry.tsx`) does not reach them
+  at apps/site scale, which is why the crash occurs without this fix.
+
+## Validation
+
+Proven by a controlled A/B on `apps/site` (the real reproduction), toggling only
+the fix, full framework rebuild each side, `apps/site` optimizer cache cleared,
+`vite --force`, first cold request to `/docs/quick-start`:
+
+- **With fix:** 200, no `__H`, no late dep discovery.
+- **Without fix:** 500, `__H` crash, `lucide-preact` / `@floating-ui/dom` /
+  `preact/jsx-runtime` discovered late, triggering the mid-render reload.
+
+Note on where the plugin loads from: `apps/site`'s Vite *config file* imports
+`hono-preact/vite`, and Vite `resolve.alias` does not apply to a config file's
+own imports, so the plugin resolves to the consolidated
+`packages/hono-preact/dist/vite/…` (built by `consolidate.mjs`), not
+`packages/vite/dist`. Any manual verification must rebuild the consolidated dist,
+not just `@hono-preact/vite`.
 
 ## Testing
 
-1. **Cold-start integration test** (primary): with a fresh optimizer cache, boot
-   the dev server and hit `/docs/quick-start` on the *first* request; assert 200.
-   Today this is a 500. This is the regression guard for the whole class.
-2. **Unit test** on the hook: returns `{ optimizeDeps: { entries: [<abs routes>] } }`
-   for a non-client env name and `undefined` for `'client'`.
+1. **Unit test** on the hook (automated regression guard): returns
+   `{ optimizeDeps: { entries: [<abs routes>] } }` for a non-client env name and
+   `undefined` for `'client'`. This pins the hook's mechanics deterministically.
+2. **Manual A/B on `apps/site`** (see Validation): the authoritative end-to-end
+   check. A synthetic minimal fixture was attempted as an automated cold-start
+   guard and removed: the race only manifests at `apps/site` scale (shiki plus
+   the full docs corpus plus the mdx `import.meta.glob`), where the CF plugin's
+   default `server-entry` scan is incomplete. Small fixtures get their whole
+   route graph pre-scanned regardless of the fix, so such a test passes with or
+   without it (a tautology, not a guard). Reproducing the scale reliably risks a
+   flaky test, so the manual A/B is the end-to-end verification of record.
 
 ## Out of scope
 
