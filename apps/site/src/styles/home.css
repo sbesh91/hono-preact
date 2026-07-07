@@ -145,6 +145,13 @@
   gap: 1rem;
   align-items: stretch;
 }
+/* Declared before the 48rem block so the mobile 1fr override wins by source
+   order (no !important), and .hx-cols2--compare still wins by specificity. */
+.hx-cols2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
 @media (max-width: 48rem) {
   .hx-panels {
     grid-template-columns: 1fr;
@@ -187,11 +194,26 @@
     min-height: 8.5rem;
     padding: 0.7rem;
   }
-}
-.hx-cols2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  /* Reclaim width on phones: the 3rem desktop side gutter wastes ~24px at 360px
+     and squeezes the demos. Halve it, and trim the panel chrome that stacks up
+     (browser bar, wire, region) so content is not boxed in by padding. */
+  .hx-scene,
+  .hx-stage__pin > *,
+  .hx-chapter__coda {
+    width: min(64rem, 100% - 1.5rem);
+  }
+  .hx-wrap {
+    width: min(64rem, 100% - 1.75rem);
+  }
+  .hx-wire {
+    padding: 0.65rem 0.6rem;
+  }
+  .hx-region {
+    padding: 0.5rem 0.55rem;
+  }
+  .hx-browser__bar {
+    padding: 0.45rem 0.6rem;
+  }
 }
 /* Let grid columns shrink below their content's intrinsic width so code blocks
    (overflow-x:auto) scroll inside their box instead of widening the page. This
