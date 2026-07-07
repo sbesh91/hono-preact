@@ -29,7 +29,7 @@ function Page(): JSX.Element {
 
 afterEach(() => __resetPreloadModulesForTests());
 
-describe('renderPage — modulepreload closure', () => {
+describe('renderPage: modulepreload closure', () => {
   it('injects modulepreload <link>s and a matching Link header from the installed closure', async () => {
     installPreloadModules(() => ['/static/a.js', '/static/b.js']);
     const app = new Hono();

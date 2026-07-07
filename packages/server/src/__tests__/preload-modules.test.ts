@@ -1,6 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  preloadLinkTags,
   preloadLinkHeader,
   installPreloadModules,
   resolvePreloadModules,
@@ -41,18 +40,32 @@ describe('installPreloadModules / resolvePreloadModules', () => {
     await resolvePreloadModules();
     expect(calls).toBe(1);
   });
-});
 
-describe('preloadLinkTags', () => {
-  it('renders one modulepreload <link> per url', () => {
-    expect(preloadLinkTags(['/static/a.js', '/static/b.js'])).toEqual([
-      '<link rel="modulepreload" href="/static/a.js" />',
-      '<link rel="modulepreload" href="/static/b.js" />',
-    ]);
+  it('degrades to [] (never throws) when the reader returns a non-array', async () => {
+    // A corrupt/partial artifact can JSON.parse to a non-array; the resolver
+    // must not let that spread-throw and poison every later render.
+    installPreloadModules(() => ({}) as unknown as string[]);
+    expect(await resolvePreloadModules()).toEqual([]);
   });
 
-  it('returns [] for no urls', () => {
-    expect(preloadLinkTags([])).toEqual([]);
+  it('drops non-string entries from the reader result', async () => {
+    installPreloadModules(
+      () => ['/static/a.js', 42, null] as unknown as string[]
+    );
+    expect(await resolvePreloadModules()).toEqual(['/static/a.js']);
+  });
+
+  it('does not poison the memo: a rejecting read degrades to [] and retries next call', async () => {
+    let attempt = 0;
+    installPreloadModules(() => {
+      attempt++;
+      if (attempt === 1) return Promise.reject(new Error('transient'));
+      return ['/static/a.js'];
+    });
+    // First call sees the failure and degrades, without throwing.
+    expect(await resolvePreloadModules()).toEqual([]);
+    // A failed read is not memoized, so the next request retries and succeeds.
+    expect(await resolvePreloadModules()).toEqual(['/static/a.js']);
   });
 });
 
@@ -65,5 +78,18 @@ describe('preloadLinkHeader', () => {
 
   it('returns undefined for no urls (so no empty header is set)', () => {
     expect(preloadLinkHeader([])).toBeUndefined();
+  });
+
+  it('caps the header near the CDN header-size limit, keeping the prefix that fits', () => {
+    const urls = Array.from(
+      { length: 2000 },
+      (_, i) => `/static/chunk-${i}-abcdefgh.js`
+    );
+    const header = preloadLinkHeader(urls)!;
+    expect(header.length).toBeLessThanOrEqual(12_000);
+    // Truncated: fewer entries than the input, and each kept entry is intact.
+    const entries = header.split(', ');
+    expect(entries.length).toBeLessThan(urls.length);
+    expect(entries[0]).toBe('</static/chunk-0-abcdefgh.js>; rel=modulepreload');
   });
 });

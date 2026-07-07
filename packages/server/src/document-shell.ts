@@ -1,6 +1,5 @@
 import type { AppConfig } from '@hono-preact/iso';
 import { speculationRulesTag } from './speculation-rules.js';
-import { preloadLinkTags } from './preload-modules.js';
 
 function escapeHtml(str: string): string {
   return str
@@ -58,17 +57,23 @@ export function assembleDocument(opts: {
   // would otherwise be overridden by an empty injected one (browsers use the
   // last <title> in <head>).
   const titleSource = title ?? defaultTitle;
-  const headTags = [
-    // Preload hints first so the browser discovers the boot closure as early
-    // in the head as possible.
-    ...preloadLinkTags(preloadModules),
+  // The Layout/user's own head tags, kept separate from framework-injected
+  // preload hints so the latter can't manufacture the missing-</head> warning
+  // below (see the guard).
+  const userHeadTags = [
     titleSource != null ? `<title>${escapeHtml(titleSource)}</title>` : '',
     ...metas.map((m) => `<meta ${toAttrs(m)} />`),
     ...links.map((l) => `<link ${toAttrs(l)} />`),
     speculationRulesTag(appConfig ?? {}),
-  ]
-    .filter(Boolean)
-    .join('\n        ');
+  ].filter(Boolean);
+
+  // Preload hints go first (earliest discovery) and reuse toAttrs so their href
+  // is escaped by the same policy as every other injected <link>.
+  const preloadTags = preloadModules.map(
+    (href) => `<link ${toAttrs({ rel: 'modulepreload', href })} />`
+  );
+
+  const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
@@ -77,7 +82,11 @@ export function assembleDocument(opts: {
   // <html lang> wrapper for backward compatibility.
   const startsWithHtml = /^\s*<html(\s|>)/i.test(html);
 
-  if (startsWithHtml && headTags && !html.includes('</head>')) {
+  // Warn only when the Layout would drop the USER's head content. Framework
+  // preload hints don't count: dropping them when there's no </head> is
+  // acceptable (the Link response header still carries the closure), so they
+  // must not fire a spurious warning on every render.
+  if (startsWithHtml && userHeadTags.length > 0 && !html.includes('</head>')) {
     warnMissingMarker(
       '</head>',
       'the Layout owns the document (<html>…) but emitted no </head>; ' +

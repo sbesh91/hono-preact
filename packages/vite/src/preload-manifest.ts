@@ -58,7 +58,9 @@ export function preloadManifestPlugin(): Plugin {
   return {
     name: 'hono-preact:preload-manifest',
     generateBundle(_options, bundle) {
-      if (this.environment && this.environment.name !== 'client') return;
+      // Client environment only; fail closed if the environment is unknown so
+      // we never emit a wrong-closure artifact into a server/worker build.
+      if (this.environment?.name !== 'client') return;
       const urls = collectEntryPreloadModules(bundle);
       this.emitFile({
         type: 'asset',
