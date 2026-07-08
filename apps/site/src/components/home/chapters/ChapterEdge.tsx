@@ -5,7 +5,7 @@ import { Code } from '../scroll/code.js';
 const EYEBROW = 'The platform';
 const TITLE = 'Runs on the platform, at the edge.';
 const DESC =
-  'hono-preact is a Web Fetch app on Hono. The same source SSRs and serves realtime on Cloudflare Workers or Node; you pick the runtime with a one-line adapter.';
+  'One app on Hono, built from web standards. Write it once; it renders on the server and serves realtime the same way, whether you ship to Cloudflare Workers or Node.';
 const SNIPPET = `adapter: cloudflareAdapter()
 // or nodeAdapter()`;
 
@@ -24,8 +24,7 @@ export function ChapterEdge(): VNode {
             <article class="hx-edge-card">
               <h3 class="hx-edge-card__title">Edge</h3>
               <p class="hx-edge-card__line">
-                The same source SSRs and serves realtime on Cloudflare Workers
-                or Node.
+                One source deploys to either runtime, no rewrite between them.
               </p>
               <div class="hx-edge-card__meta">
                 <span class="hx-edge-tag">Cloudflare Workers</span>

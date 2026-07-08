@@ -4,7 +4,7 @@ import { BrowserFrame } from '../scroll/primitives.js';
 import { clamp01 } from '../scroll/progress.js';
 
 const DESC =
-  'hono-preact wraps every client route change in a view transition automatically: no per-link opt-in, direction-aware slides, and shared-element morphs where a card grows into the page it opens. Scroll to watch one morph.';
+  'Every client route change gets a view transition, automatically. No per-link opt-in, no keyframes to hand-write.';
 
 const IDEAS: { lead: string; body: string }[] = [
   {

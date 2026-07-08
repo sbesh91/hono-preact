@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 // A >=6-word contiguous slice of the real desc copy.
-const DESC_SUBSTRING = 'folds into live UI as it lands';
+const DESC_SUBSTRING = 'folds into the live UI the moment it lands';
 
 describe('ChapterStreaming', () => {
   it('renders the heading, the streaming claim, and the device body', () => {

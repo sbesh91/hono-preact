@@ -30,7 +30,7 @@ export function ChapterSSR(): VNode {
             <p class="hx-scene__desc">
               Loaders run in parallel on the server and one HTML document
               streams down. The client never staircases through per-component
-              fetches. Watch: a staircase versus a block that snaps in.
+              fetches.
             </p>
           </div>
 
@@ -50,7 +50,7 @@ export function ChapterSSR(): VNode {
                   Invoice #102000
                 </Region>
               </BrowserFrame>
-              <Wire caption="network - fetch in components">
+              <Wire caption="network: fetch in components">
                 <Lane label="document" start={0} size={0.12} />
                 <Lane label="root.js" start={0.12} size={0.12} />
                 <Lane label="data.json" start={0.24} size={0.16} />
@@ -74,7 +74,7 @@ export function ChapterSSR(): VNode {
                   Invoice #102000
                 </Region>
               </BrowserFrame>
-              <Wire caption="network - hono-preact SSR">
+              <Wire caption="network: hono-preact SSR">
                 <Lane label="document" start={0} size={0.3} tone="grad" />
                 <Lane label="loaders" start={0} size={0.26} tone="grad" />
                 <Lane label="hydrate.js" start={0.04} size={0.24} tone="grad" />

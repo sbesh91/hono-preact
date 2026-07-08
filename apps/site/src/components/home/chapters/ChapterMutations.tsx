@@ -5,7 +5,7 @@ import { Code } from '../scroll/code.js';
 
 const TITLE = 'Mutations without the cliff.';
 const DESC =
-  'A mutation is a Form plus defineAction. The UI patches the instant you submit and the server reconciles behind it. Watch the list fill before the network settles, then read why that is worth doing.';
+  'A mutation is a Form plus defineAction. The UI patches the instant you submit, then the server reconciles behind it. The row lands before the network settles.';
 
 // Payoff points, each tied to a moment in the demo above.
 const WHY: { lead: string; body: string }[] = [

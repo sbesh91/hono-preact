@@ -4,7 +4,8 @@ import { render, cleanup } from '@testing-library/preact';
 import { ChapterMutations } from '../ChapterMutations.js';
 
 // A >=6-word exact substring of the real desc copy.
-const CLAIM = 'The UI patches the instant you submit and the server reconciles';
+const CLAIM =
+  'The UI patches the instant you submit, then the server reconciles';
 
 function stubMatchMedia(reduce: boolean) {
   window.matchMedia = ((query: string) => ({

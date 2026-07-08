@@ -18,7 +18,7 @@ const Home: FunctionComponent = () => {
   useMeta({
     name: 'description',
     content:
-      'Watch the connection come alive: hono-preact fetches, streams, mutates, transitions, and goes live, edge to browser.',
+      'One framework from the edge to the browser: Hono on the server, Preact on the client, and a single typed connection for routing, data, mutations, and realtime.',
   });
   return (
     <div class="hx-home">
@@ -48,9 +48,8 @@ const Home: FunctionComponent = () => {
               </span>
             </h1>
             <p class="hx-hero__lede">
-              Hono at the edge, Preact in the browser, and a single typed
-              connection between them, carrying routing, streaming, mutations,
-              transitions, and realtime.
+              Hono at the edge, Preact in the browser, and one typed connection
+              between them.
             </p>
             <div class="hx-hero__cta">
               <a class="hx-btn hx-btn--primary" href="/docs/quick-start">

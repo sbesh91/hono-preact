@@ -98,8 +98,9 @@ export function ChapterStreaming(): VNode {
             </p>
             <h2 class="hx-scene__title">Data that streams in.</h2>
             <p class="hx-scene__desc">
-              A loader can be an async generator. Each yield frames over SSE (or
-              is SSR-pumped inline) and folds into live UI as it lands.
+              A loader can be an async generator. Each value it yields streams
+              over SSE, or inlines during SSR, and folds into the live UI the
+              moment it lands.
             </p>
           </div>
 

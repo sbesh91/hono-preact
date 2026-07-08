@@ -36,9 +36,7 @@ describe('ChapterTransitions', () => {
     ).toBeTruthy();
     // >= 6-word contiguous substring of the real desc copy.
     expect(
-      screen.getByText(
-        /wraps every client route change in a view transition automatically/
-      )
+      screen.getByText(/Every client route change gets a view transition/)
     ).toBeTruthy();
     // Device chapter: the interactive widget lives inside a BrowserFrame.
     expect(container.querySelector('.hx-browser')).toBeTruthy();
@@ -54,9 +52,7 @@ describe('ChapterTransitions', () => {
       })
     ).toBeTruthy();
     expect(
-      screen.getByText(
-        /wraps every client route change in a view transition automatically/
-      )
+      screen.getByText(/Every client route change gets a view transition/)
     ).toBeTruthy();
   });
 

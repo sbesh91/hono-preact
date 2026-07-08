@@ -20,10 +20,12 @@ describe('ChapterEdge (runs on the platform)', () => {
       })
     ).toBeInTheDocument();
 
-    // A >=6-word substring of the desc that spans both clauses, so it is
-    // unique to the full desc paragraph (no single card repeats it).
+    // A >=6-word substring unique to the desc paragraph (no single card
+    // repeats it).
     expect(
-      screen.getByText(/Node; you pick the runtime with a one-line adapter/i)
+      screen.getByText(
+        /it renders on the server and serves realtime the same way/i
+      )
     ).toBeInTheDocument();
 
     // One of the three Reveal cards.
@@ -60,7 +62,9 @@ describe('ChapterEdge (runs on the platform)', () => {
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Node; you pick the runtime with a one-line adapter/i)
+      screen.getByText(
+        /it renders on the server and serves realtime the same way/i
+      )
     ).toBeInTheDocument();
     // Reveal-wrapped content is present too: proves the static frame renders
     // its children under reduced motion, not just the head outside Reveal.
