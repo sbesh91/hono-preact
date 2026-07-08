@@ -24,6 +24,7 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
+import { fontPreloadLinkHeader } from './font-preload.js';
 import {
   resolvePreloadManifest,
   preloadLinkHeader,
@@ -202,7 +203,15 @@ export async function renderPage(
   // priority and defeat the head tag's `fetchpriority="low"`. The closure is
   // the small, universal boot runtime (worth the earliest hint); the route
   // chunks are hinted low-priority via the head tags only.
-  const linkHeader = preloadLinkHeader(closure);
+  // Fonts first (render-critical, higher-priority hint), then the boot closure's
+  // modulepreload entries. Font entries are few and small; the closure portion
+  // keeps its own budget truncation.
+  const linkHeader = [
+    fontPreloadLinkHeader(options?.appConfig?.fonts ?? []),
+    preloadLinkHeader(closure),
+  ]
+    .filter(Boolean)
+    .join(', ');
   // Append rather than set: a user's middleware may already have written a
   // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
   // headers are valid (RFC 8288) and the browser merges them.

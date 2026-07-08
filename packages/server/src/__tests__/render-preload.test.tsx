@@ -132,4 +132,29 @@ describe('renderPage: modulepreload closure', () => {
     // Route stylesheets are document-only, never in the Link header.
     expect(res.headers.get('Link')).toBeNull();
   });
+
+  it('puts AppConfig font preloads in the Link header before the closure, and in the head', async () => {
+    installPreloadModules(() => ({
+      closure: ['/static/a.js'],
+      routes: {},
+      routeCss: {},
+    }));
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, <Page />, {
+        appConfig: { fonts: ['/static/regular-abc.woff2'] },
+      })
+    );
+
+    const res = await app.request('http://localhost/');
+    const html = await res.text();
+
+    expect(html).toContain(
+      '<link rel="preload" as="font" type="font/woff2" href="/static/regular-abc.woff2" crossorigin="" />'
+    );
+    expect(res.headers.get('Link')).toBe(
+      '</static/regular-abc.woff2>; rel=preload; as=font; type=font/woff2; crossorigin, ' +
+        '</static/a.js>; rel=modulepreload'
+    );
+  });
 });
