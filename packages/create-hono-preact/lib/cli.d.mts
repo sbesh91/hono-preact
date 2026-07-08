@@ -16,13 +16,14 @@ export interface RunOptions {
   spawnFn?: (
     cmd: string,
     args: string[],
-    opts: { cwd: string; stdio?: unknown },
+    opts: { cwd: string; stdio?: unknown; shell?: boolean },
   ) => SpawnedProcess;
   stdin?: {
     isTTY?: boolean;
     on(event: string, listener: (arg: unknown) => void): unknown;
     off?(event: string, listener: (arg: unknown) => void): unknown;
   };
+  platform?: NodeJS.Platform;
 }
 
 export function run(options: RunOptions): Promise<number>;
