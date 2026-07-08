@@ -1,6 +1,6 @@
 import type { VNode } from 'preact';
-import { Reveal } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
+import { useInView, usePrefersReducedMotion } from '../scroll/motion.js';
 
 const SUBPATHS = [
   'hono-preact',
@@ -14,6 +14,11 @@ import { honoPreact } from 'hono-preact/vite';
 import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';`;
 
 export function ChapterOnePackage(): VNode {
+  const reduced = usePrefersReducedMotion();
+  // The pills stagger in when the row scrolls into view. One in-view trigger on
+  // the <ul> drives the whole cascade; each pill's own delay comes from its --i
+  // index in CSS, so the markup stays a plain semantic list.
+  const [rowRef, shown] = useInView<HTMLUListElement>({ disabled: reduced });
   return (
     <section class="hx-chapter">
       <div class="hx-scene">
@@ -26,15 +31,13 @@ export function ChapterOnePackage(): VNode {
             nothing to wire up between the pieces.
           </p>
         </div>
-        <Reveal>
-          <ul class="hx-pkg-row">
-            {SUBPATHS.map((path) => (
-              <li key={path} class="hx-pkg-pill">
-                {path}
-              </li>
-            ))}
-          </ul>
-        </Reveal>
+        <ul class="hx-pkg-row" ref={rowRef} data-shown={String(shown)}>
+          {SUBPATHS.map((path, i) => (
+            <li key={path} class="hx-pkg-pill" style={{ '--i': i }}>
+              {path}
+            </li>
+          ))}
+        </ul>
         <pre class="hx-pkg-code">
           <Code source={SNIPPET} />
         </pre>

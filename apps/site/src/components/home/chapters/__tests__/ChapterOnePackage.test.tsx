@@ -18,7 +18,7 @@ function stubMatchMedia(reduce: boolean) {
   }));
 }
 
-// Reveal wires an IntersectionObserver in an effect; happy-dom lacks it, so stub a no-op.
+// useInView wires an IntersectionObserver in an effect; happy-dom lacks it, so stub a no-op.
 class IOStub {
   observe() {}
   unobserve() {}
@@ -56,7 +56,7 @@ describe('ChapterOnePackage', () => {
     );
   });
 
-  it('still renders heading, copy, and the Reveal-wrapped pills with reduced motion (static fallback frame)', () => {
+  it('still renders heading, copy, and the staggered pills with reduced motion (shown immediately)', () => {
     stubMatchMedia(true);
     const { container } = render(<ChapterOnePackage />);
 
@@ -67,8 +67,8 @@ describe('ChapterOnePackage', () => {
       'A single hono-preact install gives you the runtime'
     );
 
-    // The Reveal-wrapped package list is the only animated content, so reduced
-    // motion must render it as a static frame (no IO gate withholds it).
+    // The package pills are the only animated content, so reduced motion must
+    // show them immediately (no in-view gate withholds them).
     const pills = container.querySelectorAll('.hx-pkg-pill');
     expect(Array.from(pills, (n) => n.textContent)).toEqual([
       'hono-preact',

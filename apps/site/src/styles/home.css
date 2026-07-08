@@ -705,6 +705,11 @@
     opacity: 1;
     transform: none;
   }
+  .hx-pkg-pill {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 .hx-hero {
@@ -1124,10 +1129,27 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.15rem 1.25rem;
-  border: 1px solid var(--border-color);
+  /* Same orangenta treatment as the package pills, scaled up for card size: a
+     faintly warmed fill (padding-box), a soft gradient border in the glow's own
+     hues (border-box), and the tri-colour halo behind the card. The neutral
+     card shadow stays for elevation; the coloured shadows add the glow. */
+  --card-fill: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+  border: 1px solid transparent;
   border-radius: 0.75rem;
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
+  background:
+    linear-gradient(var(--card-fill), var(--card-fill)) padding-box,
+    linear-gradient(
+        100deg,
+        color-mix(in srgb, #fe5000 50%, transparent),
+        color-mix(in srgb, #ec008c 42%, transparent) 52%,
+        color-mix(in srgb, #c97dff 55%, transparent)
+      )
+      border-box;
+  box-shadow:
+    var(--shadow-card),
+    -14px 9px 42px -20px rgba(254, 80, 0, 0.5),
+    0 13px 40px -20px rgba(236, 0, 140, 0.42),
+    14px 9px 42px -20px rgba(201, 125, 255, 0.55);
 }
 .hx-edge-card__title {
   font-weight: 600;
@@ -1147,9 +1169,8 @@
   overflow-x: auto;
   font-size: 0.8rem;
 }
-/* Bottom-aligned concrete tags give the code-less cards the same filled base as
-   the adapter card, so the row reads as three parallel facets, not two hollow
-   cards beside a full one. */
+/* Every card ends in a bottom-aligned row of concrete tags, so the three read
+   as parallel facets sharing one filled base. */
 .hx-edge-card__meta {
   margin-top: auto;
   display: flex;
@@ -1869,19 +1890,63 @@
 .hx-pkg-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  /* Roomy enough that each pill's glow has space to breathe instead of the
+     neighbouring halos bleeding into each other. */
+  gap: 0.9rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .hx-pkg-pill {
+  position: relative;
   font-family: var(--font-sans);
   font-size: 0.875rem;
   color: var(--foreground);
-  background: var(--surface-subtle);
-  border: 1px solid var(--border-color);
+  /* Warm the flat surface a touch and trade the neutral border for a soft
+     gradient edge in the glow's own hues, so the chip face meets its halo
+     instead of sitting on it as a cold grey slab. The fill rides padding-box
+     and the gradient rides border-box, so the 1px border becomes the gradient. */
+  --pkg-fill: color-mix(in srgb, var(--surface-subtle) 92%, var(--accent) 8%);
+  border: 1px solid transparent;
   border-radius: 999px;
+  background:
+    linear-gradient(var(--pkg-fill), var(--pkg-fill)) padding-box,
+    linear-gradient(
+        100deg,
+        color-mix(in srgb, #fe5000 65%, transparent),
+        color-mix(in srgb, #ec008c 55%, transparent) 52%,
+        color-mix(in srgb, #c97dff 68%, transparent)
+      )
+      border-box;
   padding: 0.35rem 0.75rem;
+  /* Orangenta glow: three offset brand-hued shadows (orange left, magenta
+     centre, purple right) blend into one soft gradient halo behind the pill,
+     picking up the same palette as the hero. box-shadow (not a ::before) so it
+     fades cleanly with the pill's own entrance opacity. */
+  box-shadow:
+    -8px 3px 22px -9px rgba(254, 80, 0, 0.6),
+    0 6px 20px -8px rgba(236, 0, 140, 0.5),
+    8px 3px 22px -9px rgba(201, 125, 255, 0.65);
+  /* Staggered scroll-in: hidden until the row is in view, then each pill eases
+     up in turn, offset by its --i index (set in ChapterOnePackage). */
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--i, 0) * 110ms);
+  will-change: transform, opacity;
+}
+.hx-pkg-row[data-shown='true'] .hx-pkg-pill {
+  opacity: 1;
+  transform: none;
+}
+/* No-JS: the in-view trigger never fires, so reveal the pills unconditionally. */
+@media (scripting: none) {
+  .hx-pkg-pill {
+    opacity: 1;
+    transform: none;
+  }
 }
 .hx-pkg-code {
   margin: 0;

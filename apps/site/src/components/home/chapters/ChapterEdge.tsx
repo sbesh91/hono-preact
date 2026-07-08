@@ -1,13 +1,10 @@
 import type { VNode } from 'preact';
 import { Reveal } from '../scroll/primitives.js';
-import { Code } from '../scroll/code.js';
 
 const EYEBROW = 'The platform';
 const TITLE = 'Runs on the platform, at the edge.';
 const DESC =
   'One app on Hono, built from web standards. Write it once; it renders on the server and serves realtime the same way, whether you ship to Cloudflare Workers or Node.';
-const SNIPPET = `adapter: cloudflareAdapter()
-// or nodeAdapter()`;
 
 export function ChapterEdge(): VNode {
   return (
@@ -48,13 +45,16 @@ export function ChapterEdge(): VNode {
 
           <Reveal delayMs={160}>
             <article class="hx-edge-card">
-              <h3 class="hx-edge-card__title">One-line adapter swap</h3>
+              <h3 class="hx-edge-card__title">Typed edge to browser</h3>
               <p class="hx-edge-card__line">
-                You pick the runtime with a one-line adapter.
+                Loader data, actions, and route params are inferred from the
+                server all the way to the client.
               </p>
-              <pre class="hx-edge-card__code">
-                <Code source={SNIPPET} />
-              </pre>
+              <div class="hx-edge-card__meta">
+                <span class="hx-edge-tag">Loaders</span>
+                <span class="hx-edge-tag">Actions</span>
+                <span class="hx-edge-tag">Params</span>
+              </div>
             </article>
           </Reveal>
         </div>

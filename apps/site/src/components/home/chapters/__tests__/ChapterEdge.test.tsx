@@ -9,8 +9,8 @@ afterEach(() => {
 });
 
 describe('ChapterEdge (runs on the platform)', () => {
-  it('renders the heading, the pitch, and the adapter code sample', () => {
-    const { container } = render(<ChapterEdge />);
+  it('renders the heading, the pitch, and the typed-surface chips', () => {
+    render(<ChapterEdge />);
 
     // Chapter heading is an h2.
     expect(
@@ -30,14 +30,13 @@ describe('ChapterEdge (runs on the platform)', () => {
 
     // One of the three Reveal cards.
     expect(
-      screen.getByRole('heading', { level: 3, name: /one-line adapter swap/i })
+      screen.getByRole('heading', { level: 3, name: /typed edge to browser/i })
     ).toBeInTheDocument();
 
-    // The real snippet renders in a <pre> code sample.
-    const pre = container.querySelector('pre');
-    expect(pre).not.toBeNull();
-    expect(pre!.textContent).toContain('cloudflareAdapter()');
-    expect(pre!.textContent).toContain('nodeAdapter()');
+    // The typed-surface chips render in that card (mirrors the other two cards).
+    expect(screen.getByText('Loaders')).toBeInTheDocument();
+    expect(screen.getByText('Actions')).toBeInTheDocument();
+    expect(screen.getByText('Params')).toBeInTheDocument();
   });
 
   it('still renders the heading, pitch, and Reveal cards with reduced motion', () => {
@@ -69,7 +68,7 @@ describe('ChapterEdge (runs on the platform)', () => {
     // Reveal-wrapped content is present too: proves the static frame renders
     // its children under reduced motion, not just the head outside Reveal.
     expect(
-      screen.getByRole('heading', { level: 3, name: /one-line adapter swap/i })
+      screen.getByRole('heading', { level: 3, name: /typed edge to browser/i })
     ).toBeInTheDocument();
   });
 });
