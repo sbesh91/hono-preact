@@ -1,4 +1,5 @@
 import type { AppConfig } from '@hono-preact/iso';
+import { fontMimeType } from './font-preload.js';
 import { speculationRulesTag } from './speculation-rules.js';
 
 function escapeHtml(str: string): string {
@@ -115,9 +116,25 @@ export function assembleDocument(opts: {
     `<link ${toAttrs({ rel: 'stylesheet', href })} />`;
   const routeStyleTags = routeStyleSheets.map(styleTag);
 
-  const headTags = [...preloadTags, ...userHeadTags, ...routeStyleTags].join(
-    '\n        '
+  // Font preloads are render-critical resources (default High priority), so they
+  // go FIRST in the head for earliest discovery, ahead of the fetchpriority=low
+  // modulepreload hints. crossorigin is mandatory: fonts fetch in CORS mode even
+  // same-origin, so a preload without it does not match the request and
+  // double-fetches. type lets the browser skip a format it cannot use (omitted
+  // for an unrecognized extension). Like the modulepreload hints these are
+  // droppable (the Link header still carries them), so they are NOT counted in
+  // the missing-</head> warning below.
+  const fontPreloadTags = (appConfig?.fonts ?? []).map(
+    (href) =>
+      `<link ${toAttrs({ rel: 'preload', as: 'font', type: fontMimeType(href), href, crossorigin: '' })} />`
   );
+
+  const headTags = [
+    ...fontPreloadTags,
+    ...preloadTags,
+    ...userHeadTags,
+    ...routeStyleTags,
+  ].join('\n        ');
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
