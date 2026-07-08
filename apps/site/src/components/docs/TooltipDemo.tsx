@@ -6,7 +6,7 @@ const ALIGNS = ['start', 'center', 'end'] as const;
 
 // Placement explorer harness around the TooltipExample core. The controls exist
 // only here (the docs Code tab shows TooltipExample, the real usage). Styling is
-// in root.css (.docs-tooltip* / .docs-placement*).
+// in docs.css (.docs-tooltip* / .docs-placement*).
 export function TooltipDemo() {
   const [side, setSide] = useState<(typeof SIDES)[number]>('top');
   const [align, setAlign] = useState<(typeof ALIGNS)[number]>('center');

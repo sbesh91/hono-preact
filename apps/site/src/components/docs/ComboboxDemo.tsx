@@ -5,7 +5,7 @@ const FRUITS = ['Apple', 'Banana', 'Cherry', 'Orange', 'Lemon', 'Mango'];
 
 // A single-select combobox in its minimal form: just an Input. It opens on
 // focus (the default), anchors the popup to itself, and the consumer filters
-// FRUITS by the typed query. Styling is in root.css (.docs-cb*).
+// FRUITS by the typed query. Styling is in docs.css (.docs-cb*).
 export function ComboboxDemo() {
   const [query, setQuery] = useState('');
   const filtered = FRUITS.filter((f) => matchSubstring(f, query));

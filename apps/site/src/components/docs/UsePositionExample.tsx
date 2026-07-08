@@ -8,7 +8,7 @@ interface UsePositionExampleProps {
 
 // Demonstrates usePosition: a button anchors a floating box that tracks it via
 // position:fixed. The resolved side/align (after collision handling) is shown
-// inside the box. Styling: .docs-useposition* in root.css.
+// inside the box. Styling: .docs-useposition* in docs.css.
 export function UsePositionExample({
   side = 'bottom',
   align = 'center',
