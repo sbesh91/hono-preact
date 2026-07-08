@@ -22,6 +22,7 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   prompts?: import('./prompts.mjs').PromptAdapter,
  *   spawnFn?: typeof realSpawn,
  *   stdin?: import('node:stream').Readable & { isTTY?: boolean },
+ *   platform?: NodeJS.Platform,
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
@@ -33,6 +34,7 @@ export async function run({
   prompts = clackPrompts,
   spawnFn = realSpawn,
   stdin = process.stdin,
+  platform = process.platform,
 }) {
   const parsed = parseArgs(argv);
 
@@ -130,7 +132,8 @@ export async function run({
       pm,
       ['install'],
       targetPath,
-      interactive ? 'capture' : 'inherit'
+      interactive ? 'capture' : 'inherit',
+      platform
     );
     if (code !== 0) {
       if (interactive) {
@@ -151,7 +154,8 @@ export async function run({
       'git',
       ['init'],
       targetPath,
-      interactive ? 'ignore' : 'inherit'
+      interactive ? 'ignore' : 'inherit',
+      platform
     );
     if (code !== 0) {
       console.warn(
@@ -182,17 +186,34 @@ export async function run({
  * in `output`). Resolves with the exit code and any captured output. A child
  * terminated by a signal (close code null) is reported as a non-zero exit.
  *
+ * On Windows, package managers and git are `.cmd`/`.bat` shims, which recent
+ * Node refuses to spawn without a shell (surfacing as ENOENT). `shell: true`
+ * routes the launch through cmd.exe so the shim resolves. The args here are
+ * fixed literals (`install`, `init`), so there is nothing to shell-escape.
+ *
  * @param {typeof realSpawn} spawnFn
  * @param {string} cmd
  * @param {string[]} args
  * @param {string} cwd
  * @param {'inherit' | 'ignore' | 'capture'} [mode]
+ * @param {NodeJS.Platform} [platform]
  * @returns {Promise<{ code: number, output: string }>}
  */
-function runChild(spawnFn, cmd, args, cwd, mode = 'inherit') {
+function runChild(
+  spawnFn,
+  cmd,
+  args,
+  cwd,
+  mode = 'inherit',
+  platform = process.platform
+) {
   const stdio = mode === 'capture' ? ['ignore', 'pipe', 'pipe'] : mode;
   return new Promise((res) => {
-    const child = spawnFn(cmd, args, { cwd, stdio });
+    const child = spawnFn(cmd, args, {
+      cwd,
+      stdio,
+      shell: platform === 'win32',
+    });
     let output = '';
     const collect = (/** @type {Buffer} */ chunk) => {
       output += chunk.toString();
