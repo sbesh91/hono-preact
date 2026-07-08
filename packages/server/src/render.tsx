@@ -204,12 +204,13 @@ export async function renderPage(
   // the small, universal boot runtime (worth the earliest hint); the route
   // chunks are hinted low-priority via the head tags only.
   // Fonts first (render-critical, higher-priority hint), then the boot closure's
-  // modulepreload entries. Font entries are few and small; the closure portion
-  // keeps its own budget truncation.
-  const linkHeader = [
-    fontPreloadLinkHeader(options?.appConfig?.fonts ?? []),
-    preloadLinkHeader(closure),
-  ]
+  // modulepreload entries. The closure's truncation budget is reduced by the
+  // font part's byte length so the two parts combined, not each independently,
+  // stay within the header-size cap (the font part is never truncated itself:
+  // fonts are few and small enough that it isn't worth the complexity).
+  const fontHeader = fontPreloadLinkHeader(options?.appConfig?.fonts ?? []);
+  const usedBytes = fontHeader ? fontHeader.length + 2 : 0;
+  const linkHeader = [fontHeader, preloadLinkHeader(closure, usedBytes)]
     .filter(Boolean)
     .join(', ');
   // Append rather than set: a user's middleware may already have written a

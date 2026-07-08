@@ -116,6 +116,25 @@ describe('assembleDocument: route stylesheets', () => {
     });
     expect(warn).toHaveBeenCalledOnce();
   });
+
+  it('WARNS when a fragment (no <html>) drops render-critical route stylesheets (no <head> to inject into)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: '<div>x</div>',
+      head: {},
+      routeStyleSheets: ['/static/x.css'],
+    });
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT warn for a fragment with no route stylesheets (the supported quiet case)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: '<div>x</div>',
+      head: {},
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
 });
 
 describe('assembleDocument: font preloads', () => {

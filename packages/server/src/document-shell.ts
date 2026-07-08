@@ -157,6 +157,21 @@ export function assembleDocument(opts: {
         'injected <title>/<meta>/<link> tags were dropped'
     );
   }
+
+  // A fragment (no <html>) gets the framework's own <html lang> wrapper below,
+  // which has no <head> to inject into, so route stylesheets are dropped
+  // silently. Modulepreload hints being dropped there is fine (see the guard
+  // above), but route stylesheets are render-critical: warn so this is
+  // debuggable instead of shipping a route with no styles.
+  if (!startsWithHtml && routeStyleTags.length > 0) {
+    warnMissingMarker(
+      '</head>',
+      'the rendered output is a fragment (no <html>), so the framework ' +
+        '<html> wrapper has no <head> and the matched route render-critical ' +
+        'stylesheet links were dropped; a route that relies on route-scoped ' +
+        'CSS must render a document (a Layout with <Head>), not a bare fragment'
+    );
+  }
   const inner = html.replace('</head>', `${headTags}\n      </head>`);
 
   return startsWithHtml

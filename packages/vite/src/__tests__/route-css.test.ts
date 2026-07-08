@@ -55,11 +55,40 @@ const chains: RouteModuleChain[] = [
 ];
 
 describe('resolveRouteCssMap', () => {
-  it("maps a route to its chunk's CSS, keys the empty index pattern under '/', and subtracts the entry's global CSS", () => {
+  it("maps a route to its chunk's CSS and keys the empty index pattern under '/' (entry-only CSS never appears because no route chunk imports it)", () => {
     expect(resolveRouteCssMap(chains, bundle())).toEqual({
       '/': ['/home.css'],
       '/docs/x': ['/docs.css'],
     });
+  });
+
+  it("does NOT drop a route's stylesheet just because the entry closure also imports it (no eager-CSS subtraction; a route lists every stylesheet its own chunks import)", () => {
+    const b = bundle();
+    // The home chunk imports both its own CSS and a "shared.css" that the entry
+    // closure ALSO imports (e.g. a component both a global layout and the home
+    // view use). Nothing SSR-injects the entry closure's CSS, so shared.css must
+    // still appear in the route's own list or the route loses that stylesheet.
+    b['home.js'] = {
+      type: 'chunk',
+      fileName: 'home.js',
+      isEntry: false,
+      imports: [],
+      moduleIds: ['/app/pages/home.tsx'],
+      viteMetadata: { importedCss: new Set(['home.css', 'shared.css']) },
+    };
+    b['client.js'] = {
+      type: 'chunk',
+      fileName: 'client.js',
+      isEntry: true,
+      imports: [],
+      moduleIds: ['/app/entry.ts'],
+      viteMetadata: { importedCss: new Set(['global.css', 'shared.css']) },
+    };
+    b['shared.css'] = { type: 'asset', fileName: 'shared.css' };
+    expect(resolveRouteCssMap(chains, b)['/']).toEqual([
+      '/home.css',
+      '/shared.css',
+    ]);
   });
 
   it('dedupes a stylesheet shared across the chain (layout + page both import docs.css)', () => {

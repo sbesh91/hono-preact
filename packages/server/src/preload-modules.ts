@@ -118,15 +118,25 @@ const LINK_HEADER_BUDGET = 12_000;
 /**
  * An RFC 8288 `Link` header value preloading the given URLs as modules, or
  * `undefined` when there is nothing to preload (so callers skip the header
- * rather than emit an empty one). Truncated at {@link LINK_HEADER_BUDGET} bytes,
- * keeping the longest whole-entry prefix that fits.
+ * rather than emit an empty one). Truncated at {@link LINK_HEADER_BUDGET} bytes
+ * minus `usedBytes`, keeping the longest whole-entry prefix that fits.
+ *
+ * `usedBytes` lets a caller that prepends another `Link` part (e.g. font
+ * preloads) share the one budget: pass the byte length that part already
+ * consumed so the two parts combined stay within {@link LINK_HEADER_BUDGET}
+ * instead of each independently truncating to the full budget.
  */
-export function preloadLinkHeader(urls: readonly string[]): string | undefined {
+export function preloadLinkHeader(
+  urls: readonly string[],
+  usedBytes = 0
+): string | undefined {
+  const budget = LINK_HEADER_BUDGET - usedBytes;
+  if (budget <= 0) return undefined;
   let out = '';
   for (const u of urls) {
     const part = `<${u}>; rel=modulepreload`;
     const next = out ? `${out}, ${part}` : part;
-    if (next.length > LINK_HEADER_BUDGET) break;
+    if (next.length > budget) break;
     out = next;
   }
   return out || undefined;

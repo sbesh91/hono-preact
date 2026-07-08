@@ -135,4 +135,20 @@ describe('preloadLinkHeader', () => {
     expect(entries.length).toBeLessThan(urls.length);
     expect(entries[0]).toBe('</static/chunk-0-abcdefgh.js>; rel=modulepreload');
   });
+
+  it('shrinks the truncation budget by usedBytes, so a header combined with an earlier part stays within the overall cap', () => {
+    const urls = Array.from(
+      { length: 2000 },
+      (_, i) => `/static/chunk-${i}-abcdefgh.js`
+    );
+    const header = preloadLinkHeader(urls, 11_900)!;
+    // 11_900 bytes were already used by an earlier part of the combined header
+    // (e.g. font preloads); the closure portion must fit in what remains.
+    expect(header.length).toBeLessThanOrEqual(100);
+  });
+
+  it('returns undefined when usedBytes already exhausts the budget', () => {
+    const urls = ['/static/a.js', '/static/b.js'];
+    expect(preloadLinkHeader(urls, 12_000)).toBeUndefined();
+  });
 });

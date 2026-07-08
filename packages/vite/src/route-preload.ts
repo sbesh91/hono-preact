@@ -406,6 +406,23 @@ function entryClosure(
   return out;
 }
 
+// Merge a route's resolved URLs into the pattern->urls map: key the top-level
+// index route ('') under '/', and union (not overwrite) when two chains resolve
+// to the same pattern, so a shared pattern keeps all its URLs. Shared by
+// resolvePreloadMap (JS) and resolveRouteCssMap (CSS).
+function mergeRouteUrls(
+  map: Record<string, string[]>,
+  rawPattern: string,
+  urls: string[]
+): void {
+  if (urls.length === 0) return;
+  const pattern = rawPattern === '' ? '/' : rawPattern;
+  const prior = map[pattern];
+  map[pattern] = prior
+    ? [...prior, ...urls.filter((u) => !prior.includes(u))]
+    : urls;
+}
+
 /**
  * Resolve route module chains to a pattern -> { high, low } preload map against
  * the Rollup output bundle.
@@ -447,16 +464,7 @@ export function resolvePreloadMap(
         urls.push(toRootRelative(file));
       }
     }
-    if (urls.length === 0) continue;
-    // A top-level index route (`{ path: '' }`) yields an empty pattern; the
-    // runtime serves it at '/', so key it there to match the request path.
-    const pattern = chain.pattern === '' ? '/' : chain.pattern;
-    // Two chains can resolve to the same pattern (e.g. a contentRoutes index
-    // and a sibling leaf); union their chunks rather than letting the last win.
-    const prior = map[pattern];
-    map[pattern] = prior
-      ? [...prior, ...urls.filter((u) => !prior.includes(u))]
-      : urls;
+    mergeRouteUrls(map, chain.pattern, urls);
   }
   return map;
 }
@@ -491,16 +499,23 @@ function cssOfChunks(
 /**
  * Resolve route module chains to a pattern -> CSS-URL map against the Rollup
  * output bundle. For each chain, collect the CSS imported by the chain's static
- * chunk closure (layouts + view), minus the client entry's CSS (loaded eagerly
- * on every route via the entry). Mirrors `resolvePreloadMap`'s dedup, empty-path
- * -> '/' keying, and pattern-collision union, so the two maps stay consistent.
+ * chunk closure (layouts + view). Mirrors `resolvePreloadMap`'s dedup,
+ * empty-path -> '/' keying, and pattern-collision union, so the two maps stay
+ * consistent.
+ *
+ * A route's CSS list is every stylesheet its own chunks import, full stop:
+ * nothing SSR-injects the client entry's CSS (only the entry's JS closure is
+ * modulepreload-hinted; there is no CSS analog), so a stylesheet cannot be
+ * assumed already on the page just because the entry also imports it. A
+ * stylesheet meant to load on every route should be linked by the app's
+ * Layout (the `?url` pattern) or imported per-route, not relied upon via the
+ * entry closure.
  */
 export function resolveRouteCssMap(
   chains: readonly RouteModuleChain[],
   bundle: Record<string, RouteBundleChunkLike>
 ): RouteCssMap {
   const bySource = indexBySource(bundle);
-  const eagerCss = new Set(cssOfChunks(entryClosure(bundle), bundle));
 
   const map: RouteCssMap = {};
   for (const chain of chains) {
@@ -512,16 +527,11 @@ export function resolveRouteCssMap(
     const seen = new Set<string>();
     const urls: string[] = [];
     for (const css of cssOfChunks(files, bundle)) {
-      if (eagerCss.has(css) || seen.has(css)) continue;
+      if (seen.has(css)) continue;
       seen.add(css);
       urls.push(toRootRelative(css));
     }
-    if (urls.length === 0) continue;
-    const pattern = chain.pattern === '' ? '/' : chain.pattern;
-    const prior = map[pattern];
-    map[pattern] = prior
-      ? [...prior, ...urls.filter((u) => !prior.includes(u))]
-      : urls;
+    mergeRouteUrls(map, chain.pattern, urls);
   }
   return map;
 }
