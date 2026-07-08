@@ -89,3 +89,24 @@ A route sheet is plain CSS, so ordinary CSS gotchas still apply. The one that bi
   transform: scale(0.98);
 }
 ```
+
+## Preload critical fonts
+
+List your above-the-fold fonts on `AppConfig.fonts` as `?url` imports, and the framework preloads them for you: a `<link rel="preload" as="font" type="font/woff2" crossorigin>` in the SSR head, plus a matching `Link` response header so a CDN or edge runtime can promote it to a 103 Early Hints response. Both flatten the font fetch into the same round trip as the HTML instead of waiting for the CSS that references it.
+
+```ts
+// src/app-config.ts
+import { defineApp } from 'hono-preact';
+import regular from '@/styles/fonts/brand-regular.woff2?url';
+import semibold from '@/styles/fonts/brand-semibold.woff2?url';
+
+export default defineApp({
+  fonts: [regular, semibold],
+});
+```
+
+`crossorigin` is mandatory on every font preload tag the framework emits: fonts always fetch in CORS mode, even when they're same-origin, so a preload without `crossorigin` doesn't match the font request the browser actually makes and the font downloads twice.
+
+List only the weights your first paint needs; a body weight and a heading weight typically cover it. Preloading every weight in your type scale spends early bandwidth on fonts the current page never renders, competing with the resources that are actually on the critical path.
+
+Font-display is a separate, per-stylesheet concern: `AppConfig.fonts` only controls when the browser starts fetching a font, not how it swaps in once loaded. Set `font-display` in your own `@font-face` rules as you normally would.
