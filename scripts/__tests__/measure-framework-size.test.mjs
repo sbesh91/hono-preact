@@ -5,7 +5,9 @@ import {
   measureSectionC,
 } from '../measure-framework-size.mjs';
 import { FEATURE_MODULES } from '../size-probe-config.mjs';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { mkdtempSync, cpSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const ISO = resolve('packages/iso/dist');
 const UI = resolve('packages/ui/dist');
@@ -43,5 +45,28 @@ describe('measureSectionC', () => {
 
   it('returns {} when the ui dist is absent', async () => {
     expect(await measureSectionC(resolve('packages/ui/does-not-exist'))).toEqual({});
+  });
+});
+
+describe('a manifest module absent from the measured dist', () => {
+  // Reproduces the CI crash this guards against: a PR adds a module to a
+  // FEATURE_MODULES bucket (this repo added boot-client.js to `runtime`), and
+  // the CI size job then measures the BASE ref's dist, which predates that
+  // addition and does not contain the file. Without filtering the bucket's
+  // module list against the dist being measured, esbuild fails to resolve the
+  // missing path and the whole measurement throws.
+  it('measures the bucket without it instead of throwing', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'iso-dist-missing-module-'));
+    try {
+      cpSync(ISO, tmp, { recursive: true });
+      rmSync(join(tmp, 'boot-client.js'));
+      expect(existsSync(join(tmp, 'boot-client.js'))).toBe(false);
+
+      const a = await measureSectionA(tmp);
+      expect(a.runtime.total).toBeGreaterThan(0);
+      expect(a.runtime.marginal).toBeGreaterThanOrEqual(0);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
