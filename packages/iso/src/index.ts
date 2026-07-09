@@ -59,6 +59,8 @@ export type {
   ServerCaller,
   CallResult,
   CallLoaderLocation,
+  CallLoaderOptions,
+  CallStreamOptions,
 } from './server-caller.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {

@@ -25,15 +25,52 @@ export type CallLoaderLocation = {
   searchParams?: Record<string, string>;
 };
 
+/** Options for calling a single-value loader. */
+export type CallLoaderOptions = { location?: CallLoaderLocation };
+
+/**
+ * Options for calling a streaming loader. `signal` is composed with the
+ * request's own signal (`AbortSignal.any`) and threaded to the loader as
+ * `ctx.signal`, so a caller (typically a test) can abort the stream it is
+ * draining.
+ */
+export type CallStreamOptions = CallLoaderOptions & { signal?: AbortSignal };
+
+// Overload order is load-bearing. The streaming loader overload is listed
+// FIRST (mirroring defineLoader); a LoaderRef<T, false> cannot match it
+// because its useData is a function, never assignable to `never`. The
+// non-streaming action overload precedes the streaming one: an
+// ActionRef<P, R, never> would otherwise match the generic streaming overload
+// with TChunk inferred as never.
 export interface ServerCaller {
+  /**
+   * Call a streaming loader. Middleware and schema coercion run when the
+   * generator is PRODUCED; iterating the returned generator runs the loader
+   * body. This mirrors the HTTP handler, where the SSE pump iterates outside
+   * the middleware dispatch (and outside the request scope), so an error
+   * thrown mid-stream propagates from the generator, not as an outcome.
+   */
+  call<T>(
+    loader: LoaderRef<T, true>,
+    opts?: CallStreamOptions
+  ): Promise<CallResult<AsyncGenerator<T, void, unknown>>>;
   call<T>(
     loader: LoaderRef<T, false>,
-    opts?: { location?: CallLoaderLocation }
+    opts?: CallLoaderOptions
   ): Promise<CallResult<T>>;
   call<TPayload, TResult>(
     action: ActionRef<TPayload, TResult, never>,
     payload: TPayload
   ): Promise<CallResult<TResult>>;
+  /**
+   * Call a streaming action. Iterate the returned generator for its chunks;
+   * the generator's return value (the final `next()`'s `value` when `done`)
+   * is the action's `TResult`.
+   */
+  call<TPayload, TResult, TChunk>(
+    action: ActionRef<TPayload, TResult, TChunk>,
+    payload: TPayload
+  ): Promise<CallResult<AsyncGenerator<TChunk, TResult, unknown>>>;
 }
 
 // Server-side action metadata is attached to the raw function by defineAction
@@ -63,7 +100,7 @@ function serverMiddleware(
   return out;
 }
 
-function isLoaderRef(ref: unknown): ref is LoaderRef<unknown, false> {
+function isLoaderRef(ref: unknown): ref is LoaderRef<unknown, boolean> {
   return (
     typeof ref === 'object' && ref !== null && 'fn' in ref && '__id' in ref
   );
@@ -77,7 +114,8 @@ export function createCaller(c: Context): ServerCaller {
             c,
             caller,
             ref,
-            (arg as { location?: CallLoaderLocation })?.location
+            // The erased-impl seam: the public overloads guarantee this shape.
+            arg as CallStreamOptions | undefined
           )
         : callAction(
             c,
@@ -101,14 +139,20 @@ async function inScope<T>(c: Context, inner: () => Promise<T>): Promise<T> {
 async function callLoader<T>(
   c: Context,
   caller: ServerCaller,
-  ref: LoaderRef<T, false>,
-  location: CallLoaderLocation | undefined
+  ref: LoaderRef<T, boolean>,
+  opts: CallStreamOptions | undefined
 ): Promise<CallResult<T>> {
+  const location = opts?.location;
+  // Compose the caller-supplied signal (streaming calls: lets the caller abort
+  // the stream it is draining) with the request's own signal.
+  const signal = opts?.signal
+    ? AbortSignal.any([c.req.raw.signal, opts.signal])
+    : c.req.raw.signal;
   const serverMw = serverMiddleware(ref.use);
   const ctx: ServerLoaderCtx = {
     scope: 'loader',
     c,
-    signal: c.req.raw.signal,
+    signal,
     location: {
       path: location?.path ?? c.req.path,
       pathParams: location?.pathParams ?? {},

@@ -174,3 +174,82 @@ describe('ctx.call composition', () => {
     expect(loaderRan).toBe(false);
   });
 });
+
+describe('createCaller streaming', () => {
+  it('returns the async generator from a streaming loader and drains it', async () => {
+    const c = await ctx();
+    const stream = defineLoader(async function* () {
+      yield 1;
+      yield 2;
+    });
+    const r = await createCaller(c).call(stream);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const got: number[] = [];
+      for await (const chunk of r.value) got.push(chunk);
+      expect(got).toEqual([1, 2]);
+    }
+  });
+
+  it('short-circuits a streaming loader on a middleware deny (the body never starts)', async () => {
+    const c = await ctx();
+    let ran = false;
+    const guard = defineServerMiddleware(async () => deny('FORBIDDEN'));
+    const stream = defineLoader(
+      async function* () {
+        ran = true;
+        yield 1;
+      },
+      { use: [guard] }
+    );
+    const r = await createCaller(c).call(stream);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.outcome.__outcome === 'deny')
+      expect(r.outcome.code).toBe('FORBIDDEN');
+    expect(ran).toBe(false);
+  });
+
+  it('threads opts.signal into ctx.signal so an abort ends a parked stream', async () => {
+    const c = await ctx();
+    const stream = defineLoader(async function* ({ signal }) {
+      yield 'first';
+      // Park until the signal aborts, then finish (subscription-style loop).
+      await new Promise<void>((resolve) => {
+        if (signal.aborted) return resolve();
+        signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const ctrl = new AbortController();
+    const r = await createCaller(c).call(stream, { signal: ctrl.signal });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const first = await r.value.next();
+      expect(first.value).toBe('first');
+      const parked = r.value.next();
+      ctrl.abort();
+      const end = await parked;
+      expect(end.done).toBe(true);
+    }
+  });
+
+  it('returns the async generator from a streaming action (chunks, then the return value)', async () => {
+    const c = await ctx();
+    const act = defineAction(async function* (_ctx, p: { n: number }) {
+      yield p.n;
+      yield p.n + 1;
+      return { total: p.n * 2 + 1 };
+    });
+    const r = await createCaller(c).call(act, { n: 1 });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const chunks: number[] = [];
+      let step = await r.value.next();
+      while (!step.done) {
+        chunks.push(step.value);
+        step = await r.value.next();
+      }
+      expect(chunks).toEqual([1, 2]);
+      expect(step.value).toEqual({ total: 3 });
+    }
+  });
+});
