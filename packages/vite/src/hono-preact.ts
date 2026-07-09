@@ -16,6 +16,7 @@ import {
   serverEntryPlugin,
 } from './server-entry.js';
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
+import { BASELINE_TARGETS } from './css-targets.js';
 
 export interface HonoPreactOptions {
   /** Deployment target. Required. See hono-preact/adapter-cloudflare. */
@@ -70,7 +71,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
   // must stay stable.
   const configPlugin: Plugin = {
     name: 'hono-preact:config',
-    config() {
+    config(userConfig) {
       return {
         resolve: {
           dedupe: ['preact', 'preact/hooks', 'preact-iso'],
@@ -78,7 +79,18 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
         build: {
           target: 'esnext' as const,
           assetsDir: 'static',
+          // Framework-owned CSS minification: the same Lightning CSS engine the
+          // auto-splitter uses, so one parser/serializer owns all CSS semantics.
+          // Only when the user has not chosen a minifier themselves.
+          ...(userConfig.build?.cssMinify === undefined
+            ? { cssMinify: 'lightningcss' as const }
+            : {}),
         },
+        // Baseline-derived lowering targets, unless the user configured their
+        // own lightningcss options (theirs win wholesale to avoid partial merges).
+        ...(userConfig.css?.lightningcss === undefined
+          ? { css: { lightningcss: { targets: BASELINE_TARGETS } } }
+          : {}),
         environments: {
           client: {
             build: {
