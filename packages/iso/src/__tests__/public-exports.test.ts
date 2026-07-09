@@ -34,6 +34,10 @@ describe('realtime channel exports', () => {
     expect(typeof iso.defineChannel).toBe('function');
     expect(typeof iso.publish).toBe('function');
   });
+
+  it('exports eventStream', () => {
+    expect(typeof iso.eventStream).toBe('function');
+  });
 });
 
 describe('duplex WebSocket exports', () => {

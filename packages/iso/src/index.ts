@@ -119,6 +119,7 @@ export type { LoaderCache } from './cache.js';
 export { defineChannel } from './define-channel.js';
 export type { Channel, Topic } from './define-channel.js';
 export { publish } from './pubsub.js';
+export { eventStream } from './event-stream.js';
 
 // Duplex WebSocket sockets.
 export { defineSocket } from './define-socket.js';
