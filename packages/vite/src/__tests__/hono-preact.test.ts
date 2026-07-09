@@ -26,6 +26,36 @@ describe('honoPreact adapter requirement', () => {
   });
 });
 
+describe('honoPreact css.global validation', () => {
+  it('throws when css.global points at a missing file', () => {
+    expect(() =>
+      honoPreact({
+        adapter: fakeAdapter(),
+        css: { global: 'src/styles/does-not-exist.css' },
+      })
+    ).toThrow(/css\.global/);
+  });
+
+  it('throws when css.global is an empty string (resolves to the project dir, not a file)', () => {
+    expect(() =>
+      honoPreact({ adapter: fakeAdapter(), css: { global: '' } })
+    ).toThrow(/css\.global/);
+  });
+
+  it('throws when css.global points at a directory', () => {
+    expect(() =>
+      honoPreact({ adapter: fakeAdapter(), css: { global: 'packages' } })
+    ).toThrow(/css\.global/);
+  });
+
+  it('accepts css.global pointing at an existing file', () => {
+    // Any real file relative to cwd works; package.json always exists.
+    expect(() =>
+      honoPreact({ adapter: fakeAdapter(), css: { global: 'package.json' } })
+    ).not.toThrow();
+  });
+});
+
 describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in pipeline order, then the adapter plugins, then preact', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() }) as NamedPlugin[];

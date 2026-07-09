@@ -75,9 +75,11 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
   const cssGlobal = css?.global;
   if (cssGlobal !== undefined) {
     const abs = resolve(process.cwd(), cssGlobal);
-    if (!fs.existsSync(abs)) {
+    // isFile() also rejects '' and directory paths (resolve(cwd, '') is the
+    // project dir itself, which exists but is not a stylesheet).
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
       throw new Error(
-        `[hono-preact] css.global points at '${cssGlobal}', which does not exist. ` +
+        `[hono-preact] css.global points at '${cssGlobal}', which is not a file. ` +
           `Pass a project-relative path to your global stylesheet, e.g. 'src/styles/root.css'.`
       );
     }
