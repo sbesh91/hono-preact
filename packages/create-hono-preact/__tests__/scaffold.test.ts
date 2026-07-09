@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +22,20 @@ afterEach(() => rmSync(workDir, { recursive: true, force: true }));
 
 function readPkg(dir: string) {
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+}
+
+/** Recursively list every file under `dir`, as paths relative to `dir`. */
+function listAllFiles(dir: string, base = dir): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listAllFiles(full, base));
+    } else {
+      out.push(full.slice(base.length + 1));
+    }
+  }
+  return out;
 }
 
 describe('scaffold', () => {
@@ -76,6 +96,21 @@ describe('scaffold', () => {
     expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(target, '.gitignore'))).toBe(true);
   });
+
+  it('leaves no literal {{name}} placeholder anywhere in the scaffolded tree', async () => {
+    // Substitution is gated on a file-extension allowlist (see
+    // SUBSTITUTABLE_EXTENSIONS in lib/template.mjs), so a template file added
+    // in an unlisted extension would silently ship the placeholder. Walk
+    // every file the scaffolder produces, not just the substitutable ones,
+    // to catch that. Use the ui overlay so the walk covers the largest file
+    // set (base + adapter + feature/ui).
+    const target = join(workDir, 'placeholder-check');
+    await scaffold(target, { adapter: 'cloudflare', ui: true }, templatesRoot);
+    const offenders = listAllFiles(target).filter((relPath) =>
+      readFileSync(join(target, relPath), 'utf8').includes('{{name')
+    );
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('feature/ui home.tsx parity with base', () => {
@@ -93,6 +128,7 @@ describe('feature/ui home.tsx parity with base', () => {
     );
     for (const marker of [
       'serverLoaders.default.View(',
+      "HomeView.displayName = 'Home'",
       'definePage(HomeView)',
       "Welcome to {'{{name}}'}",
     ]) {
