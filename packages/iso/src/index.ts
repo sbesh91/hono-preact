@@ -231,3 +231,8 @@ export {
   type ViewTransitionNameProps,
   type ViewTransitionGroupProps,
 } from './view-transition-name.js';
+
+// Client boot. Installs the runtime services the generated client entry
+// relies on (history shim, nav-transition scheduler, stream registry);
+// public so a custom `clientEntry` can make the same call.
+export { bootClient } from './boot-client.js';
