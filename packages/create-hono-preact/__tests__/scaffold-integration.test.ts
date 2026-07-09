@@ -84,7 +84,14 @@ async function scaffold(
 ): Promise<string> {
   const argv = [name, `--adapter=${adapter}`, '--no-install', '--no-git'];
   if (ui) argv.push('--ui');
-  const code = await run({ argv, cwd: workDir, env: {} });
+  // Pin a supported nodeVersion so the preflight cannot fail the scaffold on
+  // hosts outside the engines range; preflight behavior is covered in cli.test.ts.
+  const code = await run({
+    argv,
+    cwd: workDir,
+    env: {},
+    nodeVersion: 'v22.18.0',
+  });
   if (code !== 0) throw new Error(`scaffold failed with code ${code}`);
 
   const target = join(workDir, name);

