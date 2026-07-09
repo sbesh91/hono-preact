@@ -31,10 +31,10 @@ renderPage(
 
 ## Head tags
 
-Head tags (`<title>`, `<meta>`, `<link>`) are collected during prerender via hoofd. Pages set them with hoofd's `useTitle`, `useMeta`, and `useLink` hooks:
+Head tags (`<title>`, `<meta>`, `<link>`) are collected during prerender via hoofd. Pages set them with the `useTitle`, `useMeta`, and `useLink` hooks (see [Head Management](/docs/head)):
 
 ```tsx
-import { useTitle } from 'hoofd/preact';
+import { useTitle } from 'hono-preact';
 
 export default function MoviesPage() {
   useTitle('Movies');

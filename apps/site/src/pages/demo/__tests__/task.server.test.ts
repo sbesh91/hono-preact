@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
-import { isDeny } from 'hono-preact';
-import type { LoaderCtx } from 'hono-preact';
+import {
+  createCaller,
+  isDeny,
+  type CallResult,
+  type InferActionPayload,
+  type InferActionResult,
+} from 'hono-preact';
 import {
   serverActions,
   serverLoaders,
@@ -16,15 +21,8 @@ import {
 } from '../../../demo/data.js';
 import { signIn } from '../../../demo/session.js';
 
-// defineAction returns the handler function as-is (no wrapper object), so
-// serverActions.setStatus IS the ActionFn; we cast and call it directly.
-// The full page-action wire is integration-tested in packages/server; here
-// we only check the setStatus handler's behavior and its Done guard.
-type ActionFn = (
-  ctx: { c: unknown; signal: AbortSignal },
-  input: { taskId: string; status: string }
-) => Promise<unknown>;
-const setStatus = serverActions.setStatus as unknown as ActionFn;
+type SetStatusInput = InferActionPayload<typeof serverActions.setStatus>;
+type SetStatusResult = InferActionResult<typeof serverActions.setStatus>;
 
 // A cookie set on the response is not readable on the same request, so the
 // session cookie is minted in a first round-trip and replayed as a request
@@ -46,28 +44,25 @@ async function mintSessionCookie(user: {
   return setCookie.split(';')[0];
 }
 
-// Run setStatus inside a real Hono request so currentUser can read the signed
-// session cookie. `signedInAs` mints + replays the cookie before the action.
+// Run setStatus through createCaller inside a real Hono request so currentUser
+// can read the signed session cookie. `signedInAs` mints + replays the cookie.
 async function runSetStatus(
-  input: { taskId: string; status: string },
+  input: SetStatusInput,
   signedInAs?: { id: string; email: string; name: string }
-): Promise<{ status: number; error: unknown }> {
+): Promise<CallResult<SetStatusResult>> {
   const cookie = signedInAs ? await mintSessionCookie(signedInAs) : null;
   const app = new Hono();
-  let error: unknown = null;
+  let result!: CallResult<SetStatusResult>;
   app.post('/', async (c) => {
-    try {
-      await setStatus({ c, signal: new AbortController().signal }, input);
-    } catch (e) {
-      error = e;
-    }
+    result = await createCaller(c).call(serverActions.setStatus, input);
     return c.text('ok');
   });
   const res = await app.request('/', {
     method: 'POST',
     headers: cookie ? { Cookie: cookie } : {},
   });
-  return { status: res.status, error };
+  expect(res.status).toBe(200);
+  return result;
 }
 
 describe('task setStatus action', () => {
@@ -77,12 +72,9 @@ describe('task setStatus action', () => {
     const inf = getProjectBySlug('inf')!;
     const task = listTasksForProject(inf.id).find((t) => t.status !== 'done')!;
 
-    const { error } = await runSetStatus({
-      taskId: task.id,
-      status: 'in_review',
-    });
+    const r = await runSetStatus({ taskId: task.id, status: 'in_review' });
 
-    expect(error).toBe(null);
+    expect(r.ok).toBe(true);
     expect(getTask(task.id)?.status).toBe('in_review');
   });
 
@@ -93,15 +85,15 @@ describe('task setStatus action', () => {
       (t) => t.assigneeId === null && t.status !== 'done'
     )!;
 
-    const { error } = await runSetStatus(
-      { taskId: task.id, status: 'done' },
-      stranger
-    );
+    const r = await runSetStatus({ taskId: task.id, status: 'done' }, stranger);
 
-    expect(isDeny(error)).toBe(true);
-    if (isDeny(error)) {
-      expect(error.status).toBe(403);
-      expect(error.message).toMatch(/author|assignee/i);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) {
+        expect(r.outcome.status).toBe(403);
+        expect(r.outcome.message).toMatch(/author|assignee/i);
+      }
     }
     // The deny short-circuits before the write, so status is unchanged.
     expect(getTask(task.id)?.status).not.toBe('done');
@@ -114,12 +106,9 @@ describe('task setStatus action', () => {
     // Re-seed authorId so the signed-in user is the author of this task.
     task.authorId = author.id;
 
-    const { error } = await runSetStatus(
-      { taskId: task.id, status: 'done' },
-      author
-    );
+    const r = await runSetStatus({ taskId: task.id, status: 'done' }, author);
 
-    expect(error).toBe(null);
+    expect(r.ok).toBe(true);
     expect(getTask(task.id)?.status).toBe('done');
   });
 });
@@ -129,16 +118,18 @@ describe('task setStatus action', () => {
 describe('task loader', () => {
   beforeEach(() => resetDemoData());
 
-  const loadTask = (taskId: string): Promise<TaskDetail | null> => {
-    const ctx = {
-      c: {},
-      location: { path: '/', pathParams: { taskId }, searchParams: {} },
-      signal: new AbortController().signal,
-    } as unknown as LoaderCtx;
-    const fn = serverLoaders.task.fn as (
-      ctx: LoaderCtx
-    ) => Promise<TaskDetail | null>;
-    return fn(ctx);
+  const loadTask = async (taskId: string): Promise<TaskDetail | null> => {
+    const app = new Hono();
+    let result!: CallResult<TaskDetail | null>;
+    app.get('/', async (c) => {
+      result = await createCaller(c).call(serverLoaders.task, {
+        location: { pathParams: { taskId } },
+      });
+      return c.text('ok');
+    });
+    await app.request('/');
+    if (!result.ok) throw new Error('expected the task loader to succeed');
+    return result.value;
   };
 
   it('resolves the assignee User alongside the author', async () => {

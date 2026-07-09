@@ -20,36 +20,29 @@ describe('generateClientEntrySource', () => {
 
     expect(src).toContain(`import { h, hydrate } from 'preact';`);
     expect(src).toContain(`import { LocationProvider } from 'preact-iso';`);
-    expect(src).toContain(`import { Routes } from 'hono-preact';`);
-    expect(src).toContain(
-      `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal/runtime';`
-    );
-    expect(src).toContain(`installHistoryShim();`);
-    expect(src).toContain(`installStreamRegistry();`);
+    expect(src).toContain(`import { Routes, bootClient } from 'hono-preact';`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
+    // The boot contract is the public one a custom clientEntry follows too;
+    // the internal runtime door must not leak into the emitted entry.
+    expect(src).not.toContain('hono-preact/internal/runtime');
   });
 
-  it('hydrates into #app and wraps navigations in the view-transition coordinator', () => {
+  it('hydrates into #app', () => {
     const src = generateClientEntrySource({
       routesAbsPath: '/proj/src/routes.ts',
     });
     expect(src).toContain(`document.getElementById('app')`);
-    // The render scheduler is installed so navigations start a transition
-    // before the route re-renders.
-    expect(src).toContain(`installNavTransitionScheduler();`);
   });
 
-  it('imports installHistoryShim and calls it before installStreamRegistry', () => {
+  it('calls bootClient() before hydrate()', () => {
     const src = generateClientEntrySource({
       routesAbsPath: '/proj/src/routes.ts',
     });
-    expect(src).toContain('installHistoryShim');
-    expect(src).toContain('installStreamRegistry');
-    const shimIdx = src.indexOf('installHistoryShim()');
-    const streamIdx = src.indexOf('installStreamRegistry()');
-    expect(shimIdx).toBeGreaterThan(-1);
-    expect(streamIdx).toBeGreaterThan(-1);
-    expect(shimIdx).toBeLessThan(streamIdx);
+    const bootIdx = src.indexOf('bootClient();');
+    const hydrateIdx = src.indexOf('hydrate(');
+    expect(bootIdx).toBeGreaterThan(-1);
+    expect(hydrateIdx).toBeGreaterThan(-1);
+    expect(bootIdx).toBeLessThan(hydrateIdx);
   });
 });
 

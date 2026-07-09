@@ -40,7 +40,7 @@ export default defineRoutes([
 
 ### Client and server entries (generated)
 
-The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the loader RPC handler, the page action handler, the WebSocket upgrade endpoint, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all.
+The framework owns both entries as virtual modules. The browser entry (`virtual:hono-preact/client`) hydrates the app and the server entry (`virtual:hono-preact/server`) wires the Hono app from your `routes.ts` and `Layout.tsx`, including the loader RPC handler, the page action handler, the WebSocket upgrade endpoint, and the catch-all SSR handler. `<Routes>`, `LocationProvider`, and `onRouteChange` are all wrapped inside the generated entries; no `iso.tsx` or `client.tsx` lives in user code. To add custom REST routes, author an optional `src/api.ts` that exports a Hono app (or a function returning one); the generated entry mounts it before the SSR catch-all. Creating or deleting `src/api.ts` while the dev server is running restarts it automatically, so the change takes effect without a manual restart.
 
 ### `apps/site/src/Layout.tsx`
 
@@ -80,7 +80,7 @@ const withRequestId = defineServerMiddleware(async (ctx, next) => {
 export default defineApp({ use: [withRequestId] });
 ```
 
-The framework's generated server entry imports the default export from `src/app-config.ts` (configurable via the `appConfig` option to `honoPreact()`). If the file doesn't exist, the framework treats it as `defineApp({})`. The `appConfig.use` array is the outermost layer of the middleware chain: it wraps every loader, action, and page render. See [Middleware: The three layers](/docs/middleware#the-three-layers).
+The framework's generated server entry imports the default export from `src/app-config.ts` (configurable via the `appConfig` option to `honoPreact()`). If the file doesn't exist, the framework treats it as `defineApp({})`. Creating or deleting `src/app-config.ts` while the dev server is running restarts it automatically, so the change takes effect without a manual restart. The `appConfig.use` array is the outermost layer of the middleware chain: it wraps every loader, action, and page render. See [Middleware: The three layers](/docs/middleware#the-three-layers).
 
 ### `hono-preact/server` (workspace package)
 

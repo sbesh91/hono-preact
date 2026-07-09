@@ -1,5 +1,5 @@
 import { Route, useLocation } from 'preact-iso';
-import { useTitle } from 'hoofd/preact';
+import { useTitle } from 'hono-preact';
 
 export function PageNotFound() {
   const location = useLocation();

@@ -46,8 +46,16 @@ export async function bundleSize(entryContents, resolveDir) {
 // Re-export each dist module by namespace so sideEffects:false tree-shaking
 // cannot drop a side-effect-free import. `distBase` is an absolute path, so the
 // entry can point at any ref's build.
+//
+// Filters the module list to what actually exists under `distBase` first: a
+// manifest bucket can list a module that is new on HEAD (e.g. a PR adding
+// boot-client.js) and therefore absent from a BASE-ref dist being measured in
+// the same CI job. Without the filter, esbuild fails to resolve the missing
+// path and the whole measurement crashes; with it, the module simply measures
+// as absent on that ref instead.
 function entryFor(modules, distBase) {
   return modules
+    .filter((m) => existsSync(join(distBase, m)))
     .map((m, i) => `export * as m${i} from '${join(distBase, m)}';`)
     .join('\n');
 }

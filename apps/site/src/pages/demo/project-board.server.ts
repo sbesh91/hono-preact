@@ -1,4 +1,4 @@
-import { defineAction, deny, serverRoute } from 'hono-preact';
+import { defineAction, deny, publish, serverRoute } from 'hono-preact';
 import {
   getProjectBySlug,
   listTasksForProject,
@@ -13,7 +13,7 @@ import {
   type User,
 } from '../../demo/data.js';
 import {
-  publishActivity,
+  activityChannel,
   taskCreatedEvent,
   taskMovedEvent,
 } from '../../demo/activity-stream.js';
@@ -58,7 +58,7 @@ export const serverActions = {
       if (!user) throw deny(401, 'Sign in to create tasks.');
       // Schema coerces and trims; values are already clean.
       const created = createTask(user, input);
-      publishActivity(taskCreatedEvent(created, user.name));
+      publish(activityChannel.key(), taskCreatedEvent(created, user.name));
       return { id: created.id };
     },
     { input: NewTaskSchema }
@@ -79,7 +79,8 @@ export const serverActions = {
       if (input.status) {
         const task = getTask(input.taskId);
         if (task) {
-          publishActivity(
+          publish(
+            activityChannel.key(),
             taskMovedEvent(task, input.status, user?.name ?? 'someone')
           );
         }

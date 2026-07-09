@@ -44,6 +44,11 @@ describe('hono-preact root export (iso runtime)', () => {
     expect(typeof m.isRender).toBe('function');
   });
 
+  it('surfaces bootClient for custom client entries', async () => {
+    const m = await import('hono-preact');
+    expect(typeof m.bootClient).toBe('function');
+  });
+
   it('does NOT surface server-only symbols at the root', async () => {
     const m = await import('hono-preact');
     expect((m as Record<string, unknown>).renderPage).toBeUndefined();

@@ -30,10 +30,11 @@ describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in pipeline order, then the adapter plugins, then preact', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() }) as NamedPlugin[];
     const names = plugins.map((p) => p.name);
-    expect(names.slice(0, 10)).toEqual([
+    expect(names.slice(0, 11)).toEqual([
       'hono-preact:config',
       'hono-preact:client-shim',
       'hono-preact:client-entry',
+      'hono-preact:client-entry-contract',
       'hono-preact:preload-manifest',
       'hono-preact:server-entry',
       'server-loader-validation',
@@ -179,6 +180,31 @@ describe('honoPreact config plugin', () => {
     );
     expect(ssr).toEqual({
       optimizeDeps: { entries: [resolve(process.cwd(), 'app/routing.ts')] },
+    });
+  });
+
+  it('resolves the optimizer scan entry against a custom Vite root, not cwd', () => {
+    const plugins = honoPreact({ adapter: fakeAdapter() });
+    const cfg = plugins.find((p) => p.name === 'hono-preact:config');
+    if (
+      !cfg ||
+      typeof cfg.config !== 'function' ||
+      typeof cfg.configEnvironment !== 'function'
+    ) {
+      throw new Error('config plugin hooks not found');
+    }
+    // Vite runs every plugin's `config` before any `configEnvironment`.
+    (cfg.config as Function)(
+      { root: '/custom/app' },
+      { command: 'serve', mode: 'development' }
+    );
+    const ssr = cfg.configEnvironment(
+      'ssr',
+      {},
+      { command: 'serve', mode: 'development' }
+    );
+    expect(ssr).toEqual({
+      optimizeDeps: { entries: [resolve('/custom/app', 'src/routes.ts')] },
     });
   });
 });
