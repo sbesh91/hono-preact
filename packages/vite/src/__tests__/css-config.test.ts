@@ -12,7 +12,9 @@ const stubAdapter: HonoPreactAdapter = {
 
 function configResult(userConfig: UserConfig): UserConfig {
   const plugins = honoPreact({ adapter: stubAdapter });
-  const config = plugins.find((p): p is Plugin => p.name === 'hono-preact:config');
+  const config = plugins.find(
+    (p): p is Plugin => p.name === 'hono-preact:config'
+  );
   if (!config || typeof config.config !== 'function') {
     throw new Error('hono-preact:config plugin with a config() fn expected');
   }
@@ -22,7 +24,8 @@ function configResult(userConfig: UserConfig): UserConfig {
     userConfig,
     { command: 'build', mode: 'production' }
   );
-  if (!result || typeof result !== 'object') throw new Error('expected a partial config');
+  if (!result || typeof result !== 'object')
+    throw new Error('expected a partial config');
   if (result instanceof Promise) {
     throw new Error('expected a synchronous config() result');
   }
@@ -42,13 +45,17 @@ describe('framework CSS pipeline defaults', () => {
   });
 
   it('respects user-configured lightningcss options', () => {
-    const result = configResult({ css: { lightningcss: { targets: { chrome: 100 << 16 } } } });
+    const result = configResult({
+      css: { lightningcss: { targets: { chrome: 100 << 16 } } },
+    });
     expect(result.css).toBeUndefined();
   });
 
   it('encodes plausible Baseline Widely Available versions', () => {
     // Sanity floor: all majors >= the late-2023 releases.
     expect(BASELINE_TARGETS.chrome).toBeGreaterThanOrEqual(120 << 16);
-    expect(BASELINE_TARGETS.safari).toBeGreaterThanOrEqual((17 << 16) | (2 << 8));
+    expect(BASELINE_TARGETS.safari).toBeGreaterThanOrEqual(
+      (17 << 16) | (2 << 8)
+    );
   });
 });
