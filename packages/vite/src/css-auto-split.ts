@@ -160,32 +160,41 @@ export function attributeRules(
     targets,
     visitor: {
       Rule: {
+        // Every entry callback here only reads the rule to record attribution
+        // data; none of them modify it. Returning the rule object unmodified
+        // (rather than `undefined`, meaning "no change") forces Lightning CSS
+        // to re-serialize it from the JS-visible AST, which corrupts certain
+        // value shapes on the way back out (verified with an isolated probe:
+        // a `:root,:host` custom-property rule with font-family lists, oklch
+        // colors, and calc() values throws "failed to deserialize; expected
+        // an object-like struct named Specifier, found ()"). Same failure
+        // class RuleExit below already avoids for FontFormat; applied here too.
         style(rule) {
           if (styleDepth === 0) {
             owners.push(decideOwner(rule.value.selectors, chunks));
           }
           styleDepth++;
-          return rule;
+          return undefined;
         },
-        media(rule) {
+        media() {
           atDepth++;
-          return rule;
+          return undefined;
         },
-        supports(rule) {
+        supports() {
           atDepth++;
-          return rule;
+          return undefined;
         },
         'layer-block'(rule) {
           if (atDepth === 0 && rule.value.name)
             pushLayer(rule.value.name.join('.'));
           atDepth++;
-          return rule;
+          return undefined;
         },
         'layer-statement'(rule) {
           if (atDepth === 0) {
             for (const name of rule.value.names) pushLayer(name.join('.'));
           }
-          return rule;
+          return undefined;
         },
       },
       // Flat form (not the per-type mapped form used for `Rule` above): a
@@ -311,7 +320,12 @@ function emitSubset(
     targets,
     visitor: {
       Rule: {
-        style(rule) {
+        // Entry only records the keep/drop decision on `dropStack`; the actual
+        // drop happens at RuleExit (returning `[]`). Returning the rule object
+        // unmodified here (instead of `undefined`, "no change") forces a JS
+        // round trip that corrupts serialization for some value shapes; see
+        // the matching comment in attributeRules above for the reproduction.
+        style() {
           let drop = false;
           if (styleDepth === 0) {
             visited++;
@@ -322,7 +336,7 @@ function emitSubset(
           }
           dropStack.push(drop);
           styleDepth++;
-          return rule;
+          return undefined;
         },
         media: enterContainer,
         supports: enterContainer,

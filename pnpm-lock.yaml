@@ -244,6 +244,9 @@ importers:
       hoofd:
         specifier: '>=1.0.0'
         version: 1.7.3(react@19.2.5)
+      lightningcss:
+        specifier: ^1.32.0
+        version: 1.32.0
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
