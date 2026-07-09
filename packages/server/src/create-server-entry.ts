@@ -166,6 +166,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     resolvePageUse: pageUseResolver.byPattern,
   });
   const actions = pageActionsHandler({
+    dev,
     resolverByPath: pageActionResolvers.byPath,
     // src/server registry actions are not attached to a route URL, so a
     // byPath miss falls back to a moduleKey lookup (the client always sends the

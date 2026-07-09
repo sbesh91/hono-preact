@@ -44,7 +44,14 @@ function buildHandler(
         routeId?: string;
       }
   >,
-  pageUse?: { byPattern?: PageUseResolver }
+  pageUse?: { byPattern?: PageUseResolver },
+  extra?: {
+    dev?: boolean;
+    onError?: (
+      err: unknown,
+      ctx: { module: string; action: string; routeId?: string }
+    ) => void;
+  }
 ) {
   const resolverByPath = async () => {
     const map = new Map();
@@ -73,6 +80,7 @@ function buildHandler(
     renderPage: renderPage as never,
     resolvePageNode: () => h('div', null),
     appConfig: { use: [] },
+    ...extra,
   });
 }
 
@@ -526,6 +534,125 @@ describe('pageActionsHandler', () => {
     });
     expect(res.status).toBe(200);
     expect(seen).toEqual({ count: 3 }); // coercion observable to the handler
+  });
+
+  describe('error masking and the dev deny() hint', () => {
+    const postSubmit = (handler: ReturnType<typeof pageActionsHandler>) =>
+      new Hono().post('*', handler).request('/foo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          module: 'pages/test.server',
+          action: 'submit',
+          payload: { x: 1 },
+        }),
+      });
+
+    it('masks a thrown non-outcome error as Action failed by default (production)', async () => {
+      const handler = buildHandler({
+        submit: async () => {
+          throw new Error('DB error: connection refused at 10.0.0.5');
+        },
+      });
+      const res = await postSubmit(handler);
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body).toEqual({ __outcome: 'error', message: 'Action failed' });
+    });
+
+    it('passes the thrown error message through when dev: true', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const handler = buildHandler(
+          {
+            submit: async () => {
+              throw new Error('DB error: hostname leaked');
+            },
+          },
+          undefined,
+          { dev: true }
+        );
+        const res = await postSubmit(handler);
+        expect(res.status).toBe(500);
+        const body = await res.json();
+        expect(body).toEqual({
+          __outcome: 'error',
+          message: 'DB error: hostname leaked',
+        });
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('hints at deny(status, message) on the console when dev: true', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const handler = buildHandler(
+          {
+            submit: async () => {
+              throw new Error('email is required');
+            },
+          },
+          undefined,
+          { dev: true }
+        );
+        await postSubmit(handler);
+        const hints = warn.mock.calls.filter((call) =>
+          String(call[0]).includes('deny(status, message)')
+        );
+        expect(hints).toHaveLength(1);
+        expect(String(hints[0]![0])).toContain('pages/test.server::submit');
+        expect(String(hints[0]![0])).toContain('email is required');
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('does not hint on the console in production (dev omitted)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const handler = buildHandler({
+          submit: async () => {
+            throw new Error('boom');
+          },
+        });
+        await postSubmit(handler);
+        const hints = warn.mock.calls.filter((call) =>
+          String(call[0]).includes('deny(status, message)')
+        );
+        expect(hints).toHaveLength(0);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('includes the resolver error detail in the fail-closed message only when dev: true', async () => {
+      const byPattern = async () => {
+        throw new Error('resolver boom: internal path /srv/gates.ts');
+      };
+      const routeBound = {
+        submit: {
+          fn: async () => ({ ok: true }),
+          routeId: '/foo/:id',
+        },
+      };
+      const prodRes = await postSubmit(buildHandler(routeBound, { byPattern }));
+      expect(prodRes.status).toBe(500);
+      const prodBody = await prodRes.json();
+      expect(prodBody.message).toBe(
+        "Route-bound action '/foo/:id' could not resolve its page-use chain"
+      );
+      const devRes = await postSubmit(
+        buildHandler(routeBound, { byPattern }, { dev: true })
+      );
+      const devBody = await devRes.json();
+      expect(devBody.message).toContain(
+        'resolver boom: internal path /srv/gates.ts'
+      );
+    });
   });
 });
 

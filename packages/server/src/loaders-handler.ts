@@ -270,8 +270,8 @@ export function loadersHandler(
       // loader never runs through a guard-less chain. The raw resolver message
       // may carry internal detail, so surface it only in dev (matching the
       // loaderFailure path below); onError always receives the full error for
-      // the observability side channel. (The page-actions-handler twin masks
-      // unconditionally because it has no dev option; both mask in production.)
+      // the observability side channel. (The page-actions-handler twin applies
+      // the same dev gate; both mask in production.)
       onError?.(composed.error, { module, loader: loaderName });
       const detail = dev
         ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
