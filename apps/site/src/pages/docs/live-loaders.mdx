@@ -9,35 +9,22 @@ The demo at `/demo/projects` uses a live activity loader on the `projects-shell`
 **Server module** (`projects-shell.server.ts`):
 
 ```ts
-import { defineLoader, type LoaderCtx } from 'hono-preact';
+import { defineLoader, eventStream, type LoaderCtx } from 'hono-preact';
 import {
-  subscribeActivity,
+  activityChannel,
   recentActivityEvents,
   type ActivityEvent,
 } from './activity-stream.js';
 
-async function* activityStream(
-  ctx: LoaderCtx
-): AsyncGenerator<ActivityEvent, void, unknown> {
-  // Yield recent events first so the feed is not empty on connect.
+// Backfill recent history, then stream every event published on the activity
+// channel (server actions publish real events with
+// `publish(activityChannel.key(), e)`).
+async function* activityStream({
+  signal,
+}: LoaderCtx): AsyncGenerator<ActivityEvent, void, unknown> {
   for (const e of recentActivityEvents(5)) yield e;
-
-  const queue: ActivityEvent[] = [];
-  let wake!: () => void;
-  let wakeP = new Promise<void>((r) => (wake = r));
-  const unsub = subscribeActivity((e) => {
-    queue.push(e);
-    wake();
-  });
-  ctx.signal.addEventListener('abort', () => {
-    unsub();
-    wake();
-  });
-
-  while (!ctx.signal.aborted) {
-    while (queue.length) yield queue.shift()!;
-    await wakeP;
-    wakeP = new Promise<void>((r) => (wake = r));
+  for await (const e of eventStream(activityChannel.key(), signal)) {
+    yield e;
   }
 }
 
@@ -128,7 +115,7 @@ Two pieces of the same loader API drive this pattern:
 
 ## On Cloudflare
 
-`publish()` and `route.loader(liveStream({ topic, load }))` have the same cross-isolate fan-out API on Cloudflare Workers.
+`publish()`, `route.loader(liveStream({ topic, load }))`, and `eventStream(topic, signal)` share the same cross-isolate fan-out on Cloudflare Workers.
 Cross-isolate fan-out (a `publish()` in one request waking a live loader
 streaming in another isolate) is backed by the same `HONO_PREACT_REALTIME`
 Durable Object that powers rooms, so no extra setup is needed once that binding
@@ -142,6 +129,7 @@ database, KV, D1, or Durable Object storage. A module-level `let count = 0` work
 on Node (one process shares it) but is **per-isolate on Workers**, so two tabs
 would drift apart even though the wake reached both. Read shared state in `load`,
 and `publish()` after you write it.
+`eventStream` is the exception to the "event, not state" rule: it delivers the published payload itself (as its JSON wire shape), so a feed of self-contained events needs no shared read on the subscriber side.
 
 ## Scoping the persistence
 
