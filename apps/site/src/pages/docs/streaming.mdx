@@ -161,6 +161,8 @@ const StatsView = dataLoader.View<Snapshot | null>(
 );
 ```
 
+A mid-stream throw reaches the client as a terminal error event on the wire. In production its message is masked as `Stream failed`, mirroring the non-streaming `Loader failed` and `Action failed` masking; in dev the real message and error name pass through. An expected, user-facing terminal state should be yielded as data the consumer understands rather than thrown.
+
 ## Abort and cleanup
 
 The framework aborts `ctx.signal` when the client disconnects (server side) or when the component that owns the loader unmounts (client side). Pass the signal to any upstream resource that supports cancellation:
