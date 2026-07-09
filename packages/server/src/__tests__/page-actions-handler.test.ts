@@ -883,6 +883,43 @@ describe('pageActionsHandler missing-input-schema dev warning', () => {
     }
   });
 
+  it('warns when a string payload arrives with no input schema (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, 'raw-string-payload');
+      const warnings = schemaWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/test.server::submit');
+      // The message describes any unvalidated payload, not just objects.
+      expect(String(warnings[0]![0])).not.toContain('object payload');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns when an array payload arrives with no input schema (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, [1, 2, 3]);
+      const warnings = schemaWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/test.server::submit');
+      expect(String(warnings[0]![0])).not.toContain('object payload');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('does not warn when the action declares an input schema', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -907,6 +944,22 @@ describe('pageActionsHandler missing-input-schema dev warning', () => {
         { dev: true }
       );
       await postSubmit(handler, {});
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for a null or undefined payload', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, null);
+      await postSubmit(handler, undefined);
       expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
     } finally {
       warn.mockRestore();

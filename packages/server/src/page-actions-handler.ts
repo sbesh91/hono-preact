@@ -139,21 +139,25 @@ function warnPlainErrorThrown(
   );
 }
 
-// Dev-only warning for an action invoked with a real object payload but no
-// input schema. Explicit payload generics read as safe yet validate nothing
-// at runtime; the raw client payload reaches the handler as-is. Fires once
-// per action key (not per request) via the handler-instance Set the caller
-// owns. An empty object carries no client data to validate, so it is exempt
-// (payload-less invocations and empty form posts serialize to {}).
+// Dev-only warning for an action invoked with a real client-supplied payload
+// but no input schema. Explicit payload generics read as safe yet validate
+// nothing at runtime; the raw client payload reaches the handler as-is,
+// whether it's an object, an array, or a primitive. Fires once per action key
+// (not per request) via the handler-instance Set the caller owns. `undefined`
+// and `null` carry no client data (payload-less invocations), and an empty
+// object carries no client data to validate (empty form posts serialize to
+// `{}`), so both are exempt; an empty array still warns like any other
+// unvalidated payload.
 function warnMissingInputSchema(
   warned: Set<string>,
   module: string,
   action: string,
   payload: unknown
 ): void {
+  if (payload === undefined || payload === null) return;
   if (
-    typeof payload !== 'object' ||
-    payload === null ||
+    typeof payload === 'object' &&
+    !Array.isArray(payload) &&
     Object.keys(payload).length === 0
   ) {
     return;
@@ -162,8 +166,8 @@ function warnMissingInputSchema(
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
-    `hono-preact: action '${key}' received an object payload but declares ` +
-      `no input schema, so the payload reaches the handler unvalidated ` +
+    `hono-preact: action '${key}' received a payload but declares no ` +
+      `input schema, so the payload reaches the handler unvalidated ` +
       `(payload type generics are compile-time only). Pass a Standard ` +
       `Schema via defineAction(fn, { input: schema }) to validate and type ` +
       `it at runtime.`

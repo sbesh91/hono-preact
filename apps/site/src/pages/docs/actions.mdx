@@ -57,7 +57,7 @@ export const serverActions = {
 
 With none of these, `payload` is typed `unknown` (never `any`), so the type system makes you narrow it before use rather than letting an untyped value through.
 
-Only the schema form validates at runtime. The two type-only forms (explicit generics, annotated parameters) assert a shape the wire does not enforce: the client payload reaches the handler as-is. In dev, the server warns once per action when an action without an `input` schema receives a non-empty object payload.
+Only the schema form validates at runtime. The two type-only forms (explicit generics, annotated parameters) assert a shape the wire does not enforce: the client payload reaches the handler as-is. In dev, the server warns once per action when an action without an `input` schema receives a payload other than `undefined`, `null`, or an empty object.
 
 ### `defineAction` options
 
