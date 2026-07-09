@@ -10,6 +10,10 @@ A `PreToolUse` hook (`.claude/hooks/prefer-serena.py`) nudges toward Serena only
 
 Serena binds to the primary checkout (`--project .`), so it is unavailable in worktrees (see Worktree setup below) and when the MCP server is down (run `/mcp` to check). Fall back to native tools in both cases.
 
+## Site brand
+
+[`apps/site/BRAND.md`](apps/site/BRAND.md) is the source of truth for the docs site's brand: ideology, voice, visual doctrine, and the mapping to the tokens in `apps/site/src/styles/root.css`. Read it before any work that changes what a site visitor sees or reads (page design, components, CSS, copy), and verify against its checklist before shipping.
+
 ## Worktree setup
 
 When feature work runs in a fresh `git worktree`, the worktree shares tracked files but starts without the gitignored local state and build artifacts this monorepo needs. Run `pnpm wt:setup` (i.e. `bash scripts/worktree-setup.sh`) from inside the new worktree to bring it up: it copies `.env` and `.claude/settings.local.json` from the primary checkout, runs `pnpm install`, builds the framework `dist/`, and runs `pnpm typecheck`. Add `-- --test` to also run the unit suite (`pnpm wt:setup -- --test`).
