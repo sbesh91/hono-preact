@@ -276,6 +276,13 @@ export interface ServerEntryPluginOptions {
   adapter: HonoPreactAdapter;
   coreAppPath: string; // absolute path to write the core app module
   entryWrapperPath: string; // absolute path to write the adapter wrapper
+  /**
+   * Project-relative or absolute path to the app's global stylesheet
+   * (`honoPreact({ css: { global } })`). Unused for now; the serve-mode
+   * dev URL install in the generated core-app codegen consumes it in a later
+   * task.
+   */
+  cssGlobal?: string;
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {

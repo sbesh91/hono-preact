@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import * as fs from 'node:fs';
 import preact from '@preact/preset-vite';
 import { type Plugin } from 'vite';
 import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/runtime';
@@ -18,6 +19,20 @@ import {
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 import { BASELINE_TARGETS } from './css-targets.js';
 
+export interface HonoPreactCssOptions {
+  /**
+   * Project-relative (or absolute) path to the app's global stylesheet. When
+   * set, the framework owns its delivery: it is bundled through the client
+   * build and injected into the SSR head (dev and prod), so the app must NOT
+   * also link it manually. Enables the build-time auto-split by default.
+   */
+  global?: string;
+  /** Default true (when `global` is set). Set false to deliver it unsplit. */
+  autoSplit?: boolean;
+  /** Minimum per-chunk scoped sheet size in bytes; smaller stays global. Default 1024. */
+  minSize?: number;
+}
+
 export interface HonoPreactOptions {
   /** Deployment target. Required. See hono-preact/adapter-cloudflare. */
   adapter: HonoPreactAdapter;
@@ -29,6 +44,8 @@ export interface HonoPreactOptions {
   appConfig?: string; // default 'src/app-config.ts' (only loaded if file exists)
   serverDir?: string; // default 'src/server' (registry glob; only if the dir exists)
   clientEntry?: string; // default 'virtual:hono-preact/client'
+  /** Framework-owned global stylesheet delivery and auto-split tuning. */
+  css?: HonoPreactCssOptions;
 }
 
 export function honoPreact(options: HonoPreactOptions): Plugin[] {
@@ -44,6 +61,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     appConfig = 'src/app-config.ts',
     serverDir = 'src/server',
     clientEntry = VIRTUAL_CLIENT_ENTRY_ID,
+    css,
   } = options ?? {};
 
   if (!adapter) {
@@ -52,6 +70,17 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
         "Import one, e.g. `import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare'`, " +
         'and pass `honoPreact({ adapter: cloudflareAdapter() })`.'
     );
+  }
+
+  const cssGlobal = css?.global;
+  if (cssGlobal !== undefined) {
+    const abs = resolve(process.cwd(), cssGlobal);
+    if (!fs.existsSync(abs)) {
+      throw new Error(
+        `[hono-preact] css.global points at '${cssGlobal}', which does not exist. ` +
+          `Pass a project-relative path to your global stylesheet, e.g. 'src/styles/root.css'.`
+      );
+    }
   }
 
   const coreAppPath = generatedCoreAppAbsPath();
@@ -126,8 +155,13 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
   return [
     configPlugin,
     clientShimPlugin(clientEntry),
-    clientEntryPlugin({ routes }),
-    preloadManifestPlugin({ routes }),
+    clientEntryPlugin({ routes, cssGlobal }),
+    preloadManifestPlugin({
+      routes,
+      css: cssGlobal
+        ? { autoSplit: css?.autoSplit ?? true, minSize: css?.minSize ?? 1024 }
+        : undefined,
+    }),
     serverEntryPlugin({
       layout,
       routes,
@@ -137,6 +171,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       adapter,
       coreAppPath,
       entryWrapperPath,
+      cssGlobal,
     }),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
