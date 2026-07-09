@@ -19,4 +19,6 @@ const HomeView = serverLoaders.default.View(({ data }) =>
   )
 );
 
+HomeView.displayName = 'Home';
+
 export default definePage(HomeView);
