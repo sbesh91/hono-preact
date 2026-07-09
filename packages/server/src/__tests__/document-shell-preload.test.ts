@@ -208,3 +208,36 @@ describe('assembleDocument: font preloads', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+describe('assembleDocument: full head ordering', () => {
+  it('orders the five injected segments: font preload, modulepreload, user head tag, global stylesheet, route stylesheet', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { metas: [{ name: 'description', content: 'A page' }] },
+      appConfig: { fonts: ['/static/regular-abc.woff2'] },
+      preloadModules: ['/static/a.js'],
+      globalStyleSheets: ['/static/global-a.css'],
+      routeStyleSheets: ['/static/home-b.css'],
+    });
+
+    const fontIdx = out.indexOf(
+      '<link rel="preload" as="font" type="font/woff2" href="/static/regular-abc.woff2" crossorigin="" />'
+    );
+    const preloadIdx = out.indexOf(
+      '<link rel="modulepreload" href="/static/a.js" fetchpriority="low" />'
+    );
+    const metaIdx = out.indexOf('<meta name="description" content="A page" />');
+    const globalIdx = out.indexOf(
+      '<link rel="stylesheet" href="/static/global-a.css" />'
+    );
+    const routeIdx = out.indexOf(
+      '<link rel="stylesheet" href="/static/home-b.css" />'
+    );
+
+    expect(fontIdx).toBeGreaterThan(-1);
+    expect(preloadIdx).toBeGreaterThan(fontIdx);
+    expect(metaIdx).toBeGreaterThan(preloadIdx);
+    expect(globalIdx).toBeGreaterThan(metaIdx);
+    expect(routeIdx).toBeGreaterThan(globalIdx);
+  });
+});
