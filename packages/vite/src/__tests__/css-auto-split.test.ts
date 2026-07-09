@@ -102,6 +102,19 @@ describe('attributeRules', () => {
     expect(layerNames).toEqual(['theme', 'base', 'utilities']);
   });
 
+  it('does not treat a @layer nested inside a @container/@scope/@starting-style as top-level', () => {
+    // atDepth must track the full CONTAINER_RULE_TYPES set (not just
+    // media/supports/layer-block), or a @layer statement/block nested inside
+    // a @container (or @scope/@starting-style) reads as atDepth === 0 and gets
+    // wrongly collected into the top-level layer order, which the residual
+    // then hoists into its layer-order prefix ahead of where the monolith
+    // actually declared it.
+    const css =
+      '@container c (min-width:1px){@layer nested{.hx-hero{color:red}}}@layer a;';
+    const { layerNames } = attributeRules(css, CHUNKS, undefined);
+    expect(layerNames).toEqual(['a']);
+  });
+
   it('attributes rules inside @media by their classes', () => {
     const css = '@media (min-width:600px){.hx-card{color:red}}';
     const { owners } = attributeRules(css, CHUNKS, undefined);

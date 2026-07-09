@@ -131,6 +131,30 @@ function decideOwner(
   return owner ? owner.fileName : null;
 }
 
+// At-rule types that can WRAP top-level-indexed style rules. These survive in
+// every emission (their style children are filtered normally). Every other
+// non-style rule type (@keyframes, @font-face, @property, @counter-style,
+// @page, @import, unknown/custom at-rules, ...) is a leaf that cannot own
+// scoped styles, so it lands ONLY in the residual: per-chunk emissions drop it
+// to avoid shipping a duplicate copy per sheet.
+//
+// Shared with attributeRules below: both passes must agree on which rule
+// types nest a top-level index (atDepth > 0), or a rule type this set treats
+// as a container in emitSubset but attributeRules didn't track as one would
+// get mis-scoped `layer-statement`/`layer-block` handling (e.g. a top-level
+// `@layer` name declared INSIDE a `@container`/`@scope`/`@starting-style`
+// block would be wrongly treated as top-level and hoisted into the residual's
+// layer-order prefix).
+const CONTAINER_RULE_TYPES: ReadonlySet<string> = new Set([
+  'media',
+  'supports',
+  'layer-block',
+  'container',
+  'scope',
+  'starting-style',
+  'moz-document',
+]);
+
 /**
  * Attribution pass: one Lightning CSS traversal assigning each TOP-LEVEL style
  * rule an owner (`null` = residual global). Nested style rules (CSS nesting)
@@ -153,6 +177,10 @@ export function attributeRules(
   };
   let styleDepth = 0;
   let atDepth = 0;
+  const enterContainer = (): undefined => {
+    atDepth++;
+    return undefined;
+  };
   transform({
     filename: 'global.css',
     code: Buffer.from(cssCode),
@@ -164,11 +192,14 @@ export function attributeRules(
         // data; none of them modify it. Returning the rule object unmodified
         // (rather than `undefined`, meaning "no change") forces Lightning CSS
         // to re-serialize it from the JS-visible AST, which corrupts certain
-        // value shapes on the way back out (verified with an isolated probe:
-        // a `:root,:host` custom-property rule with font-family lists, oklch
-        // colors, and calc() values throws "failed to deserialize; expected
+        // value shapes on the way back out (verified with an isolated probe and
+        // bisected in the regression test below: a declaration value containing
+        // a `var()` reference, an "unparsed" value in Lightning CSS terms, is
+        // the load-bearing trigger; it throws "failed to deserialize; expected
         // an object-like struct named Specifier, found ()"). Same failure
         // class RuleExit below already avoids for FontFormat; applied here too.
+        // See the "splits realistic theme CSS without corrupting serialization"
+        // regression test in __tests__/css-auto-split.test.ts.
         style(rule) {
           if (styleDepth === 0) {
             owners.push(decideOwner(rule.value.selectors, chunks));
@@ -176,14 +207,12 @@ export function attributeRules(
           styleDepth++;
           return undefined;
         },
-        media() {
-          atDepth++;
-          return undefined;
-        },
-        supports() {
-          atDepth++;
-          return undefined;
-        },
+        media: enterContainer,
+        supports: enterContainer,
+        container: enterContainer,
+        scope: enterContainer,
+        'starting-style': enterContainer,
+        'moz-document': enterContainer,
         'layer-block'(rule) {
           if (atDepth === 0 && rule.value.name)
             pushLayer(rule.value.name.join('.'));
@@ -212,15 +241,10 @@ export function attributeRules(
       // isolated probe: Lightning CSS throws "failed to deserialize;
       // expected an object-like struct named FontFormat, found ()").
       RuleExit(rule) {
-        switch (rule.type) {
-          case 'style':
-            styleDepth--;
-            break;
-          case 'media':
-          case 'supports':
-          case 'layer-block':
-            atDepth--;
-            break;
+        if (rule.type === 'style') {
+          styleDepth--;
+        } else if (CONTAINER_RULE_TYPES.has(rule.type)) {
+          atDepth--;
         }
         return undefined;
       },
@@ -249,22 +273,6 @@ interface EmitResult {
   visited: number;
   kept: number;
 }
-
-// At-rule types that can WRAP top-level-indexed style rules. These survive in
-// every emission (their style children are filtered normally). Every other
-// non-style rule type (@keyframes, @font-face, @property, @counter-style,
-// @page, @import, unknown/custom at-rules, ...) is a leaf that cannot own
-// scoped styles, so it lands ONLY in the residual: per-chunk emissions drop it
-// to avoid shipping a duplicate copy per sheet.
-const CONTAINER_RULE_TYPES: ReadonlySet<string> = new Set([
-  'media',
-  'supports',
-  'layer-block',
-  'container',
-  'scope',
-  'starting-style',
-  'moz-document',
-]);
 
 /**
  * Emission pass: re-serialize the monolith keeping only the top-level style
@@ -572,6 +580,18 @@ export function applyCssAutoSplit(
       const emittedFile = opts.getFileName(ref);
       const owner = bundle[ownerFile];
       if (!owner) continue;
+      // Ordering dependency: `preloadManifestPlugin` calls this from a NORMAL
+      // (default-enforce) plugin's `generateBundle`, which Vite/Rollup runs
+      // BEFORE its own post-enforced `build-import-analysis` plugin reads
+      // `viteMetadata.importedCss` off each chunk to populate that chunk's
+      // `__vitePreload` dependency array (the runtime helper client-side route
+      // navigation uses to fetch a lazy chunk's CSS alongside its JS). Adding
+      // the scoped sheet here, before that read, is what makes it load on
+      // SPA navigation too, not just the SSR-rendered first load. Moving this
+      // to `writeBundle` (which runs after the bundle is finalized and
+      // written) or to a post-enforce plugin would run too late for
+      // build-import-analysis to see it, silently breaking CSS delivery on
+      // client-side navigation to routes that own a scoped sheet.
       owner.viteMetadata ??= { importedCss: new Set<string>() };
       owner.viteMetadata.importedCss ??= new Set<string>();
       owner.viteMetadata.importedCss.add(emittedFile);
