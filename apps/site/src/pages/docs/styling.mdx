@@ -100,7 +100,7 @@ All framework CSS, whether it's your global stylesheet, an auto-split route shee
 }
 ```
 
-If you've configured your own `cssMinify` or `css.lightningcss` in `vite.config.ts`, your settings win outright over the framework's defaults, including the Baseline browser targets.
+If you've configured your own `cssMinify` or `css.lightningcss` in `vite.config.ts`, your settings win outright over the framework's defaults, including the Baseline browser targets, for CSS that goes through Vite's own asset pipeline. That carve-out doesn't extend to auto-split output: once `css.global` and `autoSplit` are on, every residual and route sheet the splitter emits is re-serialized through Lightning CSS with `minify: true` directly (not via Vite's `cssMinify` setting), so a custom `cssMinify` never opts split output out of minification.
 
 ## Preload critical fonts
 
