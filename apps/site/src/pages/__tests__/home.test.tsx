@@ -1,49 +1,84 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, it, expect } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/preact';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { cleanup, render, screen, within } from '@testing-library/preact';
 import Home from '../home.js';
 
 afterEach(() => cleanup());
 
-describe('home (marketing landing)', () => {
-  it('renders the pitch sentence', () => {
-    render(<Home />);
-    expect(screen.getByText(/manifest driven routes/i)).toBeInTheDocument();
-  });
-
+describe('home (scroll experience)', () => {
   it('links to /docs/quick-start as the primary CTA', () => {
-    render(<Home />);
-    const link = screen.getByRole('link', { name: /get started/i });
-    expect(link.getAttribute('href')).toBe('/docs/quick-start');
+    const { container } = render(<Home />);
+    const hero = container.querySelector('.hx-hero') as HTMLElement;
+    expect(
+      within(hero)
+        .getByRole('link', { name: /get started/i })
+        .getAttribute('href')
+    ).toBe('/docs/quick-start');
   });
-
   it('links to /demo as the secondary CTA', () => {
-    render(<Home />);
-    const link = screen.getByRole('link', { name: /see the demo/i });
-    expect(link.getAttribute('href')).toBe('/demo');
+    const { container } = render(<Home />);
+    const hero = container.querySelector('.hx-hero') as HTMLElement;
+    expect(
+      within(hero)
+        .getByRole('link', { name: /see the demo/i })
+        .getAttribute('href')
+    ).toBe('/demo');
   });
-
-  it('shows all four feature cards', () => {
-    render(<Home />);
-    // Use unique card-caption text to avoid colliding with hero/footer/etc.
+  it('links the repo, package, and license from the footer', () => {
+    const { container } = render(<Home />);
+    const footer = container.querySelector('.hx-footer') as HTMLElement;
     expect(
-      screen.getByText(/your routes are a data structure/i)
-    ).toBeInTheDocument();
+      within(footer)
+        .getByRole('link', { name: /github/i })
+        .getAttribute('href')
+    ).toBe('https://github.com/sbesh91/hono-preact');
     expect(
-      screen.getByText(/loaders and actions are typed functions/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/loaders, forms, sse/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/all of your tools in one place/i)
-    ).toBeInTheDocument();
+      within(footer).getByRole('link', { name: /npm/i }).getAttribute('href')
+    ).toBe('https://www.npmjs.com/package/hono-preact');
+    expect(within(footer).getByText('MIT')).toBeInTheDocument();
   });
-
   it('mounts the hero shader background', () => {
     const { container } = render(<Home />);
-    // HeroShader renders an aria-hidden wrapper containing a canvas (or the
-    // CSS fallback) plus a fade overlay.
     const bg = container.querySelector('[aria-hidden="true"]');
-    expect(bg).not.toBeNull();
-    expect(bg!.querySelector('canvas')).not.toBeNull();
+    expect(bg?.querySelector('canvas')).not.toBeNull();
+  });
+  it('renders the hero headline', () => {
+    render(<Home />);
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+  });
+
+  it('mounts all twelve chapters (headings present)', () => {
+    render(<Home />);
+    for (const re of [
+      /edge to browser/i, // hero
+      /runs on the platform/i, // edge
+      /routing is a manifest/i, // routing
+      /no client waterfall/i, // ssr
+      /streams in/i, // streaming
+      /without the cliff/i, // mutations
+      /degrade, not crash/i, // resilience
+      /instant navigation/i, // prefetch
+      /transitions, for free/i, // view transitions
+      /live, both ways/i, // realtime
+      /one package/i, // one package
+      /feels alive/i, // cta
+    ]) {
+      // The hero wordmark renders layered spans (base + gradient fill), so a
+      // heading may match more than once; assert presence, not uniqueness.
+      expect(screen.getAllByText(re).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('renders coherently with reduced motion (no pinning path)', () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: /reduce/.test(q),
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+    render(<Home />);
+    expect(screen.getByText(/routing is a manifest/i)).toBeInTheDocument();
+    expect(screen.getByText(/live, both ways/i)).toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 });

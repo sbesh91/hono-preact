@@ -52,7 +52,7 @@ const TaskCard: FunctionComponent<Props> = ({
               onMouseEnter={prefetch}
               onFocus={prefetch}
               onDragStart={(e) => e.preventDefault()}
-              class="relative block rounded-lg border border-border bg-background p-2.5 pl-3 shadow-[0_1px_1px_rgba(37,40,42,.04)] hover:border-accent/40"
+              class="relative block rounded-lg border border-border bg-background p-2.5 pl-3 shadow-subtle hover:border-accent/40"
             />
           }
         >

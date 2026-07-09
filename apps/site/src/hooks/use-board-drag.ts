@@ -14,8 +14,7 @@ export function dropTargetFromPoint(cols: ColumnRect[], x: number): TaskStatus {
   return x < cols[0].rect.left ? cols[0].status : cols[cols.length - 1].status;
 }
 
-const LIFT_SHADOW =
-  '0 12px 26px -8px rgba(37,40,42,.28), 0 4px 10px -6px rgba(37,40,42,.18)';
+const LIFT_SHADOW = 'var(--shadow-lifted)';
 
 // Build the drag avatar: a clone of the card promoted to the top layer via the
 // Popover API, so it floats above the board's `overflow-x-auto` clip (and any

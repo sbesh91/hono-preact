@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { WorkerInMsg, WorkerOutMsg } from './shader-worker.ts';
 
-// Fade the shader into the themed page background so it dissolves into the page
-// in both light and dark mode (a hardcoded white fade left a seam in dark mode).
-const FADE_GRADIENT =
-  'linear-gradient(to bottom,' +
-  ' transparent 0%,' +
-  ' transparent 30%,' +
-  ' color-mix(in srgb, var(--background) 35%, transparent) 55%,' +
-  ' color-mix(in srgb, var(--background) 75%, transparent) 80%,' +
-  ' var(--background) 100%)';
+// Mask (not paint over) the shader's lower edge to transparent, so it dissolves
+// to reveal the same fixed atmospheric ground the chapters sit on. Painting an
+// opaque background fade instead left a white band that met the chapters'
+// tinted ground on a hard line; masking keeps the ground continuous across the
+// hero/chapter seam in both themes.
+// The opaque region has to reach past the hero copy: in dark mode the revealed
+// ground is dark, so any text sitting in the dissolve zone loses contrast. The
+// content is vertically centered, so holding full opacity to 68% keeps the
+// lede and CTAs on the bright shader and confines the dissolve to the empty
+// strip below them.
+const SHADER_MASK =
+  'linear-gradient(to bottom, #000 0%, #000 68%, transparent 94%)';
 
 // Always-on base layer. Visible before the first WebGL frame (no white flash on
 // load) and as the static fallback when the OffscreenCanvas worker path is
@@ -79,20 +82,37 @@ export function HeroShader() {
     });
     observer.observe(canvas);
 
-    const onVisibility = () => {
-      if (!stopped) send({ type: 'visibility', hidden: document.hidden });
+    // Pause the render loop when the tab is hidden OR the hero has scrolled out
+    // of view. The shader is a continuous WebGL animation; left running while the
+    // reader is deep in the chapters it keeps the GPU busy for nothing and
+    // contends with scroll compositing, a stutter source on iOS. onScreen starts
+    // true so the first frames paint before the observer's first callback.
+    let onScreen = true;
+    const pushVisibility = () => {
+      if (!stopped)
+        send({ type: 'visibility', hidden: document.hidden || !onScreen });
     };
-    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('visibilitychange', pushVisibility);
+    const viewObserver = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      pushVisibility();
+    });
+    viewObserver.observe(canvas);
 
     return () => {
       observer.disconnect();
-      document.removeEventListener('visibilitychange', onVisibility);
+      viewObserver.disconnect();
+      document.removeEventListener('visibilitychange', pushVisibility);
       stop();
     };
   }, []);
 
   return (
-    <div class="absolute inset-0 -z-10 pointer-events-none" aria-hidden="true">
+    <div
+      class="absolute inset-0 -z-10 pointer-events-none"
+      aria-hidden="true"
+      style={{ maskImage: SHADER_MASK, WebkitMaskImage: SHADER_MASK }}
+    >
       <div class="absolute inset-0" style={{ background: BASE_GRADIENT }} />
       <canvas
         ref={canvasRef}
@@ -102,7 +122,10 @@ export function HeroShader() {
           transition: 'opacity 700ms ease-out',
         }}
       />
-      <div class="absolute inset-0" style={{ background: FADE_GRADIENT }} />
+      {/* Dark-mode twilight veil. Lives inside the masked wrapper so it dissolves
+          with the shader at the lower edge (see .hx-hero__veil); white in light
+          mode, so its multiply is a no-op there. */}
+      <div class="hx-hero__veil" />
     </div>
   );
 }

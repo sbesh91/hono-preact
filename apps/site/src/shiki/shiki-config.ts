@@ -1,7 +1,7 @@
 // Single source of truth for Shiki highlighting on the docs site. Consumed by
 // the MDX rehype plugin (fenced code blocks) and by the build-time highlight
 // plugin (demo source shown in Code tabs), so both render identically and the
-// dark-mode swap in root.css (.shiki / [data-theme='dark']) works for both.
+// dark-mode swap in docs.css (.shiki / [data-theme='dark']) works for both.
 export const SHIKI_THEMES = {
   light: 'github-light',
   dark: 'github-dark',

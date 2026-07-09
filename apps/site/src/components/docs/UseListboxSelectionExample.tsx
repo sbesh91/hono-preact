@@ -37,7 +37,7 @@ interface UseListboxSelectionExampleProps {
 
 // The selection core shared by Select and Combobox: single/multi value tracking,
 // a label registry resolving display labels in DOM order, and hidden form-field
-// serialization. Styling: .docs-listboxsel* in root.css.
+// serialization. Styling: .docs-listboxsel* in docs.css.
 export function UseListboxSelectionExample({
   multiple = false,
 }: UseListboxSelectionExampleProps) {

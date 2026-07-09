@@ -10,7 +10,7 @@ const THEME_INIT = `(function(){try{var t=localStorage.getItem('theme');if(t==='
 
 export default function Layout({ children }: { children: ComponentChildren }) {
   return (
-    <html>
+    <html lang="en">
       <Head defaultTitle="hono-preact">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <link rel="stylesheet" href={root} />

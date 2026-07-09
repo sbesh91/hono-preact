@@ -53,7 +53,7 @@ function Sidebar({
           href="/demo/projects"
           class="mb-4 flex items-center gap-2 px-1.5 py-1"
         >
-          <span class="h-6 w-6 rounded-md bg-gradient-to-br from-magenta-500 to-brand-orange" />
+          <span class="h-6 w-6 rounded-md bg-gradient-to-tr from-brand-orange to-magenta-500" />
           <span class="font-bold tracking-tight">Tasks</span>
         </a>
         <p class="px-2 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">

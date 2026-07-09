@@ -2,7 +2,7 @@ import { useControllableState } from 'hono-preact-ui';
 
 // A live On/Off toggle built on useControllableState. Uncontrolled here: it owns
 // its own state from defaultValue and the setter is stable across renders.
-// Styling: .docs-toggle in root.css.
+// Styling: .docs-toggle in docs.css.
 export function UseControllableStateDemo() {
   const [on, setOn] = useControllableState<boolean>({ defaultValue: false });
   return (

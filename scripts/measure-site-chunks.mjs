@@ -88,6 +88,63 @@ export function measureSiteBaseline(staticDir) {
   return { baseline: { gzip, raw, chunks: closure.size } };
 }
 
+// Written by the vite client build next to `static/` (see
+// packages/vite/src/preload-manifest.ts). Its `routeCss` map gives, per route
+// pattern, the CSS asset URLs (`/static/<file>.css`) that route's chain
+// imports; the entry's own eagerly-loaded sheet (the global stylesheet linked
+// by the Layout, e.g. root-*.css) is deliberately excluded from every route's
+// list there, so it is identified below as the CSS asset no route references.
+const PRELOAD_MANIFEST_FILE = '__hp-preload.json';
+
+function gzipMeasure(buf) {
+  return { raw: buf.length, gzip: gzipSync(buf).length };
+}
+
+function sumGzipMeasure(measures) {
+  return measures.reduce(
+    (acc, m) => ({ raw: acc.raw + m.raw, gzip: acc.gzip + m.gzip }),
+    { raw: 0, gzip: 0 }
+  );
+}
+
+// The always-loaded global CSS (gzip + raw + file count) plus a per-route
+// breakdown of route-scoped CSS, read from the client build's routeCss map.
+// Returns null when the dist or its preload manifest is absent, mirroring
+// measureSiteBaseline's graceful degradation for a partial CI run.
+export function measureSiteCss(staticDir) {
+  const manifestPath = join(dirname(staticDir), PRELOAD_MANIFEST_FILE);
+  if (!existsSync(staticDir) || !existsSync(manifestPath)) return null;
+
+  const { routeCss = {} } = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const cssFile = (url) => url.replace(/^\/static\//, '');
+
+  const referenced = new Set();
+  const routes = {};
+  for (const [pattern, urls] of Object.entries(routeCss)) {
+    const measures = [];
+    for (const url of urls) {
+      const file = cssFile(url);
+      referenced.add(file);
+      const path = join(staticDir, file);
+      // A manifest URL whose file is absent (stale/partial base-ref build in
+      // the client-size job) or outside /static/ degrades to skipping that
+      // sheet, mirroring measureSiteBaseline, instead of failing the whole job.
+      if (!existsSync(path)) continue;
+      measures.push(gzipMeasure(readFileSync(path)));
+    }
+    routes[pattern] = sumGzipMeasure(measures);
+  }
+
+  const globalFiles = readdirSync(staticDir).filter(
+    (f) => f.endsWith('.css') && !referenced.has(f)
+  );
+  const global = sumGzipMeasure(
+    globalFiles.map((f) => gzipMeasure(readFileSync(join(staticDir, f))))
+  );
+
+  return { global: { ...global, files: globalFiles.length }, routes };
+}
+
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
   if (i === -1) return undefined;
@@ -97,7 +154,11 @@ function arg(name) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const staticDir = resolve(arg('static-dir') ?? DEFAULT_STATIC_DIR);
-  const report = measureSiteBaseline(staticDir) ?? {};
+  const css = measureSiteCss(staticDir);
+  const report = {
+    ...(measureSiteBaseline(staticDir) ?? {}),
+    ...(css ? { css } : {}),
+  };
   const json = JSON.stringify(report, null, 2) + '\n';
   const out = arg('out');
   if (out) {

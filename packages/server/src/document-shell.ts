@@ -1,4 +1,5 @@
 import type { AppConfig } from '@hono-preact/iso';
+import { fontMimeType } from './font-preload.js';
 import { speculationRulesTag } from './speculation-rules.js';
 
 function escapeHtml(str: string): string {
@@ -55,6 +56,14 @@ export function assembleDocument(opts: {
    * closure. Empty or omitted -> nothing added. See issue #249.
    */
   routePreloadModules?: string[];
+  /**
+   * The matched route's own stylesheet URLs (`selectRoutePreload` over the CSS
+   * map). Injected as `<link rel="stylesheet">` after the app's own head tags so
+   * route rules keep their cascade position over the global sheet. Unlike the
+   * modulepreload hints these are render-critical: a dropped route sheet is a
+   * broken page, so they count toward the missing-</head> warning below.
+   */
+  routeStyleSheets?: string[];
 }): string {
   const {
     html,
@@ -63,6 +72,7 @@ export function assembleDocument(opts: {
     appConfig,
     preloadModules = [],
     routePreloadModules = [],
+    routeStyleSheets = [],
   } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
@@ -102,7 +112,29 @@ export function assembleDocument(opts: {
     ...routePreloadModules.map(preloadTag),
   ];
 
-  const headTags = [...preloadTags, ...userHeadTags].join('\n        ');
+  const styleTag = (href: string): string =>
+    `<link ${toAttrs({ rel: 'stylesheet', href })} />`;
+  const routeStyleTags = routeStyleSheets.map(styleTag);
+
+  // Font preloads are render-critical resources (default High priority), so they
+  // go FIRST in the head for earliest discovery, ahead of the fetchpriority=low
+  // modulepreload hints. crossorigin is mandatory: fonts fetch in CORS mode even
+  // same-origin, so a preload without it does not match the request and
+  // double-fetches. type lets the browser skip a format it cannot use (omitted
+  // for an unrecognized extension). Like the modulepreload hints these are
+  // droppable (the Link header still carries them), so they are NOT counted in
+  // the missing-</head> warning below.
+  const fontPreloadTags = (appConfig?.fonts ?? []).map(
+    (href) =>
+      `<link ${toAttrs({ rel: 'preload', as: 'font', type: fontMimeType(href), href, crossorigin: '' })} />`
+  );
+
+  const headTags = [
+    ...fontPreloadTags,
+    ...preloadTags,
+    ...userHeadTags,
+    ...routeStyleTags,
+  ].join('\n        ');
 
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
@@ -111,15 +143,33 @@ export function assembleDocument(opts: {
   // <html lang> wrapper for backward compatibility.
   const startsWithHtml = /^\s*<html(\s|>)/i.test(html);
 
-  // Warn only when the Layout would drop the USER's head content. Framework
-  // preload hints don't count: dropping them when there's no </head> is
-  // acceptable (the Link response header still carries the closure), so they
-  // must not fire a spurious warning on every render.
-  if (startsWithHtml && userHeadTags.length > 0 && !html.includes('</head>')) {
+  // Warn when the Layout would drop render-critical head content: the user's own
+  // head tags OR the route stylesheets. Framework preload hints still don't count
+  // (dropping a hint is acceptable; the Link header carries the closure).
+  if (
+    startsWithHtml &&
+    (userHeadTags.length > 0 || routeStyleTags.length > 0) &&
+    !html.includes('</head>')
+  ) {
     warnMissingMarker(
       '</head>',
       'the Layout owns the document (<html>…) but emitted no </head>; ' +
         'injected <title>/<meta>/<link> tags were dropped'
+    );
+  }
+
+  // A fragment (no <html>) gets the framework's own <html lang> wrapper below,
+  // which has no <head> to inject into, so route stylesheets are dropped
+  // silently. Modulepreload hints being dropped there is fine (see the guard
+  // above), but route stylesheets are render-critical: warn so this is
+  // debuggable instead of shipping a route with no styles.
+  if (!startsWithHtml && routeStyleTags.length > 0) {
+    warnMissingMarker(
+      '</head>',
+      'the rendered output is a fragment (no <html>), so the framework ' +
+        '<html> wrapper has no <head> and the matched route render-critical ' +
+        'stylesheet links were dropped; a route that relies on route-scoped ' +
+        'CSS must render a document (a Layout with <Head>), not a bare fragment'
     );
   }
   const inner = html.replace('</head>', `${headTags}\n      </head>`);

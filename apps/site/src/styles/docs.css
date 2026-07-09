@@ -1,0 +1,2096 @@
+/* MDX prose defaults */
+.mdx-content {
+  line-height: 1.75;
+}
+
+.mdx-content h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 1.5rem;
+}
+.mdx-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 2rem 0 1rem;
+}
+.mdx-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem;
+}
+.mdx-content h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.mdx-content p {
+  margin: 0 0 1rem;
+}
+.mdx-content p:last-child {
+  margin-bottom: 0;
+}
+
+.mdx-content a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.mdx-content a:hover {
+  color: var(--accent-hover);
+}
+
+.mdx-content code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.875em;
+  background: var(--surface-subtle);
+  padding: 0.125em 0.375em;
+  border-radius: 0.25rem;
+}
+
+.mdx-content pre {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.mdx-content pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Shiki dual theme: the light theme (github-light) is the inline default; swap
+   to the dark theme's syntax colors when the docs are in dark mode (mirrors the
+   token rules: prefers-dark without an explicit theme, or data-theme=dark). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .shiki,
+  :root:not([data-theme]) .shiki span {
+    color: var(--shiki-dark) !important;
+  }
+}
+:root[data-theme='dark'] .shiki,
+:root[data-theme='dark'] .shiki span {
+  color: var(--shiki-dark) !important;
+}
+
+/* Code background comes from a theme token: a faint surface in light mode (so
+   it reads against the white page, with the 1px border), and the github-dark
+   background in dark mode (matching the dark syntax colors). */
+.mdx-content pre,
+.docs-tabs__panel pre {
+  background-color: var(--code-surface) !important;
+}
+
+.mdx-content ul {
+  list-style: disc;
+  padding-left: 1.75rem;
+  margin: 0 0 1rem;
+}
+.mdx-content ol {
+  list-style: decimal;
+  padding-left: 1.75rem;
+  margin: 0 0 1rem;
+}
+.mdx-content li {
+  margin: 0.25rem 0;
+}
+.mdx-content li > ul,
+.mdx-content li > ol {
+  margin: 0.25rem 0;
+}
+
+/* The wrapper (injected by rehypeWrapTables) owns the visual frame and the
+   horizontal scroll, so a wide API table scrolls inside its own box on mobile
+   instead of forcing a horizontal scrollbar on the whole page. The table keeps
+   `width: 100%`, so on desktop its columns still stretch to fill the wrapper. */
+.mdx-content .table-wrap {
+  margin: 1.25rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+.mdx-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.mdx-content th {
+  padding: 0.625rem 0.875rem;
+  background: var(--surface-subtle);
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.mdx-content td {
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+}
+.mdx-content tr:last-child td {
+  border-bottom: none;
+}
+/* Keep the first column (prop/name) on one line. */
+.mdx-content td:first-child {
+  white-space: nowrap;
+}
+/* Inline code in cells (identifiers and long type signatures) stays on one
+   line so it reads cleanly. When that makes a table wider than the viewport it
+   scrolls horizontally inside its .table-wrap, rather than breaking code
+   mid-token to shrink to fit (overflow-wrap: anywhere did the latter, which
+   mangled signatures like `Promise<{ ... }>` into one-character columns on
+   mobile). Prose in cells still wraps normally. */
+.mdx-content td code {
+  white-space: nowrap;
+}
+/* The last column is prose (Description / Notes / Action). When a wide code
+   column forces the table to scroll, auto table-layout would otherwise squeeze
+   this column down to a word or two per line; give it a readable measure. */
+.mdx-content th:last-child,
+.mdx-content td:last-child {
+  min-width: 16rem;
+}
+/* Tighter cell padding on narrow phones so more columns fit before the wrapper
+   has to scroll. */
+@media (max-width: 480px) {
+  .mdx-content th,
+  .mdx-content td {
+    padding: 0.5rem 0.625rem;
+  }
+}
+
+/* Code samples and API tables read better wider than the prose measure. On
+   desktop there is room to the right of the content column, so let them grow
+   past it (capped so they never exceed the viewport). The table wrapper is the
+   direct child of .mdx-content now, so it is what gets the extra width; the
+   table inside fills it via `width: 100%`. */
+@media (min-width: 768px) {
+  .docs-tabs,
+  .mdx-content > pre,
+  .mdx-content > .table-wrap {
+    width: min(calc(100% + 9rem), calc(100vw - 240px - 6rem));
+  }
+}
+
+.mdx-content blockquote {
+  border-left: 3px solid var(--muted);
+  margin: 1rem 0;
+  padding: 0.25rem 1rem;
+  color: var(--muted);
+}
+
+.mdx-content hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 2rem 0;
+}
+.mdx-content strong {
+  font-weight: 600;
+}
+.mdx-content em {
+  font-style: italic;
+}
+
+/* --- Docs: calm fade + subtle zoom instead of the directional page slide --- */
+/* DocsLayout emits the `docs` type on docs->docs navigation. These rules come
+   AFTER the directional rules so that when both `docs` and a nav-direction type
+   are active for the same root pseudo, the docs treatment wins the specificity
+   tie. The sidebar and top bar are lifted out of the root snapshot (see
+   `.docs-sidebar` and `.docs-topbar` below), so only the page content fades
+   and zooms here. */
+html:active-view-transition-type(docs)::view-transition-old(root) {
+  animation: var(--spring-duration) var(--spring-soft) both docs-zoom-out;
+}
+html:active-view-transition-type(docs)::view-transition-new(root) {
+  animation: var(--spring-duration) var(--spring-soft) both docs-zoom-in;
+}
+
+@keyframes docs-zoom-out {
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes docs-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* The docs sidebar and top bar are persistent UI: give each its own transition
+   name so it is lifted out of the root snapshot. */
+.docs-sidebar {
+  view-transition-name: docs-sidebar;
+}
+.docs-topbar {
+  view-transition-name: docs-topbar;
+}
+/* Within docs (chrome present in both snapshots) freeze it: no fade, no zoom,
+   no morph, so only the page content transitions. Entering or leaving docs the
+   chrome is captured on only one side, so it keeps the default fade; pinning it
+   to `animation: none` there would leave the old chrome frozen on screen for
+   the duration of the transition. */
+html:active-view-transition-type(docs-within)::view-transition-group(
+    docs-sidebar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-old(
+    docs-sidebar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-new(
+    docs-sidebar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-group(
+    docs-topbar
+  ),
+html:active-view-transition-type(docs-within)::view-transition-old(docs-topbar),
+html:active-view-transition-type(docs-within)::view-transition-new(
+    docs-topbar
+  ) {
+  animation: none;
+}
+
+/* --- Docs: component demos, code tabs --- */
+
+/* Framed area that hosts a live component demo. The dotted grid makes the
+   demo read as an interactive surface rather than page content. */
+.docs-example {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-height: 9rem;
+  padding: 2rem;
+  margin: 1.25rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0) 0
+      0 / 16px 16px,
+    var(--surface);
+}
+
+/* Demo panel inside the Demo|Code tab strip: same dotted interactive surface
+   as .docs-example, but without the outer border/margin/radius (the .docs-tabs
+   card already provides those). */
+.docs-example-tabs__demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-height: 9rem;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0) 0
+      0 / 16px 16px,
+    var(--surface);
+}
+
+/* Demo buttons: a primary (trigger) and a secondary (close). */
+.docs-dialog-trigger,
+.docs-dialog-close {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-dialog-trigger {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-dialog-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-dialog-close {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border-color);
+}
+.docs-dialog-close:hover {
+  background: var(--surface-subtle);
+}
+.docs-dialog-trigger:focus-visible,
+.docs-dialog-close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* The demo's native <dialog>. Tailwind's preflight resets `dialog { margin: 0 }`,
+   which defeats the UA centering of a modal dialog, so center it explicitly.
+   Centering lives in `transform`, NOT the standalone `translate` property: when a
+   rule sets both `translate` and `transform`, the production minifier (Lightning
+   CSS) drops the `translate`, silently un-centering the dialog in the built site
+   while dev (unminified) looks fine. A single `transform` sidesteps that; the
+   entry animation folds the offset into its own transform. */
+.docs-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.875rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+@starting-style {
+  .docs-dialog[open] {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+}
+.docs-dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+@starting-style {
+  .docs-dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+/* Compact dialog-local typography (overrides the .mdx-content h2/p defaults). */
+.docs-dialog h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 0.375rem;
+}
+.docs-dialog p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.docs-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+.docs-dialog[data-state='closed'] {
+  animation: docs-dialog-out 160ms ease-in forwards;
+}
+@keyframes docs-dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+}
+.docs-dialog[data-state='closed']::backdrop {
+  animation: docs-backdrop-out 160ms ease-in forwards;
+}
+@keyframes docs-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-dialog[data-state='open'],
+  .docs-dialog[data-state='closed'],
+  .docs-dialog::backdrop,
+  .docs-dialog[data-state='closed']::backdrop {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Tabbed, copyable code examples. The tab bar uses the docs theme; the code
+   panel is a Shiki-highlighted fenced block (github-dark), so it matches every
+   other code sample on the site. */
+.docs-tabs {
+  margin: 1.25rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  overflow: hidden;
+}
+.docs-tabs__tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-color);
+}
+.docs-tabs__tab {
+  appearance: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.625rem 0.5rem;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-tabs__tab:hover {
+  color: var(--foreground);
+}
+.docs-tabs__tab[aria-selected='true'] {
+  color: var(--foreground);
+  border-bottom-color: var(--accent);
+}
+.docs-tabs__copy {
+  appearance: none;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 400;
+  margin-left: auto;
+  align-self: center;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-tabs__copy:hover {
+  color: var(--foreground);
+  background: var(--surface);
+}
+/* The panel holds a Shiki <pre>; sit it flush in the rounded card (the card's
+   own border delineates it, so the pre needs none of its own). */
+.docs-tabs__panel pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* Popover docs demo. Mirrors the copyable CSS on /docs/components/popover, but
+   uses the site theme tokens so it tracks light/dark. */
+.docs-popover-trigger,
+.docs-popover-close {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-popover-trigger {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-popover-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-popover-close {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border-color);
+}
+.docs-popover-close:hover {
+  background: var(--surface-subtle);
+}
+.docs-popover-trigger:focus-visible,
+.docs-popover-close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-popover-positioner {
+  z-index: 50;
+}
+.docs-popover {
+  box-sizing: border-box;
+  width: max(16rem, 12rem);
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+@starting-style {
+  .docs-popover[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-popover[data-state='closed'] {
+  animation: docs-popover-out 120ms ease-in forwards;
+}
+@keyframes docs-popover-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Scope the popup typography by element so it overrides the .mdx-content prose
+   h2/p (a BEM class would lose the specificity tie to `.mdx-content h2`). */
+.docs-popover h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+.docs-popover p {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.docs-popover .docs-placement__group {
+  margin-bottom: 0.5rem;
+}
+.docs-popover-close {
+  margin-top: 0.25rem;
+}
+/* Arrow: a small square rotated into a diamond. The component sets it
+   position:absolute and the cross-axis offset (left/top) from Floating UI; the
+   per-side rules below set the static-side offset so it straddles the edge
+   opposite the resolved side, showing the two outer borders as a caret. */
+.docs-popover__arrow {
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+.docs-popover__arrow[data-side='bottom'] {
+  top: -5px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.docs-popover__arrow[data-side='top'] {
+  bottom: -5px;
+  border-left: 0;
+  border-top: 0;
+}
+.docs-popover__arrow[data-side='right'] {
+  left: -5px;
+  border-top: 0;
+  border-right: 0;
+}
+.docs-popover__arrow[data-side='left'] {
+  right: -5px;
+  border-bottom: 0;
+  border-left: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-popover {
+    transition: none;
+  }
+  .docs-popover[data-state='closed'] {
+    animation: none;
+  }
+}
+
+/* Tooltip docs demo. The copyable CSS on /docs/components/tooltip uses a fixed
+   dark chip; the live demo inverts the theme tokens so it reads in both modes. */
+.docs-tooltip-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-tooltip-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-tooltip-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-tooltip-positioner {
+  z-index: 50;
+}
+.docs-tooltip {
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.8125rem;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  opacity: 1;
+  transition: opacity 100ms ease;
+}
+@starting-style {
+  .docs-tooltip[data-state='open'] {
+    opacity: 0;
+  }
+}
+.docs-tooltip[data-state='closed'] {
+  animation: docs-tooltip-out 100ms ease-in forwards;
+}
+@keyframes docs-tooltip-out {
+  to {
+    opacity: 0;
+  }
+}
+.docs-tooltip__arrow {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: var(--foreground);
+}
+.docs-tooltip__arrow[data-side='bottom'] {
+  top: -4px;
+}
+.docs-tooltip__arrow[data-side='top'] {
+  bottom: -4px;
+}
+.docs-tooltip__arrow[data-side='right'] {
+  left: -4px;
+}
+.docs-tooltip__arrow[data-side='left'] {
+  right: -4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-tooltip {
+    transition: none;
+  }
+}
+
+/* Placement explorer controls shared by the Popover and Tooltip demos. */
+.docs-placement {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+}
+.docs-placement__controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+}
+.docs-placement__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.docs-placement__option {
+  appearance: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.docs-placement__option:hover {
+  color: var(--foreground);
+}
+.docs-placement__option[data-active='true'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: transparent;
+}
+.docs-placement__option:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-placement__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 7rem;
+}
+
+/* useSafeArea explainer diagram (SafeAreaDiagram.tsx). Every color is a page
+   theme token, so the figure tracks light/dark/system automatically; the pointer
+   dots stop moving under prefers-reduced-motion (handled at the end). */
+.docs-safe-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.25rem 0;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.docs-safe-area .sa {
+  width: 100%;
+  max-width: 24rem;
+  height: auto;
+}
+
+/* The safe corridor quad. */
+.sa-corridor {
+  fill: var(--accent);
+  fill-opacity: 0.1;
+  stroke: var(--accent);
+  stroke-opacity: 0.55;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+/* Trigger / floating boxes and their labels. */
+.sa-box {
+  fill: var(--surface-subtle);
+  stroke: var(--border-color);
+  stroke-width: 1.5;
+}
+.sa-label {
+  fill: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+/* Direction tracks (visible without motion) and their arrowheads. */
+.sa-track {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 4;
+}
+.sa-track--open {
+  stroke: var(--badge-success-foreground);
+  marker-end: url(#sa-arrow-open);
+}
+.sa-track--close {
+  stroke: var(--danger);
+  marker-end: url(#sa-arrow-close);
+}
+.sa-arrowhead--open {
+  fill: var(--badge-success-foreground);
+}
+.sa-arrowhead--close {
+  fill: var(--danger);
+}
+
+/* The point where the closing path leaves the corridor. */
+.sa-x line {
+  stroke: var(--danger);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Pointer dots (positioned and looped purely by transform). */
+.sa-dot {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.sa-dot--open {
+  fill: var(--badge-success-foreground);
+  animation: sa-travel-open 3.8s ease-in-out infinite;
+}
+.sa-dot--close {
+  fill: var(--danger);
+  animation: sa-travel-close 3.8s ease-in-out infinite;
+}
+
+@keyframes sa-travel-open {
+  0% {
+    transform: translate(190px, 52px);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(140px, 130px);
+    opacity: 1;
+  }
+  82% {
+    transform: translate(140px, 130px);
+    opacity: 1;
+  }
+  90% {
+    transform: translate(140px, 130px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(190px, 52px);
+    opacity: 0;
+  }
+}
+@keyframes sa-travel-close {
+  0% {
+    transform: translate(190px, 52px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  42% {
+    transform: translate(244px, 87px);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(270px, 104px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(270px, 104px);
+    opacity: 0;
+  }
+}
+
+/* Legend. */
+.sa-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.sa-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sa-legend__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+}
+.sa-legend__dot--open {
+  background: var(--badge-success-foreground);
+}
+.sa-legend__dot--close {
+  background: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-dot--open {
+    animation: none;
+    transform: translate(162px, 100px);
+    opacity: 1;
+  }
+  .sa-dot--close {
+    animation: none;
+    transform: translate(244px, 87px);
+    opacity: 1;
+  }
+}
+
+/* Menu docs demos (Menu + Context Menu). Mirrors the copyable CSS on
+   /docs/components/menu, but uses the site theme tokens so it tracks light/dark.
+   The Popup, items, separator, group label, and submenu chevron are shared by
+   the button menu and the right-click menu. */
+.docs-menu-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-menu-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-menu-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-menu-positioner {
+  z-index: 50;
+}
+.docs-menu {
+  box-sizing: border-box;
+  min-width: 12rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+@starting-style {
+  .docs-menu[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-menu[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+/* Items: roving-tabindex rows; the active row is :focus, so highlight on
+   data-highlighted (set by hover and arrow keys) reads in both modes. */
+.docs-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.docs-menu__item[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-menu__item[data-disabled] {
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+.docs-menu__check {
+  display: inline-flex;
+  justify-content: center;
+  width: 1rem;
+  font-size: 0.8125rem;
+}
+.docs-menu__separator {
+  height: 1px;
+  margin: 0.25rem 0.3rem;
+  background: var(--border-color);
+}
+.docs-menu__group {
+  padding: 0.15rem 0;
+}
+.docs-menu__label {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.docs-menu__subtrigger {
+  justify-content: space-between;
+}
+.docs-menu__chevron {
+  margin-left: auto;
+  color: var(--muted);
+}
+.docs-menu__item[data-highlighted] .docs-menu__chevron {
+  color: inherit;
+}
+/* Context-menu drop zone: the right-click target. */
+.docs-context-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(20rem, 100%);
+  min-height: 7rem;
+  padding: 1.5rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: 0.875rem;
+  user-select: none;
+}
+.docs-context-zone[data-state='open'] {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-menu {
+    transition: none;
+  }
+}
+
+/* Select docs demos (single + multiple). Mirrors the copyable CSS on
+   /docs/components/select, but uses the site theme tokens so it tracks
+   light/dark. The trigger is a button showing the Value; the popup is a
+   role="listbox" of options with highlighted / selected / disabled states. */
+.docs-select-trigger {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 14rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.docs-select-trigger:hover {
+  border-color: var(--accent);
+}
+.docs-select-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-select-trigger[data-state='open'] {
+  border-color: var(--accent);
+}
+.docs-select__value[data-placeholder] {
+  color: var(--muted);
+}
+.docs-select__chevron {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.docs-select-positioner {
+  z-index: 50;
+}
+.docs-select {
+  box-sizing: border-box;
+  min-width: 14rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+@starting-style {
+  .docs-select[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-select[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+/* Options: the active descendant is data-highlighted (set by hover and arrow
+   keys); the selected option is data-selected. Both can be true at once. */
+.docs-select__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.docs-select__option[data-selected]::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 0.8125rem;
+}
+.docs-select__option[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-select__option[data-disabled] {
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+.docs-select__group {
+  padding: 0.15rem 0;
+}
+.docs-select__label {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-select {
+    transition: none;
+  }
+}
+
+/* Combobox docs demos (single + multiple + creatable + inline). Mirrors the
+   copyable CSS on /docs/components/combobox but uses the site theme tokens so
+   it tracks light/dark. The input is the focus surface; the popup is a
+   role="listbox" of consumer-filtered options with highlighted / selected /
+   disabled states. */
+.docs-cb-input {
+  box-sizing: border-box;
+  min-width: 16rem;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.docs-cb-input::placeholder {
+  color: var(--muted);
+}
+.docs-cb-input:focus {
+  border-color: var(--accent);
+}
+/* The optional field wrapper (Combobox.Anchor) for chips / adornments: it
+   carries the border + focus ring, and the input inside goes borderless. */
+.docs-cb-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 16rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  cursor: text;
+  transition: border-color 120ms ease;
+}
+.docs-cb-field:focus-within {
+  border-color: var(--accent);
+}
+.docs-cb-field .docs-cb-input {
+  flex: 1;
+  min-width: 5rem;
+  padding: 0.125rem 0.25rem;
+  border: none;
+  background: transparent;
+}
+.docs-cb-trigger {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.docs-cb-trigger:hover {
+  color: var(--foreground);
+}
+.docs-cb-positioner {
+  z-index: 50;
+}
+.docs-cb {
+  box-sizing: border-box;
+  min-width: 16rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.25),
+    0 4px 6px -4px rgb(0 0 0 / 0.25);
+  outline: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+@starting-style {
+  .docs-cb[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.docs-cb[data-state='closed'] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.docs-cb__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.docs-cb__option[data-selected]::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 0.8125rem;
+}
+.docs-cb__option[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-cb__option[data-disabled] {
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+.docs-cb__create {
+  font-style: italic;
+}
+.docs-cb__empty {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.docs-cb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 0.75rem;
+}
+.docs-cb-chip__remove {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.docs-cb-chip__remove:hover {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-cb {
+    transition: none;
+  }
+}
+
+/* usePresence docs demo */
+.docs-presence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.docs-presence-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.docs-presence-trigger:hover {
+  background: var(--accent-hover);
+}
+.docs-presence-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.docs-presence-box {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.docs-presence-box[data-state='open'] {
+  animation: docs-presence-in 160ms ease-out;
+}
+.docs-presence-box[data-state='closed'] {
+  animation: docs-presence-out 160ms ease-in forwards;
+}
+@keyframes docs-presence-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes docs-presence-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-presence-box[data-state='open'],
+  .docs-presence-box[data-state='closed'] {
+    animation: none;
+  }
+}
+
+/* useControllableState demo */
+.docs-toggle {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-toggle[data-pressed] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* mergeRefs demo */
+.docs-mergerefs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.docs-mergerefs-input {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+}
+.docs-mergerefs-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-mergerefs-readout {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* renderElement demo */
+.docs-renderel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.docs-renderel-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.docs-renderel-btn[data-pressed] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* usePosition demo */
+.docs-useposition {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+.docs-useposition-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.docs-useposition-group {
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.docs-useposition-group legend {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.docs-useposition-anchor {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-useposition-box {
+  /* usePosition sets position:fixed + left/top; this is visual styling only. */
+  z-index: 50;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--foreground);
+  color: var(--surface);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+
+/* usePositioner demo */
+.docs-usepositioner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.docs-usepositioner-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-usepositioner-popup {
+  z-index: 50;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  max-width: 16rem;
+}
+
+/* useDismiss demo */
+.docs-dismiss {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.docs-dismiss-trigger,
+.docs-focusreturn-trigger,
+.docs-safearea-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-dismiss-panel,
+.docs-focusreturn-panel {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+}
+.docs-dismiss-readout,
+.docs-focusreturn-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* useFocusReturn demo */
+.docs-focusreturn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.docs-focusreturn-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-focusreturn-panel button {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+/* useSafeArea demo */
+.docs-safearea {
+  position: relative;
+  width: 100%;
+  min-height: 7rem;
+}
+.docs-safearea-trigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.docs-safearea-card {
+  position: absolute;
+  top: 3.5rem;
+  left: 6rem;
+  max-width: 16rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+}
+
+/* useListNavigation demo */
+.docs-listnav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-listnav-trigger {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.docs-listnav-list {
+  width: 12rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: 0.25rem;
+  max-height: 9rem;
+  overflow: auto;
+}
+.docs-listnav-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  cursor: default;
+}
+.docs-listnav-option[data-active] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* useListboxSelection demo */
+.docs-listboxsel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-listboxsel-mode {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.docs-listboxsel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 11rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.docs-listboxsel-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--foreground);
+}
+.docs-listboxsel-option[data-selected] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-listboxsel-readout {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* useTypeahead demo */
+.docs-typeahead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docs-typeahead-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 11rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.docs-typeahead-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.docs-typeahead-option {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+.docs-typeahead-option[data-active] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.docs-typeahead-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+.docs-typeahead-hint {
+  font-size: 0.72rem;
+}
+
+/* Generic trigger button used across demos that do not need a named variant. */
+.docs-button {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .docs-button {
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
+}
+.docs-button:hover {
+  background: var(--accent-hover);
+}
+.docs-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Toast demo (docs chrome). Tokens: --foreground --muted --surface
+   --border-color --accent --accent-foreground. */
+.docs-toast-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.docs-toast-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.docs-toast-demo .toaster,
+.docs-toast-demo [popover] {
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  width: min(22rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.docs-toast-demo ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.docs-toast {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  /* Front toast (--toast-index 0) on top, so it is never covered by the older
+     toasts stacked behind it and its close button stays clickable. */
+  z-index: calc(1000 - var(--toast-index, 0));
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  touch-action: pan-y;
+  transform-origin: bottom center;
+  /* One transform composes the swipe (X), the stacking offset (up by the
+     library's --toast-offset), and a depth scale-down for the collapsed pile. */
+  transform: translateX(var(--toast-swipe-amount, 0px))
+    translateY(calc(-1 * var(--toast-offset, 0px))) scale(var(--toast-scale, 1));
+}
+/* Bridge the gap to the toast above so moving the pointer between expanded
+   toasts stays within the region's subtree. Without this the empty gap fires a
+   pointerleave on the region (collapse) immediately followed by a pointerenter
+   on the next toast (expand), which reads as jitter. The bridge keeps the whole
+   stack one contiguous hover target. */
+.docs-toast::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 16px;
+}
+/* Collapsed pile (Sonner-style): the front three are opaque and peek up by the
+   library's --toast-offset, each a touch smaller by depth; the fourth and
+   beyond hide cleanly beneath the pile rather than fanning out as faint
+   outlines. */
+.docs-toast:not([data-expanded='true']) {
+  --toast-scale: calc(1 - 0.05 * min(var(--toasts-before, 0), 2));
+  opacity: calc(1 - max(0, var(--toasts-before, 0) - 2));
+}
+/* Expanded on hover/focus: every toast at full size and opacity, real heights. */
+.docs-toast[data-expanded='true'] {
+  --toast-scale: 1;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .docs-toast {
+    transition:
+      transform 0.4s cubic-bezier(0.21, 1.02, 0.73, 1),
+      opacity 0.4s ease;
+  }
+}
+/* Enter from below + fade. @starting-style (rather than a keyframe) is the
+   transition origin on insert, so reduced-motion users place instantly and the
+   same effect is expressible as a Tailwind starting: variant. */
+@starting-style {
+  .docs-toast {
+    opacity: 0;
+    transform: translateY(100%) scale(0.9);
+  }
+}
+/* While dragging, track the pointer 1:1 (no transition). */
+.docs-toast[data-swiping='true'] {
+  transition: none;
+}
+/* Exit: slide out to the right and fade. A swipe-dismiss keeps its offset, so
+   this continues the gesture outward instead of snapping back to center. */
+.docs-toast[data-state='closed'] {
+  opacity: 0;
+  transform: translateX(110%) translateY(calc(-1 * var(--toast-offset, 0px)));
+}
+.docs-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+.docs-toast-title {
+  font-weight: 600;
+}
+.docs-toast-description {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.docs-toast-action {
+  align-self: center;
+  padding: 0.25rem 0.625rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+}
+.docs-toast-close {
+  flex: none;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -0.125rem -0.25rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.docs-toast-close:hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.docs-toast[data-type='success'] {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--border-color));
+}
+.docs-toast[data-type='error'] {
+  border-color: color-mix(in oklab, #ef4444 60%, var(--border-color));
+}
+
+/* rehype-autolink-headings appends this anchor to every heading. Hidden until
+   the heading is hovered/focused, so it does not clutter the prose. */
+.mdx-content :is(h1, h2, h3, h4) {
+  /* Land below the 3rem sticky top bar when scrolled to via an anchor (TOC,
+     permalink, deep link) instead of hiding under it. */
+  scroll-margin-top: 4.5rem;
+}
+.mdx-content :is(h2, h3, h4) {
+  position: relative;
+}
+.mdx-content .heading-anchor {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.mdx-content :is(h2, h3, h4):hover .heading-anchor,
+.mdx-content .heading-anchor:focus-visible {
+  opacity: 1;
+}
+
+/* Cmd+K command palette. Reuses the combobox demo styles for the field and
+   listbox; this block is the dialog shell, the topbar trigger, and result rows. */
+.docs-cmdk-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.docs-cmdk-trigger:hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.docs-cmdk-kbd {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  color: var(--muted);
+}
+.docs-cmdk {
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: 40rem;
+  margin: 12vh auto auto;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-subtle, var(--background));
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+/* Enter: animate from the starting style when the <dialog> gains `open`.
+   @starting-style is progressive enhancement (older engines just appear). */
+@starting-style {
+  .docs-cmdk[open] {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+.docs-cmdk::backdrop {
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+@starting-style {
+  .docs-cmdk[open]::backdrop {
+    opacity: 0;
+  }
+}
+/* Exit: data-state flips to 'closed' before the Dialog's usePresence calls
+   close(), so this keyframe plays out and defers the actual close. */
+.docs-cmdk[data-state='closed'] {
+  animation: docs-cmdk-out 160ms ease-in forwards;
+}
+@keyframes docs-cmdk-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+.docs-cmdk[data-state='closed']::backdrop {
+  animation: docs-backdrop-out 160ms ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-cmdk,
+  .docs-cmdk[data-state='closed'],
+  .docs-cmdk::backdrop,
+  .docs-cmdk[data-state='closed']::backdrop {
+    transition: none;
+    animation: none;
+  }
+}
+.docs-cmdk-input {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+.docs-cmdk-list {
+  position: static;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: none;
+}
+.docs-cmdk-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.docs-cmdk-option__title {
+  font-weight: 400;
+}
+.docs-cmdk-option__section {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+/* On the highlighted (accent-background) row, --muted has poor contrast. Use a
+   slightly dimmed on-accent foreground so the subtext stays readable in both
+   light and dark modes. */
+.docs-cmdk-option[data-highlighted] .docs-cmdk-option__section {
+  color: color-mix(in oklab, var(--accent-foreground) 80%, var(--accent));
+}

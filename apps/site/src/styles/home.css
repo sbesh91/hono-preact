@@ -1,0 +1,2041 @@
+/* Home scroll experience. All classes are `hx-` namespaced. Uses root.css tokens. */
+.hx-chapter {
+  position: relative;
+}
+/* One continuous atmospheric field behind the whole scroll experience, so
+   chapters never show a hard seam where one section's local glow met the next.
+   Fixed, so it stays put while chapters scroll over it. */
+.hx-home {
+  position: relative;
+  z-index: 0;
+  background: var(--background);
+}
+.hx-home::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      52% 44% at 12% 8%,
+      color-mix(in srgb, var(--color-brand-orange) 12%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      50% 50% at 88% 92%,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 62%
+    );
+}
+.hx-home > main {
+  position: relative;
+  z-index: 1;
+}
+/* Calm (non-pinned) chapters carry their own vertical rhythm; pinned chapters
+   get their space from the 100svh pin. */
+.hx-chapter:not(:has(.hx-stage)) {
+  padding-block: clamp(4rem, 8vh, 7rem);
+}
+.hx-wrap {
+  width: min(64rem, 100% - 3rem);
+  margin-inline: auto;
+}
+.hx-scene {
+  position: relative;
+  z-index: 2;
+  width: min(64rem, 100% - 3rem);
+  margin-inline: auto;
+  /* One consistent gap between every scene block (head, panels, code, notes)
+     instead of ad-hoc per-element margins that left some pairs touching. */
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.hx-scene__head {
+  text-align: center;
+}
+.hx-scene__step {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+/* Framing bookends (Edge, One Package, Ready) use the muted tier and carry no
+   number, so the accent-numbered spine reads clearly as the request journey. */
+.hx-scene__step--muted {
+  color: var(--muted);
+}
+/* Lifecycle position marker on the numbered spine chapters (01..08). The
+   running count is what tells the reader how far the request has assembled. */
+.hx-scene__num {
+  font-variant-numeric: tabular-nums;
+}
+.hx-scene__num::after {
+  content: '·';
+  margin: 0 0.5em;
+  font-weight: 400;
+  opacity: 0.55;
+}
+.hx-scene__title {
+  font-size: clamp(1.5rem, 3.2vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.028em;
+  margin-top: 0.4rem;
+  text-wrap: balance;
+}
+.hx-scene__desc {
+  color: var(--muted);
+  max-width: 38rem;
+  margin: 0.5rem auto 0;
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.hx-stage {
+  position: relative;
+  /* Pin scrub length. CSS-driven (set per stage via --stage-pages) so the height
+     is identical on server and client; the narrow override lives in the 48rem
+     media query below. Reduced motion forces height:auto (see that block). */
+  height: calc(var(--stage-pages, 1) * 100svh);
+}
+.hx-stage__pin {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* Bound and center the pinned scene so no single-child device collapses to
+   content width hard-left; min-width:0 lets wide grids/code shrink to fit. */
+.hx-stage__pin > * {
+  width: min(64rem, 100% - 3rem);
+  margin-inline: auto;
+  min-width: 0;
+}
+.hx-stage--static {
+  padding: 3rem 0;
+}
+/* Phone-only copy of a chapter's notes + code, placed after the pin. Desktop
+   keeps that content inside the composed pinned frame (this is display:none and
+   the in-pin copy shows); on phones the stacked pinned scene would overflow one
+   viewport and clip, so the in-pin copy hides and this one flows below instead.
+   Same width and rhythm as a scene, with its own vertical padding. */
+.hx-chapter__coda {
+  display: none;
+  position: relative;
+  z-index: 2;
+  width: min(64rem, 100% - 3rem);
+  margin-inline: auto;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-block: clamp(2.5rem, 6vh, 4.5rem);
+}
+.hx-live {
+  position: relative;
+}
+
+.hx-panels {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 1rem;
+  align-items: stretch;
+}
+/* Declared before the 48rem block so the mobile 1fr override wins by source
+   order (no !important), and .hx-cols2--compare still wins by specificity. */
+.hx-cols2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 48rem) {
+  .hx-panels {
+    grid-template-columns: 1fr;
+  }
+  .hx-cols2 {
+    grid-template-columns: 1fr;
+  }
+  /* SSR's staircase-vs-parallel comparison stays side-by-side even on phones:
+     stacking it doubles the pinned height (clips) and loses the whole point of a
+     side-by-side comparison. Tighter gap to fit two narrow columns. */
+  .hx-cols2--compare {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  /* Phones scrub the same sticky pin as desktop, just over a shorter spacer
+     (--stage-pages-narrow). CSS-driven so it matches the SSR height with no
+     hydration shift. */
+  .hx-stage {
+    height: calc(var(--stage-pages-narrow, var(--stage-pages, 1)) * 100svh);
+  }
+  /* Move notes + code out of the one-viewport pin so the pinned scene fits:
+     hide the in-pin copy and reveal the after-pin coda. */
+  .hx-stage__pin .hx-why,
+  .hx-stage__pin .hx-code,
+  .hx-stage__pin .hx-scene__code {
+    display: none;
+  }
+  .hx-chapter__coda {
+    display: flex;
+  }
+  /* Vertical density. iOS Safari sizes the pin to 100svh, the toolbar-visible
+     small viewport (~745px on an iPhone 15, less on smaller phones), so the
+     pinned scene must be compact to clear it. Trim the head, the gaps, and the
+     demo chrome so the tallest chapters fit a short viewport instead of clipping.
+     Taller phones just get a little more breathing room. */
+  .hx-scene {
+    gap: 0.75rem;
+  }
+  .hx-scene__desc {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin-top: 0.3rem;
+  }
+  .hx-scene__title {
+    margin-top: 0.25rem;
+  }
+  .hx-cols2 {
+    gap: 0.7rem;
+  }
+  .hx-browser__body {
+    min-height: 7rem;
+    padding: 0.6rem;
+    gap: 0.4rem;
+  }
+  .hx-wire {
+    padding: 0.6rem;
+    row-gap: 0.4rem;
+  }
+  .hx-lane__track {
+    height: 0.78rem;
+  }
+  .hx-region {
+    padding: 0.5rem 0.55rem;
+  }
+  .hx-browser__bar {
+    padding: 0.45rem 0.6rem;
+  }
+  /* Reclaim width on phones: the 3rem desktop side gutter wastes ~24px at 360px
+     and squeezes the demos. */
+  .hx-scene,
+  .hx-stage__pin > *,
+  .hx-chapter__coda {
+    width: min(64rem, 100% - 1.5rem);
+  }
+  .hx-wrap {
+    width: min(64rem, 100% - 1.75rem);
+  }
+}
+/* Let grid columns shrink below their content's intrinsic width so code blocks
+   (overflow-x:auto) scroll inside their box instead of widening the page. This
+   is what stops horizontal overflow when the columns stack on narrow screens. */
+.hx-cols2 > *,
+.hx-panels > * {
+  min-width: 0;
+}
+/* A standalone wire panel beside a taller browser should wrap its lanes, not
+   stretch into a big empty bordered box. Top-align it so its border hugs the
+   content and the height difference reads as intentional whitespace. */
+.hx-panels > .hx-wire {
+  align-self: start;
+}
+
+.hx-browser {
+  border: 1px solid var(--border-color);
+  border-radius: 0.8rem;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow:
+    var(--shadow-card),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+}
+.hx-browser__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-subtle);
+}
+.hx-browser__bar i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.hx-browser__url {
+  margin-left: 0.5rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hx-browser__body {
+  position: relative;
+  min-height: 11rem;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.hx-live-tag {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--wire-done);
+}
+.hx-live-tag b {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--wire-done);
+  animation: hx-pulse 1.4s ease-in-out infinite;
+}
+@keyframes hx-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hx-wire {
+  border: 1px solid var(--border-color);
+  border-radius: 0.8rem;
+  background: var(--code-surface);
+  box-shadow:
+    var(--shadow-card),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 0.8rem 0.9rem;
+  /* One shared grid for the whole wire so every lane's track starts at the same
+     x: the label column is sized (via subgrid below) to the widest label in
+     THIS wire, so short-label wires don't get over-padded and long ones don't
+     clip. A per-lane grid would size each label column independently and the
+     bars would step in and out. */
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.hx-wire__cap {
+  grid-column: 1 / -1;
+  font-family: ui-monospace, monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.hx-lane {
+  display: grid;
+  grid-column: 1 / -1;
+  /* Inherit the wire's two columns so all lanes share one label column. */
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+.hx-lane__label {
+  font-family: ui-monospace, monospace;
+  font-size: 0.66rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hx-lane__track {
+  position: relative;
+  height: 0.9rem;
+  border-radius: 0.28rem;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+.hx-lane__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--wire-inflight);
+  border-radius: 0.28rem;
+  transition: background 0.2s;
+}
+/* Solid green/amber only for non-gradient lanes. The :not() keeps these off
+   the gradient lanes, whose `background` shorthand previously (at equal
+   specificity but later source order) reset the gradient to flat green. */
+.hx-lane__fill:not(.hx-lane__fill--grad)[data-state='done'] {
+  background: var(--wire-done);
+}
+.hx-lane__fill:not(.hx-lane__fill--grad)[data-state='cancel'] {
+  background: var(--wire-cancel);
+}
+/* Gradient ("orangenta") lanes keep the brand gradient through inflight AND
+   done, with a soft glow that reads as a packet travelling the wire. */
+.hx-lane__fill--grad[data-state='inflight'],
+.hx-lane__fill--grad[data-state='done'] {
+  background: var(--gradient-orangenta);
+  box-shadow: 0 0 12px -1px var(--glow);
+}
+.hx-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  opacity: 0.7;
+  box-shadow: 0 0 10px 1px var(--glow);
+  pointer-events: none;
+}
+
+.hx-region {
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  min-height: 2.6rem;
+}
+.hx-region__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: opacity 0.25s;
+}
+.hx-region[data-shown='true'] .hx-region__skeleton {
+  opacity: 0;
+}
+.hx-region__content {
+  position: absolute;
+  inset: 0.55rem 0.65rem;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
+  font-size: 0.82rem;
+}
+.hx-region[data-shown='true'] .hx-region__content {
+  opacity: 1;
+  transform: none;
+}
+
+/* Visible by default: SSR, no-JS, and a failed client bundle all render the
+   content. The component arms the hidden state ('hidden') only after mount
+   with IntersectionObserver available, then flips to 'shown' on scroll-in, so
+   JS is an enhancement here, never a gate. */
+.hx-reveal {
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hx-reveal[data-reveal-state='hidden'] {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+/* Syntax-highlight tokens for the home snippets. The colors reuse the wire
+   tokens, which are already AA on the code surface in both themes. */
+.tok-kw {
+  color: var(--accent);
+  font-weight: 600;
+}
+.tok-fn {
+  color: var(--wire-cancel);
+  font-weight: 600;
+}
+.tok-str {
+  color: var(--wire-done);
+}
+.tok-cm {
+  color: var(--muted);
+}
+
+/* Shared code-sample style (used by every chapter's <pre class="hx-code">). */
+.hx-code {
+  margin: 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.7rem;
+  background: var(--code-surface);
+  overflow-x: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+
+/* "Why it matters" annotation list: ties demo moments to their payoff. */
+.hx-why {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.5rem;
+}
+@media (max-width: 48rem) {
+  .hx-why {
+    grid-template-columns: 1fr;
+  }
+}
+.hx-why__item {
+  display: grid;
+  gap: 0.15rem;
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--accent);
+}
+.hx-why__lead {
+  font-weight: 700;
+  color: var(--foreground);
+}
+.hx-why__body {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* Chapter: Instant navigation (prefetch) */
+/* The text column sits beside the device, so it reads left-aligned and
+   vertically centered rather than using the centered .hx-scene__head. */
+.hx-prefetch__intro {
+  align-self: center;
+  text-align: start;
+}
+.hx-prefetch__intro .hx-scene__desc {
+  margin-inline: 0;
+}
+.hx-prefetch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 12rem;
+  font-family: var(--font-sans);
+}
+.hx-prefetch__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.15rem 0.7rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--foreground);
+}
+.hx-prefetch__brand {
+  font-weight: 600;
+}
+.hx-prefetch__link {
+  color: var(--muted);
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.4rem;
+  transition:
+    color 0.25s,
+    background 0.25s;
+}
+/* Hovering warms the route: give the link a clear highlight so the pointer
+   reads as actually hovering it, not floating near it. */
+.hx-prefetch__link[data-warm] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.hx-prefetch__cursor {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+.hx-prefetch__cursor svg {
+  display: block;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
+}
+/* Ripple that fires from the pointer tip as it lands on the link. */
+.hx-prefetch__click {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  transform: translate(-50%, -50%);
+  animation: hx-prefetch-click 0.55s ease-out forwards;
+}
+@keyframes hx-prefetch-click {
+  from {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0.25);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+}
+.hx-prefetch__panel {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.hx-prefetch__panel-head {
+  margin: 0 0 0.55rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.hx-prefetch__rows {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hx-prefetch__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--foreground);
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+.hx-prefetch__ready {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  transition:
+    background 0.25s,
+    color 0.25s;
+}
+.hx-prefetch__ready[data-ready] {
+  background: var(--badge-success-surface);
+  color: var(--badge-success-foreground);
+}
+.hx-prefetch__dest {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.6rem;
+  background: var(--surface-subtle);
+  color: var(--foreground);
+  opacity: 0.5;
+  transition:
+    opacity 0.3s,
+    border-color 0.3s;
+}
+.hx-prefetch__dest[data-arrived] {
+  opacity: 1;
+  border-color: var(--accent);
+}
+.hx-prefetch__dest-title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+.hx-prefetch__dest-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.hx-prefetch__code {
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--code-surface);
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.hx-prefetch__demo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 0.75rem;
+  padding: 0 1rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hx-stage {
+    height: auto !important;
+  }
+  .hx-stage__pin {
+    position: static;
+    height: auto;
+    padding: 2.5rem 0;
+  }
+  .hx-playhead,
+  .hx-live-tag b {
+    display: none;
+  }
+  .hx-hero__scroll-arrow,
+  .hx-stream__dot,
+  .hx-sk-line,
+  .hx-skel {
+    animation: none;
+  }
+  /* Repeat the armed-hidden selectors so this override outranks them even if
+     a reduced-motion flip races the arming effect. */
+  .hx-reveal,
+  .hx-reveal[data-reveal-state='hidden'] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .hx-region__skeleton {
+    display: none;
+  }
+  .hx-region__content {
+    position: static;
+    opacity: 1;
+    transform: none;
+  }
+  .hx-pkg-pill,
+  .hx-pkg-row[data-armed='true']:not([data-shown='true']) .hx-pkg-pill {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+.hx-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 88svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 5rem 0 4.5rem;
+}
+/* Dark mode only (--hero-veil-* are white in light, so the multiply is a no-op):
+   multiply a deep plum over the always-light sunset shader so the hero reads as
+   a dark twilight native to dark mode rather than a bright light island. Multiply
+   scales every pole down (even the near-white one), so the hue life survives
+   where a screen/opacity blend would smear the light pole to grey.
+   This lives INSIDE the shader wrapper (HeroShader), so the wrapper's dissolve
+   mask clips the darkened shader as one unit: the hero fades to the single shared
+   atmospheric ground the chapters sit on, keeping the fixed background glow
+   continuous across the seam. A veil layered over the isolated hero instead
+   could not reveal that ground, so its lower edge popped against the chapters. */
+.hx-hero__veil {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+  background: linear-gradient(
+    160deg,
+    var(--hero-veil-1) 0%,
+    var(--hero-veil-2) 50%,
+    var(--hero-veil-3) 100%
+  );
+}
+.hx-hero .hx-wrap {
+  position: relative;
+  z-index: 1;
+}
+/* ---- Hero wordmark: "edge to browser" travels a wire (the signature) ----
+   The finished gradient wordmark is the DEFAULT state, so no-JS and reduced
+   motion render it complete; the keyframes only play the fill-in on load.
+   The gradient stays on fixed light values (the shader is always light). */
+.hx-hero__wire {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  /* Room for the wire to sit clear below the "g" descender. */
+  padding-bottom: 0.34em;
+}
+.hx-hero__wm-base {
+  /* Full ink (matching the "One framework," line), not a faint underlay: the
+     wordmark paints as solid text on the very first frame, so the headline is a
+     large, fully-painted LCP candidate at first paint and the gradient sweep
+     reads as filling real text rather than materializing from nothing. This
+     keeps the LCP element on the headline instead of the late-fading lede.
+     Theme foreground so it flips to light on the dark-mode hero ground. */
+  color: var(--foreground);
+  /* Hidden at rest so its glyph edges never ghost behind the gradient; the load
+     animation reveals it (backwards fill) and fades it out as the fill lands. */
+  opacity: 0;
+}
+.hx-hero__wm-fill {
+  position: absolute;
+  inset: 0 auto auto 0;
+  /* Bottom padding extends the gradient's paint box below the baseline; without
+     it, background-clip:text leaves the "g" descender with no gradient behind
+     it (it renders transparent). */
+  padding-bottom: 0.35em;
+  /* Fixed brand poles rather than var(--gradient-orangenta): the theme token
+     brightens in dark mode for page surfaces, but the wordmark sits on the
+     fixed sunset/twilight hero backdrop (same reasoning as the hero button). */
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-orange),
+    var(--color-brand-magenta)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* The right inset does the left-to-right reveal; top/bottom extend past the
+     box so the wipe itself never clips the glyphs. */
+  clip-path: inset(-0.3em 0 -0.3em -0.08em);
+  /* Isolate the gradient text on its own layer so the clip-path wipe repaints
+     just this element rather than the hero region behind it. */
+  will-change: clip-path;
+}
+/* The wire and its nodes sit on a baseline below the descenders (bottom: 0.04em
+   of the padded box), so the line never crosses the "g". */
+.hx-hero__wire-line {
+  position: absolute;
+  left: 0.05em;
+  right: 0.05em;
+  bottom: 0.04em;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  overflow: hidden;
+  opacity: 0;
+}
+.hx-hero__wire-line::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-orange),
+    var(--color-brand-magenta)
+  );
+  /* Grow the fill with a compositor transform (scaleX) rather than animating
+     width, which relayouts every frame and stutters the wipe on iOS Safari. */
+  transform-origin: left;
+  will-change: transform;
+}
+.hx-hero__edge {
+  position: absolute;
+  left: 0.05em;
+  bottom: calc(0.04em + 1px);
+  width: 0.16em;
+  height: 0.16em;
+  border-radius: 50%;
+  /* Orange pole node: attached to the gradient wire, so it may take the pole
+     color (BRAND.md C3 pole-node exception). */
+  background: var(--color-brand-orange);
+  transform: translate(-50%, 50%);
+  opacity: 0;
+}
+.hx-hero__packet {
+  position: absolute;
+  left: 100%;
+  bottom: calc(0.04em + 1px);
+  width: 0.16em;
+  height: 0.16em;
+  border-radius: 50%;
+  background: var(--color-brand-magenta);
+  box-shadow: 0 0 0.35em 0.07em
+    color-mix(in srgb, var(--color-brand-magenta) 60%, transparent);
+  transform: translate(-50%, 50%);
+  opacity: 0;
+  /* Own layer so the traveling dot (and its glow) composites instead of
+     repainting the hero region each frame as it moves. */
+  will-change: left, opacity;
+}
+/* The destination dot at the browser end, lit as the packet arrives. */
+.hx-hero__browser {
+  position: absolute;
+  left: 100%;
+  bottom: calc(0.04em + 1px);
+  width: 0.18em;
+  height: 0.18em;
+  border-radius: 50%;
+  background: var(--color-brand-magenta);
+  box-shadow: 0 0 0.45em 0.1em
+    color-mix(in srgb, var(--color-brand-magenta) 55%, transparent);
+  transform: translate(-50%, 50%) scale(0.6);
+  opacity: 0;
+  will-change: transform, opacity, filter;
+}
+
+/* Opt in to the load animation only when motion is welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .hx-hero__wm-fill {
+    animation: hx-hero-fill 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s backwards;
+  }
+  .hx-hero__wm-base {
+    animation: hx-hero-base 1.3s ease 0.3s backwards;
+  }
+  .hx-hero__wire-line {
+    animation: hx-hero-wire 1.6s ease 0.3s backwards;
+  }
+  .hx-hero__wire-line::before {
+    animation: hx-hero-wirefill 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s
+      backwards;
+  }
+  .hx-hero__edge {
+    animation: hx-hero-edge 1.6s ease 0.3s backwards;
+  }
+  .hx-hero__packet {
+    animation: hx-hero-packet 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s backwards;
+  }
+  .hx-hero__browser {
+    animation: hx-hero-browser 1.55s ease 0.3s backwards;
+  }
+  /* The subtitle and CTAs rise in after the wordmark wipe lands, so the hero
+     reads as one orchestrated entrance rather than everything arriving at once.
+     A smooth ease-out (not the snappy expo) over a touch more travel reads as a
+     glide; transform + opacity are auto-composited, so this stays off the main
+     thread. */
+  .hx-hero__lede {
+    animation: hx-hero-rise 0.72s cubic-bezier(0.33, 1, 0.68, 1) 1.05s backwards;
+  }
+  .hx-hero__cta {
+    animation: hx-hero-rise 0.72s cubic-bezier(0.33, 1, 0.68, 1) 1.2s backwards;
+  }
+}
+@keyframes hx-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.9rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes hx-hero-fill {
+  from {
+    clip-path: inset(-0.3em 100% -0.3em -0.08em);
+  }
+  to {
+    clip-path: inset(-0.3em 0 -0.3em -0.08em);
+  }
+}
+@keyframes hx-hero-base {
+  0%,
+  84% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-wirefill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes hx-hero-wire {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-packet {
+  0% {
+    left: 0.03em;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-edge {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hx-hero-browser {
+  0%,
+  72% {
+    opacity: 0;
+    transform: translate(-50%, 50%) scale(0.6);
+    filter: blur(0);
+  }
+  86% {
+    opacity: 1;
+    transform: translate(-50%, 50%) scale(1.2);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    /* Scale further out and blur as it fades, so the dissolve reads as a soft
+       bloom rather than a hard pop-out. */
+    transform: translate(-50%, 50%) scale(1.9);
+    filter: blur(5px);
+  }
+}
+/* Hero text tracks the theme: dark ink on the light-mode sunset, light on the
+   dark-mode twilight. --hero-eyebrow keeps the AA-safe solid value per mode. */
+.hx-eyebrow {
+  margin-top: 1.1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  /* Solid (not an alpha tint): clears AA on the shader in both modes. */
+  color: var(--hero-eyebrow);
+}
+.hx-hero__title {
+  color: var(--foreground);
+  /* The clamp holds down to ~360px, where "edge to browser" still fits one line
+     at the 2.6rem floor; below that the 11.5vw cap takes over so the wordmark
+     scales with the viewport and stays single-line, which is what lets the wire
+     animation run on phones instead of falling back to a static wordmark. Above
+     ~360px the clamp always wins, so wider screens are unchanged. */
+  font-size: min(clamp(2.6rem, 6.6vw, 4.7rem), 11.5vw);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  margin-top: 1rem;
+  text-wrap: balance;
+}
+/* Light, airy lede is the deliberate counterpoint to the heavy title: the
+   weight ladder is what carries the type, not a second face. */
+.hx-hero__lede {
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+  font-weight: 300;
+  font-size: clamp(1.1rem, 2.3vw, 1.4rem);
+  line-height: 1.45;
+  max-width: 34rem;
+  margin: 1.35rem 0 0;
+}
+.hx-hero__cta {
+  display: flex;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  flex-wrap: wrap;
+}
+.hx-btn {
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.6rem 1.1rem;
+  border-radius: 0.6rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.hx-btn--primary {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.hx-btn--primary:hover {
+  background: var(--accent-hover);
+}
+.hx-btn--ghost {
+  border: 1px solid var(--border-color);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+/* Primary keeps the fixed brand magenta (reads on both the light sunset and the
+   dark twilight); the ghost tracks the theme via tokens so it sits on the right
+   surface in each mode. */
+.hx-hero .hx-btn--primary {
+  background: var(--color-magenta-600);
+  color: #ffffff;
+}
+.hx-hero .hx-btn--primary:hover {
+  background: var(--color-magenta-700);
+}
+.hx-hero .hx-btn--ghost {
+  border-color: var(--hero-ghost-border);
+  color: var(--foreground);
+  background: var(--hero-ghost-bg);
+}
+.hx-hero .hx-btn--ghost:hover {
+  background: var(--hero-ghost-bg-hover);
+}
+/* Scroll cue: gives the lower third a purpose and points into chapter one. */
+.hx-hero__scroll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1.6rem;
+  z-index: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  /* The cue sits over the dissolved shader (the page ground), so it must track
+     the theme: a fixed dark ink failed WCAG contrast on the dark background. */
+  color: var(--muted);
+}
+.hx-hero__scroll-arrow {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+  animation: hx-hero-bob 1.7s ease-in-out infinite;
+}
+@keyframes hx-hero-bob {
+  0%,
+  100% {
+    transform: translateY(-2px) rotate(45deg);
+  }
+  50% {
+    transform: translateY(3px) rotate(45deg);
+  }
+}
+
+/* Chapter: runs on the platform (edge). Calm three-card row. The eyebrow uses
+   the shared .hx-scene__step ladder (see ChapterEdge). */
+.hx-edge-cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 48rem) {
+  .hx-edge-cards {
+    grid-template-columns: 1fr;
+  }
+}
+/* The grid stretches each Reveal wrapper to equal height; make the card fill
+   its wrapper so the code-bearing card does not leave the others short. */
+.hx-edge-cards > * {
+  display: flex;
+  min-width: 0;
+}
+.hx-edge-card {
+  flex: 1;
+  /* Let the card shrink below the code block's intrinsic width so the code
+     scrolls inside its own overflow-x:auto box instead of widening the page. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.15rem 1.25rem;
+  /* Same orangenta treatment as the package pills, scaled up for card size: a
+     faintly warmed fill (padding-box), a soft gradient border in the glow's own
+     hues (border-box), and the tri-colour halo behind the card. The neutral
+     card shadow stays for elevation; the coloured shadows add the glow. */
+  --card-fill: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(var(--card-fill), var(--card-fill)) padding-box,
+    linear-gradient(
+        100deg,
+        color-mix(in srgb, var(--color-brand-orange) 50%, transparent),
+        color-mix(in srgb, var(--color-brand-magenta) 42%, transparent) 52%,
+        color-mix(in srgb, var(--color-brand-violet) 55%, transparent)
+      )
+      border-box;
+  box-shadow:
+    var(--shadow-card),
+    -14px 9px 42px -20px rgba(254, 80, 0, 0.5),
+    0 13px 40px -20px rgba(236, 0, 140, 0.42),
+    14px 9px 42px -20px rgba(201, 125, 255, 0.55);
+}
+.hx-edge-card__title {
+  font-weight: 600;
+  color: var(--foreground);
+}
+.hx-edge-card__line {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.hx-edge-card__code {
+  margin-top: auto;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--code-surface);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+  font-size: 0.8rem;
+}
+/* Every card ends in a bottom-aligned row of concrete tags, so the three read
+   as parallel facets sharing one filled base. */
+.hx-edge-card__meta {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.hx-edge-tag {
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.4rem;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
+/* Chapter: Routing is a manifest. A centered column: a tab row of route nodes
+   above the app frame that renders the matching nested stack. */
+.hx-route {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: min(42rem, 100%);
+  margin-inline: auto;
+}
+.hx-route__code {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  width: min(42rem, 100%);
+  margin-inline: auto;
+  padding: 0.85rem 1.1rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border-color);
+  background: var(--code-surface);
+  color: var(--foreground);
+}
+/* The whole nested manifest is always laid out; nothing mounts, collapses, or
+   clips. Scrolling only moves which layer is `data-state=active`, and every
+   layer transitions its own colors, so the accent highlight glides down the
+   tree smoothly in both scroll directions. */
+.hx-route__nest {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+/* One accent ring that slides onto the active layer (positioned from JS in
+   RouteStack). Because every layer is laid out at a stable spot, moving one
+   ring between them reads as the highlight travelling route to route, zooming
+   inward as you drill deeper. */
+.hx-route__ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px var(--accent);
+  pointer-events: none;
+  z-index: 2;
+  transition:
+    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-route__ring {
+    transition: none;
+  }
+}
+.hx-route__layer {
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  background: var(--surface);
+  transition:
+    border-color 0.4s ease,
+    box-shadow 0.4s ease,
+    background-color 0.4s ease;
+}
+.hx-route__layer .hx-route__layer {
+  margin-top: 0.5rem;
+  background: var(--surface-subtle);
+}
+.hx-route__layer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.hx-route__layer-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  transition: color 0.4s ease;
+}
+.hx-route__layer-role {
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: color 0.4s ease;
+}
+/* Deeper routes are defined in the manifest but not loaded yet: fainter box and
+   dimmed name, so the loaded region reads as "lit up" as you descend. */
+.hx-route__layer[data-state='pending'] {
+  border-color: color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+.hx-route__layer[data-state='pending']
+  > .hx-route__layer-head
+  .hx-route__layer-name {
+  color: var(--muted);
+}
+/* The active node carries the accent ring (via the per-layer border as the
+   no-JS fallback); its role reads in accent too. */
+.hx-route__layer[data-state='active'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+/* Once the sliding ring is positioned, drop the per-layer border so only the
+   travelling ring shows (otherwise the border would jump ahead of the slide). */
+.hx-route__nest[data-ring] .hx-route__layer[data-state='active'] {
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+.hx-route__layer[data-state='active']
+  > .hx-route__layer-head
+  .hx-route__layer-role {
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-route__layer,
+  .hx-route__layer-name,
+  .hx-route__layer-role {
+    transition: none;
+  }
+}
+.hx-route__view-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  transition: opacity 0.4s ease;
+}
+/* The view's content only reads as loaded once the view is the active node. */
+.hx-route__layer[data-state='pending'] > .hx-route__view-body {
+  opacity: 0.4;
+}
+.hx-route__view-row {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--border-strong);
+}
+.hx-route__view-row--short {
+  width: 55%;
+}
+
+/* Chapter: SSR, no client waterfall (Task 9) */
+.hx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.hx-panel__cap {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hx-sk-line {
+  display: block;
+  height: 0.6rem;
+  border-radius: 0.3rem;
+}
+
+/* Chapter: Streaming, live */
+.hx-stream {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.hx-stream__count {
+  font: 700 clamp(2.5rem, 8vw, 4rem) / 1 var(--font-sans);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.hx-stream__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+.hx-stream__item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.34rem 0;
+  color: var(--foreground);
+  font-size: 0.9rem;
+}
+.hx-stream__item + .hx-stream__item {
+  border-top: 1px solid var(--border-color);
+}
+.hx-stream__item::before {
+  content: '';
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--wire-done);
+}
+.hx-stream__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.hx-stream__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--wire-done);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wire-done) 22%, transparent);
+  animation: hx-pulse 1.4s ease-in-out infinite;
+}
+.hx-stream__chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.55rem;
+  background: var(--surface-subtle);
+}
+.hx-stream__chart-cap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hx-stream__chart-trend {
+  color: var(--wire-done);
+  font-weight: 600;
+}
+.hx-chart {
+  display: block;
+  width: 100%;
+  height: 2.6rem;
+}
+.hx-chart__area {
+  fill: url(#hx-chart-fill);
+}
+.hx-chart__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.hx-chart__now {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+.hx-chart__stop-a {
+  stop-color: var(--accent);
+  stop-opacity: 0.34;
+}
+.hx-chart__stop-b {
+  stop-color: var(--accent);
+  stop-opacity: 0;
+}
+.hx-skel {
+  border-radius: 0.5rem;
+  min-height: 1.5rem;
+}
+/* Skeleton bars shimmer so a "loading" region reads as genuinely in-flight. */
+.hx-sk-line,
+.hx-skel {
+  background: linear-gradient(
+    90deg,
+    var(--surface-subtle),
+    var(--border-strong),
+    var(--surface-subtle)
+  );
+  background-size: 200% 100%;
+  animation: hx-shimmer 1.3s linear infinite;
+}
+@keyframes hx-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.hx-skel--list {
+  min-height: 6.4rem;
+}
+.hx-skel--head {
+  min-height: 1.4rem;
+}
+/* Tall enough to contain the whole chart figure (caption + 2.6rem svg + its own
+   border/padding); when it was shorter the svg and its "now" line overflowed
+   the region and poked out the bottom. */
+.hx-skel--chart {
+  min-height: 5.6rem;
+}
+.hx-scene__code {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--code-surface);
+  color: var(--foreground);
+  font:
+    0.85rem / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+/* Chapter: Mutations without the cliff */
+.hx-mut-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  margin-block-end: 0.75rem;
+}
+.hx-mut-input {
+  flex: 1 1 auto;
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface-subtle);
+  color: var(--muted);
+}
+.hx-mut-add {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.hx-mut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.hx-mut-row {
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.hx-mut-row--pending {
+  opacity: 0.4;
+}
+.hx-mut-row--optimistic {
+  border-style: dashed;
+  opacity: 0.7;
+}
+.hx-mut-tag {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.hx-mut-tag--ok {
+  padding-inline: 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--badge-success-surface);
+  color: var(--badge-success-foreground);
+}
+
+/* Chapter: Built to degrade, not crash (ChapterResilience) */
+.hx-res {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--surface-subtle);
+}
+.hx-res__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.hx-res__chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--foreground);
+  background: var(--surface);
+  text-transform: capitalize;
+}
+.hx-res__chip[data-state='success'] {
+  background: var(--badge-success-surface);
+  color: var(--badge-success-foreground);
+  border-color: transparent;
+}
+.hx-res__chip[data-state='revalidating'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: transparent;
+}
+.hx-res__chip[data-state='error'] {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--surface);
+}
+.hx-res__note {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.hx-res__panes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.hx-res__pane {
+  min-height: 5.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.65rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.hx-res__pane-head {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.hx-res__pane-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+/* Loaded data rows; while loading they shimmer as skeletons instead. */
+.hx-res__row {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--border-strong);
+}
+.hx-res__row--short {
+  width: 60%;
+}
+.hx-res__pane-body[data-loading] .hx-res__row {
+  background: linear-gradient(
+    90deg,
+    var(--surface-subtle),
+    var(--border-strong),
+    var(--surface-subtle)
+  );
+  background-size: 200% 100%;
+  animation: hx-shimmer 1.3s linear infinite;
+}
+/* The errored pane keeps its frame but swaps its body for a contained boundary
+   while the sibling panes keep rendering their data. */
+.hx-res__pane--error {
+  border-color: var(--danger);
+}
+.hx-res__pane-fail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+.hx-res__retry {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--danger);
+  border-radius: 0.375rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.hx-res__code {
+  margin: 0;
+  align-self: start;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  background: var(--code-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* ---- Chapter: Transitions, for free (user-driven shared-element morph) ---- */
+.hx-vt2 {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.hx-vt2__demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  width: min(40rem, 100%);
+  margin-inline: auto;
+}
+/* Scrubber that names the scroll interaction and tracks its progress, so the
+   pinned morph never reads as an unexplained scroll hijack. */
+.hx-morph__scrub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+}
+.hx-morph__scrub-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.hx-morph__scrub-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+/* Full-width orangenta gradient revealed left-to-right, so the bar keeps the
+   brand gradient (orange -> magenta) fixed to the track instead of a squished,
+   scaled copy. */
+.hx-morph__scrub-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--gradient-orangenta);
+  clip-path: inset(0 calc((1 - var(--m, 0)) * 100%) 0 0);
+}
+/* Opening the detail flips --m to 1; CSS transitions the accent card from a
+   list row into the page header (sibling rows collapse, detail body fades in). */
+.hx-morph {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 13rem;
+}
+.hx-morph__hero {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.05rem + var(--m, 0) * 0.2rem);
+  padding: calc(0.65rem + var(--m, 0) * 0.6rem)
+    calc(0.8rem + var(--m, 0) * 0.4rem);
+  border-radius: calc(0.55rem + var(--m, 0) * 0.25rem);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 calc(6px + var(--m, 0) * 14px) calc(16px + var(--m, 0) * 22px) -10px
+      var(--glow);
+}
+.hx-morph__title {
+  font-weight: 700;
+  font-size: calc(0.95rem + var(--m, 0) * 0.32rem);
+  letter-spacing: -0.01em;
+}
+.hx-morph__meta {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.hx-morph__rest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+  opacity: calc(1 - var(--m, 0) * 1.4);
+  max-height: calc((1 - var(--m, 0)) * 8rem);
+}
+.hx-morph__row {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.55rem;
+  background: var(--surface-subtle);
+  color: var(--foreground);
+}
+.hx-morph__body {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: calc((var(--m, 0) - 0.6) * 3);
+  max-height: calc(var(--m, 0) * 6rem);
+}
+/* Realtime chapter (live clock). The cursor room and its wire stack in a
+   centered column, with the code below, so there is no empty stretched panel. */
+.hx-rt-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(42rem, 100%);
+  margin-inline: auto;
+}
+.hx-rt-room {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+/* A peer cursor: a colored pointer with a name tag, like a multiplayer canvas. */
+.hx-rt-peer {
+  position: absolute;
+  transform: translate(-2px, -2px);
+  pointer-events: none;
+  color: var(--c);
+}
+.hx-rt-peer svg {
+  display: block;
+  fill: var(--c);
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
+}
+.hx-rt-peer__name {
+  position: absolute;
+  left: 0.7rem;
+  top: 0.7rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 0.3rem;
+  /* Darkened peer colour so white text clears WCAG AA (the vibrant colours only
+     hit ~4.2:1 with white); the cursor arrow keeps the full-strength colour. */
+  background: color-mix(in srgb, var(--c) 68%, #000);
+  color: #fff;
+  font: 600 0.7rem/1.35 var(--font-sans);
+  white-space: nowrap;
+}
+/* Presence roster: overlapping avatars of everyone in the room. */
+.hx-rt-roster {
+  position: absolute;
+  left: 0.85rem;
+  bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.hx-rt-roster__avatars {
+  display: flex;
+}
+.hx-rt-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: -0.45rem;
+  border-radius: 999px;
+  /* Same 68% darkening as the peer name chip: white initials on the vibrant
+     full-strength colours only hit ~4.2:1, short of AA's 4.5:1 at this size. */
+  background: color-mix(in srgb, var(--c) 68%, #000);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font: 700 0.72rem/1 var(--font-sans);
+  border: 2px solid var(--surface-subtle);
+}
+.hx-rt-avatar:first-child {
+  margin-left: 0;
+}
+.hx-rt-roster__count {
+  font: 600 0.8125rem/1 var(--font-sans);
+  color: var(--muted);
+}
+.hx-rt-chips {
+  position: absolute;
+  right: 0.75rem;
+  top: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hx-rt-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font: 600 0.75rem/1.4 var(--font-mono, ui-monospace, monospace);
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+.hx-rt-chip__dir {
+  font-weight: 700;
+  opacity: 0.75;
+}
+/* A frame lights up as it lands over the socket. */
+.hx-rt-chip[data-live] {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: transparent;
+}
+.hx-rt-chip[data-live] .hx-rt-chip__dir {
+  opacity: 1;
+}
+
+/* Chapter: One package, typed throughout */
+.hx-pkg-row {
+  display: flex;
+  flex-wrap: wrap;
+  /* Roomy enough that each pill's glow has space to breathe instead of the
+     neighbouring halos bleeding into each other. */
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hx-pkg-pill {
+  position: relative;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--foreground);
+  /* Warm the flat surface a touch and trade the neutral border for a soft
+     gradient edge in the glow's own hues, so the chip face meets its halo
+     instead of sitting on it as a cold grey slab. The fill rides padding-box
+     and the gradient rides border-box, so the 1px border becomes the gradient. */
+  --pkg-fill: color-mix(in srgb, var(--surface-subtle) 92%, var(--accent) 8%);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background:
+    linear-gradient(var(--pkg-fill), var(--pkg-fill)) padding-box,
+    linear-gradient(
+        100deg,
+        color-mix(in srgb, var(--color-brand-orange) 65%, transparent),
+        color-mix(in srgb, var(--color-brand-magenta) 55%, transparent) 52%,
+        color-mix(in srgb, var(--color-brand-violet) 68%, transparent)
+      )
+      border-box;
+  padding: 0.35rem 0.75rem;
+  /* Orangenta glow: three offset brand-hued shadows (orange left, magenta
+     centre, purple right) blend into one soft gradient halo behind the pill,
+     picking up the same palette as the hero. box-shadow (not a ::before) so it
+     fades cleanly with the pill's own entrance opacity. */
+  box-shadow:
+    -8px 3px 22px -9px rgba(254, 80, 0, 0.6),
+    0 6px 20px -8px rgba(236, 0, 140, 0.5),
+    8px 3px 22px -9px rgba(201, 125, 255, 0.65);
+  /* Staggered scroll-in: each pill eases up in turn, offset by its --i index
+     (set in ChapterOnePackage). Visible by default; the hidden state applies
+     only once the row has armed post-mount (client JS running) and is not yet
+     in view, so SSR/no-JS/a failed bundle never strand the pills invisible. */
+  transition:
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--i, 0) * 110ms);
+  will-change: transform, opacity;
+}
+.hx-pkg-row[data-armed='true']:not([data-shown='true']) .hx-pkg-pill {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.hx-pkg-code {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--code-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+/* Closing call to action (ChapterCTA): calm centered section, no pin. */
+.hx-cta {
+  max-width: 44rem;
+  margin-inline: auto;
+  text-align: center;
+}
+.hx-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.hx-cta__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.hx-cta__btn--primary {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.hx-cta__btn--primary:hover {
+  background: var(--accent-hover);
+}
+.hx-cta__btn--secondary {
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--border-color);
+}
+.hx-cta__btn--secondary:hover {
+  background: var(--surface-subtle);
+}
+.hx-cta__btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.hx-cta__note {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ---- Footer: the project's outbound links (repo, package, license) ---- */
+.hx-footer {
+  border-top: 1px solid var(--border-color);
+  padding: 1.5rem 0 2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.hx-footer__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.hx-footer a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.hx-footer a:hover {
+  color: var(--accent-hover);
+}

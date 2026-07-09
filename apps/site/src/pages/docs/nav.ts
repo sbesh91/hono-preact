@@ -97,6 +97,7 @@ export const nav: NavArea[] = [
           { title: 'CLI', route: '/docs/cli' },
           { title: 'Vite Config', route: '/docs/vite-config' },
           { title: 'Project Structure', route: '/docs/structure' },
+          { title: 'Styling', route: '/docs/styling' },
           {
             title: 'Composing Hono Middleware',
             route: '/docs/hono-middleware',

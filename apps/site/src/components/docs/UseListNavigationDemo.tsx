@@ -5,7 +5,7 @@ const OPTIONS = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet'];
 
 // An activedescendant listbox: the trigger keeps DOM focus while ArrowUp/Down,
 // Home/End, and typeahead move aria-activedescendant over the options (wrapping
-// at the ends, scrolling into view). Styling: .docs-listnav* in root.css.
+// at the ends, scrolling into view). Styling: .docs-listnav* in docs.css.
 export function UseListNavigationDemo() {
   const listRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);

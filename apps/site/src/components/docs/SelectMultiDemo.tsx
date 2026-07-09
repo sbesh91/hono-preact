@@ -2,7 +2,7 @@ import { Select } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // A multiple-select listbox. Picking an option toggles it and keeps the popup
-// open; the Value joins the selected labels. Styling is in root.css.
+// open; the Value joins the selected labels. Styling is in docs.css.
 export function SelectMultiDemo() {
   const [value, setValue] = useState<string[]>([]);
   return (

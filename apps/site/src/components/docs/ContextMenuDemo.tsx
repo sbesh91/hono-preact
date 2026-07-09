@@ -2,7 +2,7 @@ import { ContextMenu } from 'hono-preact-ui';
 
 // A right-click (contextmenu) menu. The Trigger is the drop zone; right-click
 // inside it to open the menu at the pointer. The part set below is identical to
-// Menu. Styling is in root.css (.docs-menu* / .docs-context-zone).
+// Menu. Styling is in docs.css (.docs-menu* / .docs-context-zone).
 export function ContextMenuDemo() {
   return (
     <ContextMenu.Root>

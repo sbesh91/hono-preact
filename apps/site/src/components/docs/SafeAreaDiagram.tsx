@@ -3,7 +3,7 @@
 // safe corridor is the trapezoid joining the trigger's bottom edge to the floating
 // element's top edge. One pointer dot loops diagonally through the corridor (stays
 // open); a second veers out through the corridor's slanted edge (closes). Geometry
-// is in SVG attributes; all color, stroke, and motion live in root.css (.sa-*), so
+// is in SVG attributes; all color, stroke, and motion live in docs.css (.sa-*), so
 // the figure follows the page theme and stops animating under prefers-reduced-motion.
 export function SafeAreaDiagram() {
   return (

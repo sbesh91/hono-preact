@@ -1,156 +1,99 @@
 import type { FunctionComponent } from 'preact';
 import { useMeta, useTitle } from 'hoofd/preact';
+import '@/styles/home.css';
 import { HeroShader } from '../components/HeroShader.js';
+import { ChapterEdge } from '../components/home/chapters/ChapterEdge.js';
+import { ChapterRouting } from '../components/home/chapters/ChapterRouting.js';
+import { ChapterSSR } from '../components/home/chapters/ChapterSSR.js';
+import { ChapterStreaming } from '../components/home/chapters/ChapterStreaming.js';
+import { ChapterMutations } from '../components/home/chapters/ChapterMutations.js';
+import { ChapterResilience } from '../components/home/chapters/ChapterResilience.js';
+import { ChapterPrefetch } from '../components/home/chapters/ChapterPrefetch.js';
+import { ChapterTransitions } from '../components/home/chapters/ChapterTransitions.js';
+import { ChapterRealtime } from '../components/home/chapters/ChapterRealtime.js';
+import { ChapterOnePackage } from '../components/home/chapters/ChapterOnePackage.js';
+import { ChapterCTA } from '../components/home/chapters/ChapterCTA.js';
 
 const Home: FunctionComponent = () => {
   useTitle('hono-preact');
   useMeta({
     name: 'description',
     content:
-      'Hono on the edge, Preact in the browser, manifest driven routes, typed RPC, streaming everywhere.',
+      'One framework from the edge to the browser: Hono on the server, Preact on the client, and a single typed connection for routing, data, mutations, and realtime.',
   });
   return (
-    <div class="relative isolate overflow-hidden">
-      <HeroShader />
-      <main class="relative mx-auto max-w-4xl px-6 py-16 space-y-16">
-        {/* Hero */}
-        <section class="space-y-4 text-center">
-          <span class="energy-bar w-16 mx-auto" aria-hidden="true" />
-          <p class="inline-block bg-surface/70 backdrop-blur text-xs px-2 py-0.5 rounded-full border border-border">
-            hono-preact v{__HONO_PREACT_VERSION__}
-          </p>
-          <h1 class="text-5xl font-semibold text-orangenta">
-            A small full-stack framework.
-          </h1>
-          <p class="text-lg text-brand-ink/80 max-w-2xl mx-auto">
-            Hono on the edge, Preact in the browser, manifest driven routes,
-            typed RPC, streaming everywhere.
-          </p>
-          <div class="flex gap-3 justify-center pt-2">
-            <a
-              href="/docs/quick-start"
-              class="bg-accent text-accent-foreground px-4 py-2 font-medium rounded-md hover:bg-accent-hover"
-            >
-              Get started
-            </a>
-            <a
-              href="/demo"
-              class="border border-border text-foreground px-4 py-2 font-medium rounded-md bg-surface/80 backdrop-blur"
-            >
-              See the demo
-            </a>
+    <div class="hx-home">
+      <main class="relative">
+        {/* Hero (the shader is confined to the hero, not the whole page) */}
+        <header class="hx-hero">
+          <HeroShader />
+          <div class="hx-wrap">
+            <span class="energy-bar w-16" aria-hidden="true" />
+            <p class="hx-eyebrow">hono-preact v{__HONO_PREACT_VERSION__}</p>
+            {/* The wordmark is the wire: "edge to browser" fills with the
+                orangenta gradient as a packet travels a wire beneath it. Pure
+                CSS load animation; the finished wordmark is the default state,
+                so no-JS and reduced-motion render it complete. */}
+            <h1 class="hx-hero__title">
+              One framework,
+              <br />
+              <span class="hx-hero__wire">
+                <span class="hx-hero__wm-base" aria-hidden="true">
+                  edge to browser
+                </span>
+                <span class="hx-hero__wm-fill">edge to browser</span>
+                <span class="hx-hero__wire-line" aria-hidden="true" />
+                <span class="hx-hero__edge" aria-hidden="true" />
+                <span class="hx-hero__packet" aria-hidden="true" />
+                <span class="hx-hero__browser" aria-hidden="true" />
+              </span>
+            </h1>
+            <p class="hx-hero__lede">
+              Hono at the edge, Preact in the browser, and one typed connection
+              between them.
+            </p>
+            <div class="hx-hero__cta">
+              <a class="hx-btn hx-btn--primary" href="/docs/quick-start">
+                Get started
+              </a>
+              <a class="hx-btn hx-btn--ghost" href="/demo">
+                See the demo
+              </a>
+            </div>
           </div>
-        </section>
+          <p class="hx-hero__scroll" aria-hidden="true">
+            Scroll to assemble
+            <span class="hx-hero__scroll-arrow" />
+          </p>
+        </header>
 
-        {/* Code block */}
-        <section class="space-y-4">
-          <h2 class="text-sm uppercase tracking-wide text-brand-ink/70">
-            Keep it simple
-          </h2>
-          <div class="grid gap-3 md:grid-cols-2">
-            <CodeBlock filename="vite.config.ts">
-              {`import { honoPreact } from 'hono-preact/vite';
-import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
-import { defineConfig } from 'vite';
+        {/* Chapters, in order */}
+        <ChapterEdge />
+        <ChapterRouting />
+        <ChapterSSR />
+        <ChapterStreaming />
+        <ChapterMutations />
+        <ChapterResilience />
+        <ChapterPrefetch />
+        <ChapterTransitions />
+        <ChapterRealtime />
+        <ChapterOnePackage />
+        <ChapterCTA />
 
-export default defineConfig({
-  plugins: [honoPreact({ adapter: cloudflareAdapter() })],
-});`}
-            </CodeBlock>
-            <CodeBlock filename="src/routes.ts">
-              {`import { defineRoutes } from 'hono-preact';
-export default defineRoutes([
-  { path: '/', view: () => import('./views/home') },
-]);`}
-            </CodeBlock>
-            <CodeBlock filename="src/views/home.tsx">
-              {`export default function Home() {
-  return <h1>Hello</h1>;
-}`}
-            </CodeBlock>
-            <CodeBlock filename="src/Layout.tsx">
-              {`import { ClientScript, Head } from 'hono-preact';
-export default function Layout({ children }) {
-  return (
-    <html>
-      <Head defaultTitle="hono-preact" />
-      <body>
-        <main id="app">{children}</main>
-        <ClientScript />
-      </body>
-    </html>
-  );
-}`}
-            </CodeBlock>
+        <footer class="hx-footer">
+          <div class="hx-wrap hx-footer__row">
+            <span>
+              <a href="https://github.com/sbesh91/hono-preact">GitHub</a>
+              {' · '}
+              <a href="https://www.npmjs.com/package/hono-preact">npm</a>
+            </span>
+            <span>MIT</span>
           </div>
-        </section>
-
-        {/* Feature cards */}
-        <section class="grid gap-4 md:grid-cols-2">
-          <Card title="Manifest-driven routes">
-            Your routes are a data structure, not a directory tree.
-          </Card>
-          <Card title="Typed RPC, end to end">
-            Loaders and actions are typed functions; the client gets a typed
-            stub.
-          </Card>
-          <Card title="Streaming everywhere">
-            Loaders, forms, SSE. Built on ReadableStream.
-          </Card>
-          <Card title="One package">
-            <code>hono-preact</code>, <code>hono-preact/server</code>,{' '}
-            <code>hono-preact/vite</code>, <code>hono-preact/adapter-*</code>.
-            All of your tools in one place.
-          </Card>
-        </section>
-
-        {/* Footer */}
-        <footer class="pt-8 border-t border-border text-sm text-muted flex flex-wrap gap-4 justify-between">
-          <span>
-            <a
-              class="underline text-accent hover:text-accent-hover"
-              href="https://github.com/sbesh91/hono-preact"
-            >
-              GitHub
-            </a>{' '}
-            ·{' '}
-            <a
-              class="underline text-accent hover:text-accent-hover"
-              href="https://www.npmjs.com/package/hono-preact"
-            >
-              npm
-            </a>
-          </span>
-          <span>MIT</span>
         </footer>
       </main>
     </div>
   );
 };
 Home.displayName = 'Home';
-
-const CodeBlock: FunctionComponent<{
-  filename: string;
-  children: string;
-}> = ({ filename, children }) => (
-  <figure class="rounded-md border border-border bg-surface shadow-card overflow-hidden">
-    <figcaption class="text-xs text-muted px-3 py-1 border-b border-border bg-surface-subtle">
-      {filename}
-    </figcaption>
-    <pre class="text-xs p-3 overflow-x-auto">
-      <code>{children}</code>
-    </pre>
-  </figure>
-);
-
-const Card: FunctionComponent<{ title: string; children: any }> = ({
-  title,
-  children,
-}) => (
-  <article class="rounded-md border border-border bg-surface shadow-card p-4">
-    <h3 class="font-semibold mb-1">{title}</h3>
-    <p class="text-sm text-muted">{children}</p>
-  </article>
-);
 
 export default Home;

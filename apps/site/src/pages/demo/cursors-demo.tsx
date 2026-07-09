@@ -117,7 +117,7 @@ const CursorsDemo: FunctionComponent = () => {
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: '#e05',
+                background: 'var(--accent)',
                 transform: 'translate(-50%, -50%)',
                 pointerEvents: 'none',
               }}

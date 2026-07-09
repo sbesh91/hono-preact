@@ -78,3 +78,101 @@ describe('assembleDocument: modulepreload hints', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 });
+
+describe('assembleDocument: route stylesheets', () => {
+  it('injects a <link rel="stylesheet"> for each route sheet, after the user head tags', () => {
+    const out = assembleDocument({
+      html: '<html><head><link rel="stylesheet" href="/global.css" /></head><body>x</body></html>',
+      head: {},
+      routeStyleSheets: ['/static/home.css'],
+    });
+    expect(out).toContain('<link rel="stylesheet" href="/static/home.css" />');
+    // Route sheet lands inside <head> and AFTER the global sheet (cascade order).
+    expect(out.indexOf('/static/home.css')).toBeLessThan(
+      out.indexOf('</head>')
+    );
+    expect(out.indexOf('/global.css')).toBeLessThan(
+      out.indexOf('/static/home.css')
+    );
+  });
+
+  it('injects nothing when routeStyleSheets is empty or omitted', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: {},
+      routeStyleSheets: [],
+    });
+    expect(out).not.toContain('rel="stylesheet"');
+    const out2 = assembleDocument({ html: shell, head: {} });
+    expect(out2).not.toContain('rel="stylesheet"');
+  });
+
+  it('WARNS about a missing </head> when route stylesheets would be dropped (render-critical, unlike preload hints)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: noHeadShell,
+      head: {},
+      routeStyleSheets: ['/static/home.css'],
+    });
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('WARNS when a fragment (no <html>) drops render-critical route stylesheets (no <head> to inject into)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: '<div>x</div>',
+      head: {},
+      routeStyleSheets: ['/static/x.css'],
+    });
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT warn for a fragment with no route stylesheets (the supported quiet case)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: '<div>x</div>',
+      head: {},
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('assembleDocument: font preloads', () => {
+  it('injects a crossorigin font <link rel=preload> with an inferred type for each AppConfig font', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: {},
+      appConfig: { fonts: ['/static/regular-abc.woff2'] },
+    });
+    expect(out).toContain(
+      '<link rel="preload" as="font" type="font/woff2" href="/static/regular-abc.woff2" crossorigin="" />'
+    );
+  });
+
+  it('places font preloads before the low-priority modulepreload hints', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: {},
+      preloadModules: ['/static/a.js'],
+      appConfig: { fonts: ['/static/regular-abc.woff2'] },
+    });
+    expect(out.indexOf('/static/regular-abc.woff2')).toBeLessThan(
+      out.indexOf('/static/a.js')
+    );
+  });
+
+  it('injects nothing when there are no fonts', () => {
+    const out = assembleDocument({ html: shell, head: {}, appConfig: {} });
+    expect(out).not.toContain('as="font"');
+  });
+
+  it('does NOT warn about a missing </head> when only font preloads would be dropped', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    assembleDocument({
+      html: noHeadShell,
+      head: {},
+      appConfig: { fonts: ['/static/regular-abc.woff2'] },
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});

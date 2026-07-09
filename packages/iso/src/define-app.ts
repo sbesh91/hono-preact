@@ -25,6 +25,13 @@ export type AppConfig = {
    * links opt out with `data-no-prefetch`.
    */
   speculation?: boolean;
+  /**
+   * Font URLs (from `?url` imports) to preload as render-critical resources.
+   * List only above-the-fold weights: preloading every font wastes early
+   * bandwidth. Each URL is emitted as `<link rel="preload" as="font"
+   * crossorigin>` in the head and in the `Link` response header.
+   */
+  fonts?: ReadonlyArray<string>;
 };
 
 export function defineApp(config: AppConfig): AppConfig {

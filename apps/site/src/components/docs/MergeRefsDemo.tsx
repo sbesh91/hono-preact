@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 // One input node feeds two refs at once via mergeRefs: an internal ref used to
 // focus it, and a measuring ref used to read its width. Both receiving the same
-// node is the visible proof. Styling: .docs-mergerefs* in root.css.
+// node is the visible proof. Styling: .docs-mergerefs* in docs.css.
 export function MergeRefsDemo() {
   const focusRef = useRef<HTMLInputElement>(null);
   const measureRef = useRef<HTMLInputElement>(null);

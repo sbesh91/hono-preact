@@ -8,7 +8,7 @@ import {
 
 afterEach(() => __resetPreloadModulesForTests());
 
-const EMPTY = { closure: [], routes: {} };
+const EMPTY = { closure: [], routes: {}, routeCss: {} };
 
 describe('installPreloadModules / resolvePreloadManifest', () => {
   it('resolves to an empty manifest when no reader is installed', async () => {
@@ -23,6 +23,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js', '/static/b.js'],
       routes: { '/': ['/static/home.js'] },
+      routeCss: {},
     });
   });
 
@@ -34,6 +35,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
       routes: {},
+      routeCss: {},
     });
   });
 
@@ -71,6 +73,24 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
       routes: { '/ok': ['/static/l.js', '/static/v.js'] },
+      routeCss: {},
+    });
+  });
+
+  it('normalizes routeCss and drops malformed entries, like routes', async () => {
+    installPreloadModules(() => ({
+      closure: [],
+      routes: {},
+      routeCss: {
+        '/': ['/static/home.css', 9],
+        '/empty': [],
+        '/bad': null,
+      },
+    }));
+    expect(await resolvePreloadManifest()).toEqual({
+      closure: [],
+      routes: {},
+      routeCss: { '/': ['/static/home.css'] },
     });
   });
 
@@ -87,6 +107,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
     expect(await resolvePreloadManifest()).toEqual({
       closure: ['/static/a.js'],
       routes: {},
+      routeCss: {},
     });
   });
 });
@@ -113,5 +134,21 @@ describe('preloadLinkHeader', () => {
     const entries = header.split(', ');
     expect(entries.length).toBeLessThan(urls.length);
     expect(entries[0]).toBe('</static/chunk-0-abcdefgh.js>; rel=modulepreload');
+  });
+
+  it('shrinks the truncation budget by usedBytes, so a header combined with an earlier part stays within the overall cap', () => {
+    const urls = Array.from(
+      { length: 2000 },
+      (_, i) => `/static/chunk-${i}-abcdefgh.js`
+    );
+    const header = preloadLinkHeader(urls, 11_900)!;
+    // 11_900 bytes were already used by an earlier part of the combined header
+    // (e.g. font preloads); the closure portion must fit in what remains.
+    expect(header.length).toBeLessThanOrEqual(100);
+  });
+
+  it('returns undefined when usedBytes already exhausts the budget', () => {
+    const urls = ['/static/a.js', '/static/b.js'];
+    expect(preloadLinkHeader(urls, 12_000)).toBeUndefined();
   });
 });

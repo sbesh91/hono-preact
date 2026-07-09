@@ -9,10 +9,13 @@ import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
 import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
 import {
+  chunkCloser,
   extractRouteChains,
   resolvePreloadMap,
+  resolveRouteCssMap,
   expandGlobFs,
   type RoutePreloadMap,
+  type RouteCssMap,
 } from './route-preload.js';
 
 /**
@@ -25,6 +28,7 @@ import {
 export interface PreloadArtifact {
   closure: string[];
   routes: RoutePreloadMap;
+  routeCss: RouteCssMap;
 }
 
 /** The subset of a Rollup output-bundle entry this collector reads. */
@@ -101,10 +105,12 @@ export function preloadManifestPlugin(
       // we never emit a wrong-closure artifact into a server/worker build.
       if (this.environment?.name !== 'client') return;
       const closure = collectEntryPreloadModules(bundle);
-      const routes = buildRouteMap(routesAbsPath, bundle, (msg) =>
-        this.warn(`[preload] ${msg}`)
+      const { routes, routeCss } = buildRouteMaps(
+        routesAbsPath,
+        bundle,
+        (msg) => this.warn(`[preload] ${msg}`)
       );
-      const artifact: PreloadArtifact = { closure, routes };
+      const artifact: PreloadArtifact = { closure, routes, routeCss };
       this.emitFile({
         type: 'asset',
         fileName: PRELOAD_MANIFEST_FILE,
@@ -115,21 +121,23 @@ export function preloadManifestPlugin(
 }
 
 /**
- * Read `routes.ts` and resolve its per-pattern module chains against the bundle.
- * Any failure (missing file, parse error) yields an empty map, so route preload
- * degrades to entry-closure-only rather than failing the build.
+ * Read `routes.ts` and resolve its per-pattern module chains to both the JS
+ * preload map and the CSS map against the bundle, parsing the routes file once.
+ * Any failure yields empty maps, so preload/route-CSS degrade rather than
+ * failing the build.
  */
-function buildRouteMap(
+function buildRouteMaps(
   routesAbsPath: string,
   bundle: Parameters<typeof resolvePreloadMap>[1],
   warn: (msg: string) => void
-): RoutePreloadMap {
-  if (!routesAbsPath) return {};
+): { routes: RoutePreloadMap; routeCss: RouteCssMap } {
+  const empty = { routes: {}, routeCss: {} };
+  if (!routesAbsPath) return empty;
   let source: string;
   try {
     source = fs.readFileSync(routesAbsPath, 'utf8');
   } catch {
-    return {};
+    return empty;
   }
   try {
     const chains = extractRouteChains(
@@ -138,9 +146,15 @@ function buildRouteMap(
       expandGlobFs,
       warn
     );
-    return resolvePreloadMap(chains, bundle);
+    // One memoized closure resolver serves both maps, so the per-chain chunk
+    // closures are computed once instead of twice over the same bundle.
+    const chunksOf = chunkCloser(bundle);
+    return {
+      routes: resolvePreloadMap(chains, bundle, chunksOf),
+      routeCss: resolveRouteCssMap(chains, bundle, chunksOf),
+    };
   } catch (e) {
     warn(`route map generation failed: ${(e as Error).message}`);
-    return {};
+    return empty;
   }
 }

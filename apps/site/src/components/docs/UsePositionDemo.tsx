@@ -6,7 +6,7 @@ const ALIGNS = ['start', 'center', 'end'] as const;
 
 // Placement explorer harness around the UsePositionExample core. The fieldset
 // controls exist only here (the docs Code tab shows UsePositionExample, the real
-// usage). Styling: .docs-useposition* in root.css.
+// usage). Styling: .docs-useposition* in docs.css.
 export function UsePositionDemo() {
   const [side, setSide] = useState<(typeof SIDES)[number]>('bottom');
   const [align, setAlign] = useState<(typeof ALIGNS)[number]>('center');
