@@ -62,7 +62,7 @@ describe('preloadManifestPlugin', () => {
     'static/a.js': chunk('static/a.js', []),
   };
 
-  function run(envName: string) {
+  async function run(envName: string) {
     const plugin = preloadManifestPlugin({ routes: 'src/routes.ts' });
     const emitted: Array<{ type: string; fileName: string; source: string }> =
       [];
@@ -73,12 +73,12 @@ describe('preloadManifestPlugin', () => {
         emitted.push(f),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (plugin.generateBundle as any).call(ctx, {}, bundle);
+    await (plugin.generateBundle as any).call(ctx, {}, bundle);
     return emitted;
   }
 
-  it('emits the { closure, routes } artifact as a JSON asset during the client build', () => {
-    const emitted = run('client');
+  it('emits the { closure, routes } artifact as a JSON asset during the client build', async () => {
+    const emitted = await run('client');
     expect(emitted).toHaveLength(1);
     expect(emitted[0].type).toBe('asset');
     expect(emitted[0].fileName).toBe(PRELOAD_MANIFEST_FILE);
@@ -92,11 +92,11 @@ describe('preloadManifestPlugin', () => {
     });
   });
 
-  it('emits nothing for non-client environments', () => {
-    expect(run('ssr')).toHaveLength(0);
+  it('emits nothing for non-client environments', async () => {
+    expect(await run('ssr')).toHaveLength(0);
   });
 
-  it('populates the route map from routes.ts once configResolved sets its path', () => {
+  it('populates the route map from routes.ts once configResolved sets its path', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-preload-'));
     const routesPath = path.join(dir, 'src', 'routes.ts');
     fs.mkdirSync(path.dirname(routesPath), { recursive: true });
@@ -136,7 +136,7 @@ describe('preloadManifestPlugin', () => {
       emitFile: (f: { source: string }) => emitted.push(f),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (plugin.generateBundle as any).call(ctx, {}, routeBundle);
+    await (plugin.generateBundle as any).call(ctx, {}, routeBundle);
 
     expect(JSON.parse(emitted[0].source).routes).toEqual({
       '/': ['/static/home-XX.js'],
@@ -147,7 +147,7 @@ describe('preloadManifestPlugin', () => {
     });
   });
 
-  it('runs css auto-split end-to-end: replaces the entry css asset and fills globalCss', () => {
+  it('runs css auto-split end-to-end: replaces the entry css asset and fills globalCss', async () => {
     // No configResolved -> empty chains -> nothing is scopable, so the whole
     // sheet stays global; this still exercises the generateBundle ->
     // applyCssAutoSplit -> artifact wiring (emit residual, delete original).
@@ -205,7 +205,7 @@ describe('preloadManifestPlugin', () => {
       },
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (plugin.generateBundle as any).call(ctx, {}, cssBundle);
+    await (plugin.generateBundle as any).call(ctx, {}, cssBundle);
 
     const manifest = emitted.find((f) => f.fileName === PRELOAD_MANIFEST_FILE);
     expect(manifest).toBeDefined();

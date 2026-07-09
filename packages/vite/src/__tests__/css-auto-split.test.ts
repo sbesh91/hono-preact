@@ -21,19 +21,27 @@ const ENTRY = chunk('static/client.js', 'x("app-shell")', false);
 const CHUNKS = [HOME, DOCS, ENTRY];
 
 describe('attributeRules', () => {
-  it('scopes a rule whose classes are exclusive to one scopable chunk', () => {
-    const { owners } = attributeRules('.hx-hero{color:red}', CHUNKS, undefined);
+  it('scopes a rule whose classes are exclusive to one scopable chunk', async () => {
+    const { owners } = await attributeRules(
+      '.hx-hero{color:red}',
+      CHUNKS,
+      undefined
+    );
     expect(owners).toEqual(['static/home-abc.js']);
   });
 
-  it('keeps a rule global when its class appears in more than one chunk', () => {
+  it('keeps a rule global when its class appears in more than one chunk', async () => {
     const shared = [...CHUNKS, chunk('static/other-x.js', 'z("hx-hero")')];
-    const { owners } = attributeRules('.hx-hero{color:red}', shared, undefined);
+    const { owners } = await attributeRules(
+      '.hx-hero{color:red}',
+      shared,
+      undefined
+    );
     expect(owners).toEqual([null]);
   });
 
-  it('keeps zero-evidence classes global (never drops)', () => {
-    const { owners } = attributeRules(
+  it('keeps zero-evidence classes global (never drops)', async () => {
+    const { owners } = await attributeRules(
       '.runtime-only{color:red}',
       CHUNKS,
       undefined
@@ -41,15 +49,15 @@ describe('attributeRules', () => {
     expect(owners).toEqual([null]);
   });
 
-  it('keeps classless selectors global (:root, elements, view transitions)', () => {
+  it('keeps classless selectors global (:root, elements, view transitions)', async () => {
     const css =
       ':root{--t:1}p{margin:0}::view-transition-group(x){animation:none}';
-    const { owners } = attributeRules(css, CHUNKS, undefined);
+    const { owners } = await attributeRules(css, CHUNKS, undefined);
     expect(owners).toEqual([null, null, null]);
   });
 
-  it('keeps rules owned by entry-closure (non-scopable) chunks global', () => {
-    const { owners } = attributeRules(
+  it('keeps rules owned by entry-closure (non-scopable) chunks global', async () => {
+    const { owners } = await attributeRules(
       '.app-shell{color:red}',
       CHUNKS,
       undefined
@@ -57,16 +65,16 @@ describe('attributeRules', () => {
     expect(owners).toEqual([null]);
   });
 
-  it('requires an anchor class outside functional pseudo-classes', () => {
+  it('requires an anchor class outside functional pseudo-classes', async () => {
     // .hx-hero anchors; the :not() argument only adds evidence requirements.
-    const scoped = attributeRules(
+    const scoped = await attributeRules(
       '.hx-hero:not(.hx-card){color:red}',
       CHUNKS,
       undefined
     );
     expect(scoped.owners).toEqual(['static/home-abc.js']);
     // div:not(.hx-hero) has no anchor: matching elements need not carry the class.
-    const anchorless = attributeRules(
+    const anchorless = await attributeRules(
       'div:not(.hx-hero){color:red}',
       CHUNKS,
       undefined
@@ -74,14 +82,14 @@ describe('attributeRules', () => {
     expect(anchorless.owners).toEqual([null]);
   });
 
-  it('demotes when classes span two chunks, and when a selector list mixes routes', () => {
-    const span = attributeRules(
+  it('demotes when classes span two chunks, and when a selector list mixes routes', async () => {
+    const span = await attributeRules(
       '.hx-hero .mdx-content{color:red}',
       CHUNKS,
       undefined
     );
     expect(span.owners).toEqual([null]);
-    const list = attributeRules(
+    const list = await attributeRules(
       '.hx-hero,.mdx-content{color:red}',
       CHUNKS,
       undefined
@@ -89,20 +97,20 @@ describe('attributeRules', () => {
     expect(list.owners).toEqual([null]);
   });
 
-  it('indexes only top-level style rules; nested rules follow their parent', () => {
+  it('indexes only top-level style rules; nested rules follow their parent', async () => {
     const css = '.hx-hero{color:red;&:hover{color:blue}}';
-    const { owners } = attributeRules(css, CHUNKS, undefined);
+    const { owners } = await attributeRules(css, CHUNKS, undefined);
     expect(owners).toEqual(['static/home-abc.js']);
   });
 
-  it('collects top-level layer order from statements and blocks', () => {
+  it('collects top-level layer order from statements and blocks', async () => {
     const css =
       '@layer theme,base;@layer base{.hx-hero{color:red}}@layer utilities{.u{margin:0}}';
-    const { layerNames } = attributeRules(css, CHUNKS, undefined);
+    const { layerNames } = await attributeRules(css, CHUNKS, undefined);
     expect(layerNames).toEqual(['theme', 'base', 'utilities']);
   });
 
-  it('does not treat a @layer nested inside a @container/@scope/@starting-style as top-level', () => {
+  it('does not treat a @layer nested inside a @container/@scope/@starting-style as top-level', async () => {
     // atDepth must track the full CONTAINER_RULE_TYPES set (not just
     // media/supports/layer-block), or a @layer statement/block nested inside
     // a @container (or @scope/@starting-style) reads as atDepth === 0 and gets
@@ -111,13 +119,13 @@ describe('attributeRules', () => {
     // actually declared it.
     const css =
       '@container c (min-width:1px){@layer nested{.hx-hero{color:red}}}@layer a;';
-    const { layerNames } = attributeRules(css, CHUNKS, undefined);
+    const { layerNames } = await attributeRules(css, CHUNKS, undefined);
     expect(layerNames).toEqual(['a']);
   });
 
-  it('attributes rules inside @media by their classes', () => {
+  it('attributes rules inside @media by their classes', async () => {
     const css = '@media (min-width:600px){.hx-card{color:red}}';
-    const { owners } = attributeRules(css, CHUNKS, undefined);
+    const { owners } = await attributeRules(css, CHUNKS, undefined);
     expect(owners).toEqual(['static/home-abc.js']);
   });
 });
@@ -125,10 +133,10 @@ describe('attributeRules', () => {
 describe('splitCssByChunkUsage', () => {
   const opts = { minSize: 0 };
 
-  it('moves scoped rules out of the residual and into per-chunk sheets', () => {
+  it('moves scoped rules out of the residual and into per-chunk sheets', async () => {
     const css =
       '.hx-hero{color:red}.mdx-content{color:blue}.plain-shared{margin:0}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     expect(result.perChunk.get('static/home-abc.js')).toContain('hx-hero');
     expect(result.perChunk.get('static/docs-def.js')).toContain('mdx-content');
     expect(result.residual).toContain('plain-shared');
@@ -136,29 +144,29 @@ describe('splitCssByChunkUsage', () => {
     expect(result.residual).not.toContain('mdx-content');
   });
 
-  it('reproduces @media wrappers around scoped rules', () => {
+  it('reproduces @media wrappers around scoped rules', async () => {
     const css =
       '@media (min-width:600px){.hx-hero{color:red}.zz-none{color:blue}}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     const home = result.perChunk.get('static/home-abc.js');
     expect(home).toMatch(/@media[^{]*\{[^{]*\.hx-hero/);
     expect(home).not.toContain('zz-none');
     expect(result.residual).toContain('zz-none');
   });
 
-  it('keeps @keyframes, @font-face and custom-property rules in the residual', () => {
+  it('keeps @keyframes, @font-face and custom-property rules in the residual', async () => {
     const css =
       '@keyframes spin{to{rotate:1turn}}@font-face{font-family:X;src:url(x.woff2)}.hx-hero{color:red}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     expect(result.residual).toContain('@keyframes');
     expect(result.residual).toContain('@font-face');
     expect(result.residual).not.toContain('hx-hero');
   });
 
-  it('re-declares the full top-level layer order at the head of the residual', () => {
+  it('re-declares the full top-level layer order at the head of the residual', async () => {
     const css =
       '@layer a,b,c;@layer b{.hx-hero{color:red}}@layer c{.plain-shared{margin:0}}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     // Even with the whole @layer b block scoped away, the residual's first
     // declaration establishes a,b,c in monolith order.
     expect(result.residual.startsWith('@layer a,b,c;')).toBe(true);
@@ -166,17 +174,17 @@ describe('splitCssByChunkUsage', () => {
     expect(home).toContain('@layer b');
   });
 
-  it('demotes chunks whose scoped CSS is below minSize back to the residual', () => {
+  it('demotes chunks whose scoped CSS is below minSize back to the residual', async () => {
     const css = '.hx-hero{color:red}';
-    const result = splitCssByChunkUsage(css, CHUNKS, { minSize: 10_000 });
+    const result = await splitCssByChunkUsage(css, CHUNKS, { minSize: 10_000 });
     expect(result.perChunk.size).toBe(0);
     expect(result.residual).toContain('hx-hero');
   });
 
-  it('confines non-style at-rules to the residual, never per-chunk sheets', () => {
+  it('confines non-style at-rules to the residual, never per-chunk sheets', async () => {
     const css =
       '@keyframes spin{to{rotate:1turn}}@font-face{font-family:X;src:url(x.woff2)}.hx-hero{color:red}.mdx-content{color:blue}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     expect(result.perChunk.size).toBe(2);
     for (const [fileName, sheet] of result.perChunk) {
       expect(sheet, fileName).not.toContain('@keyframes');
@@ -189,10 +197,10 @@ describe('splitCssByChunkUsage', () => {
     expect(everything.split('@font-face').length - 1).toBe(1);
   });
 
-  it('reproduces @container wrappers and keeps owners indexing aligned', () => {
+  it('reproduces @container wrappers and keeps owners indexing aligned', async () => {
     const css =
       '@container (min-width:400px){.hx-hero{color:red}}.mdx-content{color:blue}.plain-shared{margin:0}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     const home = result.perChunk.get('static/home-abc.js');
     expect(home).toMatch(/@container[^{]*\{.*\.hx-hero/);
     expect(result.perChunk.get('static/docs-def.js')).toContain('mdx-content');
@@ -200,34 +208,38 @@ describe('splitCssByChunkUsage', () => {
     expect(result.residual).not.toContain('hx-hero');
   });
 
-  it('compares minSize against UTF-8 bytes, not UTF-16 code units', () => {
+  it('compares minSize against UTF-8 bytes, not UTF-16 code units', async () => {
     // The check marks are multi-byte in UTF-8 but one code unit each in
     // UTF-16, so byte length exceeds string length; a threshold between the
     // two keeps the sheet only if the splitter measures bytes.
     const css = '.hx-hero{--check:"✓✓✓✓"}';
-    const probe = splitCssByChunkUsage(css, CHUNKS, { minSize: 0 });
+    const probe = await splitCssByChunkUsage(css, CHUNKS, { minSize: 0 });
     const sheet = probe.perChunk.get('static/home-abc.js');
     expect(sheet).toBeDefined();
     if (sheet === undefined) return;
     const units = sheet.length;
     const bytes = Buffer.byteLength(sheet, 'utf8');
     expect(bytes).toBeGreaterThan(units);
-    const kept = splitCssByChunkUsage(css, CHUNKS, { minSize: units + 1 });
+    const kept = await splitCssByChunkUsage(css, CHUNKS, {
+      minSize: units + 1,
+    });
     expect(kept.perChunk.get('static/home-abc.js')).toBe(sheet);
-    const demoted = splitCssByChunkUsage(css, CHUNKS, { minSize: bytes + 1 });
+    const demoted = await splitCssByChunkUsage(css, CHUNKS, {
+      minSize: bytes + 1,
+    });
     expect(demoted.perChunk.size).toBe(0);
     expect(demoted.residual).toContain('hx-hero');
   });
 
-  it('keeps nested @layer statements in the residual', () => {
+  it('keeps nested @layer statements in the residual', async () => {
     // Only TOP-LEVEL layer names are re-declared by the residual's prefix, so
     // a statement nested under a conditional at-rule must survive in place.
     const css = '@media (min-width:600px){@layer x;.plain-shared{margin:0}}';
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     expect(result.residual).toContain('@layer x');
   });
 
-  it('splits realistic theme CSS without corrupting serialization (visitor return-undefined regression)', () => {
+  it('splits realistic theme CSS without corrupting serialization (visitor return-undefined regression)', async () => {
     // Regression pin for the Rule-visitor serialization bug: entry callbacks
     // that return the unmodified rule object (instead of `undefined`, "no
     // change") force Lightning CSS to re-serialize the rule from the
@@ -257,7 +269,7 @@ describe('splitCssByChunkUsage', () => {
       "src:url(selawik-regular.woff2) format('woff2');}",
       '.hx-hero{color:oklch(63.7% .237 25.331);font-family:var(--font-sans)}',
     ].join('');
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     // The scopable class rule lands in its per-chunk sheet.
     expect(result.perChunk.get('static/home-abc.js')).toContain('hx-hero');
     expect(result.residual).not.toContain('hx-hero');
@@ -273,7 +285,7 @@ describe('splitCssByChunkUsage', () => {
     );
   });
 
-  it('conserves every rule exactly once across outputs', () => {
+  it('conserves every rule exactly once across outputs', async () => {
     const css = [
       '@layer theme,base;',
       ':root{--t:1}',
@@ -281,7 +293,7 @@ describe('splitCssByChunkUsage', () => {
       '@media (min-width:600px){.hx-card{color:blue}.mdx-content{margin:0}}',
       '.plain-shared{padding:0}',
     ].join('');
-    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const result = await splitCssByChunkUsage(css, CHUNKS, opts);
     const everything = [result.residual, ...result.perChunk.values()].join(
       '\n'
     );
@@ -347,10 +359,10 @@ function fakeEmitter() {
 }
 
 describe('applyCssAutoSplit', () => {
-  it('splits, rewires viteMetadata, deletes the original, returns residual urls', () => {
+  it('splits, rewires viteMetadata, deletes the original, returns residual urls', async () => {
     const bundle = fixtureBundle();
     const { emitFile, getFileName, emitted } = fakeEmitter();
-    const globalCss = applyCssAutoSplit(
+    const globalCss = await applyCssAutoSplit(
       bundle,
       HOME_CHAIN,
       chunkCloser(bundle),
@@ -384,10 +396,10 @@ describe('applyCssAutoSplit', () => {
     ).toBe(false);
   });
 
-  it('autoSplit=false delivers the monolith untouched via globalCss', () => {
+  it('autoSplit=false delivers the monolith untouched via globalCss', async () => {
     const bundle = fixtureBundle();
     const { emitFile, getFileName } = fakeEmitter();
-    const globalCss = applyCssAutoSplit(
+    const globalCss = await applyCssAutoSplit(
       bundle,
       HOME_CHAIN,
       chunkCloser(bundle),
@@ -405,7 +417,7 @@ describe('applyCssAutoSplit', () => {
     ).toBeDefined();
   });
 
-  it('degrades to unsplit delivery (with a warning) when the CSS cannot be parsed', () => {
+  it('degrades to unsplit delivery (with a warning) when the CSS cannot be parsed', async () => {
     const bundle = fixtureBundle();
     // Lightning CSS error-recovers from malformed source instead of throwing,
     // so the degrade path is triggered by making the asset unreadable
@@ -413,7 +425,7 @@ describe('applyCssAutoSplit', () => {
     delete (bundle as Record<string, unknown>)['static/global-orig.css'];
     const warnings: string[] = [];
     const { emitFile, getFileName } = fakeEmitter();
-    const globalCss = applyCssAutoSplit(
+    const globalCss = await applyCssAutoSplit(
       bundle,
       HOME_CHAIN,
       chunkCloser(bundle),
@@ -429,10 +441,10 @@ describe('applyCssAutoSplit', () => {
     expect(warnings.length).toBeGreaterThan(0);
   });
 
-  it('propagates a conservation error and leaves the original asset in place', () => {
+  it('propagates a conservation error and leaves the original asset in place', async () => {
     const bundle = fixtureBundle();
     const { emitFile, getFileName } = fakeEmitter();
-    expect(() =>
+    await expect(
       applyCssAutoSplit(bundle, HOME_CHAIN, chunkCloser(bundle), {
         autoSplit: true,
         minSize: 0,
@@ -443,7 +455,7 @@ describe('applyCssAutoSplit', () => {
           throw new CssSplitConservationError('deliberate mismatch');
         },
       })
-    ).toThrow(CssSplitConservationError);
+    ).rejects.toThrow(CssSplitConservationError);
     // The failed asset was not deleted: nothing shipped a page missing its CSS.
     expect(
       (bundle as Record<string, unknown>)['static/global-orig.css']
@@ -455,11 +467,11 @@ describe('applyCssAutoSplit', () => {
     ).toBe(true);
   });
 
-  it('degrades to unsplit delivery (with a warning) when the splitter throws a generic error', () => {
+  it('degrades to unsplit delivery (with a warning) when the splitter throws a generic error', async () => {
     const bundle = fixtureBundle();
     const warnings: string[] = [];
     const { emitFile, getFileName } = fakeEmitter();
-    const globalCss = applyCssAutoSplit(
+    const globalCss = await applyCssAutoSplit(
       bundle,
       HOME_CHAIN,
       chunkCloser(bundle),

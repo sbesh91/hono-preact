@@ -112,7 +112,7 @@ export function preloadManifestPlugin(
         : path.resolve(config.root, opts.routes);
       targets = config.css?.lightningcss?.targets;
     },
-    generateBundle(_options, bundle) {
+    async generateBundle(_options, bundle) {
       // Client environment only; fail closed if the environment is unknown so
       // we never emit a wrong-closure artifact into a server/worker build.
       if (this.environment?.name !== 'client') return;
@@ -126,7 +126,7 @@ export function preloadManifestPlugin(
       let globalCss: string[] = [];
       if (opts.css) {
         try {
-          globalCss = applyCssAutoSplit(bundle, chains, chunksOf, {
+          globalCss = await applyCssAutoSplit(bundle, chains, chunksOf, {
             autoSplit: opts.css.autoSplit,
             minSize: opts.css.minSize,
             targets,

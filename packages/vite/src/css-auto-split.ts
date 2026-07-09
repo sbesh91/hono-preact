@@ -12,13 +12,26 @@
 // pruning it once every rule inside is scoped away (see emitSubset below).
 // That is a bytes-only quirk, not a correctness gap.
 
-import { transform } from 'lightningcss';
-import type { Targets } from 'lightningcss';
+import type { Targets, transform as TransformFn } from 'lightningcss';
 import { entryClosure } from './route-preload.js';
 import type {
   RouteBundleChunkLike,
   RouteModuleChain,
 } from './route-preload.js';
+
+// lightningcss ships a native binding per platform; importing it eagerly would
+// load that binding for every app that pulls in this module, even the (much
+// more common) ones that never configure `css.global`. Loaded lazily on first
+// use and cached module-wide, so a build with no global stylesheet never pays
+// for it, and a build that splits many sheets only pays once.
+let cachedTransform: typeof TransformFn | undefined;
+
+async function loadTransform(): Promise<typeof TransformFn> {
+  if (!cachedTransform) {
+    ({ transform: cachedTransform } = await import('lightningcss'));
+  }
+  return cachedTransform;
+}
 
 /** One JS chunk's usage evidence for class scanning. */
 export interface CssChunkEvidence {
@@ -162,11 +175,12 @@ const CONTAINER_RULE_TYPES: ReadonlySet<string> = new Set([
  * top-level cascade-layer order (statements and blocks, first-seen), which the
  * residual re-declares so scoping a whole @layer block cannot reorder layers.
  */
-export function attributeRules(
+export async function attributeRules(
   cssCode: string,
   chunks: readonly CssChunkEvidence[],
   targets: Targets | undefined
-): { owners: Array<string | null>; layerNames: string[] } {
+): Promise<{ owners: Array<string | null>; layerNames: string[] }> {
+  const transform = await loadTransform();
   const owners: Array<string | null> = [];
   const layerNames: string[] = [];
   const seenLayers = new Set<string>();
@@ -304,13 +318,14 @@ interface EmitResult {
  * `undefined` (a no-op, keeping the library's own already-updated tree)
  * otherwise, for every rule type including the kept 'style' case.
  */
-function emitSubset(
+async function emitSubset(
   cssCode: string,
   owners: ReadonlyArray<string | null>,
   keep: (owner: string | null) => boolean,
   scoped: boolean,
   targets: Targets | undefined
-): EmitResult {
+): Promise<EmitResult> {
+  const transform = await loadTransform();
   let styleDepth = 0;
   let atDepth = 0;
   let index = 0;
@@ -414,13 +429,25 @@ function assertConservation(
  * Split one global stylesheet into a residual plus per-chunk scoped sheets.
  * Throws on a conservation mismatch (a rule dropped or double-counted would
  * otherwise ship a broken page); callers turn that into a build failure.
+ *
+ * Cost note: emission is O(owning chunks) full monolith parses, one
+ * `emitSubset` pass per owning chunk plus one for the residual, each a fresh
+ * Lightning CSS `transform()` over the whole input. Fine at today's chunk
+ * counts; if a large app's owning-chunk count ever makes this the build-time
+ * bottleneck, the optimization path is a single-pass emission that writes all
+ * outputs (residual + every per-chunk sheet) from one traversal instead of
+ * one traversal per output.
  */
-export function splitCssByChunkUsage(
+export async function splitCssByChunkUsage(
   cssCode: string,
   chunks: readonly CssChunkEvidence[],
   opts: CssSplitOptions
-): CssSplitResult {
-  const { owners, layerNames } = attributeRules(cssCode, chunks, opts.targets);
+): Promise<CssSplitResult> {
+  const { owners, layerNames } = await attributeRules(
+    cssCode,
+    chunks,
+    opts.targets
+  );
   const total = owners.length;
 
   const owningChunks = [
@@ -430,7 +457,7 @@ export function splitCssByChunkUsage(
   const perChunk = new Map<string, string>();
   let scopedKept = 0;
   for (const owner of owningChunks) {
-    const out = emitSubset(
+    const out = await emitSubset(
       cssCode,
       owners,
       (o) => o === owner,
@@ -446,7 +473,7 @@ export function splitCssByChunkUsage(
     perChunk.set(owner, out.code);
   }
 
-  const residualOut = emitSubset(
+  const residualOut = await emitSubset(
     cssCode,
     owners,
     (o) => o === null || demoted.has(o),
@@ -509,12 +536,12 @@ function assetSource(entry: SplitBundleEntryLike): string | undefined {
  * fails the build; a dropped rule is a broken page). Any other per-asset
  * failure warns and degrades to delivering that asset unsplit.
  */
-export function applyCssAutoSplit(
+export async function applyCssAutoSplit(
   bundle: Record<string, SplitBundleEntryLike>,
   chains: readonly RouteModuleChain[],
   chunksOf: (src: string) => ReadonlySet<string>,
   opts: CssAutoSplitBundleOptions
-): string[] {
+): Promise<string[]> {
   const entry = Object.values(bundle).find(
     (c) => c.isEntry && c.type !== 'asset'
   );
@@ -555,7 +582,7 @@ export function applyCssAutoSplit(
     }
     let split: CssSplitResult;
     try {
-      split = (opts.split ?? splitCssByChunkUsage)(source, evidence, {
+      split = await (opts.split ?? splitCssByChunkUsage)(source, evidence, {
         minSize: opts.minSize,
         targets: opts.targets,
       });
