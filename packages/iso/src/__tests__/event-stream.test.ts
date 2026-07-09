@@ -91,4 +91,57 @@ describe('eventStream', () => {
     await expect(parked).rejects.toThrow('socket died');
     ac.abort();
   });
+
+  it('yields a message that arrives before a drop reported in the same wake window, then throws', async () => {
+    let deliver: ((message: unknown) => void) | undefined;
+    let failSub: ((error: unknown) => void) | undefined;
+    const fake: PubSubBackend = {
+      publish() {},
+      subscribe(_topic, onMessage, onError) {
+        deliver = onMessage;
+        failSub = onError;
+        return () => {};
+      },
+    };
+    installPubSubBackend(fake);
+    const ac = new AbortController();
+    const gen = eventStream(
+      defineChannel('es-drop-after-message')<{ n: number }>().key(),
+      ac.signal
+    );
+    const parked = gen.next();
+    // Both callbacks fire in the same wake window, message first: the
+    // message must still be yielded before the drop is surfaced.
+    deliver?.({ n: 1 });
+    failSub?.(new Error('socket died'));
+    await expect(parked).resolves.toEqual({ done: false, value: { n: 1 } });
+    await expect(gen.next()).rejects.toThrow('socket died');
+    ac.abort();
+  });
+
+  it('unsubscribes when the consumer breaks out of the loop without aborting', async () => {
+    let unsubbed = false;
+    let deliver: ((message: unknown) => void) | undefined;
+    const fake: PubSubBackend = {
+      publish() {},
+      subscribe(_topic, onMessage) {
+        deliver = onMessage;
+        return () => {
+          unsubbed = true;
+        };
+      },
+    };
+    installPubSubBackend(fake);
+    const ac = new AbortController();
+    const gen = eventStream(
+      defineChannel('es-return')<{ n: number }>().key(),
+      ac.signal
+    );
+    const first = gen.next();
+    deliver?.({ n: 1 });
+    expect((await first).value).toEqual({ n: 1 });
+    await gen.return();
+    expect(unsubbed).toBe(true);
+    expect(ac.signal.aborted).toBe(false);
+  });
 });

@@ -96,15 +96,20 @@ export function eventStream<P>(
           });
         }
         if (signal.aborted) break;
+        while (queue.length > 0 && !signal.aborted) {
+          // Length-checked and single-consumer, so shift() is defined.
+          yield queue.shift()!;
+        }
+        if (signal.aborted) break;
+        // Drain the queue (above) before checking the failure: a payload that
+        // arrived in the same wake window as a drop must still be delivered
+        // before the generator throws, honoring the every-payload-in-order
+        // contract at the failure edge.
         const failure = drop.failure;
         if (failure) {
           throw failure.error instanceof Error
             ? failure.error
             : new Error('hono-preact: event stream subscription dropped');
-        }
-        while (queue.length > 0 && !signal.aborted) {
-          // Length-checked and single-consumer, so shift() is defined.
-          yield queue.shift()!;
         }
       }
     } finally {
