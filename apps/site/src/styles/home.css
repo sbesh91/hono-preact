@@ -777,7 +777,14 @@
      it, background-clip:text leaves the "g" descender with no gradient behind
      it (it renders transparent). */
   padding-bottom: 0.35em;
-  background-image: linear-gradient(90deg, #fe5000, #ec008c);
+  /* Fixed brand poles rather than var(--gradient-orangenta): the theme token
+     brightens in dark mode for page surfaces, but the wordmark sits on the
+     fixed sunset/twilight hero backdrop (same reasoning as the hero button). */
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-orange),
+    var(--color-brand-magenta)
+  );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -806,7 +813,11 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 100%;
-  background: linear-gradient(90deg, #fe5000, #ec008c);
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-orange),
+    var(--color-brand-magenta)
+  );
   /* Grow the fill with a compositor transform (scaleX) rather than animating
      width, which relayouts every frame and stutters the wipe on iOS Safari. */
   transform-origin: left;
@@ -819,7 +830,9 @@
   width: 0.16em;
   height: 0.16em;
   border-radius: 50%;
-  background: #fe5000;
+  /* Orange pole node: attached to the gradient wire, so it may take the pole
+     color (BRAND.md C3 pole-node exception). */
+  background: var(--color-brand-orange);
   transform: translate(-50%, 50%);
   opacity: 0;
 }
@@ -830,8 +843,9 @@
   width: 0.16em;
   height: 0.16em;
   border-radius: 50%;
-  background: #ec008c;
-  box-shadow: 0 0 0.35em 0.07em rgba(236, 0, 140, 0.6);
+  background: var(--color-brand-magenta);
+  box-shadow: 0 0 0.35em 0.07em
+    color-mix(in srgb, var(--color-brand-magenta) 60%, transparent);
   transform: translate(-50%, 50%);
   opacity: 0;
   /* Own layer so the traveling dot (and its glow) composites instead of
@@ -846,8 +860,9 @@
   width: 0.18em;
   height: 0.18em;
   border-radius: 50%;
-  background: #ec008c;
-  box-shadow: 0 0 0.45em 0.1em rgba(236, 0, 140, 0.55);
+  background: var(--color-brand-magenta);
+  box-shadow: 0 0 0.45em 0.1em
+    color-mix(in srgb, var(--color-brand-magenta) 55%, transparent);
   transform: translate(-50%, 50%) scale(0.6);
   opacity: 0;
   will-change: transform, opacity, filter;
@@ -1050,11 +1065,11 @@
    dark twilight); the ghost tracks the theme via tokens so it sits on the right
    surface in each mode. */
 .hx-hero .hx-btn--primary {
-  background: #c40076;
+  background: var(--color-magenta-600);
   color: #ffffff;
 }
 .hx-hero .hx-btn--primary:hover {
-  background: #9b005d;
+  background: var(--color-magenta-700);
 }
 .hx-hero .hx-btn--ghost {
   border-color: var(--hero-ghost-border);
@@ -1140,9 +1155,9 @@
     linear-gradient(var(--card-fill), var(--card-fill)) padding-box,
     linear-gradient(
         100deg,
-        color-mix(in srgb, #fe5000 50%, transparent),
-        color-mix(in srgb, #ec008c 42%, transparent) 52%,
-        color-mix(in srgb, #c97dff 55%, transparent)
+        color-mix(in srgb, var(--color-brand-orange) 50%, transparent),
+        color-mix(in srgb, var(--color-brand-magenta) 42%, transparent) 52%,
+        color-mix(in srgb, var(--color-brand-violet) 55%, transparent)
       )
       border-box;
   box-shadow:
@@ -1837,7 +1852,9 @@
   height: 1.5rem;
   margin-left: -0.45rem;
   border-radius: 999px;
-  background: var(--c);
+  /* Same 68% darkening as the peer name chip: white initials on the vibrant
+     full-strength colours only hit ~4.2:1, short of AA's 4.5:1 at this size. */
+  background: color-mix(in srgb, var(--c) 68%, #000);
   color: #fff;
   display: grid;
   place-items: center;
@@ -1913,9 +1930,9 @@
     linear-gradient(var(--pkg-fill), var(--pkg-fill)) padding-box,
     linear-gradient(
         100deg,
-        color-mix(in srgb, #fe5000 65%, transparent),
-        color-mix(in srgb, #ec008c 55%, transparent) 52%,
-        color-mix(in srgb, #c97dff 68%, transparent)
+        color-mix(in srgb, var(--color-brand-orange) 65%, transparent),
+        color-mix(in srgb, var(--color-brand-magenta) 55%, transparent) 52%,
+        color-mix(in srgb, var(--color-brand-violet) 68%, transparent)
       )
       border-box;
   padding: 0.35rem 0.75rem;

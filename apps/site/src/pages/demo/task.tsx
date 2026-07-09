@@ -115,7 +115,7 @@ const TaskHeaderAndActions: FunctionComponent<{
         name={`task-card-${task.id}`}
         groupClass="task-card"
         render={
-          <article class="relative rounded-xl border border-border bg-background p-5 pl-6 shadow-[0_1px_2px_rgba(37,40,42,.05)]" />
+          <article class="relative rounded-xl border border-border bg-background p-5 pl-6 shadow-subtle" />
         }
       >
         <span

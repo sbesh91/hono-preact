@@ -6,10 +6,10 @@ import TaskCard from './TaskCard.js';
 import type { PatchFn, RemoveFn } from './Board.js';
 
 const DOT: Record<string, string> = {
-  backlog: '#94a3b8',
-  in_progress: 'var(--accent)',
-  in_review: '#7c3aed',
-  done: '#16a34a',
+  backlog: 'var(--status-backlog)',
+  in_progress: 'var(--status-in-progress)',
+  in_review: 'var(--status-in-review)',
+  done: 'var(--status-done)',
 };
 
 type Props = {

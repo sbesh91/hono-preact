@@ -5,7 +5,7 @@ const DemoIndex: FunctionComponent = () => (
   <div class="grid min-h-screen place-items-center bg-background px-4">
     <div class="w-full max-w-sm rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm">
       <div class="mb-6">
-        <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-magenta-500 to-brand-orange">
+        <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-orange to-magenta-500">
           <span class="text-lg font-bold text-white">T</span>
         </div>
         <h1 class="text-xl font-bold text-foreground">Tasks demo</h1>

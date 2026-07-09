@@ -9,7 +9,7 @@ const DESC =
 const IDEAS: { lead: string; body: string }[] = [
   {
     lead: 'Automatic',
-    body: 'Every client route change is wrapped in a view transition. No per-link opt-in, nothing to remember.',
+    body: 'The router wraps every client route change in a view transition. No per-link opt-in, nothing to remember.',
   },
   {
     lead: 'Direction-aware',

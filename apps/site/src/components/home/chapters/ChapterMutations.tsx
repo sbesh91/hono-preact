@@ -15,7 +15,7 @@ const WHY: { lead: string; body: string }[] = [
   },
   {
     lead: 'Race-safe',
-    body: 'Submit again before the first finishes and the in-flight request is aborted, so you never write a duplicate.',
+    body: 'Submit again before the first finishes and the action aborts the in-flight request, so you never write a duplicate.',
   },
   {
     lead: 'Revalidate by reference',

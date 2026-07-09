@@ -90,7 +90,7 @@ The signature gesture is the **orangenta gradient**: warm orange flowing into vi
 
 - **C1.** White (or the theme's neutral background) is predominant. The palette proportion, in descending order of area: background neutral, then the gradient gesture, then the grey ladder, then near-black ink, then solo magenta accents. Vivid color is always the minority.
 - **C2.** The gradient is a label and an accent, never a primary field. It should never inhabit more than roughly 8% of the available space.
-- **C3.** Orange and magenta are designed to be used together in the gradient. **Orange never appears alone**: not as text, not as a fill, not as an accent. Magenta may occasionally solo as a highlight or accent color.
+- **C3.** Orange and magenta are designed to be used together in the gradient. **Orange never appears alone**: not as text, not as a fill, not as an accent. Magenta may occasionally solo as a highlight or accent color. Pole-node exception: an element visually attached to the gradient gesture (the endpoint dots of a wire or bar) may take its pole color, orange included; detached from the gradient, the rule holds.
 - **C4.** The neutral stage is a grey ladder between white and a near-black ink. Greys ground; they never compete.
 - **C5.** Wordmark-style elements sit in cool grey to counter-balance the vibrant gradient; black or white is permissible where legibility demands it.
 
@@ -103,7 +103,7 @@ The signature gesture is the **orangenta gradient**: warm orange flowing into vi
 
 ### 7.3 Typography
 
-One typeface family carries everything, in three weights. Character comes from weight, case, and scale, never from mixing families.
+One typeface family carries everything, in three weights. Character comes from weight, case, and scale, never from mixing families. The one exception is code: code samples and code-adjacent labels (diagram captions naming files, requests, or identifiers) may use the monospace stack.
 
 - **T1.** Display headlines come in two sanctioned modes. **Attitudinal:** bold, uppercase, tight tracking (about -0.04em), tight leading (about 80% of font size); for short, punchy brand messaging. **Statement:** semibold or bold, sentence case, often gradient-filled per T6; for calm, confident claims (the home hero uses this mode). Pick one mode per composition; don't mix them in the same headline block.
 - **T2.** Subheadlines: **light, lowercase**. Relaxed and human, the counterpoint to a display headline.
@@ -128,7 +128,7 @@ One typeface family carries everything, in three weights. Character comes from w
 
 ### 7.6 Motion
 
-- **M1.** Motion is artistic craftsmanship with an innate sense of personality: springy, organic, alive. Prefer soft spring easing over linear or mechanical curves.
+- **M1.** Motion is artistic craftsmanship with an innate sense of personality: springy, organic, alive. Prefer soft spring easing over linear or mechanical curves; reach for the shared `--spring-soft` token first, and use a bespoke curve only where a composition needs its own character.
 - **M2.** Motion is brief and purposeful. It clarifies spatial relationships (where things came from, where they went); it never performs for its own sake.
 - **M3.** Every animation respects `prefers-reduced-motion` (see 8).
 
@@ -157,14 +157,14 @@ The doctrine is already implemented as tokens and utilities in `apps/site/src/st
 | C3 signature colors | `--color-brand-magenta` (#ec008c), `--color-brand-orange` (#fe5000, gradient use only), plus the `--color-magenta-50…900` ramp |
 | C4 neutral stage | Semantic tokens `--background`, `--foreground`, `--muted`, `--surface`, `--surface-subtle`, `--border-color`; ink is `--color-brand-ink` (#25282a), grey is `--color-brand-grey` (#888b8d) |
 | G1/G2 energy bar | `--gradient-orangenta` (90deg, orange to magenta); utilities `bg-orangenta`, `text-orangenta`, `energy-bar` |
-| G3 cloud | Utility `bg-brand-cloud` (three diffuse radial glows: orange, magenta, purple hint) |
+| G3 cloud | Utility `bg-brand-cloud` (three diffuse radial glows: orange, magenta, purple hint); the purple hint is tokened as `--color-brand-violet` |
 | T1-T4 type | `--font-sans`: Selawik (the shipped open-license face), weights 300 (light), 400 (regular), 600/700 (bold display) |
 | A1 accessible accent | `--accent` / `--accent-hover` / `--accent-foreground`: magenta-600/700 on light, brightened magenta on dark; focus ring `--ring` |
 | A2 theming | Tokens flip via `prefers-color-scheme` and `:root[data-theme]`; keep both blocks in sync |
-| A2 status/priority color | `--priority-*` tokens (per-mode values) for the demo's category stripes and dots; never raw hex in components |
+| A2 status/priority color | `--priority-*` and `--status-*` tokens (per-mode values) for the demo's category stripes and dots; never raw hex in components |
 | A3 paired badges | `badge-*` utilities set surface and foreground together |
 | M1 spring motion | `--spring-soft` easing + `--spring-duration`; zeroed under reduced motion |
-| S2 elevation | `shadow-card` token-driven, mode-flipped shadow instead of drawn borders or inline rgba shadows where depth is meant |
+| S2 elevation | `shadow-card` for cards, `shadow-subtle` for hairline lift, `--shadow-lifted` for drag states; all token-driven and mode-flipped, instead of drawn borders or inline rgba shadows |
 
 When a new visual need has no token, extend `root.css` following these patterns (semantic token, both modes, AA-checked) rather than hardcoding values in a component.
 

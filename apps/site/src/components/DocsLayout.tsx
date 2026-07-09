@@ -125,8 +125,11 @@ export function DocsLayout({ children }: Props) {
         </button>
         <a
           href="/"
-          class="font-bold text-[0.95rem] text-foreground no-underline hover:text-accent whitespace-nowrap"
+          class="flex items-center gap-2 font-bold text-[0.95rem] text-foreground no-underline hover:text-accent whitespace-nowrap"
         >
+          {/* The signature energy bar labels the brand asset (BRAND.md G2);
+              the docs chrome's one vivid gesture. */}
+          <span class="energy-bar w-4 shrink-0" aria-hidden="true" />
           hono-preact
         </a>
         {/* Area tabs key off `activeAreaId` (mutually exclusive: components

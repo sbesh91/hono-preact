@@ -35,6 +35,7 @@
   /* Brand colors (sRGB equivalents of the guideline Pantone specs) */
   --color-brand-magenta: #ec008c; /* Pantone Process Magenta C */
   --color-brand-orange: #fe5000; /* Pantone Orange 021 C - gradient use only */
+  --color-brand-violet: #c97dff; /* cloud-spectrum hint (BRAND.md G3) */
   --color-brand-grey: #888b8d; /* Cool Gray 8C */
   --color-brand-ink: #25282a; /* Pantone 426C */
 
@@ -72,6 +73,10 @@
 
 @utility shadow-card {
   box-shadow: var(--shadow-card);
+}
+
+@utility shadow-subtle {
+  box-shadow: var(--shadow-subtle);
 }
 
 /* Signature "orangenta" utilities: published design-system surface. text-orangenta
@@ -232,12 +237,26 @@
   --priority-medium: #d97706;
   --priority-low: #0d9488;
 
+  /* Solid status colors for the demo board's column dots (>= 3:1 as UI color
+     against the page background in both modes; in-progress tracks the accent,
+     which already flips per mode). */
+  --status-backlog: #64748b;
+  --status-in-progress: var(--accent);
+  --status-in-review: #7c3aed;
+  --status-done: #16a34a;
+
   /* Signature orange-to-magenta "orangenta" gradient (left to right) */
   --gradient-orangenta: linear-gradient(90deg, #fe5000 0%, #ec008c 100%);
 
   /* Card elevation (flipped in the dark media query below) */
   --shadow-card:
     0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 16px rgba(16, 24, 40, 0.08);
+  /* Hairline lift for dense list items and inline articles */
+  --shadow-subtle: 0 1px 2px rgba(37, 40, 42, 0.05);
+  /* Drag elevation for a card lifted off the board */
+  --shadow-lifted:
+    0 12px 26px -8px rgba(37, 40, 42, 0.28),
+    0 4px 10px -6px rgba(37, 40, 42, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -305,9 +324,17 @@
     --priority-medium: #fbbf24;
     --priority-low: #2dd4bf;
 
+    /* Solid status colors for the demo board's column dots */
+    --status-backlog: #94a3b8;
+    --status-in-review: #a78bfa;
+    --status-done: #4ade80;
+
     /* Deeper, darker elevation so cards keep depth on the dark surface */
     --shadow-card:
       0 1px 2px rgba(0, 0, 0, 0.35), 0 18px 44px rgba(0, 0, 0, 0.55);
+    --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lifted:
+      0 12px 26px -8px rgba(0, 0, 0, 0.55), 0 4px 10px -6px rgba(0, 0, 0, 0.4);
   }
 }
 

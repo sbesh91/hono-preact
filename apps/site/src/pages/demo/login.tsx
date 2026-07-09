@@ -24,9 +24,9 @@ const LoginPage: FunctionComponent = () => {
 
   return (
     <div class="grid min-h-screen place-items-center bg-background px-4 py-10">
-      <div class="w-full max-w-sm space-y-6 rounded-2xl border border-border bg-surface-subtle p-8 shadow-[0_1px_2px_rgba(37,40,42,.05),0_5px_16px_rgba(37,40,42,.06)]">
+      <div class="w-full max-w-sm space-y-6 rounded-2xl border border-border bg-surface-subtle p-8 shadow-card">
         <div class="space-y-3">
-          <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-magenta-500 to-brand-orange">
+          <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-orange to-magenta-500">
             <span class="text-lg font-bold text-white">T</span>
           </div>
           <div class="space-y-1.5">
