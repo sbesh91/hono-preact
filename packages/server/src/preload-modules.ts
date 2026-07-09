@@ -22,6 +22,8 @@ export interface PreloadManifest {
   routes: RoutePreloadMap;
   /** Per-route render-critical stylesheet URLs (same shape/matching as routes). */
   routeCss: RoutePreloadMap;
+  /** Residual global stylesheet URLs, injected render-blocking before route CSS. */
+  globalCss: string[];
 }
 
 /**
@@ -37,7 +39,12 @@ export type PreloadModulesReader = () => unknown | Promise<unknown>;
 let reader: PreloadModulesReader | undefined;
 let pending: Promise<PreloadManifest> | undefined;
 
-const EMPTY: PreloadManifest = { closure: [], routes: {}, routeCss: {} };
+const EMPTY: PreloadManifest = {
+  closure: [],
+  routes: {},
+  routeCss: {},
+  globalCss: [],
+};
 
 /** Install the platform reader (see {@link PreloadModulesReader}). */
 export function installPreloadModules(r: PreloadModulesReader): void {
@@ -65,7 +72,12 @@ function normalizeRoutes(raw: unknown): RoutePreloadMap {
 function normalizeManifest(raw: unknown): PreloadManifest {
   const obj =
     typeof raw === 'object' && raw !== null
-      ? (raw as { closure?: unknown; routes?: unknown; routeCss?: unknown })
+      ? (raw as {
+          closure?: unknown;
+          routes?: unknown;
+          routeCss?: unknown;
+          globalCss?: unknown;
+        })
       : {};
   const closure = Array.isArray(obj.closure)
     ? obj.closure.filter(isString)
@@ -74,6 +86,9 @@ function normalizeManifest(raw: unknown): PreloadManifest {
     closure,
     routes: normalizeRoutes(obj.routes),
     routeCss: normalizeRoutes(obj.routeCss),
+    globalCss: Array.isArray(obj.globalCss)
+      ? obj.globalCss.filter(isString)
+      : [],
   };
 }
 

@@ -18,3 +18,7 @@ export {
   installPreloadModules,
   type PreloadModulesReader,
 } from './preload-modules.js';
+
+// Dev-mode global stylesheet seam: the generated core app installs the dev
+// source URL of `css.global` (serve mode only); renderPage injects it.
+export { installDevGlobalCss } from './dev-global-css.js';

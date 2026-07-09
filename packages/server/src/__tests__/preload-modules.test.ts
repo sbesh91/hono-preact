@@ -5,10 +5,15 @@ import {
   resolvePreloadManifest,
   __resetPreloadModulesForTests,
 } from '../preload-modules.js';
+import {
+  installDevGlobalCss,
+  getDevGlobalCss,
+  __resetDevGlobalCssForTests,
+} from '../dev-global-css.js';
 
 afterEach(() => __resetPreloadModulesForTests());
 
-const EMPTY = { closure: [], routes: {}, routeCss: {} };
+const EMPTY = { closure: [], routes: {}, routeCss: {}, globalCss: [] };
 
 describe('installPreloadModules / resolvePreloadManifest', () => {
   it('resolves to an empty manifest when no reader is installed', async () => {
@@ -24,6 +29,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
       closure: ['/static/a.js', '/static/b.js'],
       routes: { '/': ['/static/home.js'] },
       routeCss: {},
+      globalCss: [],
     });
   });
 
@@ -36,6 +42,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
       closure: ['/static/a.js'],
       routes: {},
       routeCss: {},
+      globalCss: [],
     });
   });
 
@@ -74,6 +81,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
       closure: ['/static/a.js'],
       routes: { '/ok': ['/static/l.js', '/static/v.js'] },
       routeCss: {},
+      globalCss: [],
     });
   });
 
@@ -91,6 +99,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
       closure: [],
       routes: {},
       routeCss: { '/': ['/static/home.css'] },
+      globalCss: [],
     });
   });
 
@@ -108,6 +117,7 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
       closure: ['/static/a.js'],
       routes: {},
       routeCss: {},
+      globalCss: [],
     });
   });
 });
@@ -150,5 +160,28 @@ describe('preloadLinkHeader', () => {
   it('returns undefined when usedBytes already exhausts the budget', () => {
     const urls = ['/static/a.js', '/static/b.js'];
     expect(preloadLinkHeader(urls, 12_000)).toBeUndefined();
+  });
+});
+
+describe('manifest globalCss', () => {
+  it('normalizes globalCss and defaults it to empty', async () => {
+    __resetPreloadModulesForTests();
+    installPreloadModules(() => ({ globalCss: ['/static/global-a.css', 7] }));
+    const m = await resolvePreloadManifest();
+    expect(m.globalCss).toEqual(['/static/global-a.css']);
+    __resetPreloadModulesForTests();
+    const empty = await resolvePreloadManifest();
+    expect(empty.globalCss).toEqual([]);
+  });
+});
+
+describe('dev global css seam', () => {
+  it('round-trips installed dev urls and resets', () => {
+    __resetDevGlobalCssForTests();
+    expect(getDevGlobalCss()).toBeUndefined();
+    installDevGlobalCss(['/src/styles/root.css']);
+    expect(getDevGlobalCss()).toEqual(['/src/styles/root.css']);
+    __resetDevGlobalCssForTests();
+    expect(getDevGlobalCss()).toBeUndefined();
   });
 });
