@@ -9,39 +9,39 @@
         "seo": 91
       },
       "metrics": {
-        "lcp": 1690,
+        "lcp": 1714,
         "tbt": 0,
         "cls": 0
       },
-      "reportUrl": "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/1783554618735-87636.report.html"
+      "reportUrl": "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/1783566791673-46794.report.html"
     },
     "/docs/quick-start": {
       "scores": {
-        "performance": 98,
+        "performance": 99,
         "accessibility": 91,
         "bestPractices": 100,
         "seo": 82
       },
       "metrics": {
-        "lcp": 2309,
+        "lcp": 1951,
         "tbt": 0,
         "cls": 0
       },
-      "reportUrl": "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/1783554619102-73953.report.html"
+      "reportUrl": "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/1783566792070-31253.report.html"
     },
     "/demo": {
       "scores": {
-        "performance": 99,
+        "performance": 100,
         "accessibility": 88,
         "bestPractices": 100,
         "seo": 82
       },
       "metrics": {
-        "lcp": 1678,
+        "lcp": 1486,
         "tbt": 0,
         "cls": 0
       },
-      "reportUrl": "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/1783554619492-73783.report.html"
+      "reportUrl": "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/1783566792616-20323.report.html"
     }
   }
 }
