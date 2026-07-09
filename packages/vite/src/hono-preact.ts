@@ -22,12 +22,43 @@ export interface HonoPreactOptions {
   adapter: HonoPreactAdapter;
 
   // Source paths (for the generated core app module). All optional.
-  layout?: string; // default 'src/Layout.tsx'
-  routes?: string; // default 'src/routes.ts'
-  api?: string; // default 'src/api.ts' (only loaded if file exists)
-  appConfig?: string; // default 'src/app-config.ts' (only loaded if file exists)
-  serverDir?: string; // default 'src/server' (registry glob; only if the dir exists)
-  clientEntry?: string; // default 'virtual:hono-preact/client'
+
+  /**
+   * Root layout component path.
+   * @default 'src/Layout.tsx'
+   */
+  layout?: string;
+
+  /**
+   * Route table path.
+   * @default 'src/routes.ts'
+   */
+  routes?: string;
+
+  /**
+   * Optional custom Hono routes; only loaded if the file exists.
+   * @default 'src/api.ts'
+   */
+  api?: string;
+
+  /**
+   * Optional app config; only loaded if the file exists.
+   * @default 'src/app-config.ts'
+   */
+  appConfig?: string;
+
+  /**
+   * Registry folder for route-less server modules; globbed only if the
+   * directory exists.
+   * @default 'src/server'
+   */
+  serverDir?: string;
+
+  /**
+   * Client entry module id.
+   * @default 'virtual:hono-preact/client'
+   */
+  clientEntry?: string;
 }
 
 export function honoPreact(options: HonoPreactOptions): Plugin[] {
