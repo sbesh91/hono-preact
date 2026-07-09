@@ -691,6 +691,63 @@ describe('run(): install failure diagnostics', () => {
       console.error = originalError;
     }
   });
+
+  it('non-interactive: prints recovery steps after an install failure', async () => {
+    const out: string[] = [];
+    const errs: string[] = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (...args) => out.push(args.join(' '));
+    console.error = (...args) => errs.push(args.join(' '));
+    try {
+      const failingSpawn = () => ({
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(1));
+        },
+      });
+      const code = await run({
+        argv: ['rec-app', '--adapter=node', '--no-git'],
+        cwd: workDir,
+        env: { npm_config_user_agent: 'pnpm/10' },
+        spawnFn: failingSpawn as never,
+      });
+      expect(code).toBe(1);
+      expect(errs.join('\n')).toContain("'pnpm install' failed");
+      const printed = out.join('\n');
+      expect(printed).toContain('cd rec-app');
+      expect(printed).toContain('pnpm install');
+      expect(printed).toContain('pnpm dev');
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+  });
+
+  it('interactive: shows the recovery note after an install failure', async () => {
+    const notes: Array<{ text: string; title?: string }> = [];
+    const fake = fakePrompts({ dir: 'rec-int-app', adapter: 'node' });
+    (fake.prompts as PromptAdapter).note = (text: string, title?: string) => {
+      notes.push({ text, title });
+    };
+    const failingSpawn = (cmd: string) => ({
+      on: (e: string, cb: (c: number) => void) => {
+        if (e === 'close') queueMicrotask(() => cb(cmd === 'git' ? 0 : 1));
+      },
+    });
+    const code = await run({
+      argv: ['rec-int-app', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'pnpm/10' },
+      isTTY: true,
+      prompts: fake.prompts,
+      spawnFn: failingSpawn as never,
+    });
+    expect(code).toBe(1);
+    const recovery = notes.find((n) => /finish setup/i.test(n.title ?? ''));
+    expect(recovery).toBeTruthy();
+    expect(recovery?.text).toContain('cd rec-int-app');
+    expect(recovery?.text).toContain('pnpm install');
+  });
 });
 
 describe('run(): Node version preflight', () => {
