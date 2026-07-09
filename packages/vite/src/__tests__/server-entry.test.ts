@@ -458,6 +458,99 @@ describe('serverEntryPlugin', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
+  it('config installs the dev global css url in serve mode', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src', 'styles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'styles', 'root.css'),
+      ':root { color-scheme: light dark; }\n'
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+      cssGlobal: 'src/styles/root.css',
+    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'serve' });
+
+    const code = fs.readFileSync(coreAppPath, 'utf8');
+    expect(code).toContain(
+      `import { installDevGlobalCss } from 'hono-preact/server/internal/runtime';`
+    );
+    expect(code).toContain(`installDevGlobalCss(["/src/styles/root.css"]);`);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('config omits the dev global css install in build mode (double-delivery guard)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src', 'styles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'styles', 'root.css'),
+      ':root { color-scheme: light dark; }\n'
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+      cssGlobal: 'src/styles/root.css',
+    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
+
+    const code = fs.readFileSync(coreAppPath, 'utf8');
+    expect(code).not.toContain('installDevGlobalCss');
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
   it('buildStart throws via this.error for a catch-all route in api.ts', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });

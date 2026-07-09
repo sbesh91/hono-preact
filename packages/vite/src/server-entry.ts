@@ -292,9 +292,10 @@ export interface ServerEntryPluginOptions {
   entryWrapperPath: string; // absolute path to write the adapter wrapper
   /**
    * Project-relative or absolute path to the app's global stylesheet
-   * (`honoPreact({ css: { global } })`). Unused for now; the serve-mode
-   * dev URL install in the generated core-app codegen consumes it in a later
-   * task.
+   * (`honoPreact({ css: { global } })`). In serve mode the generated core
+   * app installs its root-relative dev URL via `installDevGlobalCss`, so
+   * renderPage links the dev-served source directly. Builds skip the
+   * install; prod delivery reads the build artifact instead.
    */
   cssGlobal?: string;
 }
