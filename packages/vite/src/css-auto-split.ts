@@ -6,6 +6,11 @@
 // chunk stays in the residual global sheet. Splitting is an optimization,
 // never a correctness risk; nothing is ever dropped ("unused" CSS is not
 // purged, it stays global).
+//
+// Emitted-sheet byte size is not a strict tally of applied rules: Lightning
+// CSS's minifier keeps an emptied @media/@layer wrapper as `{}` rather than
+// pruning it once every rule inside is scoped away (see emitSubset below).
+// That is a bytes-only quirk, not a correctness gap.
 
 import { transform } from 'lightningcss';
 import type { Targets } from 'lightningcss';
@@ -185,6 +190,13 @@ export function attributeRules(
       // depth counters would only ever grow. The flat single-function form
       // does fire for every rule type, entry and exit alike, so it is used
       // here and switches on `rule.type` instead.
+      //
+      // Return `undefined` (a no-op), never the unmodified `rule`: this pass
+      // only tracks depth counters here and never needs to replace a rule at
+      // exit, and returning an unmodified rule for some at-rule shapes (e.g.
+      // @font-face's `src` list) corrupts serialization (verified with an
+      // isolated probe: Lightning CSS throws "failed to deserialize;
+      // expected an object-like struct named FontFormat, found ()").
       RuleExit(rule) {
         switch (rule.type) {
           case 'style':
@@ -196,9 +208,166 @@ export function attributeRules(
             atDepth--;
             break;
         }
-        return rule;
+        return undefined;
       },
     },
   });
   return { owners, layerNames };
+}
+
+export interface CssSplitOptions {
+  /** Minimum emitted-sheet byte size; smaller scoped sets stay global. */
+  minSize: number;
+  targets?: Targets;
+}
+
+export interface CssSplitResult {
+  /** Residual global CSS (minified; layer order re-declared at its head). */
+  residual: string;
+  /** Owning chunk fileName -> that chunk's scoped CSS (minified). */
+  perChunk: Map<string, string>;
+}
+
+interface EmitResult {
+  code: string;
+  visited: number;
+  kept: number;
+}
+
+/**
+ * Emission pass: re-serialize the monolith keeping only the top-level style
+ * rules `keep` accepts. Drops happen at RuleExit (enter/exit pairing is
+ * guaranteed when enter never replaces), so nested traversal and index order
+ * stay identical to the attribution pass. At-rule wrappers survive around kept
+ * rules; emptied wrappers are pruned by minification EXCEPT for at-rules whose
+ * grammar still requires a body (verified with an isolated probe: an emptied
+ * @media or @layer block is retained as an empty `{}` wrapper by Lightning
+ * CSS's minifier). That is a bytes-only quirk, not a correctness gap, since an
+ * empty wrapper applies no rules; callers should not assert emptied wrappers
+ * vanish entirely. Layer statements are stripped everywhere (the residual
+ * re-declares the canonical order itself).
+ *
+ * RuleExit uses the flat form for a second reason beyond the one documented on
+ * attributeRules above: returning an unmodified `rule` object from an
+ * ancestor's exit, after one of its descendants was already dropped at ITS
+ * exit, corrupts serialization (verified with an isolated probe: Lightning
+ * CSS throws "missing field `value`") because the returned copy of the
+ * ancestor no longer matches its already-mutated internal tree. The fix is to
+ * never re-return an unmodified rule from RuleExit: return `[]` to drop, and
+ * `undefined` (a no-op, keeping the library's own already-updated tree)
+ * otherwise, for every rule type including the kept 'style' case.
+ */
+function emitSubset(
+  cssCode: string,
+  owners: ReadonlyArray<string | null>,
+  keep: (owner: string | null) => boolean,
+  targets: Targets | undefined
+): EmitResult {
+  let styleDepth = 0;
+  let index = 0;
+  let visited = 0;
+  let kept = 0;
+  const dropStack: boolean[] = [];
+  const result = transform({
+    filename: 'global.css',
+    code: Buffer.from(cssCode),
+    minify: true,
+    targets,
+    visitor: {
+      Rule: {
+        style(rule) {
+          let drop = false;
+          if (styleDepth === 0) {
+            visited++;
+            const owner = owners[index];
+            index++;
+            drop = !keep(owner ?? null);
+            if (!drop) kept++;
+          }
+          dropStack.push(drop);
+          styleDepth++;
+          return rule;
+        },
+        'layer-statement'() {
+          return [];
+        },
+      },
+      RuleExit(rule) {
+        if (rule.type === 'style') {
+          styleDepth--;
+          const drop = dropStack.pop();
+          if (drop) return [];
+        }
+        return undefined;
+      },
+    },
+  });
+  return { code: result.code.toString(), visited, kept };
+}
+
+function assertConservation(
+  label: string,
+  visited: number,
+  total: number
+): void {
+  if (visited !== total) {
+    throw new Error(
+      `[hono-preact] css auto-split conservation check failed for ${label}: ` +
+        `visited ${visited} top-level style rules, expected ${total}. ` +
+        `No split output was trusted; this is a splitter bug, please report it.`
+    );
+  }
+}
+
+/**
+ * Split one global stylesheet into a residual plus per-chunk scoped sheets.
+ * Throws on a conservation mismatch (a rule dropped or double-counted would
+ * otherwise ship a broken page); callers turn that into a build failure.
+ */
+export function splitCssByChunkUsage(
+  cssCode: string,
+  chunks: readonly CssChunkEvidence[],
+  opts: CssSplitOptions
+): CssSplitResult {
+  const { owners, layerNames } = attributeRules(cssCode, chunks, opts.targets);
+  const total = owners.length;
+
+  const owningChunks = [
+    ...new Set(owners.filter((o): o is string => o !== null)),
+  ];
+  const demoted = new Set<string>();
+  const perChunk = new Map<string, string>();
+  let scopedKept = 0;
+  for (const owner of owningChunks) {
+    const out = emitSubset(cssCode, owners, (o) => o === owner, opts.targets);
+    assertConservation(owner, out.visited, total);
+    if (out.code.length < opts.minSize) {
+      demoted.add(owner);
+      continue;
+    }
+    scopedKept += out.kept;
+    perChunk.set(owner, out.code);
+  }
+
+  const residualOut = emitSubset(
+    cssCode,
+    owners,
+    (o) => o === null || demoted.has(o),
+    opts.targets
+  );
+  assertConservation('residual', residualOut.visited, total);
+  if (residualOut.kept + scopedKept !== total) {
+    throw new Error(
+      `[hono-preact] css auto-split conservation check failed: ` +
+        `${residualOut.kept} residual + ${scopedKept} scoped rules != ${total} input rules.`
+    );
+  }
+
+  // Re-declare the monolith's top-level layer order first, so scoping an
+  // entire @layer block into a route sheet cannot reorder cascade layers
+  // (layer order is fixed by first declaration; later re-declarations are
+  // no-ops, so this is also safe when the residual kept some blocks).
+  const layerPrefix =
+    layerNames.length > 0 ? `@layer ${layerNames.join(',')};` : '';
+  return { residual: layerPrefix + residualOut.code, perChunk };
 }

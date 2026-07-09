@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { attributeRules, type CssChunkEvidence } from '../css-auto-split.js';
+import {
+  attributeRules,
+  splitCssByChunkUsage,
+  type CssChunkEvidence,
+} from '../css-auto-split.js';
 
 const chunk = (
   fileName: string,
@@ -98,5 +102,81 @@ describe('attributeRules', () => {
     const css = '@media (min-width:600px){.hx-card{color:red}}';
     const { owners } = attributeRules(css, CHUNKS, undefined);
     expect(owners).toEqual(['static/home-abc.js']);
+  });
+});
+
+describe('splitCssByChunkUsage', () => {
+  const opts = { minSize: 0 };
+
+  it('moves scoped rules out of the residual and into per-chunk sheets', () => {
+    const css =
+      '.hx-hero{color:red}.mdx-content{color:blue}.plain-shared{margin:0}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    expect(result.perChunk.get('static/home-abc.js')).toContain('hx-hero');
+    expect(result.perChunk.get('static/docs-def.js')).toContain('mdx-content');
+    expect(result.residual).toContain('plain-shared');
+    expect(result.residual).not.toContain('hx-hero');
+    expect(result.residual).not.toContain('mdx-content');
+  });
+
+  it('reproduces @media wrappers around scoped rules', () => {
+    const css =
+      '@media (min-width:600px){.hx-hero{color:red}.zz-none{color:blue}}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const home = result.perChunk.get('static/home-abc.js');
+    expect(home).toMatch(/@media[^{]*\{[^{]*\.hx-hero/);
+    expect(home).not.toContain('zz-none');
+    expect(result.residual).toContain('zz-none');
+  });
+
+  it('keeps @keyframes, @font-face and custom-property rules in the residual', () => {
+    const css =
+      '@keyframes spin{to{rotate:1turn}}@font-face{font-family:X;src:url(x.woff2)}.hx-hero{color:red}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    expect(result.residual).toContain('@keyframes');
+    expect(result.residual).toContain('@font-face');
+    expect(result.residual).not.toContain('hx-hero');
+  });
+
+  it('re-declares the full top-level layer order at the head of the residual', () => {
+    const css =
+      '@layer a,b,c;@layer b{.hx-hero{color:red}}@layer c{.plain-shared{margin:0}}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    // Even with the whole @layer b block scoped away, the residual's first
+    // declaration establishes a,b,c in monolith order.
+    expect(result.residual.startsWith('@layer a,b,c;')).toBe(true);
+    const home = result.perChunk.get('static/home-abc.js');
+    expect(home).toContain('@layer b');
+  });
+
+  it('demotes chunks whose scoped CSS is below minSize back to the residual', () => {
+    const css = '.hx-hero{color:red}';
+    const result = splitCssByChunkUsage(css, CHUNKS, { minSize: 10_000 });
+    expect(result.perChunk.size).toBe(0);
+    expect(result.residual).toContain('hx-hero');
+  });
+
+  it('conserves every rule exactly once across outputs', () => {
+    const css = [
+      '@layer theme,base;',
+      ':root{--t:1}',
+      '.hx-hero{color:red}',
+      '@media (min-width:600px){.hx-card{color:blue}.mdx-content{margin:0}}',
+      '.plain-shared{padding:0}',
+    ].join('');
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const everything = [result.residual, ...result.perChunk.values()].join(
+      '\n'
+    );
+    for (const marker of [
+      '--t:1',
+      'hx-hero',
+      'hx-card',
+      'mdx-content',
+      'plain-shared',
+    ]) {
+      const count = everything.split(marker).length - 1;
+      expect(count, marker).toBe(1);
+    }
   });
 });
