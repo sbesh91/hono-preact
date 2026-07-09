@@ -8,6 +8,8 @@ type: process
 
 Two files must be updated when adding a new docs page. The route is auto-registered — no router changes needed.
 
+Page copy and any page-local styling must follow the brand system in [`apps/site/BRAND.md`](../../apps/site/BRAND.md) (voice/writing rules for prose, visual doctrine and token mapping for styling).
+
 ## 1. Create the MDX file
 
 - **Guide page:** `apps/site/src/pages/docs/<slug>.mdx` → route `/docs/<slug>`.
