@@ -85,9 +85,9 @@ describe('feature/ui home.tsx parity with base', () => {
       'utf8'
     );
     for (const marker of [
-      'homeLoader.useData()',
-      'definePage(HomeView',
-      'Welcome to {',
+      'serverLoaders.default.View(',
+      'definePage(HomeView)',
+      "Welcome to {'{{name}}'}",
     ]) {
       expect(baseHome).toContain(marker);
       expect(uiHome).toContain(marker);

@@ -1,28 +1,22 @@
 import { definePage } from 'hono-preact';
-import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './home.server.js';
 
-const homeLoader = serverLoaders.default;
-
-const HomePage: FunctionComponent = () => {
-  const { data } = homeLoader.useData();
-  if (!data) return <p>Loading...</p>;
-  const { message, renderedAt } = data;
-  return (
+// `.View(render)` wraps the render in the loader's error boundary and data
+// context. `data` is absent only while the loader is cold, so the truthy
+// check doubles as the loading guard.
+const HomeView = serverLoaders.default.View(({ data }) =>
+  data ? (
     <section>
       <h1>Welcome to {'{{name}}'}</h1>
-      <p>{message}</p>
+      <p>{data.message}</p>
       <p>
-        <small>Rendered at {renderedAt}</small>
+        <small>Rendered at {data.renderedAt}</small>
       </p>
       <a href="/about">About</a>
     </section>
-  );
-};
-HomePage.displayName = 'HomePage';
-
-const HomeView = homeLoader.View(({ data }) =>
-  data ? <HomePage /> : <p>Loading...</p>
+  ) : (
+    <p>Loading...</p>
+  )
 );
 
-export default definePage(HomeView, {});
+export default definePage(HomeView);
