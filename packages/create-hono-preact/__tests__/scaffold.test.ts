@@ -29,6 +29,9 @@ describe('scaffold', () => {
     expect(pkg.devDependencies).not.toHaveProperty('@hono/node-server');
     expect(pkg.scripts).toHaveProperty('deploy');
     expect(pkg.dependencies).not.toHaveProperty('hono-preact-ui');
+    // hoofd is a required peer of hono-preact; it must be a direct dep so
+    // package managers that do not auto-install peers still resolve it.
+    expect(pkg.dependencies).toHaveProperty('hoofd');
     expect(pkg.name).toBe('cf');
   });
 
