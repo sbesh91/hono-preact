@@ -40,26 +40,44 @@ const CLIENT_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
   },
 ];
 
+// The bindings a `.server` strip can be reached through in one module:
+//   direct     `import { defineServerMiddleware } from 'hono-preact'` -> local
+//              name resolves straight to a strategy (matched on `foo()` calls).
+//   namespaces `import * as hp from 'hono-preact'` -> the namespace local name;
+//              a strip is reached as a member call `hp.defineServerMiddleware()`,
+//              matched by property name. Without this the namespace form ships
+//              the middleware body to the client -- and since a `.server.*`
+//              module cannot export middleware (the exports contract blocks it),
+//              guard-strip is the ONLY protection for route-level middleware.
+type StripBindings = {
+  direct: Map<string, StripStrategy>;
+  namespaces: Set<string>;
+};
+
 function collectLocalBindings(
   ast: ReturnType<typeof parse>,
-  strips: ReadonlyArray<StripStrategy>
-): Map<string, StripStrategy> {
-  const bindings = new Map<string, StripStrategy>();
-  const byName = new Map(strips.map((s) => [s.name, s]));
+  byName: ReadonlyMap<string, StripStrategy>
+): StripBindings {
+  const direct = new Map<string, StripStrategy>();
+  const namespaces = new Set<string>();
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
     const imp = node as ImportDeclaration;
     if (!ISO_PACKAGE_SOURCES.has(imp.source.value)) continue;
     for (const spec of imp.specifiers) {
+      if (spec.type === 'ImportNamespaceSpecifier') {
+        namespaces.add(spec.local.name);
+        continue;
+      }
       if (spec.type !== 'ImportSpecifier') continue;
       if (spec.imported.type !== 'Identifier') continue;
       const strategy = byName.get(spec.imported.name);
       if (strategy) {
-        bindings.set(spec.local.name, strategy);
+        direct.set(spec.local.name, strategy);
       }
     }
   }
-  return bindings;
+  return { direct, namespaces };
 }
 
 type Hit = {
@@ -70,14 +88,29 @@ type Hit = {
 
 function findCallsByLocalName(
   ast: File,
-  bindings: Map<string, StripStrategy>,
+  bindings: StripBindings,
+  byName: ReadonlyMap<string, StripStrategy>,
   hits: Hit[]
 ): void {
   traverse(ast, {
     CallExpression(path: NodePath<CallExpression>) {
       const { node } = path;
-      if (node.callee.type !== 'Identifier') return;
-      const strategy = bindings.get(node.callee.name);
+      const callee = node.callee;
+      let strategy: StripStrategy | undefined;
+      if (callee.type === 'Identifier') {
+        // `defineServerMiddleware(...)` via a named import.
+        strategy = bindings.direct.get(callee.name);
+      } else if (
+        callee.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.object.type === 'Identifier' &&
+        bindings.namespaces.has(callee.object.name) &&
+        callee.property.type === 'Identifier'
+      ) {
+        // `hp.defineServerMiddleware(...)` via a namespace import: the object is
+        // a framework namespace binding and the property names the strip.
+        strategy = byName.get(callee.property.name);
+      }
       if (strategy && node.start != null && node.end != null) {
         hits.push({ strategy, start: node.start, end: node.end });
       }
@@ -112,11 +145,12 @@ export function guardStripPlugin(): Plugin {
         errorRecovery: true,
       });
 
-      const bindings = collectLocalBindings(ast, strips);
-      if (bindings.size === 0) return;
+      const byName = new Map(strips.map((s) => [s.name, s]));
+      const bindings = collectLocalBindings(ast, byName);
+      if (bindings.direct.size === 0 && bindings.namespaces.size === 0) return;
 
       const hits: Hit[] = [];
-      findCallsByLocalName(ast, bindings, hits);
+      findCallsByLocalName(ast, bindings, byName, hits);
       if (hits.length === 0) return;
 
       const s = new MagicString(code);

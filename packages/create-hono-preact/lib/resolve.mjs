@@ -1,5 +1,33 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath, basename } from 'node:path';
+
+// A project name is substituted into generated files -- most consequentially the
+// `package.json` `name` field and the Cloudflare `deploy` script (via
+// `{{name_underscore}}`). Restrict it to a strict slug so a name can never carry
+// JSON-breaking quotes or shell metacharacters into those sinks (an install-time
+// `postinstall` breakout, or a `deploy`-time command injection). Must start with
+// a letter or digit, then letters/digits/`.`/`_`/`-` only. This also rules out
+// `..` and leading-dot names.
+const PROJECT_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * Validate the final path segment of a target directory as a project name.
+ * Returns an error string when it contains anything outside the safe slug set,
+ * or undefined when it is acceptable. The name reaches `package.json` and shell
+ * scripts by textual substitution, so this is a security boundary, not cosmetics.
+ *
+ * @param {string} name the project name (a directory basename)
+ * @returns {string | undefined}
+ */
+export function validateProjectName(name) {
+  if (!PROJECT_NAME_RE.test(name)) {
+    return (
+      `Invalid project name '${name}'. Use only letters, numbers, '.', '_', ` +
+      `and '-', starting with a letter or number.`
+    );
+  }
+  return undefined;
+}
 
 /**
  * @typedef {Object} ResolvedOptions
@@ -46,7 +74,10 @@ export function checkTargetDir(dest, name) {
 export function validateDirName(value, cwd) {
   const name = value.trim();
   if (name.length === 0) return 'A project directory is required.';
-  return checkTargetDir(resolvePath(cwd, name), name);
+  const dest = resolvePath(cwd, name);
+  const nameError = validateProjectName(basename(dest));
+  if (nameError) return nameError;
+  return checkTargetDir(dest, name);
 }
 
 /**

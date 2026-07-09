@@ -90,7 +90,7 @@ export const serverActions = {
 };
 ```
 
-Binding the route makes the action resolve its page-level `use` chain from that exact route pattern. A bare `defineAction` resolves the chain by matching the POST URL, which is correct whenever the patterns are unambiguous. Reach for `route.action` when an action lives under an authenticated layout: the route-level gate (a `requireSession` on the parent route node, say) is then applied by the action's own pattern, closing the window where two overlapping patterns (`/a/:x` and `/a/:y`) match the same URL and the wrong route's gates run. The same `route` binder typically already defines the page's loaders, so its loaders and actions read as one route-bound unit.
+Binding the route makes the action resolve its page-level `use` chain from that exact route pattern. A bare `defineAction` is route-independent (like a bare `defineLoader`): its POST RPC runs only the app-level `use` and the action's own unit-level `use`, never a route node's page-layer `use`. So reach for `route.action` whenever an action lives under an authenticated layout, so the route-level gate (a `requireSession` on the parent route node, say) is applied by the action's own declared pattern. Otherwise put the gate on the action itself with a unit-level `use`. The same `route` binder typically already defines the page's loaders, so its loaders and actions read as one route-bound unit.
 
 Bind an action to the route its module is registered on. Route-binding pins the `use` chain to the **declaring** route's gates, so the framework enforces that a route-bound action (or loader) names the route it is actually mounted on: a mismatch fails the request closed with a startup error rather than silently resolving the wrong route's gates. Using the same `route` binder for a module's loaders and actions keeps this correct by construction.
 
@@ -594,7 +594,7 @@ export const serverActions = {
 };
 ```
 
-For route-wide gating (every action, plus every route-bound loader, under a route), declare `use` on the route node in `src/routes.ts`. See [Middleware](/docs/middleware) for the full chain model, including why a bare `defineLoader` RPC is route-independent. To bind an action to that route node's gate by exact pattern, define it with [`route.action`](#route-bound-actions).
+For route-wide gating (every render, plus every route-bound loader and action, under a route), declare `use` on the route node in `src/routes.ts`. A route node's `use` covers route-bound units only: a bare `defineAction` or `defineLoader` is route-independent, so its RPC is not gated by the route node (see [Middleware](/docs/middleware) for why). To bind an action to that route node's gate by exact pattern, define it with [`route.action`](#route-bound-actions); otherwise gate the bare action with its own unit-level `use`.
 
 ## Inference types
 

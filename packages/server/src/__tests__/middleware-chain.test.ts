@@ -181,7 +181,6 @@ describe('stream observer fanout (E20)', () => {
       '*',
       pageActionsHandler({
         resolverByPath: resolvers.byPath,
-        resolvePageUseByPath: async () => [], // streaming-observer fixture, no page-level middleware
         resolvePageUseByPattern: async () => [],
         renderPage: noopRender as never,
         resolvePageNode: () => null,
@@ -249,11 +248,11 @@ describe('stream observer fanout (E20)', () => {
 });
 
 describe('pageActionsHandler dispatches the full chain (root -> page -> action)', () => {
-  it('runs page-level middleware before the action body (regression: page-level was previously dropped)', async () => {
-    // Without resolvePageUseByPath the old handler only composed
-    // [appUse, actionUse], silently dropping pageUse. Any user who guards a
-    // page with pageUse (e.g. an auth gate on a layout .server.ts) would have
-    // seen action POSTs bypass the gate. This test locks in the fix.
+  it('runs a route-bound action behind its page-level middleware', async () => {
+    // A route-bound action (routeId set) composes its page tier from its OWN
+    // declared pattern via resolvePageUseByPattern, so a page-level auth gate on
+    // the route's layout runs before the action body. (A BARE action is
+    // route-independent and gets no page tier -- covered separately below.)
     const order: string[] = [];
 
     const pageMw = defineServerMiddleware<'action'>(async (_ctx, next) => {
@@ -270,6 +269,7 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
             fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
             use: ReadonlyArray<unknown>;
             moduleKey: string;
+            routeId?: string;
           }
         >();
         map.set('submit', {
@@ -279,11 +279,11 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
           },
           use: [],
           moduleKey: 'pages/test.server',
+          routeId: '/foo',
         });
         return map;
       },
-      resolvePageUseByPath: async () => [pageMw],
-      resolvePageUseByPattern: async () => [],
+      resolvePageUseByPattern: async () => [pageMw],
       renderPage: async () => new Response('', { status: 200 }),
       resolvePageNode: () => null,
       appConfig: { use: [] },
@@ -333,6 +333,7 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
             fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
             use: ReadonlyArray<unknown>;
             moduleKey: string;
+            routeId?: string;
           }
         >();
         map.set('submit', {
@@ -342,11 +343,11 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
           },
           use: [actionMw],
           moduleKey: 'pages/test.server',
+          routeId: '/foo',
         });
         return map;
       },
-      resolvePageUseByPath: async () => [pageMw],
-      resolvePageUseByPattern: async () => [],
+      resolvePageUseByPattern: async () => [pageMw],
       renderPage: async () => new Response('', { status: 200 }),
       resolvePageNode: () => null,
       appConfig: { use: [rootMw] },
@@ -378,12 +379,11 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
   });
 
   it('fails closed at construction when wired without a page-use resolver (auth-bypass regression)', () => {
-    // Previously resolvePageUseByPath was optional and the handler fell back to
-    // an empty page-use array, silently composing only [appUse, actionUse]. A
-    // page-level auth gate on a layout .server.ts was therefore bypassed on the
-    // action POST path. The resolver is now required and validated at
-    // construction, so a mis-wired handler fails loudly instead of running the
-    // action with its page-level (auth) middleware silently dropped.
+    // resolvePageUseByPattern is where route-bound actions get their route-level
+    // (auth) gates. If a mis-wired (e.g. JS) caller omits it, a route-bound
+    // action would compose only [appUse, actionUse], silently dropping the
+    // route's auth gate on the POST path. The resolver is required and validated
+    // at construction, so the handler fails loudly instead.
     const make = () =>
       pageActionsHandler({
         resolverByPath: async () =>
@@ -397,11 +397,11 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
               },
             ],
           ]),
-        // resolvePageUseByPath omitted to simulate a mis-wired (e.g. JS) caller
+        // resolvePageUseByPattern omitted to simulate a mis-wired caller
         renderPage: async () => new Response('', { status: 200 }),
         resolvePageNode: () => null,
       } as unknown as Parameters<typeof pageActionsHandler>[0]);
 
-    expect(make).toThrow(/resolvePageUseByPath/);
+    expect(make).toThrow(/resolvePageUseByPattern/);
   });
 });

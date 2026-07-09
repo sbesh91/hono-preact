@@ -107,6 +107,52 @@ describe('guardStripPlugin: middleware/observer rewrites', () => {
     const result = transform(code, '/src/pages/home.tsx');
     expect(result?.code).toMatch(/__kind:\s*['"]middleware['"]/);
   });
+
+  it('strips a namespace-import member call (server-code leak defense)', () => {
+    // Regression: `import * as hp` + `hp.defineServerMiddleware(...)` produces no
+    // named binding, so a local-name-only matcher never fired and the auth/
+    // session body shipped to the client. guard-strip is the ONLY protection for
+    // route-level middleware (a .server.* module cannot export middleware), so
+    // the member-call form must be matched too.
+    const code = `
+      import * as hp from 'hono-preact';
+      export const mw = hp.defineServerMiddleware(async (_c, next) => {
+        await verifySessionSecret();
+        await next();
+      });
+    `;
+    const result = transform(code, '/src/routes.tsx');
+    expect(result?.code).toMatch(/__kind:\s*['"]middleware['"]/);
+    expect(result?.code).toMatch(/runs:\s*['"]server['"]/);
+    expect(result?.code).not.toMatch(/hp\.defineServerMiddleware\s*\(/);
+    expect(result?.code).not.toContain('verifySessionSecret');
+  });
+
+  it('strips a namespace-import member call from the scoped iso source too', () => {
+    const code = `
+      import * as iso from '@hono-preact/iso';
+      export const mw = iso.defineServerMiddleware(async (_c, next) => {
+        await secretServerCall();
+        await next();
+      });
+    `;
+    const result = transform(code, '/src/routes.tsx');
+    expect(result?.code).toMatch(/__kind:\s*['"]middleware['"]/);
+    expect(result?.code).not.toContain('secretServerCall');
+  });
+
+  it('leaves a namespace member call to a non-framework namespace alone', () => {
+    // `other.defineServerMiddleware` where `other` is not a framework namespace
+    // must not be rewritten (no false positive on an unrelated import).
+    const code = `
+      import * as other from './helpers.js';
+      export const x = other.defineServerMiddleware(1);
+    `;
+    // No framework symbol is even mentioned via a framework import, so the
+    // pre-filter would still see the string; assert the call survives untouched.
+    const result = transform(code, '/src/routes.tsx');
+    expect(result).toBeUndefined();
+  });
 });
 
 describe('guardStripPlugin: leaves unaffected code alone', () => {

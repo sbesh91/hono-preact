@@ -13,8 +13,8 @@ export type PageUseResolver = (
  * the security message and the check from drifting across the three.
  *
  * The `option` string names the handler's specific field (e.g. `resolvePageUse`
- * or `resolvePageUseByPath`) so the thrown message points at the exact missing
- * option; `surface` names the request path the gate would be dropped on.
+ * or `resolvePageUseByPattern`) so the thrown message points at the exact
+ * missing option; `surface` names the request path the gate would be dropped on.
  */
 export function assertPageUseResolver(
   resolver: unknown,
@@ -24,7 +24,7 @@ export function assertPageUseResolver(
     throw new Error(
       `${ctx.handler} requires ${ctx.option}; without it page-level middleware ` +
         `(including auth gates) is silently dropped on the ${ctx.surface}, ` +
-        'exposing data the gate should protect. Pass makePageUseResolver(routes).byPath.'
+        'exposing data the gate should protect. Pass makePageUseResolver(routes).byPattern.'
     );
   }
 }

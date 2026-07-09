@@ -19,6 +19,8 @@ export function validateDirName(
   cwd: string
 ): string | undefined;
 
+export function validateProjectName(name: string): string | undefined;
+
 export function resolveOptions(
   parsed: {
     targetDir?: string;

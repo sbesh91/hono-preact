@@ -49,20 +49,6 @@ export interface PageActionsHandlerOptions {
     actionName: string
   ) => Promise<ActionEntry | undefined>;
   /**
-   * Per-page middleware resolver, keyed by URL path. The handler composes the
-   * chain as [appConfig.use, resolvePageUseByPath(path), action.use]. Pass
-   * `pageUseResolver.byPath` from makePageUseResolver (the same resolver
-   * loadersHandler uses).
-   *
-   * REQUIRED: page-level `use` is where route/layout auth gates live, so an
-   * absent resolver would silently drop them on the action POST path (an
-   * auth-bypass footgun). The handler validates this at construction and
-   * throws rather than composing a guard-less chain.
-   */
-  resolvePageUseByPath: (
-    path: string
-  ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
-  /**
    * Per-route middleware resolver, keyed by EXACT route pattern. Used for
    * actions defined via `serverRoute(r).action(fn)` (their `ActionEntry`
    * carries `routeId`): the chain is composed from the action's OWN declared
@@ -71,9 +57,16 @@ export interface PageActionsHandlerOptions {
    * makePageUseResolver (the same resolver the loaders handler uses for
    * route-bound loaders).
    *
-   * REQUIRED for the same auth-bypass reason as `resolvePageUseByPath`: a
-   * route-bound action with no pattern resolver would silently drop its
-   * route-level gates. The handler validates this at construction.
+   * REQUIRED to avoid an auth-bypass: a route-bound action with no pattern
+   * resolver would silently drop its route-level gates. The handler validates
+   * this at construction.
+   *
+   * A BARE action (`defineAction`, no `routeId`) is route-independent and
+   * receives NO page tier, mirroring bare loaders (see loadersHandler's
+   * EMPTY_PAGE_USE). It never fuzzy-matches the POST URL: doing so would let the
+   * client pick which route's guards apply by choosing where to POST (a sibling
+   * route with weaker gates). Guard a bare action at the unit level
+   * (`defineAction({ use })`) or bind it with `serverRoute(r).action`.
    */
   resolvePageUseByPattern: (
     pattern: string
@@ -111,6 +104,11 @@ export interface PageActionsHandlerOptions {
     ctx: { module: string; action: string; routeId?: string }
   ) => void;
 }
+
+// The page tier for a bare (route-independent) action: no route-node `use`.
+// Mirrors loadersHandler's constant of the same name so bare actions and bare
+// loaders share one contract (guard at the unit level, not the page).
+const EMPTY_PAGE_USE = (): ReadonlyArray<unknown> => [];
 
 async function parseBody(
   c: Context
@@ -168,7 +166,6 @@ export function pageActionsHandler(
   const {
     resolverByPath,
     resolverByModuleKey,
-    resolvePageUseByPath,
     resolvePageUseByPattern,
     renderPage,
     resolvePageNode,
@@ -177,11 +174,6 @@ export function pageActionsHandler(
     onError,
   } = opts;
 
-  assertPageUseResolver(resolvePageUseByPath, {
-    handler: 'pageActionsHandler',
-    option: 'resolvePageUseByPath',
-    surface: 'action POST path',
-  });
   assertPageUseResolver(resolvePageUseByPattern, {
     handler: 'pageActionsHandler',
     option: 'resolvePageUseByPattern',
@@ -222,20 +214,26 @@ export function pageActionsHandler(
     //
     // Route-bound actions (serverRoute(r).action, `routeId` set) resolve their
     // page tier from their OWN declared pattern, so a `/a/:x` vs `/a/:y` URL
-    // collision cannot apply the wrong route's gates. Bare actions keep
-    // resolving by the request URL (unchanged behavior). A route-bound action
-    // whose pattern resolver throws fails closed (500) rather than running
-    // through a guard-less chain (auth-gate bypass), mirroring loadersHandler.
+    // collision cannot apply the wrong route's gates. A route-bound action whose
+    // pattern resolver throws fails closed (500) rather than running through a
+    // guard-less chain (auth-gate bypass).
     //
-    // The resolver, its lookup key, and the fail-closed flag are all derived
-    // from ONE `typeof routeId` check so they cannot desync: a route-bound
-    // action pairs `byPattern` with its `routeId` (and fails closed on a resolver
-    // throw), a bare action pairs `byPath` with the request URL. The guard
-    // narrows `routeId` to `string` for the `key`, keeping the pairing cast-free.
+    // Bare actions (`defineAction`, no `routeId`) are route-independent and
+    // receive NO page tier -- identical to bare loaders (loadersHandler's
+    // EMPTY_PAGE_USE). Resolving the page tier by the request URL would let the
+    // client select which route's guards run by choosing where to POST, so a
+    // bare action colocated under a guarded route could be invoked from a weaker
+    // sibling. There is no route-level guard to honor for a bare unit; the app
+    // guards it at the unit level (`defineAction({ use })`) or binds it with
+    // `serverRoute(r).action`. `actionUse` (below) is always composed either way.
+    //
+    // The resolver, its lookup key, and the fail-closed flag are derived from ONE
+    // `typeof routeId` check so they cannot desync. The guard narrows `routeId`
+    // to `string` for the `key`, keeping the pairing cast-free.
     const pageTier =
       typeof routeId === 'string'
         ? { resolve: resolvePageUseByPattern, key: routeId, routeBound: true }
-        : { resolve: resolvePageUseByPath, key: urlPath, routeBound: false };
+        : { resolve: EMPTY_PAGE_USE, key: '', routeBound: false };
     const composed = await composeServerChainOrFailClosed<'action'>(
       {
         requestSignal: c.req.raw.signal,

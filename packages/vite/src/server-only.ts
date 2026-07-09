@@ -13,6 +13,7 @@ import {
   findDynamicServerImports,
   isServerImport,
   type DynamicServerImport,
+  type UnstubbableServerImport,
 } from './ast-walkers.js';
 import { extractServerLoadersMeta } from './source-extraction.js';
 import {
@@ -137,7 +138,28 @@ export function serverOnlyPlugin(): Plugin {
       const serverImports = ast.program.body.filter(isServerImport);
 
       const dynamicServerImports: DynamicServerImport[] = [];
-      findDynamicServerImports(ast, dynamicServerImports);
+      const unstubbableServerImports: UnstubbableServerImport[] = [];
+      findDynamicServerImports(
+        ast,
+        dynamicServerImports,
+        unstubbableServerImports
+      );
+
+      // Fail closed: a dynamic import whose specifier is not static but clearly
+      // targets a `.server` module (e.g. `` import(`./${name}.server.js`) ``)
+      // cannot be resolved to one module and stubbed, so rollup would bundle the
+      // real server body into the client. Reject it with a fix rather than
+      // leaking silently. The safe default for this boundary is a static string.
+      if (unstubbableServerImports.length > 0) {
+        const { start, end } = unstubbableServerImports[0];
+        const snippet = code.slice(start, end);
+        throw new Error(
+          `${id}: dynamic import of a .server.* module via a non-static specifier ` +
+            `(\`${snippet}\`) cannot be stripped from the client bundle, so the ` +
+            `server body would leak. Use a static string specifier so the module ` +
+            `is stubbed out, e.g. import('./x.server.js').`
+        );
+      }
 
       if (serverImports.length === 0 && dynamicServerImports.length === 0)
         return;

@@ -44,7 +44,7 @@ function buildHandler(
         routeId?: string;
       }
   >,
-  pageUse?: { byPath?: PageUseResolver; byPattern?: PageUseResolver }
+  pageUse?: { byPattern?: PageUseResolver }
 ) {
   const resolverByPath = async () => {
     const map = new Map();
@@ -66,9 +66,9 @@ function buildHandler(
   );
   return pageActionsHandler({
     resolverByPath,
-    // No page-level middleware in the default fixture; the byPattern/byPath
-    // branch tests below inject resolvers to observe which path is taken.
-    resolvePageUseByPath: pageUse?.byPath ?? (async () => []),
+    // No page-level middleware in the default fixture. Bare actions get no page
+    // tier at all; the byPattern branch tests below inject a resolver to observe
+    // the route-bound path.
     resolvePageUseByPattern: pageUse?.byPattern ?? (async () => []),
     renderPage: renderPage as never,
     resolvePageNode: () => h('div', null),
@@ -100,11 +100,12 @@ describe('pageActionsHandler', () => {
   });
 
   // A src/server registry action is not in any route's byPath map; it resolves
-  // through the moduleKey fallback the handler tries when byPath misses.
-  const registryHandler = (pageUseByPath: PageUseResolver = async () => []) => {
+  // through the moduleKey fallback the handler tries when byPath misses. A bare
+  // registry action (no routeId) is route-independent, so it gets no page tier.
+  const registryHandler = (actionUse: ReadonlyArray<unknown> = []) => {
     const entry = {
       fn: async () => ({ ran: 'registry' }),
-      use: [] as ReadonlyArray<unknown>,
+      use: actionUse,
       moduleKey: 'src/server/reports.server',
       routeId: undefined as string | undefined,
     };
@@ -112,7 +113,6 @@ describe('pageActionsHandler', () => {
       resolverByPath: async () => new Map(), // no route action map
       resolverByModuleKey: async (moduleKey, name) =>
         moduleKey === entry.moduleKey && name === 'export' ? entry : undefined,
-      resolvePageUseByPath: pageUseByPath,
       resolvePageUseByPattern: async () => [],
       renderPage: (async (c: { html: (s: string) => unknown }) =>
         c.html('x')) as never,
@@ -144,11 +144,25 @@ describe('pageActionsHandler', () => {
     });
   });
 
-  it('runs a route-less registry action behind the invoking page gates', async () => {
-    // byPath (keyed on the POST URL) supplies the current page's use chain, so
-    // a route-less action inherits the gates of the page it is called from.
+  it('does NOT gate a route-less registry action by the invoking page', async () => {
+    // A bare (route-independent) registry action gets no page tier, so the
+    // invoking page's guards never run against it. This is the whole point of
+    // route-independence: the client picks the POST URL, so the page it posts
+    // from must not be a security boundary. Guard such an action at the unit
+    // level instead (next test).
+    const res = await postRegistry(registryHandler());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      __outcome: 'success',
+      data: { ran: 'registry' },
+    });
+  });
+
+  it('gates a route-less registry action by its own unit-level use', async () => {
+    // The supported way to protect a bare action: an action-level `use` is
+    // always composed, regardless of the POST URL.
     const res = await postRegistry(
-      registryHandler(async () => [denyGuard(401, 'page-gate')])
+      registryHandler([denyGuard(401, 'unit-gate')])
     );
     expect(res.status).toBe(401);
   });
@@ -161,7 +175,6 @@ describe('pageActionsHandler', () => {
     const handler = pageActionsHandler({
       resolverByPath: async () => new Map(), // wrong URL: no match
       resolverByModuleKey: async () => undefined, // route actions are not indexed
-      resolvePageUseByPath: async () => [],
       resolvePageUseByPattern: async () => [],
       renderPage: (async (c: { html: (s: string) => unknown }) =>
         c.html('x')) as never,
@@ -194,11 +207,9 @@ describe('pageActionsHandler', () => {
       routeId: '/reports/:id',
     };
     const byPattern = vi.fn(async () => [denyGuard(403, 'via-pattern')]);
-    const byPath = vi.fn(async () => [denyGuard(418, 'via-path')]);
     const handler = pageActionsHandler({
       resolverByPath: async () => new Map(),
       resolverByModuleKey: async () => entry,
-      resolvePageUseByPath: byPath,
       resolvePageUseByPattern: byPattern,
       renderPage: (async (c: { html: (s: string) => unknown }) =>
         c.html('x')) as never,
@@ -219,14 +230,12 @@ describe('pageActionsHandler', () => {
     });
     expect(res.status).toBe(403); // pattern guard fired
     expect(byPattern).toHaveBeenCalledWith('/reports/:id');
-    expect(byPath).not.toHaveBeenCalled();
   });
 
   it('404s a moduleKey miss (no registry entry)', async () => {
     const handler = pageActionsHandler({
       resolverByPath: async () => new Map(),
       resolverByModuleKey: async () => undefined,
-      resolvePageUseByPath: async () => [],
       resolvePageUseByPattern: async () => [],
       renderPage: (async (c: { html: (s: string) => unknown }) =>
         c.html('x')) as never,
@@ -245,11 +254,10 @@ describe('pageActionsHandler', () => {
     });
 
   it('route-bound action resolves page-use by its pattern, not the request URL', async () => {
-    const byPath = vi.fn(async () => [denyGuard(418, 'via-path')]);
     const byPattern = vi.fn(async () => [denyGuard(403, 'via-pattern')]);
     const handler = buildHandler(
       { submit: { fn: async () => ({ ok: true }), routeId: '/foo/:id' } },
-      { byPath, byPattern }
+      { byPattern }
     );
     const app = new Hono().post('*', handler);
     const res = await app.request('/foo/42', {
@@ -264,22 +272,28 @@ describe('pageActionsHandler', () => {
         payload: {},
       }),
     });
-    // The byPattern guard for '/foo/:id' fired (403); the byPath guard for the
-    // concrete URL '/foo/42' (418) was NOT consulted.
+    // The byPattern guard for the DECLARED pattern '/foo/:id' fired (403), not
+    // the concrete request URL '/foo/42'.
     expect(res.status).toBe(403);
     expect(byPattern).toHaveBeenCalledWith('/foo/:id');
-    expect(byPath).not.toHaveBeenCalled();
   });
 
-  it('bare (route-independent) action resolves page-use by the request URL', async () => {
-    const byPath = vi.fn(async () => [denyGuard(418, 'via-path')]);
+  it('bare (route-independent) action gets NO page tier (sibling-route bypass is impossible)', async () => {
+    // Security regression: a bare action must not resolve any page-use chain
+    // from the request URL. Previously the handler fuzzy-matched the POST URL,
+    // so an attacker could POST a guarded action to a weaker sibling route to
+    // pick up that route's (empty) guards. Now a bare action never consults a
+    // page-use resolver: byPattern is not called, and the injected guard (which
+    // would deny 403 if it ran) never fires. The action runs to success.
     const byPattern = vi.fn(async () => [denyGuard(403, 'via-pattern')]);
     const handler = buildHandler(
       { submit: async () => ({ ok: true }) }, // no routeId -> not route-bound
-      { byPath, byPattern }
+      { byPattern }
     );
     const app = new Hono().post('*', handler);
-    const res = await app.request('/foo/42', {
+    // POST to a route that is NOT where the action is declared; under the old
+    // fuzzy behavior this is exactly the attacker's lever.
+    const res = await app.request('/orgs/new', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -291,9 +305,11 @@ describe('pageActionsHandler', () => {
         payload: {},
       }),
     });
-    // The byPath guard for the concrete URL fired (418); byPattern untouched.
-    expect(res.status).toBe(418);
-    expect(byPath).toHaveBeenCalledWith('/foo/42');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      __outcome: 'success',
+      data: { ok: true },
+    });
     expect(byPattern).not.toHaveBeenCalled();
   });
 
@@ -317,7 +333,6 @@ describe('pageActionsHandler', () => {
             },
           ],
         ]) as never,
-      resolvePageUseByPath: async () => [],
       resolvePageUseByPattern: byPattern,
       renderPage: (async () => new Response('x')) as never,
       resolvePageNode: () => h('div', null),
@@ -546,8 +561,7 @@ function buildTimedApp(
   const noopRender = async () => new Response('', { status: 200 });
   const handler = pageActionsHandler({
     resolverByPath,
-    resolvePageUseByPath: async () => [], // no page-level middleware in this fixture
-    resolvePageUseByPattern: async () => [],
+    resolvePageUseByPattern: async () => [], // no page-level middleware in this fixture
     renderPage: noopRender as never,
     resolvePageNode: () => null,
     ...(opts.defaultTimeoutMs !== undefined
