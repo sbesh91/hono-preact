@@ -365,13 +365,22 @@ function emitSubset(
   };
 }
 
+/**
+ * A rule was dropped or double-counted during splitting. Unlike every other
+ * split failure (which degrades to delivering the sheet unsplit), this one
+ * must FAIL THE BUILD: the splitter's own accounting is broken, so no split
+ * output can be trusted. `applyCssAutoSplit` rethrows it by type, never by
+ * message sniffing.
+ */
+export class CssSplitConservationError extends Error {}
+
 function assertConservation(
   label: string,
   visited: number,
   total: number
 ): void {
   if (visited !== total) {
-    throw new Error(
+    throw new CssSplitConservationError(
       `[hono-preact] css auto-split conservation check failed for ${label}: ` +
         `visited ${visited} top-level style rules, expected ${total}. ` +
         `No split output was trusted; this is a splitter bug, please report it.`
@@ -424,7 +433,7 @@ export function splitCssByChunkUsage(
   );
   assertConservation('residual', residualOut.visited, total);
   if (residualOut.kept + scopedKept !== total) {
-    throw new Error(
+    throw new CssSplitConservationError(
       `[hono-preact] css auto-split conservation check failed: ` +
         `${residualOut.kept} residual + ${scopedKept} scoped rules != ${total} input rules.`
     );
@@ -452,6 +461,12 @@ export interface CssAutoSplitBundleOptions {
   emitFile: (asset: { type: 'asset'; name: string; source: string }) => string;
   getFileName: (ref: string) => string;
   warn: (msg: string) => void;
+  /**
+   * Splitter override for tests (defaults to {@link splitCssByChunkUsage}),
+   * so both failure-policy branches (conservation rethrow vs warn-and-degrade)
+   * are exercisable without crafting CSS that breaks the real splitter.
+   */
+  split?: typeof splitCssByChunkUsage;
 }
 
 function assetSource(entry: SplitBundleEntryLike): string | undefined {
@@ -518,14 +533,14 @@ export function applyCssAutoSplit(
     }
     let split: CssSplitResult;
     try {
-      split = splitCssByChunkUsage(source, evidence, {
+      split = (opts.split ?? splitCssByChunkUsage)(source, evidence, {
         minSize: opts.minSize,
         targets: opts.targets,
       });
     } catch (e) {
       // Conservation failures must fail the build (spec); rethrow for the
       // plugin to turn into this.error. Anything else degrades to unsplit.
-      if (e instanceof Error && e.message.includes('conservation')) throw e;
+      if (e instanceof CssSplitConservationError) throw e;
       opts.warn(
         `css auto-split: could not split ${cssFile} (${e instanceof Error ? e.message : String(e)}); delivering it unsplit`
       );

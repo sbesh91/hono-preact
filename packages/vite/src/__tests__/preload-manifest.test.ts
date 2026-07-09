@@ -146,4 +146,77 @@ describe('preloadManifestPlugin', () => {
       '/': ['/static/home-XX.css'],
     });
   });
+
+  it('runs css auto-split end-to-end: replaces the entry css asset and fills globalCss', () => {
+    // No configResolved -> empty chains -> nothing is scopable, so the whole
+    // sheet stays global; this still exercises the generateBundle ->
+    // applyCssAutoSplit -> artifact wiring (emit residual, delete original).
+    const cssBundle: Record<string, unknown> = {
+      'static/client.js': {
+        type: 'chunk',
+        fileName: 'static/client.js',
+        isEntry: true,
+        code: 'boot("app-shell")',
+        imports: [],
+        moduleIds: [],
+        viteMetadata: { importedCss: new Set(['static/global-orig.css']) },
+      },
+      'static/home-XX.js': {
+        type: 'chunk',
+        fileName: 'static/home-XX.js',
+        isEntry: false,
+        code: 'render("hx-hero")',
+        imports: [],
+        moduleIds: [],
+        viteMetadata: { importedCss: new Set<string>() },
+      },
+      'static/global-orig.css': {
+        type: 'asset',
+        fileName: 'static/global-orig.css',
+        source: '.hx-hero{color:red}.app-shell{margin:0}',
+      },
+    };
+
+    const plugin = preloadManifestPlugin({
+      routes: 'src/routes.ts',
+      css: { autoSplit: true, minSize: 0 },
+    });
+    const emitted: Array<{
+      type: string;
+      fileName?: string;
+      name?: string;
+      source: string;
+    }> = [];
+    const ctx = {
+      environment: { name: 'client' },
+      warn: () => {},
+      emitFile: (f: {
+        type: string;
+        fileName?: string;
+        name?: string;
+        source: string;
+      }) => {
+        emitted.push(f);
+        return `ref-${emitted.length - 1}`;
+      },
+      getFileName: (ref: string) => {
+        const i = Number(ref.replace(/^ref-/, ''));
+        return `static/${emitted[i].name!.replace(/\.css$/, '')}-HASH.css`;
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plugin.generateBundle as any).call(ctx, {}, cssBundle);
+
+    const manifest = emitted.find((f) => f.fileName === PRELOAD_MANIFEST_FILE);
+    expect(manifest).toBeDefined();
+    const artifact = JSON.parse(manifest!.source);
+    expect(artifact.globalCss).toEqual(['/static/global-HASH.css']);
+    // The original monolith was replaced: gone from the bundle and from the
+    // entry chunk's importedCss; its rules live on in the emitted residual.
+    expect(cssBundle['static/global-orig.css']).toBeUndefined();
+    const residual = emitted.find((f) => f.name === 'global.css');
+    expect(residual).toBeDefined();
+    expect(residual!.source).toContain('hx-hero');
+    expect(residual!.source).toContain('app-shell');
+  });
 });

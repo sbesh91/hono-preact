@@ -119,6 +119,9 @@ export function preloadManifestPlugin(
       const warn = (msg: string): void => this.warn(`[preload] ${msg}`);
       const closure = collectEntryPreloadModules(bundle);
       const chains = readRouteChains(routesAbsPath, warn);
+      // One memoized closure resolver shared by applyCssAutoSplit,
+      // resolvePreloadMap, and resolveRouteCssMap, so each per-chain chunk
+      // closure is computed once over the bundle.
       const chunksOf = chunkCloser(bundle);
       let globalCss: string[] = [];
       if (opts.css) {

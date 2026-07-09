@@ -3,6 +3,7 @@ import {
   attributeRules,
   splitCssByChunkUsage,
   applyCssAutoSplit,
+  CssSplitConservationError,
   type CssChunkEvidence,
 } from '../css-auto-split.js';
 import type { RouteModuleChain } from '../route-preload.js';
@@ -367,5 +368,58 @@ describe('applyCssAutoSplit', () => {
     );
     expect(globalCss).toEqual(['/static/global-orig.css']);
     expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('propagates a conservation error and leaves the original asset in place', () => {
+    const bundle = fixtureBundle();
+    const { emitFile, getFileName } = fakeEmitter();
+    expect(() =>
+      applyCssAutoSplit(bundle, HOME_CHAIN, chunkCloser(bundle), {
+        autoSplit: true,
+        minSize: 0,
+        emitFile,
+        getFileName,
+        warn: () => {},
+        split: () => {
+          throw new CssSplitConservationError('deliberate mismatch');
+        },
+      })
+    ).toThrow(CssSplitConservationError);
+    // The failed asset was not deleted: nothing shipped a page missing its CSS.
+    expect(
+      (bundle as Record<string, unknown>)['static/global-orig.css']
+    ).toBeDefined();
+    expect(
+      bundle['static/client.js'].viteMetadata.importedCss.has(
+        'static/global-orig.css'
+      )
+    ).toBe(true);
+  });
+
+  it('degrades to unsplit delivery (with a warning) when the splitter throws a generic error', () => {
+    const bundle = fixtureBundle();
+    const warnings: string[] = [];
+    const { emitFile, getFileName } = fakeEmitter();
+    const globalCss = applyCssAutoSplit(
+      bundle,
+      HOME_CHAIN,
+      chunkCloser(bundle),
+      {
+        autoSplit: true,
+        minSize: 0,
+        emitFile,
+        getFileName,
+        warn: (m) => warnings.push(m),
+        split: () => {
+          throw new Error('lightningcss exploded');
+        },
+      }
+    );
+    expect(globalCss).toEqual(['/static/global-orig.css']);
+    expect(
+      (bundle as Record<string, unknown>)['static/global-orig.css']
+    ).toBeDefined();
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('lightningcss exploded');
   });
 });
