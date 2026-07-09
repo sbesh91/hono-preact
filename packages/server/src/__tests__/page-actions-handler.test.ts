@@ -842,3 +842,85 @@ describe('pageActionsHandler timeouts', () => {
     expect((observedReason as DOMException).name).toBe('TimeoutError');
   });
 });
+
+describe('pageActionsHandler missing-input-schema dev warning', () => {
+  const schemaWarnings = (calls: ReadonlyArray<ReadonlyArray<unknown>>) =>
+    calls.filter((call) => String(call[0]).includes('input schema'));
+
+  const postSubmit = (
+    handler: ReturnType<typeof pageActionsHandler>,
+    payload: unknown
+  ) =>
+    new Hono().post('*', handler).request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload,
+      }),
+    });
+
+  it('warns once per action when an object payload arrives with no input schema (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, { title: 'a' });
+      await postSubmit(handler, { title: 'b' });
+      const warnings = schemaWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/test.server::submit');
+      expect(String(warnings[0]![0])).toContain('{ input: schema }');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn when the action declares an input schema', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: { fn: async () => 'ok', input: coercing } },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, { count: '3' });
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for an empty object payload', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, {});
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn in production (dev omitted)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler({ submit: async () => ({ ok: true }) });
+      await postSubmit(handler, { title: 'a' });
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

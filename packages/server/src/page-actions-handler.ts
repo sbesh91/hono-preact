@@ -139,6 +139,37 @@ function warnPlainErrorThrown(
   );
 }
 
+// Dev-only warning for an action invoked with a real object payload but no
+// input schema. Explicit payload generics read as safe yet validate nothing
+// at runtime; the raw client payload reaches the handler as-is. Fires once
+// per action key (not per request) via the handler-instance Set the caller
+// owns. An empty object carries no client data to validate, so it is exempt
+// (payload-less invocations and empty form posts serialize to {}).
+function warnMissingInputSchema(
+  warned: Set<string>,
+  module: string,
+  action: string,
+  payload: unknown
+): void {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    Object.keys(payload).length === 0
+  ) {
+    return;
+  }
+  const key = `${module}::${action}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: action '${key}' received an object payload but declares ` +
+      `no input schema, so the payload reaches the handler unvalidated ` +
+      `(payload type generics are compile-time only). Pass a Standard ` +
+      `Schema via defineAction(fn, { input: schema }) to validate and type ` +
+      `it at runtime.`
+  );
+}
+
 async function parseBody(
   c: Context
 ): Promise<
@@ -210,6 +241,11 @@ export function pageActionsHandler(
     surface: 'route-bound action POST path',
   });
 
+  // Dedup store for warnMissingInputSchema: one warning per action key for
+  // the life of this handler instance (per process in prod, per module-map
+  // rebuild boundary in dev, which is close enough for a console hint).
+  const warnedMissingSchema = new Set<string>();
+
   return async (c) => {
     const accept = pickAccept(c.req.header('Accept'));
     const parsed = await parseBody(c);
@@ -235,6 +271,9 @@ export function pageActionsHandler(
       return accept === 'json'
         ? c.json({ __outcome: 'error', message: msg }, 404)
         : c.text(msg, 404);
+    }
+    if (dev && entry.input === undefined) {
+      warnMissingInputSchema(warnedMissingSchema, module, action, payload);
     }
     const { fn, use: actionUse, timeoutMs, routeId } = entry;
     // Chain order is app (outermost) -> page (route-node `use`) -> action
