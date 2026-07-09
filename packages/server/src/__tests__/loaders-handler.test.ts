@@ -413,6 +413,54 @@ describe('loadersHandler dev / caching', () => {
   });
 });
 
+describe('loadersHandler streaming error frames', () => {
+  const streamGlob = {
+    './pages/live.server.ts': {
+      __moduleKey: 'pages/live',
+      serverLoaders: {
+        feed: async function* () {
+          yield { tick: 1 };
+          throw new Error('DB error: connection refused at 10.0.0.5');
+        },
+      },
+    },
+  };
+  const postFeed = (app: Hono) =>
+    app.request('http://localhost/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/live',
+        loader: 'feed',
+        location: loc,
+      }),
+    });
+
+  it('masks the mid-stream error frame by default (production)', async () => {
+    const res = await postFeed(makeApp(streamGlob));
+    const body = await res.text();
+    expect(body).toContain('data: {"tick":1}');
+    expect(body).toContain('"message":"Stream failed"');
+    expect(body).not.toContain('10.0.0.5');
+  });
+
+  it('passes the mid-stream error message through when dev: true', async () => {
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(streamGlob, {
+        dev: true,
+        resolvePageUse: async () => [],
+      })
+    );
+    const res = await postFeed(app);
+    const body = await res.text();
+    expect(body).toContain(
+      '"message":"DB error: connection refused at 10.0.0.5"'
+    );
+  });
+});
+
 describe('loadersHandler path-keyed routing', () => {
   it('routes lookups by mod.__moduleKey rather than filename', async () => {
     const loaderFn = vi.fn().mockResolvedValue({ id: 1 });
@@ -646,5 +694,111 @@ describe('loadersHandler: location validation', () => {
       location: { searchParams: {} },
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('loadersHandler bare-loader guarded-route dev warning', () => {
+  const bareGlob = {
+    './pages/board.server.ts': {
+      __moduleKey: 'pages/board',
+      serverLoaders: { default: async () => ({ ok: true }) },
+    },
+  };
+  const gatedLoc = { path: '/admin/board', pathParams: {}, searchParams: {} };
+  const findGuardedRoute = (urlPath: string) =>
+    urlPath.startsWith('/admin') ? '/admin/:section' : null;
+
+  const bareWarnings = (calls: ReadonlyArray<ReadonlyArray<unknown>>) =>
+    calls.filter((call) => String(call[0]).includes('bare loader'));
+
+  const makeWarnApp = (opts: Partial<Parameters<typeof loadersHandler>[1]>) => {
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(bareGlob, { resolvePageUse: async () => [], ...opts })
+    );
+    return app;
+  };
+  const postBoard = (app: Hono, path: string) =>
+    app.request('http://localhost/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/board',
+        loader: 'default',
+        location: { ...gatedLoc, path },
+      }),
+    });
+
+  it('warns once per bare loader when the request path matches a guarded route (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = makeWarnApp({ dev: true, findGuardedRoute });
+      await postBoard(app, '/admin/board');
+      await postBoard(app, '/admin/board');
+      const warnings = bareWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/board::default');
+      expect(String(warnings[0]![0])).toContain('/admin/:section');
+      expect(String(warnings[0]![0])).toContain(
+        "serverRoute('/admin/:section')"
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn when the matched route carries no use', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = makeWarnApp({ dev: true, findGuardedRoute });
+      await postBoard(app, '/public/board');
+      expect(bareWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn in production (dev omitted)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = makeWarnApp({ findGuardedRoute });
+      await postBoard(app, '/admin/board');
+      expect(bareWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for a route-bound loader', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const boundGlob = {
+        './pages/board.server.ts': {
+          __moduleKey: 'pages/board',
+          serverLoaders: {
+            default: {
+              fn: async () => ({ ok: true }),
+              use: [],
+              __routeId: '/admin/:section',
+            },
+          },
+        },
+      };
+      const app = new Hono();
+      app.post(
+        '/__loaders',
+        loadersHandler(boundGlob, {
+          dev: true,
+          findGuardedRoute,
+          resolvePageUse: async () => [],
+        })
+      );
+      const res = await postBoard(app, '/admin/board');
+      expect(res.status).toBe(200);
+      expect(bareWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

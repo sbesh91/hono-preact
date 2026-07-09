@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { createCaller, isRedirect } from 'hono-preact';
+import { createCaller, isDeny, isRedirect } from 'hono-preact';
 import { serverActions } from '../login.server.js';
 import { resetDemoData, findUserByEmail } from '../../../demo/data.js';
 import { DEMO_SESSION_COOKIE } from '../../../demo/session.js';
@@ -42,19 +42,19 @@ describe('login action', () => {
     expect(captured.cookieSet).toMatch(new RegExp(`${DEMO_SESSION_COOKIE}=`));
   });
 
-  it('rejects an empty email', async () => {
-    const threw = await inRequest(async (c) => {
-      try {
-        await createCaller(c).call(serverActions.login, {
-          email: '',
-          name: '',
-        });
-        return null;
-      } catch (e) {
-        return e instanceof Error ? e : new Error(String(e));
+  it('rejects an empty email with a 400 deny', async () => {
+    // The action denies (a value outcome through createCaller, not a thrown
+    // Error): a plain throw would be masked as 'Action failed' in production.
+    const r = await inRequest(async (c) =>
+      createCaller(c).call(serverActions.login, { email: '', name: '' })
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) {
+        expect(r.outcome.status).toBe(400);
+        expect(r.outcome.message).toMatch(/email/i);
       }
-    });
-    expect(threw).not.toBe(null);
-    expect(threw?.message).toMatch(/email/i);
+    }
   });
 });

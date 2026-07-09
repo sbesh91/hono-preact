@@ -43,6 +43,15 @@ export type SseResponseOptions = {
   signal?: AbortSignal;
   /** Used only with `signal`; the timeout value reported in the frame. */
   timeoutMs?: number;
+  /**
+   * When true, a thrown stream error's real `message` and `name` ride the
+   * `event: error` frame. When false (default), the frame is masked as
+   * `{ message: 'Stream failed', name: 'Error' }`: mid-stream errors reach
+   * the client verbatim on the wire, so production must not leak internal
+   * detail (mirroring the JSON paths' 'Loader failed' / 'Action failed'
+   * masking). Timeout frames are unaffected; they carry only `timeoutMs`.
+   */
+  dev?: boolean;
 };
 
 /** Alias retained for source compatibility with earlier code. */
@@ -71,10 +80,31 @@ function isTimeoutAbort(signal?: AbortSignal): boolean {
   );
 }
 
-function encodeErrorPayload(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  const name = err instanceof Error ? err.name : 'Error';
-  return JSON.stringify({ message, name });
+/**
+ * Mask a thrown error's detail unless `dev` is true. Shared by every
+ * mid-stream error surface that puts an error's `message`/`name` directly on
+ * the wire: the SSE `event: error` frame here and the SSR streaming pump's
+ * per-loader error script (`stream-pump.ts`). Production masks to `{ message:
+ * 'Stream failed', name: 'Error' }` (mirroring the JSON paths' 'Loader
+ * failed' / 'Action failed' masking); dev passes the real message and name
+ * through. Callers that also run stream observers (fanError) still receive
+ * the real error for the observability side channel regardless of `dev`.
+ */
+export function maskStreamError(
+  err: unknown,
+  dev: boolean
+): { message: string; name: string } {
+  if (!dev) {
+    return { message: 'Stream failed', name: 'Error' };
+  }
+  return {
+    message: err instanceof Error ? err.message : String(err),
+    name: err instanceof Error ? err.name : 'Error',
+  };
+}
+
+function encodeErrorPayload(err: unknown, dev: boolean): string {
+  return JSON.stringify(maskStreamError(err, dev));
 }
 
 /**
@@ -117,6 +147,7 @@ function buildSseResponse(
     observerCtx,
     signal,
     timeoutMs,
+    dev = false,
   } = options;
   const obs = observers ?? [];
   let chunks = 0;
@@ -155,7 +186,7 @@ function buildSseResponse(
       if (isTimeoutAbort(signal) && typeof timeoutMs === 'number') {
         yield { event: 'timeout', data: JSON.stringify({ timeoutMs }) };
       } else {
-        yield { event: 'error', data: encodeErrorPayload(err) };
+        yield { event: 'error', data: encodeErrorPayload(err, dev) };
       }
       finished = true;
     }

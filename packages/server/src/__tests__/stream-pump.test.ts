@@ -48,6 +48,7 @@ async function runPump(opts: {
   streamingLoaders: ServerLoaderStream[];
   requestSignal: AbortSignal;
   bindRequestScope?: <R>(fn: () => R | Promise<R>) => R | Promise<R>;
+  dev?: boolean;
 }): Promise<Response> {
   const app = new Hono();
   app.get('/', (c: Context) =>
@@ -56,6 +57,7 @@ async function runPump(opts: {
       streamingLoaders: opts.streamingLoaders,
       requestSignal: opts.requestSignal,
       bindRequestScope: opts.bindRequestScope ?? ((fn) => fn()),
+      dev: opts.dev,
     })
   );
   return app.request('http://localhost/');
@@ -135,9 +137,47 @@ describe('streamDocumentResponse', () => {
     });
 
     const html = await readAll(res);
-    expect(html).toContain('.error("a",{"message":"boom:a","name":"Error"})');
+    // Default (production): the real detail is masked on the wire.
+    expect(html).toContain(
+      '.error("a",{"message":"Stream failed","name":"Error"})'
+    );
+    expect(html).not.toContain('boom:a');
     // The pump caught the per-loader error and still wrote the closing tags.
     expect(html.endsWith('</body></html>')).toBe(true);
+  });
+
+  it('passes the real error message and name through when dev: true', async () => {
+    const ac = new AbortController();
+    const a = makeLoader('a', ['never'], { throwAt: 0 });
+    const res = await runPump({
+      fullHtml: HTML_WITH_BODY,
+      streamingLoaders: [a.stream],
+      requestSignal: ac.signal,
+      dev: true,
+    });
+
+    const html = await readAll(res);
+    expect(html).toContain('.error("a",{"message":"boom:a","name":"Error"})');
+    expect(html.endsWith('</body></html>')).toBe(true);
+  });
+
+  it('masks a loader error with internal detail as "Stream failed" by default (production)', async () => {
+    const ac = new AbortController();
+    async function* run(): AsyncGenerator<unknown, void, unknown> {
+      throw new Error('DB error: connection refused at 10.0.0.5');
+    }
+    const gen = run();
+    const res = await runPump({
+      fullHtml: HTML_WITH_BODY,
+      streamingLoaders: [{ loaderId: 'a', gen }],
+      requestSignal: ac.signal,
+    });
+
+    const html = await readAll(res);
+    expect(html).toContain(
+      '.error("a",{"message":"Stream failed","name":"Error"})'
+    );
+    expect(html).not.toContain('10.0.0.5');
   });
 
   it('paces generators by consumer read rate (backpressure): an unread stream does not drain the generator', async () => {

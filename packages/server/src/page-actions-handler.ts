@@ -79,7 +79,7 @@ export interface PageActionsHandlerOptions {
   renderPage: (
     c: Context,
     node: VNode,
-    opts: { appConfig?: AppConfig }
+    opts: { appConfig?: AppConfig; dev?: boolean }
   ) => Promise<Response>;
   /**
    * Resolves the VNode to render for the given URL path. Returns null when
@@ -95,6 +95,15 @@ export interface PageActionsHandlerOptions {
    */
   defaultTimeoutMs?: number | false;
   /**
+   * When true, error responses pass the thrown error's message through to
+   * the client and the handler emits console diagnostics (e.g. the deny()
+   * hint when an action throws a plain Error). When false (default), a
+   * thrown non-outcome error is masked as 'Action failed'; the raw error
+   * still reaches `onError`. The framework's generated server entry threads
+   * its own dev flag here, matching loadersHandler.
+   */
+  dev?: boolean;
+  /**
    * Called for every unexpected error an action throws. Use it to hook into
    * your observability stack. The handler still responds with a sanitized
    * 500; this is a side channel only.
@@ -109,6 +118,61 @@ export interface PageActionsHandlerOptions {
 // Mirrors loadersHandler's constant of the same name so bare actions and bare
 // loaders share one contract (guard at the unit level, not the page).
 const EMPTY_PAGE_USE = (): ReadonlyArray<unknown> => [];
+
+// Dev-only console hint for an action that threw a plain (non-outcome)
+// error. The JSON envelope masks such errors as 'Action failed' in
+// production, so an intentional denial thrown as `new Error(...)` silently
+// loses its message; point at deny(status, message), which reaches the
+// client with its status and message in every mode.
+function warnPlainErrorThrown(
+  module: string,
+  action: string,
+  err: unknown
+): void {
+  const detail =
+    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  console.warn(
+    `hono-preact: action '${module}::${action}' threw (${detail}). ` +
+      `Production responses mask this as 'Action failed'. If this is an ` +
+      `intentional denial, throw deny(status, message) instead so the ` +
+      `client receives the status and message in every mode.`
+  );
+}
+
+// Dev-only warning for an action invoked with a real client-supplied payload
+// but no input schema. Explicit payload generics read as safe yet validate
+// nothing at runtime; the raw client payload reaches the handler as-is,
+// whether it's an object, an array, or a primitive. Fires once per action key
+// (not per request) via the handler-instance Set the caller owns. `undefined`
+// and `null` carry no client data (payload-less invocations), and an empty
+// object carries no client data to validate (empty form posts serialize to
+// `{}`), so both are exempt; an empty array still warns like any other
+// unvalidated payload.
+function warnMissingInputSchema(
+  warned: Set<string>,
+  module: string,
+  action: string,
+  payload: unknown
+): void {
+  if (payload === undefined || payload === null) return;
+  if (
+    typeof payload === 'object' &&
+    !Array.isArray(payload) &&
+    Object.keys(payload).length === 0
+  ) {
+    return;
+  }
+  const key = `${module}::${action}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: action '${key}' received a payload but declares no ` +
+      `input schema, so the payload reaches the handler unvalidated ` +
+      `(payload type generics are compile-time only). Pass a Standard ` +
+      `Schema via defineAction(fn, { input: schema }) to validate and type ` +
+      `it at runtime.`
+  );
+}
 
 async function parseBody(
   c: Context
@@ -171,6 +235,7 @@ export function pageActionsHandler(
     resolvePageNode,
     appConfig,
     defaultTimeoutMs = 30_000,
+    dev = false,
     onError,
   } = opts;
 
@@ -179,6 +244,11 @@ export function pageActionsHandler(
     option: 'resolvePageUseByPattern',
     surface: 'route-bound action POST path',
   });
+
+  // Dedup store for warnMissingInputSchema: one warning per action key for
+  // the life of this handler instance (per process in prod, per module-map
+  // rebuild boundary in dev, which is close enough for a console hint).
+  const warnedMissingSchema = new Set<string>();
 
   return async (c) => {
     const accept = pickAccept(c.req.header('Accept'));
@@ -205,6 +275,9 @@ export function pageActionsHandler(
       return accept === 'json'
         ? c.json({ __outcome: 'error', message: msg }, 404)
         : c.text(msg, 404);
+    }
+    if (dev && entry.input === undefined) {
+      warnMissingInputSchema(warnedMissingSchema, module, action, payload);
     }
     const { fn, use: actionUse, timeoutMs, routeId } = entry;
     // Chain order is app (outermost) -> page (route-node `use`) -> action
@@ -248,7 +321,12 @@ export function pageActionsHandler(
     );
     if (!composed.ok) {
       onError?.(composed.error, { module, action, routeId });
-      const message = `Route-bound action '${routeId}' could not resolve its page-use chain`;
+      // The raw resolver message may carry internal detail; surface it only
+      // in dev, matching the loaders-handler twin. Both mask in production.
+      const detail = dev
+        ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
+        : '';
+      const message = `Route-bound action '${routeId}' could not resolve its page-use chain${detail}`;
       return accept === 'json'
         ? c.json({ __outcome: 'error', message }, 500)
         : c.text(message, 500);
@@ -322,13 +400,21 @@ export function pageActionsHandler(
         };
       } else {
         onError?.(err, { module, action, routeId });
-        resolution = { kind: 'error', message: 'Action failed' };
+        // In production the client never sees the raw error text (it may
+        // carry PII or internal detail); denials users want to surface
+        // should be thrown as deny(status, message), not plain errors.
+        if (dev) warnPlainErrorThrown(module, action, err);
+        resolution = {
+          kind: 'error',
+          message: dev && err instanceof Error ? err.message : 'Action failed',
+        };
       }
     }
 
     // Streaming success: hand off to SSE responders.
     if (streamingResult) {
       const sseOpts = {
+        dev,
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,
@@ -399,9 +485,12 @@ export function pageActionsHandler(
         ) {
           return c.text(resolution.outcome.message, resolution.outcome.status);
         }
-        return c.text('Action failed', 500);
+        return c.text(
+          resolution.kind === 'error' ? resolution.message : 'Action failed',
+          500
+        );
       }
-      const rendered = await renderPage(c, node, { appConfig });
+      const rendered = await renderPage(c, node, { appConfig, dev });
       if (
         resolution.kind === 'outcome' &&
         resolution.outcome.__outcome === 'deny'

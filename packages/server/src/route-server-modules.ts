@@ -1,4 +1,5 @@
 import type { RoutesManifest, ServerRoute } from '@hono-preact/iso';
+import { findBestPattern } from './route-pattern.js';
 
 /**
  * Convert a RoutesManifest into the array of lazy server-module loaders
@@ -40,6 +41,34 @@ export function makePageUseResolver(manifest: RoutesManifest): {
     byPattern(pattern: string) {
       return map.get(pattern) ?? [];
     },
+  };
+}
+
+/**
+ * Build a dev-diagnostic matcher over the manifest's `routeUse`: given a
+ * concrete URL path, return the best-matching route pattern when that
+ * pattern's folded `use` chain is non-empty, else null. loadersHandler uses
+ * it to warn (dev only) when a bare (route-independent) loader serves a
+ * request under a guarded route, since the bare loader's RPC runs none of
+ * that route's guards.
+ *
+ * Purely observational: the result never feeds guard resolution, so the URL
+ * fuzzy-match that is forbidden for `makePageUseResolver` (see its note on
+ * the byPath footgun) is safe here. A wrong best-match costs at most a
+ * console hint.
+ *
+ * NOTE: framework-private. The only intended consumer is the generated
+ * server entry.
+ */
+export function makeGuardedRouteMatcher(
+  routeUse: ReadonlyArray<{ path: string; use: ReadonlyArray<unknown> }>
+): (urlPath: string) => string | null {
+  const useByPattern = new Map(routeUse.map((r) => [r.path, r.use]));
+  return (urlPath) => {
+    const best = findBestPattern(useByPattern.keys(), urlPath);
+    if (best === null) return null;
+    const use = useByPattern.get(best);
+    return use !== undefined && use.length > 0 ? best : null;
   };
 }
 

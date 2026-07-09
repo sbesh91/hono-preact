@@ -29,3 +29,18 @@ export const SetStatusSchema = v.object({
   taskId: v.pipe(v.string(), v.minLength(1)),
   status: v.picklist(STATUSES, 'Status is required'),
 });
+
+// Patching a task: one action drives both drag moves and priority changes,
+// so both fields are optional; `taskId` is always required.
+export const PatchTaskSchema = v.object({
+  taskId: v.pipe(v.string(), v.minLength(1)),
+  status: v.optional(v.picklist(STATUSES, 'Status must be a known column')),
+  priority: v.optional(
+    v.picklist(PRIORITIES, 'Priority must be a known level')
+  ),
+});
+
+// Deleting a task: just the id.
+export const DeleteTaskSchema = v.object({
+  taskId: v.pipe(v.string(), v.minLength(1)),
+});

@@ -14,6 +14,7 @@ import {
   routeServerModules,
   makePageUseResolver,
   makeSocketRoutePathResolver,
+  makeGuardedRouteMatcher,
 } from './route-server-modules.js';
 import {
   assertRouteBindingsMatchMount,
@@ -164,8 +165,12 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     // pattern (`ref.__routeId`), so it needs the exact pattern lookup, not the
     // URL fuzzy-matcher: `byPath` could collide `/a/:x` with `/a/:y`.
     resolvePageUse: pageUseResolver.byPattern,
+    // Dev diagnostic only: warns when a bare loader serves a request whose
+    // matched route carries `use`. Observational, never feeds a guard chain.
+    findGuardedRoute: makeGuardedRouteMatcher(routes.routeUse),
   });
   const actions = pageActionsHandler({
+    dev,
     resolverByPath: pageActionResolvers.byPath,
     // src/server registry actions are not attached to a route URL, so a
     // byPath miss falls back to a moduleKey lookup (the client always sends the
@@ -242,7 +247,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       }
       return actions(c, next);
     })
-    .get('*', (c) => renderPage(c, pageTree(), { appConfig }));
+    .get('*', (c) => renderPage(c, pageTree(), { appConfig, dev }));
 
   return app;
 }

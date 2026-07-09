@@ -98,7 +98,7 @@ export const serverLoaders = {
 
 When path or search params are needed, use `serverRoute(r).loader()` instead.
 
-A route-independent loader is not route-gated. Its RPC endpoint (`POST /__loaders`) runs only the app-level `use` plus the loader's own unit-level `use`; it does not inherit a route node's page-layer `use`, even when the loader module is colocated under a guarded route. To gate a loader by a route's middleware chain, bind it with `serverRoute(r).loader` (the page-layer `use` then resolves from that exact route pattern) or attach a unit-level `use` to the loader itself. See [Middleware](/docs/middleware) for the three layers.
+A route-independent loader is not route-gated. Its RPC endpoint (`POST /__loaders`) runs only the app-level `use` plus the loader's own unit-level `use`; it does not inherit a route node's page-layer `use`, even when the loader module is colocated under a guarded route. To gate a loader by a route's middleware chain, bind it with `serverRoute(r).loader` (the page-layer `use` then resolves from that exact route pattern) or attach a unit-level `use` to the loader itself. See [Middleware](/docs/middleware) for the three layers. In dev, the server warns once per loader when a route-independent loader serves a request whose matched route declares `use`, so an ungated RPC under a guarded subtree is visible in the console.
 
 ## Streaming loaders
 
