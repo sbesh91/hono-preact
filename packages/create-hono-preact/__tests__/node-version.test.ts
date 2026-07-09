@@ -1,8 +1,33 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   nodeVersionError,
   SUPPORTED_NODE_RANGE,
 } from '../lib/node-version.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '../../..');
+
+function enginesNode(pkgPath: string): string {
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  return pkg.engines.node;
+}
+
+describe('SUPPORTED_NODE_RANGE stays in sync with package.json engines', () => {
+  it('matches create-hono-preact package.json engines.node', () => {
+    expect(SUPPORTED_NODE_RANGE).toBe(
+      enginesNode(resolve(here, '..', 'package.json'))
+    );
+  });
+
+  it('matches hono-preact package.json engines.node', () => {
+    expect(SUPPORTED_NODE_RANGE).toBe(
+      enginesNode(resolve(repoRoot, 'packages/hono-preact/package.json'))
+    );
+  });
+});
 
 describe('nodeVersionError', () => {
   it.each(['v22.18.0', 'v22.19.3', 'v24.11.0', 'v24.12.1', 'v25.0.0'])(
