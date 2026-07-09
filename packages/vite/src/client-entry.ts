@@ -86,6 +86,18 @@ export function clientEntryPlugin(opts: ClientEntryPluginOptions): Plugin {
               `Pass a project-relative path to your global stylesheet, e.g. 'src/styles/root.css'.`
           );
         }
+        // A path outside root (e.g. '../shared/root.css') produces a dev
+        // <link> URL like /../shared.css: the dev server resolves URLs
+        // against root, so it never serves a path that escapes it (a 404 at
+        // dev time, working only once the build's own CSS pipeline takes
+        // over). Rejecting here keeps prod/dev URL semantics identical
+        // instead of adding /@fs/ mapping just for this one case.
+        const rel = path.relative(config.root, cssGlobalAbsPath);
+        if (rel.startsWith('..') || path.isAbsolute(rel)) {
+          throw new Error(
+            `[hono-preact] css.global must live under the project root; found '${cssGlobalAbsPath}' outside '${config.root}'.`
+          );
+        }
       }
       isBuild = config.command === 'build';
     },

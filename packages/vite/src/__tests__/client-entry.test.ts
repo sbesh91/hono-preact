@@ -188,4 +188,48 @@ describe('clientEntryPlugin css.global validation', () => {
     });
     expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).not.toThrow();
   });
+
+  it('accepts css.global nested under a subdirectory of root, not just root itself', () => {
+    const root = path.join(tmpRoot, 'project');
+    fs.mkdirSync(path.join(root, 'src', 'styles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'src', 'styles', 'root.css'),
+      'body{color:red}'
+    );
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'src/styles/root.css',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root })).not.toThrow();
+  });
+
+  it('throws when css.global resolves outside config.root (a dev URL the dev server cannot serve)', () => {
+    // A file that exists and is a real stylesheet, but escapes root via a
+    // '../' path: the dev server resolves URLs against root, so this would
+    // 404 in dev (e.g. /../shared.css) even though the file itself is fine.
+    const root = path.join(tmpRoot, 'project');
+    fs.mkdirSync(root);
+    fs.writeFileSync(path.join(tmpRoot, 'shared.css'), 'body{color:red}');
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: '../shared.css',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root })).toThrow(
+      /css\.global must live under the project root/
+    );
+  });
+
+  it('throws when css.global is an absolute path outside config.root', () => {
+    const root = path.join(tmpRoot, 'project');
+    fs.mkdirSync(root);
+    const outsideFile = path.join(tmpRoot, 'shared.css');
+    fs.writeFileSync(outsideFile, 'body{color:red}');
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: outsideFile,
+    });
+    expect(() => configResolvedOf(plugin)?.({ root })).toThrow(
+      /css\.global must live under the project root/
+    );
+  });
 });
