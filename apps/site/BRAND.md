@@ -16,69 +16,69 @@ Rules carry IDs (V1, C3, T2...) so reviews can cite them precisely.
 
 **We inspire connections.**
 
-Warmth, momentum, and human connection make technology feel alive. The brand exists to amplify discovery and enjoyment, to empower creative expression, and to engage each person more deeply with the things they love.
+Between the edge and the browser. Between a developer and the thing they're building. Between one docs page and the next idea. Warmth, momentum, and human connection make a web framework feel alive rather than institutional. The brand exists to make building for the web feel personal, capable, and fun.
 
-Positioning in one sentence: a personal, connected experience that ignites rich connections between people and the things they care about.
+Positioning in one sentence: a small full-stack framework whose docs make you feel at home in five minutes and never talk down to you.
 
 ## 2. The three pillars
 
-Three persistent values weave through the design, the product, and the brand experience. Everything shipped should serve at least one.
+Three persistent values weave through the docs, the demos, and the identity. Everything shipped should serve at least one.
 
-**Rich discovery.** Discovery is powered by people and by context. There is a conversation behind everything, and exciting connections to be made with every exchange. Never just deliver content; serve it in valuable context. Every click is a potential launch pad to a series of more rewarding associations. Help people sift the infinity of what is available and zone in on what they love.
+**Rich discovery.** Every page leads somewhere. Never just deliver reference; serve it in valuable context: what this is for, what it composes with, where to go next. Every code sample and cross-link is a potential launch pad to the next capability. Help people sift a full-stack surface and zone in on the part they need right now. No dead ends: even a 404 points somewhere useful.
 
-**Simple connections.** Enjoyment should be simple and fluid, everywhere, all the time. Make the process of connecting less complicated and more fulfilling, with features that help at the right moment. No hassle, no confusion, no clutter: people find exactly what they are looking for.
+**Simple connections.** Building should be simple and fluid, end to end. The framework's promise (one package, typed from server to client, streaming everywhere) is the brand's promise too: no hassle, no confusion, no clutter. Docs get people to working code fast; features like search and prefetching help at the right moment and stay out of the way otherwise.
 
-**You make it you.** Provide rich ways for people to express their individuality and enjoy the experience on their own terms. It should be easy, and fun, to tweak almost everything, totally making it yours.
+**You make it you.** The framework hands over control: routes as a data structure, headless primitives you style yourself, copy-paste starting points in both CSS and Tailwind flavors. The brand celebrates that ownership. Show people how to make it theirs; never imply there is one blessed way.
 
 ## 3. Values
 
-- **Independent in spirit.** We don't conform, and we don't try to be everything to everyone.
-- **Authenticity through action.** Never say it, be it. Passion shows through genuine actions, not claims.
-- **Organic in experience.** Honest self-expression that is intimate and unpredictable, always changing, always adapting.
+- **Independent in spirit.** We don't chase every trend, and we don't try to be every framework. Design choices are made on merit, and we're comfortable diverging from the herd when the merit is there.
+- **Authenticity through action.** Never say it, be it. Working demos, honest benchmarks, and real code carry the message; marketing adjectives don't.
+- **Organic in experience.** The framework and its docs evolve with the platform: honest about limitations, always changing, always adapting.
 
 ## 4. Traits
 
-- **Warm.** The brand is a welcoming proposition, an invitation to join a larger experience and connect with others.
-- **Human.** Its purpose is to create, and be a conduit for, meaningful human connections.
-- **Real.** Accessible; real people and real situations sit at the center of the brand.
-- **Delightful.** It creates impactful moments that delight and enrich.
+- **Warm.** The site is a welcoming proposition: an invitation to build something, aimed as much at the newcomer as the expert.
+- **Human.** Written by people, for people. The reader is a person mid-task, not "the developer persona."
+- **Real.** Real examples, real constraints, honestly documented limitations. No toy code that falls apart on contact.
+- **Delightful.** Crafted moments (a fluid view transition, a live demo that just works) that reward attention without demanding it.
 
 ## 5. Point of view and tone
 
 Point of view (the outlook behind everything we say):
 
-- **We believe in community power.** This is an emotional space more than a technological one.
-- **We strive for simplicity.** Don't get crazy with tech-speak. Stick to the basics.
-- **We're honest.** Tell it like it is and practice fanatical consistency. State your case and let people make up their own minds. Don't try too hard.
-- **We're open and inclusive.** Act like the social space we are.
-- **We're independent.** There is no single arbiter of cool; we make up our own minds.
-- **We like the unexpected.** Life, journeys, and choices keep changing. Stay open to it.
+- **We believe in the platform and its community.** We build on web standards and prior art, and we credit both. The framework is a thin, honest layer over a platform that deserves the spotlight.
+- **We strive for simplicity.** Don't get crazy with jargon. Stick to the basics; introduce a term only when the reader needs it.
+- **We're honest.** Tell it like it is, including what the framework doesn't do. State your case and let people make up their own minds. Don't try too hard.
+- **We're open and inclusive.** No gatekeeping, no assumed folklore. Every page should be enterable by someone who just arrived.
+- **We're independent.** There is no single arbiter of best practice. We make up our own minds, and we respect readers who do the same.
+- **We like the unexpected.** The platform keeps evolving; so do we. Stay curious in the writing.
 
 Tone (how the brand sounds when it communicates):
 
 - **Integrity.** Portray an honest point of view people can rally around.
-- **Friendly.** Talk to people like they're your friends, not a demographic or a target market.
-- **Amusing.** It's supposed to be fun: loose, informal, and unpredictable.
-- **Positive and respectful.** Don't insult competitors or alternatives. Insulting them insults the people who chose them. Respect what others have accomplished.
+- **Friendly.** Talk to readers like colleagues at the next desk, not like a demographic or a target market.
+- **Amusing.** It's allowed to be fun: loose, informal, a little unpredictable. Never at the reader's expense.
+- **Positive and respectful.** Don't insult other frameworks or tools. Insulting them insults the people who chose them. Compare honestly and respect what others have accomplished.
 - **Thoughtful.** We're not shouters. Let the content of what we're saying rise above the noise.
-- **Smart and sophisticated.** Confident in who we are and what we're doing, without arrogance and without boasting.
+- **Smart and sophisticated.** Confident in what we've built, without arrogance and without boasting.
 
 ## 6. Writing rules
 
 Word choice:
 
-- **W1.** Prefer the human word over the system word. Say what the thing is to the person, not what it is to the machine (the way "song" beats "file", and "replace" beats "overwrite").
-- **W2.** Be authentic to the audience: use the words they'd use, not internal or enterprise vocabulary.
-- **W3.** Frame actions as less work and more benefit ("update it" rather than naming the mechanism that performs the update).
+- **W1.** Prefer the human word over the system word in guide prose: "reload the page's data" beats "invalidate the loader cache"; "your page" beats "the route module." API names stay exact where the API is the subject.
+- **W2.** Be authentic to the audience: web developers. Use their working vocabulary; skip enterprise words ("leverage", "utilize", "solution") and internal names.
+- **W3.** Frame actions as less work and more benefit: lead with what the reader gets, then the mechanism.
 
 Phrasing:
 
-- **W4.** Direct, active voice. "A workspace can hold up to 200 projects" beats "the limit of projects that can be in a workspace is 200."
-- **W5.** Simple, short constructions. "Drag items anywhere in the list to change the order" beats a clause-stacked instruction.
-- **W6.** Human-oriented verbs: people *choose*, they don't *configure*.
+- **W4.** Direct, active voice. "Loaders run on the server" beats "execution of loaders is performed server-side."
+- **W5.** Simple, short constructions. "Drag the card to another column to move it" beats a clause-stacked instruction.
+- **W6.** Human-oriented verbs: people *choose* and *build*, they don't *configure* and *implement* (unless they literally do).
 - **W7.** Informal, casual, natural. Write like a person who is good at explaining, not like documentation defending itself.
 
-These rules govern brand voice surfaces: headlines, landing copy, empty states, marketing-flavored prose. Technical reference (API tables, signatures, error semantics) stays precise first; apply W4 and W5 there, but never trade accuracy for looseness.
+These rules govern brand voice surfaces: headlines, landing copy, empty states, error pages, marketing-flavored prose. Technical reference (API tables, signatures, error semantics) stays precise first; apply W4 and W5 there, but never trade accuracy for looseness.
 
 ## 7. Visual doctrine
 
@@ -105,12 +105,13 @@ The signature gesture is the **orangenta gradient**: warm orange flowing into vi
 
 One typeface family carries everything, in three weights. Character comes from weight, case, and scale, never from mixing families.
 
-- **T1.** Headlines: **bold, uppercase**, tight tracking (about -0.04em), tight leading (about 80% of font size). Short, attitudinal.
-- **T2.** Subheadlines: **light, lowercase**. Relaxed and human, the counterpoint to the bold headline.
-- **T3.** Titles and labels: regular weight, uppercase, normal tracking.
+- **T1.** Display headlines come in two sanctioned modes. **Attitudinal:** bold, uppercase, tight tracking (about -0.04em), tight leading (about 80% of font size); for short, punchy brand messaging. **Statement:** semibold or bold, sentence case, often gradient-filled per T6; for calm, confident claims (the home hero uses this mode). Pick one mode per composition; don't mix them in the same headline block.
+- **T2.** Subheadlines: **light, lowercase**. Relaxed and human, the counterpoint to a display headline.
+- **T3.** Titles and inline headings: regular or semibold weight, sentence case, normal tracking.
 - **T4.** Body: regular weight, sentence case, comfortable leading.
 - **T5.** Never jumble upper and lower case within a word, never mix cased and uncased words within a sentence set in a display style, and never mix colors, weights, or fonts within a single word.
 - **T6.** Type color stays within the palette: ink, greys, or white on dark. Magenta text is permissible as an accent. **Orange text never** (C3). Gradient-filled display text is the one exception where both colors appear in type, and it follows G1.
+- **T7.** Overline micro-labels (nav section headings, group labels, column headers): small size (10-12px), bold or semibold, uppercase, **wide** tracking (0.04em to 0.1em), muted color. This is the only uppercase style with positive tracking; it marks structure, never content. Body-size-and-up uppercase stays in T1 attitudinal territory.
 
 ### 7.4 Space and layout
 
@@ -160,9 +161,10 @@ The doctrine is already implemented as tokens and utilities in `apps/site/src/st
 | T1-T4 type | `--font-sans`: Selawik (the shipped open-license face), weights 300 (light), 400 (regular), 600/700 (bold display) |
 | A1 accessible accent | `--accent` / `--accent-hover` / `--accent-foreground`: magenta-600/700 on light, brightened magenta on dark; focus ring `--ring` |
 | A2 theming | Tokens flip via `prefers-color-scheme` and `:root[data-theme]`; keep both blocks in sync |
+| A2 status/priority color | `--priority-*` tokens (per-mode values) for the demo's category stripes and dots; never raw hex in components |
 | A3 paired badges | `badge-*` utilities set surface and foreground together |
 | M1 spring motion | `--spring-soft` easing + `--spring-duration`; zeroed under reduced motion |
-| S2 elevation | `shadow-card` token-driven shadow instead of drawn borders where depth is meant |
+| S2 elevation | `shadow-card` token-driven, mode-flipped shadow instead of drawn borders or inline rgba shadows where depth is meant |
 
 When a new visual need has no token, extend `root.css` following these patterns (semantic token, both modes, AA-checked) rather than hardcoding values in a component.
 
@@ -173,10 +175,10 @@ Before shipping visual or copy work, verify:
 - [ ] Vivid color is a minority accent: gradient under ~8% of the composition, background neutral dominant (C1, C2)
 - [ ] Orange never appears alone; gradient reads orange to magenta, left-to-right, upward, or rising diagonal (C3, G1)
 - [ ] One focal point; whitespace generous; borders implied where possible (S1-S3)
-- [ ] Display type follows the casing system; no mixed case/weight/color within a word; no orange text (T1-T6)
+- [ ] Display type uses one sanctioned mode; no mixed case/weight/color within a word; no orange text; micro-labels are the only wide-tracked uppercase (T1-T7)
 - [ ] Patterns and texture stay in the background, small and quiet (P1)
 - [ ] Motion is springy, brief, purposeful, and disabled under reduced motion (M1-M3, A6)
 - [ ] AA contrast verified in **both** light and dark modes; tokens used, no raw hex in components (A1, A2)
 - [ ] Colored surfaces pair their own foreground; gradient overlays use fixed ink/white (A3, A4)
-- [ ] Copy passes the voice test: friendly, direct, active, no tech-speak, no shouting, no boasting (Sections 5-6)
+- [ ] Copy passes the voice test: friendly, direct, active, no jargon, no shouting, no boasting (Sections 5-6)
 - [ ] No source brand names anywhere (A7)
