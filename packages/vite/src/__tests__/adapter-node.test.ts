@@ -31,6 +31,24 @@ describe('nodeAdapter', () => {
     expect(tail).toContain("from 'hono-preact/server/internal/runtime'");
   });
 
+  it('wrapEntry warns on a failed manifest read, guarded so it is silent on a dev module-runner load', () => {
+    const tail = nodeAdapter().wrapEntry(ctx);
+    // The generated reader's catch: a real prod read failure must be
+    // observable (the manifest now carries render-critical CSS), but `vite
+    // dev` loads this wrapper through the SSR module runner where
+    // dist/client never exists, so the warn is gated on PROD like the
+    // serve() boot is, not unconditional.
+    const catchBlock = tail.slice(
+      tail.indexOf('installPreloadModules'),
+      tail.indexOf('const app = new Hono()')
+    );
+    expect(catchBlock).toContain('catch (err)');
+    expect(catchBlock).toContain('if (import.meta.env.PROD)');
+    expect(catchBlock).toContain('console.warn(');
+    expect(catchBlock).toContain('preload manifest read failed');
+    expect(catchBlock).toContain('err');
+  });
+
   it('wrapEntry uses createNodeWebSocket and installWebSocketUpgrader', () => {
     const tail = nodeAdapter().wrapEntry(ctx);
     expect(tail).toContain("from '@hono/node-ws'");

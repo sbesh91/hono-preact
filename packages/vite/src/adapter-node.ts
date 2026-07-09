@@ -36,15 +36,25 @@ export function nodeAdapter(): HonoPreactAdapter {
         `import { readFileSync } from 'node:fs';\n` +
         `import coreApp from ${JSON.stringify(ctx.coreAppModuleId)};\n` +
         `\n` +
-        // The modulepreload artifact (entry closure + per-route chunk map),
-        // written to the client build output by the framework's preload-manifest
-        // plugin. Read from disk once (resolvePreloadManifest memoizes), so the
-        // file is loaded lazily at the first render, not at import time.
-        // Missing/unreadable -> empty artifact -> no hints.
+        // The modulepreload artifact (entry closure + per-route chunk map,
+        // plus globalCss/routeCss, which are render-critical), written to the
+        // client build output by the framework's preload-manifest plugin.
+        // Read from disk once (resolvePreloadManifest memoizes), so the file
+        // is loaded lazily at the first render, not at import time.
+        // Missing/unreadable -> empty artifact -> no hints, unstyled page.
         `installPreloadModules(() => {\n` +
         `  try {\n` +
         `    return JSON.parse(readFileSync('./dist/client/${PRELOAD_MANIFEST_FILE}', 'utf8'));\n` +
-        `  } catch {\n` +
+        `  } catch (err) {\n` +
+        // Guarded the same way the serve() boot below is: `vite dev` loads
+        // this wrapper through the SSR module runner, where dist/client (and
+        // so the manifest) never exists, so PROD is false there and this
+        // warn never fires on a dev boot. A real production read failure
+        // still warns (not memoized as a failure, so it retries and warns
+        // again on the next request until fixed).
+        `    if (import.meta.env.PROD) {\n` +
+        `      console.warn('[hono-preact] preload manifest read failed; page ships without render-critical CSS this request', err);\n` +
+        `    }\n` +
         `    return {};\n` +
         `  }\n` +
         `});\n` +
