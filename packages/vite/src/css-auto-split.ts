@@ -230,22 +230,47 @@ export interface CssSplitResult {
 
 interface EmitResult {
   code: string;
+  /** UTF-8 byte length of `code` (minSize compares bytes, not code units). */
+  bytes: number;
   visited: number;
   kept: number;
 }
 
+// At-rule types that can WRAP top-level-indexed style rules. These survive in
+// every emission (their style children are filtered normally). Every other
+// non-style rule type (@keyframes, @font-face, @property, @counter-style,
+// @page, @import, unknown/custom at-rules, ...) is a leaf that cannot own
+// scoped styles, so it lands ONLY in the residual: per-chunk emissions drop it
+// to avoid shipping a duplicate copy per sheet.
+const CONTAINER_RULE_TYPES: ReadonlySet<string> = new Set([
+  'media',
+  'supports',
+  'layer-block',
+  'container',
+  'scope',
+  'starting-style',
+  'moz-document',
+]);
+
 /**
  * Emission pass: re-serialize the monolith keeping only the top-level style
- * rules `keep` accepts. Drops happen at RuleExit (enter/exit pairing is
- * guaranteed when enter never replaces), so nested traversal and index order
- * stay identical to the attribution pass. At-rule wrappers survive around kept
- * rules; emptied wrappers are pruned by minification EXCEPT for at-rules whose
- * grammar still requires a body (verified with an isolated probe: an emptied
- * @media or @layer block is retained as an empty `{}` wrapper by Lightning
- * CSS's minifier). That is a bytes-only quirk, not a correctness gap, since an
- * empty wrapper applies no rules; callers should not assert emptied wrappers
- * vanish entirely. Layer statements are stripped everywhere (the residual
- * re-declares the canonical order itself).
+ * rules `keep` accepts. Style-rule drops happen at RuleExit (enter/exit
+ * pairing is guaranteed when enter never replaces), so nested traversal and
+ * index order stay identical to the attribution pass. Container at-rule
+ * wrappers survive around kept rules; emptied wrappers are pruned by
+ * minification EXCEPT for at-rules whose grammar still requires a body
+ * (verified with an isolated probe: an emptied @media or @layer block is
+ * retained as an empty `{}` wrapper by Lightning CSS's minifier). That is a
+ * bytes-only quirk, not a correctness gap, since an empty wrapper applies no
+ * rules; callers should not assert emptied wrappers vanish entirely.
+ *
+ * Non-container leaf at-rules stay residual-only: `scoped` emissions drop them
+ * (guarded to styleDepth 0, so rule types that legally nest inside style
+ * rules, e.g. nested-declarations, always follow their parent untouched).
+ *
+ * Layer statements: per-chunk emissions drop them all; the residual drops only
+ * TOP-LEVEL ones (its prefix re-declares those names) and keeps nested ones
+ * (e.g. `@media{@layer x;}`) in place, since the prefix does not cover them.
  *
  * RuleExit uses the flat form for a second reason beyond the one documented on
  * attributeRules above: returning an unmodified `rule` object from an
@@ -261,13 +286,19 @@ function emitSubset(
   cssCode: string,
   owners: ReadonlyArray<string | null>,
   keep: (owner: string | null) => boolean,
+  scoped: boolean,
   targets: Targets | undefined
 ): EmitResult {
   let styleDepth = 0;
+  let atDepth = 0;
   let index = 0;
   let visited = 0;
   let kept = 0;
   const dropStack: boolean[] = [];
+  const enterContainer = (): undefined => {
+    atDepth++;
+    return undefined;
+  };
   const result = transform({
     filename: 'global.css',
     code: Buffer.from(cssCode),
@@ -288,8 +319,19 @@ function emitSubset(
           styleDepth++;
           return rule;
         },
+        media: enterContainer,
+        supports: enterContainer,
+        'layer-block': enterContainer,
+        container: enterContainer,
+        scope: enterContainer,
+        'starting-style': enterContainer,
+        'moz-document': enterContainer,
         'layer-statement'() {
-          return [];
+          // Dropping a leaf at enter is safe (nothing nests under it, so no
+          // enter/exit pairing to preserve). Nested statements survive in the
+          // residual because the prefix only re-declares top-level names.
+          if (scoped || atDepth === 0) return [];
+          return undefined;
         },
       },
       RuleExit(rule) {
@@ -297,12 +339,25 @@ function emitSubset(
           styleDepth--;
           const drop = dropStack.pop();
           if (drop) return [];
+          return undefined;
         }
+        if (CONTAINER_RULE_TYPES.has(rule.type)) {
+          atDepth--;
+          return undefined;
+        }
+        // Leaf at-rule: residual-only. The styleDepth guard keeps rule types
+        // that live inside style rules attached to their parent.
+        if (scoped && styleDepth === 0) return [];
         return undefined;
       },
     },
   });
-  return { code: result.code.toString(), visited, kept };
+  return {
+    code: result.code.toString(),
+    bytes: result.code.length,
+    visited,
+    kept,
+  };
 }
 
 function assertConservation(
@@ -339,9 +394,15 @@ export function splitCssByChunkUsage(
   const perChunk = new Map<string, string>();
   let scopedKept = 0;
   for (const owner of owningChunks) {
-    const out = emitSubset(cssCode, owners, (o) => o === owner, opts.targets);
+    const out = emitSubset(
+      cssCode,
+      owners,
+      (o) => o === owner,
+      true,
+      opts.targets
+    );
     assertConservation(owner, out.visited, total);
-    if (out.code.length < opts.minSize) {
+    if (out.bytes < opts.minSize) {
       demoted.add(owner);
       continue;
     }
@@ -353,6 +414,7 @@ export function splitCssByChunkUsage(
     cssCode,
     owners,
     (o) => o === null || demoted.has(o),
+    false,
     opts.targets
   );
   assertConservation('residual', residualOut.visited, total);

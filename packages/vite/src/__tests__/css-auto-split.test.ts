@@ -156,6 +156,60 @@ describe('splitCssByChunkUsage', () => {
     expect(result.residual).toContain('hx-hero');
   });
 
+  it('confines non-style at-rules to the residual, never per-chunk sheets', () => {
+    const css =
+      '@keyframes spin{to{rotate:1turn}}@font-face{font-family:X;src:url(x.woff2)}.hx-hero{color:red}.mdx-content{color:blue}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    expect(result.perChunk.size).toBe(2);
+    for (const [fileName, sheet] of result.perChunk) {
+      expect(sheet, fileName).not.toContain('@keyframes');
+      expect(sheet, fileName).not.toContain('@font-face');
+    }
+    const everything = [result.residual, ...result.perChunk.values()].join(
+      '\n'
+    );
+    expect(everything.split('@keyframes').length - 1).toBe(1);
+    expect(everything.split('@font-face').length - 1).toBe(1);
+  });
+
+  it('reproduces @container wrappers and keeps owners indexing aligned', () => {
+    const css =
+      '@container (min-width:400px){.hx-hero{color:red}}.mdx-content{color:blue}.plain-shared{margin:0}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    const home = result.perChunk.get('static/home-abc.js');
+    expect(home).toMatch(/@container[^{]*\{.*\.hx-hero/);
+    expect(result.perChunk.get('static/docs-def.js')).toContain('mdx-content');
+    expect(result.residual).toContain('plain-shared');
+    expect(result.residual).not.toContain('hx-hero');
+  });
+
+  it('compares minSize against UTF-8 bytes, not UTF-16 code units', () => {
+    // The check marks are multi-byte in UTF-8 but one code unit each in
+    // UTF-16, so byte length exceeds string length; a threshold between the
+    // two keeps the sheet only if the splitter measures bytes.
+    const css = '.hx-hero{--check:"✓✓✓✓"}';
+    const probe = splitCssByChunkUsage(css, CHUNKS, { minSize: 0 });
+    const sheet = probe.perChunk.get('static/home-abc.js');
+    expect(sheet).toBeDefined();
+    if (sheet === undefined) return;
+    const units = sheet.length;
+    const bytes = Buffer.byteLength(sheet, 'utf8');
+    expect(bytes).toBeGreaterThan(units);
+    const kept = splitCssByChunkUsage(css, CHUNKS, { minSize: units + 1 });
+    expect(kept.perChunk.get('static/home-abc.js')).toBe(sheet);
+    const demoted = splitCssByChunkUsage(css, CHUNKS, { minSize: bytes + 1 });
+    expect(demoted.perChunk.size).toBe(0);
+    expect(demoted.residual).toContain('hx-hero');
+  });
+
+  it('keeps nested @layer statements in the residual', () => {
+    // Only TOP-LEVEL layer names are re-declared by the residual's prefix, so
+    // a statement nested under a conditional at-rule must survive in place.
+    const css = '@media (min-width:600px){@layer x;.plain-shared{margin:0}}';
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    expect(result.residual).toContain('@layer x');
+  });
+
   it('conserves every rule exactly once across outputs', () => {
     const css = [
       '@layer theme,base;',
