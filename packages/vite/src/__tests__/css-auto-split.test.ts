@@ -214,6 +214,52 @@ describe('splitCssByChunkUsage', () => {
     expect(result.residual).toContain('@layer x');
   });
 
+  it('splits realistic theme CSS without corrupting serialization (visitor return-undefined regression)', () => {
+    // Regression pin for the Rule-visitor serialization bug: entry callbacks
+    // that return the unmodified rule object (instead of `undefined`, "no
+    // change") force Lightning CSS to re-serialize the rule from the
+    // JS-visible AST, which corrupts declarations whose value contains a
+    // `var()` reference (an "unparsed" value in Lightning CSS terms) and
+    // throws "failed to deserialize; expected an object-like struct named
+    // Specifier, found ()". The docs site's real Tailwind-v4 root.css hit it
+    // on exactly this shape: a `@layer theme{:root,:host{...}}` block whose
+    // trailing `--default-font-family:var(--font-sans)` carries the var()
+    // (the font lists / oklch() / calc() around it are realistic dressing;
+    // probing showed the var() reference is the load-bearing trigger). The
+    // splitter's failure policy then silently degraded the WHOLE sheet to
+    // unsplit (build stays green), so this test is the only red signal for
+    // that bug class.
+    const css = [
+      '@layer theme{:root,:host{',
+      '--font-sans:ui-sans-serif,system-ui,sans-serif;',
+      '--font-mono:ui-monospace,SFMono-Regular,monospace;',
+      '--color-red-500:oklch(63.7% .237 25.331);',
+      '--color-zinc-900:oklch(21% .006 285.885);',
+      '--text-sm:.875rem;',
+      '--text-sm--line-height:calc(1.25 / .875);',
+      '--ease-out:cubic-bezier(0,0,.2,1);',
+      '--default-font-family:var(--font-sans);',
+      '}}',
+      '@font-face{font-family:Selawik;font-weight:400;',
+      "src:url(selawik-regular.woff2) format('woff2');}",
+      '.hx-hero{color:oklch(63.7% .237 25.331);font-family:var(--font-sans)}',
+    ].join('');
+    const result = splitCssByChunkUsage(css, CHUNKS, opts);
+    // The scopable class rule lands in its per-chunk sheet.
+    expect(result.perChunk.get('static/home-abc.js')).toContain('hx-hero');
+    expect(result.residual).not.toContain('hx-hero');
+    // The custom-property block and font-face survive intact in the residual.
+    expect(result.residual).toContain(
+      '--font-sans:ui-sans-serif,system-ui,sans-serif'
+    );
+    expect(result.residual).toContain('--text-sm--line-height:calc(');
+    expect(result.residual).toContain('--default-font-family:var(--font-sans)');
+    expect(result.residual).toMatch(/--color-red-500:oklch\(/);
+    expect(result.residual).toMatch(
+      /@font-face\{[^}]*src:url\(selawik-regular\.woff2\)\s*format\("woff2"\)/
+    );
+  });
+
   it('conserves every rule exactly once across outputs', () => {
     const css = [
       '@layer theme,base;',
