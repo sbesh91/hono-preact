@@ -91,6 +91,35 @@ it('returns the movie', async () => {
 
 `createCaller(c)` reuses an already-open request scope if one exists, and otherwise opens a fresh scope bound to `c`. In a test there is normally no active scope, so it runs standalone; inside a live handler `ctx.call` goes through the same mechanism and reuses the request's active scope automatically.
 
+## Streaming loaders and actions
+
+Streaming refs are first-class through the same `call` surface. Calling a streaming loader runs its middleware and schema coercion up front, then resolves to the loader's async generator; iterate it to run the loader body. Pass `signal` to end the stream from the caller's side:
+
+```ts
+import { createCaller } from 'hono-preact';
+import { serverLoaders } from './projects-shell.server.js';
+
+it('streams activity events', async () => {
+  const ctrl = new AbortController();
+  const r = await createCaller(c).call(serverLoaders.activity, {
+    signal: ctrl.signal,
+  });
+  expect(r.ok).toBe(true);
+  if (r.ok) {
+    const events = [];
+    for await (const e of r.value) {
+      events.push(e);
+      if (events.length === 3) break;
+    }
+    ctrl.abort();
+  }
+});
+```
+
+A middleware `deny` or `redirect` still surfaces as `{ ok: false, outcome }` before the generator is produced. An error thrown mid-stream propagates from the generator itself (a rejected `next()`), matching the HTTP path where the SSE stream terminates.
+
+A streaming action resolves to `AsyncGenerator<TChunk, TResult>`: iterate for chunks; the final `next()`'s `value` (when `done` is `true`) is the action's return value.
+
 ## How it works
 
 - **Runs the procedure's own `use` middleware.** The called procedure's per-unit `use` array is applied: auth guards, rate limits, and any observers declared on `defineLoader` or `defineAction`. The app-level chain and the page (route) middleware are not run for the call: the app chain already fired for the outer request, and the callee's own route-level middleware is bypassed entirely. So a guard placed only on a route node does not protect a procedure reached through `ctx.call` from a different route. Put any guard that must protect a procedure regardless of how it is entered on that procedure's own `defineLoader` / `defineAction({ use })`, not only on its route.
@@ -103,28 +132,28 @@ it('returns the movie', async () => {
 
 ## Limitations
 
-- **Single-value loaders and actions only.** `ctx.call(loader)` is typed for `LoaderRef<T, false>` (non-live loaders). Passing a live (streaming) loader is a type error: a live loader produces a stream, not a single return value.
 - **No synthetic context minting.** `createCaller(c)` accepts a `Context` you supply. Obtain one from `app.request(new Request(...))` or your test helper. The framework does not mint a synthetic context.
 
 ## API reference
 
 ### `ctx.call(loader, opts?)`
 
-| Argument        | Type                            | Description                                                                                                             |
-| --------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `loader`        | `LoaderRef<T, false>`           | The single-value loader to call. Live loaders are excluded by the type.                                                 |
-| `opts.location` | `CallLoaderLocation` (optional) | Path, path params, and search params for the loader's location. Defaults to the current request path with empty params. |
+| Argument        | Type                                          | Description                                                                                                             |
+| --------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `loader`        | `LoaderRef<T, false>` \| `LoaderRef<T, true>` | The loader to call. A single-value loader resolves to its value; a streaming loader resolves to its async generator.    |
+| `opts.location` | `CallLoaderLocation` (optional)               | Path, path params, and search params for the loader's location. Defaults to the current request path with empty params. |
+| `opts.signal`   | `AbortSignal` (optional, streaming loaders)   | Composed with the request's signal and threaded to the loader as `ctx.signal`; aborting it ends the stream.             |
 
-Returns `Promise<CallResult<T>>`.
+Returns `Promise<CallResult<T>>` for a single-value loader, `Promise<CallResult<AsyncGenerator<T, void, unknown>>>` for a streaming loader.
 
 ### `ctx.call(action, payload)`
 
-| Argument  | Type                                  | Description                                                                            |
-| --------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
-| `action`  | `ActionRef<TPayload, TResult, never>` | The single-value action to call. Streaming actions are excluded by the type.           |
-| `payload` | `TPayload`                            | The action payload. Validated against the action's `input` schema when one is present. |
+| Argument  | Type                                   | Description                                                                                                           |
+| --------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `action`  | `ActionRef<TPayload, TResult, TChunk>` | The action to call. A single-value action resolves to its result; a streaming action resolves to its async generator. |
+| `payload` | `TPayload`                             | The action payload. Validated against the action's `input` schema when one is present.                                |
 
-Returns `Promise<CallResult<TResult>>`.
+Returns `Promise<CallResult<TResult>>` for a single-value action, `Promise<CallResult<AsyncGenerator<TChunk, TResult, unknown>>>` for a streaming action (an async generator handler with a chunk type).
 
 ### `createCaller(c)`
 
