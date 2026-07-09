@@ -4,6 +4,7 @@ import { type Plugin } from 'vite';
 import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/runtime';
 import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
+import { clientEntryContractPlugin } from './client-entry-contract.js';
 import { preloadManifestPlugin } from './preload-manifest.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
 import { moduleKeyPlugin } from './module-key-plugin.js';
@@ -155,6 +156,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     configPlugin,
     clientShimPlugin(clientEntry),
     clientEntryPlugin({ routes }),
+    clientEntryContractPlugin(clientEntry),
     preloadManifestPlugin({ routes }),
     serverEntryPlugin({
       layout,
