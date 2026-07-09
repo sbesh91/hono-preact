@@ -371,6 +371,7 @@ export function pageActionsHandler(
     // Streaming success: hand off to SSE responders.
     if (streamingResult) {
       const sseOpts = {
+        dev,
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,

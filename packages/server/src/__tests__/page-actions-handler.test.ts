@@ -536,6 +536,50 @@ describe('pageActionsHandler', () => {
     expect(seen).toEqual({ count: 3 }); // coercion observable to the handler
   });
 
+  it('gates the streaming action error frame on dev', async () => {
+    const make = (dev: boolean) =>
+      pageActionsHandler({
+        resolverByPath: async () =>
+          new Map([
+            [
+              'stream',
+              {
+                fn: async () =>
+                  (async function* () {
+                    yield { tick: 1 };
+                    throw new Error('secret detail');
+                  })(),
+                use: [],
+                moduleKey: 'pages/test.server',
+              },
+            ],
+          ]) as never,
+        resolvePageUseByPattern: async () => [],
+        renderPage: (async () => new Response('x')) as never,
+        resolvePageNode: () => h('div', null),
+        appConfig: { use: [] },
+        dev,
+      });
+    const post = (handler: ReturnType<typeof pageActionsHandler>) =>
+      new Hono().post('*', handler).request('/foo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({
+          module: 'pages/test.server',
+          action: 'stream',
+          payload: {},
+        }),
+      });
+    const prodBody = await (await post(make(false))).text();
+    expect(prodBody).toContain('"message":"Stream failed"');
+    expect(prodBody).not.toContain('secret detail');
+    const devBody = await (await post(make(true))).text();
+    expect(devBody).toContain('"message":"secret detail"');
+  });
+
   describe('error masking and the dev deny() hint', () => {
     const postSubmit = (handler: ReturnType<typeof pageActionsHandler>) =>
       new Hono().post('*', handler).request('/foo', {

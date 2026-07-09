@@ -378,6 +378,7 @@ export function loadersHandler(
     if (isAsyncGenerator(result)) {
       return sseGeneratorResponse(c, result, {
         emitResult: false,
+        dev,
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,
@@ -387,6 +388,7 @@ export function loadersHandler(
     }
     if (result instanceof ReadableStream) {
       return sseReadableStreamResponse(c, result, {
+        dev,
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,

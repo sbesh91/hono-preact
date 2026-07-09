@@ -413,6 +413,54 @@ describe('loadersHandler dev / caching', () => {
   });
 });
 
+describe('loadersHandler streaming error frames', () => {
+  const streamGlob = {
+    './pages/live.server.ts': {
+      __moduleKey: 'pages/live',
+      serverLoaders: {
+        feed: async function* () {
+          yield { tick: 1 };
+          throw new Error('DB error: connection refused at 10.0.0.5');
+        },
+      },
+    },
+  };
+  const postFeed = (app: Hono) =>
+    app.request('http://localhost/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/live',
+        loader: 'feed',
+        location: loc,
+      }),
+    });
+
+  it('masks the mid-stream error frame by default (production)', async () => {
+    const res = await postFeed(makeApp(streamGlob));
+    const body = await res.text();
+    expect(body).toContain('data: {"tick":1}');
+    expect(body).toContain('"message":"Stream failed"');
+    expect(body).not.toContain('10.0.0.5');
+  });
+
+  it('passes the mid-stream error message through when dev: true', async () => {
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(streamGlob, {
+        dev: true,
+        resolvePageUse: async () => [],
+      })
+    );
+    const res = await postFeed(app);
+    const body = await res.text();
+    expect(body).toContain(
+      '"message":"DB error: connection refused at 10.0.0.5"'
+    );
+  });
+});
+
 describe('loadersHandler path-keyed routing', () => {
   it('routes lookups by mod.__moduleKey rather than filename', async () => {
     const loaderFn = vi.fn().mockResolvedValue({ id: 1 });
