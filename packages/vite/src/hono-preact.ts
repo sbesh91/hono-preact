@@ -61,6 +61,14 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     entryWrapperId: entryWrapperPath,
   };
 
+  // The root every post-config path decision resolves against. `ctx.root`
+  // (process.cwd() at honoPreact() call time) is only the pre-config
+  // fallback handed to the adapter contract: under a custom Vite `root` the
+  // two differ, and resolving against cwd silently points at the wrong tree.
+  // The `config` hook below updates this to the configured root before Vite
+  // calls any `configEnvironment` hook.
+  let resolvedRoot = ctx.root;
+
   // Shared config plus the `client` build environment's input. The worker
   // environment is configured by the adapter's plugins; the `client`
   // environment's entry is framework-owned (every adapter needs the same
@@ -70,7 +78,8 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
   // must stay stable.
   const configPlugin: Plugin = {
     name: 'hono-preact:config',
-    config() {
+    config(userConfig) {
+      resolvedRoot = userConfig.root ? resolve(userConfig.root) : process.cwd();
       return {
         resolve: {
           dedupe: ['preact', 'preact/hooks', 'preact-iso'],
@@ -107,7 +116,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     // per-adapter code and without knowing the adapter's env name.
     configEnvironment(name: string) {
       if (name === 'client') return;
-      return { optimizeDeps: { entries: [resolve(ctx.root, routes)] } };
+      return { optimizeDeps: { entries: [resolve(resolvedRoot, routes)] } };
     },
   };
 

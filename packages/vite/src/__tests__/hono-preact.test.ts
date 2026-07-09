@@ -181,4 +181,29 @@ describe('honoPreact config plugin', () => {
       optimizeDeps: { entries: [resolve(process.cwd(), 'app/routing.ts')] },
     });
   });
+
+  it('resolves the optimizer scan entry against a custom Vite root, not cwd', () => {
+    const plugins = honoPreact({ adapter: fakeAdapter() });
+    const cfg = plugins.find((p) => p.name === 'hono-preact:config');
+    if (
+      !cfg ||
+      typeof cfg.config !== 'function' ||
+      typeof cfg.configEnvironment !== 'function'
+    ) {
+      throw new Error('config plugin hooks not found');
+    }
+    // Vite runs every plugin's `config` before any `configEnvironment`.
+    (cfg.config as Function)(
+      { root: '/custom/app' },
+      { command: 'serve', mode: 'development' }
+    );
+    const ssr = cfg.configEnvironment(
+      'ssr',
+      {},
+      { command: 'serve', mode: 'development' }
+    );
+    expect(ssr).toEqual({
+      optimizeDeps: { entries: [resolve('/custom/app', 'src/routes.ts')] },
+    });
+  });
 });
