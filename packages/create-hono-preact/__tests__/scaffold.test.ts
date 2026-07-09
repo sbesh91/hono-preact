@@ -33,6 +33,8 @@ describe('scaffold', () => {
     // package managers that do not auto-install peers still resolve it.
     expect(pkg.dependencies).toHaveProperty('hoofd');
     expect(pkg.name).toBe('cf');
+    // The bundled agent recipes verify with `pnpm typecheck`.
+    expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
   });
 
   it('node: writes node devDeps and start script, no wrangler.jsonc', async () => {
