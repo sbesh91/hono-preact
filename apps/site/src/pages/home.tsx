@@ -1,5 +1,5 @@
 import type { FunctionComponent } from 'preact';
-import { useMeta, useTitle } from 'hoofd/preact';
+import { useMeta, useTitle } from 'hono-preact';
 import '@/styles/home.css';
 import { HeroShader } from '../components/HeroShader.js';
 import { ChapterEdge } from '../components/home/chapters/ChapterEdge.js';

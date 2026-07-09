@@ -1,6 +1,5 @@
-import { definePage } from 'hono-preact';
+import { definePage, useTitle } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
-import { useTitle } from 'hoofd/preact';
 
 const ProjectsIndex: FunctionComponent = () => {
   useTitle('Projects · demo');
