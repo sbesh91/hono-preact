@@ -23,7 +23,10 @@ function configResult(userConfig: UserConfig): UserConfig {
     { command: 'build', mode: 'production' }
   );
   if (!result || typeof result !== 'object') throw new Error('expected a partial config');
-  return result as UserConfig;
+  if (result instanceof Promise) {
+    throw new Error('expected a synchronous config() result');
+  }
+  return result;
 }
 
 describe('framework CSS pipeline defaults', () => {
