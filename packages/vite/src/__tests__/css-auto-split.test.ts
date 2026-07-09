@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { transform } from 'lightningcss';
 import {
   attributeRules,
   splitCssByChunkUsage,
@@ -307,6 +308,106 @@ describe('splitCssByChunkUsage', () => {
       const count = everything.split(marker).length - 1;
       expect(count, marker).toBe(1);
     }
+  });
+});
+
+// Splits an already-minified (single-line, comment-free) Lightning CSS output
+// into its top-level rule strings: block rules end at their balanced closing
+// `}`, statement rules (e.g. `@layer a,b;`) end at a top-level `;`. Depth and
+// string-literal tracking keep braces/semicolons inside selectors, string
+// values, or url()s from being mistaken for rule boundaries. Deliberately not
+// a lightningcss visitor: the visitor API hands back AST nodes, not each
+// node's own serialized text, so isolating one rule's text would mean one
+// transform() call per rule; textual splitting of output both sides already
+// ran through the SAME minifying transform() gets the same rule-level
+// granularity for a fraction of the cost.
+function splitTopLevelRules(css: string): string[] {
+  const rules: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let quote: string | null = null;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (quote) {
+      if (c === '\\') {
+        i++;
+      } else if (c === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === '{') {
+      depth++;
+    } else if (c === '}') {
+      depth--;
+      if (depth === 0) {
+        rules.push(css.slice(start, i + 1));
+        start = i + 1;
+      }
+    } else if (c === ';' && depth === 0) {
+      rules.push(css.slice(start, i + 1));
+      start = i + 1;
+    }
+  }
+  const rest = css.slice(start).trim();
+  if (rest) rules.push(rest);
+  return rules;
+}
+
+/** Canonical (minified, targets-normalized) top-level rule set, sorted for an order-insensitive comparison. */
+function canonicalRuleSet(css: string): string[] {
+  const minified = transform({
+    filename: 'round-trip.css',
+    code: Buffer.from(css),
+    minify: true,
+  }).code.toString();
+  return splitTopLevelRules(minified).sort();
+}
+
+describe('splitCssByChunkUsage round-trip (spec section 8)', () => {
+  it('the union of emitted sheets is rule-equivalent to the input monolith under real Lightning CSS serialization', async () => {
+    // Representative fixture: a cascade layer with custom properties whose
+    // values are var() references (the bisected trigger for the visitor
+    // serialization bug this splitter had — see the "splits realistic theme
+    // CSS" regression test above), a leaf at-rule (@font-face), a container
+    // at-rule (@media) wrapping a scoped rule, and a residual-only rule.
+    // Every rule here has a SINGLE owner (or none), so no at-rule wrapper is
+    // split across multiple output sheets; the round-trip invariant holds
+    // rule-for-rule rather than only up to wrapper repartitioning.
+    const css = [
+      '@layer theme{:root,:host{',
+      '--font-sans:ui-sans-serif,system-ui,sans-serif;',
+      '--color-red-500:oklch(63.7% .237 25.331);',
+      '--text-sm--line-height:calc(1.25 / .875);',
+      '--default-font-family:var(--font-sans);',
+      '}}',
+      '@font-face{font-family:Selawik;font-weight:400;',
+      "src:url(selawik-regular.woff2) format('woff2');}",
+      '.hx-hero{color:oklch(63.7% .237 25.331);font-family:var(--font-sans)}',
+      '@media (min-width:600px){.hx-hero{padding:var(--text-sm--line-height)}}',
+      '.plain-shared{margin:0}',
+    ].join('');
+
+    const result = await splitCssByChunkUsage(css, CHUNKS, { minSize: 0 });
+
+    // The residual's layer-order prefix (`@layer <names>;`) is prepended as a
+    // raw string ahead of the transformed residual code (see the layerPrefix
+    // line in splitCssByChunkUsage), not a statement the input monolith ever
+    // declared (the monolith declares the `theme` layer via the `@layer
+    // theme{...}` BLOCK, not a bare statement). Strip it before comparison so
+    // the round-trip check compares like for like; the layer-order guarantee
+    // itself is covered separately by the "re-declares the full top-level
+    // layer order" test above.
+    const residualWithoutPrefix = result.residual.replace(/^@layer[^;]*;/, '');
+
+    const reconstructed = [
+      residualWithoutPrefix,
+      ...result.perChunk.values(),
+    ].join('');
+
+    expect(canonicalRuleSet(reconstructed)).toEqual(canonicalRuleSet(css));
   });
 });
 
