@@ -94,3 +94,20 @@ describe('feature/ui home.tsx parity with base', () => {
     }
   });
 });
+
+describe('base routes.ts idioms', () => {
+  const routes = readFileSync(
+    join(templatesRoot, 'base', 'src', 'routes.ts'),
+    'utf8'
+  );
+
+  it('relies on .server.ts auto-discovery (no explicit server: wiring)', () => {
+    expect(routes).not.toContain('server:');
+  });
+
+  it('registers the route tree for typed params and paths', () => {
+    expect(routes).toContain('as const');
+    expect(routes).toContain('interface RegisteredRoutes');
+    expect(routes).toContain('RoutePaths<typeof routeTree>');
+  });
+});
