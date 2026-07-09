@@ -189,6 +189,59 @@ describe('run(): install step', () => {
 
     expect(code).toBe(1);
   });
+
+  it('spawns the package manager through a shell on Windows (.cmd shims)', async () => {
+    const calls: Array<{ cmd: string; opts: { shell?: boolean } }> = [];
+    const fakeSpawn = (
+      cmd: string,
+      _args: string[],
+      opts: { cwd: string; shell?: boolean }
+    ) => {
+      calls.push({ cmd, opts });
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    await run({
+      argv: ['win-app', '--adapter=node', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'npm/11 node/v26 win32 x64' },
+      spawnFn: fakeSpawn,
+      platform: 'win32',
+    });
+
+    expect(calls[0].cmd).toBe('npm');
+    expect(calls[0].opts.shell).toBe(true);
+  });
+
+  it('does not use a shell on POSIX platforms', async () => {
+    const calls: Array<{ opts: { shell?: boolean } }> = [];
+    const fakeSpawn = (
+      _cmd: string,
+      _args: string[],
+      opts: { cwd: string; shell?: boolean }
+    ) => {
+      calls.push({ opts });
+      return {
+        on: (e: string, cb: (c: number) => void) => {
+          if (e === 'close') queueMicrotask(() => cb(0));
+        },
+      };
+    };
+
+    await run({
+      argv: ['posix-app', '--adapter=node', '--no-git'],
+      cwd: workDir,
+      env: { npm_config_user_agent: 'npm/11 node/v26 darwin arm64' },
+      spawnFn: fakeSpawn,
+      platform: 'darwin',
+    });
+
+    expect(calls[0].opts.shell).toBeFalsy();
+  });
 });
 
 describe('run(): git step', () => {

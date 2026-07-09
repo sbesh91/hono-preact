@@ -72,6 +72,55 @@ jobs:
       - name: Build site
         run: pnpm --filter site build
 
+  # End-to-end smoke for the scaffolder's OWN install + git-init path
+  # (create-hono-preact -> runChild -> spawn). The unit suite stubs spawn, and
+  # scaffold-integration installs deps itself with --no-install, so neither
+  # exercises the real spawn. This job does, on every supported OS.
+  #
+  # Windows is the reason it exists (issue #256): npm/pnpm are `.cmd` shims that
+  # spawn cannot launch without a shell, so a scaffold+install fails with ENOENT
+  # unless the shell:true fix is present. Linux runs the identical script so the
+  # coverage is equal, not Windows-only.
+  scaffold-smoke:
+    name: Scaffold smoke (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version derives from the `packageManager` field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The scaffold copies templates/agents/llms-full.txt, which is generated.
+      - name: Generate bundled agents corpus
+        run: pnpm gen:agents-corpus
+
+      # One script, identical across OSes (bash is available on the Windows
+      # runner via Git for Windows). Force the npm branch of the pm detector so
+      # the smoke runs the exact `npm install` from the issue everywhere, then
+      # assert both spawned steps actually happened (node_modules + .git).
+      - name: Scaffold a node app, letting the CLI install and git-init
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          npm_config_user_agent: 'npm/10 node/v22 ${{ runner.os }} x64'
+        run: |
+          node "$GITHUB_WORKSPACE/packages/create-hono-preact/bin/index.mjs" smoke-app --adapter=node
+          test -d smoke-app/node_modules || { echo 'FAIL: npm install did not run (spawn ENOENT?)'; exit 1; }
+          test -d smoke-app/.git || { echo 'FAIL: git init did not run'; exit 1; }
+
   client-size:
     name: Framework JS size
     needs: test
