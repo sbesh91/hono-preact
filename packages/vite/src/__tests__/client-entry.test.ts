@@ -1,10 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import {
   clientEntryPlugin,
   generateClientEntrySource,
   VIRTUAL_CLIENT_ENTRY_ID,
 } from '../client-entry.js';
+
+type MinimalResolvedConfig = { root: string; command?: string };
+
+function configResolvedOf(plugin: ReturnType<typeof clientEntryPlugin>) {
+  return (plugin as { configResolved?: (c: MinimalResolvedConfig) => void })
+    .configResolved;
+}
 
 describe('VIRTUAL_CLIENT_ENTRY_ID', () => {
   it('is the documented virtual module id', () => {
@@ -107,5 +116,76 @@ describe('clientEntryPlugin', () => {
       plugin as { load?: (id: string) => string | undefined }
     ).load?.('other-id');
     expect(code).toBeUndefined();
+  });
+});
+
+describe('clientEntryPlugin css.global validation', () => {
+  // Resolved against config.root (not process.cwd()): these fixtures live
+  // under a real temp directory, and root is set to that temp directory, so
+  // the tests exercise the actual filesystem check regardless of the cwd the
+  // test runner happens to invoke from.
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hono-preact-css-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('throws when css.global points at a missing file', () => {
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'does-not-exist.css',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).toThrow(
+      /css\.global/
+    );
+  });
+
+  it('throws when css.global is an empty string (resolves to the root dir, not a file)', () => {
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: '',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).toThrow(
+      /css\.global/
+    );
+  });
+
+  it('throws when css.global points at a directory', () => {
+    const dir = path.join(tmpRoot, 'a-directory');
+    fs.mkdirSync(dir);
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'a-directory',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).toThrow(
+      /css\.global/
+    );
+  });
+
+  it('accepts css.global pointing at an existing file', () => {
+    fs.writeFileSync(path.join(tmpRoot, 'root.css'), 'body{color:red}');
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'root.css',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).not.toThrow();
+  });
+
+  it('resolves css.global against config.root, not process.cwd() (root differs from cwd)', () => {
+    // The regression this proves: a valid file that lives under `root` but
+    // NOT under process.cwd() must validate cleanly. process.cwd() here is
+    // the monorepo checkout, which does not contain tmpRoot, so a
+    // cwd-resolved check would have thrown "not a file" for this case.
+    expect(tmpRoot.startsWith(process.cwd())).toBe(false);
+    fs.writeFileSync(path.join(tmpRoot, 'root.css'), 'body{color:red}');
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'root.css',
+    });
+    expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).not.toThrow();
   });
 });

@@ -1,5 +1,7 @@
 import * as path from 'node:path';
-import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   clientEntryPlugin,
   generateClientEntrySource,
@@ -26,7 +28,14 @@ describe('client entry global CSS import', () => {
 // Drives the plugin through its Vite hooks (configResolved -> load) the same
 // way client-entry.test.ts does, so the build-only gate is covered where it
 // lives: a regression that drops the isBuild guard in load() fails here.
-function loadEntrySource(command: 'serve' | 'build'): string | undefined {
+// configResolved now also validates cssGlobal against the real filesystem
+// (see client-entry.test.ts's "css.global validation" describe block), so
+// this fixture needs a real file under a real root rather than the fictional
+// '/proj' path used elsewhere in this file for the pure-function tests above.
+function loadEntrySource(
+  command: 'serve' | 'build',
+  root: string
+): string | undefined {
   const plugin = clientEntryPlugin({
     routes: 'src/routes.ts',
     cssGlobal: 'src/styles/root.css',
@@ -35,28 +44,42 @@ function loadEntrySource(command: 'serve' | 'build'): string | undefined {
     plugin as {
       configResolved?: (c: { root: string; command: string }) => void;
     }
-  ).configResolved?.({ root: '/proj', command });
+  ).configResolved?.({ root, command });
   return (plugin as { load?: (id: string) => string | undefined }).load?.(
     '\0' + VIRTUAL_CLIENT_ENTRY_ID
   );
 }
 
 describe('clientEntryPlugin build-only CSS import gate', () => {
-  const cssAbs = path.resolve('/proj', 'src/styles/root.css');
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hono-preact-css-gate-'));
+    fs.mkdirSync(path.join(tmpRoot, 'src', 'styles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpRoot, 'src', 'styles', 'root.css'),
+      'body{color:red}'
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
 
   it('build mode: the generated entry imports the stylesheet first', () => {
-    const code = loadEntrySource('build');
+    const code = loadEntrySource('build', tmpRoot);
     expect(code).toBeDefined();
+    const cssAbs = path.resolve(tmpRoot, 'src/styles/root.css');
     expect(code!.startsWith(`import '${cssAbs}';`)).toBe(true);
   });
 
   it('serve mode: the generated entry has no CSS import (dev FOUC guard)', () => {
-    const code = loadEntrySource('serve');
+    const code = loadEntrySource('serve', tmpRoot);
     expect(code).toBeDefined();
     expect(code).not.toContain('.css');
     // The rest of the entry is unaffected by the gate.
     expect(code).toContain(
-      `import routes from '${path.resolve('/proj', 'src/routes.ts')}';`
+      `import routes from '${path.resolve(tmpRoot, 'src/routes.ts')}';`
     );
   });
 });

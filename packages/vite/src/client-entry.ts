@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
 import { VIRTUAL_CLIENT_ID } from '@hono-preact/iso/internal/runtime';
 
@@ -64,10 +65,27 @@ export function clientEntryPlugin(opts: ClientEntryPluginOptions): Plugin {
       routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(config.root, opts.routes);
-      if (opts.cssGlobal) {
+      // `!== undefined` (not a truthy check): an empty string is a distinct
+      // misconfiguration (see the isFile() note below) that must still throw,
+      // not silently be treated as "no cssGlobal configured".
+      if (opts.cssGlobal !== undefined) {
         cssGlobalAbsPath = path.isAbsolute(opts.cssGlobal)
           ? opts.cssGlobal
           : path.resolve(config.root, opts.cssGlobal);
+        // isFile() also rejects '' and directory paths (resolving cssGlobal
+        // against config.root when it is '' yields the project dir itself,
+        // which exists but is not a stylesheet). Resolved against
+        // config.root (not process.cwd()) so an app whose Vite root differs
+        // from the invocation cwd validates the right path.
+        if (
+          !fs.existsSync(cssGlobalAbsPath) ||
+          !fs.statSync(cssGlobalAbsPath).isFile()
+        ) {
+          throw new Error(
+            `[hono-preact] css.global points at '${opts.cssGlobal}', which is not a file. ` +
+              `Pass a project-relative path to your global stylesheet, e.g. 'src/styles/root.css'.`
+          );
+        }
       }
       isBuild = config.command === 'build';
     },

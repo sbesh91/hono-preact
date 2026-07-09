@@ -26,35 +26,12 @@ describe('honoPreact adapter requirement', () => {
   });
 });
 
-describe('honoPreact css.global validation', () => {
-  it('throws when css.global points at a missing file', () => {
-    expect(() =>
-      honoPreact({
-        adapter: fakeAdapter(),
-        css: { global: 'src/styles/does-not-exist.css' },
-      })
-    ).toThrow(/css\.global/);
-  });
-
-  it('throws when css.global is an empty string (resolves to the project dir, not a file)', () => {
-    expect(() =>
-      honoPreact({ adapter: fakeAdapter(), css: { global: '' } })
-    ).toThrow(/css\.global/);
-  });
-
-  it('throws when css.global points at a directory', () => {
-    expect(() =>
-      honoPreact({ adapter: fakeAdapter(), css: { global: 'packages' } })
-    ).toThrow(/css\.global/);
-  });
-
-  it('accepts css.global pointing at an existing file', () => {
-    // Any real file relative to cwd works; package.json always exists.
-    expect(() =>
-      honoPreact({ adapter: fakeAdapter(), css: { global: 'package.json' } })
-    ).not.toThrow();
-  });
-});
+// css.global's exists+isFile validation now lives in clientEntryPlugin's
+// configResolved (resolved against config.root, not process.cwd()); see
+// packages/vite/src/__tests__/client-entry.test.ts's "clientEntryPlugin
+// css.global validation" describe block. honoPreact() itself no longer
+// validates cssGlobal synchronously, since configResolved only runs once
+// Vite resolves the config.
 
 describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in pipeline order, then the adapter plugins, then preact', () => {
