@@ -692,3 +692,56 @@ describe('run(): install failure diagnostics', () => {
     }
   });
 });
+
+describe('run(): Node version preflight', () => {
+  it('refuses to scaffold on an unsupported Node and scaffolds nothing', async () => {
+    const errs: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => errs.push(args.join(' '));
+    try {
+      const code = await run({
+        argv: ['old-node-app', '--no-install', '--no-git'],
+        cwd: workDir,
+        env: {},
+        nodeVersion: 'v20.11.1',
+      });
+      expect(code).toBe(1);
+      expect(errs.join('\n')).toContain('^22.18.0 || >=24.11.0');
+      expect(errs.join('\n')).toContain('v20.11.1');
+    } finally {
+      console.error = originalError;
+    }
+    expect(existsSync(join(workDir, 'old-node-app'))).toBe(false);
+  });
+
+  it('scaffolds normally on a supported Node', async () => {
+    const code = await run({
+      argv: ['new-node-app', '--no-install', '--no-git'],
+      cwd: workDir,
+      env: {},
+      nodeVersion: 'v24.11.0',
+    });
+    expect(code).toBe(0);
+    expect(existsSync(join(workDir, 'new-node-app', 'package.json'))).toBe(
+      true
+    );
+  });
+
+  it('--help still works on an unsupported Node', async () => {
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args) => lines.push(args.join(' '));
+    try {
+      const code = await run({
+        argv: ['--help'],
+        cwd: workDir,
+        env: {},
+        nodeVersion: 'v20.11.1',
+      });
+      expect(code).toBe(0);
+      expect(lines.join('\n').toLowerCase()).toContain('usage');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});

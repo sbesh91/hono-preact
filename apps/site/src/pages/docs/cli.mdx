@@ -16,6 +16,10 @@ adapter (Cloudflare Workers or a Node server), whether to add `hono-preact-ui`
 components, and whether to install dependencies and initialize git. Because the
 common path takes no flags, there is nothing for npm to mis-parse.
 
+The CLI requires Node `^22.18.0 || >=24.11.0` (the range hono-preact itself
+supports) and exits with a clear message on an older Node before anything is
+scaffolded. `--help`, `--version`, and `add-agents` work on any Node.
+
 You can pass a directory and skip prompts with flags for scripting or CI:
 
 ```bash

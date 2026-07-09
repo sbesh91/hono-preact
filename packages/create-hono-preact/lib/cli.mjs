@@ -12,6 +12,7 @@ import {
   checkTargetDir,
   validateProjectName,
 } from './resolve.mjs';
+import { nodeVersionError } from './node-version.mjs';
 import { clackPrompts, brandBanner } from './prompts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,7 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   spawnFn?: typeof realSpawn,
  *   stdin?: import('node:stream').Readable & { isTTY?: boolean },
  *   platform?: NodeJS.Platform,
+ *   nodeVersion?: string,
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
@@ -39,6 +41,7 @@ export async function run({
   spawnFn = realSpawn,
   stdin = process.stdin,
   platform = process.platform,
+  nodeVersion = process.version,
 }) {
   const parsed = parseArgs(argv);
 
@@ -75,6 +78,14 @@ export async function run({
     console.error(parsed.message);
     printHelp();
     return 2;
+  }
+
+  // Help, version, and add-agents work on any Node; scaffolding does not.
+  // Refuse before prompting or touching the filesystem.
+  const versionError = nodeVersionError(nodeVersion);
+  if (versionError) {
+    console.error(`error: ${versionError}`);
+    return 1;
   }
 
   const interactive = Boolean(isTTY) && !parsed.yes;
