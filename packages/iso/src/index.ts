@@ -202,6 +202,20 @@ export { Head } from './head.js';
 export type { HeadProps } from './head.js';
 export { ClientScript } from './client-script.js';
 
+// Head management hooks: trivial re-exports of hoofd/preact. The framework
+// owns the hoofd integration (renderPage collects these into the document
+// head via HoofdProvider), so pages import the hooks from hono-preact rather
+// than depending on hoofd directly.
+export {
+  useTitle,
+  useTitleTemplate,
+  useMeta,
+  useLink,
+  useLang,
+  useScript,
+} from 'hoofd/preact';
+export type { MetaOptions, LinkOptions, ScriptOptions } from 'hoofd/preact';
+
 // View transition lifecycle hook.
 export {
   useViewTransitionLifecycle,

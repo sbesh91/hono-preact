@@ -77,3 +77,14 @@ describe('active-route detection exports', () => {
     expect(typeof iso.buildPath).toBe('function');
   });
 });
+
+describe('head management exports', () => {
+  it('re-exports the hoofd head hooks', () => {
+    expect(typeof iso.useTitle).toBe('function');
+    expect(typeof iso.useTitleTemplate).toBe('function');
+    expect(typeof iso.useMeta).toBe('function');
+    expect(typeof iso.useLink).toBe('function');
+    expect(typeof iso.useLang).toBe('function');
+    expect(typeof iso.useScript).toBe('function');
+  });
+});
