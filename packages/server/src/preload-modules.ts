@@ -97,11 +97,14 @@ function normalizeManifest(raw: unknown): PreloadManifest {
  * is installed. Memoized via the in-flight promise so the reader runs once per
  * isolate and concurrent callers share it.
  *
- * Preload is an optimization, never a correctness dependency, so this can never
- * throw or reject: a reader that rejects or returns a malformed value degrades
- * to an empty manifest. A failed read is NOT memoized (the in-flight promise is
- * cleared), so a transient failure retries on the next request instead of
- * disabling preload for the isolate's lifetime.
+ * The `closure`/`routes` parts are still just an optimization: a reader that
+ * rejects or returns a malformed value degrades to an empty manifest rather
+ * than throwing or rejecting. But `globalCss`/`routeCss` are now
+ * render-critical (see {@link PreloadManifest}), so a degraded manifest ships
+ * an unstyled page; that failure is logged (see the `console.warn` below)
+ * instead of passing silently. A failed read is NOT memoized (the in-flight
+ * promise is cleared), so a transient failure retries on the next request
+ * instead of disabling preload/CSS delivery for the isolate's lifetime.
  */
 export function resolvePreloadManifest(): Promise<PreloadManifest> {
   if (pending) return pending;
@@ -109,8 +112,12 @@ export function resolvePreloadManifest(): Promise<PreloadManifest> {
   const inFlight = Promise.resolve()
     .then(() => reader!())
     .then(normalizeManifest)
-    .catch(() => {
+    .catch((err: unknown) => {
       if (pending === inFlight) pending = undefined;
+      console.warn(
+        '[hono-preact] preload manifest read failed; page ships without render-critical CSS this request',
+        err
+      );
       return EMPTY;
     });
   pending = inFlight;

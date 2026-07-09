@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   preloadLinkHeader,
   installPreloadModules,
@@ -119,6 +119,18 @@ describe('installPreloadModules / resolvePreloadManifest', () => {
       routeCss: {},
       globalCss: [],
     });
+  });
+
+  it('warns when the reader rejects (the manifest now carries render-critical CSS)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      installPreloadModules(() => Promise.reject(new Error('boom')));
+      expect(await resolvePreloadManifest()).toEqual(EMPTY);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0]?.[0]).toContain('preload manifest read failed');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
