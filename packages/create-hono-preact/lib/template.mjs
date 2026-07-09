@@ -7,7 +7,7 @@ import {
   mkdir,
   readdir,
 } from 'node:fs/promises';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, extname } from 'node:path';
 
 /**
  * Recursively copy a template directory into the target.
@@ -56,24 +56,64 @@ export async function renameDotfiles(target) {
   }
 }
 
+// File types the name substitution rewrites. Everything the templates ship
+// is text in one of these; anything else (images, archives) must never be
+// string-replaced.
+const SUBSTITUTABLE_EXTENSIONS = new Set([
+  '.json',
+  '.jsonc',
+  '.md',
+  '.ts',
+  '.tsx',
+  '.html',
+  '.yaml',
+]);
+
+// Directories the substitution walk never descends into. Neither exists at
+// scaffold time today; this is a guard against a future reordering (an
+// install or git init before substitution) turning the walk expensive.
+const SUBSTITUTION_SKIP_DIRS = new Set(['node_modules', '.git']);
+
 /**
- * Replace `{{name}}` and `{{name_underscore}}` in manifest and root README files
- * (the Cloudflare adapter writes its bundle to `dist/<name_with_underscores>/`,
- * so the underscored form is needed in deploy scripts and READMEs). Source files
- * keep the literal `{{name}}` placeholder as a discoverable edit-me marker.
+ * Collect every substitutable file under `dir`, recursively.
+ *
+ * @param {string} dir absolute directory to walk
+ * @returns {Promise<string[]>} absolute file paths
+ */
+async function collectSubstitutableFiles(dir) {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!SUBSTITUTION_SKIP_DIRS.has(entry.name)) {
+        out.push(...(await collectSubstitutableFiles(path)));
+      }
+    } else if (SUBSTITUTABLE_EXTENSIONS.has(extname(entry.name))) {
+      out.push(path);
+    }
+  }
+  return out;
+}
+
+/**
+ * Replace `{{name}}` and `{{name_underscore}}` across the scaffolded tree:
+ * manifests, READMEs, and source files alike (the `<Head>` default title
+ * and the home-page heading carry `{{name}}`, and must render as the real
+ * project name on the first `pnpm dev`). The Cloudflare adapter writes its
+ * bundle to `dist/<name_with_underscores>/`, so the underscored form is
+ * needed in deploy scripts and READMEs.
+ *
+ * The name is validated as a strict slug before any scaffolding runs (see
+ * resolve.mjs), so this textual substitution cannot inject syntax into any
+ * of these sinks; package.json's `name` field is additionally set
+ * structurally in scaffold.mjs.
  *
  * @param {string} target absolute path to the scaffolded dir
  * @param {string} name new project name
  */
 export async function substituteName(target, name) {
   const underscored = name.replaceAll('-', '_');
-  for (const file of ['package.json', 'wrangler.jsonc', 'README.md']) {
-    const path = join(target, file);
-    try {
-      await access(path);
-    } catch {
-      continue;
-    }
+  for (const path of await collectSubstitutableFiles(target)) {
     const original = await readFile(path, 'utf8');
     const updated = original
       .replaceAll('{{name_underscore}}', underscored)

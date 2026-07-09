@@ -64,7 +64,8 @@ describe('run(): node adapter', () => {
     expect(pkg.name).toBe('my-test-app');
 
     const layout = readFileSync(join(target, 'src', 'Layout.tsx'), 'utf8');
-    expect(layout).toContain('{{name}}');
+    expect(layout).toContain('defaultTitle="my-test-app"');
+    expect(layout).not.toContain('{{name}}');
   });
 });
 
