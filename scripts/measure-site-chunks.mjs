@@ -142,16 +142,18 @@ export function measureSiteCss(staticDir) {
   // Explicit set (the manifest's own `globalCss` field) unioned with the
   // unreferenced-file heuristic, deduped: exact even if a future change
   // leaves an unreferenced stray that `globalCss` doesn't know about.
+  // Filter to files present on disk BEFORE counting, so `files` reports
+  // exactly the set the byte sums measured: a globalCss entry missing from
+  // a stale/partial base-ref build (client-size CI job) is skipped entirely,
+  // never counted with zero bytes.
   const heuristicGlobal = readdirSync(staticDir).filter(
     (f) => f.endsWith('.css') && !referenced.has(f)
   );
   const globalFiles = [
     ...new Set([...globalCss.map(cssFile), ...heuristicGlobal]),
-  ];
+  ].filter((f) => existsSync(join(staticDir, f)));
   const global = sumGzipMeasure(
-    globalFiles
-      .filter((f) => existsSync(join(staticDir, f)))
-      .map((f) => gzipMeasure(readFileSync(join(staticDir, f))))
+    globalFiles.map((f) => gzipMeasure(readFileSync(join(staticDir, f))))
   );
 
   return { global: { ...global, files: globalFiles.length }, routes };

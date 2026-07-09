@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import {
@@ -162,7 +157,10 @@ describe('measure-site-chunks', () => {
     const staticDir = join(dir, 'static');
     mkdirSync(staticDir);
     writeFileSync(join(staticDir, 'root-AAA.css'), 'body{margin:0}'.repeat(20));
-    writeFileSync(join(staticDir, 'home-BBB.css'), '.home{color:red}'.repeat(20));
+    writeFileSync(
+      join(staticDir, 'home-BBB.css'),
+      '.home{color:red}'.repeat(20)
+    );
     writeFileSync(
       join(dir, '__hp-preload.json'),
       JSON.stringify({
@@ -177,6 +175,31 @@ describe('measure-site-chunks', () => {
 
     const r = measureSiteCss(staticDir);
     expect(r.global.files).toBe(1);
+  });
+
+  it('counts only globalCss files present on disk, and bytes match that set', () => {
+    // Stale/partial base-ref build (client-size CI job): a globalCss entry
+    // whose file is absent must be skipped from BOTH the byte sums and the
+    // file count, so `files` never over-reports what was actually measured.
+    const dir = mkdtempSync(join(tmpdir(), 'site-css-missing-global-'));
+    const staticDir = join(dir, 'static');
+    mkdirSync(staticDir);
+    const present = 'body{margin:0}'.repeat(20);
+    writeFileSync(join(staticDir, 'global-AAA.css'), present);
+    writeFileSync(
+      join(dir, '__hp-preload.json'),
+      JSON.stringify({
+        closure: [],
+        routes: {},
+        routeCss: {},
+        globalCss: ['/static/global-AAA.css', '/static/gone-BBB.css'],
+      })
+    );
+
+    const r = measureSiteCss(staticDir);
+    expect(r.global.files).toBe(1);
+    expect(r.global.raw).toBe(present.length);
+    expect(r.global.gzip).toBeGreaterThan(0);
   });
 
   it('returns null when the preload manifest is absent', () => {
