@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 
 // A button-triggered command menu showing every part: plain items, a separator,
 // a checkbox item, a single-select radio group, a labelled group, and a nested
-// submenu. Styling is in root.css (.docs-menu* / .docs-menu-trigger).
+// submenu. Styling is in docs.css (.docs-menu* / .docs-menu-trigger).
 export function MenuDemo() {
   const [wrap, setWrap] = useState(true);
   const [density, setDensity] = useState('comfortable');

@@ -3,7 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 
 // A panel registered with the dismissal stack. Pressing Escape or clicking
 // outside the panel dismisses it; the readout shows which path fired.
-// Styling: .docs-dismiss* in root.css.
+// Styling: .docs-dismiss* in docs.css.
 export function UseDismissDemo() {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);

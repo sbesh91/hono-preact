@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 
 // A single-select listbox showing the common parts: a trigger with a
 // placeholder Value, plain options, one disabled option, and a labelled
-// option group. Styling is in root.css (.docs-select* / .docs-select-trigger).
+// option group. Styling is in docs.css (.docs-select* / .docs-select-trigger).
 export function SelectDemo() {
   const [value, setValue] = useState('');
   return (

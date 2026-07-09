@@ -56,6 +56,8 @@ export interface RouteBundleChunkLike {
   moduleIds?: string[];
   /** File names of the chunks this one statically imports. */
   imports?: string[];
+  /** Vite's per-chunk CSS metadata: the CSS asset file names this chunk pulls in. */
+  viteMetadata?: { importedCss?: Set<string> };
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +352,16 @@ function stripExt(p: string): string {
   return p.replace(/\.[^./]+$/, '');
 }
 
+// Root-relative href for a build output file name, shared by resolvePreloadMap
+// (JS chunks) and resolveRouteCssMap (CSS assets). Ignores a configured Vite
+// `base` (hardcoded '/' + fileName); for the JS preload hints a wrong href is
+// only a lost optimization (the browser falls back to normal discovery), but
+// for route CSS a wrong href is a broken first paint (the stylesheet 404s), so
+// this must be base-prefixed first if base support is ever added.
+function toRootRelative(file: string): string {
+  return '/' + file;
+}
+
 /** Index every chunk by each of its source module ids (extension-stripped). */
 function indexBySource(
   bundle: Record<string, RouteBundleChunkLike>
@@ -394,6 +406,23 @@ function entryClosure(
   return out;
 }
 
+// Merge a route's resolved URLs into the pattern->urls map: key the top-level
+// index route ('') under '/', and union (not overwrite) when two chains resolve
+// to the same pattern, so a shared pattern keeps all its URLs. Shared by
+// resolvePreloadMap (JS) and resolveRouteCssMap (CSS).
+function mergeRouteUrls(
+  map: Record<string, string[]>,
+  rawPattern: string,
+  urls: string[]
+): void {
+  if (urls.length === 0) return;
+  const pattern = rawPattern === '' ? '/' : rawPattern;
+  const prior = map[pattern];
+  map[pattern] = prior
+    ? [...prior, ...urls.filter((u) => !prior.includes(u))]
+    : urls;
+}
+
 /**
  * Resolve route module chains to a pattern -> { high, low } preload map against
  * the Rollup output bundle.
@@ -411,7 +440,6 @@ export function resolvePreloadMap(
 ): RoutePreloadMap {
   const bySource = indexBySource(bundle);
   const eager = entryClosure(bundle);
-  const href = (file: string): string => '/' + file;
 
   const chunksOf = (sources: readonly string[]): Set<string> => {
     const files = new Set<string>();
@@ -433,19 +461,77 @@ export function resolvePreloadMap(
       for (const file of chunksOf([src])) {
         if (eager.has(file) || seen.has(file)) continue;
         seen.add(file);
-        urls.push(href(file));
+        urls.push(toRootRelative(file));
       }
     }
-    if (urls.length === 0) continue;
-    // A top-level index route (`{ path: '' }`) yields an empty pattern; the
-    // runtime serves it at '/', so key it there to match the request path.
-    const pattern = chain.pattern === '' ? '/' : chain.pattern;
-    // Two chains can resolve to the same pattern (e.g. a contentRoutes index
-    // and a sibling leaf); union their chunks rather than letting the last win.
-    const prior = map[pattern];
-    map[pattern] = prior
-      ? [...prior, ...urls.filter((u) => !prior.includes(u))]
-      : urls;
+    mergeRouteUrls(map, chain.pattern, urls);
+  }
+  return map;
+}
+
+/**
+ * Build-generated map from route pattern to the CSS asset URLs that route needs,
+ * the render-critical sibling of {@link RoutePreloadMap}. Serialized into the
+ * client build artifact; the server injects the matched route's sheets as
+ * `<link rel="stylesheet">` into the SSR head.
+ */
+export type RouteCssMap = Record<string, string[]>;
+
+/** The distinct CSS asset file names a set of chunks import, in first-seen order. */
+function cssOfChunks(
+  files: Iterable<string>,
+  bundle: Record<string, RouteBundleChunkLike>
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const file of files) {
+    const importedCss = bundle[file]?.viteMetadata?.importedCss;
+    if (!importedCss) continue;
+    for (const css of importedCss) {
+      if (seen.has(css)) continue;
+      seen.add(css);
+      out.push(css);
+    }
+  }
+  return out;
+}
+
+/**
+ * Resolve route module chains to a pattern -> CSS-URL map against the Rollup
+ * output bundle. For each chain, collect the CSS imported by the chain's static
+ * chunk closure (layouts + view). Mirrors `resolvePreloadMap`'s dedup,
+ * empty-path -> '/' keying, and pattern-collision union, so the two maps stay
+ * consistent.
+ *
+ * A route's CSS list is every stylesheet its own chunks import, full stop:
+ * nothing SSR-injects the client entry's CSS (only the entry's JS closure is
+ * modulepreload-hinted; there is no CSS analog), so a stylesheet cannot be
+ * assumed already on the page just because the entry also imports it. A
+ * stylesheet meant to load on every route should be linked by the app's
+ * Layout (the `?url` pattern) or imported per-route, not relied upon via the
+ * entry closure.
+ */
+export function resolveRouteCssMap(
+  chains: readonly RouteModuleChain[],
+  bundle: Record<string, RouteBundleChunkLike>
+): RouteCssMap {
+  const bySource = indexBySource(bundle);
+
+  const map: RouteCssMap = {};
+  for (const chain of chains) {
+    const files = new Set<string>();
+    for (const src of chain.sources) {
+      const fileName = bySource.get(stripExt(src));
+      if (fileName) collectStaticChunks(fileName, bundle, files, new Set());
+    }
+    const seen = new Set<string>();
+    const urls: string[] = [];
+    for (const css of cssOfChunks(files, bundle)) {
+      if (seen.has(css)) continue;
+      seen.add(css);
+      urls.push(toRootRelative(css));
+    }
+    mergeRouteUrls(map, chain.pattern, urls);
   }
   return map;
 }

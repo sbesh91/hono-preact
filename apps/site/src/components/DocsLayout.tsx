@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import '@/styles/docs.css';
 import { useLocation } from 'preact-iso';
 import { NavLink, useRouteActive } from 'hono-preact';
 import { ThemeToggle } from './ThemeToggle.js';

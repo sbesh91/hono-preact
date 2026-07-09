@@ -1,7 +1,7 @@
 import { Dialog } from 'hono-preact-ui';
 
 // A styled Dialog used as the live demo on the docs page. The styling lives in
-// apps/site/src/styles/root.css (.docs-dialog*) and mirrors the copyable CSS
+// apps/site/src/styles/docs.css (.docs-dialog*) and mirrors the copyable CSS
 // example below it, so what you see is what you copy.
 export function DialogDemo() {
   return (

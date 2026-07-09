@@ -111,4 +111,50 @@ describe('renderPage: modulepreload closure', () => {
     // A streaming response goes through c.body(); assert before draining.
     expect(res.headers.get('Link')).toBe('</static/a.js>; rel=modulepreload');
   });
+
+  it("injects the matched route's stylesheet into <head> and not another route's", async () => {
+    installPreloadModules(() => ({
+      closure: [],
+      routes: {},
+      routeCss: {
+        '/': ['/static/home.css'],
+        '/other': ['/static/other.css'],
+      },
+    }));
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Page />));
+
+    const res = await app.request('http://localhost/');
+    const html = await res.text();
+
+    expect(html).toContain('<link rel="stylesheet" href="/static/home.css" />');
+    expect(html).not.toContain('/static/other.css');
+    // Route stylesheets are document-only, never in the Link header.
+    expect(res.headers.get('Link')).toBeNull();
+  });
+
+  it('puts AppConfig font preloads in the Link header before the closure, and in the head', async () => {
+    installPreloadModules(() => ({
+      closure: ['/static/a.js'],
+      routes: {},
+      routeCss: {},
+    }));
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, <Page />, {
+        appConfig: { fonts: ['/static/regular-abc.woff2'] },
+      })
+    );
+
+    const res = await app.request('http://localhost/');
+    const html = await res.text();
+
+    expect(html).toContain(
+      '<link rel="preload" as="font" type="font/woff2" href="/static/regular-abc.woff2" crossorigin="" />'
+    );
+    expect(res.headers.get('Link')).toBe(
+      '</static/regular-abc.woff2>; rel=preload; as=font; type=font/woff2; crossorigin, ' +
+        '</static/a.js>; rel=modulepreload'
+    );
+  });
 });

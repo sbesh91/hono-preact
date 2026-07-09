@@ -24,6 +24,7 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
+import { fontPreloadLinkHeader } from './font-preload.js';
 import {
   resolvePreloadManifest,
   preloadLinkHeader,
@@ -181,7 +182,7 @@ export async function renderPage(
   // The client entry's static-import closure plus the matched route's own
   // chunks, hinted as `modulepreload` in the document head. Resolving is
   // memoized, so the platform reader runs at most once per isolate.
-  const { closure, routes } = await resolvePreloadManifest();
+  const { closure, routes, routeCss } = await resolvePreloadManifest();
   // Decode the path so it matches the build-time pattern keys, which are decoded
   // source-derived slugs (a `%20`/unicode segment would otherwise never match).
   // `decodeURI` keeps `/` intact (unlike decodeURIComponent) and can't throw on
@@ -193,13 +194,25 @@ export async function renderPage(
     // keep the raw, encoded path
   }
   const routePreload = selectRoutePreload(routes, routePath) ?? [];
+  // The matched route's own render-critical stylesheets, injected into the head
+  // (not the Link header). Reuses the exact-key-then-findBestPattern matcher.
+  const routeStyleSheets = selectRoutePreload(routeCss, routePath) ?? [];
   // Only the entry closure goes in the `Link` header. The header is honored
   // before body parse (and promotable to 103 Early Hints), but it cannot carry
   // `fetchpriority`, so a route chunk placed there would preload at default
   // priority and defeat the head tag's `fetchpriority="low"`. The closure is
   // the small, universal boot runtime (worth the earliest hint); the route
   // chunks are hinted low-priority via the head tags only.
-  const linkHeader = preloadLinkHeader(closure);
+  // Fonts first (render-critical, higher-priority hint), then the boot closure's
+  // modulepreload entries. The closure's truncation budget is reduced by the
+  // font part's byte length so the two parts combined, not each independently,
+  // stay within the header-size cap (the font part is never truncated itself:
+  // fonts are few and small enough that it isn't worth the complexity).
+  const fontHeader = fontPreloadLinkHeader(options?.appConfig?.fonts ?? []);
+  const usedBytes = fontHeader ? fontHeader.length + 2 : 0;
+  const linkHeader = [fontHeader, preloadLinkHeader(closure, usedBytes)]
+    .filter(Boolean)
+    .join(', ');
   // Append rather than set: a user's middleware may already have written a
   // `Link` header (e.g. a preconnect/preload of their own). Multiple `Link`
   // headers are valid (RFC 8288) and the browser merges them.
@@ -212,6 +225,7 @@ export async function renderPage(
     appConfig: options?.appConfig,
     preloadModules: closure,
     routePreloadModules: routePreload,
+    routeStyleSheets,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

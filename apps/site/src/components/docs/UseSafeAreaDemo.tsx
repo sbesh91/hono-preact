@@ -5,7 +5,7 @@ import { useRef, useState } from 'preact/hooks';
 // keeps it open while the pointer travels the corridor toward it, even on a
 // diagonal that does not aim straight at the card, and closes it after the grace
 // period once the pointer leaves the safe region. The card is CSS-placed to the
-// lower-right with a deliberate gap. Styling: .docs-safearea* in root.css.
+// lower-right with a deliberate gap. Styling: .docs-safearea* in docs.css.
 export function UseSafeAreaDemo() {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const floatingRef = useRef<HTMLDivElement>(null);

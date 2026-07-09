@@ -69,6 +69,39 @@ function siteSection(lines, siteFresh, siteBase) {
   lines.push('');
 }
 
+// The always-loaded global CSS from measure-site-chunks.mjs's `css` block
+// (optional): the render-critical stylesheet linked by every route, plus a
+// brief per-route breakdown when the build produced route-scoped CSS. Mirrors
+// siteSection's graceful degradation: absent on either report (older report
+// shape, or a build with no CSS split) means no section, not a blank one.
+function cssSection(lines, siteFresh, siteBase) {
+  const fresh = siteFresh?.css?.global?.gzip;
+  if (fresh === undefined) return;
+  lines.push('### Docs-site CSS (real build, gzip)');
+  lines.push(
+    "<sub>The always-loaded global stylesheet linked by every route. Route-scoped CSS (below, when present) is fetched only by the routes that need it. The delta isolates framework changes; the site's own CSS is constant between refs.</sub>"
+  );
+  lines.push('| | Size | Δ vs base |');
+  lines.push('|---|---|---|');
+  lines.push(row('global (always-loaded)', fresh, siteBase?.css?.global?.gzip));
+  lines.push('');
+  const routes = siteFresh?.css?.routes;
+  const routeNames = routes ? Object.keys(routes) : [];
+  if (routeNames.length > 0) {
+    lines.push('<details><summary>Per-route CSS</summary>');
+    lines.push('');
+    lines.push('| Route | Size | Δ vs base |');
+    lines.push('|---|---|---|');
+    const baseRoutes = siteBase?.css?.routes ?? {};
+    for (const pattern of routeNames) {
+      lines.push(row(pattern, routes[pattern].gzip, baseRoutes[pattern]?.gzip));
+    }
+    lines.push('');
+    lines.push('</details>');
+    lines.push('');
+  }
+}
+
 export function renderComment(fresh, base, meta, site) {
   const lines = [COMMENT_HEADER, '## Framework JS size', ''];
   section(
@@ -89,7 +122,10 @@ export function renderComment(fresh, base, meta, site) {
     base.sectionC ?? {},
     'ui-core'
   );
-  if (site) siteSection(lines, site.fresh, site.base);
+  if (site) {
+    siteSection(lines, site.fresh, site.base);
+    cssSection(lines, site.fresh, site.base);
+  }
   const footer = freshnessFooter(meta);
   if (footer) lines.push(footer);
   return lines.join('\n');

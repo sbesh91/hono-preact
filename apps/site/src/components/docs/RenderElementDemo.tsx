@@ -30,7 +30,7 @@ function DemoButton({
 
 // The same Button rendered three ways: the default <button>, an <a> to clone
 // (a real anchor, opens in a new tab), and the function form that reads the
-// component's state. Styling: .docs-renderel* in root.css.
+// component's state. Styling: .docs-renderel* in docs.css.
 export function RenderElementDemo() {
   const [pressed, setPressed] = useState(false);
   return (

@@ -3,7 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 
 // When the panel opens, useFocusReturn moves focus to its first button; when it
 // closes, focus returns to the trigger. Paired with useDismiss so Escape closes
-// it (useFocusReturn is not a focus trap). Styling: .docs-focusreturn* in root.css.
+// it (useFocusReturn is not a focus trap). Styling: .docs-focusreturn* in docs.css.
 export function UseFocusReturnDemo() {
   const popupRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);

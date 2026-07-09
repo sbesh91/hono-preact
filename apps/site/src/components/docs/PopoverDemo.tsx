@@ -6,7 +6,7 @@ const ALIGNS = ['start', 'center', 'end'] as const;
 
 // Interactive placement explorer. The side/align controls live INSIDE the popup
 // on purpose: a click inside the popover is not an outside-press, so the popover
-// stays open and repositions live as you change them. Styling is in root.css
+// stays open and repositions live as you change them. Styling is in docs.css
 // (.docs-popover* / .docs-placement*).
 export function PopoverDemo() {
   const [side, setSide] = useState<(typeof SIDES)[number]>('bottom');
