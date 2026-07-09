@@ -20,31 +20,33 @@ export default defineConfig({
 
 ## honoPreact(options)
 
-| Option        | Type                | Default                        | Description                                                                                                                                 |
-| ------------- | ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapter`     | `HonoPreactAdapter` | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`.                                                                           |
-| `layout`      | `string`            | `'src/Layout.tsx'`             | Root layout component path.                                                                                                                 |
-| `routes`      | `string`            | `'src/routes.ts'`              | Route table path.                                                                                                                           |
-| `api`         | `string`            | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.                                                                                     |
-| `appConfig`   | `string`            | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.                                                                                        |
-| `serverDir`   | `string`            | `'src/server'`                 | Registry folder for route-less server modules; globbed if it exists. See [The `src/server` registry](/docs/routes#the-src-server-registry). |
-| `clientEntry` | `string`            | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                     |
+| Option        | Type                                                         | Default                        | Description                                                                                                                                 |
+| ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `adapter`     | `HonoPreactAdapter`                                          | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`.                                                                           |
+| `layout`      | `string`                                                     | `'src/Layout.tsx'`             | Root layout component path.                                                                                                                 |
+| `routes`      | `string`                                                     | `'src/routes.ts'`              | Route table path.                                                                                                                           |
+| `api`         | `string`                                                     | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.                                                                                     |
+| `appConfig`   | `string`                                                     | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.                                                                                        |
+| `serverDir`   | `string`                                                     | `'src/server'`                 | Registry folder for route-less server modules; globbed if it exists. See [The `src/server` registry](/docs/routes#the-src-server-registry). |
+| `clientEntry` | `string`                                                     | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                     |
+| `css`         | `{ global?: string; autoSplit?: boolean; minSize?: number }` | `undefined`                    | Framework-owned global stylesheet delivery and build-time auto-split tuning. See [Styling](/docs/styling) for the full pipeline.            |
 
 ## What the plugin handles
 
 `honoPreact()` configures everything the framework requires:
 
-| Concern              | What it sets                                                                                                                                                                                              |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Preact deduplication | `resolve.dedupe` for `preact`, `preact/hooks`, `preact-iso`                                                                                                                                               |
-| Build target         | `build.target: 'esnext'`, `build.assetsDir: 'static'`                                                                                                                                                     |
-| Client build output  | `static/client.js` entry, hashed chunk and asset filenames in the `client` environment                                                                                                                    |
-| Deployment target    | Delegated to the configured adapter (Cloudflare Workers, Node.js, etc.), which supplies its own Vite plugins and entry wrapper                                                                            |
-| Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle (see [Project Structure](/docs/structure) for the `.server.*` file convention) |
-| Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                                                                    |
-| Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                                                         |
-| Guard strip          | `guardStripPlugin` rewrites opposite-environment middleware bodies to no-ops so server-only code tree-shakes out of the client bundle                                                                     |
-| Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw                                          |
+| Concern              | What it sets                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Preact deduplication | `resolve.dedupe` for `preact`, `preact/hooks`, `preact-iso`                                                                                                                                                                    |
+| Build target         | `build.target: 'esnext'`, `build.assetsDir: 'static'`                                                                                                                                                                          |
+| Client build output  | `static/client.js` entry, hashed chunk and asset filenames in the `client` environment                                                                                                                                         |
+| Deployment target    | Delegated to the configured adapter (Cloudflare Workers, Node.js, etc.), which supplies its own Vite plugins and entry wrapper                                                                                                 |
+| Server-only imports  | `serverOnlyPlugin` stubs static `*.server.*` imports and dynamic `() => import('./*.server.*')` calls in the client bundle (see [Project Structure](/docs/structure) for the `.server.*` file convention)                      |
+| Loader validation    | `serverLoaderValidationPlugin` enforces `.server.*` export conventions                                                                                                                                                         |
+| Module identity      | `moduleKeyPlugin` injects a path-derived `__moduleKey` into each `.server.*` file for RPC routing                                                                                                                              |
+| Guard strip          | `guardStripPlugin` rewrites opposite-environment middleware bodies to no-ops so server-only code tree-shakes out of the client bundle                                                                                          |
+| Browser shim         | `clientShimPlugin` prepends a `globalThis.process ??= ...` shim to the client entry so libraries reading `process.env.NODE_ENV` at module-eval time do not throw                                                               |
+| CSS pipeline         | `build.cssMinify: 'lightningcss'` and Baseline browser targets (`css.lightningcss.targets`), unless you set `cssMinify` or `css.lightningcss` yourself, in which case your config wins outright. See [Styling](/docs/styling). |
 
 ## Peer dependencies
 
