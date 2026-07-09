@@ -145,7 +145,7 @@ One typeface family carries everything, in three weights. Character comes from w
 - **A4.** Text overlaying gradient or cloud surfaces uses a fixed ink or white, chosen for contrast against that surface, not the theme foreground.
 - **A5.** Web platform features: Baseline Widely Available only. Newly Available features may be used as progressive enhancement with a safe fallback.
 - **A6.** All motion honors `prefers-reduced-motion: reduce` (disable or reduce to opacity).
-- **A7.** Naming: brand tokens and utilities are named `brand-*` or by coined color words (`orangenta`, `magenta`). The names of the source brand, its parent company, or their trademarked typefaces never appear in code, comments, class names, or site copy.
+- **A7.** Naming: brand tokens and utilities are named `brand-*` or by coined color words (`orangenta`, `magenta`). The names of the source brand and its parent company never appear in code, comments, class names, or site copy. Exemption: operating-system fonts may be named in `font-family` fallback position (the `--font-sans` stack does this); the shipped webfont itself is the only face we present as ours.
 
 ## 9. Mapping to the codebase
 
