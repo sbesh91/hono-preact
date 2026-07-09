@@ -24,6 +24,7 @@ import {
 } from '@hono-preact/iso/internal';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
+import { getDevGlobalCss } from './dev-global-css.js';
 import { fontPreloadLinkHeader } from './font-preload.js';
 import {
   resolvePreloadManifest,
@@ -182,7 +183,8 @@ export async function renderPage(
   // The client entry's static-import closure plus the matched route's own
   // chunks, hinted as `modulepreload` in the document head. Resolving is
   // memoized, so the platform reader runs at most once per isolate.
-  const { closure, routes, routeCss } = await resolvePreloadManifest();
+  const { closure, routes, routeCss, globalCss } =
+    await resolvePreloadManifest();
   // Decode the path so it matches the build-time pattern keys, which are decoded
   // source-derived slugs (a `%20`/unicode segment would otherwise never match).
   // `decodeURI` keeps `/` intact (unlike decodeURIComponent) and can't throw on
@@ -197,6 +199,13 @@ export async function renderPage(
   // The matched route's own render-critical stylesheets, injected into the head
   // (not the Link header). Reuses the exact-key-then-findBestPattern matcher.
   const routeStyleSheets = selectRoutePreload(routeCss, routePath) ?? [];
+  // The framework-owned global stylesheet(s): dev seam first (source URL served
+  // by the dev server; the artifact is empty in dev), then the build artifact's
+  // residual sheets. Render-critical, head-only (not in the Link header, v1).
+  const devGlobalCss = getDevGlobalCss();
+  const globalStyleSheets = devGlobalCss
+    ? [...devGlobalCss, ...globalCss]
+    : globalCss;
   // Only the entry closure goes in the `Link` header. The header is honored
   // before body parse (and promotable to 103 Early Hints), but it cannot carry
   // `fetchpriority`, so a route chunk placed there would preload at default
@@ -226,6 +235,7 @@ export async function renderPage(
     preloadModules: closure,
     routePreloadModules: routePreload,
     routeStyleSheets,
+    globalStyleSheets,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.

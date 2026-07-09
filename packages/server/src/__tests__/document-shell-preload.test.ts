@@ -135,6 +135,38 @@ describe('assembleDocument: route stylesheets', () => {
     });
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it('injects global stylesheets after user head tags and before route sheets', () => {
+    const html = assembleDocument({
+      html: '<html><head><meta charset="utf-8"/></head><body></body></html>',
+      head: {},
+      globalStyleSheets: ['/static/global-a.css'],
+      routeStyleSheets: ['/static/home-b.css'],
+    });
+    const global = html.indexOf('href="/static/global-a.css"');
+    const route = html.indexOf('href="/static/home-b.css"');
+    expect(global).toBeGreaterThan(-1);
+    expect(route).toBeGreaterThan(global);
+    expect(html).toContain(
+      '<link rel="stylesheet" href="/static/global-a.css" />'
+    );
+  });
+
+  it('warns when a fragment render would drop the global sheet', () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (msg: string) => warnings.push(msg);
+    try {
+      assembleDocument({
+        html: '<div>fragment</div>',
+        head: {},
+        globalStyleSheets: ['/static/global-a.css'],
+      });
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings.join('\n')).toContain('render-critical');
+  });
 });
 
 describe('assembleDocument: font preloads', () => {
