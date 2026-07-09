@@ -108,6 +108,11 @@ export const EXCLUDED_MODULES = [
   // Server-only.
   'server-route.js', // server RPC route surface
   'upgrade-websocket.js', // server-side WebSocket upgrade helper
+  // Called only from inside a streaming loader's server-side generator body
+  // (never referenced by the client bootstrap, which only holds the loader
+  // stub); rides internal/pubsub's server-side backend, the same one
+  // server-route.js and internal/subscribe-topic.js use.
+  'event-stream.js',
   // Re-export barrels: no bytes of their own; measuring one measures everything.
   'index.js',
   'internal.js',
