@@ -96,7 +96,7 @@ describe('renderPage: streaming SSR', () => {
     );
   });
 
-  it('emits an error script tag when the generator throws', async () => {
+  it('emits an error script tag when the generator throws, masked as Stream failed by default (production)', async () => {
     const loader = defineLoader(async function* (): AsyncGenerator<{
       count: number;
     }> {
@@ -110,6 +110,30 @@ describe('renderPage: streaming SSR', () => {
         <Loader loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
+      )
+    );
+    const res = await app.request('/');
+    const body = await readBody(res);
+    expect(body).toContain('window.__HP_STREAM__.error');
+    expect(body).toContain('"message":"Stream failed"');
+    expect(body).not.toContain('mid-stream');
+  });
+
+  it('passes the real error message through when dev: true', async () => {
+    const loader = defineLoader(async function* (): AsyncGenerator<{
+      count: number;
+    }> {
+      yield { count: 1 };
+      throw new Error('mid-stream');
+    });
+    const app = new Hono();
+    app.get('/', (c) =>
+      renderPage(
+        c,
+        <Loader loader={loader} location={loc}>
+          <p>streaming</p>
+        </Loader>,
+        { dev: true }
       )
     );
     const res = await app.request('/');
@@ -176,7 +200,7 @@ describe('renderPage: streaming SSR', () => {
     expect(body).toContain('"scopeVisible":true,"pass":2');
   });
 
-  it('escapes < in error payloads so a hostile error.message cannot break the script', async () => {
+  it('escapes < in error payloads so a hostile error.message cannot break the script (dev)', async () => {
     const loader = defineLoader(async function* (): AsyncGenerator<{
       count: number;
     }> {
@@ -189,7 +213,8 @@ describe('renderPage: streaming SSR', () => {
         c,
         <Loader loader={loader} location={loc}>
           <p>streaming</p>
-        </Loader>
+        </Loader>,
+        { dev: true }
       )
     );
     const res = await app.request('/');

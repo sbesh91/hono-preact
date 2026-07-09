@@ -80,16 +80,31 @@ function isTimeoutAbort(signal?: AbortSignal): boolean {
   );
 }
 
-function encodeErrorPayload(err: unknown, dev: boolean): string {
+/**
+ * Mask a thrown error's detail unless `dev` is true. Shared by every
+ * mid-stream error surface that puts an error's `message`/`name` directly on
+ * the wire: the SSE `event: error` frame here and the SSR streaming pump's
+ * per-loader error script (`stream-pump.ts`). Production masks to `{ message:
+ * 'Stream failed', name: 'Error' }` (mirroring the JSON paths' 'Loader
+ * failed' / 'Action failed' masking); dev passes the real message and name
+ * through. Callers that also run stream observers (fanError) still receive
+ * the real error for the observability side channel regardless of `dev`.
+ */
+export function maskStreamError(
+  err: unknown,
+  dev: boolean
+): { message: string; name: string } {
   if (!dev) {
-    // Production: the frame reaches the client verbatim, so mask like the
-    // JSON error paths do. Stream observers (fanError) already received the
-    // real error for the observability side channel.
-    return JSON.stringify({ message: 'Stream failed', name: 'Error' });
+    return { message: 'Stream failed', name: 'Error' };
   }
-  const message = err instanceof Error ? err.message : String(err);
-  const name = err instanceof Error ? err.name : 'Error';
-  return JSON.stringify({ message, name });
+  return {
+    message: err instanceof Error ? err.message : String(err),
+    name: err instanceof Error ? err.name : 'Error',
+  };
+}
+
+function encodeErrorPayload(err: unknown, dev: boolean): string {
+  return JSON.stringify(maskStreamError(err, dev));
 }
 
 /**

@@ -247,7 +247,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
       }
       return actions(c, next);
     })
-    .get('*', (c) => renderPage(c, pageTree(), { appConfig }));
+    .get('*', (c) => renderPage(c, pageTree(), { appConfig, dev }));
 
   return app;
 }

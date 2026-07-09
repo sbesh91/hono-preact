@@ -79,7 +79,7 @@ export interface PageActionsHandlerOptions {
   renderPage: (
     c: Context,
     node: VNode,
-    opts: { appConfig?: AppConfig }
+    opts: { appConfig?: AppConfig; dev?: boolean }
   ) => Promise<Response>;
   /**
    * Resolves the VNode to render for the given URL path. Returns null when
@@ -486,7 +486,7 @@ export function pageActionsHandler(
           500
         );
       }
-      const rendered = await renderPage(c, node, { appConfig });
+      const rendered = await renderPage(c, node, { appConfig, dev });
       if (
         resolution.kind === 'outcome' &&
         resolution.outcome.__outcome === 'deny'
