@@ -88,7 +88,7 @@ Discovery reads the inline `() => import()` on the route, so it covers hand-writ
 
 Server modules that are not tied to a single page can live in `src/server/` instead of next to a view. Every `.server.*` file under it, at any folder depth, is globbed into the server build, so its units register without a `server:` route field. This is the place to organize route-less server code by domain (`src/server/billing/`, `src/server/audit/`).
 
-**Route-less** units are addressed by module key: a bare `defineLoader` (over the loaders RPC) or `defineAction` (via the handler's moduleKey fallback; it runs behind the `use` gates of whichever page invokes it), plus rooms and sockets. A page reaches them by importing their `serverLoaders` / `serverActions` exactly as it would a route-attached module.
+**Route-less** units are addressed by module key: a bare `defineLoader` (over the loaders RPC) or `defineAction` (via the handler's moduleKey fallback), plus rooms and sockets. Both are route-independent: their RPC runs only the app-level `use` and the unit's own unit-level `use`, never a route node's page-layer `use`, so gate a route-less unit with a unit-level `use` (or bind it with `serverRoute(r)`). A page reaches them by importing their `serverLoaders` / `serverActions` exactly as it would a route-attached module.
 
 ```
 src/server/audit/log.server.ts   ->  export const serverLoaders = { recent: defineLoader(...) }

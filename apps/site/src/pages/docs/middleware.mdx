@@ -6,11 +6,11 @@ Middleware is how you add auth gates, tracing, timing, and request logging to lo
 
 Each layer attaches its `use` array through a different surface:
 
-| Layer | Where you declare it                                           | What it wraps                                                                                                                                |
-| ----- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| App   | `defineApp({ use })` default-exported from `src/app-config.ts` | Every page render, every loader, every action.                                                                                               |
-| Page  | `use` on a route node in `src/routes.ts`                       | The matched node and its descendants: renders, actions, and route-bound loaders. A bare `defineLoader` RPC is route-independent (see below). |
-| Unit  | `defineLoader(fn, { use })` / `defineAction(fn, { use })`      | Just that one loader or action call.                                                                                                         |
+| Layer | Where you declare it                                           | What it wraps                                                                                                                                                                        |
+| ----- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| App   | `defineApp({ use })` default-exported from `src/app-config.ts` | Every page render, every loader, every action.                                                                                                                                       |
+| Page  | `use` on a route node in `src/routes.ts`                       | The matched node and its descendants: renders, plus route-bound loaders and actions (`serverRoute(r)`). A bare `defineLoader` / `defineAction` RPC is route-independent (see below). |
+| Unit  | `defineLoader(fn, { use })` / `defineAction(fn, { use })`      | Just that one loader or action call.                                                                                                                                                 |
 
 ```ts
 // apps/site/src/app-config.ts (optional file)
@@ -89,9 +89,9 @@ A `throw` in any ring propagates up through the surrounding `after` blocks (so a
 
 ### Nested routes compose down the tree
 
-A `use` on a route node inherits down the tree: it applies to the node's own view (if any) and every descendant. It covers the render path for the whole subtree, the action RPC path, and the RPC path of any **route-bound** loader (`serverRoute(r).loader`). You declare the guard once on the ancestor; leaves under it are gated without repeating anything. A sibling route that is not a descendant of the guarded node stays ungated.
+A `use` on a route node inherits down the tree: it applies to the node's own view (if any) and every descendant. It covers the render path for the whole subtree and the RPC path of any **route-bound** loader or action (`serverRoute(r).loader` / `serverRoute(r).action`). You declare the guard once on the ancestor; leaves under it are gated without repeating anything. A sibling route that is not a descendant of the guarded node stays ungated.
 
-Bare loaders are the exception. A route-independent `defineLoader` runs its SSR render inside the route chain, but its client-navigation RPC (`POST /__loaders`) runs only the app-level `use` and the loader's own unit-level `use`, never the route node's page-layer `use`. So a bare loader colocated under a guarded route is gated on first paint but not on a direct RPC hit. Bind the loader with `serverRoute(r).loader` (as in the example above) or give it a unit-level `use` to gate it everywhere. Actions have no such gap: a bare `defineAction` inherits the route's guard by matching its POST URL, though `serverRoute(r).action` is still recommended under an authenticated layout (see [Server Actions](/docs/actions#route-bound-actions)).
+Bare units are the exception, and loaders and actions behave the same way. A route-independent `defineLoader` or `defineAction` runs its SSR render inside the route chain, but its client-driven RPC (`POST /__loaders` for a loader, the action POST for an action) runs only the app-level `use` and the unit's own unit-level `use`, never the route node's page-layer `use`. So a bare unit colocated under a guarded route is gated on first paint but not on a direct RPC hit. A bare unit is route-independent by design: the client chooses where to POST, so the route it posts from is not a security boundary. Bind it with `serverRoute(r).loader` / `serverRoute(r).action` (as in the example above), or give it a unit-level `use`, to gate it everywhere.
 
 ```ts
 // src/routes.ts
