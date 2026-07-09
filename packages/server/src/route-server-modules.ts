@@ -1,5 +1,4 @@
 import type { RoutesManifest, ServerRoute } from '@hono-preact/iso';
-import { findBestPattern } from './route-pattern.js';
 
 /**
  * Convert a RoutesManifest into the array of lazy server-module loaders
@@ -19,38 +18,25 @@ export function routeServerModules(
 /**
  * Build the page-layer `use` resolver from the route manifest. The composed
  * `use` per pattern is static tree data (`manifest.routeUse`), so lookup is a
- * synchronous map read. Two lookup modes:
+ * synchronous map read.
  *
- * - `byPath(url)`: resolve a CONCRETE URL (params substituted) to the most
- *   specific matching pattern and return its `use`. Used by the page-actions /
- *   SSR paths, which carry a real request URL.
  * - `byPattern(pattern)`: resolve an EXACT route-pattern key directly (no
- *   matching). Used by the loaders RPC path, which already knows the loader's
- *   declared route pattern (`ref.__routeId`) and must NOT fuzzy-match it: a
- *   pattern fed through `byPath` can collide with a sibling same-shaped pattern
- *   (`/a/:x` vs `/a/:y`) and return the wrong page's guards.
+ *   matching). Every consumer (loaders RPC, action POST, socket upgrade) knows
+ *   the unit's declared route pattern (`ref.__routeId` / `route.path`) and must
+ *   NOT fuzzy-match a URL to it: a URL fed through a best-pattern matcher can
+ *   collide with a sibling same-shaped pattern (`/a/:x` vs `/a/:y`) and return
+ *   the wrong page's guards. There is deliberately no `byPath` (URL fuzzy-match)
+ *   mode: it was the mechanism behind a bare-action guard-selection footgun and
+ *   has no remaining safe consumer.
  *
  * NOTE: framework-private. The only intended consumer is the generated server
  * entry.
  */
 export function makePageUseResolver(manifest: RoutesManifest): {
-  byPath: (path: string) => ReadonlyArray<unknown>;
   byPattern: (pattern: string) => ReadonlyArray<unknown>;
 } {
   const map = new Map(manifest.routeUse.map((r) => [r.path, r.use]));
   return {
-    byPath(path: string) {
-      const pattern = findBestPattern(map.keys(), path);
-      // Fails open (no `use` chain) when nothing matches. This is safe because
-      // `map` is keyed by the COMPILE-TIME `manifest.routeUse`, so an unmatched
-      // path means a request URL for which no page route was registered at all
-      // -- there is no page (and so no page-tier guard) to drop. The two callers
-      // both add their own gate: the loaders RPC uses `byPattern` (an exact key
-      // lookup, never this fuzzy match), and the page-actions handler verifies
-      // the action exists on the resolved route before it runs. A real route
-      // always resolves to its own `use` here; only a no-such-page URL gets [].
-      return pattern === null ? [] : (map.get(pattern) ?? []);
-    },
     byPattern(pattern: string) {
       return map.get(pattern) ?? [];
     },

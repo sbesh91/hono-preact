@@ -35,6 +35,24 @@ export { MAX_FORWARD_HEADER_BYTES, byteLength };
 export const ROOM_DO_PREFIX = 'room:';
 export const TOPIC_DO_PREFIX = 'topic:';
 
+/**
+ * Drop every `x-hp-*` header from a forwarded request's cloned Headers before
+ * the connector stamps its own. The `x-hp-*` namespace is server-controlled: it
+ * carries DO dispatch (`x-hp-kind`), identity/context (`x-hp-data`,
+ * `x-hp-params`), and routing (`x-hp-topic`/`x-hp-module`/`x-hp-name`). A client
+ * cannot be allowed to smuggle any of them through -- most critically
+ * `x-hp-data`, which the DO surfaces verbatim as `conn.data`/`socket.data`, the
+ * documented carrier for server-established identity. Stamping a value is not
+ * enough on its own: a factory that returns `undefined` skips its `set()`, so
+ * without this strip the client's own header would survive. Clearing the whole
+ * namespace up front makes the server's subsequent `set()`s the sole source.
+ */
+function stripForwardedHpHeaders(headers: Headers): void {
+  for (const key of [...headers.keys()]) {
+    if (key.toLowerCase().startsWith('x-hp-')) headers.delete(key);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The worker-side forward connector
 // ---------------------------------------------------------------------------
@@ -119,10 +137,11 @@ export function makeCfForwardConnector(
       const fwd = new Request(c.req.raw, {
         headers: new Headers(c.req.raw.headers),
       });
-      // set() (not just a stamp) is the deliberate smuggle defense: it
-      // overwrites any client-supplied x-hp-kind so the server controls DO
-      // dispatch (mirrors the room branch's explicit delete). A fresh
-      // newUniqueId() DO also makes a stray kind inert, but do not rely on that.
+      // Clear the server-controlled x-hp-* namespace before stamping, so no
+      // client-supplied x-hp-kind (DO dispatch) or x-hp-data (socket.data
+      // identity) can survive -- x-hp-data is conditional below, so an absent
+      // data factory would otherwise leave the client's header in place.
+      stripForwardedHpHeaders(fwd.headers);
       fwd.headers.set('x-hp-kind', 'socket');
       fwd.headers.set('x-hp-module', moduleKey);
       fwd.headers.set('x-hp-name', name);
@@ -167,18 +186,18 @@ export function makeCfForwardConnector(
     const fwd = new Request(c.req.raw, {
       headers: new Headers(c.req.raw.headers),
     });
+    // Clear the server-controlled x-hp-* namespace before stamping. This strips
+    // any client-supplied x-hp-kind (so a room-authorized client cannot divert
+    // its upgrade into the topic/publish branch on the room's DO; the DO defaults
+    // an absent kind to 'room') and any client-supplied x-hp-data (conn.data
+    // identity), which is conditional below and would otherwise survive when the
+    // room has no data factory. The server, not the client, controls dispatch.
+    stripForwardedHpHeaders(fwd.headers);
     fwd.headers.set('x-hp-topic', topic);
     fwd.headers.set('x-hp-module', moduleKey);
     fwd.headers.set('x-hp-name', name);
     fwd.headers.set('x-hp-params', paramsJson);
     if (dataJson !== undefined) fwd.headers.set('x-hp-data', dataJson);
-    // This room branch forwards room upgrades; the socket branch above handles
-    // socket-forward, and the DO's pub/sub topic/publish kinds are invoked
-    // separately by makeCfPubSubBackend, never here. Strip any client-supplied
-    // x-hp-kind so a room-authorized client cannot smuggle a header to divert its
-    // upgrade into the topic/publish branch on the room's DO. The server, not the
-    // client, controls DO dispatch (the DO defaults absent to 'room').
-    fwd.headers.delete('x-hp-kind');
 
     // `stub.fetch` returns `Promise<Response>` (the forwarded 101 upgrade); the
     // connector returns it directly. socketsHandler returns this Response as-is.

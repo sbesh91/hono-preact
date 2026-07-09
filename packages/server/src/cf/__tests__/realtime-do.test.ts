@@ -240,6 +240,54 @@ describe('makeCfForwardConnector', () => {
       ).toBeNull();
     }
   });
+
+  it('drops a client-supplied x-hp-data when the room has no data factory (identity-spoof defense)', async () => {
+    // Regression: the DO surfaces x-hp-data verbatim as conn.data, the carrier
+    // for server-established identity. A non-browser client sends its own
+    // x-hp-data; the room's data factory returns undefined, so the connector
+    // does NOT set the header. Without stripping the server-controlled x-hp-*
+    // namespace first, the client's forged header would survive into the DO and
+    // become conn.data. It must not.
+    const records: ForwardRecord[] = [];
+    const { namespace } = makeFakeNamespace(records);
+    const connector = makeCfForwardConnector(() => namespace as never);
+
+    const raw = new Request('https://example.com/__sockets?m=x', {
+      headers: {
+        Upgrade: 'websocket',
+        'x-hp-data': JSON.stringify({ id: 'victim', role: 'admin' }),
+      },
+    });
+    await connector({
+      c: makeContext(raw),
+      ...baseCtx({ data: undefined }),
+    });
+
+    // The forged header must not reach the DO: absent -> conn.data is undefined.
+    expect(records[0].request.headers.has('x-hp-data')).toBe(false);
+  });
+
+  it('overwrites a client-supplied x-hp-data with the server value when a factory runs', async () => {
+    const records: ForwardRecord[] = [];
+    const { namespace } = makeFakeNamespace(records);
+    const connector = makeCfForwardConnector(() => namespace as never);
+
+    const raw = new Request('https://example.com/__sockets?m=x', {
+      headers: {
+        Upgrade: 'websocket',
+        'x-hp-data': JSON.stringify({ id: 'victim', role: 'admin' }),
+      },
+    });
+    await connector({
+      c: makeContext(raw),
+      ...baseCtx({ data: { user: 'alice' } }),
+    });
+
+    // Server value wins; the client's forged identity is gone.
+    expect(records[0].request.headers.get('x-hp-data')).toBe(
+      JSON.stringify({ user: 'alice' })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -560,6 +608,32 @@ describe('makeCfForwardConnector: socket-forward', () => {
     });
     const fwd = calls[0]!.fetched[0]!;
     expect(fwd.headers.get('x-hp-data')).toBe('null');
+  });
+
+  it('drops a client-supplied x-hp-data when the socket has no data factory (identity-spoof defense)', async () => {
+    // Mirror of the room-branch regression: the DO surfaces x-hp-data as
+    // socket.data. A client sends a forged x-hp-data and the factory returns
+    // undefined (skips the set()); the forged header must not survive.
+    const { ns, calls } = fakeNamespace();
+    const connector = makeCfForwardConnector(() => ns);
+    const c = {
+      req: {
+        raw: new Request('https://x/__sockets?m=pages/chat&s=echo', {
+          headers: {
+            'x-hp-data': JSON.stringify({ id: 'victim', role: 'admin' }),
+          },
+        }),
+      },
+    } as never;
+    await connector({
+      c,
+      kind: 'socket-forward',
+      moduleKey: 'pages/chat',
+      name: 'echo',
+      data: undefined,
+    });
+    const fwd = calls[0]!.fetched[0]!;
+    expect(fwd.headers.has('x-hp-data')).toBe(false);
   });
 });
 

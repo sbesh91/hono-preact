@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { spawn as realSpawn } from 'node:child_process';
-import { resolve, join, dirname } from 'node:path';
+import { resolve, join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
 import { parseArgs } from './args.mjs';
 import { detectPackageManager } from './detect-pm.mjs';
 import { copyAgentGuidance } from './template.mjs';
 import { scaffold } from './scaffold.mjs';
-import { resolveOptions, checkTargetDir } from './resolve.mjs';
+import {
+  resolveOptions,
+  checkTargetDir,
+  validateProjectName,
+} from './resolve.mjs';
 import { clackPrompts, brandBanner } from './prompts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -92,8 +96,14 @@ export async function run({
   // Validate a known target dir (positional or stdin) before prompting for
   // anything else, so a wizard's worth of answers is never collected and then
   // discarded. A prompted dir is validated inline by resolveOptions instead.
+  // The project-name check runs first: the name is substituted into
+  // package.json / shell scripts, so a hostile name must be rejected before any
+  // filesystem work (checkTargetDir) or scaffolding runs.
   if (targetDirArg !== undefined) {
-    const reason = checkTargetDir(resolve(cwd, targetDirArg), targetDirArg);
+    const targetPath = resolve(cwd, targetDirArg);
+    const reason =
+      validateProjectName(basename(targetPath)) ??
+      checkTargetDir(targetPath, targetDirArg);
     if (reason) {
       if (interactive) prompts.cancel(reason);
       else console.error(`error: ${reason}`);

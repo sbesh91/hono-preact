@@ -259,6 +259,43 @@ describe('dynamic import() rewriting for .server.* sources', () => {
     expect(result).toBeUndefined();
   });
 
+  it('rewrites a no-substitution TEMPLATE-LITERAL dynamic import (server-leak defense)', () => {
+    // Regression: only StringLiteral specifiers were collected, so a backtick
+    // `import(`./x.server.js`)` (no interpolation) rode through untransformed and
+    // rollup bundled the real .server body into the client. A zero-expression
+    // template literal names exactly one module and must be stubbed like a quote.
+    const code = 'const m = () => import(`./foo.server.ts`);';
+    const result = transform(code, '/Users/me/repo/src/routes.ts');
+    expect(result).toBeDefined();
+    expect(result?.code).toContain(
+      'Promise.resolve({ __moduleKey: "src/foo" })'
+    );
+    expect(result?.code).not.toContain('import(`./foo.server.ts`)');
+  });
+
+  it('fails closed on an interpolated template-literal .server import (cannot be stubbed)', () => {
+    // A template literal WITH an expression whose trailing text is a `.server`
+    // extension clearly targets a server module but cannot be resolved to one
+    // module at transform time, so it cannot be stubbed. Rather than let rollup
+    // bundle the real body, the plugin throws with a fix.
+    const code =
+      'const name = "foo";\nconst m = () => import(`./${name}.server.ts`);';
+    expect(() => transform(code, '/Users/me/repo/src/routes.ts')).toThrow(
+      /non-static specifier/
+    );
+  });
+
+  it('does NOT flag an interpolated import whose trailing text is not a .server module', () => {
+    // `.server-utils` and a bare `./${name}` must not trip the fail-closed check
+    // (anchored on the trailing quasi), so ordinary dynamic imports still build.
+    const okA =
+      'const name = "x";\nconst m = () => import(`./${name}.server-utils.ts`);';
+    const okB =
+      'const name = "x";\nconst m = () => import(`./routes/${name}`);';
+    expect(transform(okA, '/Users/me/repo/src/routes.ts')).toBeUndefined();
+    expect(transform(okB, '/Users/me/repo/src/routes.ts')).toBeUndefined();
+  });
+
   it('rewrites both static and dynamic .server.* imports in the same file', () => {
     const code = [
       `import { serverLoaders } from './movies.server.js';`,

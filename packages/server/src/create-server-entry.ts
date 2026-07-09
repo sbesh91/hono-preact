@@ -169,13 +169,13 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     resolverByPath: pageActionResolvers.byPath,
     // src/server registry actions are not attached to a route URL, so a
     // byPath miss falls back to a moduleKey lookup (the client always sends the
-    // action's moduleKey). Their page-use still resolves by the request URL,
-    // i.e. the gates of the page they are invoked from.
+    // action's moduleKey).
     resolverByModuleKey: pageActionResolvers.byModuleKey,
-    resolvePageUseByPath: pageUseResolver.byPath,
     // Route-bound actions (serverRoute(r).action) resolve their page-use chain
     // from their declared pattern, mirroring the loaders RPC. Same resolver,
-    // exact-pattern lookup: byPath could collide `/a/:x`/`/a/:y`.
+    // exact-pattern lookup: byPath could collide `/a/:x`/`/a/:y`. Bare actions
+    // are route-independent and receive no page tier (EMPTY_PAGE_USE inside the
+    // handler), matching bare loaders.
     resolvePageUseByPattern: pageUseResolver.byPattern,
     renderPage,
     resolvePageNode: pageTree,
