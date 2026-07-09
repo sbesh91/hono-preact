@@ -37,3 +37,30 @@ describe('bundled docs corpus', () => {
     expect(readFileSync(corpus, 'utf8').length).toBeGreaterThan(1000);
   });
 });
+
+describe('recipes teach current idioms', () => {
+  // Explicit `server:` wiring is an advanced override since auto-discovery;
+  // recipes must not present it as the normal path.
+  it('no recipe wires server: by hand', () => {
+    for (const f of skillFiles) {
+      const body = readFileSync(resolve(skillsDir, f), 'utf8');
+      expect(body, `${f} still shows explicit server: wiring`).not.toMatch(
+        /server:\s*\(\)\s*=>\s*import/
+      );
+    }
+  });
+
+  // redirect/deny are exported from the hono-preact root (the recipes import
+  // them there); AGENTS.md must not imply they live only on hono-preact/page.
+  it('AGENTS.md lists redirect and deny on the root entry point', () => {
+    // The root bullet wraps across lines; slice from its start to the
+    // hono-preact/page bullet and assert within that span.
+    const start = agentsMd.indexOf('- `hono-preact` -');
+    const end = agentsMd.indexOf('- `hono-preact/page`');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const rootBullet = agentsMd.slice(start, end);
+    expect(rootBullet).toContain('`redirect`');
+    expect(rootBullet).toContain('`deny`');
+  });
+});

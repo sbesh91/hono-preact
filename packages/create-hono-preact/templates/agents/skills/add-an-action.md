@@ -33,8 +33,8 @@
    parsed form body. To refuse, throw `deny(403, 'message')` (import `deny` from
    `hono-preact`).
 
-2. Ensure the route has its `server:` import in `src/routes.ts` (see `add-a-loader.md`,
-   step 2).
+2. Nothing to wire in `src/routes.ts`: the colocated `<name>.server.ts` is discovered
+   automatically from the view file's name (see `add-a-loader.md`, step 2).
 
 3. Render a `<Form>` wired to the action, reading its status and result, in
    `src/pages/<name>.tsx`:

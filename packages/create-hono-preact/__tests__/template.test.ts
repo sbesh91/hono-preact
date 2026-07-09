@@ -74,12 +74,12 @@ describe('substituteName', () => {
     expect(wrangler).toContain('"main": "dist/my_cool_app/index.js"');
   });
 
-  it('does not touch source files (only top-level manifests and README)', async () => {
+  it('replaces {{name}} in nested source files', async () => {
     await copyTemplate(fixture, target);
-    const before = readFileSync(join(target, 'src', 'index.ts'), 'utf8');
     await substituteName(target, 'my-app');
-    const after = readFileSync(join(target, 'src', 'index.ts'), 'utf8');
-    expect(after).toBe(before);
+    const src = readFileSync(join(target, 'src', 'index.ts'), 'utf8');
+    expect(src).toContain('hello my-app');
+    expect(src).not.toContain('{{name}}');
   });
 });
 

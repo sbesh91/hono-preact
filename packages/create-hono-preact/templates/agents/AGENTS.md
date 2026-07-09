@@ -35,8 +35,9 @@ A page is up to four files:
   through them; the Vite plugin rewrites those imports into client-safe RPC
   handles. Never put secrets or server-only helpers where they would be inlined
   into the client; keep that logic inside the loader and action bodies.
-- `src/routes.ts` - declares every URL and which view (and optional `.server`
-  module) lives there.
+- `src/routes.ts` - declares every URL and which view lives there. A colocated
+  `.server.ts` sibling is discovered and wired automatically; the explicit
+  `server:` field is an advanced override.
 - `src/Layout.tsx` - the HTML document shell. It must render `<ClientScript />`
   (hydration) and a `<Head />` (both from `hono-preact`).
 
@@ -44,10 +45,11 @@ A page is up to four files:
 
 Import from these subpaths of the `hono-preact` package:
 
-- `hono-preact` - routing, loaders, actions, hooks, and components
-  (`defineRoutes`, `defineLoader`, `defineAction`, `useParams`, `Head`,
-  `ClientScript`, `Form`, `useActionResult`, ...).
-- `hono-preact/page` - page-level outcome helpers (`redirect`, `deny`, `render`).
+- `hono-preact` - routing, loaders, actions, hooks, components, and outcome
+  constructors (`defineRoutes`, `defineLoader`, `defineAction`, `useParams`,
+  `Head`, `ClientScript`, `Form`, `useActionResult`, `redirect`, `deny`, ...).
+- `hono-preact/page` - page-scope outcome helpers: `render` (available only
+  here) plus re-exports of `redirect` and `deny` for a single import line.
 - `hono-preact/server` - the page render entry point and Hono context access
   (`renderPage`, `useHonoContext`, `HonoContext`). The request handlers are
   internal; the generated server entry wires them for you.
