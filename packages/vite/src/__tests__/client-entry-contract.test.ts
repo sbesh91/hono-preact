@@ -50,6 +50,9 @@ describe('clientEntryContractPlugin', () => {
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('bootClient');
+    // The scan only inspects the entry module itself; the message says so, so
+    // a reader who delegates booting to an imported module knows to ignore it.
+    expect(warnings[0]).toContain('only inspects the entry module itself');
     // An HMR re-transform must not warn again.
     transform(`import { hydrate } from 'preact';\n`, entryId);
     expect(warnings).toHaveLength(1);

@@ -13,6 +13,12 @@ import type { Plugin } from 'vite';
  * imports bootClient but never calls it slips through. That trade keeps the
  * guard a one-regex transform, and the import-without-call case is far
  * rarer than the forgot-entirely case this exists to catch.
+ *
+ * The scan also only inspects the entry module's own source, not its import
+ * graph: an entry that delegates booting to an imported module (e.g. it
+ * imports `./bootstrap`, which calls bootClient()) never mentions bootClient
+ * itself, so the warning fires even though the app is fine. The warning text
+ * says so, so a reader who delegates this way knows to ignore it.
  */
 export function clientEntryContractPlugin(clientEntry: string): Plugin {
   let resolvedEntry: string | null = null;
@@ -42,7 +48,9 @@ export function clientEntryContractPlugin(clientEntry: string): Plugin {
         `[hono-preact] custom clientEntry ${JSON.stringify(clientEntry)} never references ` +
           `bootClient(). Import it from 'hono-preact' and call it before hydrate(), or ` +
           `view transitions, history direction tracking, and live-loader streams will ` +
-          `silently not work.`
+          `silently not work. This scan only inspects the entry module itself, so if the ` +
+          `entry delegates booting to a module it imports (e.g. bootClient() is called in ` +
+          `an imported ./bootstrap), this warning is a false positive and can be ignored.`
       );
     },
   };
