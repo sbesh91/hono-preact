@@ -111,3 +111,22 @@ honoPreact({
 ```
 
 `clientEntry` is the single source of truth for both the rollup `input` and the `clientShimPlugin` transform target, so you only set it in one place.
+
+A custom entry takes over the virtual entry's responsibilities. Before hydrating, call `bootClient()` (exported from `hono-preact`). It installs the client runtime services the framework relies on: the history shim (back/forward direction tracking), the navigation transition scheduler (view transitions on route changes), and the stream registry (live-loader streams). Skipping the call silently disables all three, so the dev server warns when the configured `clientEntry` module never references `bootClient`.
+
+```tsx
+// src/main.tsx
+import { hydrate } from 'preact';
+import { LocationProvider } from 'preact-iso';
+import { Routes, bootClient } from 'hono-preact';
+import routes from './routes.js';
+
+bootClient();
+
+hydrate(
+  <LocationProvider>
+    <Routes routes={routes} />
+  </LocationProvider>,
+  document.getElementById('app')
+);
+```

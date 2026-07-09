@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -732,5 +732,126 @@ describe('mount-order composition (why api.ts is mounted first)', () => {
     });
     expect(ok.status).toBe(200);
     expect(loadersRan).toBe(true);
+  });
+});
+
+describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
+  // The api/app-config/serverDir existence probes run only in `config`, so a
+  // file created or deleted mid dev-session changes nothing until a restart.
+  // The configureServer watcher closes that gap: it restarts the dev server
+  // when a probe's answer flips, and the restart re-runs `config`.
+  function makePlugin(tmp: string) {
+    return serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
+      adapter: stubAdapter,
+      coreAppPath: path.join(
+        tmp,
+        'node_modules',
+        '.vite',
+        'hono-preact',
+        'core-app.tsx'
+      ),
+      entryWrapperPath: path.join(
+        tmp,
+        'node_modules',
+        '.vite',
+        'hono-preact',
+        'server-entry.tsx'
+      ),
+    });
+  }
+
+  type WatchHandler = (file: string) => void;
+
+  // Minimal chokidar-like watcher plus a restart spy, mirroring the fake in
+  // route-server-autodiscovery.test.ts.
+  function fakeDevServer() {
+    const handlers = new Map<string, WatchHandler[]>();
+    const restart = vi.fn();
+    const server = {
+      watcher: {
+        on(event: string, cb: WatchHandler) {
+          const list = handlers.get(event) ?? [];
+          list.push(cb);
+          handlers.set(event, list);
+        },
+      },
+      restart,
+    };
+    const emit = (event: string, file: string) => {
+      for (const cb of handlers.get(event) ?? []) cb(file);
+    };
+    return { server, restart, emit };
+  }
+
+  function drive(plugin: ReturnType<typeof serverEntryPlugin>, tmp: string) {
+    (plugin as { config?: (c: { root: string }) => void }).config?.({
+      root: tmp,
+    });
+    const { server, restart, emit } = fakeDevServer();
+    (
+      plugin as { configureServer?: (s: typeof server) => void }
+    ).configureServer?.(server);
+    return { restart, emit };
+  }
+
+  it('restarts when api.ts is created mid-session (absent at config time)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
+    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    emit('add', path.join(tmp, 'src', 'api.ts'));
+    expect(restart).toHaveBeenCalledTimes(1);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('restarts when an existing app-config.ts is deleted', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'app-config.ts'),
+      'export default { use: [] };\n'
+    );
+    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    emit('unlink', path.join(tmp, 'src', 'app-config.ts'));
+    expect(restart).toHaveBeenCalledTimes(1);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('does not restart on unlink of a candidate that was already absent', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
+    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    emit('unlink', path.join(tmp, 'src', 'api.ts'));
+    expect(restart).not.toHaveBeenCalled();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('does not restart for unrelated file adds', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
+    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    emit('add', path.join(tmp, 'src', 'pages', 'about.tsx'));
+    expect(restart).not.toHaveBeenCalled();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('restarts on the first server module added under an absent src/server', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
+    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    emit('add', path.join(tmp, 'src', 'server', 'audit.server.ts'));
+    expect(restart).toHaveBeenCalledTimes(1);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('does not restart for server modules when src/server existed at config time', () => {
+    // The emitted import.meta.glob is live in dev; new modules under an
+    // existing folder need no restart.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
+    fs.mkdirSync(path.join(tmp, 'src', 'server'), { recursive: true });
+    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    emit('add', path.join(tmp, 'src', 'server', 'audit.server.ts'));
+    expect(restart).not.toHaveBeenCalled();
+    fs.rmSync(tmp, { recursive: true, force: true });
   });
 });

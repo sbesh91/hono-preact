@@ -34,12 +34,14 @@ export const CORE_MODULES = [
 
 export const FEATURE_MODULES = {
   // Always-on, NOT opt-in: the generated client entry (client-entry.ts) calls
-  // installHistoryShim() + installNavTransitionScheduler() + installStreamRegistry()
-  // unconditionally, so every route pays this on top of `core`. Broken out as its
-  // own row (rather than folded into `core`) so a regression in the boot runtime
-  // is legible instead of hidden in the core total. `route-change` transitively
-  // pulls view-transition-event + history-shim.
+  // bootClient(), which installs the history shim, the nav-transition
+  // scheduler, and the stream registry unconditionally, so every route pays
+  // this on top of `core`. Broken out as its own row (rather than folded into
+  // `core`) so a regression in the boot runtime is legible instead of hidden
+  // in the core total. `route-change` transitively pulls
+  // view-transition-event + history-shim.
   runtime: [
+    'boot-client.js',
     'internal/history-shim.js',
     'internal/route-change.js',
     'internal/stream-registry.js',
