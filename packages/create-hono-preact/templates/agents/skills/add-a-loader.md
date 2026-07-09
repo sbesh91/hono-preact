@@ -31,48 +31,34 @@
    The loader function receives `{ c, location, signal }` (the Hono context, the route
    location, and an abort signal) and returns the data. Read request-scoped values off `c`.
 
-2. Wire the server module onto the route in `src/routes.ts` by adding `server:` beside
-   `view:`:
-
-   ```ts
-   {
-     path: '/profile',
-     view: () => import('./pages/profile.js'),
-     server: () => import('./pages/profile.server.js'),
-   },
-   ```
+2. There is nothing to wire in `src/routes.ts`. A `.server.ts` file named after the
+   route's view file (`profile.tsx` pairs with `profile.server.ts`) is discovered and
+   wired to the route automatically. The explicit `server:` field on a route node is
+   an advanced override (a non-sibling module, or `server: false` to opt out).
 
 3. Read the data in `src/pages/<name>.tsx`. Import `serverLoaders` from the sibling
-   `.server.js`, call `.useData()` in the component (it returns a `LoaderState` union),
-   and wrap it with `.View(...)`. `data` reads straight off the union (it is absent
-   only in the cold `loading` arm, so a truthy check doubles as the loading guard);
-   reach for `status` when you need to tell `revalidating` or `error` apart:
+   `.server.js` and render through `.View(render)`; the render function receives the
+   `LoaderState` union. `data` reads straight off the union (it is absent only in the
+   cold `loading` arm, so a truthy check doubles as the loading guard); reach for
+   `status` when you need to tell `revalidating` or `error` apart. Descendants that
+   need the same data inside the view can call `.useData()`:
 
    ```tsx
    import { definePage } from 'hono-preact';
-   import type { FunctionComponent } from 'preact';
    import { serverLoaders } from './profile.server.js';
 
-   const loader = serverLoaders.default;
-
-   const ProfilePage: FunctionComponent = () => {
-     const { data } = loader.useData();
-     if (!data) return <p>Loading...</p>;
-     const { message, renderedAt } = data;
-     return (
+   const ProfileView = serverLoaders.default.View(({ data }) =>
+     data ? (
        <section>
-         <p>{message}</p>
-         <small>Rendered at {renderedAt}</small>
+         <p>{data.message}</p>
+         <small>Rendered at {data.renderedAt}</small>
        </section>
-     );
-   };
-   ProfilePage.displayName = 'ProfilePage';
-
-   const ProfileView = loader.View(({ data }) =>
-     data ? <ProfilePage /> : <p>Loading...</p>
+     ) : (
+       <p>Loading...</p>
+     )
    );
 
-   export default definePage(ProfileView, {});
+   export default definePage(ProfileView);
    ```
 
 ## Verify
@@ -85,8 +71,9 @@
 
 ## Common mistakes
 
-- Forgetting the `server:` import in `routes.ts`. The loader never runs and `useData()`
-  has no data.
+- Misnaming the server file. Discovery pairs `profile.tsx` with `profile.server.ts`;
+  a mismatched basename (`profileServer.ts`, `profile-data.server.ts`) is never
+  discovered, the loader never runs, and the view renders its loading arm forever.
 - Adding other named exports to `.server.ts`. Only `serverLoaders` and `serverActions` are
   allowed; anything else is a build error.
 - Fetching in `useEffect` instead. Loaders run on the server, are typed, and are SSR'd;

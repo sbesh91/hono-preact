@@ -30,8 +30,9 @@
    export default About;
    ```
 
-2. Register the route in `src/routes.ts` by adding an entry to the array passed to
-   `defineRoutes(...)`. The import specifier ends in `.js`, not `.tsx`:
+2. Register the route in `src/routes.ts` by adding an entry to the `routeTree` array
+   (the scaffold declares it `as const` so route params and paths stay typed). The
+   import specifier ends in `.js`, not `.tsx`:
 
    ```ts
    { path: '/about', view: () => import('./pages/about.js') },
