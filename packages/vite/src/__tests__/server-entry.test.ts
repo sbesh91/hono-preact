@@ -143,6 +143,30 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain('const appConfig = { use: [] };');
     expect(src).toContain('appConfig,');
   });
+
+  it('installs the dev global css url when provided', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/proj/src/Layout.tsx',
+      routesAbsPath: '/proj/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+      devGlobalCssUrl: '/src/styles/root.css',
+    });
+    expect(src).toContain(
+      `import { installDevGlobalCss } from 'hono-preact/server/internal/runtime';`
+    );
+    expect(src).toContain(`installDevGlobalCss(["/src/styles/root.css"]);`);
+  });
+
+  it('emits nothing when dev global css url is absent', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/proj/src/Layout.tsx',
+      routesAbsPath: '/proj/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+    });
+    expect(src).not.toContain('installDevGlobalCss');
+  });
 });
 
 describe('generated entry paths', () => {
@@ -362,9 +386,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     expect(fs.existsSync(coreAppPath)).toBe(true);
     expect(fs.existsSync(entryWrapperPath)).toBe(true);
@@ -417,9 +443,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const code = fs.readFileSync(coreAppPath, 'utf8');
     expect(code).toContain(
@@ -461,9 +489,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     // Rollup's this.error throws; mimic that.
     const ctx = {
@@ -521,9 +551,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const ctx = {
       warn: () => {},
@@ -575,9 +607,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const ctx = {
       warn: () => {},
@@ -621,9 +655,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const ctx = {
       warn: () => {},
@@ -671,9 +707,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const warnings: string[] = [];
     const ctx = {
