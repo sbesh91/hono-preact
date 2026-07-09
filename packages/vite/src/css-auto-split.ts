@@ -14,6 +14,11 @@
 
 import { transform } from 'lightningcss';
 import type { Targets } from 'lightningcss';
+import { entryClosure } from './route-preload.js';
+import type {
+  RouteBundleChunkLike,
+  RouteModuleChain,
+} from './route-preload.js';
 
 /** One JS chunk's usage evidence for class scanning. */
 export interface CssChunkEvidence {
@@ -432,4 +437,125 @@ export function splitCssByChunkUsage(
   const layerPrefix =
     layerNames.length > 0 ? `@layer ${layerNames.join(',')};` : '';
   return { residual: layerPrefix + residualOut.code, perChunk };
+}
+
+/** Bundle entries as this module reads them: chunks carry code, assets a source. */
+export interface SplitBundleEntryLike extends RouteBundleChunkLike {
+  code?: string;
+  source?: string | Uint8Array;
+}
+
+export interface CssAutoSplitBundleOptions {
+  autoSplit: boolean;
+  minSize: number;
+  targets?: Targets;
+  emitFile: (asset: { type: 'asset'; name: string; source: string }) => string;
+  getFileName: (ref: string) => string;
+  warn: (msg: string) => void;
+}
+
+function assetSource(entry: SplitBundleEntryLike): string | undefined {
+  if (typeof entry.source === 'string') return entry.source;
+  if (entry.source instanceof Uint8Array)
+    return new TextDecoder().decode(entry.source);
+  return undefined;
+}
+
+/**
+ * Split every CSS asset the client entry chunk imports (the framework-owned
+ * global stylesheet, plus anything else entry-imported) against the bundle's
+ * usage evidence, wiring per-chunk sheets into `viteMetadata.importedCss` so
+ * the existing `resolveRouteCssMap` union delivers them per route. Returns the
+ * residual sheet URLs for the artifact's `globalCss`.
+ *
+ * Failure policy per the spec: a conservation mismatch THROWS (the caller
+ * fails the build; a dropped rule is a broken page). Any other per-asset
+ * failure warns and degrades to delivering that asset unsplit.
+ */
+export function applyCssAutoSplit(
+  bundle: Record<string, SplitBundleEntryLike>,
+  chains: readonly RouteModuleChain[],
+  chunksOf: (src: string) => ReadonlySet<string>,
+  opts: CssAutoSplitBundleOptions
+): string[] {
+  const entry = Object.values(bundle).find(
+    (c) => c.isEntry && c.type !== 'asset'
+  );
+  const entryCssFiles = [...(entry?.viteMetadata?.importedCss ?? [])];
+  if (entryCssFiles.length === 0) return [];
+
+  if (!opts.autoSplit) return entryCssFiles.map((f) => '/' + f);
+
+  const eager = entryClosure(bundle);
+  const scopable = new Set<string>();
+  for (const chain of chains) {
+    for (const src of chain.sources) {
+      for (const file of chunksOf(src)) {
+        if (!eager.has(file)) scopable.add(file);
+      }
+    }
+  }
+  const evidence: CssChunkEvidence[] = [];
+  for (const c of Object.values(bundle)) {
+    if (c.type === 'asset' || typeof c.code !== 'string') continue;
+    evidence.push({
+      fileName: c.fileName,
+      code: c.code,
+      scopable: scopable.has(c.fileName),
+    });
+  }
+
+  const globalCss: string[] = [];
+  for (const cssFile of entryCssFiles) {
+    const asset = bundle[cssFile];
+    const source = asset ? assetSource(asset) : undefined;
+    if (source === undefined) {
+      opts.warn(
+        `css auto-split: entry stylesheet ${cssFile} unreadable; delivering it unsplit`
+      );
+      globalCss.push('/' + cssFile);
+      continue;
+    }
+    let split: CssSplitResult;
+    try {
+      split = splitCssByChunkUsage(source, evidence, {
+        minSize: opts.minSize,
+        targets: opts.targets,
+      });
+    } catch (e) {
+      // Conservation failures must fail the build (spec); rethrow for the
+      // plugin to turn into this.error. Anything else degrades to unsplit.
+      if (e instanceof Error && e.message.includes('conservation')) throw e;
+      opts.warn(
+        `css auto-split: could not split ${cssFile} (${e instanceof Error ? e.message : String(e)}); delivering it unsplit`
+      );
+      globalCss.push('/' + cssFile);
+      continue;
+    }
+
+    for (const [ownerFile, css] of split.perChunk) {
+      const base = ownerFile.replace(/^.*\//, '').replace(/\.js$/, '');
+      const ref = opts.emitFile({
+        type: 'asset',
+        name: `${base}.scoped.css`,
+        source: css,
+      });
+      const emittedFile = opts.getFileName(ref);
+      const owner = bundle[ownerFile];
+      if (!owner) continue;
+      owner.viteMetadata ??= { importedCss: new Set<string>() };
+      owner.viteMetadata.importedCss ??= new Set<string>();
+      owner.viteMetadata.importedCss.add(emittedFile);
+    }
+
+    const residualRef = opts.emitFile({
+      type: 'asset',
+      name: 'global.css',
+      source: split.residual,
+    });
+    globalCss.push('/' + opts.getFileName(residualRef));
+    delete bundle[cssFile];
+    entry?.viteMetadata?.importedCss?.delete(cssFile);
+  }
+  return globalCss;
 }

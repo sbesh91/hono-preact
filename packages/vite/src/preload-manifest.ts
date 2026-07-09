@@ -7,6 +7,7 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
+import type { Targets } from 'lightningcss';
 import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
 import {
   chunkCloser,
@@ -14,9 +15,11 @@ import {
   resolvePreloadMap,
   resolveRouteCssMap,
   expandGlobFs,
+  type RouteModuleChain,
   type RoutePreloadMap,
   type RouteCssMap,
 } from './route-preload.js';
+import { applyCssAutoSplit } from './css-auto-split.js';
 
 /**
  * The client build artifact read at runtime by the adapter's manifest reader.
@@ -29,6 +32,11 @@ export interface PreloadArtifact {
   closure: string[];
   routes: RoutePreloadMap;
   routeCss: RouteCssMap;
+  /**
+   * The residual global stylesheet URLs the SSR head injects render-blocking
+   * before route sheets; `[]` unless the app configured `css.global`.
+   */
+  globalCss: string[];
 }
 
 /** The subset of a Rollup output-bundle entry this collector reads. */
@@ -74,6 +82,8 @@ export function collectEntryPreloadModules(
 export interface PreloadManifestPluginOptions {
   /** Path to the app's `routes.ts` (project-relative or absolute). */
   routes: string;
+  /** Present when the app configured `css.global` (framework-owned global CSS). */
+  css?: { autoSplit: boolean; minSize: number };
 }
 
 /**
@@ -93,24 +103,48 @@ export function preloadManifestPlugin(
   opts: PreloadManifestPluginOptions
 ): Plugin {
   let routesAbsPath = '';
+  let targets: Targets | undefined;
   return {
     name: 'hono-preact:preload-manifest',
     configResolved(config) {
       routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(config.root, opts.routes);
+      targets = config.css?.lightningcss?.targets;
     },
     generateBundle(_options, bundle) {
       // Client environment only; fail closed if the environment is unknown so
       // we never emit a wrong-closure artifact into a server/worker build.
       if (this.environment?.name !== 'client') return;
+      const warn = (msg: string): void => this.warn(`[preload] ${msg}`);
       const closure = collectEntryPreloadModules(bundle);
-      const { routes, routeCss } = buildRouteMaps(
-        routesAbsPath,
-        bundle,
-        (msg) => this.warn(`[preload] ${msg}`)
-      );
-      const artifact: PreloadArtifact = { closure, routes, routeCss };
+      const chains = readRouteChains(routesAbsPath, warn);
+      const chunksOf = chunkCloser(bundle);
+      let globalCss: string[] = [];
+      if (opts.css) {
+        try {
+          globalCss = applyCssAutoSplit(bundle, chains, chunksOf, {
+            autoSplit: opts.css.autoSplit,
+            minSize: opts.css.minSize,
+            targets,
+            emitFile: (a) => this.emitFile(a),
+            getFileName: (ref) => this.getFileName(ref),
+            warn,
+          });
+        } catch (e) {
+          this.error(
+            `[hono-preact] css auto-split failed: ${e instanceof Error ? e.message : String(e)}`
+          );
+        }
+      }
+      const routes = resolvePreloadMap(chains, bundle, chunksOf);
+      const routeCss = resolveRouteCssMap(chains, bundle, chunksOf);
+      const artifact: PreloadArtifact = {
+        closure,
+        routes,
+        routeCss,
+        globalCss,
+      };
       this.emitFile({
         type: 'asset',
         fileName: PRELOAD_MANIFEST_FILE,
@@ -121,40 +155,26 @@ export function preloadManifestPlugin(
 }
 
 /**
- * Read `routes.ts` and resolve its per-pattern module chains to both the JS
- * preload map and the CSS map against the bundle, parsing the routes file once.
- * Any failure yields empty maps, so preload/route-CSS degrade rather than
- * failing the build.
+ * Read `routes.ts` and AST-walk it into per-pattern module chains. Best-effort:
+ * if the routes file is unreadable or its shape is exotic, this yields `[]` so
+ * preload/route-CSS/css-auto-split degrade to entry-closure-only, never an
+ * error.
  */
-function buildRouteMaps(
+function readRouteChains(
   routesAbsPath: string,
-  bundle: Parameters<typeof resolvePreloadMap>[1],
   warn: (msg: string) => void
-): { routes: RoutePreloadMap; routeCss: RouteCssMap } {
-  const empty = { routes: {}, routeCss: {} };
-  if (!routesAbsPath) return empty;
+): RouteModuleChain[] {
+  if (!routesAbsPath) return [];
   let source: string;
   try {
     source = fs.readFileSync(routesAbsPath, 'utf8');
   } catch {
-    return empty;
+    return [];
   }
   try {
-    const chains = extractRouteChains(
-      source,
-      routesAbsPath,
-      expandGlobFs,
-      warn
-    );
-    // One memoized closure resolver serves both maps, so the per-chain chunk
-    // closures are computed once instead of twice over the same bundle.
-    const chunksOf = chunkCloser(bundle);
-    return {
-      routes: resolvePreloadMap(chains, bundle, chunksOf),
-      routeCss: resolveRouteCssMap(chains, bundle, chunksOf),
-    };
+    return extractRouteChains(source, routesAbsPath, expandGlobFs, warn);
   } catch (e) {
     warn(`route map generation failed: ${(e as Error).message}`);
-    return empty;
+    return [];
   }
 }

@@ -394,7 +394,7 @@ function collectStaticChunks(
 }
 
 /** The chunk-file closure of the client entry (already fetched eagerly). */
-function entryClosure(
+export function entryClosure(
   bundle: Record<string, RouteBundleChunkLike>
 ): Set<string> {
   const out = new Set<string>();

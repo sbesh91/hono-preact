@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   attributeRules,
   splitCssByChunkUsage,
+  applyCssAutoSplit,
   type CssChunkEvidence,
 } from '../css-auto-split.js';
+import type { RouteModuleChain } from '../route-preload.js';
+import { chunkCloser } from '../route-preload.js';
 
 const chunk = (
   fileName: string,
@@ -232,5 +235,137 @@ describe('splitCssByChunkUsage', () => {
       const count = everything.split(marker).length - 1;
       expect(count, marker).toBe(1);
     }
+  });
+});
+
+function fixtureBundle() {
+  // entry -> (static) shared vendor; /home lazy-imports home chunk.
+  return {
+    'static/client.js': {
+      type: 'chunk' as const,
+      fileName: 'static/client.js',
+      isEntry: true,
+      code: 'boot("app-shell")',
+      moduleIds: ['/src/entry.ts'],
+      imports: [],
+      viteMetadata: { importedCss: new Set(['static/global-orig.css']) },
+    },
+    'static/home-abc.js': {
+      type: 'chunk' as const,
+      fileName: 'static/home-abc.js',
+      isEntry: false,
+      code: 'render("hx-hero")',
+      moduleIds: ['/src/pages/home.tsx'],
+      imports: [],
+      viteMetadata: { importedCss: new Set<string>() },
+    },
+    'static/global-orig.css': {
+      type: 'asset' as const,
+      fileName: 'static/global-orig.css',
+      source: '.hx-hero{color:red}.app-shell{margin:0}',
+    },
+  };
+}
+
+const HOME_CHAIN: RouteModuleChain[] = [
+  { pattern: '/', sources: ['/src/pages/home.tsx'] },
+];
+
+function fakeEmitter() {
+  const emitted = new Map<string, { name: string; source: string }>();
+  let n = 0;
+  return {
+    emitted,
+    emitFile: (a: { type: 'asset'; name: string; source: string }) => {
+      const ref = `ref-${n++}`;
+      emitted.set(ref, { name: a.name, source: a.source });
+      return ref;
+    },
+    getFileName: (ref: string) =>
+      `static/${emitted.get(ref)!.name.replace(/\.css$/, '')}-HASH.css`,
+  };
+}
+
+describe('applyCssAutoSplit', () => {
+  it('splits, rewires viteMetadata, deletes the original, returns residual urls', () => {
+    const bundle = fixtureBundle();
+    const { emitFile, getFileName, emitted } = fakeEmitter();
+    const globalCss = applyCssAutoSplit(
+      bundle,
+      HOME_CHAIN,
+      chunkCloser(bundle),
+      {
+        autoSplit: true,
+        minSize: 0,
+        emitFile,
+        getFileName,
+        warn: () => {},
+      }
+    );
+    // Residual keeps the entry-evidence rule, loses the scoped one.
+    const residual = [...emitted.values()].find((a) =>
+      a.source.includes('app-shell')
+    );
+    expect(residual).toBeDefined();
+    expect(residual!.source).not.toContain('hx-hero');
+    expect(globalCss).toHaveLength(1);
+    expect(globalCss[0]).toMatch(/^\/static\/.*-HASH\.css$/);
+    // Scoped sheet attached to the home chunk's importedCss.
+    const homeCss = [...bundle['static/home-abc.js'].viteMetadata.importedCss];
+    expect(homeCss.some((f) => f.endsWith('-HASH.css'))).toBe(true);
+    // Original gone from bundle and from the entry's importedCss.
+    expect(
+      (bundle as Record<string, unknown>)['static/global-orig.css']
+    ).toBeUndefined();
+    expect(
+      bundle['static/client.js'].viteMetadata.importedCss.has(
+        'static/global-orig.css'
+      )
+    ).toBe(false);
+  });
+
+  it('autoSplit=false delivers the monolith untouched via globalCss', () => {
+    const bundle = fixtureBundle();
+    const { emitFile, getFileName } = fakeEmitter();
+    const globalCss = applyCssAutoSplit(
+      bundle,
+      HOME_CHAIN,
+      chunkCloser(bundle),
+      {
+        autoSplit: false,
+        minSize: 0,
+        emitFile,
+        getFileName,
+        warn: () => {},
+      }
+    );
+    expect(globalCss).toEqual(['/static/global-orig.css']);
+    expect(
+      (bundle as Record<string, unknown>)['static/global-orig.css']
+    ).toBeDefined();
+  });
+
+  it('degrades to unsplit delivery (with a warning) when the CSS cannot be parsed', () => {
+    const bundle = fixtureBundle();
+    // Lightning CSS error-recovers from malformed source instead of throwing,
+    // so the degrade path is triggered by making the asset unreadable
+    // (deleting it) rather than by feeding it invalid CSS.
+    delete (bundle as Record<string, unknown>)['static/global-orig.css'];
+    const warnings: string[] = [];
+    const { emitFile, getFileName } = fakeEmitter();
+    const globalCss = applyCssAutoSplit(
+      bundle,
+      HOME_CHAIN,
+      chunkCloser(bundle),
+      {
+        autoSplit: true,
+        minSize: 0,
+        emitFile,
+        getFileName,
+        warn: (m) => warnings.push(m),
+      }
+    );
+    expect(globalCss).toEqual(['/static/global-orig.css']);
+    expect(warnings.length).toBeGreaterThan(0);
   });
 });

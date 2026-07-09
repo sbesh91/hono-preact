@@ -88,6 +88,7 @@ describe('preloadManifestPlugin', () => {
       closure: ['/static/a.js'],
       routes: {},
       routeCss: {},
+      globalCss: [],
     });
   });
 
