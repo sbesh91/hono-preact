@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { h, type ComponentChildren } from 'preact';
 import {
@@ -221,5 +221,43 @@ describe('createServerEntry', () => {
     });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toBe('ok');
+  });
+
+  it('wires the bare-loader guarded-route dev warning (dev: true)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const pageGuard = defineServerMiddleware<'loader'>(async (_c, next) => {
+        await next();
+      });
+      const app = createServerEntry({
+        routes: manifest({
+          serverImports: [
+            async () => ({
+              __moduleKey: 'test/bare',
+              serverLoaders: { l: async () => 'ok' },
+            }),
+          ],
+          routeUse: [{ path: '/x', use: [pageGuard] }],
+        }),
+        layout: Layout,
+        dev: true,
+      });
+      const res = await app.request('/__loaders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'test/bare',
+          loader: 'l',
+          location: { path: '/x', pathParams: {}, searchParams: {} },
+        }),
+      });
+      expect(res.status).toBe(200);
+      const warnings = warn.mock.calls.filter((call) =>
+        String(call[0]).includes('bare loader')
+      );
+      expect(warnings).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
