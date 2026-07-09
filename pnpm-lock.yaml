@@ -242,7 +242,7 @@ importers:
         specifier: '>=4.0.0'
         version: 4.12.14
       hoofd:
-        specifier: '>=1.0.0'
+        specifier: '>=1.3.0'
         version: 1.7.3(react@19.2.5)
       magic-string:
         specifier: ^0.30.21
@@ -287,6 +287,9 @@ importers:
       hono:
         specifier: '>=4.0.0'
         version: 4.12.14
+      hoofd:
+        specifier: '>=1.3.0'
+        version: 1.7.3(react@19.2.5)
       preact:
         specifier: '>=10.0.0'
         version: 10.29.1
@@ -310,7 +313,7 @@ importers:
         specifier: '>=4.0.0'
         version: 4.12.14
       hoofd:
-        specifier: '>=1.0.0'
+        specifier: '>=1.3.0'
         version: 1.7.3(react@19.2.5)
       preact:
         specifier: '>=10.0.0'

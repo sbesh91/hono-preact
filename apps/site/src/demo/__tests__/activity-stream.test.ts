@@ -1,14 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { publish, eventStream } from 'hono-preact';
 import { resetDemoData, getTask } from '../data.js';
 import {
-  publishActivity,
-  subscribeActivity,
+  activityChannel,
   taskMovedEvent,
   commentAddedEvent,
   taskCreatedEvent,
   recentActivityEvents,
   __resetActivityForTesting,
-  type ActivityEvent,
 } from '../activity-stream.js';
 
 beforeEach(() => {
@@ -16,14 +15,16 @@ beforeEach(() => {
   __resetActivityForTesting();
 });
 
-describe('activity bus', () => {
-  it('delivers published events to subscribers', () => {
-    const seen: ActivityEvent[] = [];
-    const unsub = subscribeActivity((e) => seen.push(e));
+describe('activity channel', () => {
+  it('delivers published events to a channel subscriber', async () => {
+    const ac = new AbortController();
+    const gen = eventStream(activityChannel.key(), ac.signal);
+    const first = gen.next();
     const task = getTask('t-1')!;
-    publishActivity(taskMovedEvent(task, 'done', 'Alice'));
-    expect(seen).toHaveLength(1);
-    expect(seen[0]).toMatchObject({
+    publish(activityChannel.key(), taskMovedEvent(task, 'done', 'Alice'));
+    const got = await first;
+    expect(got.done).toBe(false);
+    expect(got.value).toMatchObject({
       kind: 'task-moved',
       taskId: 't-1',
       to: 'done',
@@ -31,9 +32,7 @@ describe('activity bus', () => {
       projectSlug: 'inf',
       simulated: false,
     });
-    unsub();
-    publishActivity(commentAddedEvent(task, 'Bob'));
-    expect(seen).toHaveLength(1); // unsubscribed: no further delivery
+    ac.abort();
   });
 
   it('assigns unique ids and marks simulated events', () => {
@@ -43,19 +42,6 @@ describe('activity bus', () => {
     expect(a.id).not.toBe(b.id);
     expect(a.simulated).toBe(false);
     expect(b.simulated).toBe(true);
-  });
-
-  it('isolates a throwing subscriber so others still receive the event', () => {
-    const seen: ActivityEvent[] = [];
-    subscribeActivity(() => {
-      throw new Error('boom');
-    });
-    subscribeActivity((e) => seen.push(e));
-    const task = getTask('t-1')!;
-    expect(() =>
-      publishActivity(taskMovedEvent(task, 'done', 'Alice'))
-    ).not.toThrow();
-    expect(seen).toHaveLength(1);
   });
 });
 

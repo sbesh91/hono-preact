@@ -1,4 +1,4 @@
-import { defineAction, serverRoute } from 'hono-preact';
+import { defineAction, publish, serverRoute } from 'hono-preact';
 import {
   getProjectBySlug,
   listTasksForProject,
@@ -15,7 +15,7 @@ import {
   type TaskPriority,
 } from '../../demo/data.js';
 import {
-  publishActivity,
+  activityChannel,
   taskCreatedEvent,
   taskMovedEvent,
 } from '../../demo/activity-stream.js';
@@ -56,7 +56,7 @@ export const serverActions = {
       if (!user) throw new Error('not signed in');
       // Schema coerces and trims; values are already clean.
       const created = createTask(user, input);
-      publishActivity(taskCreatedEvent(created, user.name));
+      publish(activityChannel.key(), taskCreatedEvent(created, user.name));
       return { id: created.id };
     },
     { input: NewTaskSchema }
@@ -78,7 +78,8 @@ export const serverActions = {
     if (input.status) {
       const task = getTask(input.taskId);
       if (task) {
-        publishActivity(
+        publish(
+          activityChannel.key(),
           taskMovedEvent(task, input.status, user?.name ?? 'someone')
         );
       }

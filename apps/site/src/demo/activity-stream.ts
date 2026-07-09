@@ -1,8 +1,10 @@
 // apps/site/src/demo/activity-stream.ts
-// In-memory activity bus + event model for the persistent demo activity bar.
-// The bus is per-isolate: server actions publish real events; the SSE endpoint
-// subscribes. Builders construct events; the data store stays a pure module and
-// does not import this file.
+// Event model + typed channel for the persistent demo activity bar. Server
+// actions publish real events on `activityChannel`; the shell's live loader
+// subscribes via `eventStream`, so on Cloudflare the feed sees publishes from
+// other isolates through the realtime Durable Object. Builders construct
+// events; the data store stays a pure module and does not import this file.
+import { defineChannel } from 'hono-preact';
 import {
   listAllTasks,
   listComments,
@@ -26,6 +28,11 @@ export type ActivityEvent =
   | (EventBase & { kind: 'task-created' })
   | (EventBase & { kind: 'task-moved'; to: TaskStatus })
   | (EventBase & { kind: 'comment-added' });
+
+/** The typed channel demo activity rides. `publish(activityChannel.key(), e)`
+ * from an action; `eventStream(activityChannel.key(), signal)` in the shell's
+ * live loader. */
+export const activityChannel = defineChannel('demo-activity')<ActivityEvent>();
 
 let counter = 0;
 const nextId = (): string => `evt-${++counter}`;
@@ -84,28 +91,6 @@ export function commentAddedEvent(
   };
 }
 
-const listeners = new Set<(e: ActivityEvent) => void>();
-
-export function publishActivity(e: ActivityEvent): void {
-  // Copy before iterating so an unsubscribe during dispatch is safe. Isolate each
-  // subscriber: a throwing listener must not break the publishing action or starve
-  // other subscribers.
-  for (const l of [...listeners]) {
-    try {
-      l(e);
-    } catch {
-      // ignore a misbehaving subscriber
-    }
-  }
-}
-
-export function subscribeActivity(cb: (e: ActivityEvent) => void): () => void {
-  listeners.add(cb);
-  return () => {
-    listeners.delete(cb);
-  };
-}
-
 // Derive a few most-recent events from the seeded store (across all projects)
 // so a freshly-connected bar is immediately populated. Uses the historical
 // timestamps (not Date.now), so the backfill reads as real history.
@@ -141,6 +126,5 @@ export function recentActivityEvents(limit = 5): ActivityEvent[] {
 
 /** Test-only reset. Do not call from production code. */
 export function __resetActivityForTesting(): void {
-  listeners.clear();
   counter = 0;
 }

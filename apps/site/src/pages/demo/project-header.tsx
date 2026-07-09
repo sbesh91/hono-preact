@@ -1,7 +1,6 @@
 // apps/site/src/pages/demo/project-header.tsx
 import type { LayoutProps } from 'hono-preact';
-import { useParams, useViewTransitionLifecycle } from 'hono-preact';
-import { useTitle } from 'hoofd/preact';
+import { useParams, useTitle, useViewTransitionLifecycle } from 'hono-preact';
 
 export default function ProjectHeader({ children }: LayoutProps) {
   const { projectId: slug } = useParams('/demo/projects/:projectId');

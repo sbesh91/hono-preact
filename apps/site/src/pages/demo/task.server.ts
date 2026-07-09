@@ -1,4 +1,4 @@
-import { serverRoute } from 'hono-preact';
+import { serverRoute, publish } from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -15,7 +15,7 @@ import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
 import { AddCommentSchema, SetStatusSchema } from './task-schema.js';
 import {
-  publishActivity,
+  activityChannel,
   commentAddedEvent,
   taskMovedEvent,
 } from '../../demo/activity-stream.js';
@@ -89,7 +89,8 @@ export const serverActions = {
       if (!user) throw new Error('not signed in');
       const c = addComment(user, { taskId: input.taskId, body: input.body });
       const task = getTask(input.taskId);
-      if (task) publishActivity(commentAddedEvent(task, user.name));
+      if (task)
+        publish(activityChannel.key(), commentAddedEvent(task, user.name));
       return { id: c.id };
     },
     { input: AddCommentSchema }
@@ -104,7 +105,8 @@ export const serverActions = {
       setTaskStatus(input.taskId, input.status, user?.id ?? null);
       const task = getTask(input.taskId);
       if (task) {
-        publishActivity(
+        publish(
+          activityChannel.key(),
           taskMovedEvent(task, input.status, user?.name ?? 'someone')
         );
       }

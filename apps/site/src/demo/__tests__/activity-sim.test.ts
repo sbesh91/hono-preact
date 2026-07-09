@@ -1,7 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { eventStream } from 'hono-preact';
 import { resetDemoData, listAllTasks, getProject, getTask } from '../data.js';
-import { __resetActivityForTesting } from '../activity-stream.js';
-import { simulateActivity } from '../activity-sim.js';
+import {
+  __resetActivityForTesting,
+  activityChannel,
+} from '../activity-stream.js';
+import {
+  simulateActivity,
+  acquireSimHeartbeat,
+  __resetSimHeartbeatForTesting,
+} from '../activity-sim.js';
 
 beforeEach(() => {
   resetDemoData();
@@ -31,5 +39,42 @@ describe('simulateActivity', () => {
     for (const t of listAllTasks()) {
       expect(t.status).toBe(statusBefore.get(t.id));
     }
+  });
+});
+
+describe('sim heartbeat', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    __resetSimHeartbeatForTesting();
+    vi.useRealTimers();
+  });
+
+  it('publishes a simulated event on the channel while held', async () => {
+    const ac = new AbortController();
+    const gen = eventStream(activityChannel.key(), ac.signal);
+    const release = acquireSimHeartbeat();
+    const first = gen.next();
+    // The tick window is 4000-8000ms; 8000 guarantees one fire.
+    await vi.advanceTimersByTimeAsync(8000);
+    const got = await first;
+    expect(got.done).toBe(false);
+    expect(got.value).toMatchObject({ simulated: true });
+    release();
+    ac.abort();
+  });
+
+  it('is refcounted: the timer stops only when the last holder releases', () => {
+    const releaseA = acquireSimHeartbeat();
+    const releaseB = acquireSimHeartbeat();
+    expect(vi.getTimerCount()).toBe(1);
+    releaseA();
+    expect(vi.getTimerCount()).toBe(1);
+    releaseB();
+    expect(vi.getTimerCount()).toBe(0);
+    // A release is idempotent: calling it again must not go negative.
+    releaseB();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
