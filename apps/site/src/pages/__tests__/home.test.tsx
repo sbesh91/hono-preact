@@ -24,6 +24,19 @@ describe('home (scroll experience)', () => {
         .getAttribute('href')
     ).toBe('/demo');
   });
+  it('links the repo, package, and license from the footer', () => {
+    const { container } = render(<Home />);
+    const footer = container.querySelector('.hx-footer') as HTMLElement;
+    expect(
+      within(footer)
+        .getByRole('link', { name: /github/i })
+        .getAttribute('href')
+    ).toBe('https://github.com/sbesh91/hono-preact');
+    expect(
+      within(footer).getByRole('link', { name: /npm/i }).getAttribute('href')
+    ).toBe('https://www.npmjs.com/package/hono-preact');
+    expect(within(footer).getByText('MIT')).toBeInTheDocument();
+  });
   it('mounts the hero shader background', () => {
     const { container } = render(<Home />);
     const bg = container.querySelector('[aria-hidden="true"]');

@@ -97,8 +97,10 @@ export function Region({
   skeleton: ComponentChildren;
   children: ComponentChildren;
 }): VNode {
-  const { progress } = useStageProgress();
-  const shown = progress >= showAt;
+  const { progress, live } = useStageProgress();
+  // Until client JS is actually driving the playhead (SSR, a failed bundle,
+  // no-JS), show the content: a skeleton must never be the terminal state.
+  const shown = !live || progress >= showAt;
   return (
     <div class="hx-region" data-shown={String(shown)}>
       <div class="hx-region__skeleton" aria-hidden={shown ? 'true' : undefined}>
@@ -118,18 +120,23 @@ export function Reveal({
 }): VNode {
   const reduced = usePrefersReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
+  // 'static' is the SSR/no-JS/reduced state and renders fully visible; the
+  // mount effect arms the scroll-in animation ('hidden') only once client JS
+  // is running with IntersectionObserver available, so a failed bundle or a
+  // JS-less browser never strands the content invisible.
+  const [state, setState] = useState<'static' | 'hidden' | 'shown'>('static');
   useEffect(() => {
     if (reduced || typeof IntersectionObserver === 'undefined') {
-      setShown(true);
+      setState('static');
       return;
     }
     const el = ref.current;
     if (!el) return;
+    setState((s) => (s === 'shown' ? s : 'hidden'));
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setShown(true);
+          setState('shown');
           io.disconnect();
         }
       },
@@ -142,7 +149,7 @@ export function Reveal({
     <div
       class="hx-reveal"
       ref={ref}
-      data-shown={String(shown)}
+      data-reveal-state={state}
       style={{ transitionDelay: `${delayMs}ms` }}
     >
       {children}

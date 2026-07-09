@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import {
   findEntryChunk,
   entryClosure,
@@ -96,6 +101,23 @@ describe('measure-site-chunks', () => {
     expect(r.routes['/'].gzip).toBeGreaterThan(0);
     expect(r.routes['/'].raw).toBeGreaterThan(0);
     expect(r.routes['/docs/actions'].gzip).toBeGreaterThan(0);
+  });
+
+  it('skips manifest CSS URLs whose file is missing instead of throwing', () => {
+    // A stale/partial base-ref build (client-size CI job) or an asset outside
+    // /static/ must degrade to skipping that file, not fail the whole job.
+    const staticDir = makeCssFixture();
+    const manifestPath = join(dirname(staticDir), '__hp-preload.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.routeCss['/'].push('/static/gone-EEE.css');
+    manifest.routeCss['/demo'] = ['/assets/outside-FFF.css'];
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    const r = measureSiteCss(staticDir);
+    // '/' still measures its present sheet; the missing one contributes 0.
+    expect(r.routes['/'].gzip).toBeGreaterThan(0);
+    // A route whose only sheet is unresolvable measures as 0 bytes.
+    expect(r.routes['/demo']).toEqual({ raw: 0, gzip: 0 });
   });
 
   it('excludes route-scoped sheets from the global measurement', () => {

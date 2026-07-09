@@ -25,7 +25,9 @@ export function fontMimeType(href: string): string | undefined {
  * when there are none (so callers skip the header rather than emit an empty
  * one). Each entry is `rel=preload; as=font; crossorigin` (fonts are always
  * fetched in CORS mode, so crossorigin is required to reuse the preload) plus
- * `type=<mime>` when the extension is recognized. Promotable to 103 Early Hints.
+ * `type="<mime>"` when the extension is recognized (quoted: the value contains
+ * '/', which is not a token character, so an unquoted form is invalid per
+ * RFC 8288/7230 and strict parsers drop it). Promotable to 103 Early Hints.
  */
 export function fontPreloadLinkHeader(
   fonts: readonly string[]
@@ -33,7 +35,7 @@ export function fontPreloadLinkHeader(
   const entries = fonts.map((href) => {
     const type = fontMimeType(href);
     const parts = [`<${href}>`, 'rel=preload', 'as=font'];
-    if (type) parts.push(`type=${type}`);
+    if (type) parts.push(`type="${type}"`);
     parts.push('crossorigin');
     return parts.join('; ');
   });

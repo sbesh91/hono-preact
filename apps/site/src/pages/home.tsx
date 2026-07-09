@@ -79,6 +79,17 @@ const Home: FunctionComponent = () => {
         <ChapterRealtime />
         <ChapterOnePackage />
         <ChapterCTA />
+
+        <footer class="hx-footer">
+          <div class="hx-wrap hx-footer__row">
+            <span>
+              <a href="https://github.com/sbesh91/hono-preact">GitHub</a>
+              {' · '}
+              <a href="https://www.npmjs.com/package/hono-preact">npm</a>
+            </span>
+            <span>MIT</span>
+          </div>
+        </footer>
       </main>
     </div>
   );

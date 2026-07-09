@@ -7,9 +7,17 @@ import { usePrefersReducedMotion } from './motion.js';
 export interface StageValue {
   progress: number;
   pinned: boolean;
+  /** True once client JS is actually driving the playhead. False in SSR and
+   * when the bundle never runs, so progress-gated UI (Region skeletons) can
+   * default to its resolved state instead of hiding content behind JS. */
+  live: boolean;
 }
 
-const StageContext = createContext<StageValue>({ progress: 0, pinned: false });
+const StageContext = createContext<StageValue>({
+  progress: 0,
+  pinned: false,
+  live: false,
+});
 
 export function useStageProgress(): StageValue {
   return useContext(StageContext);
@@ -31,11 +39,13 @@ export function ScrollStage({
   const reduced = usePrefersReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(fallbackProgress);
+  const [live, setLive] = useState(false);
 
   useEffect(() => {
     if (reduced) return;
     const el = ref.current;
     if (!el) return;
+    setLive(true);
     let raf = 0;
     let active = false;
     // Cached geometry so the per-frame tick reads only window.scrollY, never
@@ -60,20 +70,29 @@ export function ScrollStage({
     };
     // Only stages in (or near) the viewport run the scroll math; the rest stay
     // idle instead of computing and re-rendering to a clamped 0/1 every frame.
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        active = entry.isIntersecting;
-        if (active) {
-          measure();
-          tick();
-        } else if (raf) {
-          cancelAnimationFrame(raf);
-          raf = 0;
-        }
-      },
-      { rootMargin: '100px' }
-    );
-    io.observe(el);
+    // Without IntersectionObserver (legacy WebViews), drive unconditionally
+    // instead of throwing, mirroring the graceful fallback in useInView.
+    let io: IntersectionObserver | undefined;
+    if (typeof IntersectionObserver === 'undefined') {
+      active = true;
+      measure();
+      tick();
+    } else {
+      io = new IntersectionObserver(
+        ([entry]) => {
+          active = entry.isIntersecting;
+          if (active) {
+            measure();
+            tick();
+          } else if (raf) {
+            cancelAnimationFrame(raf);
+            raf = 0;
+          }
+        },
+        { rootMargin: '100px' }
+      );
+      io.observe(el);
+    }
     const onResize = () => {
       if (!active) return;
       measure();
@@ -82,7 +101,7 @@ export function ScrollStage({
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
     return () => {
-      io.disconnect();
+      io?.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
       if (raf) cancelAnimationFrame(raf);
@@ -93,7 +112,7 @@ export function ScrollStage({
     return (
       <div class="hx-stage hx-stage--static" ref={ref} aria-label={label}>
         <StageContext.Provider
-          value={{ progress: fallbackProgress, pinned: false }}
+          value={{ progress: fallbackProgress, pinned: false, live: false }}
         >
           {children}
         </StageContext.Provider>
@@ -116,7 +135,7 @@ export function ScrollStage({
       aria-label={label}
     >
       <div class="hx-stage__pin">
-        <StageContext.Provider value={{ progress, pinned: true }}>
+        <StageContext.Provider value={{ progress, pinned: true, live }}>
           {children}
         </StageContext.Provider>
       </div>
@@ -139,6 +158,7 @@ export function Actor({
       value={{
         progress: sliceProgress(parent.progress, start, end),
         pinned: parent.pinned,
+        live: parent.live,
       }}
     >
       {children}
@@ -183,7 +203,10 @@ export function LiveStage({
 
   return (
     <div class="hx-live" ref={ref}>
-      <StageContext.Provider value={{ progress, pinned: false }}>
+      {/* live is unconditionally true: without JS the fallbackProgress renders
+          the room fully-on, which is the right static state, and no Region
+          hangs off a LiveStage. */}
+      <StageContext.Provider value={{ progress, pinned: false, live: true }}>
         {children}
       </StageContext.Provider>
     </div>

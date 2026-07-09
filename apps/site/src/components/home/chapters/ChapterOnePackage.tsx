@@ -1,4 +1,5 @@
 import type { VNode } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import { Code } from '../scroll/code.js';
 import { useInView, usePrefersReducedMotion } from '../scroll/motion.js';
 
@@ -19,6 +20,11 @@ export function ChapterOnePackage(): VNode {
   // the <ul> drives the whole cascade; each pill's own delay comes from its --i
   // index in CSS, so the markup stays a plain semantic list.
   const [rowRef, shown] = useInView<HTMLUListElement>({ disabled: reduced });
+  // The hidden-then-stagger treatment only arms after mount (client JS is
+  // running): SSR, a failed bundle, and no-JS render the pills visible rather
+  // than stranded hidden waiting for an in-view trigger that never fires.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => setArmed(true), []);
   return (
     <section class="hx-chapter">
       <div class="hx-scene">
@@ -31,7 +37,12 @@ export function ChapterOnePackage(): VNode {
             nothing to wire up between the pieces.
           </p>
         </div>
-        <ul class="hx-pkg-row" ref={rowRef} data-shown={String(shown)}>
+        <ul
+          class="hx-pkg-row"
+          ref={rowRef}
+          data-armed={String(armed)}
+          data-shown={String(shown)}
+        >
           {SUBPATHS.map((path, i) => (
             <li key={path} class="hx-pkg-pill" style={{ '--i': i }}>
               {path}

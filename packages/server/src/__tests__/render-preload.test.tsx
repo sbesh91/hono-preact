@@ -153,7 +153,7 @@ describe('renderPage: modulepreload closure', () => {
       '<link rel="preload" as="font" type="font/woff2" href="/static/regular-abc.woff2" crossorigin="" />'
     );
     expect(res.headers.get('Link')).toBe(
-      '</static/regular-abc.woff2>; rel=preload; as=font; type=font/woff2; crossorigin, ' +
+      '</static/regular-abc.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin, ' +
         '</static/a.js>; rel=modulepreload'
     );
   });

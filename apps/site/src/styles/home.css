@@ -428,23 +428,18 @@
   transform: none;
 }
 
+/* Visible by default: SSR, no-JS, and a failed client bundle all render the
+   content. The component arms the hidden state ('hidden') only after mount
+   with IntersectionObserver available, then flips to 'shown' on scroll-in, so
+   JS is an enhancement here, never a gate. */
 .hx-reveal {
-  opacity: 0;
-  transform: translateY(24px);
   transition:
     opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.hx-reveal[data-shown='true'] {
-  opacity: 1;
-  transform: none;
-}
-
-@media (scripting: none) {
-  .hx-reveal {
-    opacity: 1;
-    transform: none;
-  }
+.hx-reveal[data-reveal-state='hidden'] {
+  opacity: 0;
+  transform: translateY(24px);
 }
 
 /* Syntax-highlight tokens for the home snippets. The colors reuse the wire
@@ -692,7 +687,10 @@
   .hx-skel {
     animation: none;
   }
-  .hx-reveal {
+  /* Repeat the armed-hidden selectors so this override outranks them even if
+     a reduced-motion flip races the arming effect. */
+  .hx-reveal,
+  .hx-reveal[data-reveal-state='hidden'] {
     opacity: 1;
     transform: none;
     transition: none;
@@ -705,7 +703,8 @@
     opacity: 1;
     transform: none;
   }
-  .hx-pkg-pill {
+  .hx-pkg-pill,
+  .hx-pkg-row[data-armed='true']:not([data-shown='true']) .hx-pkg-pill {
     opacity: 1;
     transform: none;
     transition: none;
@@ -1944,26 +1943,19 @@
     -8px 3px 22px -9px rgba(254, 80, 0, 0.6),
     0 6px 20px -8px rgba(236, 0, 140, 0.5),
     8px 3px 22px -9px rgba(201, 125, 255, 0.65);
-  /* Staggered scroll-in: hidden until the row is in view, then each pill eases
-     up in turn, offset by its --i index (set in ChapterOnePackage). */
-  opacity: 0;
-  transform: translateY(16px);
+  /* Staggered scroll-in: each pill eases up in turn, offset by its --i index
+     (set in ChapterOnePackage). Visible by default; the hidden state applies
+     only once the row has armed post-mount (client JS running) and is not yet
+     in view, so SSR/no-JS/a failed bundle never strand the pills invisible. */
   transition:
     opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   transition-delay: calc(var(--i, 0) * 110ms);
   will-change: transform, opacity;
 }
-.hx-pkg-row[data-shown='true'] .hx-pkg-pill {
-  opacity: 1;
-  transform: none;
-}
-/* No-JS: the in-view trigger never fires, so reveal the pills unconditionally. */
-@media (scripting: none) {
-  .hx-pkg-pill {
-    opacity: 1;
-    transform: none;
-  }
+.hx-pkg-row[data-armed='true']:not([data-shown='true']) .hx-pkg-pill {
+  opacity: 0;
+  transform: translateY(16px);
 }
 .hx-pkg-code {
   margin: 0;
@@ -2025,4 +2017,25 @@
   margin-top: 1rem;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* ---- Footer: the project's outbound links (repo, package, license) ---- */
+.hx-footer {
+  border-top: 1px solid var(--border-color);
+  padding: 1.5rem 0 2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.hx-footer__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.hx-footer a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.hx-footer a:hover {
+  color: var(--accent-hover);
 }

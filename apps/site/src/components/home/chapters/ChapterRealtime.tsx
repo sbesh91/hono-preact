@@ -30,7 +30,17 @@ const PEERS = [
   { name: 'Ben', color: '#fe5000', rx: 28, ry: 31, sx: 1.2, sy: 0.9, ph: 1.4 },
   { name: 'Cy', color: '#0a9d78', rx: 24, ry: 22, sx: 0.8, sy: 1.5, ph: 2.7 },
   { name: 'Devi', color: '#6b5cff', rx: 30, ry: 18, sx: 1.4, sy: 1.1, ph: 4.1 },
-  { name: 'You', color: '#25282a', rx: 20, ry: 28, sx: 1.1, sy: 0.7, ph: 5.5 },
+  // The local user rides the theme accent so the cursor reads in both modes
+  // (a fixed ink arrow disappeared on the dark room surface).
+  {
+    name: 'You',
+    color: 'var(--accent)',
+    rx: 20,
+    ry: 28,
+    sx: 1.1,
+    sy: 0.7,
+    ph: 5.5,
+  },
 ] as const;
 
 // Reads the LiveStage playhead (a looping 0..1 rAF clock) to drift each peer's

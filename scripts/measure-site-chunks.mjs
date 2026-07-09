@@ -121,10 +121,17 @@ export function measureSiteCss(staticDir) {
   const referenced = new Set();
   const routes = {};
   for (const [pattern, urls] of Object.entries(routeCss)) {
-    const measures = urls.map((url) => {
-      referenced.add(cssFile(url));
-      return gzipMeasure(readFileSync(join(staticDir, cssFile(url))));
-    });
+    const measures = [];
+    for (const url of urls) {
+      const file = cssFile(url);
+      referenced.add(file);
+      const path = join(staticDir, file);
+      // A manifest URL whose file is absent (stale/partial base-ref build in
+      // the client-size job) or outside /static/ degrades to skipping that
+      // sheet, mirroring measureSiteBaseline, instead of failing the whole job.
+      if (!existsSync(path)) continue;
+      measures.push(gzipMeasure(readFileSync(path)));
+    }
     routes[pattern] = sumGzipMeasure(measures);
   }
 

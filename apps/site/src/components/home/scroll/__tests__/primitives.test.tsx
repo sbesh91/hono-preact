@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { ScrollStage } from '../stage.js';
-import { Lane, BrowserFrame, Region } from '../primitives.js';
+import { Lane, BrowserFrame, Region, Reveal } from '../primitives.js';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('Lane', () => {
   it('renders a labeled bar whose state reflects the fallback playhead', () => {
@@ -45,5 +48,54 @@ describe('Region', () => {
     expect(
       document.querySelector('.hx-region')?.getAttribute('data-shown')
     ).toBe('true');
+  });
+
+  it('shows content (not the skeleton) when no live stage is driving it', () => {
+    // Outside a ScrollStage the default context has live: false, which models
+    // SSR and a failed client bundle: the skeleton must never be terminal,
+    // even when the playhead never reaches showAt.
+    render(
+      <Region showAt={0.9} skeleton={<span>loading</span>}>
+        <span>Invoice #102000</span>
+      </Region>
+    );
+    expect(
+      document.querySelector('.hx-region')?.getAttribute('data-shown')
+    ).toBe('true');
+  });
+});
+
+describe('Reveal', () => {
+  it('stays in the visible static state when IntersectionObserver is unavailable', () => {
+    // No IO models no-JS-capable environments: the reveal must not arm its
+    // hidden state, so the content renders visible with no animation gate.
+    vi.stubGlobal('IntersectionObserver', undefined);
+    render(
+      <Reveal>
+        <p>chapter body</p>
+      </Reveal>
+    );
+    expect(
+      document.querySelector('.hx-reveal')?.getAttribute('data-reveal-state')
+    ).toBe('static');
+    expect(screen.getByText('chapter body')).toBeInTheDocument();
+  });
+
+  it('arms the hidden state after mount when IntersectionObserver exists', () => {
+    class IOStub {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal('IntersectionObserver', IOStub);
+    render(
+      <Reveal>
+        <p>chapter body</p>
+      </Reveal>
+    );
+    // Armed (hidden, awaiting scroll-in) only because client JS is running.
+    expect(
+      document.querySelector('.hx-reveal')?.getAttribute('data-reveal-state')
+    ).toBe('hidden');
   });
 });
