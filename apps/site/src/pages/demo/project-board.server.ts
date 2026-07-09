@@ -1,4 +1,4 @@
-import { defineAction, serverRoute } from 'hono-preact';
+import { defineAction, deny, serverRoute } from 'hono-preact';
 import {
   getProjectBySlug,
   listTasksForProject,
@@ -11,8 +11,6 @@ import {
   type Task,
   type Project,
   type User,
-  type TaskStatus,
-  type TaskPriority,
 } from '../../demo/data.js';
 import {
   publishActivity,
@@ -21,7 +19,11 @@ import {
 } from '../../demo/activity-stream.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
-import { NewTaskSchema } from './task-schema.js';
+import {
+  NewTaskSchema,
+  PatchTaskSchema,
+  DeleteTaskSchema,
+} from './task-schema.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (projectId) from the route's pattern.
@@ -53,7 +55,7 @@ export const serverActions = {
   createTask: defineAction(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
-      if (!user) throw new Error('not signed in');
+      if (!user) throw deny(401, 'Sign in to create tasks.');
       // Schema coerces and trims; values are already clean.
       const created = createTask(user, input);
       publishActivity(taskCreatedEvent(created, user.name));
@@ -63,33 +65,37 @@ export const serverActions = {
   ),
 
   // One action drives both moves and priority changes so a single
-  // useOptimisticAction can cover drag + menu interactions.
-  patchTask: defineAction<
-    { taskId: string; status?: TaskStatus; priority?: TaskPriority },
-    { ok: true }
-  >(async (ctx, input) => {
-    const user = await currentUser(ctx.c);
-    if (input.status === 'done') {
-      await assertCanMoveToDone(input.taskId, user?.id);
-    }
-    if (input.status)
-      setTaskStatus(input.taskId, input.status, user?.id ?? null);
-    if (input.priority) setTaskPriority(input.taskId, input.priority);
-    if (input.status) {
-      const task = getTask(input.taskId);
-      if (task) {
-        publishActivity(
-          taskMovedEvent(task, input.status, user?.name ?? 'someone')
-        );
+  // useOptimisticAction can cover drag + menu interactions. The schema
+  // types the payload; no generics needed.
+  patchTask: defineAction(
+    async (ctx, input): Promise<{ ok: true }> => {
+      const user = await currentUser(ctx.c);
+      if (input.status === 'done') {
+        await assertCanMoveToDone(input.taskId, user?.id);
       }
-    }
-    return { ok: true };
-  }),
+      if (input.status)
+        setTaskStatus(input.taskId, input.status, user?.id ?? null);
+      if (input.priority) setTaskPriority(input.taskId, input.priority);
+      if (input.status) {
+        const task = getTask(input.taskId);
+        if (task) {
+          publishActivity(
+            taskMovedEvent(task, input.status, user?.name ?? 'someone')
+          );
+        }
+      }
+      return { ok: true };
+    },
+    { input: PatchTaskSchema }
+  ),
 
-  deleteTask: defineAction<{ taskId: string }, { ok: true }>(
-    async (_ctx, input) => {
+  deleteTask: defineAction(
+    async (ctx, input): Promise<{ ok: true }> => {
+      const user = await currentUser(ctx.c);
+      if (!user) throw deny(401, 'Sign in to delete tasks.');
       deleteTask(input.taskId);
       return { ok: true };
-    }
+    },
+    { input: DeleteTaskSchema }
   ),
 };
