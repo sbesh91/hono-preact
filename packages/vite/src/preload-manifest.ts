@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
 import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
 import {
+  chunkCloser,
   extractRouteChains,
   resolvePreloadMap,
   resolveRouteCssMap,
@@ -145,9 +146,12 @@ function buildRouteMaps(
       expandGlobFs,
       warn
     );
+    // One memoized closure resolver serves both maps, so the per-chain chunk
+    // closures are computed once instead of twice over the same bundle.
+    const chunksOf = chunkCloser(bundle);
     return {
-      routes: resolvePreloadMap(chains, bundle),
-      routeCss: resolveRouteCssMap(chains, bundle),
+      routes: resolvePreloadMap(chains, bundle, chunksOf),
+      routeCss: resolveRouteCssMap(chains, bundle, chunksOf),
     };
   } catch (e) {
     warn(`route map generation failed: ${(e as Error).message}`);

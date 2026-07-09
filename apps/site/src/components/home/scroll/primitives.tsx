@@ -1,8 +1,8 @@
 import type { ComponentChildren, VNode } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { useStageProgress } from './stage.js';
 import { barState } from './progress.js';
-import { usePrefersReducedMotion } from './motion.js';
+import { useInView, usePrefersReducedMotion } from './motion.js';
 
 export function Playhead(): VNode {
   const { progress } = useStageProgress();
@@ -119,32 +119,18 @@ export function Reveal({
   delayMs?: number;
 }): VNode {
   const reduced = usePrefersReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
+  // useInView owns the IntersectionObserver wiring (same threshold/margin and
+  // disconnect-once semantics this component used to duplicate inline).
+  const [ref, inView] = useInView<HTMLDivElement>({ disabled: reduced });
   // 'static' is the SSR/no-JS/reduced state and renders fully visible; the
-  // mount effect arms the scroll-in animation ('hidden') only once client JS
-  // is running with IntersectionObserver available, so a failed bundle or a
-  // JS-less browser never strands the content invisible.
-  const [state, setState] = useState<'static' | 'hidden' | 'shown'>('static');
+  // mount effect arms the scroll-in animation only once client JS is running
+  // with IntersectionObserver available, so a failed bundle or a JS-less
+  // browser never strands the content invisible.
+  const [armed, setArmed] = useState(false);
   useEffect(() => {
-    if (reduced || typeof IntersectionObserver === 'undefined') {
-      setState('static');
-      return;
-    }
-    const el = ref.current;
-    if (!el) return;
-    setState((s) => (s === 'shown' ? s : 'hidden'));
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setState('shown');
-          io.disconnect();
-        }
-      },
-      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' }
-    );
-    io.observe(el);
-    return () => io.disconnect();
+    setArmed(!reduced && typeof IntersectionObserver !== 'undefined');
   }, [reduced]);
+  const state = !armed ? 'static' : inView ? 'shown' : 'hidden';
   return (
     <div
       class="hx-reveal"

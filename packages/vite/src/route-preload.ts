@@ -424,6 +424,29 @@ function mergeRouteUrls(
 }
 
 /**
+ * A memoized source -> static-chunk-closure resolver over one bundle. Both
+ * route maps (JS preload and CSS) walk the same chains against the same
+ * bundle, so the caller building both should create one of these and pass it
+ * to each resolver rather than letting each recompute every closure.
+ * The returned Sets are shared by the memo: treat them as read-only.
+ */
+export function chunkCloser(
+  bundle: Record<string, RouteBundleChunkLike>
+): (src: string) => ReadonlySet<string> {
+  const bySource = indexBySource(bundle);
+  const memo = new Map<string, Set<string>>();
+  return (src) => {
+    const hit = memo.get(src);
+    if (hit) return hit;
+    const files = new Set<string>();
+    const fileName = bySource.get(stripExt(src));
+    if (fileName) collectStaticChunks(fileName, bundle, files, new Set());
+    memo.set(src, files);
+    return files;
+  };
+}
+
+/**
  * Resolve route module chains to a pattern -> { high, low } preload map against
  * the Rollup output bundle.
  *
@@ -436,19 +459,10 @@ function mergeRouteUrls(
  */
 export function resolvePreloadMap(
   chains: readonly RouteModuleChain[],
-  bundle: Record<string, RouteBundleChunkLike>
+  bundle: Record<string, RouteBundleChunkLike>,
+  chunksOf: (src: string) => ReadonlySet<string> = chunkCloser(bundle)
 ): RoutePreloadMap {
-  const bySource = indexBySource(bundle);
   const eager = entryClosure(bundle);
-
-  const chunksOf = (sources: readonly string[]): Set<string> => {
-    const files = new Set<string>();
-    for (const src of sources) {
-      const fileName = bySource.get(stripExt(src));
-      if (fileName) collectStaticChunks(fileName, bundle, files, new Set());
-    }
-    return files;
-  };
 
   const map: RoutePreloadMap = {};
   for (const chain of chains) {
@@ -458,7 +472,7 @@ export function resolvePreloadMap(
     const seen = new Set<string>();
     const urls: string[] = [];
     for (const src of chain.sources) {
-      for (const file of chunksOf([src])) {
+      for (const file of chunksOf(src)) {
         if (eager.has(file) || seen.has(file)) continue;
         seen.add(file);
         urls.push(toRootRelative(file));
@@ -513,16 +527,14 @@ function cssOfChunks(
  */
 export function resolveRouteCssMap(
   chains: readonly RouteModuleChain[],
-  bundle: Record<string, RouteBundleChunkLike>
+  bundle: Record<string, RouteBundleChunkLike>,
+  chunksOf: (src: string) => ReadonlySet<string> = chunkCloser(bundle)
 ): RouteCssMap {
-  const bySource = indexBySource(bundle);
-
   const map: RouteCssMap = {};
   for (const chain of chains) {
     const files = new Set<string>();
     for (const src of chain.sources) {
-      const fileName = bySource.get(stripExt(src));
-      if (fileName) collectStaticChunks(fileName, bundle, files, new Set());
+      for (const file of chunksOf(src)) files.add(file);
     }
     const seen = new Set<string>();
     const urls: string[] = [];

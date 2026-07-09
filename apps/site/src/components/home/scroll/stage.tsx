@@ -181,23 +181,43 @@ export function LiveStage({
 
   useEffect(() => {
     if (reduced) return;
+    const el = ref.current;
+    if (!el) return;
     let raf = 0;
-    let running = true;
+    let running = false;
     const loop = (ts: number) => {
       if (!running) return;
-      const el = ref.current;
-      if (el) {
-        const r = el.getBoundingClientRect();
-        if (r.bottom > 0 && r.top < window.innerHeight) {
-          setProgress((ts % periodMs) / periodMs);
-        }
-      }
+      setProgress((ts % periodMs) / periodMs);
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => {
+    const start = () => {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(loop);
+    };
+    const stop = () => {
       running = false;
-      if (raf) cancelAnimationFrame(raf);
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    };
+    // Gate the clock on visibility with IntersectionObserver instead of a
+    // per-frame getBoundingClientRect (a forced layout read every frame for
+    // the component's whole lifetime, even far off-screen). Without IO, run
+    // unconditionally, mirroring ScrollStage's fallback.
+    let io: IntersectionObserver | undefined;
+    if (typeof IntersectionObserver === 'undefined') {
+      start();
+    } else {
+      io = new IntersectionObserver(([entry]) =>
+        entry.isIntersecting ? start() : stop()
+      );
+      io.observe(el);
+    }
+    return () => {
+      io?.disconnect();
+      stop();
     };
   }, [reduced, periodMs]);
 
