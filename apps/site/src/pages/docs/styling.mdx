@@ -34,6 +34,8 @@ At build time the framework goes further: it looks at which rules in that styles
 
 `css.global` must point at a file that exists; the framework throws a clear build error if it doesn't, telling you the path it checked.
 
+Head order is fixed: whatever your Layout or route renders into `<head>` itself (title, meta, any `<link>` you write by hand) comes first, then the global stylesheet, then route sheets. One consequence is worth knowing up front: because the global stylesheet lands later in the head than anything you hand-write there, it wins an equal-specificity tie against a stylesheet you link yourself. If you need to override a rule from the global stylesheet, the override belongs inside the global stylesheet itself (it's one file, so a later rule there wins the normal cascade way) or in a hand-split route sheet, which loads after it for the same reason.
+
 ## How splitting decides what's exclusive
 
 A rule is scoped to a route only when every class it depends on shows up in exactly one route's built JavaScript, nowhere else. That's a strict bar on purpose: the framework would rather ship a rule as global than guess wrong and scope it to the wrong route.
