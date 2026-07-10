@@ -55,3 +55,30 @@ function useListboxSelection<Value = string>(
 | `labelFor`       | `(value: unknown) => string`        | Resolve a single value's display label.                            |
 | `optionCount`    | `number`                            | Number of currently-registered options.                            |
 | `hiddenFields`   | `ComponentChild[] \| null`          | Hidden `<input>`s for native form submission, or `null`.           |
+
+## normalizeSelectionProps
+
+`normalizeSelectionProps` is the pure helper that maps [Select](/docs/components/select)'s and [Combobox](/docs/components/combobox)'s public
+`value` / `defaultValue` / `onValueChange` props (discriminated on `multiple`,
+see [Select](/docs/components/select)'s Usage section) onto the array-shaped
+`values` / `setValues` that `useListboxSelection` consumes. Reach for it when
+building a custom control that wants the same single/multiple discriminated
+prop contract as the built-in components, feeding the result into your own
+`useListboxSelection` call.
+
+```ts
+import { normalizeSelectionProps } from 'hono-preact-ui';
+import type { SelectionProps, NormalizedSelection } from 'hono-preact-ui';
+
+function normalizeSelectionProps<Value>(
+  p: SelectionProps<Value>
+): NormalizedSelection<Value>;
+```
+
+`NormalizedSelection<Value>` always represents selection as an array:
+`values`/`defaultValues` are `readonly Value[]` (`undefined` values means
+uncontrolled), and `onValuesChange` wraps the caller's `onValueChange` so a
+single-mode caller still gets `Value | null` (`[] -> null`) while a
+multiple-mode caller gets the `Value[]` it passed in. Memoize the result
+per render: a single-mode `value` wraps into a fresh array each call, which
+would otherwise churn downstream callback identities.
