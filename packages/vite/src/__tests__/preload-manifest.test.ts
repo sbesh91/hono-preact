@@ -219,4 +219,133 @@ describe('preloadManifestPlugin', () => {
     expect(residual!.source).toContain('hx-hero');
     expect(residual!.source).toContain('app-shell');
   });
+
+  it('reads the configured Layout file and feeds it as non-scopable css-auto-split evidence', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-preload-layout-'));
+    fs.writeFileSync(
+      path.join(dir, 'Layout.tsx'),
+      '<nav class="hp-shell-nav">shell</nav>'
+    );
+
+    // Same coincidental-collision shape as the css-auto-split.ts unit tests:
+    // 'hp-shell-nav' appears only in one scopable chunk's code, so without
+    // the Layout evidence it would be (wrongly) scoped away.
+    const cssBundle: Record<string, unknown> = {
+      'static/client.js': {
+        type: 'chunk',
+        fileName: 'static/client.js',
+        isEntry: true,
+        code: 'boot("nothing-shell-related")',
+        imports: [],
+        moduleIds: [],
+        viteMetadata: { importedCss: new Set(['static/global-orig.css']) },
+      },
+      'static/home-XX.js': {
+        type: 'chunk',
+        fileName: 'static/home-XX.js',
+        isEntry: false,
+        code: 'render("hp-shell-nav")',
+        imports: [],
+        moduleIds: [],
+        viteMetadata: { importedCss: new Set<string>() },
+      },
+      'static/global-orig.css': {
+        type: 'asset',
+        fileName: 'static/global-orig.css',
+        source: '.hp-shell-nav{display:flex}',
+      },
+    };
+
+    const plugin = preloadManifestPlugin({
+      routes: 'src/routes.ts',
+      layout: 'Layout.tsx',
+      css: { autoSplit: true, minSize: 0 },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plugin.configResolved as any)({ root: dir });
+    const emitted: Array<{
+      type: string;
+      fileName?: string;
+      name?: string;
+      source: string;
+    }> = [];
+    const ctx = {
+      environment: { name: 'client' },
+      warn: () => {},
+      emitFile: (f: {
+        type: string;
+        fileName?: string;
+        name?: string;
+        source: string;
+      }) => {
+        emitted.push(f);
+        return `ref-${emitted.length - 1}`;
+      },
+      getFileName: (ref: string) => {
+        const i = Number(ref.replace(/^ref-/, ''));
+        return `static/${emitted[i].name!.replace(/\.css$/, '')}-HASH.css`;
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (plugin.generateBundle as any).call(ctx, {}, cssBundle);
+
+    // The class collides with exactly one scopable chunk, but the Layout
+    // evidence disqualifies it from exclusive attribution, so it stays in
+    // the residual rather than the per-chunk sheet.
+    const residual = emitted.find((f) => f.name === 'global.css');
+    expect(residual).toBeDefined();
+    expect(residual!.source).toContain('hp-shell-nav');
+    const homeScoped = emitted.find((f) => f.name === 'home-XX.scoped.css');
+    expect(homeScoped).toBeUndefined();
+  });
+
+  it('degrades gracefully (old behavior) when the configured Layout file is unreadable', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'hp-preload-layout-missing-')
+    );
+    const cssBundle: Record<string, unknown> = {
+      'static/client.js': {
+        type: 'chunk',
+        fileName: 'static/client.js',
+        isEntry: true,
+        code: 'boot("app-shell")',
+        imports: [],
+        moduleIds: [],
+        viteMetadata: { importedCss: new Set(['static/global-orig.css']) },
+      },
+      'static/global-orig.css': {
+        type: 'asset',
+        fileName: 'static/global-orig.css',
+        source: '.app-shell{margin:0}',
+      },
+    };
+
+    const plugin = preloadManifestPlugin({
+      routes: 'src/routes.ts',
+      layout: 'Layout.tsx', // does not exist under `dir`
+      css: { autoSplit: true, minSize: 0 },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plugin.configResolved as any)({ root: dir });
+    const emitted: Array<{ name?: string; source: string }> = [];
+    const ctx = {
+      environment: { name: 'client' },
+      warn: () => {},
+      emitFile: (f: { name?: string; source: string }) => {
+        emitted.push(f);
+        return `ref-${emitted.length - 1}`;
+      },
+      getFileName: (ref: string) => {
+        const i = Number(ref.replace(/^ref-/, ''));
+        return `static/${emitted[i].name!.replace(/\.css$/, '')}-HASH.css`;
+      },
+    };
+    // Never throws even though the Layout path is unreadable.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(
+      (plugin.generateBundle as any).call(ctx, {}, cssBundle)
+    ).resolves.toBeUndefined();
+    const residual = emitted.find((f) => f.name === 'global.css');
+    expect(residual?.source).toContain('app-shell');
+  });
 });

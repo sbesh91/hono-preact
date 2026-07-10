@@ -82,6 +82,16 @@ export function collectEntryPreloadModules(
 export interface PreloadManifestPluginOptions {
   /** Path to the app's `routes.ts` (project-relative or absolute). */
   routes: string;
+  /**
+   * Path to the app's Layout source (project-relative or absolute). Read
+   * best-effort in `generateBundle` and fed to `applyCssAutoSplit` as
+   * non-scopable evidence, so the document shell's own classes can never be
+   * mis-scoped into a route's sheet by a coincidental substring match (see
+   * the JSDoc on the evidence push in `css-auto-split.ts`). Only used when
+   * `css` (below) is set; a missing/unreadable file degrades to the old
+   * behavior rather than failing the build.
+   */
+  layout?: string;
   /** Present when the app configured `css.global` (framework-owned global CSS). */
   css?: { autoSplit: boolean; minSize: number };
 }
@@ -103,6 +113,7 @@ export function preloadManifestPlugin(
   opts: PreloadManifestPluginOptions
 ): Plugin {
   let routesAbsPath = '';
+  let layoutAbsPath = '';
   let targets: Targets | undefined;
   return {
     name: 'hono-preact:preload-manifest',
@@ -110,6 +121,11 @@ export function preloadManifestPlugin(
       routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(config.root, opts.routes);
+      layoutAbsPath = opts.layout
+        ? path.isAbsolute(opts.layout)
+          ? opts.layout
+          : path.resolve(config.root, opts.layout)
+        : '';
       targets = config.css?.lightningcss?.targets;
     },
     async generateBundle(_options, bundle) {
@@ -125,11 +141,24 @@ export function preloadManifestPlugin(
       const chunksOf = chunkCloser(bundle);
       let globalCss: string[] = [];
       if (opts.css) {
+        // Best-effort: an unreadable/absent Layout file degrades to the old
+        // behavior (no non-scopable evidence from it) rather than failing
+        // the build, matching readRouteChains's degrade-on-read-failure
+        // policy for routes.ts above.
+        let layoutSource: string | undefined;
+        if (layoutAbsPath) {
+          try {
+            layoutSource = fs.readFileSync(layoutAbsPath, 'utf8');
+          } catch {
+            layoutSource = undefined;
+          }
+        }
         try {
           globalCss = await applyCssAutoSplit(bundle, chains, chunksOf, {
             autoSplit: opts.css.autoSplit,
             minSize: opts.css.minSize,
             targets,
+            layoutSource,
             emitFile: (a) => this.emitFile(a),
             getFileName: (ref) => this.getFileName(ref),
             warn,

@@ -148,6 +148,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     clientEntryPlugin({ routes, cssGlobal }),
     preloadManifestPlugin({
       routes,
+      layout,
       css: cssGlobal
         ? { autoSplit: css?.autoSplit ?? true, minSize: css?.minSize ?? 1024 }
         : undefined,

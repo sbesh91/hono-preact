@@ -516,6 +516,15 @@ export interface CssAutoSplitBundleOptions {
    * are exercisable without crafting CSS that breaks the real splitter.
    */
   split?: typeof splitCssByChunkUsage;
+  /**
+   * The app's Layout source, when readable (best-effort; see
+   * `preload-manifest.ts`). The Layout renders the document shell and never
+   * lands in a client chunk (it is server-only), so without this its classes
+   * have ZERO scoping evidence. See the non-scopable evidence entry pushed in
+   * `applyCssAutoSplit` for why that is a real safety hole, not just a missed
+   * optimization.
+   */
+  layoutSource?: string;
 }
 
 function assetSource(entry: SplitBundleEntryLike): string | undefined {
@@ -566,6 +575,29 @@ export async function applyCssAutoSplit(
       fileName: c.fileName,
       code: c.code,
       scopable: scopable.has(c.fileName),
+    });
+  }
+  if (opts.layoutSource !== undefined) {
+    // Without this, a class the Layout uses for the document shell (nav,
+    // footer, wrapper divs, ...) has no evidence of its own: if that class
+    // name happens to also appear as a substring in exactly one scopable
+    // route chunk (plausible for short/common names, and `decideOwner`'s
+    // substring scan cannot tell "used" from "coincidental"), the rule reads
+    // as exclusive to that one chunk and gets scoped away into its sheet.
+    // Every OTHER route then renders without it: a single coincidental match
+    // breaks the shell everywhere except the one route that happened to
+    // collide. Feeding the Layout's source as a non-scopable evidence entry
+    // means any class it uses now appears in at least one non-scopable
+    // chunk too, so `decideOwner` (which requires the class to appear in
+    // EXACTLY one, all-scopable chunk) always demotes it back to the
+    // residual, regardless of what a route chunk happens to contain. The
+    // leading space in the sentinel fileName keeps it out of the real
+    // `static/...` chunk namespace so it can never collide with (or be
+    // mistaken for) an actual bundle entry.
+    evidence.push({
+      fileName: ' layout-source',
+      code: opts.layoutSource,
+      scopable: false,
     });
   }
 

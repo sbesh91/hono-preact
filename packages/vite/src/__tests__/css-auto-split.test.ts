@@ -595,3 +595,81 @@ describe('applyCssAutoSplit', () => {
     expect(warnings[0]).toContain('lightningcss exploded');
   });
 });
+
+// The Layout renders the document shell and never lands in a client chunk
+// (it's server-only), so without evidence its classes have no scoping
+// signal at all: a coincidental substring match in exactly one scopable
+// route chunk reads as "exclusive" and gets scoped away, breaking the shell
+// on every OTHER route. `layoutSource` closes that hole by feeding the
+// Layout's own source in as non-scopable evidence.
+describe('applyCssAutoSplit: layout evidence', () => {
+  function bundleWithCoincidentalShellClass() {
+    return {
+      'static/client.js': {
+        type: 'chunk' as const,
+        fileName: 'static/client.js',
+        isEntry: true,
+        // Deliberately unrelated to the shell class: the entry closure must
+        // NOT be the thing providing evidence here, or this test would not
+        // isolate the layout-evidence fix from the existing entry-evidence
+        // behavior already covered above.
+        code: 'boot("nothing-shell-related")',
+        moduleIds: ['/src/entry.ts'],
+        imports: [],
+        viteMetadata: { importedCss: new Set(['static/global-orig.css']) },
+      },
+      'static/home-abc.js': {
+        type: 'chunk' as const,
+        fileName: 'static/home-abc.js',
+        isEntry: false,
+        // Coincidentally contains the shell's class name as a substring,
+        // with no actual relationship to the Layout (e.g. an unrelated
+        // string constant that happens to contain it).
+        code: 'render("hp-shell-nav")',
+        moduleIds: ['/src/pages/home.tsx'],
+        imports: [],
+        viteMetadata: { importedCss: new Set<string>() },
+      },
+      'static/global-orig.css': {
+        type: 'asset' as const,
+        fileName: 'static/global-orig.css',
+        source: '.hp-shell-nav{display:flex}',
+      },
+    };
+  }
+
+  it('without layoutSource, a shell class coinciding with one route chunk is wrongly scoped away (old behavior)', async () => {
+    const bundle = bundleWithCoincidentalShellClass();
+    const { emitFile, getFileName, emitted } = fakeEmitter();
+    await applyCssAutoSplit(bundle, HOME_CHAIN, chunkCloser(bundle), {
+      autoSplit: true,
+      minSize: 0,
+      emitFile,
+      getFileName,
+      warn: () => {},
+    });
+    const homeCss = [...bundle['static/home-abc.js'].viteMetadata.importedCss];
+    expect(homeCss.some((f) => f.endsWith('-HASH.css'))).toBe(true);
+    const scoped = [...emitted.values()].find((a) =>
+      a.name.startsWith('home-abc')
+    );
+    expect(scoped?.source).toContain('hp-shell-nav');
+  });
+
+  it('with layoutSource containing the class, the rule stays in the residual even though it coincides with one route chunk', async () => {
+    const bundle = bundleWithCoincidentalShellClass();
+    const { emitFile, getFileName, emitted } = fakeEmitter();
+    await applyCssAutoSplit(bundle, HOME_CHAIN, chunkCloser(bundle), {
+      autoSplit: true,
+      minSize: 0,
+      emitFile,
+      getFileName,
+      warn: () => {},
+      layoutSource: '<nav class="hp-shell-nav">...</nav>',
+    });
+    const homeCss = [...bundle['static/home-abc.js'].viteMetadata.importedCss];
+    expect(homeCss.some((f) => f.endsWith('-HASH.css'))).toBe(false);
+    const residual = [...emitted.values()].find((a) => a.name === 'global.css');
+    expect(residual?.source).toContain('hp-shell-nav');
+  });
+});
