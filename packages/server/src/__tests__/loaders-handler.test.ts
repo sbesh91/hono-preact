@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
-import { redirect, defineLoader } from '@hono-preact/iso';
+import { redirect, defineLoader, serverRoute } from '@hono-preact/iso';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { loadersHandler } from '../loaders-handler.js';
 
@@ -797,6 +797,42 @@ describe('loadersHandler bare-loader guarded-route dev warning', () => {
       const res = await postBoard(app, '/admin/board');
       expect(res.status).toBe(200);
       expect(bareWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for a serverRoute(pattern).loader binding and resolves guards from the declared pattern', async () => {
+    // Same silence contract as the hand-stamped __routeId test above, but
+    // through the public spelling users actually write. Also proves the page
+    // tier resolves from the loader's own declaration, not the client-sent
+    // location path.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const resolvePageUse = vi.fn(async () => []);
+      const boundGlob = {
+        './pages/board.server.ts': {
+          __moduleKey: 'pages/board',
+          serverLoaders: {
+            default: serverRoute('/admin/:section').loader(async () => ({
+              ok: true,
+            })),
+          },
+        },
+      };
+      const app = new Hono();
+      app.post(
+        '/__loaders',
+        loadersHandler(boundGlob, {
+          dev: true,
+          findGuardedRoute,
+          resolvePageUse,
+        })
+      );
+      const res = await postBoard(app, '/admin/board');
+      expect(res.status).toBe(200);
+      expect(bareWarnings(warn.mock.calls)).toHaveLength(0);
+      expect(resolvePageUse).toHaveBeenCalledWith('/admin/:section');
     } finally {
       warn.mockRestore();
     }
