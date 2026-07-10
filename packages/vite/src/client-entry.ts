@@ -110,6 +110,20 @@ export function clientEntryPlugin(opts: ClientEntryPluginOptions): Plugin {
             `[hono-preact] css.global must live under the project root; found '${cssGlobalAbsPath}' outside '${config.root}'.`
           );
         }
+        // With `build.cssCodeSplit: false`, Vite bundles every imported
+        // stylesheet into one file it manages itself and never populates a
+        // chunk's `viteMetadata.importedCss` (the auto-splitter's only signal
+        // for "this entry imports a global stylesheet"). The framework would
+        // then silently ship no global stylesheet at all in prod, a broken
+        // page with no error anywhere. Fail at config time instead of at
+        // request time.
+        if (config.build?.cssCodeSplit === false) {
+          throw new Error(
+            `[hono-preact] css.global requires build.cssCodeSplit (Vite's default); ` +
+              `with cssCodeSplit disabled the framework cannot attribute or deliver ` +
+              `the global stylesheet. Enable cssCodeSplit or remove css.global.`
+          );
+        }
       }
       isBuild = config.command === 'build';
     },

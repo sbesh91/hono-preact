@@ -8,7 +8,11 @@ import {
   VIRTUAL_CLIENT_ENTRY_ID,
 } from '../client-entry.js';
 
-type MinimalResolvedConfig = { root: string; command?: string };
+type MinimalResolvedConfig = {
+  root: string;
+  command?: string;
+  build?: { cssCodeSplit?: boolean };
+};
 
 function configResolvedOf(plugin: ReturnType<typeof clientEntryPlugin>) {
   return (plugin as { configResolved?: (c: MinimalResolvedConfig) => void })
@@ -231,5 +235,36 @@ describe('clientEntryPlugin css.global validation', () => {
     expect(() => configResolvedOf(plugin)?.({ root })).toThrow(
       /css\.global must live under the project root/
     );
+  });
+
+  it('throws when css.global is set and build.cssCodeSplit is disabled', () => {
+    fs.writeFileSync(path.join(tmpRoot, 'root.css'), 'body{color:red}');
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'root.css',
+    });
+    expect(() =>
+      configResolvedOf(plugin)?.({
+        root: tmpRoot,
+        build: { cssCodeSplit: false },
+      })
+    ).toThrow(/cssCodeSplit/);
+  });
+
+  it('accepts css.global when cssCodeSplit is left at its default (true)', () => {
+    fs.writeFileSync(path.join(tmpRoot, 'root.css'), 'body{color:red}');
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+      cssGlobal: 'root.css',
+    });
+    expect(() =>
+      configResolvedOf(plugin)?.({
+        root: tmpRoot,
+        build: { cssCodeSplit: true },
+      })
+    ).not.toThrow();
+    // Also fine when `build` is entirely absent from the resolved config
+    // fixture (matches the other tests in this file, and Vite's real default).
+    expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).not.toThrow();
   });
 });
