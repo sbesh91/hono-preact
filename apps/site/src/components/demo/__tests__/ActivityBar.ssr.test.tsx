@@ -79,14 +79,16 @@ describe('ActivityBar SSR (real .View path, connecting arm)', () => {
   });
 });
 
-// Route-independence contract: the activity loader must be a bare standalone
-// defineLoader (no __routeId) with { live: true } so it is never SSR-pumped
-// and never resolves against a route context. These assertions guard against
-// accidentally converting it to a serverRoute(r).loader(...) binding, which
-// would set __routeId and break the layout-host / outside-router consumption.
-describe('ActivityBar: activity loader route-independence contract', () => {
-  it('has no __routeId (is a standalone route-independent loader)', () => {
-    expect(serverLoaders.activity.__routeId).toBeUndefined();
+// Route-binding contract: the activity loader is bound to the projects
+// layout's route pattern via serverRoute('/demo/projects'), so its RPC
+// composes the page-layer use chain (requireSession on the projects node in
+// routes.ts) from the declared pattern. The layout host supplies the derived
+// layout location to route-bound loaders consumed inside the layout, and
+// { live: true } keeps the stream off the SSR path.
+describe('ActivityBar: activity loader route-binding contract', () => {
+  it('is bound to the projects layout route', () => {
+    expect(serverLoaders.activity.__routeId).toBe('/demo/projects');
+    expect(serverLoaders.activity.__routeBound).toBe(true);
   });
 
   it('carries live: true so it is never SSR-pumped', () => {

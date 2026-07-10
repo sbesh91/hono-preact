@@ -85,3 +85,26 @@ describe('activity live loader', () => {
     expect(clearSpy).toHaveBeenCalled();
   });
 });
+
+describe('shell loaders are route-bound to the projects layout', () => {
+  it('binds default and activity to /demo/projects', () => {
+    // Route binding is what attaches the page-layer use chain
+    // (requireSession on the projects node) to these loaders' RPCs.
+    expect(serverLoaders.default.__routeId).toBe('/demo/projects');
+    expect(serverLoaders.default.__routeBound).toBe(true);
+    expect(serverLoaders.activity.__routeId).toBe('/demo/projects');
+    expect(serverLoaders.activity.__routeBound).toBe(true);
+  });
+
+  it('default loader returns the shell data shape via the server caller', async () => {
+    const c = await mintContext();
+    const r = await createCaller(c).call(serverLoaders.default);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.user).toBeNull();
+    expect(r.value.projects.length).toBeGreaterThan(0);
+    for (const p of r.value.projects) {
+      expect(typeof p.taskCount).toBe('number');
+    }
+  });
+});

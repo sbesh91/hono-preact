@@ -1,4 +1,4 @@
-import { defineLoader, eventStream, type LoaderCtx } from 'hono-preact';
+import { serverRoute, eventStream, type LoaderCtx } from 'hono-preact';
 import {
   listProjects,
   listTasksForProject,
@@ -36,8 +36,14 @@ async function* activityStream({
   }
 }
 
+// Bind this server module to the projects layout's route pattern. Binding
+// resolves the page-layer use chain (requireSession, declared on the
+// projects node in routes.ts) from this declared pattern on every loader
+// RPC, so the shell's data endpoints are gated like the pages they serve.
+const route = serverRoute('/demo/projects');
+
 export const serverLoaders = {
-  default: defineLoader(async (ctx) => {
+  default: route.loader(async (ctx) => {
     const user = await currentUser(ctx.c);
     const projects = listProjects().map((p) => ({
       ...p,
@@ -45,5 +51,5 @@ export const serverLoaders = {
     }));
     return { user, projects } satisfies ShellData;
   }),
-  activity: defineLoader(activityStream, { live: true }),
+  activity: route.loader(activityStream, { live: true }),
 };
