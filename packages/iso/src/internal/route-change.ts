@@ -188,10 +188,11 @@ function buildEvent(from: string | undefined): ViewTransitionEvent {
 //
 // Preact calls `options.debounceRendering(process)` to schedule a render flush
 // (this is the seam `flushSync` uses). We override it: when a flush is the
-// result of a navigation (the URL changed since the last flush, because the
-// router pushes state before re-rendering), wrap that flush in a view
-// transition so the browser captures the current route as the old snapshot
-// before `process()` swaps in the new one. Everything else schedules normally.
+// result of a navigation (the URL's pathname or search changed since the last
+// flush, because the router pushes state before re-rendering; hash-only
+// changes do not count), wrap that flush in a view transition so the browser
+// captures the current route as the old snapshot before `process()` swaps in
+// the new one. Everything else schedules normally.
 //
 // Cold (suspending) routes commit their content in a later, same-URL flush; the
 // in-flight transition routes that flush into itself so the new snapshot is the
@@ -202,7 +203,12 @@ function buildEvent(from: string | undefined): ViewTransitionEvent {
 type ProcessFn = () => void;
 
 let schedulerInstalled = false;
-let lastHref = '';
+// The navigation key (pathname + search) of the last flush. A flush whose key
+// differs is a navigated flush. Hash-only URL changes do not move the key, so
+// they are never classified as navigations: they never animate and never
+// consume the one-shot skip. This matches the ViewTransitionEvent model,
+// whose to/from are already pathname + search (see currentPath).
+let lastNavKey = '';
 
 // One-shot: when set, the next navigated flush commits without a view
 // transition (see skipNextNavTransition). Consumed on that flush.
@@ -240,6 +246,12 @@ function defaultSchedule(process: ProcessFn): void {
 // scheduleRender never sees it and its own supersede branch can't fire.
 function onNavObserved(): void {
   if (!transitionActive && !coldRouteSignal) return;
+  // Hash-only URL changes are not navigations: a shareable-hash write during
+  // a cold load must not abort the held transition. At the moment a real
+  // path or search push fires, the flush that would advance lastNavKey has
+  // not run yet, so a real navigation still compares unequal and abandons
+  // correctly.
+  if (currentPath() === lastNavKey) return;
   navGen++; // the in-flight callback bows out at its next navGen check
   transitionActive = false;
   if (coldRouteSignal) {
@@ -270,15 +282,15 @@ export function installNavTransitionScheduler(): void {
   if (typeof document === 'undefined' || typeof location === 'undefined')
     return;
   schedulerInstalled = true;
-  lastHref = location.href;
+  lastNavKey = currentPath();
   prevDebounce = options.debounceRendering;
   options.debounceRendering = scheduleRender;
   unsubscribeNav = onNavigation(onNavObserved);
 }
 
 function scheduleRender(process: ProcessFn): void {
-  const href = location.href;
-  const navigated = href !== lastHref;
+  const navKey = currentPath();
+  const navigated = navKey !== lastNavKey;
 
   // The content flush for an in-flight cold navigation (same URL): hand it back
   // to that transition so it lands in the new snapshot.
@@ -318,7 +330,7 @@ function scheduleRender(process: ProcessFn): void {
 
   const skip = navigated && skipNextTransition;
   if (navigated) skipNextTransition = false; // one-shot: consumed on the nav flush
-  lastHref = href;
+  lastNavKey = navKey;
   const start = navigated && !skip ? getStartViewTransition() : undefined;
   if (!start) {
     defaultSchedule(process);
