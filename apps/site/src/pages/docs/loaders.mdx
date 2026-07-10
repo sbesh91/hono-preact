@@ -370,10 +370,12 @@ A loader in `layout.server.*` is scoped to the layout's matched location. It doe
 
 ```ts
 // src/pages/movies/layout.server.ts
-import { defineLoader } from 'hono-preact';
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/movies');
 
 export const serverLoaders = {
-  activity: defineLoader(
+  activity: route.loader(
     async function* ({ signal }) {
       for await (const event of subscribeToActivity(signal)) {
         yield event;
@@ -410,6 +412,12 @@ export default function MoviesLayout({
 ```
 
 Navigating between child routes does not unmount the layout, so the streaming subscription continues across those navigations.
+
+### Binding a layout's loaders
+
+A layout node's path is a route pattern, so a layout server module binds with `serverRoute('/movies')` the same way a leaf module binds its own pattern. Binding resolves the page-layer `use` chain from the declared pattern on every loader RPC: a guard declared on the layout node (or inherited from an ancestor) gates the layout's data endpoints, not just its render. Inside the layout, a bound loader resolves its `location` to the layout's own matched path with the wildcard remainder stripped, so `ctx.location.pathParams` carries exactly the layout pattern's params.
+
+A layout path and its empty-path index child share one pattern string. Guard resolution for that string uses the deepest node's composed chain: the layout's inherited and own `use`, plus the index child's own `use` when the index child declares one. A loader bound to a layout path always runs at least the layout's gates; an index child that declares its own `use` adds those gates to the bound loader's RPC as well.
 
 ## The loader context
 
