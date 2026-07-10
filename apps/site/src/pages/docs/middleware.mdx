@@ -93,6 +93,10 @@ A `use` on a route node inherits down the tree: it applies to the node's own vie
 
 Bare units are the exception, and loaders and actions behave the same way. A route-independent `defineLoader` or `defineAction` runs its SSR render inside the route chain, but its client-driven RPC (`POST /__loaders` for a loader, the action POST for an action) runs only the app-level `use` and the unit's own unit-level `use`, never the route node's page-layer `use`. So a bare unit colocated under a guarded route is gated on first paint but not on a direct RPC hit. A bare unit is route-independent by design: the client chooses where to POST, so the route it posts from is not a security boundary. Bind it with `serverRoute(r).loader` / `serverRoute(r).action` (as in the example above), or give it a unit-level `use`, to gate it everywhere.
 
+A layout node's path is a route pattern too, so a layout's own server module binds the same way: `serverRoute('/admin')` in the layout's `.server.ts` attaches the subtree's gates to the layout's loader RPCs (see [Layout-level loaders](/docs/loaders#binding-a-layouts-loaders)). A layout path and its empty-path index child share one pattern string; guard resolution for that string uses the deepest node's composed chain, so a loader bound to a layout path runs the layout's inherited and own `use`, plus the index child's own `use` when the index child declares one.
+
+A grouping node that declares `use` and `children` but no `view` or `layout` has no pattern of its own, so nothing binds to it directly. A server module shared across such a subtree binds a descendant leaf's pattern instead: guards inherit down the tree, so the leaf's chain carries every gate the grouping node declares, plus the leaf's own `use`.
+
 ```ts
 // src/routes.ts
 import { defineRoutes } from 'hono-preact';
