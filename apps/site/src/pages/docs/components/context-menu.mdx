@@ -269,15 +269,17 @@ Sets `aria-checked` and `data-checked` (present when checked).
 
 ### ContextMenu.RadioGroup
 
-Single-select context for the radio items inside it. Default element `<div>`
+Single-select context for the radio items inside it. Generic over the value
+type (`ContextMenu.RadioGroup<V extends string>`); `V` is inferred from
+`value` / `defaultValue` and defaults to `string`. Default element `<div>`
 with `role="group"`.
 
 | Prop            | Type                                 | Default | Description                                           |
 | --------------- | ------------------------------------ | ------- | ----------------------------------------------------- |
 | `render`        | `RenderProp`                         | -       | Compose or replace the element.                       |
-| `value`         | `string`                             | -       | Controlled selected value. Pair with `onValueChange`. |
-| `defaultValue`  | `string`                             | -       | Initial selected value when uncontrolled.             |
-| `onValueChange` | `(value: string) => void`            | -       | Called when the selection changes.                    |
+| `value`         | `V`                                  | -       | Controlled selected value. Pair with `onValueChange`. |
+| `defaultValue`  | `V`                                  | -       | Initial selected value when uncontrolled.             |
+| `onValueChange` | `(value: V) => void`                 | -       | Called when the selection changes.                    |
 | `children`      | `ComponentChildren`                  | -       | The radio items.                                      |
 | `...props`      | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.                             |
 

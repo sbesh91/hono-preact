@@ -40,11 +40,22 @@ selected labels.
 
 ## Usage
 
-Set `multiple` on `Select.Root` for multi-selection: picking an option toggles
-it and keeps the popup open, and the value becomes an array. Pass a `value` /
-`onValueChange` pair to control the selection, or `defaultValue` to leave it
+The value contract follows `multiple`. A single select (the default) deals in
+`Value | null`: `onValueChange` receives the picked value, or `null` when the
+selection is cleared (for example by a form reset with no `defaultValue`). Set
+`multiple` on `Select.Root` for multi-selection: picking an option toggles it
+and keeps the popup open, and the value is a `Value[]`. Pass a `value` /
+`onValueChange` pair to control the selection (`null` in single mode and `[]`
+in multiple mode mean controlled-and-empty), or `defaultValue` to leave it
 uncontrolled. When `name` is set, the value submits as a hidden field (one
-field per selected value in multiple mode), present before hydration.
+field per selected value in multiple mode), present before hydration; an empty
+selection submits no field, like an unchecked checkbox.
+
+Two typing notes. `multiple` must be a literal (`true`, or omitted) for
+TypeScript to pin the mode; a `boolean` variable widens the handler to the
+union of both modes. And `null` alone cannot infer `Value`, so when the initial
+controlled value is `null` and `Value` is not `string`, pass the generic
+explicitly (`<Select.Root<User> value={null}>`).
 
 The value type is generic. By default an option's `value` is a string, but you
 can pass objects: give `Select.Root` an `isValueEqual` comparator so the
@@ -264,26 +275,26 @@ Provides selection and open state, ids, refs, navigation config, and placement
 to the parts. Generic over the value type (`Select.Root<Value>`); defaults to
 `string`. Renders its children plus the hidden form field(s) when `name` is set.
 
-| Prop             | Type                                | Default     | Description                                                                 |
-| ---------------- | ----------------------------------- | ----------- | --------------------------------------------------------------------------- |
-| `value`          | `Value \| Value[]`                  | -           | Controlled selection. Pair with `onValueChange`. An array in multiple mode. |
-| `defaultValue`   | `Value \| Value[]`                  | -           | Initial selection when uncontrolled.                                        |
-| `onValueChange`  | `(value: Value \| Value[]) => void` | -           | Called when the selection changes.                                          |
-| `multiple`       | `boolean`                           | `false`     | Allow more than one selection; the value becomes an array.                  |
-| `open`           | `boolean`                           | -           | Controlled open state. Pair with `onOpenChange`.                            |
-| `defaultOpen`    | `boolean`                           | `false`     | Initial open state when uncontrolled.                                       |
-| `onOpenChange`   | `(open: boolean) => void`           | -           | Called when the listbox requests an open or close.                          |
-| `name`           | `string`                            | -           | Submit the value as a hidden field (one per value in multiple mode).        |
-| `disabled`       | `boolean`                           | `false`     | Disable the trigger and skip the hidden field.                              |
-| `required`       | `boolean`                           | `false`     | Mark the trigger `aria-required`.                                           |
-| `isValueEqual`   | `(a: Value, b: Value) => boolean`   | `Object.is` | Compare values for selection matching (use for object values).              |
-| `serializeValue` | `(value: Value) => string`          | `String`    | Stringify a value for the hidden form field.                                |
-| `side`           | `'top'\|'right'\|'bottom'\|'left'`  | `'bottom'`  | Preferred side of the trigger to place the popup.                           |
-| `align`          | `'start'\|'center'\|'end'`          | `'start'`   | Alignment along that side.                                                  |
-| `offset`         | `number`                            | `8`         | Gap in pixels between the trigger and the popup.                            |
-| `loop`           | `boolean`                           | `true`      | Wrap arrow navigation at the first / last option.                           |
-| `typeahead`      | `boolean`                           | `true`      | Activate options by typing their leading characters.                        |
-| `children`       | `ComponentChildren`                 | -           | The trigger and positioner.                                                 |
+| Prop             | Type                                                                         | Default     | Description                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `value`          | `Value \| null` single, `readonly Value[]` multiple                          | -           | Controlled selection. Pair with `onValueChange`. `null` (single) or `[]` (multiple) is controlled-and-empty; omit for uncontrolled. |
+| `defaultValue`   | `Value \| null` single, `readonly Value[]` multiple                          | -           | Initial selection when uncontrolled.                                                                                                |
+| `onValueChange`  | `(value: Value \| null) => void` single, `(value: Value[]) => void` multiple | -           | Called when the selection changes, including when it is cleared.                                                                    |
+| `multiple`       | `true \| false`                                                              | `false`     | Discriminates the value shape: omitted or `false` is scalar, `true` is array. Use a literal so TypeScript pins the mode.            |
+| `open`           | `boolean`                                                                    | -           | Controlled open state. Pair with `onOpenChange`.                                                                                    |
+| `defaultOpen`    | `boolean`                                                                    | `false`     | Initial open state when uncontrolled.                                                                                               |
+| `onOpenChange`   | `(open: boolean) => void`                                                    | -           | Called when the listbox requests an open or close.                                                                                  |
+| `name`           | `string`                                                                     | -           | Submit the value as a hidden field (one per value in multiple mode).                                                                |
+| `disabled`       | `boolean`                                                                    | `false`     | Disable the trigger and skip the hidden field.                                                                                      |
+| `required`       | `boolean`                                                                    | `false`     | Mark the trigger `aria-required`.                                                                                                   |
+| `isValueEqual`   | `(a: Value, b: Value) => boolean`                                            | `Object.is` | Compare values for selection matching (use for object values).                                                                      |
+| `serializeValue` | `(value: Value) => string`                                                   | `String`    | Stringify a value for the hidden form field.                                                                                        |
+| `side`           | `'top'\|'right'\|'bottom'\|'left'`                                           | `'bottom'`  | Preferred side of the trigger to place the popup.                                                                                   |
+| `align`          | `'start'\|'center'\|'end'`                                                   | `'start'`   | Alignment along that side.                                                                                                          |
+| `offset`         | `number`                                                                     | `8`         | Gap in pixels between the trigger and the popup.                                                                                    |
+| `loop`           | `boolean`                                                                    | `true`      | Wrap arrow navigation at the first / last option.                                                                                   |
+| `typeahead`      | `boolean`                                                                    | `true`      | Activate options by typing their leading characters.                                                                                |
+| `children`       | `ComponentChildren`                                                          | -           | The trigger and positioner.                                                                                                         |
 
 ### Select.Trigger
 
