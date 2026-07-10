@@ -370,7 +370,7 @@ describe('splitCssByChunkUsage round-trip (spec section 8)', () => {
   it('the union of emitted sheets is rule-equivalent to the input monolith under real Lightning CSS serialization', async () => {
     // Representative fixture: a cascade layer with custom properties whose
     // values are var() references (the bisected trigger for the visitor
-    // serialization bug this splitter had — see the "splits realistic theme
+    // serialization bug this splitter had; see the "splits realistic theme
     // CSS" regression test above), a leaf at-rule (@font-face), a container
     // at-rule (@media) wrapping a scoped rule, and a residual-only rule.
     // Every rule here has a SINGLE owner (or none), so no at-rule wrapper is

@@ -405,7 +405,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         const where = `${apiAbsPath}${r.line != null ? `:${r.line}` : ''}`;
         if (r.kind === 'notFound') {
           this.warn(
-            `[hono-preact] ${where}: app.notFound(...) will not fire — the ` +
+            `[hono-preact] ${where}: app.notFound(...) will not fire: the ` +
               `framework's renderPage handler matches every unmatched request. ` +
               `Move the behavior to a specific path, or accept that it won't fire.`
           );
