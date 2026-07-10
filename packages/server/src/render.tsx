@@ -196,16 +196,23 @@ export async function renderPage(
     // keep the raw, encoded path
   }
   const routePreload = selectRoutePreload(routes, routePath) ?? [];
-  // The matched route's own render-critical stylesheets, injected into the head
-  // (not the Link header). Reuses the exact-key-then-findBestPattern matcher.
-  const routeStyleSheets = selectRoutePreload(routeCss, routePath) ?? [];
-  // The framework-owned global stylesheet(s): dev seam first (source URL served
-  // by the dev server; the artifact is empty in dev), then the build artifact's
-  // residual sheets. Render-critical, head-only (not in the Link header, v1).
+  // The dev-global-css seam is installed only in serve mode (see
+  // dev-global-css.ts), so its presence here IS "we are running under `vite
+  // dev`". On the node adapter that matters beyond styling: a stale
+  // dist/client from a previous build reads successfully in dev (the file on
+  // disk didn't go anywhere when the dev server started), so the artifact's
+  // hashed route/global stylesheet URLs would resolve to chunk names that
+  // don't exist in this dev session and 404 render-blockingly. The dev-served
+  // global stylesheet source already carries every rule those artifact sheets
+  // would have carried (nothing is scoped away in dev), so artifact-driven
+  // render-critical CSS is never wanted alongside it, not even as a
+  // supplement. Modulepreload hints are left untouched: they're droppable (a
+  // stale hint just 404s a prefetch, never the page).
   const devGlobalCss = getDevGlobalCss();
-  const globalStyleSheets = devGlobalCss
-    ? [...devGlobalCss, ...globalCss]
-    : globalCss;
+  const routeStyleSheets = devGlobalCss
+    ? []
+    : (selectRoutePreload(routeCss, routePath) ?? []);
+  const globalStyleSheets = devGlobalCss ? [...devGlobalCss] : globalCss;
   // Only the entry closure goes in the `Link` header. The header is honored
   // before body parse (and promotable to 103 Early Hints), but it cannot carry
   // `fetchpriority`, so a route chunk placed there would preload at default

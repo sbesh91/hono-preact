@@ -204,4 +204,30 @@ describe('renderPage: global stylesheet', () => {
       '<link rel="stylesheet" href="/src/styles/root.css" />'
     );
   });
+
+  it('when the dev seam is installed, injects only the dev stylesheet and drops all artifact CSS (stale dist/client manifest safety)', async () => {
+    // A stale dist/client from a previous build reads successfully under
+    // `vite dev` (the node adapter's fs reader has no idea the dev server
+    // restarted), so its hashed route/global URLs must never reach the head
+    // alongside the dev seam: they would 404 render-blockingly, and the dev
+    // stylesheet source already carries every rule they would have.
+    installDevGlobalCss(['/src/styles/root.css']);
+    installPreloadModules(() => ({
+      closure: [],
+      routes: {},
+      routeCss: { '/': ['/static/home-STALE.css'] },
+      globalCss: ['/static/global-STALE.css'],
+    }));
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Page />));
+
+    const res = await app.request('http://localhost/');
+    const html = await res.text();
+
+    expect(html).toContain(
+      '<link rel="stylesheet" href="/src/styles/root.css" />'
+    );
+    expect(html).not.toContain('/static/home-STALE.css');
+    expect(html).not.toContain('/static/global-STALE.css');
+  });
 });
