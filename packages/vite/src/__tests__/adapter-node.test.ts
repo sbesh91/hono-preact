@@ -31,22 +31,36 @@ describe('nodeAdapter', () => {
     expect(tail).toContain("from 'hono-preact/server/internal/runtime'");
   });
 
-  it('wrapEntry warns on a failed manifest read, guarded so it is silent on a dev module-runner load', () => {
+  it('wrapEntry gates the manifest read on PROD, so a dev module-runner load never touches disk', () => {
     const tail = nodeAdapter().wrapEntry(ctx);
-    // The generated reader's catch: a real prod read failure must be
-    // observable (the manifest now carries render-critical CSS), but `vite
-    // dev` loads this wrapper through the SSR module runner where
-    // dist/client never exists, so the warn is gated on PROD like the
-    // serve() boot is, not unconditional.
-    const catchBlock = tail.slice(
+    // A stale dist/client left over from a previous build would otherwise
+    // read successfully under `vite dev` and serve hashed stylesheet URLs
+    // that 404 render-blockingly (see render.tsx's dev seam); gating the
+    // read itself on PROD, not just the warn, is what prevents that read
+    // from ever happening in dev.
+    const block = tail.slice(
       tail.indexOf('installPreloadModules'),
       tail.indexOf('const app = new Hono()')
     );
-    expect(catchBlock).toContain('catch (err)');
-    expect(catchBlock).toContain('if (import.meta.env.PROD)');
-    expect(catchBlock).toContain('console.warn(');
-    expect(catchBlock).toContain('preload manifest read failed');
-    expect(catchBlock).toContain('err');
+    expect(block).toContain('if (!import.meta.env.PROD) return {};');
+    expect(block).toContain('readFileSync');
+  });
+
+  it('wrapEntry rethrows a failed manifest read instead of degrading to {} locally', () => {
+    const tail = nodeAdapter().wrapEntry(ctx);
+    // resolvePreloadManifest's own catch must own the warn and the
+    // non-memoized retry (so a transient prod failure recovers on the next
+    // request); the generated reader rethrows rather than swallowing the
+    // failure into `{}` itself.
+    const block = tail.slice(
+      tail.indexOf('installPreloadModules'),
+      tail.indexOf('const app = new Hono()')
+    );
+    expect(block).toContain('catch (err)');
+    expect(block).toContain('throw new Error(');
+    expect(block).toContain('preload manifest read failed');
+    expect(block).toContain('__hp-preload.json');
+    expect(block).not.toContain('console.warn(');
   });
 
   it('wrapEntry uses createNodeWebSocket and installWebSocketUpgrader', () => {
