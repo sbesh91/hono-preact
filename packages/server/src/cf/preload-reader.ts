@@ -4,18 +4,32 @@
 // chunk filenames don't exist when the worker is bundled and can't be baked in
 // as a constant. Workerd also has no `fs`. So the worker reads the preload
 // artifact (written into the client output by the vite preload-manifest plugin)
-// at runtime through the `ASSETS` binding, on the first render. The result is
-// memoized by `resolvePreloadManifest`, so this runs at most once per isolate.
+// at runtime through the `ASSETS` binding, on the first render.
 //
-// Requires the worker to bind its assets as `ASSETS`
-// (`assets.binding` in wrangler). Absent binding or any read failure -> `{}`
-// (no hints, no render-critical CSS), never an error: preload is an
-// optimization, but `globalCss`/`routeCss` are render-critical, so every
-// failure mode here is logged (see warnDegraded below) rather than passing
-// silently. resolvePreloadManifest's own catch also warns, but it never
-// fires for THIS reader: every branch below already returns `{}` instead of
-// throwing/rejecting, so the context (which failure mode) would otherwise be
-// lost. Logging it here, where the context exists, is the fix.
+// Two distinct failure shapes, deliberately handled differently:
+//
+//  - ABSENCE (no `ASSETS` binding configured, or the binding 404s the
+//    manifest path): a static fact about this deploy, not a transient
+//    condition -- retrying the same request would just fail the same way.
+//    This is also the ordinary shape of `wrangler dev` (no client build ever
+//    ran, so no manifest exists on the bound assets). These branches RETURN
+//    `{}`, which `resolvePreloadManifest` treats as a successful read and
+//    memoizes: the warn below therefore fires at most once per isolate
+//    (every later call short-circuits on the memoized promise before this
+//    reader runs again), gated on `import.meta.env.PROD` so `wrangler dev`
+//    stays silent.
+//  - TRANSPORT FAILURE (the fetch itself throws, a non-OK non-404 response,
+//    or the body fails to parse as JSON): a condition that may well clear on
+//    retry (a network blip, a transient 5xx, a race with an in-progress
+//    deploy). These branches THROW, so `resolvePreloadManifest`'s own catch
+//    owns the warn (it has the same per-request context: "a read failed just
+//    now") AND leaves the read un-memoized, retrying on the next request
+//    instead of shipping every subsequent render unstyled for the isolate's
+//    lifetime.
+//
+// Requires the worker to bind its assets as `ASSETS` (`assets.binding` in
+// wrangler) to ever succeed; a missing binding is treated as ABSENCE, not a
+// transport failure (see above).
 
 import { PRELOAD_MANIFEST_URL } from '@hono-preact/iso/internal/runtime';
 import { getRealtimeRuntime } from './cf-pubsub.js';
@@ -34,24 +48,20 @@ function isFetcher(value: unknown): value is Fetcher {
 }
 
 /**
- * Log a degraded-read reason before the reader returns `{}`. Gated on
+ * Log an ABSENCE reason (see the module doc above). Gated on
  * `import.meta.env.PROD`: `wrangler dev` (via `@cloudflare/vite-plugin`, which
  * drives both dev and build) never has a built `__hp-preload.json` either, so
- * the no-binding/non-OK-response cases would otherwise fire on every single
- * dev request. `import.meta.env.PROD` is a build-time constant Vite replaces
- * statically (see types.d.ts), so this whole branch compiles away in dev; a
- * real production failure still warns on every affected request (a failed
- * read is not memoized, per resolvePreloadManifest, so an ongoing prod
- * misconfiguration keeps being visible rather than going silent after once).
+ * the no-binding/404 cases would otherwise fire on every single dev request.
+ * `import.meta.env.PROD` is a build-time constant Vite replaces statically
+ * (see types.d.ts), so this whole branch compiles away in dev. A real
+ * production ABSENCE fires this warn once per isolate (the `{}` return is
+ * memoized by resolvePreloadManifest, so this reader does not run again).
  */
-function warnDegraded(reason: string, err?: unknown): void {
+function warnAbsent(reason: string): void {
   if (!import.meta.env.PROD) return;
-  const message = `[hono-preact] preload manifest read failed (${reason}); page ships without render-critical CSS this request`;
-  if (err !== undefined) {
-    console.warn(message, err);
-  } else {
-    console.warn(message);
-  }
+  console.warn(
+    `[hono-preact] preload manifest unavailable (${reason}); page ships without render-critical CSS this request`
+  );
 }
 
 /**
@@ -63,7 +73,7 @@ export function makeAssetsPreloadReader(): () => Promise<unknown> {
   return async () => {
     const assets = getRealtimeRuntime()?.env.ASSETS;
     if (!isFetcher(assets)) {
-      warnDegraded('no ASSETS binding is configured on this worker');
+      warnAbsent('no ASSETS binding is configured on this worker');
       return {};
     }
     let res: Response;
@@ -72,19 +82,29 @@ export function makeAssetsPreloadReader(): () => Promise<unknown> {
         new Request('https://assets.invalid' + PRELOAD_MANIFEST_URL)
       );
     } catch (err) {
-      warnDegraded('the ASSETS fetch threw', err);
+      throw new Error(
+        `[hono-preact] preload manifest ASSETS fetch threw: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+    if (res.status === 404) {
+      // The build produced no manifest at this path, or nothing was ever
+      // deployed under it: a static fact for this isolate, not a transport
+      // failure. Also the ordinary shape of `wrangler dev` (see module doc).
+      warnAbsent('the build produced no preload manifest (404)');
       return {};
     }
     if (!res.ok) {
-      warnDegraded(`the ASSETS fetch returned HTTP ${res.status}`);
-      return {};
+      throw new Error(
+        `[hono-preact] preload manifest ASSETS fetch returned HTTP ${res.status}`
+      );
     }
     try {
       // Raw parsed artifact; resolvePreloadManifest validates + normalizes it.
       return await res.json();
     } catch (err) {
-      warnDegraded('the manifest body failed to parse as JSON', err);
-      return {};
+      throw new Error(
+        `[hono-preact] preload manifest body failed to parse as JSON: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   };
 }

@@ -45,30 +45,37 @@ describe('makeAssetsPreloadReader', () => {
     await expect(runReader(runtime)).resolves.toEqual({});
   });
 
-  it('degrades to {} on a non-OK response', async () => {
+  it('degrades to {} on a 404 (no manifest exists, e.g. wrangler dev or nothing deployed yet)', async () => {
     const runtime = runtimeWith(
       fakeAssets(async () => new Response(null, { status: 404 }))
     );
     await expect(runReader(runtime)).resolves.toEqual({});
   });
 
-  it('degrades to {} when the fetch itself throws', async () => {
+  it('throws on a non-OK, non-404 response (a transport failure, not absence)', async () => {
+    const runtime = runtimeWith(
+      fakeAssets(async () => new Response(null, { status: 503 }))
+    );
+    await expect(runReader(runtime)).rejects.toThrow('HTTP 503');
+  });
+
+  it('throws when the fetch itself throws (a transport failure, not absence)', async () => {
     const runtime = runtimeWith(
       fakeAssets(async () => {
         throw new Error('network down');
       })
     );
-    await expect(runReader(runtime)).resolves.toEqual({});
+    await expect(runReader(runtime)).rejects.toThrow('fetch threw');
   });
 
-  it('degrades to {} when the response body is not valid JSON', async () => {
+  it('throws when the response body is not valid JSON (a transport failure, not absence)', async () => {
     const runtime = runtimeWith(
       fakeAssets(async () => new Response('not json{'))
     );
-    await expect(runReader(runtime)).resolves.toEqual({});
+    await expect(runReader(runtime)).rejects.toThrow('failed to parse as JSON');
   });
 
-  describe('degraded-read observability', () => {
+  describe('absence observability (the reader itself warns; transport failures are warned by resolvePreloadManifest instead)', () => {
     it('stays silent in dev (import.meta.env.PROD false, matching wrangler dev)', async () => {
       import.meta.env.PROD = false;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -93,51 +100,17 @@ describe('makeAssetsPreloadReader', () => {
       }
     });
 
-    it('warns in prod: non-OK response names the HTTP status', async () => {
+    it('warns once in prod: a 404 (no manifest)', async () => {
       import.meta.env.PROD = true;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         await runReader(
           runtimeWith(
-            fakeAssets(async () => new Response(null, { status: 503 }))
+            fakeAssets(async () => new Response(null, { status: 404 }))
           )
         );
         expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn.mock.calls[0]?.[0]).toContain('HTTP 503');
-      } finally {
-        warn.mockRestore();
-      }
-    });
-
-    it('warns in prod: a thrown fetch names the failure and passes the error', async () => {
-      import.meta.env.PROD = true;
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        const thrown = new Error('network down');
-        await runReader(
-          runtimeWith(
-            fakeAssets(async () => {
-              throw thrown;
-            })
-          )
-        );
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn.mock.calls[0]?.[0]).toContain('fetch threw');
-        expect(warn.mock.calls[0]?.[1]).toBe(thrown);
-      } finally {
-        warn.mockRestore();
-      }
-    });
-
-    it('warns in prod: a JSON parse failure names the failure', async () => {
-      import.meta.env.PROD = true;
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        await runReader(
-          runtimeWith(fakeAssets(async () => new Response('not json{')))
-        );
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn.mock.calls[0]?.[0]).toContain('failed to parse as JSON');
+        expect(warn.mock.calls[0]?.[0]).toContain('404');
       } finally {
         warn.mockRestore();
       }
@@ -150,6 +123,23 @@ describe('makeAssetsPreloadReader', () => {
         await runReader(
           runtimeWith(fakeAssets(async () => new Response('{}')))
         );
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('does not warn locally on a transport failure; the reader only throws', async () => {
+      import.meta.env.PROD = true;
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await expect(
+          runReader(
+            runtimeWith(
+              fakeAssets(async () => new Response(null, { status: 503 }))
+            )
+          )
+        ).rejects.toThrow('HTTP 503');
         expect(warn).not.toHaveBeenCalled();
       } finally {
         warn.mockRestore();
