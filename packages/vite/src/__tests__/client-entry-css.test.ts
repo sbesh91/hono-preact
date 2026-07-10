@@ -14,7 +14,7 @@ describe('client entry global CSS import', () => {
       routesAbsPath: '/proj/src/routes.ts',
       cssGlobalAbsPath: '/proj/src/styles/root.css',
     });
-    expect(src.startsWith(`import '/proj/src/styles/root.css';`)).toBe(true);
+    expect(src.startsWith(`import "/proj/src/styles/root.css";`)).toBe(true);
   });
 
   it('emits no CSS import when not configured', () => {
@@ -22,6 +22,15 @@ describe('client entry global CSS import', () => {
       routesAbsPath: '/proj/src/routes.ts',
     });
     expect(src).not.toContain('.css');
+  });
+
+  it('normalizes a win32-shaped absolute path to forward slashes and quotes it as a JS string literal', () => {
+    const src = generateClientEntrySource({
+      routesAbsPath: '/proj/src/routes.ts',
+      cssGlobalAbsPath: 'C:\\Users\\dev\\app\\src\\styles\\root.css',
+    });
+    expect(src).toContain(`import "C:/Users/dev/app/src/styles/root.css";\n`);
+    expect(src).not.toContain('\\');
   });
 });
 
@@ -70,7 +79,7 @@ describe('clientEntryPlugin build-only CSS import gate', () => {
     const code = loadEntrySource('build', tmpRoot);
     expect(code).toBeDefined();
     const cssAbs = path.resolve(tmpRoot, 'src/styles/root.css');
-    expect(code!.startsWith(`import '${cssAbs}';`)).toBe(true);
+    expect(code!.startsWith(`import ${JSON.stringify(cssAbs)};`)).toBe(true);
   });
 
   it('serve mode: the generated entry has no CSS import (dev FOUC guard)', () => {

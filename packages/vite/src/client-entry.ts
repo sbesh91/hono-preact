@@ -19,11 +19,23 @@ export interface GenerateClientEntrySourceOptions {
   cssGlobalAbsPath?: string;
 }
 
+// Rollup/esbuild import specifiers are always forward-slash paths, even on
+// Windows: a raw backslash in a generated specifier either corrupts the path
+// or throws a SyntaxError depending on where it lands in the string. Absolute
+// paths built from `path.resolve`/`path.join` carry the platform separator
+// (backslash on win32), so every generated specifier must be normalized to
+// posix separators before being embedded in source text.
+function toPosixSpecifier(p: string): string {
+  return p.split('\\').join('/');
+}
+
 export function generateClientEntrySource(
   opts: GenerateClientEntrySourceOptions
 ): string {
   return (
-    (opts.cssGlobalAbsPath ? `import '${opts.cssGlobalAbsPath}';\n` : '') +
+    (opts.cssGlobalAbsPath
+      ? `import ${JSON.stringify(toPosixSpecifier(opts.cssGlobalAbsPath))};\n`
+      : '') +
     `import { h, hydrate } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
     `import { Routes } from 'hono-preact';\n` +
