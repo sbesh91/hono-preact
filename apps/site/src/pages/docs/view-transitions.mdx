@@ -1,6 +1,6 @@
 # View Transitions
 
-The framework wraps every same-document route change in `document.startViewTransition` automatically. You don't opt in. Style the default root transition with `::view-transition-old(root)` and `::view-transition-new(root)`, and respect `prefers-reduced-motion`.
+The framework wraps every same-document route change in `document.startViewTransition` automatically. You don't opt in. A route change is a path or query change; hash-only URL changes (in-page anchors) never animate. Style the default root transition with `::view-transition-old(root)` and `::view-transition-new(root)`, and respect `prefers-reduced-motion`.
 
 On top of that, three primitives let you scale view transitions across many elements, hook into the navigation lifecycle, and target CSS by direction.
 
@@ -144,20 +144,28 @@ as a module side effect.
 
 ## Opting out of the transition
 
-The transition is on by default for every URL change. Three opt-outs update the
-URL without animating (the render still commits):
+The transition is on by default for every route change (a path or query
+change). A hash-only URL change is not a route change: writing `#section` to
+the URL, whether via `navigate('#section')`, a plain anchor click, or a raw
+`history.pushState`, never animates and needs no opt-out. Three opt-outs
+update the URL without animating (the render still commits):
 
 - `navigate(href, { transition: false })` from `useNavigate`, for programmatic
   navigations (reflecting a tab, filter, or sort into the query string).
 - `<NavLink href="..." transition={false}>`: the declarative form of the same.
-- `skipNextNavTransition()`: a one-shot escape hatch for code that writes
-  history directly. Call it immediately before the write:
+- `skipNextNavTransition(target?)`: a one-shot escape hatch for code that
+  drives a navigation outside `useNavigate` and `<NavLink>`. Call it
+  immediately before the navigation. Pass the destination URL to key the skip
+  to it: the skip applies only when the next navigation commits at that path
+  and query, and expires without applying when the next navigation goes
+  anywhere else. With no argument the skip applies to the next navigation
+  whatever its destination.
 
   ```ts
   import { skipNextNavTransition } from 'hono-preact';
 
-  skipNextNavTransition();
-  history.pushState(null, '', '#section-3'); // URL updates, no transition
+  skipNextNavTransition('/inbox?folder=archive');
+  history.pushState(null, '', '/inbox?folder=archive'); // URL updates, no transition
   ```
 
 Each opt-out applies to the next navigation only.
