@@ -188,3 +188,95 @@ describe('navigation classification (pathname + search)', () => {
     expect(startViewTransition).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('skipNextNavTransition(target): keyed one-shot skip', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    resetHistoryShimForTesting();
+    resetDefaultTypesForTesting();
+    __resetTransitionStateForTesting();
+    history.replaceState(null, '', '/');
+  });
+  afterEach(() => {
+    __resetTransitionStateForTesting();
+    vi.unstubAllGlobals();
+  });
+
+  it('a keyed arm is applied when the next navigation commits at the target, then clears', async () => {
+    const { startViewTransition } = installFakeVt();
+    installNavTransitionScheduler();
+    const ran: string[] = [];
+    skipNextNavTransition('/inbox?folder=archive');
+    navigateTo('/inbox?folder=archive');
+    flushRender(() => ran.push('render'));
+    await tick();
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(ran).toEqual(['render']);
+    // One-shot: the following navigation animates again.
+    navigateTo('/c');
+    flushRender(() => {});
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+  });
+
+  it('a keyed arm is cleared without applying on a mismatched commit; the following matching nav still animates', async () => {
+    const { startViewTransition } = installFakeVt();
+    installNavTransitionScheduler();
+    skipNextNavTransition('/a');
+    navigateTo('/b');
+    flushRender(() => {});
+    await tick();
+    // Mismatch: /b animates (the boolean skip would have wrongly suppressed it).
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    navigateTo('/a');
+    flushRender(() => {});
+    await tick();
+    // The arm expired at the /b flush, so /a animates too (self-expiry).
+    expect(startViewTransition).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesced flush: arm /a, but the single flush commits at /b, which animates', async () => {
+    const { startViewTransition } = installFakeVt();
+    installNavTransitionScheduler();
+    skipNextNavTransition('/a');
+    navigateTo('/a');
+    navigateTo('/b'); // second push before any flush: Preact coalesces
+    flushRender(() => {});
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+  });
+
+  it('a fragment-keyed arm before a raw hash write is inert and expires harmlessly', async () => {
+    const { startViewTransition } = installFakeVt();
+    installNavTransitionScheduler();
+    // Arm keyed to a fragment (resolves to the current pathname + search),
+    // then write the hash. The hash write is not a navigation, so nothing
+    // needs or consumes the skip; the arm then expires at the next real
+    // navigation instead of suppressing it.
+    skipNextNavTransition('#section-3');
+    navigateTo('/#section-3');
+    flushRender(() => {});
+    await tick();
+    expect(startViewTransition).not.toHaveBeenCalled();
+    navigateTo('/b');
+    flushRender(() => {});
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+  });
+
+  it('an unparseable target falls back to the wildcard arm', async () => {
+    const { startViewTransition } = installFakeVt();
+    installNavTransitionScheduler();
+    skipNextNavTransition('http://');
+    navigateTo('/b');
+    flushRender(() => {});
+    await tick();
+    expect(startViewTransition).not.toHaveBeenCalled();
+  });
+
+  it('arming with a target does not throw when location is absent (SSR import safety)', () => {
+    vi.stubGlobal('location', undefined);
+    expect(() => skipNextNavTransition('/x')).not.toThrow();
+    expect(() => skipNextNavTransition()).not.toThrow();
+  });
+});

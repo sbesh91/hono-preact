@@ -127,7 +127,7 @@ export function __resetTransitionStateForTesting(): void {
     coldTimeout = null;
   }
   transitionActive = false;
-  skipNextTransition = false;
+  skipArm = null;
   // Uninstall the render scheduler (restoring Preact's debounceRendering) so
   // each test can install it fresh.
   if (schedulerInstalled) {
@@ -210,19 +210,39 @@ let schedulerInstalled = false;
 // whose to/from are already pathname + search (see currentPath).
 let lastNavKey = '';
 
-// One-shot: when set, the next navigated flush commits without a view
-// transition (see skipNextNavTransition). Consumed on that flush.
-let skipNextTransition = false;
+// One-shot skip arm (see skipNextNavTransition). `null` means not armed.
+// `key: null` is the wildcard arm: the next navigated flush commits without a
+// transition whatever its URL. A string key arms for that pathname + search
+// only: applied when the next navigated flush commits there, cleared without
+// applying when it commits anywhere else. Either way the first navigated
+// flush clears the arm, so it can never strand onto a later navigation.
+let skipArm: { key: string | null } | null = null;
 
 /**
  * Suppress the view transition for the next client navigation, committing the
- * render without animating. One-shot: applies to the next navigation only.
- * Call it immediately before the URL write (a `navigate`, a history
- * push/replace, or a `location.hash` assignment). `navigate(href, { transition:
- * false })` and `<NavLink transition={false}>` call it for you.
+ * render without animating. One-shot: cleared by the next navigated flush.
+ * Pass `target` (any URL string resolvable against the current page) to key
+ * the skip to that destination: it applies only when the next navigation
+ * commits at the target's path and query, and expires without applying when
+ * the next navigation goes anywhere else. With no argument the skip applies
+ * to the next navigation whatever its destination. Hash-only URL changes are
+ * not navigations (they never animate), so they neither need nor consume the
+ * skip. `navigate(href, { transition: false })` and
+ * `<NavLink transition={false}>` call this for you with the target keyed.
  */
-export function skipNextNavTransition(): void {
-  skipNextTransition = true;
+export function skipNextNavTransition(target?: string): void {
+  if (target === undefined || typeof location === 'undefined') {
+    skipArm = { key: null };
+    return;
+  }
+  try {
+    const url = new URL(target, location.href);
+    skipArm = { key: url.pathname + url.search };
+  } catch {
+    // Unparseable target: fall back to the wildcard arm, which still
+    // self-clears on the next navigated flush.
+    skipArm = { key: null };
+  }
 }
 
 let prevDebounce: ((process: ProcessFn) => void) | undefined;
@@ -328,8 +348,13 @@ function scheduleRender(process: ProcessFn): void {
     loadingRouters.clear();
   }
 
-  const skip = navigated && skipNextTransition;
-  if (navigated) skipNextTransition = false; // one-shot: consumed on the nav flush
+  // One-shot: the first navigated flush clears the arm, applying it only when
+  // it is the wildcard or its key matches the committing pathname + search.
+  const skip =
+    navigated &&
+    skipArm !== null &&
+    (skipArm.key === null || skipArm.key === navKey);
+  if (navigated) skipArm = null;
   lastNavKey = navKey;
   const start = navigated && !skip ? getStartViewTransition() : undefined;
   if (!start) {
