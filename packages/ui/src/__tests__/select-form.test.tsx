@@ -122,4 +122,24 @@ describe('Select form field', () => {
     fireEvent.reset(container.querySelector('form')!);
     expect(onValueChange).not.toHaveBeenCalled();
   });
+
+  it('reset with no defaultValue emits null in single mode', () => {
+    const onValueChange = vi.fn();
+    const { container } = render(
+      <form>
+        <SelectRoot name="fruit" value="cherry" onValueChange={onValueChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="x" />
+          </SelectTrigger>
+          <SelectPositioner>
+            <SelectPopup aria-label="f">
+              <SelectOption value="cherry">Cherry</SelectOption>
+            </SelectPopup>
+          </SelectPositioner>
+        </SelectRoot>
+      </form>
+    );
+    fireEvent.reset(container.querySelector('form')!);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+  });
 });

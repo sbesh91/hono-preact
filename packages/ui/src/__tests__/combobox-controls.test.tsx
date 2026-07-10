@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 import {
   ComboboxRoot,
@@ -81,5 +81,41 @@ describe('Combobox Trigger/Clear/Empty', () => {
     );
     await act(async () => {});
     expect(queryByText('Nothing found')).toBeNull();
+  });
+
+  it('Clear in controlled single mode emits null through onValueChange', async () => {
+    const onValueChange = vi.fn();
+    const { getByLabelText } = render(
+      <ComboboxRoot value="apple" onValueChange={onValueChange}>
+        <ComboboxInput aria-label="Fruit" />
+        <ComboboxClear aria-label="Clear" />
+        <ComboboxPositioner>
+          <ComboboxPopup aria-label="Fruits">
+            <ComboboxOption value="apple">Apple</ComboboxOption>
+          </ComboboxPopup>
+        </ComboboxPositioner>
+      </ComboboxRoot>
+    );
+    fireEvent.click(getByLabelText('Clear'));
+    await act(async () => {});
+    expect(onValueChange).toHaveBeenCalledWith(null);
+  });
+
+  it('Clear in multiple mode emits an empty array', async () => {
+    const onValueChange = vi.fn();
+    const { getByLabelText } = render(
+      <ComboboxRoot multiple value={['apple']} onValueChange={onValueChange}>
+        <ComboboxInput aria-label="Fruit" />
+        <ComboboxClear aria-label="Clear" />
+        <ComboboxPositioner>
+          <ComboboxPopup aria-label="Fruits">
+            <ComboboxOption value="apple">Apple</ComboboxOption>
+          </ComboboxPopup>
+        </ComboboxPositioner>
+      </ComboboxRoot>
+    );
+    fireEvent.click(getByLabelText('Clear'));
+    await act(async () => {});
+    expect(onValueChange).toHaveBeenCalledWith([]);
   });
 });

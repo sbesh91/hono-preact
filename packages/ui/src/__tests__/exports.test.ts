@@ -50,6 +50,7 @@ describe('hono-preact-ui exports', () => {
   it('exposes the promoted composition hooks', () => {
     expect(typeof ui.usePositioner).toBe('function');
     expect(typeof ui.useListboxSelection).toBe('function');
+    expect(typeof ui.normalizeSelectionProps).toBe('function');
   });
 });
 

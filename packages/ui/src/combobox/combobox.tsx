@@ -23,6 +23,7 @@ import { renderElement, type RenderProp } from '../render-element.js';
 import {
   useListboxSelection,
   useRegisterOption,
+  normalizeSelectionProps,
   OPTION_SELECTOR,
   type SelectionProps,
 } from '../listbox/selection.js';
@@ -38,8 +39,7 @@ import {
 } from './context.js';
 import { computeInlineCompletion, isForwardEdit } from './autocomplete.js';
 
-export interface ComboboxRootProps<Value = string>
-  extends SelectionProps<Value>, PositioningProps {
+export interface ComboboxRootOwnProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -48,23 +48,30 @@ export interface ComboboxRootProps<Value = string>
   onInputChange?: (value: string) => void;
   autocomplete?: AutocompleteMode; // default 'list'
   onCreate?: (inputValue: string) => void;
-  itemToString?: (value: Value) => string;
   name?: string;
   disabled?: boolean;
   required?: boolean;
-  isValueEqual?: (a: Value, b: Value) => boolean;
-  serializeValue?: (value: Value) => string;
   loop?: boolean; // default true
   openOnFocus?: boolean; // open the popup when the input gains focus (default true)
   children?: ComponentChildren;
 }
 
-export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
+// An intersection with the SelectionProps union rather than an interface
+// (interfaces cannot extend a union). `multiple` discriminates the value
+// shape: single mode deals in `Value | null`, multiple mode in arrays.
+// `Value extends {}` keeps null out of Value so null-as-empty is unambiguous.
+export type ComboboxRootProps<Value extends {} = string> =
+  ComboboxRootOwnProps &
+    SelectionProps<Value> & {
+      itemToString?: (value: Value) => string;
+      isValueEqual?: (a: Value, b: Value) => boolean;
+      serializeValue?: (value: Value) => string;
+    };
+
+export function ComboboxRoot<Value extends {} = string>(
+  props: ComboboxRootProps<Value>
+) {
   const {
-    value: valueProp,
-    defaultValue,
-    onValueChange,
-    multiple = false,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -87,14 +94,19 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
     children,
   } = props;
 
-  const emptyDefault = (multiple ? [] : undefined) as
-    | Value
-    | Value[]
-    | undefined;
-  const [value, setValue] = useControllableState<Value | Value[] | undefined>({
-    value: valueProp,
-    defaultValue: defaultValue ?? emptyDefault,
-    onChange: (v) => v !== undefined && onValueChange?.(v),
+  // Destructuring the selection props would lose the `multiple` discriminant
+  // correlation, so they go to the normalizer whole. Memoized so the fresh
+  // wrapper array a single-mode `value` produces does not churn downstream
+  // callback identities every render.
+  const norm = useMemo(
+    () => normalizeSelectionProps<Value>(props),
+    [props.multiple, props.value, props.defaultValue, props.onValueChange]
+  );
+
+  const [values, setValues] = useControllableState<readonly Value[]>({
+    value: norm.values,
+    defaultValue: norm.defaultValues,
+    onChange: norm.onValuesChange,
   });
   const [open, setOpen] = useControllableState<boolean>({
     value: openProp,
@@ -108,8 +120,10 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  // A reset with no defaultValue lands on [] and, in single mode, reaches the
+  // consumer as onValueChange(null); it is no longer swallowed.
   useFormReset(inputRef, () => {
-    setValue(defaultValue ?? emptyDefault);
+    setValues(norm.defaultValues);
     setInputValue(defaultInputValue ?? '');
   });
   const anchorRef = useRef<HTMLElement>(null);
@@ -123,9 +137,9 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sel = useListboxSelection<Value>({
-    value,
-    setValue,
-    multiple,
+    values,
+    setValues,
+    multiple: norm.multiple,
     setOpen,
     isValueEqual,
     serializeValue,
@@ -140,9 +154,9 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   const selectOption = useCallback(
     (optionValue: unknown) => {
       sel.toggle(optionValue);
-      setInputValue(multiple ? '' : sel.labelFor(optionValue));
+      setInputValue(norm.multiple ? '' : sel.labelFor(optionValue));
     },
-    [sel.toggle, sel.labelFor, multiple, setInputValue]
+    [sel.toggle, sel.labelFor, norm.multiple, setInputValue]
   );
 
   // Creatable: route to onCreate (consumer persists + selects). Mirror the
@@ -150,33 +164,35 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
   // to be the typed text.
   const createOption = useCallback(() => {
     onCreate?.(inputValue);
-    if (multiple) {
+    if (norm.multiple) {
       setInputValue('');
     } else {
       setInputValue(inputValue);
       setOpen(false);
     }
-  }, [onCreate, inputValue, multiple, setInputValue, setOpen]);
+  }, [onCreate, inputValue, norm.multiple, setInputValue, setOpen]);
 
+  // Clearing writes the empty array; the consumer observes it as
+  // onValueChange(null) in single mode and onValueChange([]) in multiple mode.
   const clear = useCallback(() => {
-    setValue((multiple ? [] : undefined) as Value | Value[]);
+    setValues([]);
     setInputValue('');
     inputRef.current?.focus();
-  }, [setValue, multiple, setInputValue]);
+  }, [setValues, setInputValue]);
 
   // Revert the input text to the committed value when dismissing without a fresh
   // pick (single -> the selected option's label; multiple -> '' since the chips
   // carry the value). Keeps the input from showing dangling, unselected text.
   const revertInput = useCallback(() => {
     const items = sel.selectedItems();
-    setInputValue(multiple ? '' : (items[0]?.label ?? ''));
-  }, [sel.selectedItems, multiple, setInputValue]);
+    setInputValue(norm.multiple ? '' : (items[0]?.label ?? ''));
+  }, [sel.selectedItems, norm.multiple, setInputValue]);
 
   const ctx = useMemo(
     () => ({
       open,
       setOpen,
-      multiple,
+      multiple: norm.multiple,
       inputValue,
       setInputValue,
       autocomplete,
@@ -211,7 +227,7 @@ export function ComboboxRoot<Value = string>(props: ComboboxRootProps<Value>) {
     [
       open,
       setOpen,
-      multiple,
+      norm.multiple,
       inputValue,
       setInputValue,
       autocomplete,
