@@ -241,3 +241,38 @@ describe('assembleDocument: full head ordering', () => {
     expect(routeIdx).toBeGreaterThan(globalIdx);
   });
 });
+
+describe('assembleDocument: $-pattern safety in head injection', () => {
+  // String.prototype.replace expands `$&`/`$``/`$'`/`$<name>` in a STRING
+  // replacement; a title (or other head-derived content) containing one of
+  // these sequences must render literally, not be treated as a replacement
+  // pattern. A regression here would duplicate/mangle the </head> marker or
+  // corrupt the <html lang> tag depending on which literal sneaks through.
+  it('a title containing "$&" renders literally and does not duplicate </head>', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { title: 'Weird $& Title' },
+    });
+    expect(out).toContain('<title>Weird $&amp; Title</title>');
+    expect(out.split('</head>').length - 1).toBe(1);
+  });
+
+  it('a title containing "$`" renders literally', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { title: 'Weird $` Title' },
+    });
+    expect(out).toContain('<title>Weird $` Title</title>');
+    expect(out.split('</head>').length - 1).toBe(1);
+  });
+
+  it('a lang value containing "$1" renders literally in the <html lang> tag', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { lang: 'en-$1' },
+    });
+    expect(out).toContain('<html lang="en-$1"');
+    // Not corrupted into swallowing the captured trailing character.
+    expect(out).not.toContain('<html lang="en-$1">>');
+  });
+});

@@ -31,7 +31,7 @@ export type HeadStatic = {
  * `</head>`, then either threads `lang` into a Layout-owned `<html>` or wraps a
  * fragment in the framework's `<html lang>` shell.
  *
- * Pure string assembly — no streaming concerns — so it is unit-testable in
+ * Pure string assembly, no streaming concerns, so it is unit-testable in
  * isolation. The `</head>` injection is the one place coupled to the Layout's
  * markup; when the Layout owns the shell but emits no `</head>`, the head tags
  * would silently vanish, so we warn (see `warnMissingMarker`). A fragment with
@@ -186,11 +186,25 @@ export function assembleDocument(opts: {
         '<Head>), not a bare fragment'
     );
   }
-  const inner = html.replace('</head>', `${headTags}\n      </head>`);
+  // A replacement FUNCTION, not a template string: `String.prototype.replace`
+  // expands `$&`/`$\``/`$'`/`$<name>` patterns in a string replacement, and
+  // `headTags` embeds user-derived content (page title, meta/link attrs from
+  // route modules). A title containing e.g. `$&` would otherwise duplicate
+  // the matched `</head>` into the output instead of rendering literally. A
+  // function return value is inserted verbatim, with no pattern expansion.
+  const inner = html.replace('</head>', () => `${headTags}\n      </head>`);
 
   return startsWithHtml
     ? lang != null
-      ? inner.replace(/<html(\s|>)/i, `<html lang="${escapeHtml(lang)}"$1`)
+      ? // Same hazard as the </head> injection above (a replacer function,
+        // not a template string, so `lang` cannot expand `$`-patterns); the
+        // captured trailing character (`\s` or `>`) is threaded through the
+        // callback's own argument instead of a literal `$1` for the same
+        // reason.
+        inner.replace(
+          /<html(\s|>)/i,
+          (_match, tail: string) => `<html lang="${escapeHtml(lang)}"${tail}`
+        )
       : inner
     : `<html lang="${escapeHtml(lang ?? 'en-US')}">\n${inner}\n</html>`;
 }
