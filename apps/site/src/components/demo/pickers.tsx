@@ -47,7 +47,7 @@ export function StatusSelect({
   return (
     <Select.Root<TaskStatus>
       value={value}
-      onValueChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? value) : v)}
+      onValueChange={(v) => onChange(v ?? value)}
     >
       <Select.Trigger class={triggerCls}>
         <Select.Value />
@@ -78,7 +78,7 @@ export function PrioritySelect({
   return (
     <Select.Root<TaskPriority>
       value={value}
-      onValueChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? value) : v)}
+      onValueChange={(v) => onChange(v ?? value)}
     >
       <Select.Trigger class={triggerCls}>
         <span
@@ -106,7 +106,9 @@ export function PrioritySelect({
 
 // AssigneeCombobox dogfoods Combobox with consumer-side filtering.
 // The consumer holds the typed query in state, passes it as inputValue, and
-// renders only matching options. Combobox itself never filters.
+// renders only matching options. Combobox itself never filters. The domain
+// value is `string | null`: null flows in as the controlled-empty value and
+// flows out when Combobox.Clear (Unassign) fires.
 export function AssigneeCombobox({
   users,
   value,
@@ -116,31 +118,33 @@ export function AssigneeCombobox({
   value: string | null; // user id or null (unassigned)
   onChange: (id: string | null) => void;
 }) {
-  const options = [
-    { id: '', name: 'Unassigned' },
-    ...users.map((u) => ({ id: u.id, name: u.name })),
-  ];
-  const selected = options.find((o) => o.id === (value ?? '')) ?? options[0];
+  const options = users.map((u) => ({ id: u.id, name: u.name }));
+  const selected = options.find((o) => o.id === value);
 
-  const [query, setQuery] = useState(selected.name);
+  const [query, setQuery] = useState(selected?.name ?? '');
   const filtered = options.filter((o) => matchSubstring(o.name, query));
 
   return (
     <Combobox.Root<string>
-      value={value ?? ''}
-      onValueChange={(v) => {
-        const id = Array.isArray(v) ? (v[0] ?? '') : v;
-        onChange(id || null);
-      }}
+      value={value}
+      onValueChange={onChange}
       inputValue={query}
       onInputChange={setQuery}
       itemToString={(id) => options.find((o) => o.id === id)?.name ?? ''}
     >
-      <Combobox.Input
-        class={triggerCls}
-        aria-label="Assignee"
-        placeholder="Search assignee..."
-      />
+      <Combobox.Anchor class="flex items-center gap-1">
+        <Combobox.Input
+          class={triggerCls}
+          aria-label="Assignee"
+          placeholder="Unassigned"
+        />
+        <Combobox.Clear
+          class="rounded px-1 text-muted hover:bg-foreground/10"
+          aria-label="Unassign"
+        >
+          ×
+        </Combobox.Clear>
+      </Combobox.Anchor>
       <Combobox.Status />
       <Combobox.Positioner>
         <Combobox.Popup class={popupCls} aria-label="Assignee">

@@ -5,12 +5,9 @@ import { useState } from 'preact/hooks';
 // placeholder Value, plain options, one disabled option, and a labelled
 // option group. Styling is in docs.css (.docs-select* / .docs-select-trigger).
 export function SelectDemo() {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState<string | null>(null);
   return (
-    <Select.Root
-      value={value}
-      onValueChange={(v) => setValue(Array.isArray(v) ? (v[0] ?? '') : v)}
-    >
+    <Select.Root value={value} onValueChange={setValue}>
       <Select.Trigger class="docs-select-trigger">
         <Select.Value class="docs-select__value" placeholder="Pick a fruit" />
         <span class="docs-select__chevron" aria-hidden="true">

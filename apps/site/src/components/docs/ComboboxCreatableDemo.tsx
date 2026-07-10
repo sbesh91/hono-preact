@@ -7,7 +7,7 @@ import { useState } from 'preact/hooks';
 // holds. Minimal form: just an Input (no field wrapper or trigger needed).
 export function ComboboxCreatableDemo() {
   const [options, setOptions] = useState(['Apple', 'Banana', 'Cherry']);
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const filtered = options.filter((o) => matchSubstring(o, query));
   const showCreate =
@@ -16,7 +16,7 @@ export function ComboboxCreatableDemo() {
   return (
     <Combobox.Root
       value={value}
-      onValueChange={(v) => setValue(Array.isArray(v) ? (v[0] ?? '') : v)}
+      onValueChange={setValue}
       onInputChange={setQuery}
       onCreate={(label) => {
         setOptions((prev) => [...prev, label]);

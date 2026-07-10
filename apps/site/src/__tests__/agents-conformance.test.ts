@@ -153,18 +153,6 @@ describe('AGENTS.md conformance (live apps/site)', () => {
         'bridging the Preact pointer-handler event to the DOM PointerEvent',
     },
     {
-      file: 'components/demo/TaskActions.tsx',
-      expr: 'v as TaskStatus',
-      reason:
-        'MenuRadioGroup.onValueChange yields string; values are the fixed TaskStatus set',
-    },
-    {
-      file: 'components/demo/TaskActions.tsx',
-      expr: 'v as TaskPriority',
-      reason:
-        'MenuRadioGroup.onValueChange yields string; values are the fixed TaskPriority set',
-    },
-    {
       file: 'components/shader-worker.ts',
       expr: 'self as unknown as { postMessage(message: WorkerOutMsg): void }',
       reason:
