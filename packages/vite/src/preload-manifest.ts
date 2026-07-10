@@ -169,8 +169,23 @@ export function preloadManifestPlugin(
           );
         }
       }
-      const routes = resolvePreloadMap(chains, bundle, chunksOf);
-      const routeCss = resolveRouteCssMap(chains, bundle, chunksOf);
+      // Route-map resolution is best-effort, mirroring readRouteChains above:
+      // a malformed bundle shape (or a bug in the resolvers) must degrade to
+      // empty maps with a warning, not abort the whole client build over a
+      // preload/CSS-delivery optimization. `applyCssAutoSplit`'s own error
+      // handling above is intentionally NOT covered by this: a conservation
+      // failure there is a correctness bug in the splitter itself (a rule
+      // could ship dropped or duplicated), so it stays a hard build failure.
+      let routes: RoutePreloadMap = {};
+      let routeCss: RouteCssMap = {};
+      try {
+        routes = resolvePreloadMap(chains, bundle, chunksOf);
+        routeCss = resolveRouteCssMap(chains, bundle, chunksOf);
+      } catch (e) {
+        warn(
+          `route map generation failed: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
       const artifact: PreloadArtifact = {
         closure,
         routes,

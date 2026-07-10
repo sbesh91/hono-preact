@@ -147,6 +147,67 @@ describe('preloadManifestPlugin', () => {
     });
   });
 
+  it('degrades to empty route maps (with a warning) when map resolution throws, instead of failing the build', async () => {
+    // buildRouteMaps (the predecessor of readRouteChains) used to wrap
+    // chunkCloser + resolvePreloadMap + resolveRouteCssMap in the same
+    // try/catch as extractRouteChains; a later refactor split them apart and
+    // left the map-resolution calls unprotected, so a bundle shape the
+    // resolvers can't handle would abort the whole client build instead of
+    // degrading a preload/CSS-delivery optimization. This pins the restored
+    // degrade-and-warn behavior.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-preload-'));
+    const routesPath = path.join(dir, 'src', 'routes.ts');
+    fs.mkdirSync(path.dirname(routesPath), { recursive: true });
+    fs.writeFileSync(
+      routesPath,
+      `export default defineRoutes([
+         { path: '/', view: () => import('./pages/home.js') },
+       ]);`
+    );
+
+    const malformedBundle = {
+      'static/client.js': {
+        type: 'chunk',
+        fileName: 'static/client.js',
+        isEntry: true,
+        imports: [],
+        moduleIds: [],
+      },
+      'static/home-XX.js': {
+        type: 'chunk',
+        fileName: 'static/home-XX.js',
+        isEntry: false,
+        // Malformed: Rollup output always gives a chunk a real array here;
+        // this stands in for a bundle shape the resolver's own
+        // defensiveness (`chunk.imports ?? []`) cannot anticipate, since a
+        // truthy non-nullish, non-iterable value passes the `??` check and
+        // then throws a TypeError at the `for...of`.
+        imports: 5,
+        moduleIds: [path.join(dir, 'src', 'pages', 'home.tsx')],
+      },
+    };
+
+    const plugin = preloadManifestPlugin({ routes: 'src/routes.ts' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plugin.configResolved as any)({ root: dir });
+    const warnings: string[] = [];
+    const emitted: Array<{ source: string }> = [];
+    const ctx = {
+      environment: { name: 'client' },
+      warn: (m: string) => warnings.push(m),
+      emitFile: (f: { source: string }) => emitted.push(f),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (plugin.generateBundle as any).call(ctx, {}, malformedBundle);
+
+    const artifact = JSON.parse(emitted[0].source);
+    expect(artifact.routes).toEqual({});
+    expect(artifact.routeCss).toEqual({});
+    expect(
+      warnings.some((w) => w.includes('route map generation failed'))
+    ).toBe(true);
+  });
+
   it('runs css auto-split end-to-end: replaces the entry css asset and fills globalCss', async () => {
     // No configResolved -> empty chains -> nothing is scopable, so the whole
     // sheet stays global; this still exercises the generateBundle ->
