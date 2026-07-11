@@ -2,6 +2,7 @@ import type { VNode } from 'preact';
 import { LiveStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
+import { useElementSize } from '../scroll/motion.js';
 
 // Rendered literally in a <pre>. Inner backticks and ${...} are escaped so the
 // template literal reproduces the framework snippet verbatim.
@@ -50,17 +51,27 @@ function LiveRoom(): VNode {
   const { progress } = useStageProgress();
   const t = progress * 2 * Math.PI;
 
+  // The peers drift continuously (this clock never stops while the chapter is
+  // in view, unlike the scroll-scrubbed demos elsewhere on the page), so their
+  // position is a measured-px `transform` rather than a `left`/`top`
+  // percentage: that keeps a sustained per-frame animation off layout.
+  const [roomRef, room] = useElementSize<HTMLDivElement>();
+
   return (
-    <div class="hx-rt-room">
+    <div class="hx-rt-room" ref={roomRef}>
       {PEERS.map((p, i) => {
-        const x = 50 + Math.sin(t * p.sx + p.ph) * p.rx;
-        const y = 50 + Math.cos(t * p.sy + p.ph) * p.ry;
+        const xPct = 50 + Math.sin(t * p.sx + p.ph) * p.rx;
+        const yPct = 50 + Math.cos(t * p.sy + p.ph) * p.ry;
+        // -2px keeps the arrow's tip (not its top-left corner) on the point,
+        // matching the CSS `transform: translate(-2px, -2px)` this replaces.
+        const x = (xPct / 100) * room.width - 2;
+        const y = (yPct / 100) * room.height - 2;
         return (
           <span
             key={p.name}
             class="hx-rt-peer"
             data-self={i === PEERS.length - 1 ? '' : undefined}
-            style={{ left: `${x}%`, top: `${y}%`, '--c': p.color }}
+            style={{ transform: `translate(${x}px, ${y}px)`, '--c': p.color }}
             aria-hidden="true"
           >
             <svg viewBox="0 0 16 16" width="15" height="15">

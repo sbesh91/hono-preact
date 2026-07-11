@@ -556,6 +556,14 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   position: relative;
   z-index: 0;
   background: var(--background);
+  /* Shared curves for the page's hand-timed motion, named for what each one
+     already did before this was a token: entrances (Reveal, pkg pills, the
+     new pane/tag beats), the hero wordmark's load sweep, its post-load rise,
+     and the route-ring slide. */
+  --hx-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --hx-ease-load: cubic-bezier(0.65, 0, 0.35, 1);
+  --hx-ease-rise: cubic-bezier(0.33, 1, 0.68, 1);
+  --hx-ease-route: cubic-bezier(0.4, 0, 0.2, 1);
 }
 .hx-home::before {
   content: '';
@@ -912,9 +920,16 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 }
 .hx-lane__fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0;
+  /* Scaled from a full-width bar (not a `width` percentage) so the scroll-driven
+     fill is a compositor-only transform, not a per-frame layout property.
+     No border-radius here: at a fractional scaleX it would compress the
+     rounding into a flattened ellipse instead of staying circular. The track's
+     own border-radius + overflow:hidden below already produces the right
+     rounded-pill shape at rest (scaleX(1)); mid-fill the leading edge is a
+     flat cut instead of a rounded cap, a common progress-bar treatment. */
+  transform-origin: left;
   background: var(--wire-inflight);
-  border-radius: 0.28rem;
   transition: background 0.2s;
 }
 /* Solid green/amber only for non-gradient lanes. The :not() keeps these off
@@ -931,17 +946,27 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 .hx-lane__fill--grad[data-state='inflight'],
 .hx-lane__fill--grad[data-state='done'] {
   background: var(--gradient-orangenta);
+}
+/* The glow lives on the (unscaled) track rather than the scaled fill: a
+   box-shadow painted on a fractionally-scaleX'd element gets squashed
+   horizontally along with it, smearing the blur instead of keeping it soft
+   and round. :has() lets the track light up only while a gradient lane inside
+   it is actually inflight or done. */
+.hx-lane__track:has(.hx-lane__fill--grad[data-state='inflight']),
+.hx-lane__track:has(.hx-lane__fill--grad[data-state='done']) {
   box-shadow: 0 0 12px -1px var(--glow);
 }
 .hx-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 0;
   width: 2px;
   background: color-mix(in srgb, var(--accent) 70%, transparent);
   opacity: 0.7;
   box-shadow: 0 0 10px 1px var(--glow);
   pointer-events: none;
+  will-change: transform;
 }
 
 .hx-region {
@@ -981,8 +1006,8 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
    JS is an enhancement here, never a gate. */
 .hx-reveal {
   transition:
-    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.6s var(--hx-ease-out),
+    transform 0.6s var(--hx-ease-out);
 }
 .hx-reveal[data-reveal-state='hidden'] {
   opacity: 0;
@@ -1096,8 +1121,11 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 }
 .hx-prefetch__cursor {
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 3;
   pointer-events: none;
+  will-change: transform;
 }
 .hx-prefetch__cursor svg {
   display: block;
@@ -1417,7 +1445,7 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 /* Opt in to the load animation only when motion is welcome. */
 @media (prefers-reduced-motion: no-preference) {
   .hx-hero__wm-fill {
-    animation: hx-hero-fill 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s backwards;
+    animation: hx-hero-fill 1.3s var(--hx-ease-load) 0.3s backwards;
   }
   .hx-hero__wm-base {
     animation: hx-hero-base 1.3s ease 0.3s backwards;
@@ -1426,14 +1454,13 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
     animation: hx-hero-wire 1.6s ease 0.3s backwards;
   }
   .hx-hero__wire-line::before {
-    animation: hx-hero-wirefill 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s
-      backwards;
+    animation: hx-hero-wirefill 1.3s var(--hx-ease-load) 0.3s backwards;
   }
   .hx-hero__edge {
     animation: hx-hero-edge 1.6s ease 0.3s backwards;
   }
   .hx-hero__packet {
-    animation: hx-hero-packet 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.3s backwards;
+    animation: hx-hero-packet 1.3s var(--hx-ease-load) 0.3s backwards;
   }
   .hx-hero__browser {
     animation: hx-hero-browser 1.55s ease 0.3s backwards;
@@ -1444,10 +1471,10 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
      glide; transform + opacity are auto-composited, so this stays off the main
      thread. */
   .hx-hero__lede {
-    animation: hx-hero-rise 0.72s cubic-bezier(0.33, 1, 0.68, 1) 1.05s backwards;
+    animation: hx-hero-rise 0.72s var(--hx-ease-rise) 1.05s backwards;
   }
   .hx-hero__cta {
-    animation: hx-hero-rise 0.72s cubic-bezier(0.33, 1, 0.68, 1) 1.2s backwards;
+    animation: hx-hero-rise 0.72s var(--hx-ease-rise) 1.2s backwards;
   }
 }
 @keyframes hx-hero-rise {
@@ -1791,9 +1818,9 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   pointer-events: none;
   z-index: 2;
   transition:
-    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
-    width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
-    height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    transform 0.45s var(--hx-ease-route),
+    width 0.45s var(--hx-ease-route),
+    height 0.45s var(--hx-ease-route);
 }
 @media (prefers-reduced-motion: reduce) {
   .hx-route__ring {
@@ -2111,6 +2138,28 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   border-style: dashed;
   opacity: 0.7;
 }
+/* Region always mounts both rows and toggles visibility via [data-shown], so
+   the flash is scoped to that attribute rather than the bare class: it fires
+   the moment the row actually reveals, not the moment it silently mounts. */
+.hx-region[data-shown='true'] .hx-mut-row--saved {
+  animation: hx-mut-saved-flash 0.6s var(--hx-ease-out) both;
+}
+@keyframes hx-mut-saved-flash {
+  from {
+    background: color-mix(in srgb, var(--wire-done) 22%, var(--surface));
+  }
+  to {
+    background: var(--surface);
+  }
+}
+/* Placed here (not the earlier consolidated reduced-motion block) because it
+   must win the equal-specificity cascade tie against the animated rule above,
+   which it can only do by coming later in source order. */
+@media (prefers-reduced-motion: reduce) {
+  .hx-region[data-shown='true'] .hx-mut-row--saved {
+    animation: none;
+  }
+}
 .hx-mut-tag {
   font-size: 0.75rem;
   color: var(--muted);
@@ -2210,9 +2259,33 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   animation: hx-shimmer 1.3s linear infinite;
 }
 /* The errored pane keeps its frame but swaps its body for a contained boundary
-   while the sibling panes keep rendering their data. */
+   while the sibling panes keep rendering their data. It mounts fresh each time
+   the playhead crosses into the error window (Preact swaps the whole subtree,
+   there's no keyframe to retarget), so the entrance is a mount-triggered
+   opacity+scale transition, not a `from`/`to` keyframe. */
 .hx-res__pane--error {
   border-color: var(--danger);
+  opacity: 0;
+  transform: scale(0.97);
+  transition:
+    opacity 0.2s var(--hx-ease-out),
+    transform 0.2s var(--hx-ease-out);
+}
+.hx-res__pane--error[data-entered] {
+  opacity: 1;
+  transform: none;
+}
+/* Belt-and-suspenders alongside ErrorPane's own reduced-motion check (which
+   starts `entered` true, so the transition above never actually runs for a
+   reduced-motion reader): covers the case where the OS setting flips mid-arm.
+   Placed here, not the earlier consolidated block, so it wins the
+   equal-specificity cascade tie against the rule above by source order. */
+@media (prefers-reduced-motion: reduce) {
+  .hx-res__pane--error {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 .hx-res__pane-fail {
   display: flex;
@@ -2356,12 +2429,16 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   background: var(--surface-subtle);
   overflow: hidden;
 }
-/* A peer cursor: a colored pointer with a name tag, like a multiplayer canvas. */
+/* A peer cursor: a colored pointer with a name tag, like a multiplayer canvas.
+   Position is a JS-computed transform (the -2px tip offset is baked into it),
+   not left/top, since this drifts continuously via a running rAF clock. */
 .hx-rt-peer {
   position: absolute;
-  transform: translate(-2px, -2px);
+  left: 0;
+  top: 0;
   pointer-events: none;
   color: var(--c);
+  will-change: transform;
 }
 .hx-rt-peer svg {
   display: block;
@@ -2495,8 +2572,8 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
      only once the row has armed post-mount (client JS running) and is not yet
      in view, so SSR/no-JS/a failed bundle never strand the pills invisible. */
   transition:
-    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.55s var(--hx-ease-out),
+    transform 0.55s var(--hx-ease-out);
   transition-delay: calc(var(--i, 0) * 110ms);
   will-change: transform, opacity;
 }

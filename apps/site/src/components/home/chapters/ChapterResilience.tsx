@@ -1,7 +1,9 @@
 import type { VNode } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
+import { usePrefersReducedMotion } from '../scroll/motion.js';
 
 const SNIPPET = `serverLoaders.default.View((state) => {
   switch (state.status) {
@@ -34,6 +36,40 @@ const NOTE: Record<Status, string> = {
   error: 'one pane failed, the rest stayed up',
 };
 
+// The chapter's namesake moment: one pane fails while its siblings keep
+// rendering. It was a silent DOM swap (Preact mounts a wholly different
+// subtree, so there's no keyframe to retarget); this arms a one-frame-delayed
+// `data-entered` flag so CSS can transition it in each time the playhead
+// crosses into the error window, mirroring the same armed-mount pattern
+// `Reveal` and `ChapterOnePackage` already use for their own entrances. A
+// reduced-motion reader starts already "entered" (like `Reveal`'s `static`
+// state), so the mount never has a hidden frame to transition from.
+function ErrorPane(): VNode {
+  const reduced = usePrefersReducedMotion();
+  const [entered, setEntered] = useState(reduced);
+  useEffect(() => {
+    if (reduced) {
+      setEntered(true);
+      return;
+    }
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, [reduced]);
+  return (
+    <div
+      class="hx-res__pane hx-res__pane--error"
+      data-entered={entered ? '' : undefined}
+      role="status"
+    >
+      <span class="hx-res__pane-head">Tasks</span>
+      <div class="hx-res__pane-fail">
+        <span>Failed to load</span>
+        <span class="hx-res__retry">Retry</span>
+      </div>
+    </div>
+  );
+}
+
 function ResilienceApp(): VNode {
   const { progress } = useStageProgress();
   const status = statusFor(progress);
@@ -61,13 +97,7 @@ function ResilienceApp(): VNode {
           {body()}
         </div>
         {errored ? (
-          <div class="hx-res__pane hx-res__pane--error" role="status">
-            <span class="hx-res__pane-head">Tasks</span>
-            <div class="hx-res__pane-fail">
-              <span>Failed to load</span>
-              <span class="hx-res__retry">Retry</span>
-            </div>
-          </div>
+          <ErrorPane />
         ) : (
           <div class="hx-res__pane">
             <span class="hx-res__pane-head">Tasks</span>

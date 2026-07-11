@@ -2,15 +2,19 @@ import type { ComponentChildren, VNode } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useStageProgress } from './stage.js';
 import { barState } from './progress.js';
-import { useInView, usePrefersReducedMotion } from './motion.js';
+import {
+  useElementSize,
+  useInView,
+  usePrefersReducedMotion,
+} from './motion.js';
 
-export function Playhead(): VNode {
+export function Playhead({ trackWidth }: { trackWidth: number }): VNode {
   const { progress } = useStageProgress();
   return (
     <div
       class="hx-playhead"
       aria-hidden="true"
-      style={{ left: `${progress * 100}%` }}
+      style={{ transform: `translateX(${progress * trackWidth}px)` }}
     />
   );
 }
@@ -22,11 +26,12 @@ export function Wire({
   caption: string;
   children: ComponentChildren;
 }): VNode {
+  const [ref, { width: trackWidth }] = useElementSize<HTMLDivElement>();
   return (
-    <div class="hx-wire">
+    <div class="hx-wire" ref={ref}>
       <div class="hx-wire__cap">{caption}</div>
       {children}
-      <Playhead />
+      <Playhead trackWidth={trackWidth} />
     </div>
   );
 }
@@ -53,7 +58,7 @@ export function Lane({
         <span
           class={`hx-lane__fill hx-lane__fill--${tone}`}
           data-state={state}
-          style={{ width: `${width * 100}%` }}
+          style={{ transform: `scaleX(${width})` }}
         />
       </span>
     </div>
