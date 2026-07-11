@@ -66,6 +66,18 @@ describe('makeGuardedRouteMatcher', () => {
     expect(match('/b/c')).toBeNull();
   });
 
+  it('ignores an empty-use subtree sibling so the guarded exact key still matches', () => {
+    // '/app/*' is a binder-scope key (empty chain: the layout node and all
+    // ancestors are unguarded); only the index child's own use guards '/app'.
+    // The deeper subtree key must not outrank the guarded exact key and
+    // suppress the bare-loader warning for '/app'.
+    const match = makeGuardedRouteMatcher([
+      { path: '/app', use: [guard] },
+      { path: '/app/*', use: [] },
+    ]);
+    expect(match('/app')).toBe('/app');
+  });
+
   it('suggests the subtree pattern for a layout-location request', () => {
     const gate = () => {};
     const match = makeGuardedRouteMatcher([
