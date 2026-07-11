@@ -1,16 +1,34 @@
-import type { ComponentChildren, VNode } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import type { ComponentChildren, RefObject, VNode } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useStageProgress } from './stage.js';
 import { barState } from './progress.js';
 import { useInView, usePrefersReducedMotion } from './motion.js';
 
-export function Playhead(): VNode {
+// Tracks an element's content width in px so scroll-driven children can
+// position themselves with `transform` instead of a percentage `left`/`width`
+// (which is a layout property recomputed on every progress tick).
+function useElementWidth<T extends Element>(): [RefObject<T>, number] {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width];
+}
+
+export function Playhead({ trackWidth }: { trackWidth: number }): VNode {
   const { progress } = useStageProgress();
   return (
     <div
       class="hx-playhead"
       aria-hidden="true"
-      style={{ left: `${progress * 100}%` }}
+      style={{ transform: `translateX(${progress * trackWidth}px)` }}
     />
   );
 }
@@ -22,11 +40,12 @@ export function Wire({
   caption: string;
   children: ComponentChildren;
 }): VNode {
+  const [ref, trackWidth] = useElementWidth<HTMLDivElement>();
   return (
-    <div class="hx-wire">
+    <div class="hx-wire" ref={ref}>
       <div class="hx-wire__cap">{caption}</div>
       {children}
-      <Playhead />
+      <Playhead trackWidth={trackWidth} />
     </div>
   );
 }
@@ -53,7 +72,7 @@ export function Lane({
         <span
           class={`hx-lane__fill hx-lane__fill--${tone}`}
           data-state={state}
-          style={{ width: `${width * 100}%` }}
+          style={{ transform: `scaleX(${width})` }}
         />
       </span>
     </div>

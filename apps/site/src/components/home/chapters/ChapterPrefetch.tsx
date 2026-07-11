@@ -1,4 +1,5 @@
 import type { VNode } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
@@ -31,12 +32,30 @@ function PrefetchDemo(): VNode {
   // so the pointer is visibly hovering the link through the whole preload; a
   // click pulse fires later as the page opens.
   const travel = clamp01((progress - 0.04) / 0.24); // on the link by ~0.28
-  const cursorLeft = 33 + travel * 54; // 33% -> 87% (over "Invoices")
-  const cursorTop = 80 - travel * 70; // 80% -> 10% (the nav row)
+  const cursorLeftPct = 33 + travel * 54; // 33% -> 87% (over "Invoices")
+  const cursorTopPct = 80 - travel * 70; // 80% -> 10% (the nav row)
   const clicking = progress > 0.7 && progress < 0.82;
 
+  // .hx-prefetch is the cursor's positioning parent; measure it so the cursor
+  // can move via `transform` (a px offset) instead of a `left`/`top`
+  // percentage, which is a layout property recomputed on every progress tick.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry)
+        setBox({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const cursorX = (cursorLeftPct / 100) * box.w;
+  const cursorY = (cursorTopPct / 100) * box.h;
+
   return (
-    <div class="hx-prefetch">
+    <div class="hx-prefetch" ref={boxRef}>
       <div class="hx-prefetch__nav">
         <span class="hx-prefetch__brand">Acme</span>
         <span class="hx-prefetch__link" data-warm={hovering ? '' : undefined}>
@@ -47,7 +66,7 @@ function PrefetchDemo(): VNode {
       <span
         class="hx-prefetch__cursor"
         aria-hidden="true"
-        style={{ left: `${cursorLeft}%`, top: `${cursorTop}%` }}
+        style={{ transform: `translate(${cursorX}px, ${cursorY}px)` }}
       >
         {clicking && <span class="hx-prefetch__click" />}
         <svg viewBox="0 0 16 16" width="19" height="19" aria-hidden="true">
