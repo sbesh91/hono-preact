@@ -95,6 +95,8 @@ Each callback receives a `ViewTransitionEvent`:
 
 The four callbacks (`onBeforeTransition`, `onBeforeSwap`, `onAfterSwap`, `onAfterTransition`) each have the signature `(event) => void | Promise<void>`.
 
+A hash-only URL change is not a route change (see [Opting out](#opting-out-of-the-transition) below), so it never runs a transition and none of these four callbacks fire for it, including `afterSwap`. Effects that react to a URL fragment, scrolling to a heading, for example, should key on location (`useLocation().url` from `preact-iso`) rather than on a lifecycle callback, since a same-path fragment link is exactly the case where the lifecycle stays silent.
+
 ## Direction-driven CSS via types
 
 The framework adds three types to every transition:

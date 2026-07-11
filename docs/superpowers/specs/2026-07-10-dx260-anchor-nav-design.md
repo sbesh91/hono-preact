@@ -308,9 +308,15 @@ no-arg behavior preserved. Three behavior changes, all bug-fix-flavored but visi
    migration breadcrumbs.
 
 Site impact: `TableOfContents.tsx` loses its framework import and hazard comment (the issue's
-success criterion); `use-hash-scroll.ts` is untouched (it keys off `hashchange` and VT
-lifecycle, both still fire appropriately; with fewer spurious transitions its afterSwap path
-simply runs less). Note in passing (out of scope, worth a follow-up line in #260): a native
+success criterion). `use-hash-scroll.ts` is not untouched: a same-path hash link
+(`/docs/loaders#retries` clicked while already on `/docs/loaders`) is intercepted by
+preact-iso, preventDefaulted, and pushed, but the flush's path is unchanged, so the
+scheduler never classifies it as a navigation and neither `afterSwap` nor `afterTransition`
+fires for it. The hook adds a third trigger keyed on `useLocation().url` (which preact-iso
+updates, hash included, for an intercepted click) that fires directly when a `url` change
+lands on the same path as the previous one; a path change still defers to the VT lifecycle
+triggers, since that flush is wrapped in a transition. Note in passing (out of scope, worth a
+follow-up line in #260): a native
 permalink click also resets the shim's direction counter (`history-shim.ts:77-83`, popstate
 with null state reads `incoming = 0`), which mis-reports `NavDirection` for the next pop;
 this design does not change that.
