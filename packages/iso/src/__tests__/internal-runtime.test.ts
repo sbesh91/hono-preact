@@ -57,6 +57,10 @@ describe('iso /internal/runtime door', () => {
       'coerceActionInput',
       'coerceLoaderLocation',
       'collectFormData',
+      // Subtree-pattern key construction shared with @hono-preact/server's
+      // boot validator; moved off the public barrel (users spell the pattern
+      // as a literal '<path>/*' string).
+      'subtreePatternOf',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

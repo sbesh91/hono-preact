@@ -42,6 +42,40 @@ export type AbsolutePaths<
   ? NodePaths<Head, Parent> | AbsolutePaths<Tail, Parent>
   : never;
 
+// A path's subtree pattern. The root's subtree is '/*', not '//*', mirroring
+// the runtime key construction in `subtreePatternOf` (define-routes.tsx).
+type SubtreeOf<P extends string> = P extends '/' ? '/*' : `${P}/*`;
+
+// Subtree extraction over a route tree. Mirrors `NodePaths` exactly: nodes
+// are read STRUCTURALLY (the `path` literal, the presence of a `children`
+// key), never constrained to `RouteDef`, for the same cycle reason. Emits
+// `SubtreeOf<Here>` for every node that has children (layout groups AND
+// guard-only grouping nodes) and nothing for leaves, so the derived union
+// equals the runtime `collectRouteUse` subtree key set by construction.
+type NodeSubtrees<R, Parent extends string> = R extends {
+  path: infer P extends string;
+}
+  ? Here<Parent, P> extends infer H
+    ? H extends string
+      ? R extends { children: infer C extends readonly unknown[] }
+        ? SubtreeOf<H> | TreeSubtrees<C, NextParent<H>>
+        : never
+      : never
+    : never
+  : never;
+
+/**
+ * The union of subtree patterns (`<path>/*`) for every children-bearing node
+ * in a route tree: the subtree-scope spellings `serverRoute` accepts under a
+ * tree-form registration. Walks the same join as `AbsolutePaths`.
+ */
+export type TreeSubtrees<
+  T extends readonly unknown[],
+  Parent extends string = '',
+> = T extends readonly [infer Head, ...infer Tail extends readonly unknown[]]
+  ? NodeSubtrees<Head, Parent> | TreeSubtrees<Tail, Parent>
+  : never;
+
 // Param extraction. Handles required `:id`, optional `:id?`, and the preact-iso
 // modifier suffixes `*` / `+`. A pattern with no `:param` yields `{}`.
 //
@@ -109,15 +143,22 @@ export type RouteParams<Path extends string> =
       : {};
 
 /**
- * Augment this interface to register your app's routes for typed params:
+ * Augment this interface to register your app's routes for typed params. The
+ * canonical registration is the tree form:
  *
  * ```ts
  * declare module 'hono-preact' {
  *   interface RegisteredRoutes {
- *     paths: RoutePaths<typeof routes>;
+ *     tree: typeof routeTree;
  *   }
  * }
  * ```
+ *
+ * The tree form derives both the path union AND the subtree-pattern union
+ * (`RegisteredSubtrees`) from the tree structure, so every children-bearing
+ * node's wildcard spelling is typed. The paths form
+ * (`paths: RoutePaths<typeof routeTree>`) remains supported; it types
+ * subtree patterns heuristically from the path union instead.
  *
  * Until registered, `RegisteredPaths` falls back to `string` (the param hooks
  * still work; they just accept any string and project its param shape).
@@ -127,10 +168,12 @@ export interface RegisteredRoutes {
 }
 
 export type RegisteredPaths = RegisteredRoutes extends {
-  paths: infer P extends string;
+  tree: infer T extends readonly unknown[];
 }
-  ? P
-  : string;
+  ? AbsolutePaths<T>
+  : RegisteredRoutes extends { paths: infer P extends string }
+    ? P
+    : string;
 
 /**
  * A registered route pattern, or any other path string. Autocompletes the
@@ -139,6 +182,50 @@ export type RegisteredPaths = RegisteredRoutes extends {
  * matching APIs, which must work for routes outside the typed union.
  */
 export type RoutePattern = RegisteredPaths | (string & {});
+
+// `${P}/*` when P has at least one registered strict descendant, else never.
+// `All` is the FULL registered union (captured before distribution); the
+// Exclude guards the root case, where '/' itself matches `/${string}`.
+type SubtreeFrom<P extends string, All extends string> = [
+  Exclude<Extract<All, P extends '/' ? `/${string}` : `${P}/${string}`>, P>,
+] extends [never]
+  ? never
+  : SubtreeOf<P>;
+
+/**
+ * The subtree-pattern union derivable from a path union: `${P}/*` for every
+ * member `P` that has another member as a strict descendant. A pure function
+ * of the union (directly testable); it is the FALLBACK `RegisteredSubtrees`
+ * applies to paths-only registrations, which carry no tree structure to walk
+ * (a tree-form registration derives subtrees exactly via `TreeSubtrees`
+ * instead). `All` is a defaulted (not inferred) second parameter:
+ * defaults resolve once, before `Paths extends string` distributes, so `All`
+ * stays bound to the WHOLE union while `Paths` walks each member. An
+ * `[Paths] extends [infer All extends string]` capture looks equivalent but
+ * is not: nesting that capture around this function's `extends [never] ? :`
+ * conditional collapses the result to `never` for the whole union (a known
+ * conditional-type evaluation quirk), which a default parameter avoids.
+ */
+export type SubtreePatterns<
+  Paths extends string,
+  All extends string = Paths,
+> = Paths extends string ? SubtreeFrom<Paths, All> : never;
+
+/**
+ * The subtree-scope spellings `serverRoute` accepts alongside the exact
+ * registered paths. Under a tree-form registration, `${P}/*` for exactly the
+ * children-bearing nodes (the runtime's bindable subtree keys); under a
+ * paths-only registration, the `SubtreePatterns` heuristic over the path
+ * union. Resolves to `never` until routes are registered (`RegisteredPaths`
+ * then falls back to `string`, which already admits any spelling).
+ * Deliberately NOT part of `RegisteredPaths`, so `buildPath` and `useParams`
+ * autocompletion stay on navigable patterns.
+ */
+export type RegisteredSubtrees = RegisteredRoutes extends {
+  tree: infer T extends readonly unknown[];
+}
+  ? TreeSubtrees<T>
+  : SubtreePatterns<RegisteredPaths>;
 
 /**
  * The route-pattern union for an app. Accepts either the route tree array
@@ -157,4 +244,19 @@ export type RoutePaths<M> = M extends readonly unknown[]
   ? AbsolutePaths<M>
   : M extends { __tree?: infer T extends readonly unknown[] }
     ? AbsolutePaths<T>
+    : never;
+
+/**
+ * The subtree-pattern union for an app: `<path>/*` for every children-bearing
+ * node in the route tree. Mirrors `RoutePaths`: accepts either the route tree
+ * array (`typeof routeTree`) or a manifest produced by `defineRoutes`, with
+ * the same tree-form preference in the `declare module` registration (see
+ * `RoutePaths` for the cycle rationale). These are the subtree-scope
+ * spellings `serverRoute` accepts; they are not navigable patterns and never
+ * appear in `RoutePaths`.
+ */
+export type RouteSubtrees<M> = M extends readonly unknown[]
+  ? TreeSubtrees<M>
+  : M extends { __tree?: infer T extends readonly unknown[] }
+    ? TreeSubtrees<T>
     : never;

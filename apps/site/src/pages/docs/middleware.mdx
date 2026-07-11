@@ -33,6 +33,7 @@ export default defineRoutes([
   { path: '/login', view: () => import('./pages/login.js') }, // public
   {
     path: '/admin',
+    layout: () => import('./pages/admin/layout.js'),
     use: requireSession, // one declaration
     children: [
       {
@@ -92,6 +93,10 @@ A `throw` in any ring propagates up through the surrounding `after` blocks (so a
 A `use` on a route node inherits down the tree: it applies to the node's own view (if any) and every descendant. It covers the render path for the whole subtree and the RPC path of any **route-bound** loader or action (`serverRoute(r).loader` / `serverRoute(r).action`). You declare the guard once on the ancestor; leaves under it are gated without repeating anything. A sibling route that is not a descendant of the guarded node stays ungated.
 
 Bare units are the exception, and loaders and actions behave the same way. A route-independent `defineLoader` or `defineAction` runs its SSR render inside the route chain, but its client-driven RPC (`POST /__loaders` for a loader, the action POST for an action) runs only the app-level `use` and the unit's own unit-level `use`, never the route node's page-layer `use`. So a bare unit colocated under a guarded route is gated on first paint but not on a direct RPC hit. A bare unit is route-independent by design: the client chooses where to POST, so the route it posts from is not a security boundary. Bind it with `serverRoute(r).loader` / `serverRoute(r).action` (as in the example above), or give it a unit-level `use`, to gate it everywhere.
+
+A layout's own server module binds either scope of its node. `serverRoute('/admin/*')` is the subtree scope: the chain every descendant inherits (the layout's inherited and own `use`), the usual spelling for shell data. `serverRoute('/admin')` is the page scope: the deepest composed chain for the pattern string, which adds the index child's own `use` when the index child declares one (see [Binding a layout's loaders](/docs/loaders#binding-a-layouts-loaders)).
+
+A grouping node that declares `use` and `children` but no `view` or `layout` has no page pattern of its own, but its subtree does: a server module shared across the subtree binds `serverRoute('/x/*')` and runs the composed chain the node passes to every descendant. Under a tree-form registration (`tree: typeof routeTree`, see [Typed route params](/docs/layouts#typed-route-params)) the `'/x/*'` spelling is typed like every other children-bearing node's subtree; a paths-only registration types subtree patterns heuristically from the path union, which cannot see a grouping node.
 
 ```ts
 // src/routes.ts

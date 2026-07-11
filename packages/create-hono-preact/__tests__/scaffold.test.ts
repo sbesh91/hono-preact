@@ -151,6 +151,9 @@ describe('base routes.ts idioms', () => {
   it('registers the route tree for typed params and paths', () => {
     expect(routes).toContain('as const');
     expect(routes).toContain('interface RegisteredRoutes');
-    expect(routes).toContain('RoutePaths<typeof routeTree>');
+    // The canonical tree-form registration: derives paths AND subtree
+    // patterns from the tree structure (the paths form types subtrees
+    // heuristically instead).
+    expect(routes).toContain('tree: typeof routeTree');
   });
 });

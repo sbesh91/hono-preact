@@ -70,7 +70,7 @@ export default function MoviesLayout({ children }: LayoutProps) {
 Register in `routes.ts`, next to `defineRoutes`. Give the tree its own `as const` binding and register against `typeof routeTree`:
 
 ```ts
-import { defineRoutes, type RoutePaths } from 'hono-preact';
+import { defineRoutes } from 'hono-preact';
 
 const routeTree = [
   {
@@ -84,7 +84,7 @@ export default defineRoutes(routeTree);
 
 declare module 'hono-preact' {
   interface RegisteredRoutes {
-    paths: RoutePaths<typeof routeTree>;
+    tree: typeof routeTree;
   }
 }
 ```
@@ -102,6 +102,8 @@ export default function Movie() {
 ```
 
 Register against `typeof routeTree` (the tree array), not `typeof routes` (the manifest `defineRoutes` returns). The manifest form creates a type cycle. Before you register, `useParams` still works: it accepts any string and projects that pattern's params.
+
+The tree form types the whole binding surface from the tree structure: the path union (what `RoutePaths<typeof routeTree>` extracts) plus a subtree pattern (`<path>/*`, what `RouteSubtrees<typeof routeTree>` extracts) for every node with children, so `serverRoute`'s subtree scope compiles for grouping nodes and index-only layouts alike. A `paths: RoutePaths<typeof routeTree>` registration is also supported; with only a path union to work from, it types subtree patterns heuristically, requiring a registered strict descendant.
 
 ## URL composition rules
 

@@ -47,6 +47,10 @@ export type {
   DenyContext,
 } from './internal/realtime-connector.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
+// Subtree-pattern key construction shared with @hono-preact/server's boot
+// validator (route-binding-guard.ts); users spell the pattern as a literal
+// '<path>/*' string, so it has no public-barrel story.
+export { subtreePatternOf } from './define-routes.js';
 export * from './internal/contract.js';
 export {
   validateWithSchema,

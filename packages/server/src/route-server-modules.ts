@@ -64,8 +64,20 @@ export function makeGuardedRouteMatcher(
   routeUse: ReadonlyArray<{ path: string; use: ReadonlyArray<unknown> }>
 ): (urlPath: string) => string | null {
   const useByPattern = new Map(routeUse.map((r) => [r.path, r.use]));
+  // Empty-use subtree keys ('<path>/*' with an empty chain) are binder-scope
+  // keys, not matchable pages; they would win the depth tiebreak over a
+  // guarded exact key at the same URL and null the warning that guarded key
+  // should trigger. Dropping them loses no guard information: subtree chains
+  // fold every ancestor's `use`, so an empty subtree chain implies the whole
+  // ancestor path is unguarded. Guarded subtree keys stay in the candidate
+  // set (they are the subtree-scope suggestion for layout-location requests),
+  // as do empty EXACT keys (an unguarded literal page legitimately shadows a
+  // broader guarded pattern; see the matcher tests).
+  const candidates = routeUse
+    .filter((r) => !(r.path.endsWith('/*') && r.use.length === 0))
+    .map((r) => r.path);
   return (urlPath) => {
-    const best = findBestPattern(useByPattern.keys(), urlPath);
+    const best = findBestPattern(candidates, urlPath);
     if (best === null) return null;
     const use = useByPattern.get(best);
     return use !== undefined && use.length > 0 ? best : null;

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { createCaller, publish } from 'hono-preact';
+import { createCaller, publish, serverRoute, buildPath } from 'hono-preact';
 import { serverLoaders } from '../projects-shell.server.js';
 import {
   activityChannel,
@@ -10,6 +10,8 @@ import {
 } from '../../../demo/activity-stream.js';
 import { resetDemoData, getTask } from '../../../demo/data.js';
 import { __resetSimHeartbeatForTesting } from '../../../demo/activity-sim.js';
+import routes from '../../../routes.js';
+import { requireSession } from '../../../demo/guard.js';
 
 // Mint a real Hono Context by driving one request through a capture handler.
 async function mintContext(): Promise<Context> {
@@ -85,3 +87,49 @@ describe('activity live loader', () => {
     expect(clearSpy).toHaveBeenCalled();
   });
 });
+
+describe('shell loaders are subtree-bound to the projects layout', () => {
+  it('binds default and activity to /demo/projects/*', () => {
+    // Route binding is what attaches the layout's own composed use chain
+    // (requireSession on the projects node) to these loaders' RPCs.
+    expect(serverLoaders.default.__routeId).toBe('/demo/projects/*');
+    expect(serverLoaders.default.__routeBound).toBe(true);
+    expect(serverLoaders.activity.__routeId).toBe('/demo/projects/*');
+    expect(serverLoaders.activity.__routeBound).toBe(true);
+  });
+
+  it('default loader returns the shell data shape via the server caller', async () => {
+    const c = await mintContext();
+    const r = await createCaller(c).call(serverLoaders.default);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.user).toBeNull();
+    expect(r.value.projects.length).toBeGreaterThan(0);
+    for (const p of r.value.projects) {
+      expect(typeof p.taskCount).toBe('number');
+    }
+  });
+});
+
+describe('the bound subtree pattern resolves the projects gates from the site manifest', () => {
+  it('the bound pattern is a routeUse key carrying exactly the layout chain', () => {
+    const byPattern = new Map(routes.routeUse.map((r) => [r.path, r.use]));
+    // The seam the RPC guard resolution walks: declared pattern -> routeUse
+    // key -> the projects layout's own composed chain (requireSession).
+    expect(byPattern.get(serverLoaders.default.__routeId!)).toEqual(
+      requireSession
+    );
+  });
+});
+
+// Type-level pins, enforced by `pnpm typecheck` (the site tsconfig includes
+// test files). Never executed.
+function _subtreeTypeProbes() {
+  // The subtree spelling is typed for the projects layout.
+  serverRoute('/demo/projects/*');
+  // @ts-expect-error a leaf path derives no subtree pattern
+  serverRoute('/demo/login/*');
+  // @ts-expect-error the nav surface stays on exact registered paths
+  buildPath('/demo/projects/*');
+}
+void _subtreeTypeProbes;

@@ -1,4 +1,4 @@
-import { defineRoutes, contentRoutes, type RoutePaths } from 'hono-preact';
+import { defineRoutes, contentRoutes } from 'hono-preact';
 // Registers the global `docs` view-transition type rule (enter/leave/within
 // /docs). Side-effect import: the generated client entry imports this module,
 // so the subscriber is installed once at startup.
@@ -65,6 +65,6 @@ export default defineRoutes(routeTree);
 
 declare module 'hono-preact' {
   interface RegisteredRoutes {
-    paths: RoutePaths<typeof routeTree>;
+    tree: typeof routeTree;
   }
 }

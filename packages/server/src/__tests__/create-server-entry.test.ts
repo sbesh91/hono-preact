@@ -261,3 +261,69 @@ describe('createServerEntry', () => {
     }
   });
 });
+
+describe('aliased exact layout binding dev warning', () => {
+  const buildApp = (dev: boolean) => {
+    const layoutGate = defineServerMiddleware<'loader'>(async (_c, next) =>
+      next()
+    );
+    const indexGate = defineServerMiddleware<'loader'>(async (_c, next) =>
+      next()
+    );
+    const loader = _defineRouteLoader('/x', async () => 'ok', {
+      __moduleKey: 'test/m',
+      __loaderName: 'l',
+      use: [],
+    });
+    const mod = { __moduleKey: 'test/m', serverLoaders: { l: loader } };
+    return createServerEntry({
+      routes: manifest({
+        serverImports: [async () => mod],
+        serverRoutes: [{ path: '/x', server: async () => mod, ancestors: [] }],
+        routeUse: [
+          { path: '/x', use: [layoutGate, indexGate] },
+          { path: '/x/*', use: [layoutGate] },
+        ],
+      }),
+      layout: Layout,
+      dev,
+    });
+  };
+  const post = (app: ReturnType<typeof buildApp>) =>
+    app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'test/m',
+        loader: 'l',
+        location: { path: '/x', pathParams: {}, searchParams: {} },
+      }),
+    });
+  const aliasWarnings = (calls: ReadonlyArray<ReadonlyArray<unknown>>) =>
+    calls.filter((c) => String(c[0]).includes('page scope'));
+
+  it('dev warns once per binding across requests, naming both spellings', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = buildApp(true);
+      await post(app);
+      await post(app);
+      const warnings = aliasWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0][0])).toContain("serverRoute('/x/*')");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('prod never warns', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = buildApp(false);
+      await post(app);
+      expect(aliasWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

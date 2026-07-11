@@ -9,7 +9,7 @@ The demo at `/demo/projects` uses a live activity loader on the `projects-shell`
 **Server module** (`projects-shell.server.ts`):
 
 ```ts
-import { defineLoader, eventStream, type LoaderCtx } from 'hono-preact';
+import { serverRoute, eventStream, type LoaderCtx } from 'hono-preact';
 import {
   activityChannel,
   recentActivityEvents,
@@ -28,9 +28,14 @@ async function* activityStream({
   }
 }
 
+// The projects route node declares `use: requireSession`; the subtree
+// binding resolves that gate for the shell's loader RPCs from this
+// declared pattern.
+const route = serverRoute('/demo/projects/*');
+
 export const serverLoaders = {
-  default: defineLoader(shellLoader),
-  activity: defineLoader(activityStream, { live: true }),
+  default: route.loader(shellLoader),
+  activity: route.loader(activityStream, { live: true }),
 };
 ```
 
