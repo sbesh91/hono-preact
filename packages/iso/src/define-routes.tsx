@@ -300,7 +300,8 @@ function collectServerRoutes(
  * emitter here and the boot validator (`route-binding-guard.ts`) must agree
  * on this construction, so it lives in one place.
  *
- * Framework-private: exported for `@hono-preact/server`, not a user API.
+ * Framework-private: exported for `@hono-preact/server` via the
+ * `@hono-preact/iso/internal/runtime` door, not a user API.
  */
 export function subtreePatternOf(path: string): string {
   return path === '/' ? '/*' : path + '/*';

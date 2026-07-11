@@ -9,7 +9,7 @@ export type { PageBindings } from './define-page.js';
 export { Route, Router, lazy, useLocation, useRoute } from 'preact-iso';
 
 // Declarative route tree.
-export { defineRoutes, Routes, subtreePatternOf } from './define-routes.js';
+export { defineRoutes, Routes } from './define-routes.js';
 export type {
   RouteDef,
   RoutesManifest,

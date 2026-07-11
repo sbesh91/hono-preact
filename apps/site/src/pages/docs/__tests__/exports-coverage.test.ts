@@ -36,7 +36,6 @@ const INTENTIONALLY_UNDOCUMENTED = new Set<string>([
   'isTimeout', // advanced predicate for inspecting timeout outcomes in custom handler code; timeouts themselves are documented via timeoutMs
   'timeoutOutcome', // advanced constructor for timeout outcomes in custom handler code; timeouts themselves are documented via timeoutMs
   'useRoute', // raw preact-iso re-export; useParams() is the documented route-params API
-  'subtreePatternOf', // framework-private key construction for @hono-preact/server; users spell the pattern as a literal '<path>/*' string
 ]);
 
 // Public `hono-preact-ui` exports that are intentionally undocumented. Same

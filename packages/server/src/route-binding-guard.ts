@@ -1,4 +1,5 @@
-import { subtreePatternOf, type ServerRoute } from '@hono-preact/iso';
+import type { ServerRoute } from '@hono-preact/iso';
+import { subtreePatternOf } from '@hono-preact/iso/internal/runtime';
 
 /**
  * A route-bound loader/action stamps its declared route pattern onto the export
