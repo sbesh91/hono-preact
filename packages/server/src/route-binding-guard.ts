@@ -233,10 +233,8 @@ export function warnAliasedLayoutBinding(
       `layout's chain. For subtree-scoped (layout shell) data, bind ` +
       `serverRoute('${info.subtreeId}') instead: the subtree scope runs the ` +
       `layout node's own composed chain without the index child's additions. ` +
-      `Under a registered route table the '${info.subtreeId}' spelling is ` +
-      `typed only when the node has a non-index descendant route; without ` +
-      `one, keep the page-scope binding and enforce index-only checks inside ` +
-      `the ${info.kind}. Keep '${info.routeId}' if this ${info.kind} should ` +
-      `run the index page's full gate chain.`
+      `Register your routes in the tree form ({ tree: typeof routeTree }) to ` +
+      `have every subtree spelling typed. Keep '${info.routeId}' if this ` +
+      `${info.kind} should run the index page's full gate chain.`
   );
 }

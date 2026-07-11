@@ -395,10 +395,9 @@ describe('warnAliasedLayoutBinding', () => {
       expect(msg).toContain("'/app'");
       expect(msg).toContain("serverRoute('/app/*')");
       expect(msg).toContain('page scope');
-      // The wildcard hint carries its typing caveat: under a registered route
-      // table the subtree spelling compiles only with a non-index descendant.
-      expect(msg).toContain('typed only when the node has a non-index');
-      expect(msg).toContain('inside the loader');
+      // The wildcard hint points at tree-form registration, under which
+      // every children-bearing node's subtree spelling is typed.
+      expect(msg).toContain('tree: typeof routeTree');
     } finally {
       warn.mockRestore();
     }
