@@ -124,4 +124,11 @@ describe('findBestPattern', () => {
     // matcher rewrite cannot flip it silently.
     expect(findBestPattern(['/', '/*'], '/')).toBe('/*');
   });
+
+  it('prefers the deeper wildcard key over an equal-scoring bare prefix', () => {
+    // '/x' and '/x/*' score identically (the trailing * scores 0); depth
+    // breaks the tie. The #263 warning's suggestion for layout-location
+    // requests relies on this.
+    expect(findBestPattern(['/x', '/x/*'], '/x')).toBe('/x/*');
+  });
 });

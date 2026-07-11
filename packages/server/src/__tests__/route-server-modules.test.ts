@@ -65,4 +65,19 @@ describe('makeGuardedRouteMatcher', () => {
     const match = makeGuardedRouteMatcher([{ path: '/a', use: [guard] }]);
     expect(match('/b/c')).toBeNull();
   });
+
+  it('suggests the subtree pattern for a layout-location request', () => {
+    const gate = () => {};
+    const match = makeGuardedRouteMatcher([
+      { path: '/demo/projects', use: [gate] },
+      { path: '/demo/projects/*', use: [gate] },
+      { path: '/demo/projects/:projectId', use: [gate] },
+    ]);
+    // Equal literal score for the exact and wildcard keys; the deeper
+    // wildcard wins, so the #263 warning names the subtree spelling for a
+    // layout-location request.
+    expect(match('/demo/projects')).toBe('/demo/projects/*');
+    // A leaf request still resolves its more specific param pattern.
+    expect(match('/demo/projects/p1')).toBe('/demo/projects/:projectId');
+  });
 });
