@@ -33,6 +33,7 @@ export default defineRoutes([
   { path: '/login', view: () => import('./pages/login.js') }, // public
   {
     path: '/admin',
+    layout: () => import('./pages/admin/layout.js'),
     use: requireSession, // one declaration
     children: [
       {
