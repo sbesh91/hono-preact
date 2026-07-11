@@ -9,7 +9,11 @@ import {
   type ParamsFromOptions,
   type SearchFromOptions,
 } from './define-loader.js';
-import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
+import type {
+  RegisteredPaths,
+  RegisteredSubtrees,
+  RouteParams,
+} from './internal/typed-routes.js';
 import type { Topic } from './define-channel.js';
 import { subscribeTopic } from './internal/subscribe-topic.js';
 import {
@@ -175,10 +179,18 @@ export interface RouteBinder<RouteId extends string> {
  * which the server dispatcher uses to match route-bound loaders. The Vite
  * module-key plugin recognizes `route.loader(...)` calls in `serverLoaders`
  * and threads the module key just as it does for `defineLoader`.
+ *
+ * A layout or grouping node's SUBTREE binds with the wildcard spelling,
+ * `serverRoute('/movies/*')`: the returned binder resolves the `use` chain
+ * every descendant of `/movies` inherits (ancestors outer-first, then the
+ * node's own `use`), without the index child's additions. The exact path
+ * (`serverRoute('/movies')`) is the page scope, the pattern's deepest
+ * composed chain. `RouteParams` of a wildcard pattern are the prefix params
+ * only, matching the derived layout location the loader receives.
  */
-export function serverRoute<const RouteId extends RegisteredPaths>(
-  route: RouteId
-): RouteBinder<RouteId> {
+export function serverRoute<
+  const RouteId extends RegisteredPaths | RegisteredSubtrees,
+>(route: RouteId): RouteBinder<RouteId> {
   return {
     loader: (fn: Loader<unknown>, opts?: DefineLoaderOptions<unknown>) =>
       _defineRouteLoader(route, fn, opts),

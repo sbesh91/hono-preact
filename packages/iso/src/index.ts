@@ -28,6 +28,7 @@ export type {
   RouteParams,
   RoutePaths,
   RegisteredRoutes,
+  RegisteredSubtrees,
 } from './internal/typed-routes.js';
 export type { Serialize } from './internal/serialize.js';
 

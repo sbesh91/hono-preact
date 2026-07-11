@@ -140,6 +140,46 @@ export type RegisteredPaths = RegisteredRoutes extends {
  */
 export type RoutePattern = RegisteredPaths | (string & {});
 
+// A path's subtree pattern. The root's subtree is '/*', not '//*', mirroring
+// the runtime key construction in `subtreePatternOf` (define-routes.tsx).
+type SubtreeOf<P extends string> = P extends '/' ? '/*' : `${P}/*`;
+
+// `${P}/*` when P has at least one registered strict descendant, else never.
+// `All` is the FULL registered union (captured before distribution); the
+// Exclude guards the root case, where '/' itself matches `/${string}`.
+type SubtreeFrom<P extends string, All extends string> = [
+  Exclude<Extract<All, P extends '/' ? `/${string}` : `${P}/${string}`>, P>,
+] extends [never]
+  ? never
+  : SubtreeOf<P>;
+
+/**
+ * The subtree-pattern union derivable from a path union: `${P}/*` for every
+ * member `P` that has another member as a strict descendant. A pure function
+ * of the union (directly testable); `RegisteredSubtrees` applies it to the
+ * registered paths. `All` is a defaulted (not inferred) second parameter:
+ * defaults resolve once, before `Paths extends string` distributes, so `All`
+ * stays bound to the WHOLE union while `Paths` walks each member. An
+ * `[Paths] extends [infer All extends string]` capture looks equivalent but
+ * is not: nesting that capture around this function's `extends [never] ? :`
+ * conditional collapses the result to `never` for the whole union (a known
+ * conditional-type evaluation quirk), which a default parameter avoids.
+ */
+export type SubtreePatterns<
+  Paths extends string,
+  All extends string = Paths,
+> = Paths extends string ? SubtreeFrom<Paths, All> : never;
+
+/**
+ * `${P}/*` for every registered path with a registered descendant: the
+ * subtree-scope spellings `serverRoute` accepts alongside the exact
+ * registered paths. Resolves to `never` until routes are registered
+ * (`RegisteredPaths` then falls back to `string`, which already admits any
+ * spelling). Deliberately NOT part of `RegisteredPaths`, so `buildPath` and
+ * `useParams` autocompletion stay on navigable patterns.
+ */
+export type RegisteredSubtrees = SubtreePatterns<RegisteredPaths>;
+
 /**
  * The route-pattern union for an app. Accepts either the route tree array
  * (use `typeof routeTree` from `const routeTree = [...] as const`) or a manifest
