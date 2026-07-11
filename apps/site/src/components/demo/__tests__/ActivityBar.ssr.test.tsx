@@ -80,14 +80,14 @@ describe('ActivityBar SSR (real .View path, connecting arm)', () => {
 });
 
 // Route-binding contract: the activity loader is bound to the projects
-// layout's route pattern via serverRoute('/demo/projects'), so its RPC
-// composes the page-layer use chain (requireSession on the projects node in
-// routes.ts) from the declared pattern. The layout host supplies the derived
-// layout location to route-bound loaders consumed inside the layout, and
-// { live: true } keeps the stream off the SSR path.
+// layout's SUBTREE pattern via serverRoute('/demo/projects/*'), so its RPC
+// composes the layout node's own use chain (requireSession on the projects
+// node in routes.ts) from the declared pattern. The layout host supplies the
+// derived layout location to route-bound loaders consumed inside the layout,
+// and { live: true } keeps the stream off the SSR path.
 describe('ActivityBar: activity loader route-binding contract', () => {
-  it('is bound to the projects layout route', () => {
-    expect(serverLoaders.activity.__routeId).toBe('/demo/projects');
+  it('is bound to the projects layout subtree', () => {
+    expect(serverLoaders.activity.__routeId).toBe('/demo/projects/*');
     expect(serverLoaders.activity.__routeBound).toBe(true);
   });
 

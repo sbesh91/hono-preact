@@ -36,11 +36,12 @@ async function* activityStream({
   }
 }
 
-// Bind this server module to the projects layout's route pattern. Binding
-// resolves the page-layer use chain (requireSession, declared on the
-// projects node in routes.ts) from this declared pattern on every loader
-// RPC, so the shell's data endpoints are gated like the pages they serve.
-const route = serverRoute('/demo/projects');
+// Bind this server module to the projects layout's subtree pattern. The
+// subtree scope resolves the layout node's own composed use chain
+// (requireSession, declared on the projects node in routes.ts) on every
+// loader RPC, so the shell's data endpoints carry exactly the gates every
+// child of /demo/projects inherits.
+const route = serverRoute('/demo/projects/*');
 
 export const serverLoaders = {
   default: route.loader(async (ctx) => {
