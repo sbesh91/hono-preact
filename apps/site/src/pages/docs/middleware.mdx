@@ -96,7 +96,7 @@ Bare units are the exception, and loaders and actions behave the same way. A rou
 
 A layout's own server module binds either scope of its node. `serverRoute('/admin/*')` is the subtree scope: the chain every descendant inherits (the layout's inherited and own `use`), the usual spelling for shell data. `serverRoute('/admin')` is the page scope: the deepest composed chain for the pattern string, which adds the index child's own `use` when the index child declares one (see [Binding a layout's loaders](/docs/loaders#binding-a-layouts-loaders)).
 
-A grouping node that declares `use` and `children` but no `view` or `layout` has no page pattern of its own, but its subtree does: a server module shared across the subtree binds `serverRoute('/x/*')` and runs the composed chain the node passes to every descendant. Under a registered route table a grouping node's path is not in `RegisteredPaths`, so the `'/x/*'` spelling is not typed; register the node by giving it a `layout`, or bind a descendant's pattern instead.
+A grouping node that declares `use` and `children` but no `view` or `layout` has no page pattern of its own, but its subtree does: a server module shared across the subtree binds `serverRoute('/x/*')` and runs the composed chain the node passes to every descendant. Under a tree-form registration (`tree: typeof routeTree`, see [Typed route params](/docs/layouts#typed-route-params)) the `'/x/*'` spelling is typed like every other children-bearing node's subtree; a paths-only registration types subtree patterns heuristically from the path union, which cannot see a grouping node.
 
 ```ts
 // src/routes.ts
