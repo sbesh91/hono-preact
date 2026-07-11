@@ -45,8 +45,14 @@ export function useNavigate(): (
       // there is no view transition to suppress.
       if (path[0] === '#') {
         if (typeof window === 'undefined') return;
-        if (options?.replace) history.replaceState(null, '', path);
-        else history.pushState(null, '', path);
+        // A fragment target that is already the current hash needs no history
+        // write: native fragment navigation to the same URL is a replace, not a
+        // push, so pushing here would stack an identical entry and make Back
+        // appear dead. Skip the write and still scroll.
+        if (location.hash !== path) {
+          if (options?.replace) history.replaceState(null, '', path);
+          else history.pushState(null, '', path);
+        }
         document
           .getElementById(path.slice(1))
           ?.scrollIntoView({ block: 'start' });

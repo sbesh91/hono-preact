@@ -157,4 +157,23 @@ describe('useNavigate fragment targets', () => {
     expect(mockRoute).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('does not push a duplicate history entry when the fragment target is already current', () => {
+    history.replaceState(null, '', '/docs/x#usage');
+    const target = document.createElement('h2');
+    target.id = 'usage';
+    const scrollSpy = vi.fn();
+    target.scrollIntoView = scrollSpy;
+    document.body.appendChild(target);
+    const pushSpy = vi.spyOn(history, 'pushState');
+    const replaceSpy = vi.spyOn(history, 'replaceState');
+
+    render(<Harness path="#usage" />);
+    click();
+
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'start' });
+    target.remove();
+  });
 });
