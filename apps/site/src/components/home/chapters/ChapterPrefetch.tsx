@@ -1,9 +1,9 @@
 import type { VNode } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 import { clamp01 } from '../scroll/progress.js';
+import { useElementSize } from '../scroll/motion.js';
 
 const SNIPPET = `// one line in your app config
 export default defineApp({ speculation: true });
@@ -39,20 +39,9 @@ function PrefetchDemo(): VNode {
   // .hx-prefetch is the cursor's positioning parent; measure it so the cursor
   // can move via `transform` (a px offset) instead of a `left`/`top`
   // percentage, which is a layout property recomputed on every progress tick.
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = boxRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([entry]) => {
-      if (entry)
-        setBox({ w: entry.contentRect.width, h: entry.contentRect.height });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const cursorX = (cursorLeftPct / 100) * box.w;
-  const cursorY = (cursorTopPct / 100) * box.h;
+  const [boxRef, box] = useElementSize<HTMLDivElement>();
+  const cursorX = (cursorLeftPct / 100) * box.width;
+  const cursorY = (cursorTopPct / 100) * box.height;
 
   return (
     <div class="hx-prefetch" ref={boxRef}>

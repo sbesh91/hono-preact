@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { ScrollStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
+import { usePrefersReducedMotion } from '../scroll/motion.js';
 
 const SNIPPET = `serverLoaders.default.View((state) => {
   switch (state.status) {
@@ -40,13 +41,20 @@ const NOTE: Record<Status, string> = {
 // subtree, so there's no keyframe to retarget); this arms a one-frame-delayed
 // `data-entered` flag so CSS can transition it in each time the playhead
 // crosses into the error window, mirroring the same armed-mount pattern
-// `Reveal` and `ChapterOnePackage` already use for their own entrances.
+// `Reveal` and `ChapterOnePackage` already use for their own entrances. A
+// reduced-motion reader starts already "entered" (like `Reveal`'s `static`
+// state), so the mount never has a hidden frame to transition from.
 function ErrorPane(): VNode {
-  const [entered, setEntered] = useState(false);
+  const reduced = usePrefersReducedMotion();
+  const [entered, setEntered] = useState(reduced);
   useEffect(() => {
+    if (reduced) {
+      setEntered(true);
+      return;
+    }
     const id = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(id);
-  }, []);
+  }, [reduced]);
   return (
     <div
       class="hx-res__pane hx-res__pane--error"

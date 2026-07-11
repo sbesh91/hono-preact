@@ -1,26 +1,12 @@
-import type { ComponentChildren, RefObject, VNode } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren, VNode } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import { useStageProgress } from './stage.js';
 import { barState } from './progress.js';
-import { useInView, usePrefersReducedMotion } from './motion.js';
-
-// Tracks an element's content width in px so scroll-driven children can
-// position themselves with `transform` instead of a percentage `left`/`width`
-// (which is a layout property recomputed on every progress tick).
-function useElementWidth<T extends Element>(): [RefObject<T>, number] {
-  const ref = useRef<T>(null);
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, width];
-}
+import {
+  useElementSize,
+  useInView,
+  usePrefersReducedMotion,
+} from './motion.js';
 
 export function Playhead({ trackWidth }: { trackWidth: number }): VNode {
   const { progress } = useStageProgress();
@@ -40,7 +26,7 @@ export function Wire({
   caption: string;
   children: ComponentChildren;
 }): VNode {
-  const [ref, trackWidth] = useElementWidth<HTMLDivElement>();
+  const [ref, { width: trackWidth }] = useElementSize<HTMLDivElement>();
   return (
     <div class="hx-wire" ref={ref}>
       <div class="hx-wire__cap">{caption}</div>

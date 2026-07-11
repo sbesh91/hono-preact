@@ -922,10 +922,14 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   position: absolute;
   inset: 0;
   /* Scaled from a full-width bar (not a `width` percentage) so the scroll-driven
-     fill is a compositor-only transform, not a per-frame layout property. */
+     fill is a compositor-only transform, not a per-frame layout property.
+     No border-radius here: at a fractional scaleX it would compress the
+     rounding into a flattened ellipse instead of staying circular. The track's
+     own border-radius + overflow:hidden below already produces the right
+     rounded-pill shape at rest (scaleX(1)); mid-fill the leading edge is a
+     flat cut instead of a rounded cap, a common progress-bar treatment. */
   transform-origin: left;
   background: var(--wire-inflight);
-  border-radius: 0.28rem;
   transition: background 0.2s;
 }
 /* Solid green/amber only for non-gradient lanes. The :not() keeps these off
@@ -942,6 +946,14 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 .hx-lane__fill--grad[data-state='inflight'],
 .hx-lane__fill--grad[data-state='done'] {
   background: var(--gradient-orangenta);
+}
+/* The glow lives on the (unscaled) track rather than the scaled fill: a
+   box-shadow painted on a fractionally-scaleX'd element gets squashed
+   horizontally along with it, smearing the blur instead of keeping it soft
+   and round. :has() lets the track light up only while a gradient lane inside
+   it is actually inflight or done. */
+.hx-lane__track:has(.hx-lane__fill--grad[data-state='inflight']),
+.hx-lane__track:has(.hx-lane__fill--grad[data-state='done']) {
   box-shadow: 0 0 12px -1px var(--glow);
 }
 .hx-playhead {
@@ -1271,14 +1283,6 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
     opacity: 1;
     transform: none;
     transition: none;
-  }
-  .hx-res__pane--error {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-  .hx-region[data-shown='true'] .hx-mut-row--saved {
-    animation: none;
   }
 }
 
@@ -2148,6 +2152,14 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
     background: var(--surface);
   }
 }
+/* Placed here (not the earlier consolidated reduced-motion block) because it
+   must win the equal-specificity cascade tie against the animated rule above,
+   which it can only do by coming later in source order. */
+@media (prefers-reduced-motion: reduce) {
+  .hx-region[data-shown='true'] .hx-mut-row--saved {
+    animation: none;
+  }
+}
 .hx-mut-tag {
   font-size: 0.75rem;
   color: var(--muted);
@@ -2262,6 +2274,18 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 .hx-res__pane--error[data-entered] {
   opacity: 1;
   transform: none;
+}
+/* Belt-and-suspenders alongside ErrorPane's own reduced-motion check (which
+   starts `entered` true, so the transition above never actually runs for a
+   reduced-motion reader): covers the case where the OS setting flips mid-arm.
+   Placed here, not the earlier consolidated block, so it wins the
+   equal-specificity cascade tie against the rule above by source order. */
+@media (prefers-reduced-motion: reduce) {
+  .hx-res__pane--error {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 .hx-res__pane-fail {
   display: flex;

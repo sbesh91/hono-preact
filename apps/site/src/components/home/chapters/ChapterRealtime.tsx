@@ -1,8 +1,8 @@
 import type { VNode } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
 import { LiveStage, useStageProgress } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
+import { useElementSize } from '../scroll/motion.js';
 
 // Rendered literally in a <pre>. Inner backticks and ${...} are escaped so the
 // template literal reproduces the framework snippet verbatim.
@@ -55,18 +55,7 @@ function LiveRoom(): VNode {
   // in view, unlike the scroll-scrubbed demos elsewhere on the page), so their
   // position is a measured-px `transform` rather than a `left`/`top`
   // percentage: that keeps a sustained per-frame animation off layout.
-  const roomRef = useRef<HTMLDivElement>(null);
-  const [room, setRoom] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = roomRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([entry]) => {
-      if (entry)
-        setRoom({ w: entry.contentRect.width, h: entry.contentRect.height });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const [roomRef, room] = useElementSize<HTMLDivElement>();
 
   return (
     <div class="hx-rt-room" ref={roomRef}>
@@ -75,8 +64,8 @@ function LiveRoom(): VNode {
         const yPct = 50 + Math.cos(t * p.sy + p.ph) * p.ry;
         // -2px keeps the arrow's tip (not its top-left corner) on the point,
         // matching the CSS `transform: translate(-2px, -2px)` this replaces.
-        const x = (xPct / 100) * room.w - 2;
-        const y = (yPct / 100) * room.h - 2;
+        const x = (xPct / 100) * room.width - 2;
+        const y = (yPct / 100) * room.height - 2;
         return (
           <span
             key={p.name}
