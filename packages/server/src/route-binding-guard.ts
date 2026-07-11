@@ -198,3 +198,31 @@ export async function assertRegistryRouteBindingsValid(
     })
   );
 }
+
+/**
+ * Dev-only console warning for an aliased exact-path binding, fired through
+ * `RouteBindingCheckContext.onAliasedBinding`. One warning per binding key
+ * for the life of the `warned` set the caller owns (the generated entry
+ * re-runs boot checks per request in dev; the set dedups across runs).
+ *
+ * NOTE: framework-private. The only intended consumer is the generated
+ * server entry.
+ */
+export function warnAliasedLayoutBinding(
+  warned: Set<string>,
+  info: AliasedBindingInfo
+): void {
+  const key = `${info.kind}:${info.name}@${info.routeId}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: ${info.kind} '${info.name}' is bound to '${info.routeId}', ` +
+      `the page scope for that pattern: its RPC runs the deepest composed ` +
+      `chain, which includes the index child's own 'use' on top of the ` +
+      `layout's chain. For subtree-scoped (layout shell) data, bind ` +
+      `serverRoute('${info.subtreeId}') instead: the subtree scope runs the ` +
+      `layout node's own composed chain without the index child's additions. ` +
+      `Keep '${info.routeId}' if this ${info.kind} should run the index ` +
+      `page's full gate chain.`
+  );
+}

@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
+  warnAliasedLayoutBinding,
   type RouteBindingCheckContext,
+  type AliasedBindingInfo,
 } from '../route-binding-guard.js';
 import type { ServerRoute } from '@hono-preact/iso';
 
@@ -222,5 +224,136 @@ describe('subtree (wildcard) bindings', () => {
     await expect(
       assertRegistryRouteBindingsValid(registry, ctxOf([['/reports', []]]))
     ).rejects.toThrow(/bound to route '\/nope\/\*', which is not a route/);
+  });
+});
+
+describe('aliasing diagnostic (onAliasedBinding)', () => {
+  const g1 = () => {};
+  const g2 = () => {};
+  const collect = () => {
+    const seen: AliasedBindingInfo[] = [];
+    return { seen, cb: (info: AliasedBindingInfo) => seen.push(info) };
+  };
+
+  it('reports an exact binding whose sibling subtree chain differs', async () => {
+    const { seen, cb } = collect();
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/app', {
+          __moduleKey: 'm',
+          serverLoaders: { shell: bound('/app') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g1, g2]],
+          ['/app/*', [g1]],
+        ]),
+        onAliasedBinding: cb,
+      }
+    );
+    expect(seen).toEqual([
+      { kind: 'loader', name: 'shell', routeId: '/app', subtreeId: '/app/*' },
+    ]);
+  });
+
+  it('does not report when the two chains are identical', async () => {
+    const { seen, cb } = collect();
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/app', {
+          __moduleKey: 'm',
+          serverLoaders: { shell: bound('/app') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g1]],
+          ['/app/*', [g1]],
+        ]),
+        onAliasedBinding: cb,
+      }
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it('does not report a subtree binding (it IS the subtree scope)', async () => {
+    const { seen, cb } = collect();
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/app', {
+          __moduleKey: 'm',
+          serverLoaders: { shell: bound('/app/*') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g1, g2]],
+          ['/app/*', [g1]],
+        ]),
+        onAliasedBinding: cb,
+      }
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it('does not report when no sibling subtree key exists (leaf binding)', async () => {
+    const { seen, cb } = collect();
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/leaf', {
+          __moduleKey: 'm',
+          serverLoaders: { l: bound('/leaf') },
+        }),
+      ],
+      { routeUseByPattern: new Map([['/leaf', [g1]]]), onAliasedBinding: cb }
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it('reports registry bindings through the same signal', async () => {
+    const { seen, cb } = collect();
+    await assertRegistryRouteBindingsValid(
+      [
+        async () => ({
+          __moduleKey: 'src/server/x',
+          serverActions: { save: bound('/app') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g1, g2]],
+          ['/app/*', [g1]],
+        ]),
+        onAliasedBinding: cb,
+      }
+    );
+    expect(seen).toEqual([
+      { kind: 'action', name: 'save', routeId: '/app', subtreeId: '/app/*' },
+    ]);
+  });
+});
+
+describe('warnAliasedLayoutBinding', () => {
+  it('warns once per binding key, naming both spellings', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      const info: AliasedBindingInfo = {
+        kind: 'loader',
+        name: 'shell',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      };
+      warnAliasedLayoutBinding(warned, info);
+      warnAliasedLayoutBinding(warned, info);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const msg = String(warn.mock.calls[0][0]);
+      expect(msg).toContain("'/app'");
+      expect(msg).toContain("serverRoute('/app/*')");
+      expect(msg).toContain('page scope');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

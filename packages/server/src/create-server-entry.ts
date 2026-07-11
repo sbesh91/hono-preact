@@ -19,7 +19,9 @@ import {
 import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
+  warnAliasedLayoutBinding,
   type RouteBindingCheckContext,
+  type AliasedBindingInfo,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -137,8 +139,20 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // may bind either an exact route or a childful route's subtree. A
   // stale/typo'd pattern fails the boot closed rather than running the unit
   // under no gates.
+  // Dedup store for the dev aliasing warning: one per binding for the life
+  // of this entry (boot checks re-run per request in dev).
+  const warnedAliasedBindings = new Set<string>();
   const bindingCheckContext: RouteBindingCheckContext = {
     routeUseByPattern: new Map(routes.routeUse.map((r) => [r.path, r.use])),
+    // Dev-only observational diagnostic: an exact-path binding whose sibling
+    // subtree chain differs was widened by the index child's own `use`. Prod
+    // passes no callback, so the detection short-circuits to zero cost.
+    ...(dev
+      ? {
+          onAliasedBinding: (info: AliasedBindingInfo) =>
+            warnAliasedLayoutBinding(warnedAliasedBindings, info),
+        }
+      : {}),
   };
   const runBootChecks = () =>
     Promise.all([
