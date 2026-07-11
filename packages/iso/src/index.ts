@@ -27,6 +27,7 @@ export type { ContentRoutesOptions } from './content-routes.js';
 export type {
   RouteParams,
   RoutePaths,
+  RouteSubtrees,
   RegisteredRoutes,
   RegisteredSubtrees,
 } from './internal/typed-routes.js';

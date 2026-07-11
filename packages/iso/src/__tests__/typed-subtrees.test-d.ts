@@ -1,14 +1,18 @@
 // Subtree-pattern derivation for `serverRoute('<layout path>/*')` typing.
-// SubtreePatterns is a pure function of a path union, so the algebra is
-// asserted against literal unions here; live registered-union acceptance
+// TreeSubtrees (the tree-form walker) and SubtreePatterns (the paths-only
+// fallback heuristic) are pure type functions, so both are asserted against
+// literal fixtures here; live registered-union acceptance
 // (serverRoute('/demo/projects/*') in apps/site) is enforced by
-// `pnpm typecheck` through the site's route registration.
+// `pnpm typecheck` through the site's tree-form route registration.
 import { expectTypeOf } from 'vitest';
 import type {
+  AbsolutePaths,
   RegisteredPaths,
   RegisteredSubtrees,
   RouteParams,
+  RouteSubtrees,
   SubtreePatterns,
+  TreeSubtrees,
 } from '../internal/typed-routes.js';
 
 // Mirrors the shape of the docs site's registered union.
@@ -48,9 +52,11 @@ expectTypeOf<RegisteredPaths>().toEqualTypeOf<string>();
 expectTypeOf<RouteParams<'/demo/projects/*'>>().toEqualTypeOf<{}>();
 expectTypeOf<RouteParams<'/a/:org/*'>>().toEqualTypeOf<{ org: string }>();
 
-// The serverRoute parameter shape (RegisteredPaths | RegisteredSubtrees),
-// mirrored with an explicit union so acceptance/rejection is checkable in a
-// package test (the global registration lives in apps/site).
+// The serverRoute parameter shape (RegisteredPaths | RegisteredSubtrees) for
+// a PATHS-ONLY registration, mirrored with an explicit union so
+// acceptance/rejection is checkable in a package test (the global
+// registration lives in apps/site). Pins the heuristic fallback: a paths-only
+// registration keeps deriving subtrees from the union, descendants required.
 declare function bindLike<
   const R extends SitePaths | SubtreePatterns<SitePaths>,
 >(route: R): R;
@@ -58,3 +64,77 @@ bindLike('/demo/projects/*');
 bindLike('/demo/projects');
 // @ts-expect-error a leaf path has no subtree pattern
 bindLike('/demo/login/*');
+
+// --- Tree-form registration ({ tree: typeof routeTree }) ---
+// TreeSubtrees walks the tree structurally, so a type-level tree with `Thunk`
+// members stands in for the real `as const` value tree without importing any
+// component modules. The walker keys off `children` presence, exactly like
+// the runtime collectRouteUse subtree emission.
+type Thunk = () => Promise<unknown>;
+
+type TreeFixture = readonly [
+  { path: '/'; view: Thunk },
+  {
+    // A guard-only grouping node: `use` + `children`, no layout/view. Its
+    // path is not in AbsolutePaths, but its subtree IS bindable.
+    path: '/admin';
+    use: unknown;
+    children: readonly [
+      { path: 'users'; view: Thunk },
+      { path: 'settings'; view: Thunk },
+    ];
+  },
+  {
+    // An index-only layout: the only child is the empty-path index, so the
+    // paths heuristic sees no strict descendant. The tree walker still emits
+    // its subtree, matching the runtime key.
+    path: '/movies';
+    layout: Thunk;
+    children: readonly [{ path: ''; view: Thunk }];
+  },
+  { path: '/login'; view: Thunk },
+];
+
+// Every children-bearing node emits its subtree; leaves emit nothing. Note
+// the contrast with the paths heuristic over the same tree, which derives
+// only '/*' (the grouping node is unregistered, the index-only layout has no
+// strict descendant in the union).
+expectTypeOf<TreeSubtrees<TreeFixture>>().toEqualTypeOf<
+  '/admin/*' | '/movies/*'
+>();
+expectTypeOf<
+  SubtreePatterns<AbsolutePaths<TreeFixture>>
+>().toEqualTypeOf<'/*'>();
+
+// The root node's own subtree is '/*' (SubtreeOf's '/' special case), emitted
+// when the root has children.
+type RootedTree = readonly [
+  {
+    path: '/';
+    layout: Thunk;
+    children: readonly [{ path: ''; view: Thunk }];
+  },
+];
+expectTypeOf<TreeSubtrees<RootedTree>>().toEqualTypeOf<'/*'>();
+
+// RouteSubtrees mirrors RoutePaths: it accepts the tree array form or the
+// manifest `__tree` form and applies the same walker.
+expectTypeOf<RouteSubtrees<TreeFixture>>().toEqualTypeOf<
+  '/admin/*' | '/movies/*'
+>();
+expectTypeOf<RouteSubtrees<{ __tree?: TreeFixture }>>().toEqualTypeOf<
+  '/admin/*' | '/movies/*'
+>();
+
+// The serverRoute parameter shape under a TREE-FORM registration: grouping
+// and index-only-layout wildcards are accepted, leaf wildcards are rejected.
+declare function treeBindLike<
+  const R extends AbsolutePaths<TreeFixture> | TreeSubtrees<TreeFixture>,
+>(route: R): R;
+treeBindLike('/admin/*');
+treeBindLike('/movies/*');
+treeBindLike('/movies');
+// @ts-expect-error a leaf node emits no subtree pattern
+treeBindLike('/login/*');
+// @ts-expect-error a grouping node has no exact page pattern, only a subtree
+treeBindLike('/admin');
