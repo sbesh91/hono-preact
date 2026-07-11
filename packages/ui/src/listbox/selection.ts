@@ -48,35 +48,71 @@ export interface NormalizedSelection<Value> {
   onValuesChange: ((next: readonly Value[]) => void) | undefined;
 }
 
-// Pure: maps the public discriminated props onto the internal array shape and
-// wraps the public callback so single mode emits `Value | null` ([] -> null)
-// and multiple mode emits a fresh mutable Value[]. Narrowing on `p.multiple`
-// discriminates the union, so no casts are needed. Callers memoize the result:
-// the fresh wrapper array a single-mode `value` produces would otherwise churn
-// downstream callback identities every render.
+// Pure: wraps the public callback so single mode emits `Value | null`
+// ([] -> null) and multiple mode emits a fresh mutable Value[]. Narrowing on
+// `p.multiple` discriminates the union, so no casts are needed. Factored out
+// of normalizeSelectionProps so useStableOnValuesChange below can rebuild it
+// from a ref-read snapshot of props without needing normalizeSelectionProps's
+// own (differently-keyed) memoization.
+function wrapOnValueChange<Value>(
+  p: SelectionProps<Value>
+): ((next: readonly Value[]) => void) | undefined {
+  if (p.multiple) {
+    const cb = p.onValueChange;
+    return cb === undefined ? undefined : (next) => cb([...next]);
+  }
+  const cb = p.onValueChange;
+  return cb === undefined
+    ? undefined
+    : (next) => cb(next.length > 0 ? next[0] : null);
+}
+
+// Pure: maps the public discriminated props onto the internal array shape.
+// Narrowing on `p.multiple` discriminates the union, so no casts are needed.
+// Callers memoize the result on `[multiple, value, defaultValue]` only
+// (excluding onValueChange): the fresh wrapper array a single-mode `value`
+// produces would otherwise churn downstream callback identities every
+// render, and an inline onValueChange handler would defeat that
+// memoization since it mints a fresh identity every render. Use
+// useStableOnValuesChange for the callback instead.
 export function normalizeSelectionProps<Value>(
   p: SelectionProps<Value>
 ): NormalizedSelection<Value> {
   if (p.multiple) {
-    const cb = p.onValueChange;
     return {
       multiple: true,
       values: p.value,
       defaultValues: p.defaultValue ?? [],
-      onValuesChange: cb === undefined ? undefined : (next) => cb([...next]),
+      onValuesChange: wrapOnValueChange(p),
     };
   }
-  const cb = p.onValueChange;
   return {
     multiple: false,
     values:
       p.value === undefined ? undefined : p.value === null ? [] : [p.value],
     defaultValues: p.defaultValue == null ? [] : [p.defaultValue],
-    onValuesChange:
-      cb === undefined
-        ? undefined
-        : (next) => cb(next.length > 0 ? next[0] : null),
+    onValuesChange: wrapOnValueChange(p),
   };
+}
+
+// Hook: a referentially-stable onValuesChange wrapper for the Roots'
+// useControllableState call. Reads the latest props (including
+// `onValueChange`) through a ref on every render, updated in a layout effect
+// -- the same pattern useControllableState uses for its own onChange ref --
+// so the returned callback's identity never changes. This is what lets the
+// Roots memoize normalizeSelectionProps's values/defaultValues on
+// `[multiple, value, defaultValue]` alone: the callback no longer needs to be
+// part of that memo to stay fresh.
+export function useStableOnValuesChange<Value>(
+  props: SelectionProps<Value>
+): (next: readonly Value[]) => void {
+  const propsRef = useRef(props);
+  useLayoutEffect(() => {
+    propsRef.current = props;
+  });
+  return useCallback((next: readonly Value[]) => {
+    wrapOnValueChange(propsRef.current)?.(next);
+  }, []);
 }
 
 export interface UseListboxSelectionOptions<Value> {

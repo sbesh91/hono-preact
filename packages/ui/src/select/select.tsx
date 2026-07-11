@@ -20,6 +20,7 @@ import {
   useListboxSelection,
   useRegisterOption,
   normalizeSelectionProps,
+  useStableOnValuesChange,
   OPTION_SELECTOR,
   type SelectionProps,
 } from '../listbox/selection.js';
@@ -69,18 +70,21 @@ export function SelectRoot<Value extends {} = string>(
   } = props;
 
   // Destructuring the selection props would lose the `multiple` discriminant
-  // correlation, so they go to the normalizer whole. Memoized so the fresh
-  // wrapper array a single-mode `value` produces does not churn downstream
-  // callback identities every render.
+  // correlation, so they go to the normalizer whole. Memoized on the
+  // value-shape props only (not onValueChange): an inline handler mints a
+  // fresh identity every render, and including it here would recompute
+  // `values`/`defaultValues` (and churn everything keyed on them) on every
+  // such render. The callback itself is kept stable separately below.
   const norm = useMemo(
     () => normalizeSelectionProps<Value>(props),
-    [props.multiple, props.value, props.defaultValue, props.onValueChange]
+    [props.multiple, props.value, props.defaultValue]
   );
+  const onValuesChange = useStableOnValuesChange<Value>(props);
 
   const [values, setValues] = useControllableState<readonly Value[]>({
     value: norm.values,
     defaultValue: norm.defaultValues,
-    onChange: norm.onValuesChange,
+    onChange: onValuesChange,
   });
 
   const [open, setOpen] = useControllableState<boolean>({
