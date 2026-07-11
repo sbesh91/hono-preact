@@ -1,4 +1,4 @@
-import { defineRoutes, type RoutePaths } from 'hono-preact';
+import { defineRoutes } from 'hono-preact';
 
 // Each route's view is a deferred dynamic import (one code-split chunk per
 // page). A colocated `<view>.server.ts` sibling (loaders/actions) is
@@ -13,10 +13,11 @@ const routeTree = [
 
 export default defineRoutes(routeTree);
 
-// Registers this app's paths with the framework, so `useParams`,
-// `buildPath`, and `NavLink` are typed against the real route table.
+// Registers this app's route tree with the framework, so `useParams`,
+// `buildPath`, `NavLink`, and `serverRoute` (including subtree `/*`
+// patterns) are typed against the real route table.
 declare module 'hono-preact' {
   interface RegisteredRoutes {
-    paths: RoutePaths<typeof routeTree>;
+    tree: typeof routeTree;
   }
 }
