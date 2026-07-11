@@ -115,6 +115,72 @@ describe('routeUse', () => {
     // The view-only leaf still inherits its ancestor's composed gate chain.
     expect(byPath.get('/guarded/leaf')).toEqual([a]);
   });
+
+  it('emits a subtree entry per children-bearing node carrying its own composed chain', () => {
+    const m = defineRoutes([
+      {
+        path: '/app',
+        layout: noopLayout,
+        use: [a],
+        children: [
+          { path: '', view: noopView, use: [b] },
+          { path: 'leaf', view: noopView },
+        ],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    // Subtree key: the layout node's own composed chain, WITHOUT the index
+    // child's additions.
+    expect(byPath.get('/app/*')).toEqual([a]);
+    // Exact key: unchanged deepest-wins semantics (index child's chain).
+    expect(byPath.get('/app')).toEqual([a, b]);
+  });
+
+  it('emits a subtree entry for a guard-only grouping node', () => {
+    const m = defineRoutes([
+      {
+        path: '/admin',
+        use: [a],
+        children: [{ path: 'data', view: noopView }],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    expect(byPath.get('/admin/*')).toEqual([a]);
+    // The grouping node still has no exact entry of its own (no view/server).
+    expect(byPath.has('/admin')).toBe(false);
+  });
+
+  it('a literal `*` child deepest-wins over the parent subtree key', () => {
+    const m = defineRoutes([
+      {
+        path: '/docs',
+        layout: noopLayout,
+        use: [a],
+        children: [
+          { path: 'guide', view: noopView },
+          { path: '*', view: noopView, use: [b] },
+        ],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    // The catch-all child and the layout subtree share the string '/docs/*';
+    // the child's chain (a superset: inherited + own) wins the dedup, so the
+    // collision's failure direction stays over-guarding.
+    expect(byPath.get('/docs/*')).toEqual([a, b]);
+  });
+
+  it('a root layout subtree keys as /*', () => {
+    const m = defineRoutes([
+      {
+        path: '/',
+        layout: noopLayout,
+        use: [a],
+        children: [{ path: 'x', view: noopView }],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    expect(byPath.get('/*')).toEqual([a]);
+  });
 });
 
 describe('defineRoutes: layout-level server plumbing', () => {

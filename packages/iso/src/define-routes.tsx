@@ -99,12 +99,21 @@ export type RoutesManifest<
    */
   serverRoutes: ReadonlyArray<ServerRoute>;
   /**
-   * Composed page-layer `use` per server-bearing route pattern (ancestors
-   * outer-first, then the node's own `use`). One entry per node with a
-   * `server` module, matching `serverRoutes`; those are the RPC targets the
-   * resolver matches a request URL against. Guards declared on guard-only
-   * grouping or layout nodes (no `server` module) are folded into these
-   * descendant entries via composition rather than appearing themselves.
+   * Composed page-layer `use` per bindable route pattern. Two kinds of key:
+   *
+   * - An exact pattern per node with a `view` or `server` module: the page
+   *   scope. Ancestor `use` folds in outer-first; a layout and its
+   *   empty-path index child share one string and the deepest node's chain
+   *   wins, so the exact key carries the index child's own `use` too.
+   * - A `<path>/*` subtree pattern per children-bearing node (layout groups
+   *   and guard-only grouping nodes): the subtree scope, the node's own
+   *   composed chain without any child's additions, i.e. the chain every
+   *   descendant inherits. A literal `path: '*'` child produces the same
+   *   string as its parent's subtree key; the child's (superset) chain wins
+   *   the dedup, keeping that collision over-guarding.
+   *
+   * Route-bound units (`serverRoute(pattern)`) resolve their RPC `use`
+   * chain from these keys by exact lookup, never by request URL.
    */
   routeUse: ReadonlyArray<{ path: string; use: PageUse }>;
   /**
@@ -283,6 +292,20 @@ function collectServerRoutes(
   return out;
 }
 
+/**
+ * The subtree pattern for a route node's path: the key under which the node's
+ * own composed chain (the chain every descendant inherits) is registered in
+ * `routeUse`. Mirrors the matcher grammar's trailing `*` (route-pattern.ts in
+ * the server package) and the type-level `SubtreePatterns` derivation. The
+ * emitter here and the boot validator (`route-binding-guard.ts`) must agree
+ * on this construction, so it lives in one place.
+ *
+ * Framework-private: exported for `@hono-preact/server`, not a user API.
+ */
+export function subtreePatternOf(path: string): string {
+  return path === '/' ? '/*' : path + '/*';
+}
+
 function collectRouteUse(
   routes: ReadonlyArray<RouteDef>
 ): Array<{ path: string; use: PageUse }> {
@@ -305,7 +328,17 @@ function collectRouteUse(
       if (r.view || r.server) {
         ordered.push({ path: here, use: composed });
       }
-      if (r.children) walk(r.children, here, composed);
+      if (r.children) {
+        // Subtree key: the node's own composed chain (ancestors outer-first,
+        // then own `use`), WITHOUT any child's additions. Emitted for every
+        // children-bearing node (layout groups AND guard-only grouping nodes),
+        // so `serverRoute('<path>/*')` gets its own map key distinct from the
+        // node's empty-path index child. Pushed BEFORE the children so a
+        // literal `path: '*'` child producing the same string wins the
+        // deepest-wins dedup below.
+        ordered.push({ path: subtreePatternOf(here), use: composed });
+        walk(r.children, here, composed);
+      }
     }
   };
   walk(routes, '', []);
