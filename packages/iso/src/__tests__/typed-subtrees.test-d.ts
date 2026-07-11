@@ -117,6 +117,32 @@ type RootedTree = readonly [
 ];
 expectTypeOf<TreeSubtrees<RootedTree>>().toEqualTypeOf<'/*'>();
 
+// Children of a root '/' node join through the root reset: bare ('x') and
+// slashed ('/y') child spellings both derive the absolute '/x' form, the
+// empty-path index child folds into '/', and subtree spellings follow the
+// same join. These are the same strings the runtime walkers key
+// (collectRouteUse / collectServerRoutes), so a serverRoute binding under a
+// root layout typechecks with exactly the spelling the boot guard accepts.
+type RootChildrenTree = readonly [
+  {
+    path: '/';
+    layout: Thunk;
+    children: readonly [
+      { path: ''; view: Thunk },
+      { path: 'x'; view: Thunk },
+      {
+        path: '/y';
+        use: unknown;
+        children: readonly [{ path: 'z'; view: Thunk }];
+      },
+    ];
+  },
+];
+expectTypeOf<AbsolutePaths<RootChildrenTree>>().toEqualTypeOf<
+  '/' | '/x' | '/y/z'
+>();
+expectTypeOf<TreeSubtrees<RootChildrenTree>>().toEqualTypeOf<'/*' | '/y/*'>();
+
 // RouteSubtrees mirrors RoutePaths: it accepts the tree array form or the
 // manifest `__tree` form and applies the same walker.
 expectTypeOf<RouteSubtrees<TreeFixture>>().toEqualTypeOf<

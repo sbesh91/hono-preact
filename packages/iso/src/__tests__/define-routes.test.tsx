@@ -369,6 +369,23 @@ describe('serverRoutes ancestor walk', () => {
     expect(inner).toBeDefined();
     expect(inner!.ancestors).toEqual([outerS, middleS]);
   });
+
+  it('keys a server-bearing child of a root layout without a doubled slash', () => {
+    const s = () => Promise.resolve({ tag: 's' });
+    const m = defineRoutes([
+      {
+        path: '/',
+        layout: noopLayout,
+        children: [
+          { path: '', view: noopView },
+          { path: 'x', view: noopView, server: s },
+        ],
+      },
+    ]);
+    // The root reset applies to server-route keys exactly as it does to the
+    // routeUse keys and the type-level walker: '/x', never '//x'.
+    expect(m.serverRoutes.map((r) => r.path)).toEqual(['/x']);
+  });
 });
 
 describe('flatten — flat (no layouts)', () => {
@@ -449,6 +466,32 @@ describe('flatten — layout groups', () => {
       { path: '*', view: noopView },
     ]);
     expect(m.flat.map((f) => f.path)).toEqual(['/', '/x', '/x/*', '*']);
+  });
+
+  it('registers a root layout group at / and /* (not //*)', () => {
+    const m = defineRoutes([
+      {
+        path: '/',
+        layout: noopLayout,
+        children: [{ path: '', view: noopView }],
+      },
+    ]);
+    expect(m.flat.map((f) => f.path)).toEqual(['/', '/*']);
+    expect(m.flat[0].key).toBe(m.flat[1].key);
+  });
+
+  it('flattens a root path-grouping to absolute child paths', () => {
+    const m = defineRoutes([
+      {
+        path: '/',
+        children: [
+          { path: 'x', view: noopView },
+          { path: '/y', view: noopView },
+        ],
+      },
+    ]);
+    // Bare and slashed child spellings both normalize to the absolute form.
+    expect(m.flat.map((f) => f.path)).toEqual(['/x', '/y']);
   });
 
   it('flattens path-grouping routes (no layout) by inlining children', () => {

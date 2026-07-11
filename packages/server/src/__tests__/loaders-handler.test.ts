@@ -960,3 +960,65 @@ describe('subtree-bound loader chain (real manifest)', () => {
     expect(calls).not.toContain('inner');
   });
 });
+
+describe('root-layout bound loader chain (real manifest)', () => {
+  // Regression pin for the root-join unification: routeUse keys a root
+  // layout's child as '/x' (the typed spelling), so a serverRoute('/x')
+  // binding resolves the root node's gate chain through byPattern-style
+  // lookup. Before the unification the key was '//x' and the exact lookup
+  // missed, which would run the loader with NO page tier if it ever reached
+  // the RPC (the boot guard rejected the '/x' binding instead).
+  const NullView = (): null => null;
+  const noopView = async () => ({ default: NullView });
+  const noopLayout = async () => ({ default: NullView });
+
+  it("a serverRoute('/x') loader under a root layout runs the root gate", async () => {
+    const calls: string[] = [];
+    const gate = defineServerMiddleware<'loader'>(async (_ctx, next) => {
+      calls.push('gate');
+      await next();
+    });
+    const m = defineRoutes([
+      {
+        path: '/',
+        layout: noopLayout,
+        use: [gate],
+        children: [
+          { path: '', view: noopView },
+          { path: 'x', view: noopView },
+        ],
+      },
+    ]);
+    const byPattern = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    const glob = {
+      './x.server.ts': {
+        __moduleKey: 'x',
+        serverLoaders: {
+          data: serverRoute('/x').loader(async () => {
+            calls.push('inner');
+            return 'x-data';
+          }),
+        },
+      },
+    };
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(glob, {
+        dev: true,
+        resolvePageUse: (pattern) => byPattern.get(pattern) ?? [],
+      })
+    );
+    const res = await app.request('http://localhost/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'x',
+        loader: 'data',
+        location: { path: '/x', pathParams: {}, searchParams: {} },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(calls).toEqual(['gate', 'inner']);
+  });
+});

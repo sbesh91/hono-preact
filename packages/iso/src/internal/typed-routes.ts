@@ -1,13 +1,19 @@
-// Absolute-path extraction. Mirrors the runtime join in define-routes.tsx:
-//   here = parent === '' ? path : (path === '' ? parent : `${parent}/${path}`)
-// and the `/`-root reset (a layout/grouping at `/` joins children from '').
+// Absolute-path extraction. Mirrors the runtime join in define-routes.tsx
+// (`joinRoutePath`): a root parent ('') yields the child as-is; an empty
+// child keeps the parent; a '/' parent joins its children as top-level
+// absolute paths (the root reset: 'x' and '/x' both key as '/x', never
+// '//x'); otherwise `${Parent}/${Path}`. Because both sides share this one
+// join rule, the derived spellings equal the runtime pattern keys for every
+// tree shape, including a root '/' layout or grouping node.
 type Here<Parent extends string, Path extends string> = Parent extends ''
   ? Path
   : Path extends ''
     ? Parent
-    : `${Parent}/${Path}`;
-
-type NextParent<H extends string> = H extends '/' ? '' : H;
+    : Parent extends '/'
+      ? Path extends `/${string}`
+        ? Path
+        : `/${Path}`
+      : `${Parent}/${Path}`;
 
 // Read each node STRUCTURALLY (its `path` literal, the presence of `view` /
 // `layout` keys, and its `children`). Crucially we do NOT constrain nodes to
@@ -24,7 +30,7 @@ type NodePaths<R, Parent extends string> = R extends {
           | (R extends { view: unknown } ? H : never)
           | (R extends { layout: unknown } ? H : never)
           | (R extends { children: infer C extends readonly unknown[] }
-              ? AbsolutePaths<C, NextParent<H>>
+              ? AbsolutePaths<C, H>
               : never)
       : never
     : never
@@ -58,7 +64,7 @@ type NodeSubtrees<R, Parent extends string> = R extends {
   ? Here<Parent, P> extends infer H
     ? H extends string
       ? R extends { children: infer C extends readonly unknown[] }
-        ? SubtreeOf<H> | TreeSubtrees<C, NextParent<H>>
+        ? SubtreeOf<H> | TreeSubtrees<C, H>
         : never
       : never
     : never

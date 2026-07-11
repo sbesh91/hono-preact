@@ -181,6 +181,50 @@ describe('routeUse', () => {
     const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
     expect(byPath.get('/*')).toEqual([a]);
   });
+
+  it('root-layout children key as top-level absolute paths (root reset)', () => {
+    const m = defineRoutes([
+      {
+        path: '/',
+        layout: noopLayout,
+        use: [a],
+        children: [
+          { path: '', view: noopView },
+          { path: 'x', view: noopView, server: noopServer },
+          {
+            path: '/y',
+            use: [b],
+            children: [{ path: 'z', view: noopView }],
+          },
+        ],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    // Bare ('x') and slashed ('/y') child spellings both normalize to the
+    // '/x' absolute form the type-level walker derives; never '//x'.
+    expect(byPath.get('/x')).toEqual([a]);
+    expect(byPath.get('/y/z')).toEqual([a, b]);
+    expect(byPath.get('/y/*')).toEqual([a, b]);
+    expect(byPath.get('/*')).toEqual([a]);
+    // The empty-path index child shares the root's '/' key.
+    expect(byPath.get('/')).toEqual([a]);
+    // No doubled-slash spelling survives anywhere in the key set.
+    expect([...byPath.keys()].filter((k) => k.includes('//'))).toEqual([]);
+  });
+
+  it('root-grouping children key as top-level absolute paths (root reset)', () => {
+    const m = defineRoutes([
+      {
+        path: '/',
+        use: [a],
+        children: [{ path: 'x', view: noopView }],
+      },
+    ]);
+    const byPath = new Map(m.routeUse.map((r) => [r.path, r.use]));
+    expect(byPath.get('/x')).toEqual([a]);
+    expect(byPath.get('/*')).toEqual([a]);
+    expect(byPath.has('//x')).toBe(false);
+  });
 });
 
 describe('defineRoutes: layout-level server plumbing', () => {

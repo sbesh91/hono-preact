@@ -99,8 +99,9 @@ expectTypeOf<AbsolutePaths<SampleTree>>().toEqualTypeOf<
   '/' | '/about' | '/blog' | '/blog/:slug' | '/blog/*'
 >();
 
-// A layout/grouping node at `/` resets the child parent to '' so children do
-// not pick up a `//` prefix (mirrors `here === '/' ? '' : here`).
+// A layout/grouping node at `/` joins its children as top-level absolute
+// paths (the root reset in `Here`, mirroring the runtime `joinRoutePath`):
+// a child 'about' keys as '/about', never '//about' or bare 'about'.
 type RootGroupTree = readonly [
   {
     readonly path: '/';
@@ -110,7 +111,7 @@ type RootGroupTree = readonly [
     ];
   },
 ];
-expectTypeOf<AbsolutePaths<RootGroupTree>>().toEqualTypeOf<'/' | 'about'>();
+expectTypeOf<AbsolutePaths<RootGroupTree>>().toEqualTypeOf<'/' | '/about'>();
 
 // A pure grouping node (no view, no layout) contributes only its descendants,
 // never its own path.
