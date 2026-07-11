@@ -67,6 +67,27 @@ describe('SSE wire format', () => {
     const body = await bodyToString(res);
     expect(body).toBe(
       'data: "before"\n\n' +
+        'event: error\ndata: {"message":"Stream failed","name":"Error"}\n\n'
+    );
+  });
+
+  it('generator error path (dev): emits the raw message on the error frame', async () => {
+    const app = new Hono();
+    app.get('/', (c) =>
+      sseGeneratorResponse(
+        c,
+        (async function* () {
+          yield 'before';
+          throw new Error('boom');
+        })(),
+        { dev: true }
+      )
+    );
+
+    const res = await app.request('http://localhost/');
+    const body = await bodyToString(res);
+    expect(body).toBe(
+      'data: "before"\n\n' +
         'event: error\ndata: {"message":"boom","name":"Error"}\n\n'
     );
   });

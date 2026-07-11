@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +24,20 @@ function readPkg(dir: string) {
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
 }
 
+/** Recursively list every file under `dir`, as paths relative to `dir`. */
+function listAllFiles(dir: string, base = dir): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listAllFiles(full, base));
+    } else {
+      out.push(full.slice(base.length + 1));
+    }
+  }
+  return out;
+}
+
 describe('scaffold', () => {
   it('cloudflare: writes wrangler.jsonc and cloudflare devDeps, no node deps', async () => {
     const target = join(workDir, 'cf');
@@ -29,7 +49,12 @@ describe('scaffold', () => {
     expect(pkg.devDependencies).not.toHaveProperty('@hono/node-server');
     expect(pkg.scripts).toHaveProperty('deploy');
     expect(pkg.dependencies).not.toHaveProperty('hono-preact-ui');
+    // hoofd is a required peer of hono-preact; it must be a direct dep so
+    // package managers that do not auto-install peers still resolve it.
+    expect(pkg.dependencies).toHaveProperty('hoofd');
     expect(pkg.name).toBe('cf');
+    // The bundled agent recipes verify with `pnpm typecheck`.
+    expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
   });
 
   it('node: writes node devDeps and start script, no wrangler.jsonc', async () => {
@@ -63,11 +88,28 @@ describe('scaffold', () => {
     const target = join(workDir, 'my-app');
     await scaffold(target, { adapter: 'cloudflare', ui: false }, templatesRoot);
     expect(readPkg(target).name).toBe('my-app');
-    expect(readFileSync(join(target, 'src', 'Layout.tsx'), 'utf8')).toContain(
-      '{{name}}'
-    );
+    const layout = readFileSync(join(target, 'src', 'Layout.tsx'), 'utf8');
+    expect(layout).toContain('defaultTitle="my-app"');
+    expect(layout).not.toContain('{{name}}');
+    const home = readFileSync(join(target, 'src', 'pages', 'home.tsx'), 'utf8');
+    expect(home).not.toContain('{{name}}');
     expect(existsSync(join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(join(target, '.gitignore'))).toBe(true);
+  });
+
+  it('leaves no literal {{name}} placeholder anywhere in the scaffolded tree', async () => {
+    // Substitution is gated on a file-extension allowlist (see
+    // SUBSTITUTABLE_EXTENSIONS in lib/template.mjs), so a template file added
+    // in an unlisted extension would silently ship the placeholder. Walk
+    // every file the scaffolder produces, not just the substitutable ones,
+    // to catch that. Use the ui overlay so the walk covers the largest file
+    // set (base + adapter + feature/ui).
+    const target = join(workDir, 'placeholder-check');
+    await scaffold(target, { adapter: 'cloudflare', ui: true }, templatesRoot);
+    const offenders = listAllFiles(target).filter((relPath) =>
+      readFileSync(join(target, relPath), 'utf8').includes('{{name')
+    );
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -85,12 +127,30 @@ describe('feature/ui home.tsx parity with base', () => {
       'utf8'
     );
     for (const marker of [
-      'homeLoader.useData()',
-      'definePage(HomeView',
-      'Welcome to {',
+      'serverLoaders.default.View(',
+      "HomeView.displayName = 'Home'",
+      'definePage(HomeView)',
+      "Welcome to {'{{name}}'}",
     ]) {
       expect(baseHome).toContain(marker);
       expect(uiHome).toContain(marker);
     }
+  });
+});
+
+describe('base routes.ts idioms', () => {
+  const routes = readFileSync(
+    join(templatesRoot, 'base', 'src', 'routes.ts'),
+    'utf8'
+  );
+
+  it('relies on .server.ts auto-discovery (no explicit server: wiring)', () => {
+    expect(routes).not.toContain('server:');
+  });
+
+  it('registers the route tree for typed params and paths', () => {
+    expect(routes).toContain('as const');
+    expect(routes).toContain('interface RegisteredRoutes');
+    expect(routes).toContain('RoutePaths<typeof routeTree>');
   });
 });

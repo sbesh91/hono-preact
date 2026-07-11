@@ -57,6 +57,8 @@ export const serverActions = {
 
 With none of these, `payload` is typed `unknown` (never `any`), so the type system makes you narrow it before use rather than letting an untyped value through.
 
+Only the schema form validates at runtime. The two type-only forms (explicit generics, annotated parameters) assert a shape the wire does not enforce: the client payload reaches the handler as-is. In dev, the server warns once per action when an action without an `input` schema receives a payload other than `undefined`, `null`, or an empty object.
+
 ### `defineAction` options
 
 Pass a second argument to `defineAction(fn, opts)` to configure per-action behavior:
@@ -302,6 +304,29 @@ const ActionFeedback = () => {
 `result.code` is `DenyCode | undefined`. It is `undefined` when the action used the numeric form `deny(status, message)`.
 
 Deny codes are on the action path only. Loader denies surface as an `Error` without a structured code, so `result.code` is not available from loader error boundaries.
+
+## Error handling
+
+An action that throws anything other than a framework outcome (`deny`, `redirect`, a timeout) responds 500 with the uniform error envelope. In production the envelope's `message` is always `Action failed`: a thrown error's text can carry PII or internal detail, so it never reaches the client. In dev the real message passes through so the failure is readable in the network tab, and the server console prints a hint naming the action.
+
+Because of the production mask, a plain thrown `Error` is the wrong way to reject bad input or denied access on purpose. Throw `deny(status, message)` instead; a deny's status, message, and `data` reach the client in every mode:
+
+```ts
+import { defineAction, deny } from 'hono-preact';
+
+export const serverActions = {
+  publish: defineAction(
+    async (ctx, payload) => {
+      const user = await currentUser(ctx.c);
+      if (!user) throw deny(401, 'Sign in to publish.');
+      // ...
+    },
+    { input: PublishSchema }
+  ),
+};
+```
+
+The same policy applies to route-bound chain resolution: when a route-bound action cannot resolve its page-use chain, the 500 message carries the resolver's detail only in dev.
 
 ## Calling programmatically: `useAction(stub)`
 

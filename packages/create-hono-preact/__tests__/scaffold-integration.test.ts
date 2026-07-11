@@ -84,7 +84,14 @@ async function scaffold(
 ): Promise<string> {
   const argv = [name, `--adapter=${adapter}`, '--no-install', '--no-git'];
   if (ui) argv.push('--ui');
-  const code = await run({ argv, cwd: workDir, env: {} });
+  // Pin a supported nodeVersion so the preflight cannot fail the scaffold on
+  // hosts outside the engines range; preflight behavior is covered in cli.test.ts.
+  const code = await run({
+    argv,
+    cwd: workDir,
+    env: {},
+    nodeVersion: 'v22.18.0',
+  });
   if (code !== 0) throw new Error(`scaffold failed with code ${code}`);
 
   const target = join(workDir, name);
@@ -109,12 +116,31 @@ describe('scaffold + install + build — node adapter', () => {
       }
     );
 
+    // The template ships a typecheck script (the agent recipes verify with
+    // it); it must pass in a fresh scaffold.
+    execFileSync('pnpm', ['typecheck'], { cwd: target, stdio: 'inherit' });
+
     execFileSync('pnpm', ['build'], { cwd: target, stdio: 'inherit' });
 
     expect(existsSync(join(target, 'dist', 'client'))).toBe(true);
     expect(existsSync(join(target, 'dist', 'server', 'server-entry.js'))).toBe(
       true
     );
+
+    // The route table has no explicit server: field; the colocated
+    // home.server.ts must still be auto-discovered into the server build.
+    // The loader lands in a split chunk rather than the entry file, so scan
+    // every server output file rather than just server-entry.js.
+    const serverDir = join(target, 'dist', 'server');
+    const serverFiles = readdirSync(serverDir, { recursive: true }).filter(
+      (f): f is string => typeof f === 'string' && f.endsWith('.js')
+    );
+    const foundLoaderString = serverFiles.some((f) =>
+      readFileSync(join(serverDir, f), 'utf8').includes(
+        'Hello from your hono-preact app!'
+      )
+    );
+    expect(foundLoaderString).toBe(true);
   }, 180_000);
 });
 
@@ -130,6 +156,10 @@ describe('scaffold + install + build — cloudflare adapter', () => {
         stdio: 'inherit',
       }
     );
+
+    // This variant scaffolds with --ui, so it also typechecks the ui
+    // overlay page.
+    execFileSync('pnpm', ['typecheck'], { cwd: target, stdio: 'inherit' });
 
     execFileSync('pnpm', ['build'], { cwd: target, stdio: 'inherit' });
 

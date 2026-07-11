@@ -61,15 +61,15 @@ Movies.displayName = 'Movies';
 export default Movies;
 ```
 
-Add it to `src/routes.ts`:
+Add it to the `routeTree` array in `src/routes.ts` (the scaffolded file
+declares the tree `as const` and registers it, so `useParams` and
+`buildPath` stay typed as the table grows):
 
 ```ts
-import { defineRoutes } from 'hono-preact';
-
-export default defineRoutes([
+const routeTree = [
   // ... existing routes
   { path: '/movies', view: () => import('./pages/movies.js') },
-]);
+] as const;
 ```
 
 Open `http://localhost:5173/movies`. You should see "Movies".

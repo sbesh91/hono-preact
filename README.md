@@ -50,12 +50,12 @@ export default defineConfig({
 // src/routes.ts
 import { defineRoutes } from 'hono-preact';
 export default defineRoutes([
-  { path: '/', view: () => import('./views/home') },
+  { path: '/', view: () => import('./pages/home.js') },
 ]);
 ```
 
 ```tsx
-// src/views/home.tsx
+// src/pages/home.tsx
 export default function Home() {
   return <h1>Hello</h1>;
 }
@@ -92,7 +92,7 @@ pnpm add -D vite
 
 ## Status
 
-`v0.8.0`. Pre-1.0; expect changes between minor versions.
+`v0.10.1`. Pre-1.0; expect changes between minor versions.
 
 ## Contributing
 

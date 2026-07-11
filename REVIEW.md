@@ -137,11 +137,19 @@ why.
 - **Progressive enhancement is first class.** Forms must work without client JS;
   the JS layer enhances, it does not gate.
 - **Navigation side effects.** URL writes interact with the router and the
-  view-transition scheduler in non-obvious ways: the scheduler fires on any
-  `href` change (so an in-page anchor that writes the hash flashes a
-  transition), and an in-app `<a>` to a non-route URL soft-navigates to
-  not-found unless it is a native-nav link (`target`/`download`). Flag any new
-  URL write or in-app link that has not accounted for both.
+  view-transition scheduler in non-obvious ways: the scheduler classifies a
+  flush as a navigation by comparing pathname + search, so a hash-only write
+  (an in-page anchor) never animates, and an in-app `<a>` to a non-route URL
+  soft-navigates to not-found unless it is a native-nav link
+  (`target`/`download`). Flag any new URL write or in-app link that has not
+  accounted for both. Two residual hazards to check: a same-path hash link
+  produces no navigated flush, so a scroll-on-fragment effect must key on
+  location (e.g. `useLocation().url`), not on the view-transition lifecycle
+  (`afterSwap`/`afterTransition`), which never fires for it; and
+  `skipNextNavTransition` should be armed keyed to its target URL unless the
+  call site genuinely wants the wildcard (unkeyed) arm, since a keyed arm
+  self-clears on a mismatched navigation instead of stranding onto the wrong
+  one.
 - **Accessibility.** `hono-preact-ui` is a headless primitives library: verify
   ARIA roles, id wiring (e.g. `listboxId`), focus management, and keyboard
   navigation for any interactive primitive.

@@ -124,6 +124,8 @@ const MoviesView = moviesLoader.View((s) => {
 
 A cold error (the very first load fails, with no prior data) is caught by the loader's error boundary and the page-level `errorFallback` before the render function runs, so the `error` arm always carries a `data` value.
 
+`s.error.message` is `Loader failed` in production; the loader's real thrown message and name reach the client only in dev.
+
 ## The `LoaderState` union
 
 The render function receives a `LoaderState<T>` discriminated union. Match on `status`:

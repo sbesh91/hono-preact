@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "hono": "^4.12.14",
     "hono-preact": "^0.10.0",
+    "hoofd": "^1.7.3",
     "preact": "^10.29.1",
     "preact-iso": "github:preactjs/preact-iso#v3"
   },

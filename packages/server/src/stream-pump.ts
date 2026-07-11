@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { warnMissingMarker } from './document-shell.js';
+import { maskStreamError } from './sse.js';
 
 // ===========================================================================
 // Streaming wire contract (producer half)
@@ -83,9 +84,25 @@ export function streamDocumentResponse(
     streamingLoaders: ServerLoaderStream[];
     requestSignal: AbortSignal;
     bindRequestScope: <R>(fn: () => R | Promise<R>) => R | Promise<R>;
+    /**
+     * When true, a loader that throws mid-stream has its real `message` and
+     * `name` written into the per-loader error script. When false (default),
+     * the payload is masked to `{ message: 'Stream failed', name: 'Error' }`,
+     * matching the SSE wire's masking (`sse.ts`'s `maskStreamError`): this
+     * pump reaches every document request with pending streaming loaders (the
+     * default), so an unmasked loader error here would leak internal detail
+     * on a plain full-page load, not just the SSE path.
+     */
+    dev?: boolean;
   }
 ): Response {
-  const { fullHtml, streamingLoaders, requestSignal, bindRequestScope } = opts;
+  const {
+    fullHtml,
+    streamingLoaders,
+    requestSignal,
+    bindRequestScope,
+    dev = false,
+  } = opts;
 
   // Split at </body> so we can interleave per-loader chunk script tags between
   // the rendered body and the closing tags. A streaming page with no </body>
@@ -189,8 +206,7 @@ export function streamDocumentResponse(
             }
           } catch (err) {
             if (aborted) return;
-            const message = err instanceof Error ? err.message : String(err);
-            const name = err instanceof Error ? err.name : 'Error';
+            const { message, name } = maskStreamError(err, dev);
             try {
               await guardedWrite(
                 encoder.encode(errorScript(loaderId, { message, name }))

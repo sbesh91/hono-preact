@@ -50,7 +50,6 @@ signed-in user.
    {
      path: '/dashboard',
      view: () => import('./pages/dashboard.js'),
-     server: () => import('./pages/dashboard.server.js'),
      use: requireUser,
      // any children here inherit requireUser automatically
    },

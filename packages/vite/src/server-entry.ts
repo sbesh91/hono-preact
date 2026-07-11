@@ -4,7 +4,7 @@ import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import type { NodePath } from '@babel/traverse';
 import type { CallExpression } from '@babel/types';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 import {
   LOADERS_RPC_PATH,
   SOCKETS_RPC_PATH,
@@ -303,6 +303,13 @@ export interface ServerEntryPluginOptions {
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
   let apiAbsPath: string | undefined;
   let appConfigAbsPath: string | undefined;
+  // The candidate paths the config-hook existence probes checked, retained so
+  // the dev-server watcher (configureServer below) can detect when a probe's
+  // answer changes mid-session.
+  let candidateApiAbsPath = '';
+  let candidateAppConfigAbsPath = '';
+  let serverDirAbsPath = '';
+  let serverDirExisted = false;
 
   return {
     name: 'hono-preact:server-entry',
@@ -320,15 +327,17 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
       const routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(root, opts.routes);
-      const candidateApi = path.isAbsolute(opts.api)
+      candidateApiAbsPath = path.isAbsolute(opts.api)
         ? opts.api
         : path.resolve(root, opts.api);
-      apiAbsPath = fs.existsSync(candidateApi) ? candidateApi : undefined;
-      const candidateAppConfig = path.isAbsolute(opts.appConfig)
+      apiAbsPath = fs.existsSync(candidateApiAbsPath)
+        ? candidateApiAbsPath
+        : undefined;
+      candidateAppConfigAbsPath = path.isAbsolute(opts.appConfig)
         ? opts.appConfig
         : path.resolve(root, opts.appConfig);
-      appConfigAbsPath = fs.existsSync(candidateAppConfig)
-        ? candidateAppConfig
+      appConfigAbsPath = fs.existsSync(candidateAppConfigAbsPath)
+        ? candidateAppConfigAbsPath
         : undefined;
 
       // Build the registry glob only when the folder exists, so a project
@@ -336,10 +345,11 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
       // rather than a glob that matches nothing. `import.meta.glob` needs a
       // root-relative literal, so normalize to `/<dir>/**/*.server.{...}` with
       // posix separators.
-      const serverDirAbsPath = path.isAbsolute(opts.serverDir)
+      serverDirAbsPath = path.isAbsolute(opts.serverDir)
         ? opts.serverDir
         : path.resolve(root, opts.serverDir);
-      const serverRegistryGlob = fs.existsSync(serverDirAbsPath)
+      serverDirExisted = fs.existsSync(serverDirAbsPath);
+      const serverRegistryGlob = serverDirExisted
         ? '/' +
           path.relative(root, serverDirAbsPath).split(path.sep).join('/') +
           '/**/*.server.{ts,tsx,js,jsx}'
@@ -377,6 +387,48 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         apiModuleId: apiAbsPath,
       });
       fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
+    },
+    // The existence probes above run only in the `config` hook, so creating
+    // or deleting api.ts / app-config.ts (or adding the first module under a
+    // src/server folder that was absent at startup) mid dev-session would
+    // otherwise change nothing until a manual restart. Watch for those
+    // existence flips and restart the dev server: the restart re-runs
+    // `config`, which regenerates the core app module against the new file
+    // reality. Deliberately NOT addWatchFile: under Vite 8 it doubles as an
+    // import registration, and watching an absent file 500s the module that
+    // "imports" it (see route-server-autodiscovery.ts for the same trade).
+    configureServer(server: ViteDevServer) {
+      const flipsGeneratedEntry = (
+        event: 'add' | 'unlink',
+        file: string
+      ): boolean => {
+        const abs = path.resolve(file);
+        if (abs === candidateApiAbsPath) {
+          return event === 'add'
+            ? apiAbsPath === undefined
+            : apiAbsPath !== undefined;
+        }
+        if (abs === candidateAppConfigAbsPath) {
+          return event === 'add'
+            ? appConfigAbsPath === undefined
+            : appConfigAbsPath !== undefined;
+        }
+        // When src/server existed at startup, the emitted import.meta.glob is
+        // live in dev and picks up new modules itself. When it was absent,
+        // the generated entry has no glob at all, so only a restart can add
+        // one.
+        return (
+          event === 'add' &&
+          !serverDirExisted &&
+          abs.startsWith(serverDirAbsPath + path.sep)
+        );
+      };
+      const restartOn = (event: 'add' | 'unlink') => (file: string) => {
+        if (!flipsGeneratedEntry(event, file)) return;
+        void server.restart();
+      };
+      server.watcher.on('add', restartOn('add'));
+      server.watcher.on('unlink', restartOn('unlink'));
     },
     buildStart() {
       // The api.ts shadowing diagnostic stays in buildStart: it needs

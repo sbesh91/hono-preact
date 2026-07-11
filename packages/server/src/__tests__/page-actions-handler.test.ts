@@ -44,7 +44,14 @@ function buildHandler(
         routeId?: string;
       }
   >,
-  pageUse?: { byPattern?: PageUseResolver }
+  pageUse?: { byPattern?: PageUseResolver },
+  extra?: {
+    dev?: boolean;
+    onError?: (
+      err: unknown,
+      ctx: { module: string; action: string; routeId?: string }
+    ) => void;
+  }
 ) {
   const resolverByPath = async () => {
     const map = new Map();
@@ -73,6 +80,7 @@ function buildHandler(
     renderPage: renderPage as never,
     resolvePageNode: () => h('div', null),
     appConfig: { use: [] },
+    ...extra,
   });
 }
 
@@ -527,6 +535,169 @@ describe('pageActionsHandler', () => {
     expect(res.status).toBe(200);
     expect(seen).toEqual({ count: 3 }); // coercion observable to the handler
   });
+
+  it('gates the streaming action error frame on dev', async () => {
+    const make = (dev: boolean) =>
+      pageActionsHandler({
+        resolverByPath: async () =>
+          new Map([
+            [
+              'stream',
+              {
+                fn: async () =>
+                  (async function* () {
+                    yield { tick: 1 };
+                    throw new Error('secret detail');
+                  })(),
+                use: [],
+                moduleKey: 'pages/test.server',
+              },
+            ],
+          ]) as never,
+        resolvePageUseByPattern: async () => [],
+        renderPage: (async () => new Response('x')) as never,
+        resolvePageNode: () => h('div', null),
+        appConfig: { use: [] },
+        dev,
+      });
+    const post = (handler: ReturnType<typeof pageActionsHandler>) =>
+      new Hono().post('*', handler).request('/foo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({
+          module: 'pages/test.server',
+          action: 'stream',
+          payload: {},
+        }),
+      });
+    const prodBody = await (await post(make(false))).text();
+    expect(prodBody).toContain('"message":"Stream failed"');
+    expect(prodBody).not.toContain('secret detail');
+    const devBody = await (await post(make(true))).text();
+    expect(devBody).toContain('"message":"secret detail"');
+  });
+
+  describe('error masking and the dev deny() hint', () => {
+    const postSubmit = (handler: ReturnType<typeof pageActionsHandler>) =>
+      new Hono().post('*', handler).request('/foo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          module: 'pages/test.server',
+          action: 'submit',
+          payload: { x: 1 },
+        }),
+      });
+
+    it('masks a thrown non-outcome error as Action failed by default (production)', async () => {
+      const handler = buildHandler({
+        submit: async () => {
+          throw new Error('DB error: connection refused at 10.0.0.5');
+        },
+      });
+      const res = await postSubmit(handler);
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body).toEqual({ __outcome: 'error', message: 'Action failed' });
+    });
+
+    it('passes the thrown error message through when dev: true', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const handler = buildHandler(
+          {
+            submit: async () => {
+              throw new Error('DB error: hostname leaked');
+            },
+          },
+          undefined,
+          { dev: true }
+        );
+        const res = await postSubmit(handler);
+        expect(res.status).toBe(500);
+        const body = await res.json();
+        expect(body).toEqual({
+          __outcome: 'error',
+          message: 'DB error: hostname leaked',
+        });
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('hints at deny(status, message) on the console when dev: true', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const handler = buildHandler(
+          {
+            submit: async () => {
+              throw new Error('email is required');
+            },
+          },
+          undefined,
+          { dev: true }
+        );
+        await postSubmit(handler);
+        const hints = warn.mock.calls.filter((call) =>
+          String(call[0]).includes('deny(status, message)')
+        );
+        expect(hints).toHaveLength(1);
+        expect(String(hints[0]![0])).toContain('pages/test.server::submit');
+        expect(String(hints[0]![0])).toContain('email is required');
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('does not hint on the console in production (dev omitted)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const handler = buildHandler({
+          submit: async () => {
+            throw new Error('boom');
+          },
+        });
+        await postSubmit(handler);
+        const hints = warn.mock.calls.filter((call) =>
+          String(call[0]).includes('deny(status, message)')
+        );
+        expect(hints).toHaveLength(0);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('includes the resolver error detail in the fail-closed message only when dev: true', async () => {
+      const byPattern = async () => {
+        throw new Error('resolver boom: internal path /srv/gates.ts');
+      };
+      const routeBound = {
+        submit: {
+          fn: async () => ({ ok: true }),
+          routeId: '/foo/:id',
+        },
+      };
+      const prodRes = await postSubmit(buildHandler(routeBound, { byPattern }));
+      expect(prodRes.status).toBe(500);
+      const prodBody = await prodRes.json();
+      expect(prodBody.message).toBe(
+        "Route-bound action '/foo/:id' could not resolve its page-use chain"
+      );
+      const devRes = await postSubmit(
+        buildHandler(routeBound, { byPattern }, { dev: true })
+      );
+      const devBody = await devRes.json();
+      expect(devBody.message).toContain(
+        'resolver boom: internal path /srv/gates.ts'
+      );
+    });
+  });
 });
 
 // Helper that wires a single defineAction fn through pageActionsHandler with
@@ -669,5 +840,140 @@ describe('pageActionsHandler timeouts', () => {
     await post({ module: 'pages/timed', action: 'create', payload: {} });
     expect(observedReason).toBeInstanceOf(DOMException);
     expect((observedReason as DOMException).name).toBe('TimeoutError');
+  });
+});
+
+describe('pageActionsHandler missing-input-schema dev warning', () => {
+  const schemaWarnings = (calls: ReadonlyArray<ReadonlyArray<unknown>>) =>
+    calls.filter((call) => String(call[0]).includes('input schema'));
+
+  const postSubmit = (
+    handler: ReturnType<typeof pageActionsHandler>,
+    payload: unknown
+  ) =>
+    new Hono().post('*', handler).request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'submit',
+        payload,
+      }),
+    });
+
+  it('warns once per action when an object payload arrives with no input schema (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, { title: 'a' });
+      await postSubmit(handler, { title: 'b' });
+      const warnings = schemaWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/test.server::submit');
+      expect(String(warnings[0]![0])).toContain('{ input: schema }');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns when a string payload arrives with no input schema (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, 'raw-string-payload');
+      const warnings = schemaWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/test.server::submit');
+      // The message describes any unvalidated payload, not just objects.
+      expect(String(warnings[0]![0])).not.toContain('object payload');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns when an array payload arrives with no input schema (dev)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, [1, 2, 3]);
+      const warnings = schemaWarnings(warn.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]![0])).toContain('pages/test.server::submit');
+      expect(String(warnings[0]![0])).not.toContain('object payload');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn when the action declares an input schema', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: { fn: async () => 'ok', input: coercing } },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, { count: '3' });
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for an empty object payload', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, {});
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for a null or undefined payload', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler(
+        { submit: async () => ({ ok: true }) },
+        undefined,
+        { dev: true }
+      );
+      await postSubmit(handler, null);
+      await postSubmit(handler, undefined);
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn in production (dev omitted)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handler = buildHandler({ submit: async () => ({ ok: true }) });
+      await postSubmit(handler, { title: 'a' });
+      expect(schemaWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

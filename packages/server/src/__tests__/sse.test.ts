@@ -62,19 +62,34 @@ describe('sseGeneratorResponse', () => {
     expect(body).not.toContain('"ignored"');
   });
 
-  it('frames thrown errors as event: error JSON', async () => {
+  it('frames thrown errors as event: error JSON with the real message when dev: true', async () => {
     async function* gen(): AsyncGenerator<unknown, unknown, unknown> {
       yield { a: 1 };
       throw new Error('bad');
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
-      '/x'
-    );
+    const res = await makeApp((c) =>
+      sseGeneratorResponse(c, gen(), { dev: true })
+    ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
     expect(body).toContain('event: error');
     expect(body).toContain('"message":"bad"');
     expect(body).toContain('"name":"Error"');
+  });
+
+  it('masks the error frame message by default (production)', async () => {
+    async function* gen(): AsyncGenerator<unknown, unknown, unknown> {
+      yield { a: 1 };
+      throw new Error('DB error: connection refused at 10.0.0.5');
+    }
+    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
+      '/x'
+    );
+    const body = await res.text();
+    expect(body).toContain('event: error');
+    expect(body).toContain('"message":"Stream failed"');
+    expect(body).toContain('"name":"Error"');
+    expect(body).not.toContain('10.0.0.5');
   });
 });
 

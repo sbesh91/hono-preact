@@ -19,33 +19,40 @@ import {
 import {
   useListboxSelection,
   useRegisterOption,
+  normalizeSelectionProps,
+  useStableOnValuesChange,
   OPTION_SELECTOR,
   type SelectionProps,
 } from '../listbox/selection.js';
 import { useFormReset } from '../use-form-reset.js';
 import { SelectContext, useSelectContext } from './context.js';
 
-export interface SelectRootProps<Value = string>
-  extends SelectionProps<Value>, PositioningProps {
+export interface SelectRootOwnProps extends PositioningProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   name?: string;
   disabled?: boolean;
   required?: boolean;
-  isValueEqual?: (a: Value, b: Value) => boolean;
-  serializeValue?: (value: Value) => string;
   loop?: boolean; // default true
   typeahead?: boolean; // default true
   children?: ComponentChildren;
 }
 
-export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
+// An intersection with the SelectionProps union rather than an interface
+// (interfaces cannot extend a union). `multiple` discriminates the value
+// shape: single mode deals in `Value | null`, multiple mode in arrays.
+// `Value extends {}` keeps null out of Value so null-as-empty is unambiguous.
+export type SelectRootProps<Value extends {} = string> = SelectRootOwnProps &
+  SelectionProps<Value> & {
+    isValueEqual?: (a: Value, b: Value) => boolean;
+    serializeValue?: (value: Value) => string;
+  };
+
+export function SelectRoot<Value extends {} = string>(
+  props: SelectRootProps<Value>
+) {
   const {
-    value: valueProp,
-    defaultValue,
-    onValueChange,
-    multiple = false,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -62,14 +69,22 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     children,
   } = props;
 
-  const emptyDefault = (multiple ? [] : undefined) as
-    | Value
-    | Value[]
-    | undefined;
-  const [value, setValue] = useControllableState<Value | Value[] | undefined>({
-    value: valueProp,
-    defaultValue: defaultValue ?? emptyDefault,
-    onChange: (v) => v !== undefined && onValueChange?.(v),
+  // Destructuring the selection props would lose the `multiple` discriminant
+  // correlation, so they go to the normalizer whole. Memoized on the
+  // value-shape props only (not onValueChange): an inline handler mints a
+  // fresh identity every render, and including it here would recompute
+  // `values`/`defaultValues` (and churn everything keyed on them) on every
+  // such render. The callback itself is kept stable separately below.
+  const norm = useMemo(
+    () => normalizeSelectionProps<Value>(props),
+    [props.multiple, props.value, props.defaultValue]
+  );
+  const onValuesChange = useStableOnValuesChange<Value>(props);
+
+  const [values, setValues] = useControllableState<readonly Value[]>({
+    value: norm.values,
+    defaultValue: norm.defaultValues,
+    onChange: onValuesChange,
   });
 
   const [open, setOpen] = useControllableState<boolean>({
@@ -87,9 +102,9 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sel = useListboxSelection<Value>({
-    value,
-    setValue,
-    multiple,
+    values,
+    setValues,
+    multiple: norm.multiple,
     setOpen,
     isValueEqual,
     serializeValue,
@@ -97,13 +112,15 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     disabled,
   });
 
-  useFormReset(anchorRef, () => setValue(defaultValue ?? emptyDefault));
+  // A reset with no defaultValue lands on [] and, in single mode, reaches the
+  // consumer as onValueChange(null); it is no longer swallowed.
+  useFormReset(anchorRef, () => setValues(norm.defaultValues));
 
   const ctx = useMemo(
     () => ({
       open,
       setOpen,
-      multiple,
+      multiple: norm.multiple,
       isSelected: sel.isSelected,
       toggle: sel.toggle,
       activeId,
@@ -126,7 +143,7 @@ export function SelectRoot<Value = string>(props: SelectRootProps<Value>) {
     [
       open,
       setOpen,
-      multiple,
+      norm.multiple,
       sel.isSelected,
       sel.toggle,
       activeId,

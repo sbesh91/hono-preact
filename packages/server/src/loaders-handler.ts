@@ -165,12 +165,47 @@ export interface LoadersHandlerOptions {
    * a deadline).
    */
   defaultTimeoutMs?: number | false;
+  /**
+   * Dev-only diagnostic matcher: given a concrete request URL path, return
+   * the best-matching route pattern when that route carries page-level
+   * `use`, else null. Used to warn when a bare (route-independent) loader
+   * serves a request under a guarded route, since the bare loader RPC runs
+   * none of that route's guards. Never used for guard resolution (the URL
+   * is client-sent). Optional: absent skips the warning. The generated
+   * server entry passes makeGuardedRouteMatcher(routes.routeUse).
+   */
+  findGuardedRoute?: (urlPath: string) => string | null;
 }
 
 // Route-independent (bare) loaders have no page tier. Hoisted so the loader RPC
 // hot path does not mint a throwaway empty resolver per bare-loader request; the
 // result is only ever spread into the chain, never mutated.
 const EMPTY_PAGE_USE = (): ReadonlyArray<unknown> => [];
+
+// Dev-only warning for a bare (route-independent) loader serving a request
+// whose matched route carries page-level `use`. The bare loader's RPC
+// composes no page tier, so those guards never ran; that is by design (see
+// EMPTY_PAGE_USE) but easy to miss when the loader module is colocated
+// under a gated subtree. Fires once per loader key via the handler-instance
+// Set the caller owns. The matched pattern derives from the client-sent
+// location path, which is fine for a console hint but must never feed guard
+// resolution.
+function warnBareLoaderOnGuardedRoute(
+  warned: Set<string>,
+  info: { module: string; loader: string; path: string; pattern: string }
+): void {
+  const key = `${info.module}::${info.loader}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: bare loader '${key}' served a request for '${info.path}', ` +
+      `and that path's matched route '${info.pattern}' declares page-level ` +
+      `'use'. A bare defineLoader is route-independent, so those guards did ` +
+      `NOT run on this RPC. If the loader should be gated, bind it with ` +
+      `serverRoute('${info.pattern}').loader(fn) or give it a unit-level ` +
+      `use: defineLoader(fn, { use: [...] }).`
+  );
+}
 
 export function loadersHandler(
   glob: LazyGlob | EagerGlob | LazyArray,
@@ -187,8 +222,12 @@ export function loadersHandler(
     appConfig,
     resolvePageUse,
     defaultTimeoutMs = 30_000,
+    findGuardedRoute,
   } = opts;
   let cachedMapPromise: Promise<Record<string, LoaderEntry>> | null = null;
+  // Dedup store for warnBareLoaderOnGuardedRoute: one warning per bare
+  // loader key for the life of this handler instance.
+  const warnedBareGuarded = new Set<string>();
 
   return async (c) => {
     const loadersMapPromise = dev
@@ -253,6 +292,17 @@ export function loadersHandler(
     // declared route the resolver cannot handle is rejected immediately (500)
     // rather than being run guard-less, which would silently drop auth gates.
     const routeBound = typeof entry.routeId === 'string';
+    if (dev && !routeBound && findGuardedRoute) {
+      const guarded = findGuardedRoute(validatedLocation.path);
+      if (guarded !== null) {
+        warnBareLoaderOnGuardedRoute(warnedBareGuarded, {
+          module,
+          loader: loaderName,
+          path: validatedLocation.path,
+          pattern: guarded,
+        });
+      }
+    }
     const composed = await composeServerChainOrFailClosed<'loader'>(
       {
         requestSignal: c.req.raw.signal,
@@ -270,8 +320,8 @@ export function loadersHandler(
       // loader never runs through a guard-less chain. The raw resolver message
       // may carry internal detail, so surface it only in dev (matching the
       // loaderFailure path below); onError always receives the full error for
-      // the observability side channel. (The page-actions-handler twin masks
-      // unconditionally because it has no dev option; both mask in production.)
+      // the observability side channel. (The page-actions-handler twin applies
+      // the same dev gate; both mask in production.)
       onError?.(composed.error, { module, loader: loaderName });
       const detail = dev
         ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
@@ -378,6 +428,7 @@ export function loadersHandler(
     if (isAsyncGenerator(result)) {
       return sseGeneratorResponse(c, result, {
         emitResult: false,
+        dev,
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,
@@ -387,6 +438,7 @@ export function loadersHandler(
     }
     if (result instanceof ReadableStream) {
       return sseReadableStreamResponse(c, result, {
+        dev,
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,

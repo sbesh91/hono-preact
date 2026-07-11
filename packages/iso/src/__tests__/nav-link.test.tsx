@@ -1,13 +1,23 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { cleanup, render, fireEvent } from '@testing-library/preact';
-import { h } from 'preact';
+import { h, options } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { NavLink } from '../nav-link.js';
 import * as routeChange from '../internal/route-change.js';
 
+const tick = () => new Promise<void>((r) => setTimeout(r, 0));
+
+type DocWithVt = Document & {
+  startViewTransition?: (cb: () => void | Promise<void>) => unknown;
+};
+
 afterEach(() => {
   cleanup();
+  // Some tests below install the nav-transition scheduler and a fake
+  // startViewTransition on the real document; reset both.
+  routeChange.__resetTransitionStateForTesting();
+  delete (document as DocWithVt).startViewTransition;
   history.replaceState(null, '', '/');
   // The transition-arming tests below vi.spyOn the same module export in each
   // test; without restoring, an earlier test's spy stays wrapped around the
@@ -130,6 +140,7 @@ describe('NavLink', () => {
     );
     fireEvent.click(getByText('go'), { button: 0 });
     expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(new URL('/a', location.href).href);
     cleanup();
   });
 
@@ -173,11 +184,10 @@ describe('NavLink', () => {
 
   // The tests below cover the cases preact-iso does NOT client-side
   // soft-navigate for: a bare hash-only link, a download link, and a
-  // cross-origin link. Arming the skip flag for any of these would leave it
-  // armed for a later, unrelated navigation since no route change consumes
-  // it. The last two confirm arming still happens for a real same-origin
-  // soft-nav, including an href with a trailing hash fragment and a bare
-  // `self` target.
+  // cross-origin link. The browser handles those clicks itself, so no soft
+  // navigation follows and NavLink must not arm. The next two confirm arming
+  // still happens for a real same-origin soft-nav, including an href with a
+  // trailing hash fragment and a bare `self` target.
 
   it('does not arm on a bare hash-only link (in-page jump)', () => {
     history.replaceState(null, '', '/x');
@@ -276,11 +286,11 @@ describe('NavLink', () => {
     cleanup();
   });
 
-  // Regression (#219 strand): a same-URL click (e.g. the already-active nav
-  // item) must NOT arm the one-shot skip. preact-iso produces no navigated
-  // flush for a same-URL push, so an armed flag would strand and suppress the
-  // transition on the next *real* navigation.
-  it('does not arm on a same-URL click (target equals the current URL)', () => {
+  // A same-URL click (e.g. the already-active nav item) arms like any other:
+  // the arm is keyed to the resolved href, so when preact-iso's same-URL push
+  // produces no navigated flush the arm cannot strand. It expires at the next
+  // navigation to any other URL, which still gets its view transition.
+  it('arms keyed on a same-URL click, and a subsequent different-URL nav still transitions', async () => {
     history.replaceState(null, '', '/x');
     const spy = vi.spyOn(routeChange, 'skipNextNavTransition');
     const { getByText } = render(
@@ -291,7 +301,30 @@ describe('NavLink', () => {
       )
     );
     fireEvent.click(getByText('go'), { button: 0 });
-    expect(spy).not.toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(new URL('/x', location.href).href);
+    // Drain any render preact-iso scheduled for the same-URL push before
+    // installing the scheduler.
+    await tick();
+
+    // Scheduler-level continuation: the keyed arm expires instead of
+    // suppressing the next navigation's transition.
+    const startViewTransition = vi.fn((cb: () => void | Promise<void>) => {
+      void Promise.resolve().then(() => cb());
+      return {
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+        finished: Promise.resolve(),
+        types: { add: () => {} },
+        skipTransition: () => {},
+      };
+    });
+    (document as DocWithVt).startViewTransition = startViewTransition;
+    routeChange.installNavTransitionScheduler();
+    history.pushState(null, '', '/other');
+    options.debounceRendering!(() => {});
+    await tick();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
     cleanup();
   });
 

@@ -12,18 +12,123 @@ export interface OptionEntry<Value = unknown> {
   label: string;
 }
 
-// Shared controlled/uncontrolled selection props for Select + Combobox Roots.
-// The generic stays on each Root (both default Value = string).
-export interface SelectionProps<Value> {
-  value?: Value | Value[];
-  defaultValue?: Value | Value[];
-  onValueChange?: (value: Value | Value[]) => void;
-  multiple?: boolean;
+// Shared controlled/uncontrolled selection props for Select + Combobox Roots,
+// discriminated on `multiple`. Single mode deals in `Value | null` (`null` is
+// controlled-and-empty), multiple mode deals in arrays (`[]` is
+// controlled-and-empty). `undefined` keeps meaning "uncontrolled" in both
+// arms. The generic stays on each Root (both default Value = string).
+export interface SingleSelectionProps<Value> {
+  multiple?: false;
+  /** Controlled value; `null` = controlled-and-empty; omit for uncontrolled. */
+  value?: Value | null;
+  defaultValue?: Value | null;
+  onValueChange?: (value: Value | null) => void;
+}
+
+export interface MultipleSelectionProps<Value> {
+  multiple: true;
+  /** Controlled values; `[]` = controlled-and-empty; omit for uncontrolled. */
+  value?: readonly Value[];
+  defaultValue?: readonly Value[];
+  onValueChange?: (value: Value[]) => void;
+}
+
+export type SelectionProps<Value> =
+  | SingleSelectionProps<Value>
+  | MultipleSelectionProps<Value>;
+
+// The uniform internal shape both Roots feed to useControllableState:
+// selection state is always an array. `values` is undefined only when
+// uncontrolled; a cleared single select (`value={null}`) and a cleared multi
+// select (`value={[]}`) both normalize to [].
+export interface NormalizedSelection<Value> {
+  multiple: boolean;
+  values: readonly Value[] | undefined;
+  defaultValues: readonly Value[];
+  onValuesChange: ((next: readonly Value[]) => void) | undefined;
+}
+
+// Pure: wraps the public callback so single mode emits `Value | null`
+// ([] -> null) and multiple mode emits a fresh mutable Value[]. Narrowing on
+// `p.multiple` discriminates the union, so no casts are needed. Factored out
+// of normalizeSelectionProps so useStableOnValuesChange below can rebuild it
+// from a ref-read snapshot of props without needing normalizeSelectionProps's
+// own (differently-keyed) memoization.
+function wrapOnValueChange<Value>(
+  p: SelectionProps<Value>
+): ((next: readonly Value[]) => void) | undefined {
+  if (p.multiple) {
+    const cb = p.onValueChange;
+    return cb === undefined ? undefined : (next) => cb([...next]);
+  }
+  const cb = p.onValueChange;
+  return cb === undefined
+    ? undefined
+    : (next) => cb(next.length > 0 ? next[0] : null);
+}
+
+// Pure: maps the public discriminated props onto the internal array shape.
+// Narrowing on `p.multiple` discriminates the union, so no casts are needed.
+// Throws on the one shape mismatch TypeScript can't catch for untyped JS
+// callers: a scalar `value`/`defaultValue` passed alongside `multiple: true`
+// would otherwise reach `values.some` deep inside useListboxSelection and
+// fail far from the misuse. Callers memoize the result on
+// `[multiple, value, defaultValue]` only (excluding onValueChange): the fresh
+// wrapper array a single-mode `value` produces would otherwise churn
+// downstream callback identities every render, and an inline onValueChange
+// handler would defeat that memoization since it mints a fresh identity every
+// render. Use useStableOnValuesChange for the callback instead.
+export function normalizeSelectionProps<Value>(
+  p: SelectionProps<Value>
+): NormalizedSelection<Value> {
+  if (p.multiple) {
+    if (p.value !== undefined && !Array.isArray(p.value)) {
+      throw new Error('Select/Combobox: multiple mode requires an array value');
+    }
+    if (p.defaultValue !== undefined && !Array.isArray(p.defaultValue)) {
+      throw new Error(
+        'Select/Combobox: multiple mode requires an array defaultValue'
+      );
+    }
+    return {
+      multiple: true,
+      values: p.value,
+      defaultValues: p.defaultValue ?? [],
+      onValuesChange: wrapOnValueChange(p),
+    };
+  }
+  return {
+    multiple: false,
+    values:
+      p.value === undefined ? undefined : p.value === null ? [] : [p.value],
+    defaultValues: p.defaultValue == null ? [] : [p.defaultValue],
+    onValuesChange: wrapOnValueChange(p),
+  };
+}
+
+// Hook: a referentially-stable onValuesChange wrapper for the Roots'
+// useControllableState call. Reads the latest props (including
+// `onValueChange`) through a ref on every render, updated in a layout effect
+// -- the same pattern useControllableState uses for its own onChange ref --
+// so the returned callback's identity never changes. This is what lets the
+// Roots memoize normalizeSelectionProps's values/defaultValues on
+// `[multiple, value, defaultValue]` alone: the callback no longer needs to be
+// part of that memo to stay fresh.
+export function useStableOnValuesChange<Value>(
+  props: SelectionProps<Value>
+): (next: readonly Value[]) => void {
+  const propsRef = useRef(props);
+  useLayoutEffect(() => {
+    propsRef.current = props;
+  });
+  return useCallback((next: readonly Value[]) => {
+    wrapOnValueChange(propsRef.current)?.(next);
+  }, []);
 }
 
 export interface UseListboxSelectionOptions<Value> {
-  value: Value | Value[] | undefined;
-  setValue: (next: Value | Value[]) => void;
+  values: readonly Value[];
+  setValues: (next: Value[]) => void;
   multiple: boolean;
   setOpen: (open: boolean) => void;
   isValueEqual?: (a: Value, b: Value) => boolean;
@@ -53,8 +158,8 @@ export function useListboxSelection<Value = string>(
   opts: UseListboxSelectionOptions<Value>
 ): ListboxSelection {
   const {
-    value,
-    setValue,
+    values,
+    setValues,
     multiple,
     setOpen,
     isValueEqual,
@@ -82,14 +187,9 @@ export function useListboxSelection<Value = string>(
     [itemToString]
   );
 
-  const valuesArray = useCallback((): unknown[] => {
-    if (value === undefined) return [];
-    return Array.isArray(value) ? value : [value];
-  }, [value]);
-
   const isSelected = useCallback(
-    (optionValue: unknown) => valuesArray().some((v) => equal(v, optionValue)),
-    [valuesArray, equal]
+    (optionValue: unknown) => values.some((v) => equal(v, optionValue)),
+    [values, equal]
   );
 
   const registry = useRef<OptionEntry[]>([]);
@@ -150,18 +250,21 @@ export function useListboxSelection<Value = string>(
   const toggle = useCallback(
     (optionValue: unknown) => {
       snapshotLabel(optionValue);
+      // The module-level context erases the per-instance generic to unknown;
+      // the Root owns the generic, so re-apply it at this one confined seam
+      // (mirrors Combobox.Value).
+      const picked = optionValue as Value;
       if (multiple) {
-        const current = valuesArray();
-        const next = current.some((v) => equal(v, optionValue))
-          ? current.filter((v) => !equal(v, optionValue))
-          : [...current, optionValue];
-        setValue(next as Value[]);
+        const next = values.some((v) => equal(v, picked))
+          ? values.filter((v) => !equal(v, picked))
+          : [...values, picked];
+        setValues(next);
       } else {
-        setValue(optionValue as Value);
+        setValues([picked]);
         setOpen(false);
       }
     },
-    [snapshotLabel, multiple, valuesArray, equal, setValue, setOpen]
+    [snapshotLabel, multiple, values, equal, setValues, setOpen]
   );
 
   const selectedLabels = useCallback(
@@ -171,7 +274,7 @@ export function useListboxSelection<Value = string>(
   );
 
   const selectedItems = useCallback((): OptionEntry[] => {
-    return valuesArray().map((v) => {
+    return values.map((v) => {
       const entry = registry.current.find((e) => equal(e.value, v));
       return {
         id: entry?.id ?? serialize(v),
@@ -179,12 +282,12 @@ export function useListboxSelection<Value = string>(
         label: labelFor(v),
       };
     });
-  }, [valuesArray, equal, serialize, labelFor, version]);
+  }, [values, equal, serialize, labelFor, version]);
 
   const hiddenFields: ComponentChild[] | null =
     name == null
       ? null
-      : valuesArray().map((v, i) =>
+      : values.map((v, i) =>
           h('input', {
             key: `${name}-${i}`,
             type: 'hidden',

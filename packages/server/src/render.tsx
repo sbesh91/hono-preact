@@ -74,7 +74,18 @@ function buildActionResultContext(): ActionResultContextValue {
 export async function renderPage(
   c: Context,
   node: VNode,
-  options?: { defaultTitle?: string; appConfig?: AppConfig }
+  options?: {
+    defaultTitle?: string;
+    appConfig?: AppConfig;
+    /**
+     * When true, a streaming loader error's real message and name reach the
+     * client. When false (default), the error is masked as `Stream failed`,
+     * matching the SSE wire's masking. The framework's generated server entry
+     * threads its own dev flag here, matching loadersHandler and
+     * pageActionsHandler.
+     */
+    dev?: boolean;
+  }
 ): Promise<Response> {
   const dispatcher = createDispatcher();
   const previousEnv = env.current;
@@ -257,5 +268,6 @@ export async function renderPage(
     streamingLoaders,
     requestSignal: c.req.raw.signal,
     bindRequestScope,
+    dev: options?.dev ?? false,
   });
 }

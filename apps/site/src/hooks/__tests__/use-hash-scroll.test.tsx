@@ -10,11 +10,15 @@ import type { ViewTransitionLifecycle } from 'hono-preact';
 // hook scrolls on mount, on hashchange, and in each post-swap phase.
 const hoisted = vi.hoisted(() => ({
   lifecycle: null as ViewTransitionLifecycle | null,
+  url: '/',
 }));
 vi.mock('hono-preact', () => ({
   useViewTransitionLifecycle: (lifecycle: ViewTransitionLifecycle) => {
     hoisted.lifecycle = lifecycle;
   },
+}));
+vi.mock('preact-iso', () => ({
+  useLocation: () => ({ url: hoisted.url }),
 }));
 
 import { useHashScroll } from '../use-hash-scroll.js';
@@ -22,6 +26,7 @@ import { useHashScroll } from '../use-hash-scroll.js';
 afterEach(() => {
   cleanup();
   hoisted.lifecycle = null;
+  hoisted.url = '/';
   window.history.replaceState(null, '', '/');
 });
 
@@ -101,6 +106,43 @@ describe('useHashScroll', () => {
     render(<Harness />);
 
     hoisted.lifecycle?.onAfterSwap?.({} as never);
+    expect(spy).not.toHaveBeenCalled();
+    el.remove();
+  });
+
+  // The gap this closes: preact-iso intercepts a click on a same-path hash link
+  // (e.g. /docs/loaders#retries clicked while already on /docs/loaders),
+  // preventDefaults, and pushes the URL, but the flush's path is unchanged so
+  // the view-transition scheduler never classifies it as a navigation. No
+  // transition runs, so neither afterSwap nor afterTransition fires; useLocation
+  // ().url is the only trigger left standing.
+  it('scrolls when useLocation().url changes hash on the same path', () => {
+    window.history.replaceState(null, '', '/docs/loaders');
+    hoisted.url = '/docs/loaders';
+    const { rerender } = render(<Harness />);
+
+    window.history.pushState(null, '', '/docs/loaders#retries');
+    hoisted.url = '/docs/loaders#retries';
+    const { el, spy } = presentTarget('retries');
+    rerender(<Harness />);
+
+    expect(spy).toHaveBeenCalledWith({ block: 'start' });
+    el.remove();
+  });
+
+  // A cross-path url change also updates useLocation().url, but that flush IS
+  // wrapped in a view transition, so scrolling here (ahead of the transition's
+  // snapshot) would race it; afterSwap/afterTransition own that case instead.
+  it('does not scroll from a url change that crosses paths', () => {
+    window.history.replaceState(null, '', '/docs/loaders');
+    hoisted.url = '/docs/loaders';
+    const { rerender } = render(<Harness />);
+
+    window.history.pushState(null, '', '/docs/actions#usage');
+    hoisted.url = '/docs/actions#usage';
+    const { el, spy } = presentTarget('usage');
+    rerender(<Harness />);
+
     expect(spy).not.toHaveBeenCalled();
     el.remove();
   });

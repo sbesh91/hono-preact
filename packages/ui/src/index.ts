@@ -188,10 +188,14 @@ export {
 export { matchSubstring } from './combobox/autocomplete.js';
 export {
   useListboxSelection,
+  normalizeSelectionProps,
   type UseListboxSelectionOptions,
   type ListboxSelection,
   type OptionEntry,
   type SelectionProps,
+  type SingleSelectionProps,
+  type MultipleSelectionProps,
+  type NormalizedSelection,
 } from './listbox/selection.js';
 export {
   toast,

@@ -24,6 +24,7 @@ export interface RunOptions {
     off?(event: string, listener: (arg: unknown) => void): unknown;
   };
   platform?: NodeJS.Platform;
+  nodeVersion?: string;
 }
 
 export function run(options: RunOptions): Promise<number>;

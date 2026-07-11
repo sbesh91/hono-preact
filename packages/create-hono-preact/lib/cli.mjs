@@ -12,6 +12,7 @@ import {
   checkTargetDir,
   validateProjectName,
 } from './resolve.mjs';
+import { nodeVersionError } from './node-version.mjs';
 import { clackPrompts, brandBanner } from './prompts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,7 @@ const templatesRoot = resolve(here, '..', 'templates');
  *   spawnFn?: typeof realSpawn,
  *   stdin?: import('node:stream').Readable & { isTTY?: boolean },
  *   platform?: NodeJS.Platform,
+ *   nodeVersion?: string,
  * }} opts
  * @returns {Promise<number>} exit code (0 on success)
  */
@@ -39,6 +41,7 @@ export async function run({
   spawnFn = realSpawn,
   stdin = process.stdin,
   platform = process.platform,
+  nodeVersion = process.version,
 }) {
   const parsed = parseArgs(argv);
 
@@ -75,6 +78,14 @@ export async function run({
     console.error(parsed.message);
     printHelp();
     return 2;
+  }
+
+  // Help, version, and add-agents work on any Node; scaffolding does not.
+  // Refuse before prompting or touching the filesystem.
+  const versionError = nodeVersionError(nodeVersion);
+  if (versionError) {
+    console.error(`error: ${versionError}`);
+    return 1;
   }
 
   const interactive = Boolean(isTTY) && !parsed.yes;
@@ -153,6 +164,21 @@ export async function run({
         if (captured) console.error(captured);
       }
       console.error(`error: '${pm} install' failed in ${targetDir}.`);
+      // The project itself scaffolded fine; leave the user with the
+      // commands that finish setup instead of a dead end.
+      const lines = setupCommands(targetDir, pm, false);
+      if (interactive) {
+        prompts.note(
+          lines.map((l) => `  ${l}`).join('\n'),
+          'To finish setup manually'
+        );
+      } else {
+        console.log('');
+        console.log('The project was scaffolded. To finish setup manually:');
+        console.log('');
+        for (const l of lines) console.log(`  ${l}`);
+        console.log('');
+      }
       return 1;
     }
     spin?.stop('Dependencies installed');
@@ -176,10 +202,7 @@ export async function run({
 
   if (!skipHints) {
     if (interactive) {
-      const dev = pm === 'npm' ? 'npm run dev' : `${pm} dev`;
-      const lines = [`cd ${targetDir}`];
-      if (!install) lines.push(pm === 'npm' ? 'npm install' : `${pm} install`);
-      lines.push(dev);
+      const lines = setupCommands(targetDir, pm, install);
       prompts.note(lines.map((l) => `  ${l}`).join('\n'), 'Next steps');
     } else {
       printNextSteps(targetDir, pm, install);
@@ -277,21 +300,36 @@ function readFirstLine(stream) {
 }
 
 /**
+ * Shell commands that take the user from a fresh checkout of the scaffolded
+ * directory to a running dev server: cd in, install (unless dependencies are
+ * already installed), start dev.
+ *
+ * @param {string} targetDir
+ * @param {string} pm
+ * @param {boolean} installed
+ * @returns {string[]}
+ */
+function setupCommands(targetDir, pm, installed) {
+  const lines = [`cd ${targetDir}`];
+  if (!installed) {
+    lines.push(pm === 'npm' ? 'npm install' : `${pm} install`);
+  }
+  lines.push(pm === 'npm' ? 'npm run dev' : `${pm} dev`);
+  return lines;
+}
+
+/**
  * @param {string} targetDir
  * @param {string} pm
  * @param {boolean} installed
  */
 function printNextSteps(targetDir, pm, installed) {
-  const dev = pm === 'npm' ? 'npm run dev' : `${pm} dev`;
   console.log('');
   console.log(pc.green(pc.bold('Done!')) + ' Next steps:');
   console.log('');
-  console.log(`  cd ${targetDir}`);
-  if (!installed) {
-    const installCmd = pm === 'npm' ? 'npm install' : `${pm} install`;
-    console.log(`  ${installCmd}`);
+  for (const line of setupCommands(targetDir, pm, installed)) {
+    console.log(`  ${line}`);
   }
-  console.log(`  ${dev}`);
   console.log('');
 }
 

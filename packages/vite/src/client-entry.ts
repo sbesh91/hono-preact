@@ -38,18 +38,16 @@ export function generateClientEntrySource(
       : '') +
     `import { h, hydrate } from 'preact';\n` +
     `import { LocationProvider } from 'preact-iso';\n` +
-    `import { Routes } from 'hono-preact';\n` +
-    `import { installNavTransitionScheduler, installStreamRegistry, installHistoryShim } from 'hono-preact/internal/runtime';\n` +
+    `import { Routes, bootClient } from 'hono-preact';\n` +
     `import routes from '${opts.routesAbsPath}';\n` +
     `\n` +
-    `installHistoryShim();\n` +
-    `installNavTransitionScheduler();\n` +
-    `installStreamRegistry();\n` +
+    // bootClient() installs the client runtime services (history shim,
+    // nav-transition scheduler for view transitions, stream registry) before
+    // hydrate, so the very first navigation already has direction tracking,
+    // transitions, and live-loader stream wiring. It is the same public call
+    // a custom clientEntry is expected to make (the clientEntry contract).
+    `bootClient();\n` +
     `\n` +
-    // View transitions are driven by installNavTransitionScheduler() above: it
-    // overrides Preact's render scheduler so a navigation's re-render runs inside
-    // document.startViewTransition (capturing the outgoing route as the old
-    // snapshot before the new one swaps in). No per-navigation wiring needed.
     `hydrate(\n` +
     `  h(LocationProvider, null,\n` +
     `    h(Routes, { routes })\n` +

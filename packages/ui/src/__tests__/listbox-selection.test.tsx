@@ -18,13 +18,11 @@ function Harness({
   renderCherry?: boolean;
   onReady?: (api: ReturnType<typeof useListboxSelection<string>>) => void;
 }) {
-  const [value, setValue] = useState<string | string[] | undefined>(
-    multiple ? [] : undefined
-  );
+  const [values, setValues] = useState<string[]>([]);
   const [open, setOpen] = useState(true);
   const sel = useListboxSelection<string>({
-    value,
-    setValue,
+    values,
+    setValues,
     multiple,
     setOpen,
     itemToString,

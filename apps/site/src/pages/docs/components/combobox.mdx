@@ -348,32 +348,32 @@ positioning to the parts. Generic over the value type (`Combobox.Root<Value>`);
 defaults to `string`. Renders children and the hidden form field(s) when `name`
 is set.
 
-| Prop                | Type                                | Default     | Description                                                                                     |
-| ------------------- | ----------------------------------- | ----------- | ----------------------------------------------------------------------------------------------- |
-| `value`             | `Value \| Value[]`                  | -           | Controlled selection. Pair with `onValueChange`.                                                |
-| `defaultValue`      | `Value \| Value[]`                  | -           | Initial selection when uncontrolled.                                                            |
-| `onValueChange`     | `(value: Value \| Value[]) => void` | -           | Called when the selection changes (not called for `create` options).                            |
-| `multiple`          | `boolean`                           | `false`     | Allow more than one selection; value becomes an array; popup stays open on pick.                |
-| `open`              | `boolean`                           | -           | Controlled open state. Pair with `onOpenChange`.                                                |
-| `defaultOpen`       | `boolean`                           | `false`     | Initial open state when uncontrolled.                                                           |
-| `onOpenChange`      | `(open: boolean) => void`           | -           | Called when the popup requests an open or close.                                                |
-| `inputValue`        | `string`                            | -           | Controlled typed query. Pair with `onInputChange`.                                              |
-| `defaultInputValue` | `string`                            | `''`        | Initial query when uncontrolled.                                                                |
-| `onInputChange`     | `(value: string) => void`           | -           | Called when the user edits the input (always the typed query, not completion).                  |
-| `autocomplete`      | `'none' \| 'list' \| 'both'`        | `'list'`    | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                      |
-| `onCreate`          | `(inputValue: string) => void`      | -           | Called when a `create` option is selected; if absent, `create` falls back to normal selection.  |
-| `itemToString`      | `(value: Value) => string`          | -           | Resolve a label for a value whose option is not currently rendered (SSR, filter).               |
-| `name`              | `string`                            | -           | Submit the value as a hidden field (one per value in multiple mode).                            |
-| `disabled`          | `boolean`                           | `false`     | Disable the input and skip the hidden field.                                                    |
-| `required`          | `boolean`                           | `false`     | Mark the input `aria-required`.                                                                 |
-| `isValueEqual`      | `(a: Value, b: Value) => boolean`   | `Object.is` | Compare values for selection matching (use for object values).                                  |
-| `serializeValue`    | `(value: Value) => string`          | `String`    | Stringify a value for the hidden form field.                                                    |
-| `side`              | `'top'\|'right'\|'bottom'\|'left'`  | `'bottom'`  | Preferred side of the input to place the popup.                                                 |
-| `align`             | `'start'\|'center'\|'end'`          | `'start'`   | Alignment along that side.                                                                      |
-| `offset`            | `number`                            | `8`         | Gap in pixels between the input and the popup.                                                  |
-| `loop`              | `boolean`                           | `true`      | Wrap arrow navigation at the first / last option.                                               |
-| `openOnFocus`       | `boolean`                           | `true`      | Open the popup when the input gains focus (or is clicked while closed). Set `false` to opt out. |
-| `children`          | `ComponentChildren`                 | -           | The input, trigger, positioner, and status parts.                                               |
+| Prop                | Type                                                                         | Default     | Description                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`             | `Value \| null` single, `readonly Value[]` multiple                          | -           | Controlled selection. Pair with `onValueChange`. `null` (single) or `[]` (multiple) is controlled-and-empty; omit for uncontrolled.                |
+| `defaultValue`      | `Value \| null` single, `readonly Value[]` multiple                          | -           | Initial selection when uncontrolled.                                                                                                               |
+| `onValueChange`     | `(value: Value \| null) => void` single, `(value: Value[]) => void` multiple | -           | Called when the selection changes, including clears (not called for `create` options).                                                             |
+| `multiple`          | `true \| false`                                                              | `false`     | Discriminates the value shape: omitted or `false` is scalar, `true` is array; popup stays open on pick. Use a literal so TypeScript pins the mode. |
+| `open`              | `boolean`                                                                    | -           | Controlled open state. Pair with `onOpenChange`.                                                                                                   |
+| `defaultOpen`       | `boolean`                                                                    | `false`     | Initial open state when uncontrolled.                                                                                                              |
+| `onOpenChange`      | `(open: boolean) => void`                                                    | -           | Called when the popup requests an open or close.                                                                                                   |
+| `inputValue`        | `string`                                                                     | -           | Controlled typed query. Pair with `onInputChange`.                                                                                                 |
+| `defaultInputValue` | `string`                                                                     | `''`        | Initial query when uncontrolled.                                                                                                                   |
+| `onInputChange`     | `(value: string) => void`                                                    | -           | Called when the user edits the input (always the typed query, not completion).                                                                     |
+| `autocomplete`      | `'none' \| 'list' \| 'both'`                                                 | `'list'`    | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                                                                         |
+| `onCreate`          | `(inputValue: string) => void`                                               | -           | Called when a `create` option is selected; if absent, `create` falls back to normal selection.                                                     |
+| `itemToString`      | `(value: Value) => string`                                                   | -           | Resolve a label for a value whose option is not currently rendered (SSR, filter).                                                                  |
+| `name`              | `string`                                                                     | -           | Submit the value as a hidden field (one per value in multiple mode).                                                                               |
+| `disabled`          | `boolean`                                                                    | `false`     | Disable the input and skip the hidden field.                                                                                                       |
+| `required`          | `boolean`                                                                    | `false`     | Mark the input `aria-required`.                                                                                                                    |
+| `isValueEqual`      | `(a: Value, b: Value) => boolean`                                            | `Object.is` | Compare values for selection matching (use for object values).                                                                                     |
+| `serializeValue`    | `(value: Value) => string`                                                   | `String`    | Stringify a value for the hidden form field.                                                                                                       |
+| `side`              | `'top'\|'right'\|'bottom'\|'left'`                                           | `'bottom'`  | Preferred side of the input to place the popup.                                                                                                    |
+| `align`             | `'start'\|'center'\|'end'`                                                   | `'start'`   | Alignment along that side.                                                                                                                         |
+| `offset`            | `number`                                                                     | `8`         | Gap in pixels between the input and the popup.                                                                                                     |
+| `loop`              | `boolean`                                                                    | `true`      | Wrap arrow navigation at the first / last option.                                                                                                  |
+| `openOnFocus`       | `boolean`                                                                    | `true`      | Open the popup when the input gains focus (or is clicked while closed). Set `false` to opt out.                                                    |
+| `children`          | `ComponentChildren`                                                          | -           | The input, trigger, positioner, and status parts.                                                                                                  |
 
 ### Combobox.Input
 
@@ -408,7 +408,9 @@ Sets `aria-controls`, `aria-expanded`, `aria-label` (defaults to `"Open"`),
 ### Combobox.Clear
 
 An optional button that resets the selection and the input, then focuses the
-input. Default element `<button type="button">`.
+input. The cleared selection reaches `onValueChange` as `null` in single mode
+and `[]` in multiple mode, so a controlled parent observes the clear. Default
+element `<button type="button">`.
 
 | Prop       | Type                                    | Default | Description                                          |
 | ---------- | --------------------------------------- | ------- | ---------------------------------------------------- |

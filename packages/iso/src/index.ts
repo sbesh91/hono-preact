@@ -59,6 +59,8 @@ export type {
   ServerCaller,
   CallResult,
   CallLoaderLocation,
+  CallLoaderOptions,
+  CallStreamOptions,
 } from './server-caller.js';
 export { defineAction, useAction, TimeoutError } from './action.js';
 export type {
@@ -117,6 +119,7 @@ export type { LoaderCache } from './cache.js';
 export { defineChannel } from './define-channel.js';
 export type { Channel, Topic } from './define-channel.js';
 export { publish } from './pubsub.js';
+export { eventStream } from './event-stream.js';
 
 // Duplex WebSocket sockets.
 export { defineSocket } from './define-socket.js';
@@ -202,6 +205,20 @@ export { Head } from './head.js';
 export type { HeadProps } from './head.js';
 export { ClientScript } from './client-script.js';
 
+// Head management hooks: trivial re-exports of hoofd/preact. The framework
+// owns the hoofd integration (renderPage collects these into the document
+// head via HoofdProvider), so pages import the hooks from hono-preact rather
+// than depending on hoofd directly.
+export {
+  useTitle,
+  useTitleTemplate,
+  useMeta,
+  useLink,
+  useLang,
+  useScript,
+} from 'hoofd/preact';
+export type { MetaOptions, LinkOptions, ScriptOptions } from 'hoofd/preact';
+
 // View transition lifecycle hook.
 export {
   useViewTransitionLifecycle,
@@ -231,3 +248,8 @@ export {
   type ViewTransitionNameProps,
   type ViewTransitionGroupProps,
 } from './view-transition-name.js';
+
+// Client boot. Installs the runtime services the generated client entry
+// relies on (history shim, nav-transition scheduler, stream registry);
+// public so a custom `clientEntry` can make the same call.
+export { bootClient } from './boot-client.js';

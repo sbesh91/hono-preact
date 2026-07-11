@@ -5,11 +5,11 @@ import {
   useOptimisticAction,
   useParams,
   useReload,
+  useTitle,
   ViewTransitionName,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import { useTitle } from 'hoofd/preact';
 import { ArrowLeft } from 'lucide-preact';
 import {
   serverLoaders,

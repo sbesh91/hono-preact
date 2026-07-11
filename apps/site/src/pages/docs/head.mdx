@@ -1,0 +1,61 @@
+# Head Management
+
+Pages declare their document title, meta tags, link tags, and the `<html lang>` attribute with head hooks imported from `hono-preact`. During SSR the framework collects every hook call made in the rendered tree and injects the tags into the document head, so titles and social metadata are present in the initial HTML; on the client the same hooks keep the head in sync as the user navigates.
+
+## Example
+
+Set a title and description from any page component:
+
+```tsx
+// src/pages/movie.tsx
+import { useTitle, useMeta } from 'hono-preact';
+
+export default function Movie({ movie }: { movie: { title: string } }) {
+  useTitle(movie.title);
+  useMeta({ name: 'description', content: `Details for ${movie.title}` });
+  return <h1>{movie.title}</h1>;
+}
+```
+
+Set a site-wide title template once in a layout, and page titles slot into it:
+
+```tsx
+// src/pages/layout.tsx
+import { useTitleTemplate, useLang } from 'hono-preact';
+
+export default function Layout({ children }) {
+  useTitleTemplate('%s | My App');
+  useLang('en');
+  return <>{children}</>;
+}
+```
+
+Add a link tag (a canonical URL, a preload, an icon):
+
+```tsx
+import { useLink } from 'hono-preact';
+
+useLink({ rel: 'canonical', href: 'https://example.com/movies' });
+```
+
+## How it works
+
+- **SSR injection.** `renderPage` collects every head hook call during prerender and post-processes the tags into your layout's `</head>`. Your `Layout` must render a real `<head>` element (the `<Head>` component from `hono-preact` provides one); with no `<head>` in the output there is nowhere to inject and the tags are dropped.
+- **Fallback title.** When no page sets a title, the `<Head defaultTitle="...">` prop (or `renderPage`'s `defaultTitle` option) supplies one.
+- **Client navigation.** The hooks run on the client too: navigating to a page that calls `useTitle` updates `document.title` without a reload, and unmounting restores the previous value.
+- **Deepest call wins.** When a layout and a page both set the same field, the innermost (most recently rendered) hook call takes effect, so page-level titles override layout defaults.
+
+## API reference
+
+| Hook               | Signature                                     | Description                                                                                                                                |
+| ------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `useTitle`         | `(title: string, template?: boolean) => void` | Sets `document.title`. Pass `template: true` to treat the string as a title template.                                                      |
+| `useTitleTemplate` | `(template: string) => void`                  | Declares a title template; `%s` is replaced by the current `useTitle` value.                                                               |
+| `useMeta`          | `(options: MetaOptions) => void`              | Renders a `<meta>` tag. `MetaOptions` carries `name`, `property` (Open Graph), `httpEquiv`, `charset`, and `content`.                      |
+| `useLink`          | `(options: LinkOptions) => void`              | Renders a `<link>` tag. `LinkOptions` carries `rel` (required), `href`, `as`, `media`, `sizes`, `crossorigin`, `type`, and `hreflang`.     |
+| `useLang`          | `(language: string) => void`                  | Sets the `lang` attribute on `<html>`.                                                                                                     |
+| `useScript`        | `(options: ScriptOptions) => void`            | Renders a `<script>` tag. `ScriptOptions` carries `src`, `id`, `text`, `type`, `async`, `defer`, `module`, `crossorigin`, and `integrity`. |
+
+The option types (`MetaOptions`, `LinkOptions`, `ScriptOptions`) are exported from `hono-preact`.
+
+See also: [renderPage](/docs/render-page) for how collected tags are injected server-side.

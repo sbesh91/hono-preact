@@ -1,6 +1,6 @@
 # Realtime Channels
 
-Realtime channels let you push live data from the server to the client without polling. A `Channel` is a typed address; `publish(topic, message)` fires from a server action after a mutation; `route.loader(liveStream({ topic, load }))` subscribes any connected client to that topic and pushes a fresh data snapshot on every publish.
+Realtime channels let you push live data from the server to the client without polling. A `Channel` is a typed address; `publish(topic, message)` fires from a server action after a mutation; `route.loader(liveStream({ topic, load }))` subscribes any connected client to that topic and pushes a fresh data snapshot on every publish. When the event itself is the data, `eventStream(topic, signal)` yields each published payload directly to a streaming loader.
 
 ## Example: live shared counter
 
@@ -189,6 +189,34 @@ A generator helper for channel-driven live loaders. Yields `load(ctx)` once on c
 | `load`  | `(ctx: LoaderCtx) => Promise<T>`     | Produces the data snapshot. Called on connect and on every publish.                  |
 
 The composed loader returns a `LoaderRef<T, true>`. Consume it with the accumulating form `ref.View(render, { initial, reduce })`. The `StreamStatus` and `.View` option table are described on the [Live Loaders](/docs/live-loaders) page.
+
+### `eventStream(topic, signal)`
+
+Subscribe to a topic as an async generator of its published payloads. Where `liveStream` re-runs a `load` snapshot on every publish (and discards the message), `eventStream` delivers each published payload itself, in order: the right shape for feeds and tickers where the event is the data.
+
+```ts
+import { defineChannel, defineLoader, eventStream } from 'hono-preact';
+
+const activityChannel = defineChannel('activity')<ActivityEvent>();
+
+export const serverLoaders = {
+  activity: defineLoader(
+    async function* ({ signal }) {
+      for await (const e of eventStream(activityChannel.key(), signal)) {
+        yield e;
+      }
+    },
+    { live: true }
+  ),
+};
+```
+
+| Argument | Type             | Description                                                                            |
+| -------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `topic`  | `Topic<Payload>` | The channel topic to subscribe to. Build it with `channel.key(...)`.                   |
+| `signal` | `AbortSignal`    | Ends the stream and removes the subscription when aborted. Pass the loader's `signal`. |
+
+Returns `AsyncGenerator<Serialize<Payload>, void, unknown>`. Payloads arrive in publish order and buffer while the consumer is busy. The yield type is the JSON wire shape (`Serialize<Payload>`): on Cloudflare a payload crosses isolates as JSON, so a `Date` arrives as its ISO string. If the underlying subscription drops, the generator throws, terminating the stream rather than going silently stale.
 
 ### Type exports
 
