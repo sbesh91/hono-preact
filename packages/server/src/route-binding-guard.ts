@@ -107,7 +107,8 @@ function maybeReportAliasedBinding(
  * and carry no binding to check.
  *
  * A module mounted on a children-bearing node may alternatively bind its
- * subtree pattern (route.path + '/*'), which must exist as a routeUse key; a
+ * subtree pattern (subtreePatternOf(route.path), so the root's is '/*'),
+ * which must exist as a routeUse key; a
  * wildcard on a childless path fails here rather than resolving an empty
  * chain at request time.
  *
