@@ -60,4 +60,27 @@ describe('Menu checkable items', () => {
     fireEvent.click(getByText('Large'));
     expect(onValueChange).toHaveBeenCalledWith('lg');
   });
+
+  it('RadioGroup carries a typed value union through to the handler', async () => {
+    const onValueChange = vi.fn((v: 'sm' | 'lg') => v);
+    const { getByText } = render(
+      <MenuRoot defaultOpen>
+        <MenuTrigger>Open</MenuTrigger>
+        <MenuPositioner>
+          <MenuPopup>
+            <MenuRadioGroup<'sm' | 'lg'>
+              value="sm"
+              onValueChange={onValueChange}
+            >
+              <MenuRadioItem value="sm">Small</MenuRadioItem>
+              <MenuRadioItem value="lg">Large</MenuRadioItem>
+            </MenuRadioGroup>
+          </MenuPopup>
+        </MenuPositioner>
+      </MenuRoot>
+    );
+    await act(async () => {});
+    fireEvent.click(getByText('Large'));
+    expect(onValueChange).toHaveBeenCalledWith('lg');
+  });
 });

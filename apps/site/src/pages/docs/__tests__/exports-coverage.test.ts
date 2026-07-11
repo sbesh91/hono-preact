@@ -83,6 +83,7 @@ const UI_SHARED_PAGE = new Map<string, string>([
   ['matchSubstring', 'combobox.mdx'],
   ['placementFor', 'use-position.mdx'],
   ['sideAlignFromPlacement', 'use-position.mdx'],
+  ['normalizeSelectionProps', 'use-listbox-selection.mdx'],
 ]);
 
 // The `components/<file>.mdx` page that OWNS a UI export's documentation: an

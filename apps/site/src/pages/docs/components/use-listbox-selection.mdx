@@ -31,17 +31,17 @@ function useListboxSelection<Value = string>(
 
 ## Options
 
-| Option           | Type                               | Notes                                                                                         |
-| ---------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- |
-| `value`          | `Value \| Value[] \| undefined`    | The controlled selected value(s).                                                             |
-| `setValue`       | `(next: Value \| Value[]) => void` | Called with the next selection: a bare `Value` in single-select, a `Value[]` in multi-select. |
-| `multiple`       | `boolean`                          | Whether multiple options can be selected.                                                     |
-| `setOpen`        | `(open: boolean) => void`          | Called to close the control after a single-select choice.                                     |
-| `isValueEqual`   | `(a: Value, b: Value) => boolean`  | Optional. Custom equality; defaults to `Object.is`.                                           |
-| `serializeValue` | `(value: Value) => string`         | Optional. Serializes a value for the hidden form field.                                       |
-| `itemToString`   | `(value: Value) => string`         | Optional. Resolves a display label when no option is registered for a value.                  |
-| `name`           | `string`                           | Optional. Hidden form-field name; enables native form submission.                             |
-| `disabled`       | `boolean`                          | Optional. Disables selection.                                                                 |
+| Option           | Type                              | Notes                                                                               |
+| ---------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
+| `values`         | `readonly Value[]`                | The selected values; `[]` when nothing is selected.                                 |
+| `setValues`      | `(next: Value[]) => void`         | Called with the next selection array (a one-element array on a single-select pick). |
+| `multiple`       | `boolean`                         | Whether multiple options can be selected.                                           |
+| `setOpen`        | `(open: boolean) => void`         | Called to close the control after a single-select choice.                           |
+| `isValueEqual`   | `(a: Value, b: Value) => boolean` | Optional. Custom equality; defaults to `Object.is`.                                 |
+| `serializeValue` | `(value: Value) => string`        | Optional. Serializes a value for the hidden form field.                             |
+| `itemToString`   | `(value: Value) => string`        | Optional. Resolves a display label when no option is registered for a value.        |
+| `name`           | `string`                          | Optional. Hidden form-field name; enables native form submission.                   |
+| `disabled`       | `boolean`                         | Optional. Disables selection.                                                       |
 
 ## Result
 
@@ -55,3 +55,30 @@ function useListboxSelection<Value = string>(
 | `labelFor`       | `(value: unknown) => string`        | Resolve a single value's display label.                            |
 | `optionCount`    | `number`                            | Number of currently-registered options.                            |
 | `hiddenFields`   | `ComponentChild[] \| null`          | Hidden `<input>`s for native form submission, or `null`.           |
+
+## normalizeSelectionProps
+
+`normalizeSelectionProps` is the pure helper that maps [Select](/docs/components/select)'s and [Combobox](/docs/components/combobox)'s public
+`value` / `defaultValue` / `onValueChange` props (discriminated on `multiple`,
+see [Select](/docs/components/select)'s Usage section) onto the array-shaped
+`values` / `setValues` that `useListboxSelection` consumes. Reach for it when
+building a custom control that wants the same single/multiple discriminated
+prop contract as the built-in components, feeding the result into your own
+`useListboxSelection` call.
+
+```ts
+import { normalizeSelectionProps } from 'hono-preact-ui';
+import type { SelectionProps, NormalizedSelection } from 'hono-preact-ui';
+
+function normalizeSelectionProps<Value>(
+  p: SelectionProps<Value>
+): NormalizedSelection<Value>;
+```
+
+`NormalizedSelection<Value>` always represents selection as an array:
+`values`/`defaultValues` are `readonly Value[]` (`undefined` values means
+uncontrolled), and `onValuesChange` wraps the caller's `onValueChange` so a
+single-mode caller still gets `Value | null` (`[] -> null`) while a
+multiple-mode caller gets the `Value[]` it passed in. Memoize the result
+per render: a single-mode `value` wraps into a fresh array each call, which
+would otherwise churn downstream callback identities.

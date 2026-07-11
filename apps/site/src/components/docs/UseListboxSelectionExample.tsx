@@ -41,12 +41,12 @@ interface UseListboxSelectionExampleProps {
 export function UseListboxSelectionExample({
   multiple = false,
 }: UseListboxSelectionExampleProps) {
-  const [value, setValue] = useState<string | string[] | undefined>(undefined);
+  const [values, setValues] = useState<string[]>([]);
   const [, setOpen] = useState(true);
 
   const sel = useListboxSelection<string>({
-    value,
-    setValue: (next) => setValue(next),
+    values,
+    setValues,
     multiple,
     setOpen,
     name: 'fruit',

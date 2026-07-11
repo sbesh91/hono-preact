@@ -364,15 +364,17 @@ export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
   });
 }
 
-export type MenuRadioGroupProps = {
-  value?: string;
-  defaultValue?: string;
-  onValueChange?: (value: string) => void;
+export type MenuRadioGroupProps<V extends string = string> = {
+  value?: V;
+  defaultValue?: V;
+  onValueChange?: (value: V) => void;
   render?: RenderProp;
   children?: ComponentChildren;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'value'>;
 
-export function MenuRadioGroup(props: MenuRadioGroupProps) {
+export function MenuRadioGroup<V extends string = string>(
+  props: MenuRadioGroupProps<V>
+) {
   const {
     value: valueProp,
     defaultValue,
@@ -381,13 +383,19 @@ export function MenuRadioGroup(props: MenuRadioGroupProps) {
     children,
     ...rest
   } = props;
-  const [value, setValue] = useControllableState<string | undefined>({
+  const [value, setValue] = useControllableState<V | undefined>({
     value: valueProp,
     defaultValue: defaultValue,
     onChange: (v) => v !== undefined && onValueChange?.(v),
   });
   const groupCtx = useMemo(
-    () => ({ value, setValue: (v: string) => setValue(v) }),
+    () => ({
+      value,
+      // The module-level group context erases the per-instance generic to
+      // string; this component owns the generic, so re-apply it at this one
+      // confined seam (mirrors Combobox.Value and useListboxSelection).
+      setValue: (v: string) => setValue(v as V),
+    }),
     [value, setValue]
   );
   const node = renderElement({

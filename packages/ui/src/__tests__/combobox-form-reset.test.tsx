@@ -5,9 +5,7 @@ import { ComboboxRoot, ComboboxInput } from '../combobox/combobox.js';
 
 afterEach(cleanup);
 
-function FruitCombobox(props: {
-  onValueChange: (v: string | string[]) => void;
-}) {
+function FruitCombobox(props: { onValueChange: (v: string | null) => void }) {
   return (
     <form>
       <ComboboxRoot
@@ -49,5 +47,18 @@ describe('Combobox form reset', () => {
     fireEvent.reset(container.querySelector('form')!);
     await act(async () => {});
     expect(input.value).toBe('');
+  });
+
+  it('reset with no defaultValue emits null in single mode', () => {
+    const onValueChange = vi.fn();
+    const { container } = render(
+      <form>
+        <ComboboxRoot name="fruit" value="cherry" onValueChange={onValueChange}>
+          <ComboboxInput />
+        </ComboboxRoot>
+      </form>
+    );
+    fireEvent.reset(container.querySelector('form')!);
+    expect(onValueChange).toHaveBeenCalledWith(null);
   });
 });

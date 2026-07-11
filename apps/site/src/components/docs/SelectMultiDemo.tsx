@@ -6,11 +6,7 @@ import { useState } from 'preact/hooks';
 export function SelectMultiDemo() {
   const [value, setValue] = useState<string[]>([]);
   return (
-    <Select.Root
-      multiple
-      value={value}
-      onValueChange={(v) => setValue(Array.isArray(v) ? v : [v])}
-    >
+    <Select.Root<string> multiple value={value} onValueChange={setValue}>
       <Select.Trigger class="docs-select-trigger">
         <Select.Value class="docs-select__value" placeholder="Pick toppings" />
         <span class="docs-select__chevron" aria-hidden="true">

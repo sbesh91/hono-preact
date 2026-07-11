@@ -42,7 +42,7 @@ function MenuBody({
         </P.GroupLabel>
         <P.RadioGroup
           value={task.status}
-          onValueChange={(v) => onPatch(task.id, { status: v as TaskStatus })}
+          onValueChange={(v) => onPatch(task.id, { status: v })}
         >
           {STATUSES.map((s) => (
             <P.RadioItem key={s.value} value={s.value} class={itemCls}>
@@ -58,9 +58,7 @@ function MenuBody({
         </P.GroupLabel>
         <P.RadioGroup
           value={task.priority}
-          onValueChange={(v) =>
-            onPatch(task.id, { priority: v as TaskPriority })
-          }
+          onValueChange={(v) => onPatch(task.id, { priority: v })}
         >
           {PRIORITIES.map((p) => (
             <P.RadioItem key={p.value} value={p.value} class={itemCls}>
