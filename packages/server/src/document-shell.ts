@@ -31,7 +31,7 @@ export type HeadStatic = {
  * `</head>`, then either threads `lang` into a Layout-owned `<html>` or wraps a
  * fragment in the framework's `<html lang>` shell.
  *
- * Pure string assembly — no streaming concerns — so it is unit-testable in
+ * Pure string assembly, no streaming concerns, so it is unit-testable in
  * isolation. The `</head>` injection is the one place coupled to the Layout's
  * markup; when the Layout owns the shell but emits no `</head>`, the head tags
  * would silently vanish, so we warn (see `warnMissingMarker`). A fragment with
@@ -64,6 +64,14 @@ export function assembleDocument(opts: {
    * broken page, so they count toward the missing-</head> warning below.
    */
   routeStyleSheets?: string[];
+  /**
+   * The app's global stylesheet URLs (framework-owned delivery via
+   * `css.global`): the auto-split residual in prod, the dev source URL in dev.
+   * Injected before the route sheets so route rules keep their documented
+   * tie-winning cascade position over the global sheet. Render-critical like
+   * routeStyleSheets (counts toward the missing-</head> warnings).
+   */
+  globalStyleSheets?: string[];
 }): string {
   const {
     html,
@@ -73,6 +81,7 @@ export function assembleDocument(opts: {
     preloadModules = [],
     routePreloadModules = [],
     routeStyleSheets = [],
+    globalStyleSheets = [],
   } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
@@ -114,6 +123,7 @@ export function assembleDocument(opts: {
 
   const styleTag = (href: string): string =>
     `<link ${toAttrs({ rel: 'stylesheet', href })} />`;
+  const globalStyleTags = globalStyleSheets.map(styleTag);
   const routeStyleTags = routeStyleSheets.map(styleTag);
 
   // Font preloads are render-critical resources (default High priority), so they
@@ -133,6 +143,7 @@ export function assembleDocument(opts: {
     ...fontPreloadTags,
     ...preloadTags,
     ...userHeadTags,
+    ...globalStyleTags,
     ...routeStyleTags,
   ].join('\n        ');
 
@@ -144,11 +155,13 @@ export function assembleDocument(opts: {
   const startsWithHtml = /^\s*<html(\s|>)/i.test(html);
 
   // Warn when the Layout would drop render-critical head content: the user's own
-  // head tags OR the route stylesheets. Framework preload hints still don't count
-  // (dropping a hint is acceptable; the Link header carries the closure).
+  // head tags OR the global/route stylesheets. Framework preload hints still
+  // don't count (dropping a hint is acceptable; the Link header carries the
+  // closure).
   if (
     startsWithHtml &&
-    (userHeadTags.length > 0 || routeStyleTags.length > 0) &&
+    (userHeadTags.length > 0 ||
+      routeStyleTags.length + globalStyleTags.length > 0) &&
     !html.includes('</head>')
   ) {
     warnMissingMarker(
@@ -159,24 +172,39 @@ export function assembleDocument(opts: {
   }
 
   // A fragment (no <html>) gets the framework's own <html lang> wrapper below,
-  // which has no <head> to inject into, so route stylesheets are dropped
+  // which has no <head> to inject into, so global/route stylesheets are dropped
   // silently. Modulepreload hints being dropped there is fine (see the guard
-  // above), but route stylesheets are render-critical: warn so this is
+  // above), but global/route stylesheets are render-critical: warn so this is
   // debuggable instead of shipping a route with no styles.
-  if (!startsWithHtml && routeStyleTags.length > 0) {
+  if (!startsWithHtml && routeStyleTags.length + globalStyleTags.length > 0) {
     warnMissingMarker(
       '</head>',
       'the rendered output is a fragment (no <html>), so the framework ' +
-        '<html> wrapper has no <head> and the matched route render-critical ' +
-        'stylesheet links were dropped; a route that relies on route-scoped ' +
-        'CSS must render a document (a Layout with <Head>), not a bare fragment'
+        '<html> wrapper has no <head> and the render-critical stylesheet ' +
+        'links (global and route CSS) were dropped; a route that relies on ' +
+        'global or route-scoped CSS must render a document (a Layout with ' +
+        '<Head>), not a bare fragment'
     );
   }
-  const inner = html.replace('</head>', `${headTags}\n      </head>`);
+  // A replacement FUNCTION, not a template string: `String.prototype.replace`
+  // expands `$&`/`$\``/`$'`/`$<name>` patterns in a string replacement, and
+  // `headTags` embeds user-derived content (page title, meta/link attrs from
+  // route modules). A title containing e.g. `$&` would otherwise duplicate
+  // the matched `</head>` into the output instead of rendering literally. A
+  // function return value is inserted verbatim, with no pattern expansion.
+  const inner = html.replace('</head>', () => `${headTags}\n      </head>`);
 
   return startsWithHtml
     ? lang != null
-      ? inner.replace(/<html(\s|>)/i, `<html lang="${escapeHtml(lang)}"$1`)
+      ? // Same hazard as the </head> injection above (a replacer function,
+        // not a template string, so `lang` cannot expand `$`-patterns); the
+        // captured trailing character (`\s` or `>`) is threaded through the
+        // callback's own argument instead of a literal `$1` for the same
+        // reason.
+        inner.replace(
+          /<html(\s|>)/i,
+          (_match, tail: string) => `<html lang="${escapeHtml(lang)}"${tail}`
+        )
       : inner
     : `<html lang="${escapeHtml(lang ?? 'en-US')}">\n${inner}\n</html>`;
 }

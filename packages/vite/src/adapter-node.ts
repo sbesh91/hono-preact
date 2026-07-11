@@ -36,16 +36,34 @@ export function nodeAdapter(): HonoPreactAdapter {
         `import { readFileSync } from 'node:fs';\n` +
         `import coreApp from ${JSON.stringify(ctx.coreAppModuleId)};\n` +
         `\n` +
-        // The modulepreload artifact (entry closure + per-route chunk map),
-        // written to the client build output by the framework's preload-manifest
-        // plugin. Read from disk once (resolvePreloadManifest memoizes), so the
-        // file is loaded lazily at the first render, not at import time.
-        // Missing/unreadable -> empty artifact -> no hints.
+        // The modulepreload artifact (entry closure + per-route chunk map,
+        // plus globalCss/routeCss, which are render-critical), written to the
+        // client build output by the framework's preload-manifest plugin.
+        // Read from disk once (resolvePreloadManifest memoizes on success),
+        // so the file is loaded lazily at the first render, not at import
+        // time.
+        //
+        // Guarded on PROD, the same gate the serve() boot below uses: `vite
+        // dev` loads this wrapper through the SSR module runner, where
+        // dist/client never exists yet (or, worse, holds a STALE build from
+        // before the dev server started -- reading it would serve hashed
+        // stylesheet URLs that 404 render-blockingly; see render.tsx's dev
+        // seam, which is the actual reason dev must never reach this read at
+        // all, not just skip the warn). PROD is a build-time constant Vite
+        // replaces statically, so the whole branch compiles away in dev.
+        //
+        // A real production read failure RETHROWS rather than degrading to
+        // `{}` here: resolvePreloadManifest's own catch is what should own
+        // the warn and the non-memoized retry, so a transient failure (e.g. a
+        // deploy racing this read) recovers on the next request instead of
+        // shipping every subsequent render unstyled for the process's
+        // lifetime.
         `installPreloadModules(() => {\n` +
+        `  if (!import.meta.env.PROD) return {};\n` +
         `  try {\n` +
         `    return JSON.parse(readFileSync('./dist/client/${PRELOAD_MANIFEST_FILE}', 'utf8'));\n` +
-        `  } catch {\n` +
-        `    return {};\n` +
+        `  } catch (err) {\n` +
+        `    throw new Error('[hono-preact] preload manifest read failed at ./dist/client/${PRELOAD_MANIFEST_FILE}: ' + (err instanceof Error ? err.message : String(err)));\n` +
         `  }\n` +
         `});\n` +
         `\n` +

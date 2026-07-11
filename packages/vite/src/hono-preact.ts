@@ -17,6 +17,21 @@ import {
   serverEntryPlugin,
 } from './server-entry.js';
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
+import { BASELINE_TARGETS } from './css-targets.js';
+
+export interface HonoPreactCssOptions {
+  /**
+   * Project-relative (or absolute) path to the app's global stylesheet. When
+   * set, the framework owns its delivery: it is bundled through the client
+   * build and injected into the SSR head (dev and prod), so the app must NOT
+   * also link it manually. Enables the build-time auto-split by default.
+   */
+  global?: string;
+  /** Default true (when `global` is set). Set false to deliver it unsplit. */
+  autoSplit?: boolean;
+  /** Minimum per-chunk scoped sheet size in bytes; smaller stays global. Default 1024. */
+  minSize?: number;
+}
 
 export interface HonoPreactOptions {
   /** Deployment target. Required. See hono-preact/adapter-cloudflare. */
@@ -60,6 +75,9 @@ export interface HonoPreactOptions {
    * @default 'virtual:hono-preact/client'
    */
   clientEntry?: string;
+
+  /** Framework-owned global stylesheet delivery and auto-split tuning. */
+  css?: HonoPreactCssOptions;
 }
 
 export function honoPreact(options: HonoPreactOptions): Plugin[] {
@@ -75,6 +93,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     appConfig = 'src/app-config.ts',
     serverDir = 'src/server',
     clientEntry = VIRTUAL_CLIENT_ENTRY_ID,
+    css,
   } = options ?? {};
 
   if (!adapter) {
@@ -84,6 +103,8 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
         'and pass `honoPreact({ adapter: cloudflareAdapter() })`.'
     );
   }
+
+  const cssGlobal = css?.global;
 
   const coreAppPath = generatedCoreAppAbsPath();
   const entryWrapperPath = generatedEntryWrapperAbsPath();
@@ -119,7 +140,18 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
         build: {
           target: 'esnext' as const,
           assetsDir: 'static',
+          // Framework-owned CSS minification: the same Lightning CSS engine the
+          // auto-splitter uses, so one parser/serializer owns all CSS semantics.
+          // Only when the user has not chosen a minifier themselves.
+          ...(userConfig.build?.cssMinify === undefined
+            ? { cssMinify: 'lightningcss' as const }
+            : {}),
         },
+        // Baseline-derived lowering targets, unless the user configured their
+        // own lightningcss options (theirs win wholesale to avoid partial merges).
+        ...(userConfig.css?.lightningcss === undefined
+          ? { css: { lightningcss: { targets: BASELINE_TARGETS } } }
+          : {}),
         environments: {
           client: {
             build: {
@@ -155,9 +187,15 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
   return [
     configPlugin,
     clientShimPlugin(clientEntry),
-    clientEntryPlugin({ routes }),
+    clientEntryPlugin({ routes, cssGlobal }),
     clientEntryContractPlugin(clientEntry),
-    preloadManifestPlugin({ routes }),
+    preloadManifestPlugin({
+      routes,
+      layout,
+      css: cssGlobal
+        ? { autoSplit: css?.autoSplit ?? true, minSize: css?.minSize ?? 1024 }
+        : undefined,
+    }),
     serverEntryPlugin({
       layout,
       routes,
@@ -167,6 +205,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       adapter,
       coreAppPath,
       entryWrapperPath,
+      cssGlobal,
     }),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),

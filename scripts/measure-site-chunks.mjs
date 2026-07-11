@@ -91,9 +91,11 @@ export function measureSiteBaseline(staticDir) {
 // Written by the vite client build next to `static/` (see
 // packages/vite/src/preload-manifest.ts). Its `routeCss` map gives, per route
 // pattern, the CSS asset URLs (`/static/<file>.css`) that route's chain
-// imports; the entry's own eagerly-loaded sheet (the global stylesheet linked
-// by the Layout, e.g. root-*.css) is deliberately excluded from every route's
-// list there, so it is identified below as the CSS asset no route references.
+// imports; its `globalCss` field lists the residual global stylesheet URLs
+// left over after css-auto-split (e.g. global-*.css), which every route loads
+// but no route's `routeCss` entry references. The global measurement below
+// unions `globalCss` with the unreferenced-file heuristic (deduped) so the
+// number stays exact even if a future change leaves an unreferenced stray.
 const PRELOAD_MANIFEST_FILE = '__hp-preload.json';
 
 function gzipMeasure(buf) {
@@ -115,7 +117,9 @@ export function measureSiteCss(staticDir) {
   const manifestPath = join(dirname(staticDir), PRELOAD_MANIFEST_FILE);
   if (!existsSync(staticDir) || !existsSync(manifestPath)) return null;
 
-  const { routeCss = {} } = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const { routeCss = {}, globalCss = [] } = JSON.parse(
+    readFileSync(manifestPath, 'utf8')
+  );
   const cssFile = (url) => url.replace(/^\/static\//, '');
 
   const referenced = new Set();
@@ -135,9 +139,19 @@ export function measureSiteCss(staticDir) {
     routes[pattern] = sumGzipMeasure(measures);
   }
 
-  const globalFiles = readdirSync(staticDir).filter(
+  // Explicit set (the manifest's own `globalCss` field) unioned with the
+  // unreferenced-file heuristic, deduped: exact even if a future change
+  // leaves an unreferenced stray that `globalCss` doesn't know about.
+  // Filter to files present on disk BEFORE counting, so `files` reports
+  // exactly the set the byte sums measured: a globalCss entry missing from
+  // a stale/partial base-ref build (client-size CI job) is skipped entirely,
+  // never counted with zero bytes.
+  const heuristicGlobal = readdirSync(staticDir).filter(
     (f) => f.endsWith('.css') && !referenced.has(f)
   );
+  const globalFiles = [
+    ...new Set([...globalCss.map(cssFile), ...heuristicGlobal]),
+  ].filter((f) => existsSync(join(staticDir, f)));
   const global = sumGzipMeasure(
     globalFiles.map((f) => gzipMeasure(readFileSync(join(staticDir, f))))
   );

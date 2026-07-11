@@ -1,37 +1,55 @@
 # Styling
 
-hono-preact ships CSS in two tiers: one global stylesheet you link yourself in the root Layout, and a stylesheet per route that you author as a plain CSS file and the framework discovers, builds, and injects into the SSR head for you. You never hand-write a `<link>` for a route's own styles.
+Write CSS the way you'd write it for any app: design tokens, Tailwind, `@font-face`, component rules, all in one stylesheet. Hand the framework that stylesheet and it takes care of delivery: every route gets a `<link>` for the styles it actually uses, with nothing to hand-split and nothing to wire up yourself.
 
-## The global stylesheet
+## One global stylesheet
 
-Design tokens, Tailwind, `@font-face`, and any rules that apply across every route (shared view-transition animations, for example) belong in one stylesheet linked from your root Layout. Import it with Vite's `?url` suffix so you get a hashed asset URL, then link it in `<Head>`:
+Point `css.global` at your stylesheet in `vite.config.ts`:
 
-```tsx
-// src/Layout.tsx
-import { ClientScript, Head } from 'hono-preact';
-import root from '@/styles/root.css?url';
-import type { ComponentChildren } from 'preact';
+```ts
+// vite.config.ts
+import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+import { defineConfig } from 'vite';
 
-export default function Layout({ children }: { children: ComponentChildren }) {
-  return (
-    <html lang="en">
-      <Head defaultTitle="My App">
-        <link rel="stylesheet" href={root} />
-      </Head>
-      <body>
-        <main id="app">{children}</main>
-        <ClientScript />
-      </body>
-    </html>
-  );
-}
+export default defineConfig({
+  plugins: [
+    honoPreact({
+      adapter: cloudflareAdapter(),
+      css: { global: 'src/styles/root.css' },
+    }),
+  ],
+});
 ```
 
-This sheet loads on every request, so its cost is paid by every page in the app.
+The framework injects it for you, in dev and in production: no manual `?url` import, no `<link>` in your Layout. Bring one stylesheet, and every page gets it.
 
-## Route-scoped CSS
+At build time the framework goes further: it looks at which rules in that stylesheet only ever apply to one route's chunk of JavaScript, and splits those rules out into a sheet delivered just for that route, render-blocking in the SSR head, exactly like a route sheet you split by hand. What's left behind, the residual, ships as the global sheet every route still loads. Scoped rules load after the global sheet, so they win any equal-specificity tie against it, the same cascade order a hand-split sheet would give you. You don't request this or opt into it per route; it's automatic, and it never removes a rule from your app, only moves where it's delivered from.
 
-A route's own styles belong in their own file, imported for its side effect from that route's view or layout module:
+| Option      | Type      | Default  | Description                                                                                                                                  |
+| ----------- | --------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `global`    | `string`  | required | Project-relative path to your global stylesheet, e.g. `'src/styles/root.css'`.                                                               |
+| `autoSplit` | `boolean` | `true`   | Split route-exclusive rules into per-route sheets. Set `false` to deliver the stylesheet unsplit.                                            |
+| `minSize`   | `number`  | `1024`   | Minimum size in bytes for a route's split-out rules. Below this, they stay in the global sheet rather than costing a route an extra request. |
+
+`css.global` must point at a file that exists; the framework throws a clear build error if it doesn't, telling you the path it checked.
+
+Head order is fixed: whatever your Layout or route renders into `<head>` itself (title, meta, any `<link>` you write by hand) comes first, then the global stylesheet, then route sheets. One consequence is worth knowing up front: because the global stylesheet lands later in the head than anything you hand-write there, it wins an equal-specificity tie against a stylesheet you link yourself. If you need to override a rule from the global stylesheet, the override belongs inside the global stylesheet itself (it's one file, so a later rule there wins the normal cascade way) or in a hand-split route sheet, which loads after it for the same reason.
+
+## How splitting decides what's exclusive
+
+A rule is scoped to a route only when every class it depends on shows up in exactly one route's built JavaScript, nowhere else. That's a strict bar on purpose: the framework would rather ship a rule as global than guess wrong and scope it to the wrong route.
+
+Two kinds of classes never clear that bar, and both fail safe by staying global:
+
+- **Classes built at runtime**, like `` `item-${status}` ``, don't appear anywhere as a literal string, so the framework can't see them.
+- **Classes that only appear in data**, like a CSS class name stored in a CMS field or a database row, aren't in any route's JavaScript at all.
+
+Either one alone is harmless: the rule just stays global, same as it always would have without splitting. The one case that can bite is a _double_ failure: a route builds a class name at runtime, **and** that same class name happens to appear as a literal string in exactly one other route's code. Now the framework sees a single, unambiguous owner, and it isn't the route that actually needed the rule at runtime. If you hit this, the fix is to either hand-split that rule into a route sheet yourself (below), or turn off auto-split for the stylesheet with `autoSplit: false`.
+
+## Hand-split route sheets
+
+Auto-split covers rules the framework can prove are exclusive to one route. For anything else, or when you'd rather be explicit, import a stylesheet from a route module for its side effect and it ships only on that route:
 
 ```tsx
 // src/pages/home.tsx
@@ -42,7 +60,7 @@ export default function Home() {
 }
 ```
 
-The same pattern works on a layout module, which scopes the sheet to every route under that layout:
+The same pattern on a layout module scopes the sheet to every route under that layout:
 
 ```tsx
 // src/components/DocsLayout.tsx
@@ -54,19 +72,13 @@ export default function DocsLayout({ children }: LayoutProps) {
 }
 ```
 
-No `?url` suffix and no manual `<link>`: a bare side-effect `import` is the whole contract. The framework follows each route's build-time import graph to find the CSS it pulls in and associates that stylesheet with the route.
+No `?url` suffix and no manual `<link>`: a bare side-effect `import` is the whole contract. The framework follows each route's build-time import graph to find the CSS it pulls in, injects a `<link rel="stylesheet">` for it after the global sheet (so it wins the same equal-specificity ties auto-split rules do), and carries it along on client-side navigation as part of the route's JS chunk.
 
-## How it works
-
-At request time, the SSR handler looks up the matched route's stylesheet and injects a `<link rel="stylesheet">` tag into `<head>`, after your Layout's own head tags (including the global sheet). Route rules therefore come later in source order than the global sheet, so they win equal-specificity cascade ties against it.
-
-The injected tag is a real stylesheet link, not a hint: it is render-blocking like any other `<link rel="stylesheet">`, so the route's styles are present for first paint with no flash of unstyled content. You don't opt into this per route; it happens for every route that has CSS in its import graph, and routes with none simply get no extra tag.
-
-On client-side navigation the route's CSS ships as part of its JS chunk (the bundler keeps the CSS import attached to the module that imports it), so switching routes loads the incoming route's stylesheet without any extra wiring on your part.
+Hand-split sheets and auto-split compose freely: nothing about importing `home.css` from `home.tsx` changes because `root.css` is also being split. Route sheets are always render-blocking, present for first paint with no flash of unstyled content, for the same reason the injected link is a real stylesheet link and not a hint.
 
 ## Keep centering in one `transform`
 
-A route sheet is plain CSS, so ordinary CSS gotchas still apply. The one that bites most often is centering. When a rule declares a standalone `translate` / `scale` / `rotate` property alongside a `transform` property, the production CSS minifier (Lightning CSS, used by Tailwind v4) keeps only the `transform` and drops the standalone one. So a rule that centers with `translate: -50% -50%` and animates with `transform: scale(...)` loses its centering in the production build, while `vite dev` (which does not run the minifier) still looks correct. Fold every component into a single `transform` so there is nothing for the minifier to drop.
+All framework CSS, whether it's your global stylesheet, an auto-split route sheet, or a hand-split one, goes through Lightning CSS as the production minifier, targeting the browsers Baseline Widely Available covers. One gotcha is worth knowing about ahead of time: when a rule declares a standalone `translate` / `scale` / `rotate` property alongside a `transform` property, the minifier keeps only `transform` and drops the standalone one. A rule that centers with `translate: -50% -50%` and animates with `transform: scale(...)` loses its centering in the production build, while `vite dev` (which doesn't run the minifier) still looks correct. Fold every component into a single `transform` so there's nothing for the minifier to drop.
 
 ```css
 /* Correct: translate and scale live in one transform, nothing is dropped */
@@ -89,6 +101,8 @@ A route sheet is plain CSS, so ordinary CSS gotchas still apply. The one that bi
   transform: scale(0.98);
 }
 ```
+
+If you've configured your own `cssMinify` or `css.lightningcss` in `vite.config.ts`, your settings win outright over the framework's defaults, including the Baseline browser targets, for CSS that goes through Vite's own asset pipeline. That carve-out doesn't extend to auto-split output: once `css.global` and `autoSplit` are on, every residual and route sheet the splitter emits is re-serialized through Lightning CSS with `minify: true` directly (not via Vite's `cssMinify` setting), so a custom `cssMinify` never opts split output out of minification.
 
 ## Preload critical fonts
 

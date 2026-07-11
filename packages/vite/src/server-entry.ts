@@ -25,6 +25,13 @@ export interface GenerateCoreAppModuleOptions {
    * without being attached to a route.
    */
   serverRegistryGlob: string | undefined;
+  /**
+   * Root-relative dev URL of the framework-owned global stylesheet (serve mode
+   * only; undefined in builds). The core app installs it so renderPage links
+   * the dev-served source directly, exactly what a hand-authored `?url` link
+   * did. Prod delivery reads the build artifact instead.
+   */
+  devGlobalCssUrl?: string;
 }
 
 export function generateCoreAppModule(
@@ -36,6 +43,7 @@ export function generateCoreAppModule(
     apiAbsPath,
     appConfigAbsPath,
     serverRegistryGlob,
+    devGlobalCssUrl,
   } = opts;
 
   const apiImport = apiAbsPath ? `import userApp from '${apiAbsPath}';\n` : '';
@@ -59,6 +67,11 @@ export function generateCoreAppModule(
     ? `import appConfig from '${appConfigAbsPath}';\n`
     : `const appConfig = { use: [] };\n`;
 
+  const devGlobalCssInstall = devGlobalCssUrl
+    ? `import { installDevGlobalCss } from 'hono-preact/server/internal/runtime';\n` +
+      `installDevGlobalCss([${JSON.stringify(devGlobalCssUrl)}]);\n`
+    : '';
+
   // The generated entry delegates all wiring to the framework-private
   // createServerEntry factory (loaders RPC, action POST, SSR catch-all, and the
   // optional api mount). The factory lives behind hono-preact/server/internal/
@@ -73,6 +86,7 @@ export function generateCoreAppModule(
   // loaders), surfaced as a named export with no extra collection work.
   return (
     `import { createServerEntry } from 'hono-preact/server/internal/runtime';\n` +
+    devGlobalCssInstall +
     `import Layout from '${layoutAbsPath}';\n` +
     `import routes from '${routesAbsPath}';\n` +
     apiImport +
@@ -276,6 +290,14 @@ export interface ServerEntryPluginOptions {
   adapter: HonoPreactAdapter;
   coreAppPath: string; // absolute path to write the core app module
   entryWrapperPath: string; // absolute path to write the adapter wrapper
+  /**
+   * Project-relative or absolute path to the app's global stylesheet
+   * (`honoPreact({ css: { global } })`). In serve mode the generated core
+   * app installs its root-relative dev URL via `installDevGlobalCss`, so
+   * renderPage links the dev-served source directly. Builds skip the
+   * install; prod delivery reads the build artifact instead.
+   */
+  cssGlobal?: string;
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
@@ -295,7 +317,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
     // Write generated files in `config` -- the earliest hook -- so the entry
     // wrapper exists before @cloudflare/vite-plugin's own `config` hook does
     // fs.existsSync on wrangler.jsonc `main`.
-    config(userConfig) {
+    config(userConfig, env) {
       const root = userConfig.root
         ? path.resolve(userConfig.root)
         : process.cwd();
@@ -333,12 +355,27 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
           '/**/*.server.{ts,tsx,js,jsx}'
         : undefined;
 
+      const devGlobalCssUrl =
+        env.command === 'serve' && opts.cssGlobal
+          ? '/' +
+            path
+              .relative(
+                root,
+                path.isAbsolute(opts.cssGlobal)
+                  ? opts.cssGlobal
+                  : path.resolve(root, opts.cssGlobal)
+              )
+              .split(path.sep)
+              .join('/')
+          : undefined;
+
       const source = generateCoreAppModule({
         layoutAbsPath,
         routesAbsPath,
         apiAbsPath,
         appConfigAbsPath,
         serverRegistryGlob,
+        devGlobalCssUrl,
       });
       fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
       fs.writeFileSync(opts.coreAppPath, source, 'utf8');
@@ -420,7 +457,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         const where = `${apiAbsPath}${r.line != null ? `:${r.line}` : ''}`;
         if (r.kind === 'notFound') {
           this.warn(
-            `[hono-preact] ${where}: app.notFound(...) will not fire — the ` +
+            `[hono-preact] ${where}: app.notFound(...) will not fire: the ` +
               `framework's renderPage handler matches every unmatched request. ` +
               `Move the behavior to a specific path, or accept that it won't fire.`
           );

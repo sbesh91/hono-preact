@@ -284,7 +284,7 @@ export function extractRouteChains(
         }
         if (content.hasCustomSlug) {
           warn(
-            `contentRoutes at ${parentPattern || '/'} uses a custom slug() — ` +
+            `contentRoutes at ${parentPattern || '/'} uses a custom slug(): ` +
               `cannot replicate it at build time; skipping its preload hints`
           );
           continue;
@@ -394,7 +394,7 @@ function collectStaticChunks(
 }
 
 /** The chunk-file closure of the client entry (already fetched eagerly). */
-function entryClosure(
+export function entryClosure(
   bundle: Record<string, RouteBundleChunkLike>
 ): Set<string> {
   const out = new Set<string>();

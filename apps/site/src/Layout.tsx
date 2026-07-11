@@ -1,5 +1,4 @@
 import { ClientScript, Head } from 'hono-preact';
-import root from '@/styles/root.css?url';
 import type { ComponentChildren } from 'preact';
 
 // Runs synchronously before first paint so a stored Light/Dark choice applies
@@ -13,7 +12,6 @@ export default function Layout({ children }: { children: ComponentChildren }) {
     <html lang="en">
       <Head defaultTitle="hono-preact">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
-        <link rel="stylesheet" href={root} />
         <link
           rel="alternate"
           type="text/plain"

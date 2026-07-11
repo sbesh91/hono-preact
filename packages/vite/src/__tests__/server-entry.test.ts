@@ -143,6 +143,30 @@ describe('generateCoreAppModule', () => {
     expect(src).toContain('const appConfig = { use: [] };');
     expect(src).toContain('appConfig,');
   });
+
+  it('installs the dev global css url when provided', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/proj/src/Layout.tsx',
+      routesAbsPath: '/proj/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+      devGlobalCssUrl: '/src/styles/root.css',
+    });
+    expect(src).toContain(
+      `import { installDevGlobalCss } from 'hono-preact/server/internal/runtime';`
+    );
+    expect(src).toContain(`installDevGlobalCss(["/src/styles/root.css"]);`);
+  });
+
+  it('emits nothing when dev global css url is absent', () => {
+    const src = generateCoreAppModule({
+      layoutAbsPath: '/proj/src/Layout.tsx',
+      routesAbsPath: '/proj/src/routes.ts',
+      apiAbsPath: undefined,
+      appConfigAbsPath: undefined,
+    });
+    expect(src).not.toContain('installDevGlobalCss');
+  });
 });
 
 describe('generated entry paths', () => {
@@ -362,9 +386,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     expect(fs.existsSync(coreAppPath)).toBe(true);
     expect(fs.existsSync(entryWrapperPath)).toBe(true);
@@ -417,15 +443,110 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const code = fs.readFileSync(coreAppPath, 'utf8');
     expect(code).toContain(
       `import userApp from '${path.join(tmp, 'src', 'api.ts')}';`
     );
     expect(code).toContain('api: userApp,');
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('config installs the dev global css url in serve mode', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src', 'styles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'styles', 'root.css'),
+      ':root { color-scheme: light dark; }\n'
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+      cssGlobal: 'src/styles/root.css',
+    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'serve' });
+
+    const code = fs.readFileSync(coreAppPath, 'utf8');
+    expect(code).toContain(
+      `import { installDevGlobalCss } from 'hono-preact/server/internal/runtime';`
+    );
+    expect(code).toContain(`installDevGlobalCss(["/src/styles/root.css"]);`);
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('config omits the dev global css install in build mode (double-delivery guard)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
+    fs.mkdirSync(path.join(tmp, 'src', 'styles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'src', 'styles', 'root.css'),
+      ':root { color-scheme: light dark; }\n'
+    );
+    const coreAppPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'core-app.tsx'
+    );
+    const entryWrapperPath = path.join(
+      tmp,
+      'node_modules',
+      '.vite',
+      'hono-preact',
+      'server-entry.tsx'
+    );
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
+      adapter: stubAdapter,
+      coreAppPath,
+      entryWrapperPath,
+      cssGlobal: 'src/styles/root.css',
+    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
+
+    const code = fs.readFileSync(coreAppPath, 'utf8');
+    expect(code).not.toContain('installDevGlobalCss');
 
     fs.rmSync(tmp, { recursive: true, force: true });
   });
@@ -461,9 +582,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     // Rollup's this.error throws; mimic that.
     const ctx = {
@@ -521,9 +644,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const ctx = {
       warn: () => {},
@@ -575,9 +700,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const ctx = {
       warn: () => {},
@@ -621,9 +748,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const ctx = {
       warn: () => {},
@@ -671,9 +800,11 @@ describe('serverEntryPlugin', () => {
       coreAppPath,
       entryWrapperPath,
     });
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'build' });
 
     const warnings: string[] = [];
     const ctx = {
@@ -789,9 +920,14 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
   }
 
   function drive(plugin: ReturnType<typeof serverEntryPlugin>, tmp: string) {
-    (plugin as { config?: (c: { root: string }) => void }).config?.({
-      root: tmp,
-    });
+    // Vite always passes the env as the hook's second argument; the dev
+    // watcher runs under `serve`, and the hook reads env.command for the
+    // dev global-css install, so the fake must match the real contract.
+    (
+      plugin as {
+        config?: (c: { root: string }, env: { command: string }) => void;
+      }
+    ).config?.({ root: tmp }, { command: 'serve' });
     const { server, restart, emit } = fakeDevServer();
     (
       plugin as { configureServer?: (s: typeof server) => void }

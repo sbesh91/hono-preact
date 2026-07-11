@@ -145,7 +145,10 @@ export default defineConfig((env) => ({
   },
   plugins: [
     highlightPlugin(),
-    honoPreact({ adapter: cloudflareAdapter() }),
+    honoPreact({
+      adapter: cloudflareAdapter(),
+      css: { global: 'src/styles/root.css' },
+    }),
     docsIndexPlugin(nav, docsDir),
     {
       name: 'emit-llms-txt',

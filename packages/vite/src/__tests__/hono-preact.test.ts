@@ -26,6 +26,13 @@ describe('honoPreact adapter requirement', () => {
   });
 });
 
+// css.global's exists+isFile validation now lives in clientEntryPlugin's
+// configResolved (resolved against config.root, not process.cwd()); see
+// packages/vite/src/__tests__/client-entry.test.ts's "clientEntryPlugin
+// css.global validation" describe block. honoPreact() itself no longer
+// validates cssGlobal synchronously, since configResolved only runs once
+// Vite resolves the config.
+
 describe('honoPreact plugin assembly', () => {
   it('emits the framework plugins in pipeline order, then the adapter plugins, then preact', () => {
     const plugins = honoPreact({ adapter: fakeAdapter() }) as NamedPlugin[];

@@ -135,6 +135,38 @@ describe('assembleDocument: route stylesheets', () => {
     });
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it('injects global stylesheets after user head tags and before route sheets', () => {
+    const html = assembleDocument({
+      html: '<html><head><meta charset="utf-8"/></head><body></body></html>',
+      head: {},
+      globalStyleSheets: ['/static/global-a.css'],
+      routeStyleSheets: ['/static/home-b.css'],
+    });
+    const global = html.indexOf('href="/static/global-a.css"');
+    const route = html.indexOf('href="/static/home-b.css"');
+    expect(global).toBeGreaterThan(-1);
+    expect(route).toBeGreaterThan(global);
+    expect(html).toContain(
+      '<link rel="stylesheet" href="/static/global-a.css" />'
+    );
+  });
+
+  it('warns when a fragment render would drop the global sheet', () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (msg: string) => warnings.push(msg);
+    try {
+      assembleDocument({
+        html: '<div>fragment</div>',
+        head: {},
+        globalStyleSheets: ['/static/global-a.css'],
+      });
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings.join('\n')).toContain('render-critical');
+  });
 });
 
 describe('assembleDocument: font preloads', () => {
@@ -174,5 +206,73 @@ describe('assembleDocument: font preloads', () => {
       appConfig: { fonts: ['/static/regular-abc.woff2'] },
     });
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('assembleDocument: full head ordering', () => {
+  it('orders the five injected segments: font preload, modulepreload, user head tag, global stylesheet, route stylesheet', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { metas: [{ name: 'description', content: 'A page' }] },
+      appConfig: { fonts: ['/static/regular-abc.woff2'] },
+      preloadModules: ['/static/a.js'],
+      globalStyleSheets: ['/static/global-a.css'],
+      routeStyleSheets: ['/static/home-b.css'],
+    });
+
+    const fontIdx = out.indexOf(
+      '<link rel="preload" as="font" type="font/woff2" href="/static/regular-abc.woff2" crossorigin="" />'
+    );
+    const preloadIdx = out.indexOf(
+      '<link rel="modulepreload" href="/static/a.js" fetchpriority="low" />'
+    );
+    const metaIdx = out.indexOf('<meta name="description" content="A page" />');
+    const globalIdx = out.indexOf(
+      '<link rel="stylesheet" href="/static/global-a.css" />'
+    );
+    const routeIdx = out.indexOf(
+      '<link rel="stylesheet" href="/static/home-b.css" />'
+    );
+
+    expect(fontIdx).toBeGreaterThan(-1);
+    expect(preloadIdx).toBeGreaterThan(fontIdx);
+    expect(metaIdx).toBeGreaterThan(preloadIdx);
+    expect(globalIdx).toBeGreaterThan(metaIdx);
+    expect(routeIdx).toBeGreaterThan(globalIdx);
+  });
+});
+
+describe('assembleDocument: $-pattern safety in head injection', () => {
+  // String.prototype.replace expands `$&`/`$``/`$'`/`$<name>` in a STRING
+  // replacement; a title (or other head-derived content) containing one of
+  // these sequences must render literally, not be treated as a replacement
+  // pattern. A regression here would duplicate/mangle the </head> marker or
+  // corrupt the <html lang> tag depending on which literal sneaks through.
+  it('a title containing "$&" renders literally and does not duplicate </head>', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { title: 'Weird $& Title' },
+    });
+    expect(out).toContain('<title>Weird $&amp; Title</title>');
+    expect(out.split('</head>').length - 1).toBe(1);
+  });
+
+  it('a title containing "$`" renders literally', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { title: 'Weird $` Title' },
+    });
+    expect(out).toContain('<title>Weird $` Title</title>');
+    expect(out.split('</head>').length - 1).toBe(1);
+  });
+
+  it('a lang value containing "$1" renders literally in the <html lang> tag', () => {
+    const out = assembleDocument({
+      html: shell,
+      head: { lang: 'en-$1' },
+    });
+    expect(out).toContain('<html lang="en-$1"');
+    // Not corrupted into swallowing the captured trailing character.
+    expect(out).not.toContain('<html lang="en-$1">>');
   });
 });
