@@ -28,9 +28,10 @@ async function* activityStream({
   }
 }
 
-// The projects route node declares `use: requireSession`; binding resolves
-// that gate for the shell's loader RPCs from this declared pattern.
-const route = serverRoute('/demo/projects');
+// The projects route node declares `use: requireSession`; the subtree
+// binding resolves that gate for the shell's loader RPCs from this
+// declared pattern.
+const route = serverRoute('/demo/projects/*');
 
 export const serverLoaders = {
   default: route.loader(shellLoader),

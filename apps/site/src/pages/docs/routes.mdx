@@ -104,7 +104,7 @@ export const serverLoaders = {
 };
 ```
 
-The bound pattern must be a real route in your table; a `serverRoute('/typo')` that matches no route fails loudly at startup rather than running under no gates. Layout paths are bindable patterns too, but only when the layout has an index child or a server module of its own, letting a registry module inherit a layout subtree's gates by binding the layout's path (e.g. `serverRoute('/demo/projects')`). A layout with neither, or a grouping node that declares `use` and `children` but no `view` or `layout`, produces no pattern of its own; bind a descendant leaf's pattern instead, whose composed chain still carries every gate the node declares. The folder is configurable via the Vite plugin's `serverDir` option (default `src/server`).
+The bound pattern must be a real route in your table; a `serverRoute('/typo')` that matches no route fails loudly at startup rather than running under no gates. Any node with child routes (a layout, or a grouping node that declares only `use` and `children`) is bindable as a subtree: `serverRoute('/demo/projects/*')` resolves the chain every descendant inherits. A layout's exact path is also bindable when the layout has an index child or a server module of its own; that spelling is the page scope, the pattern's deepest composed chain. A subtree pattern on a childless route fails loudly at startup. The folder is configurable via the Vite plugin's `serverDir` option (default `src/server`).
 
 ## Mounting
 

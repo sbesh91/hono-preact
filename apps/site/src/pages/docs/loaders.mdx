@@ -372,7 +372,8 @@ A loader in `layout.server.*` is scoped to the layout's matched location. It doe
 // src/pages/movies/layout.server.ts
 import { serverRoute } from 'hono-preact';
 
-const route = serverRoute('/movies');
+// Subtree scope: the gates every /movies child inherits.
+const route = serverRoute('/movies/*');
 
 export const serverLoaders = {
   activity: route.loader(
@@ -415,9 +416,16 @@ Navigating between child routes does not unmount the layout, so the streaming su
 
 ### Binding a layout's loaders
 
-A layout node's path is a route pattern, so a layout server module binds with `serverRoute('/movies')` the same way a leaf module binds its own pattern. Binding resolves the page-layer `use` chain from the declared pattern on every loader RPC: a guard declared on the layout node (or inherited from an ancestor) gates the layout's data endpoints, not just its render. Inside the layout, a bound loader resolves its `location` to the layout's own matched path with the wildcard remainder stripped, so `ctx.location.pathParams` carries exactly the layout pattern's params.
+A layout server module has two bindable spellings, and they name different scopes:
 
-A layout path and its empty-path index child share one pattern string. Guard resolution for that string uses the deepest node's composed chain: the layout's inherited and own `use`, plus the index child's own `use` when the index child declares one. A loader bound to a layout path always runs at least the layout's gates; an index child that declares its own `use` adds those gates to the bound loader's RPC as well.
+- `serverRoute('/movies')` is the **page scope**: the deepest composed chain for that pattern string. A layout and its empty-path index child share the string, and guard resolution uses the deepest node's chain, so this spelling runs the layout's inherited and own `use` plus the index child's own `use` when the index child declares one. Bind it when the module's units belong to the index page.
+- `serverRoute('/movies/*')` is the **subtree scope**: the layout node's own composed chain (ancestors outer-first, then the node's own `use`), exactly the gates every descendant of `/movies` inherits. The index child's additions are not included. Bind it when the module carries shell data that serves every child route, which is the usual case for a layout module.
+
+Both spellings resolve the `use` chain from the declared pattern on every loader RPC, never from the request URL. The subtree pattern names the tree node at `/movies` and resolves its chain statically at startup; it is not a per-request deepest-match. A subtree pattern on a childless route fails loudly at startup.
+
+Inside the layout, a bound loader resolves its `location` to the layout's own matched path with the wildcard remainder stripped, so `ctx.location.pathParams` carries exactly the bound pattern's prefix params under either spelling.
+
+In dev, binding the exact path while the index child's own `use` widens the chain logs a one-time hint naming both spellings.
 
 ## The loader context
 
