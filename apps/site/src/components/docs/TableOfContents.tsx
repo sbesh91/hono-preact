@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { skipNextNavTransition } from 'hono-preact';
 import type { DocHeading } from '../../llms/docs-index.js';
 
 // Right-rail "On this page" nav. Reads the current route's headings (passed in
@@ -63,9 +62,9 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
   }, [headings]);
 
   // Smooth-scroll in-page AND put `#section` in the URL so it is shareable.
-  // The framework starts a view transition whenever location.href changes, which
-  // would flash the whole page; skipNextNavTransition() suppresses it for this
-  // one URL write. Honors modifier-clicks so "open in new tab" still works.
+  // Hash-only URL changes are not route changes, so the framework never runs
+  // a view transition for this write. Honors modifier-clicks so "open in new
+  // tab" still works.
   const onLinkClick = (event: MouseEvent, id: string) => {
     if (
       event.metaKey ||
@@ -79,14 +78,9 @@ export function TableOfContents({ headings }: { headings: DocHeading[] }) {
     const el = document.getElementById(id);
     if (!el) return;
     event.preventDefault();
-    // Write the hash so the section is shareable, and suppress the framework's
-    // view transition for that URL change. Only arm the one-shot skip when
-    // setActiveId will actually re-render (a section change): a no-op setActiveId
-    // schedules no render flush to consume the flag, so arming it then would
-    // strand it and suppress a later navigation's transition instead. When the
-    // hash is already current there is nothing to write.
+    // Write the hash so the section is shareable; skip the write when it is
+    // already current.
     if (location.hash !== `#${id}`) {
-      if (activeId !== id) skipNextNavTransition();
       history.pushState(null, '', `#${id}`);
     }
     setActiveId(id);
