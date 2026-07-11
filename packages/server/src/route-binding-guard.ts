@@ -43,25 +43,35 @@ export type RouteBindingCheckContext = {
    */
   routeUseByPattern: ReadonlyMap<string, ReadonlyArray<unknown>>;
   /**
-   * Dev-only observer: called for each exact-path binding whose pattern
-   * also has a sibling subtree key with a DIFFERENT chain (the deepest-wins
+   * Dev-only observer: called for each exact-path binding whose sibling
+   * subtree key carries a strict PREFIX of the exact chain (the deepest-wins
    * exact entry was widened by the index child's own `use`). Purely
    * diagnostic, never feeds guard resolution. Omit in prod for zero cost.
    */
   onAliasedBinding?: (info: AliasedBindingInfo) => void;
 };
 
-function sameChain(
-  a: ReadonlyArray<unknown>,
-  b: ReadonlyArray<unknown>
+// True when `exact` extends `subtree` with extra members appended: the index
+// child declared its own `use` on top of the layout's composed chain (the
+// aliasing signal). `composeUse` appends, so index-child widening is always a
+// prefix extension.
+function chainStrictlyExtends(
+  exact: ReadonlyArray<unknown>,
+  subtree: ReadonlyArray<unknown>
 ): boolean {
-  return a.length === b.length && a.every((m, i) => m === b[i]);
+  return (
+    exact.length > subtree.length && subtree.every((m, i) => m === exact[i])
+  );
 }
 
-// Dev-only observational check behind ctx.onAliasedBinding. The exact entry
-// differing from the sibling subtree entry IS the aliasing signal: both come
-// from the same collectRouteUse walk, and they diverge exactly when the
-// index child (or a same-string deeper node) declared its own `use`.
+// Dev-only observational check behind ctx.onAliasedBinding. Both entries come
+// from the same collectRouteUse walk; the exact chain strictly extending the
+// sibling subtree chain is the aliasing signal (index-child widening), and
+// only that direction is reported. When the chains diverge the other way (a
+// literal `path: '*'` catch-all child overwrote the subtree key with a WIDER
+// chain), the exact binding already runs exactly the page's own chain, no
+// spelling would improve it, and the aliasing message's explanation would be
+// inverted, so we stay silent.
 function maybeReportAliasedBinding(
   kind: BoundUnitKind,
   name: string,
@@ -73,7 +83,7 @@ function maybeReportAliasedBinding(
   const exact = ctx.routeUseByPattern.get(routeId);
   const subtree = ctx.routeUseByPattern.get(subtreeId);
   if (exact === undefined || subtree === undefined) return;
-  if (sameChain(exact, subtree)) return;
+  if (!chainStrictlyExtends(exact, subtree)) return;
   ctx.onAliasedBinding({ kind, name, routeId, subtreeId });
 }
 
@@ -222,7 +232,10 @@ export function warnAliasedLayoutBinding(
       `layout's chain. For subtree-scoped (layout shell) data, bind ` +
       `serverRoute('${info.subtreeId}') instead: the subtree scope runs the ` +
       `layout node's own composed chain without the index child's additions. ` +
-      `Keep '${info.routeId}' if this ${info.kind} should run the index ` +
-      `page's full gate chain.`
+      `Under a registered route table the '${info.subtreeId}' spelling is ` +
+      `typed only when the node has a non-index descendant route; without ` +
+      `one, keep the page-scope binding and enforce index-only checks inside ` +
+      `the ${info.kind}. Keep '${info.routeId}' if this ${info.kind} should ` +
+      `run the index page's full gate chain.`
   );
 }

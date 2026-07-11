@@ -235,7 +235,7 @@ describe('aliasing diagnostic (onAliasedBinding)', () => {
     return { seen, cb: (info: AliasedBindingInfo) => seen.push(info) };
   };
 
-  it('reports an exact binding whose sibling subtree chain differs', async () => {
+  it('reports an exact binding whose chain strictly extends the sibling subtree chain', async () => {
     const { seen, cb } = collect();
     await assertRouteBindingsMatchMount(
       [
@@ -255,6 +255,49 @@ describe('aliasing diagnostic (onAliasedBinding)', () => {
     expect(seen).toEqual([
       { kind: 'loader', name: 'shell', routeId: '/app', subtreeId: '/app/*' },
     ]);
+  });
+
+  it('does not report when the subtree chain is the wider one (catch-all collision)', async () => {
+    // A literal `path: '*'` child overwrites the subtree key with the child's
+    // own composed chain, so the SUBTREE chain extends the exact chain. The
+    // exact binding already runs exactly the page's own chain; no aliasing.
+    const { seen, cb } = collect();
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/app', {
+          __moduleKey: 'm',
+          serverLoaders: { shell: bound('/app') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g1]],
+          ['/app/*', [g1, g2]],
+        ]),
+        onAliasedBinding: cb,
+      }
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it('does not report same-length chains that differ (no prefix extension)', async () => {
+    const { seen, cb } = collect();
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/app', {
+          __moduleKey: 'm',
+          serverLoaders: { shell: bound('/app') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g2]],
+          ['/app/*', [g1]],
+        ]),
+        onAliasedBinding: cb,
+      }
+    );
+    expect(seen).toEqual([]);
   });
 
   it('does not report when the two chains are identical', async () => {
@@ -352,6 +395,10 @@ describe('warnAliasedLayoutBinding', () => {
       expect(msg).toContain("'/app'");
       expect(msg).toContain("serverRoute('/app/*')");
       expect(msg).toContain('page scope');
+      // The wildcard hint carries its typing caveat: under a registered route
+      // table the subtree spelling compiles only with a non-index descendant.
+      expect(msg).toContain('typed only when the node has a non-index');
+      expect(msg).toContain('inside the loader');
     } finally {
       warn.mockRestore();
     }
