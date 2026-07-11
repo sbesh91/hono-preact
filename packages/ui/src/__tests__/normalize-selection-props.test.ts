@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { normalizeSelectionProps } from '../listbox/selection.js';
+import {
+  normalizeSelectionProps,
+  type SelectionProps,
+} from '../listbox/selection.js';
 
 describe('normalizeSelectionProps', () => {
   it('single uncontrolled: values undefined, empty defaults, no emitter', () => {
@@ -55,5 +58,35 @@ describe('normalizeSelectionProps', () => {
     expect(cb).toHaveBeenLastCalledWith(['a']);
     norm.onValuesChange?.([]);
     expect(cb).toHaveBeenLastCalledWith([]);
+  });
+
+  // TypeScript's discriminated union rejects a scalar value/defaultValue
+  // alongside `multiple: true` at compile time; an untyped JS caller can
+  // still reach this shape at runtime, which is what these two tests
+  // simulate via a cast at the untrusted-input boundary.
+  it('multi mode rejects a scalar value with a sharp error, not a crash inside useListboxSelection', () => {
+    const props = {
+      multiple: true,
+      value: 'a',
+    } as unknown as SelectionProps<string>;
+    expect(() => normalizeSelectionProps<string>(props)).toThrow(
+      'Select/Combobox: multiple mode requires an array value'
+    );
+  });
+
+  it('multi mode rejects a scalar defaultValue with a sharp error', () => {
+    const props = {
+      multiple: true,
+      defaultValue: 'a',
+    } as unknown as SelectionProps<string>;
+    expect(() => normalizeSelectionProps<string>(props)).toThrow(
+      'Select/Combobox: multiple mode requires an array defaultValue'
+    );
+  });
+
+  it('multi mode still accepts an omitted value/defaultValue (uncontrolled)', () => {
+    expect(() =>
+      normalizeSelectionProps<string>({ multiple: true })
+    ).not.toThrow();
   });
 });

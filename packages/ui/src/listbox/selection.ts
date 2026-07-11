@@ -69,16 +69,27 @@ function wrapOnValueChange<Value>(
 
 // Pure: maps the public discriminated props onto the internal array shape.
 // Narrowing on `p.multiple` discriminates the union, so no casts are needed.
-// Callers memoize the result on `[multiple, value, defaultValue]` only
-// (excluding onValueChange): the fresh wrapper array a single-mode `value`
-// produces would otherwise churn downstream callback identities every
-// render, and an inline onValueChange handler would defeat that
-// memoization since it mints a fresh identity every render. Use
-// useStableOnValuesChange for the callback instead.
+// Throws on the one shape mismatch TypeScript can't catch for untyped JS
+// callers: a scalar `value`/`defaultValue` passed alongside `multiple: true`
+// would otherwise reach `values.some` deep inside useListboxSelection and
+// fail far from the misuse. Callers memoize the result on
+// `[multiple, value, defaultValue]` only (excluding onValueChange): the fresh
+// wrapper array a single-mode `value` produces would otherwise churn
+// downstream callback identities every render, and an inline onValueChange
+// handler would defeat that memoization since it mints a fresh identity every
+// render. Use useStableOnValuesChange for the callback instead.
 export function normalizeSelectionProps<Value>(
   p: SelectionProps<Value>
 ): NormalizedSelection<Value> {
   if (p.multiple) {
+    if (p.value !== undefined && !Array.isArray(p.value)) {
+      throw new Error('Select/Combobox: multiple mode requires an array value');
+    }
+    if (p.defaultValue !== undefined && !Array.isArray(p.defaultValue)) {
+      throw new Error(
+        'Select/Combobox: multiple mode requires an array defaultValue'
+      );
+    }
     return {
       multiple: true,
       values: p.value,
