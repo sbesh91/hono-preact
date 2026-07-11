@@ -73,7 +73,11 @@ export interface RouteBundleChunkLike {
 
 function joinRoutePath(parentPath: string, childPath: string): string {
   if (parentPath === '') return childPath;
-  return childPath === '' ? parentPath : parentPath + '/' + childPath;
+  if (childPath === '') return parentPath;
+  if (parentPath === '/') {
+    return childPath.startsWith('/') ? childPath : '/' + childPath;
+  }
+  return parentPath + '/' + childPath;
 }
 
 function commonDirPrefix(keys: readonly string[]): string {

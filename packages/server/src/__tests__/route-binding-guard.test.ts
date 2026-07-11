@@ -6,6 +6,7 @@ import {
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
 } from '../route-binding-guard.js';
+import { defineRoutes, defineServerMiddleware } from '@hono-preact/iso';
 import type { ServerRoute } from '@hono-preact/iso';
 
 // A route-bound export carries a non-enumerable `__routeId`; mirror that here.
@@ -224,6 +225,61 @@ describe('subtree (wildcard) bindings', () => {
     await expect(
       assertRegistryRouteBindingsValid(registry, ctxOf([['/reports', []]]))
     ).rejects.toThrow(/bound to route '\/nope\/\*', which is not a route/);
+  });
+});
+
+describe('root-layout bindings (real manifest)', () => {
+  // These run against a real defineRoutes manifest rather than stub
+  // ServerRoutes: the point is that the runtime keys (serverRoutes paths +
+  // routeUse patterns) agree with the typed '/x' spelling for children of a
+  // root '/' node, so the boot checks accept exactly what the types accept.
+  const noopView = () => Promise.resolve({ default: () => null });
+  const noopLayout = () => Promise.resolve({ default: () => null });
+  const gate = defineServerMiddleware(async (_c, next) => next());
+
+  const manifestFor = (server?: () => Promise<unknown>) =>
+    defineRoutes([
+      {
+        path: '/',
+        layout: noopLayout,
+        use: [gate],
+        children: [
+          { path: '', view: noopView },
+          { path: 'x', view: noopView, ...(server ? { server } : {}) },
+        ],
+      },
+    ]);
+
+  const ctxFor = (m: ReturnType<typeof manifestFor>) => ({
+    routeUseByPattern: new Map(m.routeUse.map((r) => [r.path, r.use])),
+  });
+
+  it("mount accepts serverRoute('/x') colocated under a root layout", async () => {
+    const mod = {
+      __moduleKey: 'pages/x',
+      serverLoaders: { data: bound('/x') },
+    };
+    const m = manifestFor(async () => mod);
+    const ctx = ctxFor(m);
+    await expect(
+      assertRouteBindingsMatchMount(m.serverRoutes, ctx)
+    ).resolves.toBeUndefined();
+    // The accepted binding's exact key resolves the root node's gate chain,
+    // so the RPC path runs the gate rather than an empty chain.
+    expect(ctx.routeUseByPattern.get('/x')).toEqual([gate]);
+  });
+
+  it("registry accepts bindings to '/x' and the root subtree '/*'", async () => {
+    const m = manifestFor();
+    const registry = [
+      async () => ({
+        __moduleKey: 'src/server/reg',
+        serverLoaders: { data: bound('/x'), shell: bound('/*') },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(registry, ctxFor(m))
+    ).resolves.toBeUndefined();
   });
 });
 

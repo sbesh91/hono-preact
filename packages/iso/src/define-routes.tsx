@@ -141,13 +141,22 @@ const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
 
 // Join a parent route path with a child segment, mirroring the tree walk:
 // a root parent ('') yields the child as-is; an empty child segment (a
-// layout-group wildcard leaf) contributes nothing; otherwise the child is
-// appended under a single '/'. This is the join `walkRouteTree` threads through
-// both emitters, so flat (absolute) and inner (relative) paths stay consistent.
-// `validate` keeps its own join rule (display-path with a leading slash).
+// layout-group wildcard leaf or index child) contributes nothing; a '/'
+// parent joins its children as top-level absolute paths (the root reset:
+// a child 'x' or '/x' keys as '/x', never '//x'); otherwise the child is
+// appended under a single '/'. This is the one join every tree walker
+// threads (walkRouteTree, collectServerRoutes, collectRouteUse), and it
+// mirrors the type-level `Here` in internal/typed-routes.ts, so runtime
+// pattern keys equal the type-derived spellings for every tree shape,
+// including a root '/' layout or grouping node. `validate` keeps its own
+// join rule (display-path with a leading slash).
 function joinRoutePath(parentPath: string, childPath: string): string {
   if (parentPath === '') return childPath;
-  return childPath === '' ? parentPath : parentPath + '/' + childPath;
+  if (childPath === '') return parentPath;
+  if (parentPath === '/') {
+    return childPath.startsWith('/') ? childPath : '/' + childPath;
+  }
+  return parentPath + '/' + childPath;
 }
 
 // Compose inherited page-layer `use` (ancestors outer-first) with a node's own
@@ -530,9 +539,9 @@ function deriveLayoutLocation(
 // Per-walker emit hooks for `walkRouteTree`. The fold builds every component
 // and decides the branch; each walker supplies only how a built component
 // becomes its output entry. `layoutGroup` is handed the group component once
-// and must register it at BOTH the bare path and the `/*` wildcard (sharing the
-// one component reference) so a navigation crossing between them is a single
-// matched child, not a remount.
+// and must register it at BOTH the bare path and the `subtreePatternOf`
+// wildcard (sharing the one component reference) so a navigation crossing
+// between them is a single matched child, not a remount.
 type RouteEmitter = {
   view: (component: ComponentType<ViewProps>, path: string) => void;
   layoutGroup: (component: ComponentType<ViewProps>, path: string) => void;
@@ -583,16 +592,10 @@ function walkRouteTree(
         here
       );
     } else if (r.children) {
-      // Bare grouping: thread the prefix down and carry `use`. Collapse a root
-      // '/' to '' so descendants don't pick up a doubled slash; only the
-      // absolute top-level walk can ever produce a bare '/' here.
-      walkRouteTree(
-        r.children,
-        viewCache,
-        emit,
-        here === '/' ? '' : here,
-        ownUse
-      );
+      // Bare grouping: thread the prefix down and carry `use`. A root '/'
+      // prefix is handled by joinRoutePath's root reset, so descendants
+      // never pick up a doubled slash.
+      walkRouteTree(r.children, viewCache, emit, here, ownUse);
     }
   }
 }
@@ -625,7 +628,7 @@ export function buildInnerRoutes(
         nodes.push(h(Route, { path, component: asRouteComponent(component) }));
         nodes.push(
           h(Route, {
-            path: path + '/*',
+            path: subtreePatternOf(path),
             component: asRouteComponent(component),
           })
         );
@@ -657,7 +660,7 @@ function flattenTree(
     layoutGroup: (component, path) => {
       const key = keyFor(component);
       out.push({ path, component, key });
-      out.push({ path: path + '/*', component, key });
+      out.push({ path: subtreePatternOf(path), component, key });
     },
   });
   return out;
