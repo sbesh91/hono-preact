@@ -1,4 +1,4 @@
-import type { ServerRoute } from '@hono-preact/iso';
+import { subtreePatternOf, type ServerRoute } from '@hono-preact/iso';
 
 /**
  * A route-bound loader/action stamps its declared route pattern onto the export
@@ -22,6 +22,61 @@ function readExports(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+export type BoundUnitKind = 'loader' | 'action';
+
+export type AliasedBindingInfo = {
+  kind: BoundUnitKind;
+  name: string;
+  /** The exact pattern the unit is bound to (the page scope). */
+  routeId: string;
+  /** The sibling subtree pattern (the subtree scope). */
+  subtreeId: string;
+};
+
+export type RouteBindingCheckContext = {
+  /**
+   * Every routeUse pattern mapped to its composed page-use chain
+   * (`new Map(routes.routeUse.map((r) => [r.path, r.use]))`). Key presence
+   * validates bindings (`byPattern` fails open on a miss, so a bound
+   * pattern must be a real key); the chain values feed the dev-only
+   * aliasing diagnostic.
+   */
+  routeUseByPattern: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  /**
+   * Dev-only observer: called for each exact-path binding whose pattern
+   * also has a sibling subtree key with a DIFFERENT chain (the deepest-wins
+   * exact entry was widened by the index child's own `use`). Purely
+   * diagnostic, never feeds guard resolution. Omit in prod for zero cost.
+   */
+  onAliasedBinding?: (info: AliasedBindingInfo) => void;
+};
+
+function sameChain(
+  a: ReadonlyArray<unknown>,
+  b: ReadonlyArray<unknown>
+): boolean {
+  return a.length === b.length && a.every((m, i) => m === b[i]);
+}
+
+// Dev-only observational check behind ctx.onAliasedBinding. The exact entry
+// differing from the sibling subtree entry IS the aliasing signal: both come
+// from the same collectRouteUse walk, and they diverge exactly when the
+// index child (or a same-string deeper node) declared its own `use`.
+function maybeReportAliasedBinding(
+  kind: BoundUnitKind,
+  name: string,
+  routeId: string,
+  ctx: RouteBindingCheckContext
+): void {
+  if (!ctx.onAliasedBinding || routeId.endsWith('/*')) return;
+  const subtreeId = subtreePatternOf(routeId);
+  const exact = ctx.routeUseByPattern.get(routeId);
+  const subtree = ctx.routeUseByPattern.get(subtreeId);
+  if (exact === undefined || subtree === undefined) return;
+  if (sameChain(exact, subtree)) return;
+  ctx.onAliasedBinding({ kind, name, routeId, subtreeId });
+}
+
 /**
  * Fail closed at boot if any route-bound loader/action declares a route other
  * than the one its module is registered on.
@@ -40,31 +95,52 @@ function readExports(value: unknown): Record<string, unknown> | null {
  * Bare units (no `__routeId`) are skipped: they resolve page-use by request URL
  * and carry no binding to check.
  *
+ * A module mounted on a children-bearing node may alternatively bind its
+ * subtree pattern (route.path + '/*'), which must exist as a routeUse key; a
+ * wildcard on a childless path fails here rather than resolving an empty
+ * chain at request time.
+ *
  * NOTE: framework-private. The only intended consumer is the generated server
  * entry, which awaits this before serving the loaders RPC and action POST paths.
  */
 export async function assertRouteBindingsMatchMount(
-  serverRoutes: ReadonlyArray<ServerRoute>
+  serverRoutes: ReadonlyArray<ServerRoute>,
+  ctx: RouteBindingCheckContext
 ): Promise<void> {
   await Promise.all(
     serverRoutes.map(async (route) => {
       // Structural read of a user-defined module's exports (a sanctioned cast
       // boundary); only the server-unit containers and their `__routeId` are read.
       const mod = (await route.server()) as SelfModule;
+      const subtreeId = subtreePatternOf(route.path);
       for (const [container, kind] of CONTAINERS) {
         const exports = readExports(mod[container]);
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
           const routeId = (value as RouteBoundExport).__routeId;
-          if (typeof routeId === 'string' && routeId !== route.path) {
+          if (typeof routeId !== 'string') continue;
+          if (routeId === route.path) {
+            maybeReportAliasedBinding(kind, name, routeId, ctx);
+            continue;
+          }
+          if (routeId === subtreeId) {
+            if (ctx.routeUseByPattern.has(subtreeId)) continue;
             throw new Error(
-              `Route-bound ${kind} '${name}' is bound to route '${routeId}', but its ` +
-                `module is registered on route '${route.path}'. A route-bound ${kind} must ` +
-                `use serverRoute('${route.path}') to match the route it is mounted on; ` +
-                `otherwise it resolves its page-level \`use\` (auth) chain from the wrong ` +
-                `route. Bind it to '${route.path}', or move the module to '${routeId}'.`
+              `Route-bound ${kind} '${name}' binds the subtree pattern '${subtreeId}', ` +
+                `but route '${route.path}' has no child routes, so no subtree entry ` +
+                `exists and the binding would resolve an empty page-level \`use\` ` +
+                `chain. Bind serverRoute('${route.path}') for the route itself, or ` +
+                `give '${route.path}' children to make its subtree bindable.`
             );
           }
+          throw new Error(
+            `Route-bound ${kind} '${name}' is bound to route '${routeId}', but its ` +
+              `module is registered on route '${route.path}'. A route-bound ${kind} must ` +
+              `use serverRoute('${route.path}') (the page scope) or ` +
+              `serverRoute('${subtreeId}') (the subtree scope, when the route has child ` +
+              `routes) to match the route it is mounted on; otherwise it resolves its ` +
+              `page-level \`use\` (auth) chain from the wrong route.`
+          );
         }
       }
     })
@@ -78,11 +154,11 @@ export async function assertRouteBindingsMatchMount(
  * A registry module is not attached to a route node, so a route-bound unit in
  * it resolves its page-level `use` (auth) chain by `byPattern(__routeId)`. That
  * lookup fails OPEN (empty chain) on a miss, so a `__routeId` that does not name
- * a real route pattern would run the unit under NO gates. `routeUse` carries an
- * entry for every matchable route (see iso `collectRouteUse`), so we require the
- * `__routeId` to be one of those patterns; a real route always resolves its
- * composed gate chain, and a typo / stale pattern fails loudly here instead of
- * silently dropping auth at request time.
+ * a real route pattern would run the unit under NO gates. routeUse carries an
+ * entry for every bindable pattern, exact and subtree (see iso
+ * `collectRouteUse`), so we require the `__routeId` to be one of those keys; a
+ * real pattern always resolves its composed gate chain, and a typo / stale
+ * pattern fails loudly here instead of silently dropping auth at request time.
  *
  * Bare units (no `__routeId`) are route-less and skipped; they resolve page-use
  * by request URL.
@@ -92,7 +168,7 @@ export async function assertRouteBindingsMatchMount(
  */
 export async function assertRegistryRouteBindingsValid(
   registry: ReadonlyArray<() => Promise<unknown>>,
-  validRoutePatterns: ReadonlySet<string>
+  ctx: RouteBindingCheckContext
 ): Promise<void> {
   await Promise.all(
     registry.map(async (load) => {
@@ -104,16 +180,19 @@ export async function assertRegistryRouteBindingsValid(
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
           const routeId = (value as RouteBoundExport).__routeId;
-          if (typeof routeId === 'string' && !validRoutePatterns.has(routeId)) {
+          if (typeof routeId !== 'string') continue;
+          if (!ctx.routeUseByPattern.has(routeId)) {
             throw new Error(
               `Route-bound ${kind} '${name}' in the src/server registry is bound to ` +
                 `route '${routeId}', which is not a route in your route table. A ` +
                 `serverRoute('${routeId}') unit must target a real route pattern so it ` +
                 `resolves that route's page-level \`use\` (auth) chain; otherwise it would ` +
                 `run under no gates. Fix the pattern to match a route in routes.ts (an ` +
-                `exact pattern, e.g. '/movies/:id'), or move the unit to that route's module.`
+                `exact pattern like '/movies/:id', or a subtree pattern like '/movies/*' ` +
+                `for a node with child routes), or move the unit to that route's module.`
             );
           }
+          maybeReportAliasedBinding(kind, name, routeId, ctx);
         }
       }
     })

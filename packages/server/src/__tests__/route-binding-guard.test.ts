@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
+  type RouteBindingCheckContext,
 } from '../route-binding-guard.js';
 import type { ServerRoute } from '@hono-preact/iso';
 
@@ -11,6 +12,10 @@ const bound = (routeId: string, fn: () => unknown = async () => 'ok') =>
 
 const routeOf = (path: string, mod: Record<string, unknown>): ServerRoute =>
   ({ path, ancestors: [], server: async () => mod }) as unknown as ServerRoute;
+
+const ctxOf = (
+  entries: ReadonlyArray<[string, ReadonlyArray<unknown>]>
+): RouteBindingCheckContext => ({ routeUseByPattern: new Map(entries) });
 
 describe('assertRouteBindingsMatchMount', () => {
   it('passes when every route-bound unit matches its mount path', async () => {
@@ -22,7 +27,7 @@ describe('assertRouteBindingsMatchMount', () => {
       }),
     ];
     await expect(
-      assertRouteBindingsMatchMount(routes)
+      assertRouteBindingsMatchMount(routes, ctxOf([['/movies/:id', []]]))
     ).resolves.toBeUndefined();
   });
 
@@ -35,7 +40,7 @@ describe('assertRouteBindingsMatchMount', () => {
       }),
     ];
     await expect(
-      assertRouteBindingsMatchMount(routes)
+      assertRouteBindingsMatchMount(routes, ctxOf([['/movies/:id', []]]))
     ).resolves.toBeUndefined();
   });
 
@@ -47,7 +52,9 @@ describe('assertRouteBindingsMatchMount', () => {
         serverActions: { rate: bound('/movies') },
       }),
     ];
-    await expect(assertRouteBindingsMatchMount(routes)).rejects.toThrow(
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/movies/:id', []]]))
+    ).rejects.toThrow(
       /action 'rate' is bound to route '\/movies', but its module is registered on route '\/movies\/:id'/
     );
   });
@@ -59,7 +66,9 @@ describe('assertRouteBindingsMatchMount', () => {
         serverLoaders: { default: bound('/somewhere/else') },
       }),
     ];
-    await expect(assertRouteBindingsMatchMount(routes)).rejects.toThrow(
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/movies/:id', []]]))
+    ).rejects.toThrow(
       /Route-bound loader 'default' is bound to route '\/somewhere\/else'/
     );
   });
@@ -67,14 +76,17 @@ describe('assertRouteBindingsMatchMount', () => {
   it('ignores modules with no server units', async () => {
     const routes = [routeOf('/x', { __moduleKey: 'm' })];
     await expect(
-      assertRouteBindingsMatchMount(routes)
+      assertRouteBindingsMatchMount(routes, ctxOf([['/x', []]]))
     ).resolves.toBeUndefined();
   });
 });
 
 describe('assertRegistryRouteBindingsValid', () => {
   const registryOf = (mod: Record<string, unknown>) => [async () => mod];
-  const patterns = new Set(['/reports', '/reports/:id']);
+  const ctx = ctxOf([
+    ['/reports', []],
+    ['/reports/:id', []],
+  ]);
 
   it('passes for route-less registry modules (bare units)', async () => {
     const registry = registryOf({
@@ -83,13 +95,13 @@ describe('assertRegistryRouteBindingsValid', () => {
       serverActions: { export: async () => 'ok' },
     });
     await expect(
-      assertRegistryRouteBindingsValid(registry, patterns)
+      assertRegistryRouteBindingsValid(registry, ctx)
     ).resolves.toBeUndefined();
   });
 
   it('passes for an empty registry', async () => {
     await expect(
-      assertRegistryRouteBindingsValid([], patterns)
+      assertRegistryRouteBindingsValid([], ctx)
     ).resolves.toBeUndefined();
   });
 
@@ -100,7 +112,7 @@ describe('assertRegistryRouteBindingsValid', () => {
       serverActions: { archive: bound('/reports/:id') },
     });
     await expect(
-      assertRegistryRouteBindingsValid(registry, patterns)
+      assertRegistryRouteBindingsValid(registry, ctx)
     ).resolves.toBeUndefined();
   });
 
@@ -110,7 +122,7 @@ describe('assertRegistryRouteBindingsValid', () => {
       serverLoaders: { totals: bound('/nope') },
     });
     await expect(
-      assertRegistryRouteBindingsValid(registry, patterns)
+      assertRegistryRouteBindingsValid(registry, ctx)
     ).rejects.toThrow(
       /Route-bound loader 'totals' in the src\/server registry is bound to route '\/nope', which is not a route/
     );
@@ -122,9 +134,93 @@ describe('assertRegistryRouteBindingsValid', () => {
       serverActions: { archive: bound('/reports/:id/extra') },
     });
     await expect(
-      assertRegistryRouteBindingsValid(registry, patterns)
+      assertRegistryRouteBindingsValid(registry, ctx)
     ).rejects.toThrow(
       /Route-bound action 'archive'.*is not a route in your route table/s
     );
+  });
+});
+
+describe('subtree (wildcard) bindings', () => {
+  it('mount accepts <path>/* when the subtree key exists', async () => {
+    const routes = [
+      routeOf('/movies', {
+        __moduleKey: 'm',
+        serverLoaders: { shell: bound('/movies/*') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(
+        routes,
+        ctxOf([
+          ['/movies', []],
+          ['/movies/*', []],
+        ])
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('mount rejects <path>/* on a childless route (fail closed)', async () => {
+    const routes = [
+      routeOf('/movies/:id', {
+        __moduleKey: 'm',
+        serverLoaders: { shell: bound('/movies/:id/*') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/movies/:id', []]]))
+    ).rejects.toThrow(
+      /binds the subtree pattern '\/movies\/:id\/\*', but route '\/movies\/:id' has no child routes/
+    );
+  });
+
+  it('mount still rejects a wildcard naming a DIFFERENT route', async () => {
+    const routes = [
+      routeOf('/movies', {
+        __moduleKey: 'm',
+        serverLoaders: { shell: bound('/other/*') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(
+        routes,
+        ctxOf([
+          ['/movies', []],
+          ['/movies/*', []],
+        ])
+      )
+    ).rejects.toThrow(
+      /is bound to route '\/other\/\*', but its module is registered on route '\/movies'/
+    );
+  });
+
+  it('registry accepts a subtree binding whose key exists', async () => {
+    const registry = [
+      async () => ({
+        __moduleKey: 'src/server/reports',
+        serverLoaders: { totals: bound('/reports/*') },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(
+        registry,
+        ctxOf([
+          ['/reports', []],
+          ['/reports/*', []],
+        ])
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('registry rejects a subtree binding with no such key', async () => {
+    const registry = [
+      async () => ({
+        __moduleKey: 'src/server/reports',
+        serverLoaders: { totals: bound('/nope/*') },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(registry, ctxOf([['/reports', []]]))
+    ).rejects.toThrow(/bound to route '\/nope\/\*', which is not a route/);
   });
 });

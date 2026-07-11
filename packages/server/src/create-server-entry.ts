@@ -19,6 +19,7 @@ import {
 import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
+  type RouteBindingCheckContext,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -131,14 +132,18 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   //
   // The registry check rides along: a `serverRoute(...)`-bound loader/action in
   // a src/server module resolves its gate chain by `byPattern(__routeId)`, which
-  // fails open, so we require the bound route to be a real pattern (one every
-  // `routeUse` entry covers). A stale/typo'd pattern fails the boot closed
-  // rather than running the unit under no gates.
-  const validRoutePatterns = new Set(routes.routeUse.map((r) => r.path));
+  // fails open, so we require the bound route to be a real pattern. It keys off
+  // the routeUse map, which now includes subtree patterns, so a registry unit
+  // may bind either an exact route or a childful route's subtree. A
+  // stale/typo'd pattern fails the boot closed rather than running the unit
+  // under no gates.
+  const bindingCheckContext: RouteBindingCheckContext = {
+    routeUseByPattern: new Map(routes.routeUse.map((r) => [r.path, r.use])),
+  };
   const runBootChecks = () =>
     Promise.all([
-      assertRouteBindingsMatchMount(routes.serverRoutes),
-      assertRegistryRouteBindingsValid(serverRegistry, validRoutePatterns),
+      assertRouteBindingsMatchMount(routes.serverRoutes, bindingCheckContext),
+      assertRegistryRouteBindingsValid(serverRegistry, bindingCheckContext),
     ]).then(() => undefined);
   let cachedRouteBindingCheck: Promise<void> | null = null;
   const routeBindingCheck = () =>
