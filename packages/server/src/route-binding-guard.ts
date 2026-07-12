@@ -233,7 +233,7 @@ export function warnAliasedLayoutBinding(
   warned.add(key);
   console.warn(
     `hono-preact: ${info.kind} '${info.name}' is bound to '${info.routeId}', ` +
-      `the page scope for that pattern: its RPC runs the deepest composed ` +
+      `the page scope for that pattern: it resolves the deepest composed ` +
       `chain, which includes the index child's own 'use' on top of the ` +
       `layout's chain. For subtree-scoped (layout shell) data, bind ` +
       `serverRoute('${info.subtreeId}') instead: the subtree scope runs the ` +
