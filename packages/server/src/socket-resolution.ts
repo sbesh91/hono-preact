@@ -126,9 +126,11 @@ export interface SocketsHandlerOptions {
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
    * Resolve a socket's moduleKey to its owning route path so that
-   * `resolvePageUse` receives the correct path. When the moduleKey is not
-   * found in the route tree (a bare `defineSocket` not attached to a route
-   * node) the resolver returns `undefined` and the handler falls back to
+   * `resolvePageUse` receives the correct path when the def carries no
+   * declared `__routeId` (bare `defineSocket`/`defineRoom`); a stamped
+   * declared pattern takes precedence. When the moduleKey is not found in the
+   * route tree (a bare `defineSocket` not attached to a route node) the
+   * resolver returns `undefined` and the handler falls back to
    * `SOCKETS_RPC_PATH`, which matches no route pattern, so `resolvePageUse`
    * returns `[]` and the socket gets app-use + def-use only.
    */
@@ -156,7 +158,10 @@ export async function resolveGuardDenied(opts: {
    * Path params the guard chain can read via `ctx.location.pathParams`. Rooms
    * pass their server-resolved room-key params here (so a route-node/room guard
    * can read e.g. `ctx.location.pathParams.roomId`); plain sockets pass `{}`
-   * (the `/__sockets` endpoint is query-string only, with no param wire).
+   * (the `/__sockets` endpoint is query-string only, with no param wire). A
+   * declared route binding does not change this: binding selects the use
+   * chain, never the param wire, so a guard on a param-bearing bound pattern
+   * still sees `{}` for plain sockets.
    */
   pathParams?: Record<string, string>;
 }): Promise<boolean> {
@@ -282,14 +287,19 @@ export async function resolveConnection(
 
   if (!def) return { kind: 'unknown' };
 
-  // Resolve the owning route path from the moduleKey (server-derived, not
-  // client-supplied). A def whose moduleKey is not in the route tree falls
-  // back to SOCKETS_RPC_PATH, which matches no route pattern, so
-  // resolvePageUse returns [] and the def gets app-use + def-use only.
+  // The def's declared pattern (serverRoute(r).socket/.room stamps __routeId)
+  // wins when present: the boot binding guard validates it against the module
+  // mount (or the route table for src/server registry modules) before the
+  // entry serves, so the byPattern lookup cannot fail open for a bound def.
+  // The module-mount derivation is the fallback for bare defs; a bare def
+  // whose moduleKey is not in the route tree falls back to SOCKETS_RPC_PATH,
+  // which matches no route pattern, so resolvePageUse returns [] and the def
+  // gets app-use + def-use only.
   const routePath =
-    moduleKey && opts.resolveRoutePath
+    def.__routeId ??
+    (moduleKey && opts.resolveRoutePath
       ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
-      : SOCKETS_RPC_PATH;
+      : SOCKETS_RPC_PATH);
 
   // `'channel' in def` narrows `def` to a room, so the room branch carries the
   // resolved `roomKey` with no non-null assertion and the socket branch carries

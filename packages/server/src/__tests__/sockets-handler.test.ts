@@ -7,7 +7,11 @@ import {
   defineSocket,
   type SocketDef,
 } from '@hono-preact/iso';
-import type { RoomDef } from '@hono-preact/iso/internal';
+import {
+  _defineRouteSocket,
+  _defineRouteRoom,
+  type RoomDef,
+} from '@hono-preact/iso/internal';
 import {
   installWebSocketUpgrader,
   __resetWebSocketUpgraderForTesting,
@@ -1135,5 +1139,150 @@ describe('socketsHandler: dev budget warning threads through to warnIfOverForwar
     const ws = lastWs();
     await events.onOpen?.(new Event('open'), ws as never);
     expect(ws.closes).toHaveLength(0);
+  });
+});
+
+describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)', () => {
+  const denyMiddleware = defineServerMiddleware(async (_ctx) => {
+    const { deny } = await import('@hono-preact/iso');
+    throw deny('forbidden', 403);
+  });
+
+  it('a registry-module socket bound to a guarded route runs that route gates (attacker model)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/admin', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    // Registry module: not in the route tree, so the mount derivation yields
+    // undefined. Before this fix the connection resolved SOCKETS_RPC_PATH and
+    // ran NO page gates; the declared '/admin' binding must select them.
+    const resolvePageUse = (path: string) =>
+      path === '/admin' ? [denyMiddleware] : [];
+
+    const registry = new Map([['src/server/rt::feed', def]]);
+    app = makeApp(registry, undefined, resolvePageUse, () => undefined);
+    await getRequest('src/server/rt', 'feed');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('a registry-module room bound to a guarded route runs that route gates (attacker model)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const onJoinSpy = vi.fn();
+    const channel = defineChannel('board/:boardId')<{ n: number }>();
+    const def = _defineRouteRoom('/admin', channel, {
+      onJoin: onJoinSpy,
+    }) as unknown as RoomDef<unknown, unknown, unknown, unknown, unknown>;
+
+    const resolvePageUse = (path: string) =>
+      path === '/admin' ? [denyMiddleware] : [];
+
+    const localApp = new Hono();
+    localApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry: new Map(),
+        rooms: new Map([['src/server/rt::board', def]]),
+        resolvePageUse,
+        resolveRoutePath: () => undefined,
+      })
+    );
+    // A valid room-key param is required so the connection is denied by the
+    // guard (the thing under test), not by a failed room-key resolution (which
+    // also closes WS_DENY_CODE but proves nothing about route precedence).
+    await localApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('src/server/rt')}&${SOCKET_NAME_PARAM}=board&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({ boardId: 'demo' }))}`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(onJoinSpy).not.toHaveBeenCalled();
+  });
+
+  it('the declared pattern wins over the mount derivation (subtree spelling)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/admin/*', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const resolved: string[] = [];
+    const resolvePageUse = (path: string) => {
+      resolved.push(path);
+      return [];
+    };
+
+    // The mount derivation says '/admin' (the exact page scope); the declared
+    // subtree spelling must win. This is the one route-attached case where the
+    // two chains observably differ (the boot guard forces exact declarations
+    // to equal the mount).
+    const registry = new Map([['pages/admin::feed', def]]);
+    app = makeApp(registry, undefined, resolvePageUse, () => '/admin');
+    await getRequest('pages/admin', 'feed');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(resolved).toEqual(['/admin/*']);
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(ws.closes).toHaveLength(0);
+  });
+
+  it('bare defs keep the mount derivation and the SOCKETS_RPC_PATH fallback', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const def = defineSocket<never, never>({}) as unknown as SocketDef<
+      never,
+      never,
+      undefined
+    >;
+    const resolved: string[] = [];
+    const resolvePageUse = (path: string) => {
+      resolved.push(path);
+      return [];
+    };
+
+    // Mounted module: bare defs still resolve via the mount.
+    app = makeApp(
+      new Map([['pages/chat::feed', def]]),
+      undefined,
+      resolvePageUse,
+      (mk) => (mk === 'pages/chat' ? '/chat' : undefined)
+    );
+    await getRequest('pages/chat', 'feed');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+    expect(resolved).toEqual(['/chat']);
+
+    // Route-less registry module: terminal fallback unchanged.
+    resolved.length = 0;
+    app = makeApp(
+      new Map([['src/server/rt::feed', def]]),
+      undefined,
+      resolvePageUse,
+      () => undefined
+    );
+    await getRequest('src/server/rt', 'feed');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+    expect(resolved).toEqual([SOCKETS_RPC_PATH]);
   });
 });
