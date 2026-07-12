@@ -156,13 +156,14 @@ export async function resolveGuardDenied(opts: {
   moduleKey: string;
   name: string;
   /**
-   * Path params the guard chain can read via `ctx.location.pathParams`. Rooms
-   * pass their server-resolved room-key params here (so a route-node/room guard
-   * can read e.g. `ctx.location.pathParams.roomId`); plain sockets pass `{}`
-   * (the `/__sockets` endpoint is query-string only, with no param wire). A
-   * declared route binding does not change this: binding selects the use
-   * chain, never the param wire, so a guard on a param-bearing bound pattern
-   * still sees `{}` for plain sockets.
+   * Path params the guard chain can read via `ctx.location.pathParams`. A
+   * ROOM passes its server-resolved channel-key params here (so a
+   * route-node/room guard can read e.g. `ctx.location.pathParams.roomId`). A
+   * route-BOUND socket (`serverRoute(r).socket`, `__routeId` set) passes its
+   * validated route params, resolved from the `SOCKET_KEY_PARAM` wire; a
+   * missing required slot denies the connection (4403) before the guard runs,
+   * so the guard never sees a partially-resolved bound socket. A COLOCATED
+   * or bare socket (no `__routeId`) has no param wire and passes `{}`.
    */
   pathParams?: Record<string, string>;
 }): Promise<boolean> {

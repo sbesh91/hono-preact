@@ -81,7 +81,11 @@ This reverses doc text the binding PR just wrote:
 
 ## Breaking-change surface
 
-No released behavior changes: the entire `serverRoute(r).socket/.room` real binding is new in this unreleased PR, so the socket `params` wire and room congruence are hardening a feature nobody has shipped against. The type changes are additive: `SocketRef`'s third slot defaults to `{}`, and the `data` factory's second arg is optional to read. The `SOCKET_ROOM_PARAM` → `SOCKET_KEY_PARAM` rename is an internal contract constant, not a public export.
+The socket-side changes are non-breaking for published users: `serverRoute(r).socket/.room` real binding is new in the unreleased base PR (#274), so the socket `params` wire is hardening a feature nobody has shipped against. `SocketRef`'s `Params` slot defaults to `{}`, so every existing `SocketRef<In, Out>` reference and `defineSocket` call stays source-compatible; the `data` factory's second argument is optional to read, so existing one-arg factories keep working. The `SOCKET_ROOM_PARAM` -> `SOCKET_KEY_PARAM` rename is an internal contract constant, not a public export.
+
+**Colocated-room boot congruence IS a released-behavior break.** `defineRoom` colocation shipped in v0.9, before this branch existed. An app already on v0.9/v0.10 with a room colocated on a param-bearing route, whose channel does not carry that route's params (for example `/board/:id` next to `channel('board/:boardId')`), booted fine before this change and now fails to boot: the new route-⊆-channel congruence check in `route-binding-guard.ts` runs against the effective owning route for every room, and colocation is explicitly in scope (Scope note 2), not just explicit `serverRoute(r).room` binding. This is a hard boot error, not a silent behavior change: it fails loud and closed with an actionable rename hint naming the offending param and channel. Two escape hatches: rename the channel or route param so the names match, or move the room into a `src/server` registry module with no `serverRoute` binding (a bare registry room carries no `__routeId`, is route-independent, and is skipped by the congruence check entirely). A colocated room on a param-less route is unaffected, since the check early-returns when the route has no required params; that is also why this break is easy to miss when reasoning about the diff from the export surface alone.
+
+This congruence break REQUIRES an entry in the v0.11 release notes.
 
 ## Rejected alternatives
 
