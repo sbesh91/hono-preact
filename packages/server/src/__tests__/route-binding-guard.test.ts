@@ -648,6 +648,51 @@ describe('room route/channel param congruence', () => {
       assertRegistryRouteBindingsValid(registry, ctxOf([]))
     ).resolves.toBeUndefined();
   });
+
+  // The channel may be finer-grained than the route (channel params ⊇ route
+  // params): a route bound to '/board/:id' may key its channel on a nested
+  // resource like a thread, as long as it still carries the route's own
+  // params. This must not throw, and the advisory must report only the
+  // ROUTE's params, not the channel's extras.
+  it('passes when the channel carries params beyond the route (finer-grained channel)', async () => {
+    const roomMod = async () => ({
+      serverRooms: {
+        cursors: {
+          __routeId: '/board/:id',
+          channel: { name: 'board/:id/thread/:threadId' },
+        },
+      },
+    });
+    const seen: Array<{ name: string; routeId: string; params: string[] }> = [];
+    await expect(
+      assertRegistryRouteBindingsValid([roomMod], {
+        routeUseByPattern: new Map([['/board/:id', []]]),
+        onRoomParamBinding: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([
+      { name: 'cursors', routeId: '/board/:id', params: ['id'] },
+    ]);
+  });
+
+  // A param-less route (e.g. '/chat') has no route params to satisfy, so the
+  // congruence check early-returns: no throw, and the advisory never fires
+  // (there is nothing to report a correspondence for).
+  it('does not throw or fire the advisory for a param-less route', async () => {
+    const roomMod = async () => ({
+      serverRooms: {
+        cursors: { __routeId: '/chat', channel: { name: 'chat/:msgId' } },
+      },
+    });
+    const seen: Array<{ name: string; routeId: string; params: string[] }> = [];
+    await expect(
+      assertRegistryRouteBindingsValid([roomMod], {
+        routeUseByPattern: new Map([['/chat', []]]),
+        onRoomParamBinding: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([]);
+  });
 });
 
 describe('warnAliasedLayoutBinding', () => {

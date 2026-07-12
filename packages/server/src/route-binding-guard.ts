@@ -161,9 +161,11 @@ export function warnRoomParamBinding(
   warned.add(key);
   console.warn(
     `hono-preact: room '${info.name}' bound to '${info.routeId}': route ` +
-      `param(s) ${info.params.join(', ')} are satisfied by the channel key of ` +
-      `the same name. Confirm the route and channel denote the same resource; ` +
-      `the room's guard authorizes on the channel key, not the page URL.`
+      `param${info.params.length > 1 ? 's' : ''} ${info.params.join(', ')} ` +
+      `${info.params.length > 1 ? 'are' : 'is'} satisfied by the channel key ` +
+      `of the same name. Confirm the route and channel denote the same ` +
+      `resource; the room's guard authorizes on the channel key, not the ` +
+      `page URL.`
   );
 }
 
