@@ -1286,3 +1286,149 @@ describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)',
     expect(resolved).toEqual([SOCKETS_RPC_PATH]);
   });
 });
+
+describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)', () => {
+  it('resolves route params from the r= wire and feeds them to the guard and the data factory', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardSeenId: string | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      guardSeenId = mwCtx.location.pathParams.id;
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<
+      never,
+      never,
+      Record<string, string>,
+      Record<string, string>
+    >('/board/:id', {
+      data: (_c, params) => params,
+      open(socket) {
+        openSpy(socket.data);
+      },
+    }) as unknown as SocketDef<never, never, Record<string, string>>;
+
+    const resolvePageUse = (path: string) =>
+      path === '/board/:id' ? [captureGuard] : [];
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(registry, undefined, resolvePageUse, () => undefined);
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'b1' }))}`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(guardSeenId).toBe('b1');
+    expect(openSpy).toHaveBeenCalledWith({ id: 'b1' });
+  });
+
+  it('denies 4403 when the r= wire omits a required route param', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/board/:id', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(
+      registry,
+      undefined,
+      () => [],
+      () => undefined
+    );
+
+    // No r= param on the request.
+    await getRequest('pages/board', 'boardSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns naming the missing slot in dev mode when a required param is absent', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const def = _defineRouteSocket<never, never>(
+      '/board/:id',
+      {}
+    ) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    const testApp = new Hono();
+    testApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry,
+        resolvePageUse: () => [],
+        resolveRoutePath: () => undefined,
+        dev: true,
+      })
+    );
+
+    await testApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(warn.mock.calls.some((c) => /\bid\b/.test(String(c[0])))).toBe(true);
+
+    warn.mockRestore();
+  });
+
+  it('a colocated socket (no __routeId) is never denied for a missing param and keeps pathParams: {}', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardSeenParams: Record<string, string> | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      guardSeenParams = mwCtx.location.pathParams;
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    // A bare defineSocket (no __routeId), colocated with a param-bearing route
+    // file. The mount-derived routePath is param-bearing ('/board/:id'), but
+    // gating must be on __routeId (absent here), NOT on the mounted pattern
+    // having params: a colocated socket's client stub cannot be typed to send
+    // params, so it must never be denied for a "missing" one.
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    const resolvePageUse = (path: string) =>
+      path === '/board/:id' ? [captureGuard] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === 'pages/board' ? '/board/:id' : undefined;
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+
+    // No r= param at all.
+    await getRequest('pages/board', 'boardSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(guardSeenParams).toEqual({});
+  });
+});

@@ -76,7 +76,7 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       }
 
       // --- Plain duplex socket wiring. ---
-      const { socketDef, denied } = resolved;
+      const { socketDef, denied, params } = resolved;
       let teardown: (() => void) | void;
       // socket.data is the edge `data` factory result, seeded HERE at connect
       // (after the guard resolved `denied`) so it is set before ANY handler
@@ -87,13 +87,12 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // coerced to {}); no factory means undefined (the Data default). It is the
       // connect-time seed: on Node it is a closure object the handler may
       // mutate, but on Cloudflare it is NOT a cross-event mutable store (see
-      // define-socket). The `{}` second argument satisfies the factory's typed
-      // Params contract; resolving and validating real route params from the
-      // upgrade request is not wired in yet.
+      // define-socket). `params` is the resolved route params (`{}` for an
+      // unbound socket, the validated wire params for a route-bound one).
       const data: unknown = denied
         ? undefined
         : socketDef.data
-          ? await socketDef.data(ctx, {})
+          ? await socketDef.data(ctx, params)
           : undefined;
       warnIfOverForwardBudget(data, opts.dev ?? false, 'socket');
 
@@ -199,10 +198,10 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     if (resolved.kind === 'unknown' || resolved.denied) {
       return connector({ c, kind: 'deny' });
     }
-    const { socketDef, moduleKey, name } = resolved;
-    // The `{}` second argument satisfies the factory's typed Params contract;
-    // see the matching Node-path comment above.
-    const data = socketDef.data ? await socketDef.data(c, {}) : undefined;
+    const { socketDef, moduleKey, name, params } = resolved;
+    // `params` is the resolved route params; see the matching Node-path
+    // comment above.
+    const data = socketDef.data ? await socketDef.data(c, params) : undefined;
     return connector({
       c,
       kind: 'socket-forward',

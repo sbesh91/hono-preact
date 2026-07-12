@@ -7,6 +7,7 @@ import {
   leavePresence,
   updatePresence,
   presenceMembers,
+  requiredParamSlots,
 } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
 import {
@@ -142,19 +143,12 @@ export function resolveRoomKey(
   // runtime signature.
   const topic = (channel.key as (p?: Record<string, string>) => string)(params);
 
-  // Validate that every required `:param` segment in the channel name has a
-  // non-empty value. interpolatePattern drops a missing segment rather than
-  // leaving `:name` in place, so we check the params object directly.
-  const missingRequired = channel.name
-    .split('/')
-    .filter((seg) => {
-      if (!seg.startsWith(':')) return false;
-      const flag = seg[seg.length - 1];
-      // Optional (?), rest-zero-or-more (*), and rest-one-or-more (+) are not
-      // required to be present. Only plain `:name` is required.
-      return flag !== '?' && flag !== '*' && flag !== '+';
-    })
-    .some((seg) => !params[seg.slice(1)]);
+  // Validate that every required `:param` in the channel name has a non-empty
+  // value. interpolatePattern drops a missing segment rather than leaving
+  // `:name` in place, so we check the params object directly.
+  const missingRequired = requiredParamSlots(channel.name).some(
+    (slot) => !params[slot]
+  );
 
   if (!topic || missingRequired) {
     return { ok: false };
