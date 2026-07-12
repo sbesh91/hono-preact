@@ -61,6 +61,10 @@ describe('iso /internal/runtime door', () => {
       // boot validator; moved off the public barrel (users spell the pattern
       // as a literal '<path>/*' string).
       'subtreePatternOf',
+      // Required-param-slot extraction shared with @hono-preact/server's
+      // room-key resolver, socket param resolver, and boot route/channel
+      // congruence check, so the three agree on what "required" means.
+      'requiredParamSlots',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());
