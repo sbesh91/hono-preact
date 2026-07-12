@@ -14,6 +14,8 @@ import { serverRoute, liveStream } from '../server-route.js';
 import { defineChannel } from '../define-channel.js';
 import type { LoaderCtx } from '../define-loader.js';
 import type { RouteParams } from '../internal/typed-routes.js';
+import type { SocketRef } from '../define-socket.js';
+import type { RoomRef } from '../define-room.js';
 
 function _probes() {
   const route = serverRoute('/board/:projectId');
@@ -55,6 +57,26 @@ function _probes() {
       load: async () => ({ count: 1 }),
     })
   );
+
+  // .socket: Incoming/Outgoing infer through the arm; the ref carries them.
+  const sock = route.socket<{ ping: true }, { pong: true }>({
+    message(socket, msg) {
+      expectTypeOf(msg).toEqualTypeOf<{ ping: true }>();
+      expectTypeOf(socket.send).parameter(0).toEqualTypeOf<{ pong: true }>();
+    },
+  });
+  expectTypeOf(sock).toEqualTypeOf<SocketRef<{ ping: true }, { pong: true }>>();
+
+  // .room: ctx.params is typed from the CHANNEL pattern, not the route.
+  const room = route.room(boardChannel, {
+    onJoin(conn, ctx) {
+      expectTypeOf(ctx.params).toEqualTypeOf<{ projectId: string }>();
+      expectTypeOf(conn.broadcast).parameter(0).toEqualTypeOf<{ n: number }>();
+    },
+  });
+  expectTypeOf(room).toEqualTypeOf<
+    RoomRef<{ n: number }, { n: number }, void, { projectId: string }>
+  >();
 }
 
 void _probes;
