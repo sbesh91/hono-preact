@@ -28,25 +28,17 @@ describe('computeProgress', () => {
     expect(computeProgress(-1000, 3000, 1000)).toBe(0.5);
     expect(computeProgress(-10, 1000, 1000)).toBe(1); // range guarded to >= 1
   });
-  it('measures the pin, so a collapsing mobile URL bar cannot saturate it early', () => {
-    // The regression this guards: the pin is sized in svh (the small viewport,
-    // toolbar showing), but window.innerHeight grows toward lvh as the URL bar
-    // collapses. Measuring the window instead of the pin shortens the range, so
-    // the playhead reaches 1 while the scene is still pinned and the last
-    // stretch of the scrub sits frozen on an already-finished scene.
-    const stage = 2235; // 3 pages x 745svh, an iPhone-sized small viewport
-    const pin = 745; // 100svh
-    const innerHeightOnceToolbarCollapses = 852; // ~lvh
-
-    // Correct: still mid-scrub, ~90px of pin left to run.
-    const honest = computeProgress(-1400, stage, pin);
-    expect(honest).toBeCloseTo(0.9396, 3);
-    expect(honest).toBeLessThan(1);
-
-    // Wrong: the very same scroll position reads as finished.
-    expect(computeProgress(-1400, stage, innerHeightOnceToolbarCollapses)).toBe(
-      1
-    );
+  it('shortens the scrub range as the denominator grows', () => {
+    // Plain range arithmetic, and deliberately NOT named as the regression test
+    // for the iOS pin bug: this function's body is unchanged, and it always
+    // divided by whatever it was handed. The defect was the *argument* the
+    // driver passed (window.innerHeight instead of the pin's height), so only a
+    // test that observes the driver can catch it. That lives in driver.test.tsx
+    // ("scrubs against the pin, not the window"), and this case would happily
+    // pass against the buggy build.
+    const stage = 2235; // 3 pages x 745svh
+    expect(computeProgress(-1400, stage, 745)).toBeCloseTo(0.9396, 3);
+    expect(computeProgress(-1400, stage, 852)).toBe(1);
   });
 });
 
@@ -67,6 +59,10 @@ describe('barStatus', () => {
   it('flags cancel once past cancelAt, and not before', () => {
     expect(barStatus(0.9, 0.2, 0.4, 0.4)).toBe('cancel');
     expect(barStatus(0.3, 0.2, 0.4, 0.4)).toBe('inflight');
+  });
+  it('cancels exactly at cancelAt, not one frame later', () => {
+    // The boundary is `>=`: pin it, or `>` passes every other case in this file.
+    expect(barStatus(0.4, 0.2, 0.4, 0.4)).toBe('cancel');
   });
 });
 

@@ -1,17 +1,18 @@
 import { createContext } from 'preact';
 import type { ComponentChildren, VNode } from 'preact';
 import { useContext, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { computeProgress, sliceProgress } from './progress.js';
+import { computeProgress } from './progress.js';
 import { usePrefersReducedMotion } from './motion.js';
 
 /**
  * The one custom property every scroll-driven visual on this page reads. A stage
  * writes it on its own element each frame and it inherits to the whole scene, so
  * continuous motion (lane fills, the playhead, the morph, the drifting cursors)
- * is pure CSS off a single number and costs no render at all. It is registered
- * as a `<number>` in root.css (@property) and seeded inline at SSR with the
- * stage's fallback, so it always resolves: no-JS and reduced-motion readers get
- * the settled scene rather than an unstyled one.
+ * is a pure CSS function of one number and costs no *render*. It still costs a
+ * style recalc of the stage's subtree, which is the honest price of the design
+ * (see the tick below). It is registered as a `<number>` in root.css (@property)
+ * and seeded inline at SSR with the stage's fallback, so it always resolves:
+ * no-JS and reduced-motion readers get the settled scene, not an unstyled one.
  */
 const P = '--hx-p';
 
@@ -20,9 +21,9 @@ const format = (progress: number): string => progress.toFixed(4);
 
 /**
  * The playhead as a store rather than a render value. Calling `setProgress` on
- * every rAF tick used to push a new context value through the tree, re-rendering
- * every Actor, Lane and Region in the pinned chapter 60+ times a second during
- * momentum scroll. Subscribers now pull only the value they care about (see
+ * every rAF tick used to push a fresh context value through the tree, which
+ * force-updated every Lane and Region in the pinned chapter 60+ times a second
+ * during momentum scroll. Subscribers now pull only the value they care about (see
  * `useStageValue`), so a threshold flip costs one render and a continuous value
  * costs none.
  */
@@ -32,7 +33,8 @@ export interface Playhead {
 }
 
 interface MutablePlayhead extends Playhead {
-  set(progress: number): void;
+  /** True when the value changed (and listeners ran). */
+  set(progress: number): boolean;
 }
 
 function createPlayhead(initial: number): MutablePlayhead {
@@ -40,10 +42,15 @@ function createPlayhead(initial: number): MutablePlayhead {
   const listeners = new Set<(progress: number) => void>();
   return {
     get: () => current,
+    /** Returns whether the value actually moved, so the caller can skip the DOM
+     *  write too. Progress pins at exactly 0 and 1 for a stretch of scroll on
+     *  either side of a stage (the IO keeps it active out to a 100px margin), so
+     *  this is not a rare path. */
     set(progress) {
-      if (progress === current) return;
+      if (progress === current) return false;
       current = progress;
       for (const listener of listeners) listener(progress);
+      return true;
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -160,12 +167,19 @@ export function ScrollStage({
         height,
         pinHeight
       );
-      // The entire per-frame cost of the scrub: one custom property. Every
-      // continuous visual in the scene derives from it in CSS.
-      pin.style.setProperty(P, format(progress));
-      // Discrete consumers (a status chip, a pane swap) hear about it only when
-      // their own derived value actually changed.
-      playhead.set(progress);
+      // Publish once, to one node. Every continuous visual in the scene is a CSS
+      // function of this, and discrete consumers (a status chip, a pane swap)
+      // hear about it only when their own derived value actually changed.
+      //
+      // Honest accounting: this is not free, it is *cheap*. Writing an inherited
+      // custom property invalidates style for the pin's subtree, so the frame
+      // still costs a style recalc; what it no longer costs is a Preact render
+      // and a VDOM diff of every Lane and Region in the chapter. And a transform
+      // built from var()/calc() is resolved on the main thread during that
+      // recalc -- only the resulting matrix reaches the compositor. The genuinely
+      // off-main-thread version is `animation-timeline`, which is not Baseline
+      // Widely Available and could not drive the discrete JS state anyway.
+      if (playhead.set(progress)) pin.style.setProperty(P, format(progress));
     };
     const onScroll = () => {
       if (active && !raf) raf = requestAnimationFrame(tick);
@@ -177,12 +191,18 @@ export function ScrollStage({
     let io: IntersectionObserver | undefined;
     if (typeof IntersectionObserver === 'undefined') {
       active = true;
+      stage.toggleAttribute('data-active', true);
       measure();
       tick();
     } else {
       io = new IntersectionObserver(
         ([entry]) => {
           active = entry.isIntersecting;
+          // CSS keys `will-change` off this, so the scrub-driven layers are
+          // promoted only while their chapter is on screen. A standing hint would
+          // hold a compositor layer per element for the life of the page to serve
+          // motion that only ever runs in one chapter at a time.
+          stage.toggleAttribute('data-active', active);
           if (active) {
             measure();
             tick();
@@ -212,18 +232,24 @@ export function ScrollStage({
 
   const value = useMemo<StageValue>(
     () => ({
-      get: playhead.get,
+      // The static branch is frozen at `fallbackProgress`, and its JS half has to
+      // be frozen at the same number as its CSS half. `reduced` is a live media
+      // query, so it can flip mid-session: a reader scrolled to 0.33 who switches
+      // on Reduce Motion gets `--hx-p: 0.9` inline (the fallback) while the
+      // playhead object still holds 0.33. Handing that object straight through
+      // would split the scene down the middle, CSS rendering the settled morph
+      // while JS still reports it closed and captions it "scroll to morph".
+      get: reduced ? () => fallbackProgress : playhead.get,
       subscribe: playhead.subscribe,
       pinned: !reduced,
-      // `reduced` starts false so the first client render matches SSR, which
-      // means a reduced-motion reader mounts the live stage for one frame and
-      // only then flips. `live` must fall back with it: nothing is driving the
-      // playhead in the static branch, so a stale `live: true` would leave every
-      // Region waiting for a threshold that can never arrive, stranding the
-      // reader on a skeleton.
+      // Same flip, same reason. `reduced` starts false so the first client render
+      // matches SSR, so a reduced-motion reader mounts the live stage for one
+      // frame before flipping. Nothing drives the playhead in the static branch,
+      // so a stale `live: true` would leave every Region waiting on a threshold
+      // that can never arrive, stranding the reader on a skeleton.
       live: live && !reduced,
     }),
-    [playhead, reduced, live]
+    [playhead, reduced, live, fallbackProgress]
   );
 
   if (reduced) {
@@ -262,55 +288,6 @@ export function ScrollStage({
   );
 }
 
-/**
- * Re-normalizes a window of the parent playhead to a local 0..1, for both the JS
- * consumers below it (through context) and its CSS descendants (it republishes
- * --hx-p on its own element). `display: contents`, so it adds no box.
- */
-export function Actor({
-  start,
-  end,
-  children,
-}: {
-  start: number;
-  end: number;
-  children: ComponentChildren;
-}): VNode {
-  const parent = useStage();
-  const ref = useRef<HTMLDivElement>(null);
-  const local = usePlayhead(sliceProgress(parent.get(), start, end));
-
-  useEffect(() => {
-    const apply = (progress: number) => {
-      const sliced = sliceProgress(progress, start, end);
-      ref.current?.style.setProperty(P, format(sliced));
-      local.set(sliced);
-    };
-    apply(parent.get());
-    return parent.subscribe(apply);
-  }, [parent, start, end, local]);
-
-  const value = useMemo<StageValue>(
-    () => ({
-      get: local.get,
-      subscribe: local.subscribe,
-      pinned: parent.pinned,
-      live: parent.live,
-    }),
-    [local, parent]
-  );
-
-  return (
-    <div
-      class="hx-actor"
-      ref={ref}
-      style={{ [P]: sliceProgress(parent.get(), start, end) }}
-    >
-      <StageContext.Provider value={value}>{children}</StageContext.Provider>
-    </div>
-  );
-}
-
 export function LiveStage({
   periodMs = 6000,
   fallbackProgress = 1,
@@ -333,8 +310,7 @@ export function LiveStage({
     const loop = (ts: number) => {
       if (!running) return;
       const progress = (ts % periodMs) / periodMs;
-      el.style.setProperty(P, format(progress));
-      playhead.set(progress);
+      if (playhead.set(progress)) el.style.setProperty(P, format(progress));
       raf = requestAnimationFrame(loop);
     };
     const start = () => {
@@ -355,11 +331,16 @@ export function LiveStage({
     // unconditionally, mirroring ScrollStage's fallback.
     let io: IntersectionObserver | undefined;
     if (typeof IntersectionObserver === 'undefined') {
+      el.toggleAttribute('data-active', true);
       start();
     } else {
-      io = new IntersectionObserver(([entry]) =>
-        entry.isIntersecting ? start() : stop()
-      );
+      io = new IntersectionObserver(([entry]) => {
+        // Same as ScrollStage: the peers' layers are promoted only while the room
+        // is on screen, which is also the only time their clock runs.
+        el.toggleAttribute('data-active', entry.isIntersecting);
+        if (entry.isIntersecting) start();
+        else stop();
+      });
       io.observe(el);
     }
     return () => {

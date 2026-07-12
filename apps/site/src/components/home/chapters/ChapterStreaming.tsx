@@ -58,6 +58,11 @@ function StreamChart(): VNode {
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
       aria-hidden="true"
+      // The clip rect and the "now" line are scrubbed by CSS, but their geometry
+      // is the same geometry this component draws the path with. Hand the two
+      // numbers over rather than restating them in the stylesheet: change PAD or
+      // W here and the reveal would otherwise silently stop matching the line.
+      style={{ '--chart-pad': PAD, '--chart-span': W - PAD * 2 }}
     >
       <defs>
         <linearGradient id="hx-chart-fill" x1="0" y1="0" x2="0" y2="1">
@@ -65,7 +70,13 @@ function StreamChart(): VNode {
           <stop class="hx-chart__stop-b" offset="100%" />
         </linearGradient>
         <clipPath id="hx-chart-clip">
-          <rect class="hx-chart__clip" x="0" y="0" height={H} />
+          {/* The `width` attribute is the floor, and the CSS rule (author level,
+              so it always outranks a presentation attribute) is what scrubs it.
+              A rect with no width resolves to `auto`, which is 0 for a rect, so
+              if the CSS geometry property were ever not honoured the clip would
+              be empty and the chart would vanish outright rather than simply
+              stop revealing. This turns that into "fully drawn". */}
+          <rect class="hx-chart__clip" x="0" y="0" width={W} height={H} />
         </clipPath>
       </defs>
       <path class="hx-chart__area" d={area} clip-path="url(#hx-chart-clip)" />

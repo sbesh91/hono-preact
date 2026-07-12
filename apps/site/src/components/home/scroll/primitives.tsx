@@ -111,10 +111,16 @@ export function Region({
 }): VNode {
   const { live } = useStage();
   // The skeleton/content crossfade is continuous now: CSS fades one into the
-  // other across a short window past `showAt` (--region-at), so it tracks the
-  // reader's scroll instead of firing a fixed 300ms transition that lags behind
-  // a fast scrub. `shown` survives only to label the two halves for assistive
-  // tech, which is a discrete question with a discrete answer.
+  // other across a short window that *lands on* `showAt` (--region-at), so it
+  // tracks the reader's scroll instead of firing a fixed 300ms transition that
+  // lags behind a fast scrub.
+  //
+  // Landing on showAt rather than starting there is what keeps the two halves of
+  // this component on one clock. `shown` is a step at showAt, and it drives both
+  // the assistive-tech labelling below and (via [data-shown]) the mutations
+  // chapter's save-flash. Had the fade *started* at showAt, the row would be at
+  // opacity 0 exactly when it was announced as shown and exactly when its flash
+  // played -- 0.05 of scrub in which the screen reader and the eye disagree.
   const passed = useStageValue((progress) => progress >= showAt);
   // Until client JS is actually driving the playhead (SSR, a failed bundle,
   // no-JS), show the content: a skeleton must never be the terminal state.

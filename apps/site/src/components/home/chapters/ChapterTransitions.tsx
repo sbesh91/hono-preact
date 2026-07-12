@@ -21,11 +21,20 @@ const IDEAS: { lead: string; body: string }[] = [
   },
 ];
 
-/** The morph's own 0..1, a window of the stage playhead. CSS derives the same
- *  value from --hx-p (see .hx-vt2__demo); this mirrors it for the one thing CSS
- *  cannot do here, which is swap the URL and the labels at the halfway point. */
+// The morph's window on the stage playhead. Tracked almost the whole scrub so
+// any scroll immediately moves the morph, instead of a long dead zone where the
+// pin feels like an unexplained hijack.
+//
+// These two numbers are the single source: they are handed to CSS as --m-start /
+// --m-size (which derives --m, and with it every continuous part of the morph)
+// and used here for the one thing CSS cannot do, which is swap the URL and the
+// labels at the halfway point. Restating them in the stylesheet would let the
+// two halves of the same morph drift apart.
+const M_START = 0.08;
+const M_SIZE = 0.78;
+
 const morphAmount = (progress: number): number =>
-  clamp01((progress - 0.08) / 0.78);
+  clamp01((progress - M_START) / M_SIZE);
 
 // Scroll scrubs a faked-but-real shared-element morph: --m tracks the stage
 // playhead, so the accent card grows from a list row into the page header as
@@ -37,7 +46,10 @@ const morphAmount = (progress: number): number =>
 function MorphDemo(): VNode {
   const open = useStageValue((progress) => morphAmount(progress) > 0.5);
   return (
-    <div class="hx-vt2__demo">
+    <div
+      class="hx-vt2__demo"
+      style={{ '--m-start': M_START, '--m-size': M_SIZE }}
+    >
       {/* An explicit scrubber up top makes it obvious the pinned scroll is
           driving the morph: the label names the interaction and the fill tracks
           progress. */}
