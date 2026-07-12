@@ -19,7 +19,7 @@ import {
   __resetRealtimeConnectorForTesting,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
   WS_DENY_CODE,
 } from '@hono-preact/iso/internal/runtime';
@@ -798,7 +798,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(rawR)}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(rawR)}`
     );
   }
 
@@ -820,7 +820,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({ roomId: 'demo' }))}` +
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ roomId: 'demo' }))}` +
         `&tag=x`
     );
 
@@ -1203,7 +1203,7 @@ describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)',
     // guard (the thing under test), not by a failed room-key resolution (which
     // also closes WS_DENY_CODE but proves nothing about route precedence).
     await localApp.request(
-      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('src/server/rt')}&${SOCKET_NAME_PARAM}=board&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({ boardId: 'demo' }))}`
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('src/server/rt')}&${SOCKET_NAME_PARAM}=board&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ boardId: 'demo' }))}`
     );
 
     const events = lastEvents();

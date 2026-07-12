@@ -10,7 +10,7 @@ import {
   FORM_ROOM_FIELD,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
 } from '../internal/contract.js';
 import type {
   RoomEnvelope,
@@ -169,7 +169,7 @@ describe('useRoom', () => {
       'pages/board.server'
     );
     expect(url.searchParams.get(SOCKET_NAME_PARAM)).toBe('board');
-    expect(url.searchParams.get(SOCKET_ROOM_PARAM)).toBe(
+    expect(url.searchParams.get(SOCKET_KEY_PARAM)).toBe(
       JSON.stringify({ roomId: 'r1' })
     );
   });

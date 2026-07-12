@@ -94,7 +94,7 @@ export type RoomKeyResolution =
  * channel namespace, so it cannot reach an unrelated topic.
  *
  * @param channel The room's bound channel (its name pattern + `key`).
- * @param rawR    The raw `SOCKET_ROOM_PARAM` query value (or undefined).
+ * @param rawR    The raw `SOCKET_KEY_PARAM` query value (or undefined).
  */
 export function resolveRoomKey(
   channel: AnyRoomDef['channel'],

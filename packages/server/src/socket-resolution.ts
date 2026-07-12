@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import {
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
@@ -311,7 +311,7 @@ export async function resolveConnection(
     // (channel.key(params)); the client only varies param VALUES.
     const roomKey = resolveRoomKey(
       def.channel,
-      ctx.req.query(SOCKET_ROOM_PARAM)
+      ctx.req.query(SOCKET_KEY_PARAM)
     );
     const denied = await resolveGuardDenied({
       def,

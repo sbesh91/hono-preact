@@ -4,7 +4,7 @@ import {
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   FORM_MODULE_FIELD,
   FORM_ROOM_FIELD,
 } from './internal/contract.js';
@@ -132,7 +132,7 @@ export function useRoom<R extends AnyRoomRefShape>(
         `${proto}//${location.host}${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(moduleKey!)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(roomName!)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(keyJson)}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(keyJson)}`
       );
     },
     onOpen: () => {
