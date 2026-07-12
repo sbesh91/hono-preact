@@ -72,7 +72,7 @@ Expected: build succeeds; `rg` prints nothing and `echo` shows a non-zero rg exi
 
 - [ ] **Step 5: Typecheck + existing realtime suites still green**
 
-Run: `pnpm typecheck && pnpm --filter @hono-preact/server test rooms-handler sockets-handler`
+Run: `pnpm typecheck && pnpm test rooms-handler sockets-handler`
 Expected: PASS (pure rename, no behavior change).
 
 - [ ] **Step 6: Commit**
@@ -227,7 +227,7 @@ defineSocket<{ ping: true }, { pong: true }>({
 
 - [ ] **Step 2: Run the type test to verify it fails**
 
-Run: `pnpm --filter @hono-preact/iso test:types define-socket`
+Run: `pnpm test:types`
 Expected: FAIL. `.socket`'s handler `data` currently takes only `(c: Context)`, so the two-arg factory is a type error.
 
 - [ ] **Step 3: Add the `Params` generic in `define-socket.ts`**
@@ -348,7 +348,7 @@ it('.socket still stamps __routeId (route binding unchanged by params wire)', ()
 
 - [ ] **Step 7: Build, typecheck, run type + runtime tests**
 
-Run: `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter @hono-preact/iso test:types define-socket && pnpm exec vitest run packages/iso/src/__tests__/server-route-realtime.test.ts`
+Run: `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm test:types && pnpm exec vitest run packages/iso/src/__tests__/server-route-realtime.test.ts`
 Expected: PASS (both the type-level factory-params assertions and the runtime stamp).
 
 - [ ] **Step 8: Commit**
@@ -407,7 +407,7 @@ useSocket(bareRef, { params: { id: 'b1' } });
 
 - [ ] **Step 2: Run the type test to verify it fails**
 
-Run: `pnpm --filter @hono-preact/iso test:types define-socket`
+Run: `pnpm test:types`
 Expected: FAIL. `UseSocketOptions` has no `params`, so the required-params `@ts-expect-error` lines do not error (unused directive) and `{ params: ... }` is rejected as excess.
 
 - [ ] **Step 3: Restructure `use-socket.ts` types onto a ref shape**
@@ -518,7 +518,7 @@ expect(lastWsUrl()).toContain(`&r=${encodeURIComponent(JSON.stringify({ id: 'b1'
 
 - [ ] **Step 6: Build, typecheck, run tests**
 
-Run: `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm --filter @hono-preact/iso test:types define-socket && pnpm exec vitest run packages/iso/src/__tests__/use-socket.test.tsx`
+Run: `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build && pnpm test:types && pnpm exec vitest run packages/iso/src/__tests__/use-socket.test.tsx`
 Expected: PASS (required/absent `params` typing and the wire-encoding assertion).
 
 - [ ] **Step 7: Commit**
