@@ -117,7 +117,8 @@ function maybeReportAliasedBinding(
  * chain at request time.
  *
  * NOTE: framework-private. The only intended consumer is the generated server
- * entry, which awaits this before serving the loaders RPC and action POST paths.
+ * entry, which awaits this before serving the loaders RPC, action POST, and
+ * /__sockets upgrade paths.
  */
 export async function assertRouteBindingsMatchMount(
   serverRoutes: ReadonlyArray<ServerRoute>,
@@ -235,7 +236,7 @@ export function warnAliasedLayoutBinding(
     `hono-preact: ${info.kind} '${info.name}' is bound to '${info.routeId}', ` +
       `the page scope for that pattern: it resolves the deepest composed ` +
       `chain, which includes the index child's own 'use' on top of the ` +
-      `layout's chain. For subtree-scoped (layout shell) data, bind ` +
+      `layout's chain. For a subtree-scoped (layout shell) binding, use ` +
       `serverRoute('${info.subtreeId}') instead: the subtree scope runs the ` +
       `layout node's own composed chain without the index child's additions. ` +
       `Register your routes in the tree form ({ tree: typeof routeTree }) to ` +

@@ -82,7 +82,7 @@ Writing `server:` by hand is an advanced override for the cases discovery does n
 - **Non-sibling module:** `server: () => import('./somewhere-else.server.js')` points the route at a specific module and wins over the sibling.
 - **`server: false`:** keeps a `.server.ts` sibling from being wired (e.g. a scratch file).
 
-Discovery reads the inline `() => import()` on the route, so it covers hand-written route tables. A route whose `view` is a hoisted const thunk, or one generated at runtime (e.g. `contentRoutes(import.meta.glob(...))`), takes an explicit `server:` if it needs one. If a `.server.*` file is imported by nothing (not a route, and not the [`src/server` registry](#the-src-server-registry) below), the production build warns about it, so a misplaced module is not a silent runtime 404.
+Discovery reads the inline `() => import()` on the route, so it covers hand-written route tables. A route whose `view` is a hoisted const thunk, or one generated at runtime (e.g. `contentRoutes(import.meta.glob(...))`), takes an explicit `server:` if it needs one. If a `.server.*` file is imported by nothing (not a route, and not the [`src/server` registry](#the-srcserver-registry) below), the production build warns about it, so a misplaced module is not a silent runtime 404.
 
 ## The `src/server` registry
 

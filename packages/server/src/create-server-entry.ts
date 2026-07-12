@@ -124,16 +124,17 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           routes.serverRoutes
         ));
 
-  // Boot-time guard: every route-bound loader/action must declare the route its
-  // module is mounted on (`route.path`), so a route-bound unit can never resolve
-  // its page-use (auth) chain from the wrong route. Awaited before the two
-  // `byPattern` surfaces (the loaders RPC and the action POST); a mismatch fails
-  // the request closed (500) rather than running through a wrong/empty gate
-  // chain. Cached like the socket registries: one walk at boot, per-request in
-  // dev for hot-reload parity.
+  // Boot-time guard: every route-bound unit (loader/action/socket/room) must
+  // declare the route its module is mounted on (`route.path`), so a route-bound
+  // unit can never resolve its page-use (auth) chain from the wrong route.
+  // Awaited before the three route-bound dispatch surfaces (the loaders RPC,
+  // the action POST, and the /__sockets upgrade); a mismatch fails the request
+  // closed (500) rather than running through a wrong/empty gate chain. Cached
+  // like the socket registries: one walk at boot, per-request in dev for
+  // hot-reload parity.
   //
-  // The registry check rides along: a `serverRoute(...)`-bound loader/action in
-  // a src/server module resolves its gate chain by `byPattern(__routeId)`, which
+  // The registry check rides along: a `serverRoute(...)`-bound unit in a
+  // src/server module resolves its gate chain by `byPattern(__routeId)`, which
   // fails open, so we require the bound route to be a real pattern. It keys off
   // the routeUse map, which now includes subtree patterns, so a registry unit
   // may bind either an exact route or a childful route's subtree. A

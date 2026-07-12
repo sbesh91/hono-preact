@@ -20,16 +20,16 @@ export default defineConfig({
 
 ## honoPreact(options)
 
-| Option        | Type                                                         | Default                        | Description                                                                                                                                 |
-| ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapter`     | `HonoPreactAdapter`                                          | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`.                                                                           |
-| `layout`      | `string`                                                     | `'src/Layout.tsx'`             | Root layout component path.                                                                                                                 |
-| `routes`      | `string`                                                     | `'src/routes.ts'`              | Route table path.                                                                                                                           |
-| `api`         | `string`                                                     | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.                                                                                     |
-| `appConfig`   | `string`                                                     | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.                                                                                        |
-| `serverDir`   | `string`                                                     | `'src/server'`                 | Registry folder for route-less server modules; globbed if it exists. See [The `src/server` registry](/docs/routes#the-src-server-registry). |
-| `clientEntry` | `string`                                                     | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                     |
-| `css`         | `{ global?: string; autoSplit?: boolean; minSize?: number }` | `undefined`                    | Framework-owned global stylesheet delivery and build-time auto-split tuning. See [Styling](/docs/styling) for the full pipeline.            |
+| Option        | Type                                                         | Default                        | Description                                                                                                                                |
+| ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `adapter`     | `HonoPreactAdapter`                                          | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`.                                                                          |
+| `layout`      | `string`                                                     | `'src/Layout.tsx'`             | Root layout component path.                                                                                                                |
+| `routes`      | `string`                                                     | `'src/routes.ts'`              | Route table path.                                                                                                                          |
+| `api`         | `string`                                                     | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.                                                                                    |
+| `appConfig`   | `string`                                                     | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.                                                                                       |
+| `serverDir`   | `string`                                                     | `'src/server'`                 | Registry folder for route-less server modules; globbed if it exists. See [The `src/server` registry](/docs/routes#the-srcserver-registry). |
+| `clientEntry` | `string`                                                     | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                    |
+| `css`         | `{ global?: string; autoSplit?: boolean; minSize?: number }` | `undefined`                    | Framework-owned global stylesheet delivery and build-time auto-split tuning. See [Styling](/docs/styling) for the full pipeline.           |
 
 ## What the plugin handles
 

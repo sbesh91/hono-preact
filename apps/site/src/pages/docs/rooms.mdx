@@ -165,7 +165,7 @@ export const serverRooms = {
 };
 ```
 
-The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the room under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound room live under the [`src/server` registry](/docs/routes#the-src-server-registry) organized by domain rather than beside its view. A bare `defineRoom` with no `serverRoute` binding is route-independent: it only ever runs the app-level `use` and its own `use`.
+The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the room under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound room live under the [`src/server` registry](/docs/routes#the-srcserver-registry) organized by domain rather than beside its view. A bare `defineRoom` with no `serverRoute` binding, defined in a `src/server` registry module rather than colocated with a route, is route-independent: it only ever runs the app-level `use` and its own `use`.
 
 A guard that denies the upgrade closes the connection with code `4403`. Use `deny()` rather than `redirect()` in a room guard: a WebSocket handshake cannot follow an HTTP redirect, so a `redirect()` is treated as a deny (close `4403`) and logs a warning.
 

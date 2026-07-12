@@ -495,6 +495,20 @@ describe('socket/room bindings (serverSockets / serverRooms containers)', () => 
     );
   });
 
+  it('mount rejects a room subtree binding on a childless route (fail closed)', async () => {
+    const routes = [
+      routeOf('/board', {
+        __moduleKey: 'm',
+        serverRooms: { board: boundDef('/board/*') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/board', []]]))
+    ).rejects.toThrow(
+      /room 'board' binds the subtree pattern '\/board\/\*', but route '\/board' has no child routes/
+    );
+  });
+
   it('registry throws when a bound socket targets a route not in the table', async () => {
     const registry = [
       async () => ({

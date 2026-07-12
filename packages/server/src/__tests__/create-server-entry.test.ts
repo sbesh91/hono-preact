@@ -292,6 +292,35 @@ describe('createServerEntry', () => {
     expect(body.error).toMatch(/socket 'feed'/);
     expect(body.error).toMatch(/'\/nope'/);
   });
+
+  it('prod mode: the socket gate fails closed and re-fails on repeat requests (clear-on-reject)', async () => {
+    const app = createServerEntry({
+      routes: manifest({
+        serverImports: [],
+        routeUse: [{ path: '/x', use: [] }],
+      }),
+      layout: Layout,
+      serverRegistry: [
+        async () => ({
+          __moduleKey: 'src/server/rt',
+          serverSockets: { feed: _defineRouteSocket('/nope', {}) },
+        }),
+      ],
+      // dev omitted: prod caching (memoized boot check with clear-on-reject).
+    });
+
+    const url = `${SOCKETS_RPC_PATH}?m=${encodeURIComponent('src/server/rt')}&s=feed`;
+    const first = await app.request(url);
+    expect(first.status).toBe(500);
+    const firstBody = (await first.json()) as { error: string };
+    expect(firstBody.error).toMatch(/socket 'feed'/);
+    // A rejected check must not be cached as passed: the second request
+    // re-runs the boot checks and fails closed again.
+    const second = await app.request(url);
+    expect(second.status).toBe(500);
+    const secondBody = (await second.json()) as { error: string };
+    expect(secondBody.error).toMatch(/socket 'feed'/);
+  });
 });
 
 describe('aliased exact layout binding dev warning', () => {
