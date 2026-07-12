@@ -26,9 +26,7 @@ Place the socket definition in a `.server.ts` module, inside a `serverSockets` e
 
 ```ts
 // src/chat.server.ts
-import { defineSocket, serverRoute } from 'hono-preact';
-
-const route = serverRoute('/chat');
+import { defineSocket } from 'hono-preact';
 
 export const serverSockets = {
   chat: defineSocket<
@@ -36,7 +34,7 @@ export const serverSockets = {
     { text: string; from: string } // messages the server sends
   >({
     // Optional guard middleware. A failing guard closes the socket with 4403.
-    use: [route.use],
+    use: [requireSession],
 
     // Edge factory: runs at the upgrade with the live Context; its result seeds
     // socket.data. Read cookies, headers, and middleware values here.
@@ -111,11 +109,31 @@ The free `useSocket(ref, opts)` export also works and is equivalent; the method 
 
 ### Guard model
 
-A socket's guard chain is composed in order: app-level `use` from `defineApp({ use })`, then any `use` on the enclosing route node (via `serverRoute`), then the socket's own `use` array. Route-node and layout `use` guards are inherited, so a guard that protects a route also covers its sockets and rooms without having to be repeated. Add socket-specific authorization in the socket's own `use` array for concerns that only apply to the socket.
+A socket's guard chain is composed in order: app-level `use` from `defineApp({ use })`, then the owning route's page-layer `use`, then the socket's own `use` array. A socket colocated with a route (its `.server.ts` sibling) inherits that route's `use` chain automatically, the same as a colocated loader or action.
+
+`serverRoute(r).socket(handler)` binds a socket to a route explicitly instead of relying on colocation:
+
+```ts
+// src/server/chat/room-chat.server.ts
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/chat');
+
+export const serverSockets = {
+  chat: route.socket<{ text: string }, { text: string; from: string }>({
+    // Inherits `/chat`'s page-layer `use` chain, wherever this file lives.
+    message(socket, msg) {
+      socket.send({ text: msg.text, from: 'someone' });
+    },
+  }),
+};
+```
+
+The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the socket under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound socket live under the [`src/server` registry](/docs/routes#the-src-server-registry) organized by domain rather than beside its view. A bare `defineSocket` with no `serverRoute` binding is route-independent: it only ever runs the app-level `use` and its own `use`. Add socket-specific authorization in the socket's own `use` array for concerns that only apply to the socket.
 
 Use `deny()`, not `redirect()`, to reject a realtime upgrade. A WebSocket handshake cannot follow an HTTP redirect, so a guard that throws `redirect()` on the socket path is treated as a deny (close `4403`) and logs a warning. If you share a guard between an HTTP route and its socket, branch on the request so the HTTP path redirects and the socket path denies.
 
-A plain socket does not receive route path params in an inherited route-node guard. The upgrade is served from the framework's flat `/__sockets` endpoint, which is query-string only, so `ctx.location.pathParams` is empty for a socket connection. Param-dependent authorization for a socket must read the connection's query or headers in the socket's own `use` (or in `open`), not rely on a `:param` from the route the socket lives next to. (Rooms differ: a room's guard chain can read the room-key params via `ctx.location.pathParams`, because the room key rides the wire and is resolved server-side before the guard runs. See [Rooms](/docs/rooms).)
+A plain socket does not receive route path params in an inherited route-node guard, whether that guard comes from colocation or an explicit `serverRoute(r).socket` binding: binding selects the `use` chain, not the param wire. The upgrade is served from the framework's flat `/__sockets` endpoint, which is query-string only, so `ctx.location.pathParams` is empty for a socket connection. Param-dependent authorization for a socket must read the connection's query or headers in the socket's own `use` (or in `open`), not rely on a `:param` from the route the socket is bound or colocated to. (Rooms differ: a room's guard chain can read the room-key params via `ctx.location.pathParams`, because the room key rides the wire and is resolved server-side before the guard runs. See [Rooms](/docs/rooms).)
 
 ### Cloudflare setup
 

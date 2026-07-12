@@ -134,7 +134,7 @@ The client has only `send`. There is no client-side `broadcast` because fan-out 
 
 ## Guard inheritance
 
-The guard chain for a room is: app `use` (from `defineApp({ use })`) then route-node `use` (from `serverRoute`, if the room lives next to a route) then the room's own `use`:
+The guard chain for a room is: app `use` (from `defineApp({ use })`) then the owning route's page-layer `use` then the room's own `use`. A room colocated with a route (its `.server.ts` sibling) inherits that route's `use` chain automatically, the same as a colocated loader or action:
 
 ```ts
 export const serverRooms = {
@@ -146,9 +146,30 @@ export const serverRooms = {
 };
 ```
 
+`serverRoute(r).room(channel, handler)` binds a room to a route explicitly instead of relying on colocation:
+
+```ts
+// src/server/boards/cursors.server.ts
+import { serverRoute } from 'hono-preact';
+import { cursorsChannel } from '../../cursors-channel.js';
+
+const route = serverRoute('/board/:boardId');
+
+export const serverRooms = {
+  cursors: route.room(cursorsChannel, {
+    // Inherits `/board/:boardId`'s page-layer `use` chain, wherever this file lives.
+    onJoin(conn, { params }) {
+      // params is typed from the CHANNEL pattern (board/:boardId), not the route.
+    },
+  }),
+};
+```
+
+The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the room under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound room live under the [`src/server` registry](/docs/routes#the-src-server-registry) organized by domain rather than beside its view. A bare `defineRoom` with no `serverRoute` binding is route-independent: it only ever runs the app-level `use` and its own `use`.
+
 A guard that denies the upgrade closes the connection with code `4403`. Use `deny()` rather than `redirect()` in a room guard: a WebSocket handshake cannot follow an HTTP redirect, so a `redirect()` is treated as a deny (close `4403`) and logs a warning.
 
-The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions.
+The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions. This holds whether the route-node `use` is colocation-derived or explicitly bound: binding selects the `use` chain, not the room-key param wire, which always comes from the channel.
 
 ## Presence reconnect behavior
 
