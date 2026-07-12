@@ -295,7 +295,11 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 | `data`                  | `Readonly<Data>`          | Per-connection data seeded by the `data` factory at connect time. Read-only; for Node-only mutable per-connection state, capture a closure variable in `open()`. |
 | `raw`                   | `unknown`                 | Escape hatch to the underlying runtime socket.                                                                                                                   |
 
-### `ref.useSocket(opts?)` / `useSocket(ref, opts?)`
+### `ref.useSocket(opts)` / `useSocket(ref, opts)`
+
+`opts` is optional for a bare or param-less socket, and required for a
+`serverRoute(r).socket` binding with route params (to supply `params`; see
+below).
 
 | Option                 | Type                                 | Default                                                                        | Description                                                                                                                                                     |
 | ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |

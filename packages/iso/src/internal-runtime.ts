@@ -53,11 +53,13 @@ export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 export { subtreePatternOf } from './define-routes.js';
 // Required-param-slot extraction shared with @hono-preact/server's room-key
 // resolver, socket param resolver, and boot congruence check.
-export { requiredParamSlots } from './internal/param-slots.js';
 // Declared-param-slot extraction (required AND optional/rest) shared with the
 // same two resolvers, so they can restrict a resolved params object to the
 // pattern's own declared slots and drop anything else.
-export { declaredParamSlots } from './internal/param-slots.js';
+export {
+  requiredParamSlots,
+  declaredParamSlots,
+} from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {
   validateWithSchema,

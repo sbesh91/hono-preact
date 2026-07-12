@@ -84,4 +84,23 @@ describe('resolveSocketParams', () => {
       params: { x: 'v' },
     });
   });
+
+  it('does not require a rest slot and keeps its value through the declared-slot filter', () => {
+    // `:rest*` (zero-or-more) and `:rest+` (one-or-more) are declared but never
+    // required (requiredParamSlots excludes the `*`/`+` flags), so a wire with
+    // no rest value still resolves ok, and a wire that DOES supply one is not
+    // dropped by the declared-slot filter (declaredParamSlots includes it).
+    expect(resolveSocketParams('/files/:rest*', undefined)).toEqual({
+      ok: true,
+      params: {},
+    });
+    expect(resolveSocketParams('/files/:rest*', enc({ rest: 'a/b' }))).toEqual({
+      ok: true,
+      params: { rest: 'a/b' },
+    });
+    expect(resolveSocketParams('/files/:rest+', undefined)).toEqual({
+      ok: true,
+      params: {},
+    });
+  });
 });

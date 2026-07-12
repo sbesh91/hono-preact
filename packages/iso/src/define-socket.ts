@@ -4,7 +4,7 @@ import { FORM_MODULE_FIELD, FORM_SOCKET_FIELD } from './internal/contract.js';
 import type { ReadonlyData } from './internal/readonly-data.js';
 import {
   useSocket,
-  type UseSocketOptions,
+  type UseSocketArgs,
   type UseSocketResult,
 } from './use-socket.js';
 
@@ -114,14 +114,13 @@ export interface SocketRef<Incoming, Outgoing, Params = {}> {
    * `useSocket(ref, opts)` but called directly on the ref:
    * `serverSockets.feed.useSocket({ onMessage })`.
    *
-   * Rest tuple (mirroring `useSocket` itself): the options argument is
-   * required exactly when `Params` is non-empty, so `.useSocket()` with no
-   * arguments is a type error for a param-bearing binding.
+   * `UseSocketArgs` (from use-socket.ts) is the identical rest tuple the free
+   * function uses: the options argument is required exactly when `Params` is
+   * non-empty, so `.useSocket()` with no arguments is a type error for a
+   * param-bearing binding.
    */
   useSocket(
-    ...args: keyof Params extends never
-      ? [opts?: UseSocketOptions<SocketRef<Incoming, Outgoing, Params>>]
-      : [opts: UseSocketOptions<SocketRef<Incoming, Outgoing, Params>>]
+    ...args: UseSocketArgs<SocketRef<Incoming, Outgoing, Params>>
   ): UseSocketResult<SocketRef<Incoming, Outgoing, Params>>;
 }
 

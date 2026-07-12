@@ -1357,13 +1357,13 @@ describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)',
 });
 
 describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)', () => {
-  it('resolves route params from the r= wire and feeds them to the guard and the data factory', async () => {
+  it('resolves route params from the r= wire and feeds them to the guard and the data factory, dropping an undeclared key', async () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    let guardSeenId: string | undefined;
+    let guardSeenParams: Record<string, string> | undefined;
     const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
-      guardSeenId = mwCtx.location.pathParams.id;
+      guardSeenParams = mwCtx.location.pathParams;
       await next();
     });
 
@@ -1385,8 +1385,12 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     const registry = new Map([['pages/board::boardSocket', def]]);
     app = makeApp(registry, undefined, resolvePageUse, () => undefined);
 
+    // The wire also carries `orgId`, a key the pattern `/board/:id` never
+    // declares. No real HTTP request could ever produce it (Hono only
+    // populates declared slots), so the resolver must drop it before it
+    // reaches either the guard's `pathParams` or the `data` edge factory.
     await app.request(
-      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'b1' }))}`
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'b1', orgId: 'victim' }))}`
     );
 
     const events = lastEvents();
@@ -1394,7 +1398,8 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     await events.onOpen?.(new Event('open'), ws as never);
 
     expect(ws.closes).toHaveLength(0);
-    expect(guardSeenId).toBe('b1');
+    expect(guardSeenParams).toEqual({ id: 'b1' });
+    expect(guardSeenParams?.orgId).toBeUndefined();
     expect(openSpy).toHaveBeenCalledWith({ id: 'b1' });
   });
 

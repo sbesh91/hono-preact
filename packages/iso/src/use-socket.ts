@@ -95,8 +95,10 @@ export type UseSocketResult<R extends AnySocketRefShape> = {
 // with the options argument omitted ENTIRELY is a type error for a
 // param-bearing binding (previously `opts` was merely optional, so omitting
 // it compiled even when `ParamsOption` required `params`; the hole only bit
-// once an options object was actually passed).
-type UseSocketArgs<R extends AnySocketRefShape> =
+// once an options object was actually passed). Exported so `SocketRef.useSocket`
+// in define-socket.ts spells the identical rest tuple instead of re-deriving it,
+// keeping the free-function and ref-method arity rules single-sourced.
+export type UseSocketArgs<R extends AnySocketRefShape> =
   keyof ParamsOf<R> extends never
     ? [opts?: UseSocketOptions<R>]
     : [opts: UseSocketOptions<R>];
