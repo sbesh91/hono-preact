@@ -481,11 +481,12 @@ In `useSocket`'s body, JSON-encode the params once per render (stable primitive 
 
 ```ts
   // JSON-encode route params (bound sockets) once per render so the dep array
-  // stays a stable primitive. `params` is typed-absent for a bare socket.
-  const paramsJson =
-    'params' in (opts ?? {}) && (opts as { params?: unknown }).params
-      ? JSON.stringify((opts as { params?: unknown }).params)
-      : undefined;
+  // stays a stable primitive. Read `opts?.params` DIRECTLY, with no cast: both
+  // branches of `ParamsOption` declare a `params` property, so it is accessible
+  // on the generic intersection. This mirrors use-room.ts, which reads
+  // `opts?.key` off the identical `KeyOption` shape castless. A bare socket
+  // types `params` as absent, so this is `undefined` there.
+  const paramsJson = opts?.params ? JSON.stringify(opts.params) : undefined;
 
   const lifecycle = useWsLifecycle({
     enabled,
@@ -501,7 +502,7 @@ In `useSocket`'s body, JSON-encode the params once per render (stable primitive 
     // (onOpen/onClose/shouldReconnect/reconnect/onRawMessage unchanged)
 ```
 
-(The `'params' in opts` structural read avoids widening `opts`'s type; `params` is not on the bare-socket option type, so this is the sanctioned way to read it generically inside the hook.)
+(No cast is needed or permitted here: `ParamsOption` declares `params` in BOTH branches, exactly as `KeyOption` does in `use-room.ts`, so `opts?.params` type-checks on the generic intersection. If you find yourself reaching for `as`, mirror `use-room.ts`'s `opts?.key` read instead.)
 
 - [ ] **Step 5: Add a wire-encoding runtime test**
 
