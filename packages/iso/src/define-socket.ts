@@ -22,7 +22,7 @@ export interface ServerSocket<Outgoing, Data> {
   readonly raw: unknown;
 }
 
-export interface SocketHandler<Incoming, Outgoing, Data> {
+export interface SocketHandler<Incoming, Outgoing, Data, Params = {}> {
   /** Guard/middleware chain run before the upgrade; a deny closes 4403. */
   use?: ReadonlyArray<Middleware>;
   /**
@@ -31,6 +31,10 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
    * place a socket handler sees a Context: on Cloudflare the connection runs
    * inside a Durable Object with no live Context, so read cookies, headers,
    * query, and middleware-set values here. Runs on both Node and Cloudflare.
+   *
+   * The second argument is the route's params, validated at the upgrade:
+   * `RouteParams<RouteId>` when bound via `serverRoute(r).socket`, or `{}` for
+   * a bare `defineSocket`.
    *
    * `socket.data` is the connect-time seed and is read-only: each event reads
    * the original factory value (on Cloudflare the DO is hibernatable and does
@@ -41,7 +45,7 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
    * small: it rides a request header to the Durable Object, so large results
    * can fail the upgrade.
    */
-  data?: (c: Context) => Data | Promise<Data>;
+  data?: (c: Context, params: Params) => Data | Promise<Data>;
   /**
    * Per-connection setup. Receives only the socket (its `data` is the `data`
    * factory result). May return a teardown fn.
@@ -68,11 +72,12 @@ export interface SocketHandler<Incoming, Outgoing, Data> {
 // threaded by the build (the prepended __moduleKey export + the client stub),
 // so they are optional here and unused on the server (the registry keys by the
 // module's own __moduleKey + the serverSockets property name).
-export interface SocketDef<Incoming, Outgoing, Data> extends SocketHandler<
+export interface SocketDef<
   Incoming,
   Outgoing,
-  Data
-> {
+  Data,
+  Params = {},
+> extends SocketHandler<Incoming, Outgoing, Data, Params> {
   readonly __incoming?: Incoming;
   readonly __outgoing?: Outgoing;
   /**
@@ -89,27 +94,35 @@ export interface SocketDef<Incoming, Outgoing, Data> extends SocketHandler<
 /**
  * The client-facing reference. On the server it is the SocketDef; on the client
  * the `.server` import is stripped to a `{ __module, __socket }` descriptor. The
- * message types ride phantom fields so `useSocket(ref)` infers them.
+ * message and param types ride phantom fields so `useSocket(ref)` infers them:
+ * `__incoming`/`__outgoing` (the duplex message types) and `__params` (the
+ * route's params, so `useSocket(ref, { params })` is typed).
  */
-export interface SocketRef<Incoming, Outgoing> {
+export interface SocketRef<Incoming, Outgoing, Params = {}> {
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_SOCKET_FIELD]?: string;
   readonly __incoming?: Incoming;
   readonly __outgoing?: Outgoing;
+  /**
+   * The declared route pattern's params when constructed via
+   * `serverRoute(r).socket`, so `useSocket(ref, { params })` is typed and
+   * required for a param-bearing binding. `{}` for a bare `defineSocket`.
+   */
+  readonly __params?: Params;
   /**
    * Idiomatic ref-method form of `useSocket`. Equivalent to
    * `useSocket(ref, opts)` but called directly on the ref:
    * `serverSockets.feed.useSocket({ onMessage })`.
    */
   useSocket(
-    opts?: UseSocketOptions<SocketRef<Incoming, Outgoing>>
-  ): UseSocketResult<SocketRef<Incoming, Outgoing>>;
+    opts?: UseSocketOptions<SocketRef<Incoming, Outgoing, Params>>
+  ): UseSocketResult<SocketRef<Incoming, Outgoing, Params>>;
 }
 
-function makeSocketRef<Incoming, Outgoing, Data>(
-  handler: SocketHandler<Incoming, Outgoing, Data>,
+function makeSocketRef<Incoming, Outgoing, Data, Params>(
+  handler: SocketHandler<Incoming, Outgoing, Data, Params>,
   routeId?: string
-): SocketRef<Incoming, Outgoing> {
+): SocketRef<Incoming, Outgoing, Params> {
   // A copy of the handler IS the runtime def on the server; the type presents
   // as a client SocketRef. The build strips the body on the client and replaces
   // it with the descriptor stub, so this object only runs server-side.
@@ -120,7 +133,7 @@ function makeSocketRef<Incoming, Outgoing, Data>(
   const ref = {
     ...handler,
     ...(routeId !== undefined ? { __routeId: routeId } : {}),
-  } as unknown as SocketRef<Incoming, Outgoing>;
+  } as unknown as SocketRef<Incoming, Outgoing, Params>;
   // Attach the `.useSocket` ref-method to the def itself, for the same reason
   // `defineRoom` attaches `.useRoom`: SSR skips the `.server`->stub transform,
   // so a server-rendered component calling `serverSockets.x.useSocket(...)` runs
@@ -151,9 +164,14 @@ export function defineSocket<Incoming, Outgoing, Data = undefined>(
  * route's page-use (auth) chain from it. Framework-private; not part of the
  * public API.
  */
-export function _defineRouteSocket<Incoming, Outgoing, Data = undefined>(
+export function _defineRouteSocket<
+  Incoming,
+  Outgoing,
+  Data = undefined,
+  Params = {},
+>(
   routeId: string,
-  handler: SocketHandler<Incoming, Outgoing, Data>
-): SocketRef<Incoming, Outgoing> {
+  handler: SocketHandler<Incoming, Outgoing, Data, Params>
+): SocketRef<Incoming, Outgoing, Params> {
   return makeSocketRef(handler, routeId);
 }

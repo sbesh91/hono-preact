@@ -7,6 +7,7 @@ import {
 } from '../define-socket.js';
 import { serverRoute } from '../server-route.js';
 import type { Serialize } from '../internal/serialize.js';
+import type { Context } from 'hono';
 
 type In = { kind: 'ping' } | { kind: 'say'; text: string };
 type Out = { kind: 'pong'; at: number } | { kind: 'said'; text: string };
@@ -72,7 +73,7 @@ function _routeSocketProbe() {
       expectTypeOf(socket.data).toEqualTypeOf<Readonly<{ joinedAt: number }>>();
     },
   });
-  expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out>>();
+  expectTypeOf(ref).toEqualTypeOf<SocketRef<In, Out, { id: string }>>();
 }
 
 // `open` takes only the socket now: a two-argument open does not type-check.
@@ -120,6 +121,26 @@ function _asyncDataProbe() {
   expectTypeOf(refAsync).toEqualTypeOf<SocketRef<In, Out>>();
   void refAsync;
 }
+
+// A param-bearing binding types the data factory's params from the route.
+// Data is left at its default (undefined) here: only Incoming/Outgoing are
+// given explicitly, so a returned value would need a third explicit type
+// argument to type-check (TS does not infer a defaulted trailing type
+// parameter once earlier ones are given explicitly).
+serverRoute('/board/:id').socket<{ ping: true }, { pong: true }>({
+  data: (_c: Context, params) => {
+    expectTypeOf(params).toEqualTypeOf<{ id: string }>();
+    return undefined;
+  },
+});
+
+// A bare socket's factory params are {} (second arg present but empty).
+defineSocket<{ ping: true }, { pong: true }>({
+  data: (_c: Context, params) => {
+    expectTypeOf(params).toEqualTypeOf<{}>();
+    return undefined;
+  },
+});
 
 void _probes;
 void _routeSocketProbe;

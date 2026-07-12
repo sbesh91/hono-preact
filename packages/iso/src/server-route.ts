@@ -135,20 +135,17 @@ export interface RouteBinder<RouteId extends string> {
 
   /**
    * Define a duplex WebSocket bound to this route. Consume with
-   * `useSocket(serverSockets.x)`. Binding selects the route's page-level
-   * `use` (auth) chain for the upgrade guard probe: the declared pattern is
-   * stamped on the def, validated fail-closed at boot (against the module
-   * mount, or the route table for src/server registry modules), and takes
-   * precedence over the module-mount derivation. The handler receives
-   * `ctx.c` (the Hono Context for the upgrade request); there is no
-   * `ctx.params` field because the socket endpoint is query-string-only at
-   * runtime, so a guard on a param-bearing pattern sees empty
-   * `ctx.location.pathParams`. Binding selects the use chain, not param
-   * typing; typed route params for sockets are reserved for a later release.
+   * `useSocket(serverSockets.x, { params })`. Binding selects the route's
+   * page-level `use` (auth) chain for the upgrade guard probe AND, for a
+   * param-bearing route, requires the client to supply the route params via a
+   * typed `params` option. Those params are validated at the upgrade (a missing
+   * slot denies 4403), read by the guard as `ctx.location.pathParams`, and
+   * passed to the edge `data` factory as its second argument. The declared
+   * pattern is stamped on the def and validated fail-closed at boot.
    */
   socket<Incoming, Outgoing, Data = undefined>(
-    handler: SocketHandler<Incoming, Outgoing, Data>
-  ): SocketRef<Incoming, Outgoing>;
+    handler: SocketHandler<Incoming, Outgoing, Data, RouteParams<RouteId>>
+  ): SocketRef<Incoming, Outgoing, RouteParams<RouteId>>;
 
   /**
    * Define a broadcasting room bound to this route, addressed by a `Channel`.

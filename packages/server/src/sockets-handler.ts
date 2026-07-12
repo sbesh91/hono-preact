@@ -87,11 +87,13 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       // coerced to {}); no factory means undefined (the Data default). It is the
       // connect-time seed: on Node it is a closure object the handler may
       // mutate, but on Cloudflare it is NOT a cross-event mutable store (see
-      // define-socket).
+      // define-socket). The `{}` second argument satisfies the factory's typed
+      // Params contract; resolving and validating real route params from the
+      // upgrade request is not wired in yet.
       const data: unknown = denied
         ? undefined
         : socketDef.data
-          ? await socketDef.data(ctx)
+          ? await socketDef.data(ctx, {})
           : undefined;
       warnIfOverForwardBudget(data, opts.dev ?? false, 'socket');
 
@@ -198,7 +200,9 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
       return connector({ c, kind: 'deny' });
     }
     const { socketDef, moduleKey, name } = resolved;
-    const data = socketDef.data ? await socketDef.data(c) : undefined;
+    // The `{}` second argument satisfies the factory's typed Params contract;
+    // see the matching Node-path comment above.
+    const data = socketDef.data ? await socketDef.data(c, {}) : undefined;
     return connector({
       c,
       kind: 'socket-forward',

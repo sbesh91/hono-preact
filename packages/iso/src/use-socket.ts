@@ -23,7 +23,7 @@ type Incoming<R> = R extends SocketRef<infer I, unknown> ? I : never;
 // Extract the Outgoing message type from a SocketRef (received by the client).
 type Outgoing<R> = R extends SocketRef<unknown, infer O> ? O : never;
 
-export type UseSocketOptions<R extends SocketRef<unknown, unknown>> = {
+export type UseSocketOptions<R extends SocketRef<unknown, unknown, unknown>> = {
   /** Called on every incoming message. Does NOT trigger a re-render. */
   onMessage?: (msg: Serialize<Outgoing<R>>) => void;
   /** Called when the connection opens. */
@@ -49,7 +49,7 @@ export type UseSocketOptions<R extends SocketRef<unknown, unknown>> = {
   lastMessage?: boolean;
 };
 
-export type UseSocketResult<R extends SocketRef<unknown, unknown>> = {
+export type UseSocketResult<R extends SocketRef<unknown, unknown, unknown>> = {
   send: (msg: Incoming<R>) => void;
   status: SocketStatus;
   close: (code?: number, reason?: string) => void;
@@ -57,7 +57,7 @@ export type UseSocketResult<R extends SocketRef<unknown, unknown>> = {
   lastMessage?: Serialize<Outgoing<R>>;
 };
 
-export function useSocket<R extends SocketRef<unknown, unknown>>(
+export function useSocket<R extends SocketRef<unknown, unknown, unknown>>(
   ref: R,
   opts?: UseSocketOptions<R>
 ): UseSocketResult<R> {
