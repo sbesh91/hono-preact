@@ -1,5 +1,5 @@
 import type { VNode } from 'preact';
-import { ScrollStage, useStageProgress } from '../scroll/stage.js';
+import { ScrollStage, useStageValue } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { clamp01 } from '../scroll/progress.js';
 
@@ -21,17 +21,21 @@ const IDEAS: { lead: string; body: string }[] = [
   },
 ];
 
+/** The morph's own 0..1, a window of the stage playhead. CSS derives the same
+ *  value from --hx-p (see .hx-vt2__demo); this mirrors it for the one thing CSS
+ *  cannot do here, which is swap the URL and the labels at the halfway point. */
+const morphAmount = (progress: number): number =>
+  clamp01((progress - 0.08) / 0.78);
+
 // Scroll scrubs a faked-but-real shared-element morph: --m tracks the stage
 // playhead, so the accent card grows from a list row into the page header as
-// you scroll (sibling rows collapse, the detail body fades in). No autoplay and
-// no button; the reader drives it with scroll, and reduced motion / no-JS
-// render the settled (morphed) state via the stage fallback.
+// you scroll (sibling rows collapse, the detail body fades in). The morph itself
+// is pure CSS off the playhead, so scrubbing it costs no render; only the
+// halfway flip below does. No autoplay and no button; the reader drives it with
+// scroll, and reduced motion / no-JS render the settled (morphed) state via the
+// stage fallback.
 function MorphDemo(): VNode {
-  const { progress } = useStageProgress();
-  // Track almost the whole scrub so any scroll immediately moves the morph,
-  // instead of a long dead zone where the pin feels like an unexplained hijack.
-  const m = clamp01((progress - 0.08) / 0.78);
-  const open = m > 0.5;
+  const open = useStageValue((progress) => morphAmount(progress) > 0.5);
   return (
     <div class="hx-vt2__demo">
       {/* An explicit scrubber up top makes it obvious the pinned scroll is
@@ -44,11 +48,11 @@ function MorphDemo(): VNode {
             : 'Scroll to morph the card into its page ↓'}
         </span>
         <div class="hx-morph__scrub-track">
-          <div class="hx-morph__scrub-fill" style={{ '--m': m }} />
+          <div class="hx-morph__scrub-fill" />
         </div>
       </div>
       <BrowserFrame url={open ? '/demo/projects/auth' : '/demo/projects'}>
-        <div class="hx-morph" style={{ '--m': m }}>
+        <div class="hx-morph">
           <div class="hx-morph__hero">
             <span class="hx-morph__title">Ship the auth flow</span>
             <span class="hx-morph__meta">

@@ -1,8 +1,7 @@
 import type { VNode } from 'preact';
-import { LiveStage, useStageProgress } from '../scroll/stage.js';
+import { LiveStage, useStageValue } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
-import { useElementSize } from '../scroll/motion.js';
 
 // Rendered literally in a <pre>. Inner backticks and ${...} are escaped so the
 // template literal reproduces the framework snippet verbatim.
@@ -44,43 +43,59 @@ const PEERS = [
   },
 ] as const;
 
-// Reads the LiveStage playhead (a looping 0..1 rAF clock) to drift each peer's
-// cursor, keep a presence roster, and light up/down frame chips. Keeps moving
-// without any scrolling because LiveStage drives it.
-function LiveRoom(): VNode {
-  const { progress } = useStageProgress();
-  const t = progress * 2 * Math.PI;
-
-  // The peers drift continuously (this clock never stops while the chapter is
-  // in view, unlike the scroll-scrubbed demos elsewhere on the page), so their
-  // position is a measured-px `transform` rather than a `left`/`top`
-  // percentage: that keeps a sustained per-frame animation off layout.
-  const [roomRef, room] = useElementSize<HTMLDivElement>();
-
+// One frame chip, lighting up as its frame lands on the looping clock. Its own
+// component so each chip owns its threshold and flips on its own.
+function FrameChip({ dir, label, at }: (typeof FRAMES)[number]): VNode {
+  const live = useStageValue((progress) => progress >= at);
   return (
-    <div class="hx-rt-room" ref={roomRef}>
-      {PEERS.map((p, i) => {
-        const xPct = 50 + Math.sin(t * p.sx + p.ph) * p.rx;
-        const yPct = 50 + Math.cos(t * p.sy + p.ph) * p.ry;
-        // -2px keeps the arrow's tip (not its top-left corner) on the point,
-        // matching the CSS `transform: translate(-2px, -2px)` this replaces.
-        const x = (xPct / 100) * room.width - 2;
-        const y = (yPct / 100) * room.height - 2;
-        return (
+    <li class="hx-rt-chip" data-live={live ? '' : undefined}>
+      <span class="hx-rt-chip__dir" aria-hidden="true">
+        {dir}
+      </span>
+      {label}
+    </li>
+  );
+}
+
+// The room reads the LiveStage playhead (a looping 0..1 rAF clock), so unlike
+// the scroll-scrubbed chapters it never stops while it is on screen. That makes
+// it the one place a per-frame render would have cost the most, and the one that
+// gains the most from not doing any: each peer's drift is now a CSS
+// `sin()`/`cos()` of --hx-p on its own anchor box (see .hx-rt-peer-anchor), so
+// five cursors orbit continuously without this component rendering at all. The
+// roster is static; only the frame chips flip, and they do it one at a time.
+function LiveRoom(): VNode {
+  return (
+    <div class="hx-rt-room">
+      {PEERS.map((p, i) => (
+        // The anchor spans the room, so a percentage translate on it resolves
+        // against the room's box (a translate on the little cursor itself would
+        // resolve against the cursor). The -2px keeps the arrow's tip, not its
+        // corner, on the point.
+        <span
+          key={p.name}
+          class="hx-rt-peer-anchor"
+          aria-hidden="true"
+          style={{
+            '--rx': p.rx,
+            '--ry': p.ry,
+            '--sx': p.sx,
+            '--sy': p.sy,
+            '--ph': p.ph,
+          }}
+        >
           <span
-            key={p.name}
             class="hx-rt-peer"
             data-self={i === PEERS.length - 1 ? '' : undefined}
-            style={{ transform: `translate(${x}px, ${y}px)`, '--c': p.color }}
-            aria-hidden="true"
+            style={{ '--c': p.color }}
           >
             <svg viewBox="0 0 16 16" width="15" height="15">
               <path d="M2 1.5 L2 13 L5 10.2 L7.1 14.6 L9.1 13.7 L7 9.4 L11 9.4 Z" />
             </svg>
             <span class="hx-rt-peer__name">{p.name}</span>
           </span>
-        );
-      })}
+        </span>
+      ))}
 
       <div class="hx-rt-roster" aria-hidden="true">
         <span class="hx-rt-roster__avatars">
@@ -94,21 +109,9 @@ function LiveRoom(): VNode {
       </div>
 
       <ul class="hx-rt-chips">
-        {FRAMES.map((frame) => {
-          const live = progress >= frame.at;
-          return (
-            <li
-              key={frame.dir + frame.label}
-              class="hx-rt-chip"
-              data-live={live ? '' : undefined}
-            >
-              <span class="hx-rt-chip__dir" aria-hidden="true">
-                {frame.dir}
-              </span>
-              {frame.label}
-            </li>
-          );
-        })}
+        {FRAMES.map((frame) => (
+          <FrameChip key={frame.dir + frame.label} {...frame} />
+        ))}
       </ul>
     </div>
   );

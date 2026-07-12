@@ -1,11 +1,67 @@
 import { createContext } from 'preact';
 import type { ComponentChildren, VNode } from 'preact';
-import { useContext, useEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { computeProgress, sliceProgress } from './progress.js';
 import { usePrefersReducedMotion } from './motion.js';
 
-export interface StageValue {
-  progress: number;
+/**
+ * The one custom property every scroll-driven visual on this page reads. A stage
+ * writes it on its own element each frame and it inherits to the whole scene, so
+ * continuous motion (lane fills, the playhead, the morph, the drifting cursors)
+ * is pure CSS off a single number and costs no render at all. It is registered
+ * as a `<number>` in root.css (@property) and seeded inline at SSR with the
+ * stage's fallback, so it always resolves: no-JS and reduced-motion readers get
+ * the settled scene rather than an unstyled one.
+ */
+const P = '--hx-p';
+
+/** How the DOM sees the playhead: 4dp is finer than a device pixel at any size. */
+const format = (progress: number): string => progress.toFixed(4);
+
+/**
+ * The playhead as a store rather than a render value. Calling `setProgress` on
+ * every rAF tick used to push a new context value through the tree, re-rendering
+ * every Actor, Lane and Region in the pinned chapter 60+ times a second during
+ * momentum scroll. Subscribers now pull only the value they care about (see
+ * `useStageValue`), so a threshold flip costs one render and a continuous value
+ * costs none.
+ */
+export interface Playhead {
+  get(): number;
+  subscribe(listener: (progress: number) => void): () => void;
+}
+
+interface MutablePlayhead extends Playhead {
+  set(progress: number): void;
+}
+
+function createPlayhead(initial: number): MutablePlayhead {
+  let current = initial;
+  const listeners = new Set<(progress: number) => void>();
+  return {
+    get: () => current,
+    set(progress) {
+      if (progress === current) return;
+      current = progress;
+      for (const listener of listeners) listener(progress);
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+/** Hold one playhead for the life of the component (created once, never swapped). */
+function usePlayhead(initial: number): MutablePlayhead {
+  const ref = useRef<MutablePlayhead | null>(null);
+  if (ref.current === null) ref.current = createPlayhead(initial);
+  return ref.current;
+}
+
+export interface StageValue extends Playhead {
   pinned: boolean;
   /** True once client JS is actually driving the playhead. False in SSR and
    * when the bundle never runs, so progress-gated UI (Region skeletons) can
@@ -13,14 +69,45 @@ export interface StageValue {
   live: boolean;
 }
 
-const StageContext = createContext<StageValue>({
-  progress: 0,
+const IDLE: StageValue = {
+  get: () => 0,
+  subscribe: () => () => {},
   pinned: false,
   live: false,
-});
+};
 
-export function useStageProgress(): StageValue {
+const StageContext = createContext<StageValue>(IDLE);
+
+export function useStage(): StageValue {
   return useContext(StageContext);
+}
+
+/**
+ * Read a *derived* slice of the playhead. The component re-renders only when the
+ * selected value actually changes, so `p => p > 0.4` costs one render as the
+ * reader crosses 0.4 and nothing across the rest of the scrub.
+ *
+ * `select` must return a primitive: values are compared with Object.is, so
+ * returning a fresh object every frame would defeat the whole point. Anything
+ * genuinely continuous belongs in CSS, derived from `--hx-p`, not here.
+ */
+export function useStageValue<T>(select: (progress: number) => T): T {
+  const stage = useStage();
+  // Read through a ref so an inline arrow (the common case at every call site)
+  // doesn't resubscribe on every render.
+  const selectRef = useRef(select);
+  selectRef.current = select;
+  const [value, setValue] = useState(() => select(stage.get()));
+  useEffect(() => {
+    const apply = (progress: number) => {
+      const next = selectRef.current(progress);
+      setValue((prev) => (Object.is(prev, next) ? prev : next));
+    };
+    // Catch up on mount: SSR rendered the fallback, the driver has since moved.
+    apply(stage.get());
+    return stage.subscribe(apply);
+  }, [stage]);
+  return value;
 }
 
 export function ScrollStage({
@@ -37,14 +124,16 @@ export function ScrollStage({
   children: ComponentChildren;
 }): VNode {
   const reduced = usePrefersReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-  const [progress, setProgress] = useState(fallbackProgress);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState(false);
+  const playhead = usePlayhead(fallbackProgress);
 
   useEffect(() => {
     if (reduced) return;
-    const el = ref.current;
-    if (!el) return;
+    const stage = stageRef.current;
+    const pin = pinRef.current;
+    if (!stage || !pin) return;
     setLive(true);
     let raf = 0;
     let active = false;
@@ -55,15 +144,28 @@ export function ScrollStage({
     // stage enters view and on resize, which is when its position can change.
     let docTop = 0;
     let height = 0;
-    let viewportH = 0;
+    let pinHeight = 0;
     const measure = () => {
-      docTop = el.getBoundingClientRect().top + window.scrollY;
-      height = el.offsetHeight;
-      viewportH = window.innerHeight;
+      docTop = stage.getBoundingClientRect().top + window.scrollY;
+      height = stage.offsetHeight;
+      // The pin, not the window (see computeProgress). The pin is the 100svh box
+      // the scrub actually runs against, and measuring it is what keeps the
+      // playhead honest when a mobile URL bar collapses mid-scroll.
+      pinHeight = pin.offsetHeight;
     };
     const tick = () => {
       raf = 0;
-      setProgress(computeProgress(docTop - window.scrollY, height, viewportH));
+      const progress = computeProgress(
+        docTop - window.scrollY,
+        height,
+        pinHeight
+      );
+      // The entire per-frame cost of the scrub: one custom property. Every
+      // continuous visual in the scene derives from it in CSS.
+      pin.style.setProperty(P, format(progress));
+      // Discrete consumers (a status chip, a pane swap) hear about it only when
+      // their own derived value actually changed.
+      playhead.set(progress);
     };
     const onScroll = () => {
       if (active && !raf) raf = requestAnimationFrame(tick);
@@ -91,7 +193,7 @@ export function ScrollStage({
         },
         { rootMargin: '100px' }
       );
-      io.observe(el);
+      io.observe(stage);
     }
     const onResize = () => {
       if (!active) return;
@@ -106,16 +208,33 @@ export function ScrollStage({
       window.removeEventListener('resize', onResize);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [reduced]);
+  }, [reduced, playhead]);
+
+  const value = useMemo<StageValue>(
+    () => ({
+      get: playhead.get,
+      subscribe: playhead.subscribe,
+      pinned: !reduced,
+      // `reduced` starts false so the first client render matches SSR, which
+      // means a reduced-motion reader mounts the live stage for one frame and
+      // only then flips. `live` must fall back with it: nothing is driving the
+      // playhead in the static branch, so a stale `live: true` would leave every
+      // Region waiting for a threshold that can never arrive, stranding the
+      // reader on a skeleton.
+      live: live && !reduced,
+    }),
+    [playhead, reduced, live]
+  );
 
   if (reduced) {
     return (
-      <div class="hx-stage hx-stage--static" ref={ref} aria-label={label}>
-        <StageContext.Provider
-          value={{ progress: fallbackProgress, pinned: false, live: false }}
-        >
-          {children}
-        </StageContext.Provider>
+      <div
+        class="hx-stage hx-stage--static"
+        ref={stageRef}
+        aria-label={label}
+        style={{ [P]: fallbackProgress }}
+      >
+        <StageContext.Provider value={value}>{children}</StageContext.Provider>
       </div>
     );
   }
@@ -127,22 +246,27 @@ export function ScrollStage({
   return (
     <div
       class="hx-stage"
-      ref={ref}
+      ref={stageRef}
       style={{
         '--stage-pages': pages,
         '--stage-pages-narrow': pagesNarrow ?? pages,
       }}
       aria-label={label}
     >
-      <div class="hx-stage__pin">
-        <StageContext.Provider value={{ progress, pinned: true, live }}>
-          {children}
-        </StageContext.Provider>
+      {/* --hx-p is seeded with the fallback so the SSR'd scene is the settled
+          one; the effect above overwrites it on this node every frame. */}
+      <div class="hx-stage__pin" ref={pinRef} style={{ [P]: fallbackProgress }}>
+        <StageContext.Provider value={value}>{children}</StageContext.Provider>
       </div>
     </div>
   );
 }
 
+/**
+ * Re-normalizes a window of the parent playhead to a local 0..1, for both the JS
+ * consumers below it (through context) and its CSS descendants (it republishes
+ * --hx-p on its own element). `display: contents`, so it adds no box.
+ */
 export function Actor({
   start,
   end,
@@ -152,17 +276,38 @@ export function Actor({
   end: number;
   children: ComponentChildren;
 }): VNode {
-  const parent = useStageProgress();
+  const parent = useStage();
+  const ref = useRef<HTMLDivElement>(null);
+  const local = usePlayhead(sliceProgress(parent.get(), start, end));
+
+  useEffect(() => {
+    const apply = (progress: number) => {
+      const sliced = sliceProgress(progress, start, end);
+      ref.current?.style.setProperty(P, format(sliced));
+      local.set(sliced);
+    };
+    apply(parent.get());
+    return parent.subscribe(apply);
+  }, [parent, start, end, local]);
+
+  const value = useMemo<StageValue>(
+    () => ({
+      get: local.get,
+      subscribe: local.subscribe,
+      pinned: parent.pinned,
+      live: parent.live,
+    }),
+    [local, parent]
+  );
+
   return (
-    <StageContext.Provider
-      value={{
-        progress: sliceProgress(parent.progress, start, end),
-        pinned: parent.pinned,
-        live: parent.live,
-      }}
+    <div
+      class="hx-actor"
+      ref={ref}
+      style={{ [P]: sliceProgress(parent.get(), start, end) }}
     >
-      {children}
-    </StageContext.Provider>
+      <StageContext.Provider value={value}>{children}</StageContext.Provider>
+    </div>
   );
 }
 
@@ -177,7 +322,7 @@ export function LiveStage({
 }): VNode {
   const reduced = usePrefersReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
-  const [progress, setProgress] = useState(fallbackProgress);
+  const playhead = usePlayhead(fallbackProgress);
 
   useEffect(() => {
     if (reduced) return;
@@ -187,7 +332,9 @@ export function LiveStage({
     let running = false;
     const loop = (ts: number) => {
       if (!running) return;
-      setProgress((ts % periodMs) / periodMs);
+      const progress = (ts % periodMs) / periodMs;
+      el.style.setProperty(P, format(progress));
+      playhead.set(progress);
       raf = requestAnimationFrame(loop);
     };
     const start = () => {
@@ -219,16 +366,24 @@ export function LiveStage({
       io?.disconnect();
       stop();
     };
-  }, [reduced, periodMs]);
+  }, [reduced, periodMs, playhead]);
+
+  const value = useMemo<StageValue>(
+    () => ({
+      get: playhead.get,
+      subscribe: playhead.subscribe,
+      pinned: false,
+      // Unconditionally live: without JS the fallbackProgress renders the room
+      // fully-on, which is the right static state, and no Region hangs off a
+      // LiveStage.
+      live: true,
+    }),
+    [playhead]
+  );
 
   return (
-    <div class="hx-live" ref={ref}>
-      {/* live is unconditionally true: without JS the fallbackProgress renders
-          the room fully-on, which is the right static state, and no Region
-          hangs off a LiveStage. */}
-      <StageContext.Provider value={{ progress, pinned: false, live: true }}>
-        {children}
-      </StageContext.Provider>
+    <div class="hx-live" ref={ref} style={{ [P]: fallbackProgress }}>
+      <StageContext.Provider value={value}>{children}</StageContext.Provider>
     </div>
   );
 }

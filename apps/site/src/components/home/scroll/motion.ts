@@ -25,33 +25,6 @@ export function useIsNarrow(maxRem = 48): boolean {
 }
 
 /**
- * Tracks an element's padding-box size in px, for scroll-driven children that
- * position themselves with `transform` instead of a percentage `left`/`top`/
- * `width` (a layout property recomputed on every progress tick). Reads
- * `clientWidth`/`clientHeight` rather than the ResizeObserverEntry's own
- * `contentRect` because a `position: absolute; left: 0` child's containing
- * block is the padding box, not the (padding-excluded) content box — the same
- * box a percentage `left`/`width` resolves against.
- */
-export function useElementSize<T extends Element>(): [
-  RefObject<T>,
-  { width: number; height: number },
-] {
-  const ref = useRef<T>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      setSize({ width: el.clientWidth, height: el.clientHeight });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, size];
-}
-
-/**
  * Reveal-on-scroll trigger. Returns a ref to attach to an element and a flag
  * that flips to true (once) when the element scrolls into view, so a group can
  * animate its children in on arrival rather than at mount. When motion is

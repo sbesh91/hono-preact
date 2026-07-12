@@ -1,9 +1,7 @@
 import type { VNode } from 'preact';
-import { ScrollStage, useStageProgress } from '../scroll/stage.js';
+import { ScrollStage, useStageValue } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
-import { clamp01 } from '../scroll/progress.js';
-import { useElementSize } from '../scroll/motion.js';
 
 const SNIPPET = `// one line in your app config
 export default defineApp({ speculation: true });
@@ -19,32 +17,38 @@ const WARM_ROWS = [
   { name: 'chart.js', at: 0.56 },
 ];
 
+// One row of the warm-up panel. Its own component so its threshold is its own
+// subscription: the row flips once when the playhead passes it, instead of the
+// whole panel re-rendering because some other row moved.
+function WarmRow({ name, at }: { name: string; at: number }): VNode {
+  const ready = useStageValue((progress) => progress > at);
+  return (
+    <li class="hx-prefetch__row">
+      <code>{name}</code>
+      <span class="hx-prefetch__ready" data-ready={ready ? '' : undefined}>
+        {ready ? 'ready' : '…'}
+      </span>
+    </li>
+  );
+}
+
 // One playhead drives the whole beat: a pointer glides to the "Invoices" link,
-// hovering warms that route's resources in parallel, then a click opens the
-// page instantly from cache. Every value derives from progress; there is no
-// real pointer input.
+// hovering warms that route's resources in parallel, then a click opens the page
+// instantly from cache. There is no real pointer input.
+//
+// The glide itself is CSS (see .hx-prefetch__cursor, which walks a percentage of
+// its own full-size box off --hx-p), so the cursor tracks the scroll with no
+// render and no measured geometry. What is left here is the discrete beats: the
+// link warming, the click pulse, and the page opening.
 function PrefetchDemo(): VNode {
-  const { progress } = useStageProgress();
-  const hovering = progress > 0.32;
-  const opened = progress > 0.78;
-
-  // Glide up onto the "Invoices" link and settle there *before* warming starts,
-  // so the pointer is visibly hovering the link through the whole preload; a
-  // click pulse fires later as the page opens.
-  const travel = clamp01((progress - 0.04) / 0.24); // on the link by ~0.28
-  const cursorLeftPct = 33 + travel * 54; // 33% -> 87% (over "Invoices")
-  const cursorTopPct = 80 - travel * 70; // 80% -> 10% (the nav row)
-  const clicking = progress > 0.7 && progress < 0.82;
-
-  // .hx-prefetch is the cursor's positioning parent; measure it so the cursor
-  // can move via `transform` (a px offset) instead of a `left`/`top`
-  // percentage, which is a layout property recomputed on every progress tick.
-  const [boxRef, box] = useElementSize<HTMLDivElement>();
-  const cursorX = (cursorLeftPct / 100) * box.width;
-  const cursorY = (cursorTopPct / 100) * box.height;
+  const hovering = useStageValue((progress) => progress > 0.32);
+  const opened = useStageValue((progress) => progress > 0.78);
+  const clicking = useStageValue(
+    (progress) => progress > 0.7 && progress < 0.82
+  );
 
   return (
-    <div class="hx-prefetch" ref={boxRef}>
+    <div class="hx-prefetch">
       <div class="hx-prefetch__nav">
         <span class="hx-prefetch__brand">Acme</span>
         <span class="hx-prefetch__link" data-warm={hovering ? '' : undefined}>
@@ -52,11 +56,7 @@ function PrefetchDemo(): VNode {
         </span>
       </div>
 
-      <span
-        class="hx-prefetch__cursor"
-        aria-hidden="true"
-        style={{ transform: `translate(${cursorX}px, ${cursorY}px)` }}
-      >
+      <span class="hx-prefetch__cursor" aria-hidden="true">
         {clicking && <span class="hx-prefetch__click" />}
         <svg viewBox="0 0 16 16" width="19" height="19" aria-hidden="true">
           <path
@@ -76,20 +76,9 @@ function PrefetchDemo(): VNode {
             : 'Hover a link to warm its route'}
         </p>
         <ul class="hx-prefetch__rows">
-          {WARM_ROWS.map((row) => {
-            const ready = progress > row.at;
-            return (
-              <li key={row.name} class="hx-prefetch__row">
-                <code>{row.name}</code>
-                <span
-                  class="hx-prefetch__ready"
-                  data-ready={ready ? '' : undefined}
-                >
-                  {ready ? 'ready' : '…'}
-                </span>
-              </li>
-            );
-          })}
+          {WARM_ROWS.map((row) => (
+            <WarmRow key={row.name} name={row.name} at={row.at} />
+          ))}
         </ul>
       </div>
 
