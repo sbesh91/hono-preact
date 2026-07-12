@@ -17,11 +17,15 @@ import type {
 import type { Topic } from './define-channel.js';
 import { subscribeTopic } from './internal/subscribe-topic.js';
 import {
-  defineSocket,
+  _defineRouteSocket,
   type SocketHandler,
   type SocketRef,
 } from './define-socket.js';
-import { defineRoom, type RoomHandler, type RoomRef } from './define-room.js';
+import {
+  _defineRouteRoom,
+  type RoomHandler,
+  type RoomRef,
+} from './define-room.js';
 import type { Channel } from './define-channel.js';
 import {
   _defineRouteAction,
@@ -131,10 +135,16 @@ export interface RouteBinder<RouteId extends string> {
 
   /**
    * Define a duplex WebSocket bound to this route. Consume with
-   * `useSocket(serverSockets.x)`. The handler receives `ctx.c` (the Hono
-   * Context for the upgrade request); there is no `ctx.params` field because
-   * the socket endpoint is query-string-only at runtime. Typed route params
-   * for sockets are reserved for a later release (rooms).
+   * `useSocket(serverSockets.x)`. Binding selects the route's page-level
+   * `use` (auth) chain for the upgrade guard probe: the declared pattern is
+   * stamped on the def, validated fail-closed at boot (against the module
+   * mount, or the route table for src/server registry modules), and takes
+   * precedence over the module-mount derivation. The handler receives
+   * `ctx.c` (the Hono Context for the upgrade request); there is no
+   * `ctx.params` field because the socket endpoint is query-string-only at
+   * runtime, so a guard on a param-bearing pattern sees empty
+   * `ctx.location.pathParams`. Binding selects the use chain, not param
+   * typing; typed route params for sockets are reserved for a later release.
    */
   socket<Incoming, Outgoing, Data = undefined>(
     handler: SocketHandler<Incoming, Outgoing, Data>
@@ -146,8 +156,10 @@ export interface RouteBinder<RouteId extends string> {
    * from the CHANNEL name pattern (e.g. `defineChannel('room/:roomId')`), not
    * the route's pattern: the room key rides the wire (the `&r=channel.key(...)`
    * query param), so the channel is the only param source available at runtime
-   * on the flat socket endpoint. Attaching the room to the route node only
-   * wires its `use` inheritance.
+   * on the flat socket endpoint. Binding the route wires the room's page-level
+   * `use` inheritance: the declared pattern is stamped on the def, validated
+   * fail-closed at boot, and takes precedence over the module-mount
+   * derivation when the upgrade guard chain is resolved.
    */
   room<
     Name extends string,
@@ -198,7 +210,7 @@ export function serverRoute<
       fn: ActionFn<unknown, unknown, unknown>,
       opts?: DefineActionOptions<unknown, unknown>
     ) => _defineRouteAction(route, fn, opts),
-    socket: (handler) => defineSocket(handler),
-    room: (channel, handler) => defineRoom(channel, handler),
+    socket: (handler) => _defineRouteSocket(route, handler),
+    room: (channel, handler) => _defineRouteRoom(route, channel, handler),
   };
 }

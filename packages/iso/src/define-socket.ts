@@ -75,6 +75,15 @@ export interface SocketDef<Incoming, Outgoing, Data> extends SocketHandler<
 > {
   readonly __incoming?: Incoming;
   readonly __outgoing?: Outgoing;
+  /**
+   * The declared route pattern when constructed via `serverRoute(r).socket`.
+   * Read by the boot binding guard (fail-closed validation against the module
+   * mount, or the route table for src/server registry modules) and by
+   * connection resolution, where it takes precedence over the module-mount
+   * derivation for the page-use (auth) chain. Absent on bare `defineSocket`
+   * defs, which stay route-independent.
+   */
+  readonly __routeId?: string;
 }
 
 /**
@@ -97,6 +106,31 @@ export interface SocketRef<Incoming, Outgoing> {
   ): UseSocketResult<SocketRef<Incoming, Outgoing>>;
 }
 
+function makeSocketRef<Incoming, Outgoing, Data>(
+  handler: SocketHandler<Incoming, Outgoing, Data>,
+  routeId?: string
+): SocketRef<Incoming, Outgoing> {
+  // A copy of the handler IS the runtime def on the server; the type presents
+  // as a client SocketRef. The build strips the body on the client and replaces
+  // it with the descriptor stub, so this object only runs server-side.
+  // Single sanctioned cast: the def-doubles-as-client-ref pattern, identical
+  // to how defineAction returns a server fn typed as ActionRef (action.ts
+  // uses `return fn as unknown as ActionRef<...>`). The cast is bounded to
+  // this one return site.
+  const ref = {
+    ...handler,
+    ...(routeId !== undefined ? { __routeId: routeId } : {}),
+  } as unknown as SocketRef<Incoming, Outgoing>;
+  // Attach the `.useSocket` ref-method to the def itself, for the same reason
+  // `defineRoom` attaches `.useRoom`: SSR skips the `.server`->stub transform,
+  // so a server-rendered component calling `serverSockets.x.useSocket(...)` runs
+  // against this real def and would otherwise throw "useSocket is not a
+  // function" (a bare 500). Without a module/socket key the hook stays
+  // disconnected during SSR, matching the client's first hydration render.
+  ref.useSocket = (opts) => useSocket(ref, opts);
+  return ref;
+}
+
 /**
  * Define a typed duplex WebSocket. Place it in a `serverSockets` map in a
  * `.server` module; consume it with `useSocket(serverSockets.x)`.
@@ -107,20 +141,19 @@ export interface SocketRef<Incoming, Outgoing> {
 export function defineSocket<Incoming, Outgoing, Data = undefined>(
   handler: SocketHandler<Incoming, Outgoing, Data>
 ): SocketRef<Incoming, Outgoing> {
-  // A copy of the handler IS the runtime def on the server; the type presents
-  // as a client SocketRef. The build strips the body on the client and replaces
-  // it with the descriptor stub, so this object only runs server-side.
-  // Single sanctioned cast: the def-doubles-as-client-ref pattern, identical
-  // to how defineAction returns a server fn typed as ActionRef (action.ts
-  // uses `return fn as unknown as ActionRef<...>`). The cast is bounded to
-  // this one return site.
-  const ref = { ...handler } as unknown as SocketRef<Incoming, Outgoing>;
-  // Attach the `.useSocket` ref-method to the def itself, for the same reason
-  // `defineRoom` attaches `.useRoom`: SSR skips the `.server`->stub transform,
-  // so a server-rendered component calling `serverSockets.x.useSocket(...)` runs
-  // against this real def and would otherwise throw "useSocket is not a
-  // function" (a bare 500). Without a module/socket key the hook stays
-  // disconnected during SSR, matching the client's first hydration render.
-  ref.useSocket = (opts) => useSocket(ref, opts);
-  return ref;
+  return makeSocketRef(handler);
+}
+
+/**
+ * Internal constructor behind `serverRoute(r).socket`: a `defineSocket` that
+ * stamps the declared route pattern as `__routeId`, so the boot binding guard
+ * validates the binding fail-closed and connection resolution resolves the
+ * route's page-use (auth) chain from it. Framework-private; not part of the
+ * public API.
+ */
+export function _defineRouteSocket<Incoming, Outgoing, Data = undefined>(
+  routeId: string,
+  handler: SocketHandler<Incoming, Outgoing, Data>
+): SocketRef<Incoming, Outgoing> {
+  return makeSocketRef(handler, routeId);
 }

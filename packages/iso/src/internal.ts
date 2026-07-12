@@ -91,6 +91,8 @@ export {
 // and framework internals that need to create a route-bound LoaderRef directly
 // without going through the `serverRoute(r).loader(fn)` public API.
 export { _defineRouteLoader } from './define-loader.js';
+export { _defineRouteSocket } from './define-socket.js';
+export { _defineRouteRoom } from './define-room.js';
 
 // Middleware dispatcher + observer fanout. Internal-stability subpath.
 export {

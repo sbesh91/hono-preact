@@ -105,6 +105,13 @@ export interface RoomDef<
 > extends RoomHandler<Incoming, Outgoing, State, Data, Params> {
   /** The channel this room is bound to. The discriminator vs a `SocketDef`. */
   readonly channel: Channel<string, unknown>;
+  /**
+   * The declared route pattern when constructed via `serverRoute(r).room`.
+   * Same contract as `SocketDef.__routeId`: boot-validated, and preferred
+   * over the module-mount derivation when resolving the page-use chain.
+   * Absent on bare `defineRoom` defs.
+   */
+  readonly __routeId?: string;
   readonly __incoming?: Incoming;
   readonly __outgoing?: Outgoing;
   readonly __state?: State;
@@ -139,6 +146,39 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
   ): UseRoomResult<RoomRef<Incoming, Outgoing, State, Params>>;
 }
 
+function makeRoomRef<Name extends string, Payload, State, Data>(
+  channel: Channel<Name, Payload>,
+  handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>,
+  routeId?: string
+): RoomRef<Payload, Payload, State, RouteParams<Name>> {
+  // The def (handler + channel) IS the runtime value on the server; the type
+  // presents as a client `RoomRef`. The build strips the body on the client and
+  // replaces it with the descriptor stub, so this object only runs server-side.
+  // Single sanctioned cast: the def-doubles-as-client-ref boundary, identical
+  // to how `defineSocket` returns a server def typed as `SocketRef`. The cast is
+  // bounded to this one return site.
+  const def: RoomDef<Payload, Payload, State, Data, RouteParams<Name>> = {
+    ...handler,
+    channel,
+    ...(routeId !== undefined ? { __routeId: routeId } : {}),
+  };
+  const ref = def as unknown as RoomRef<
+    Payload,
+    Payload,
+    State,
+    RouteParams<Name>
+  >;
+  // Attach the `.useRoom` ref-method to the def itself. On the client the
+  // `.server` import is replaced by a stub that attaches its own `.useRoom`, but
+  // the build skips that transform for SSR, so a server-rendered component that
+  // calls `serverRooms.x.useRoom(...)` runs against this real def. Without the
+  // method, SSR throws "useRoom is not a function" (a bare 500). The def carries
+  // no module/room key, so the hook stays disconnected during SSR (opening no
+  // socket) and the markup matches the client's first hydration render.
+  ref.useRoom = (opts) => useRoom(ref, opts);
+  return ref;
+}
+
 /**
  * Define a typed broadcasting room bound to a `Channel`. Place it in a
  * `serverRooms` map in a `.server` module; consume it with the rooms client
@@ -158,29 +198,25 @@ export function defineRoom<
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
 ): RoomRef<Payload, Payload, State, RouteParams<Name>> {
-  // The def (handler + channel) IS the runtime value on the server; the type
-  // presents as a client `RoomRef`. The build strips the body on the client and
-  // replaces it with the descriptor stub, so this object only runs server-side.
-  // Single sanctioned cast: the def-doubles-as-client-ref boundary, identical
-  // to how `defineSocket` returns a server def typed as `SocketRef`. The cast is
-  // bounded to this one return site.
-  const def: RoomDef<Payload, Payload, State, Data, RouteParams<Name>> = {
-    ...handler,
-    channel,
-  };
-  const ref = def as unknown as RoomRef<
-    Payload,
-    Payload,
-    State,
-    RouteParams<Name>
-  >;
-  // Attach the `.useRoom` ref-method to the def itself. On the client the
-  // `.server` import is replaced by a stub that attaches its own `.useRoom`, but
-  // the build skips that transform for SSR, so a server-rendered component that
-  // calls `serverRooms.x.useRoom(...)` runs against this real def. Without the
-  // method, SSR throws "useRoom is not a function" (a bare 500). The def carries
-  // no module/room key, so the hook stays disconnected during SSR (opening no
-  // socket) and the markup matches the client's first hydration render.
-  ref.useRoom = (opts) => useRoom(ref, opts);
-  return ref;
+  return makeRoomRef(channel, handler);
+}
+
+/**
+ * Internal constructor behind `serverRoute(r).room`: a `defineRoom` that
+ * stamps the declared route pattern as `__routeId`, so the boot binding guard
+ * validates the binding fail-closed and connection resolution resolves the
+ * route's page-use (auth) chain from it. Framework-private; not part of the
+ * public API.
+ */
+export function _defineRouteRoom<
+  Name extends string,
+  Payload,
+  State = void,
+  Data = undefined,
+>(
+  routeId: string,
+  channel: Channel<Name, Payload>,
+  handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
+): RoomRef<Payload, Payload, State, RouteParams<Name>> {
+  return makeRoomRef(channel, handler, routeId);
 }
