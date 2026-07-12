@@ -160,6 +160,9 @@ export const serverRooms = {
     // Inherits `/board/:boardId`'s page-layer `use` chain, wherever this file lives.
     onJoin(conn, { params }) {
       // params is typed from the CHANNEL pattern (board/:boardId), not the route.
+      // The route's own `:boardId` is required to be a channel param of the same
+      // name too, so the guard chain's `ctx.location.pathParams.boardId` and this
+      // `params.boardId` always denote the same resource.
     },
   }),
 };
@@ -167,9 +170,11 @@ export const serverRooms = {
 
 The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the room under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound room live under the [`src/server` registry](/docs/routes#the-srcserver-registry) organized by domain rather than beside its view. A bare `defineRoom` with no `serverRoute` binding, defined in a `src/server` registry module rather than colocated with a route, is route-independent: it only ever runs the app-level `use` and its own `use`.
 
+A room's route and its channel must be **congruent**: every `:param` in the route pattern must also be a param of the channel pattern (the channel may be finer-grained and carry extra params of its own, but never fewer). `/board/:boardId` bound to a `board/:boardId` channel is congruent; `/board/:id` bound to that same channel is not, because `id` names no channel key. This is validated at boot, with a rename hint pointing at the mismatched name, because the room's guard chain reads its params from the resolved **channel** key, not the route: a route param the channel doesn't carry would leave the guard reading it as `undefined`. In dev, a one-time console advisory names each correspondence (which route param is satisfied by which channel key), so the aliasing is never silent even when the names happen to match. The requirement applies to a colocated room the same as an explicitly bound one: a colocated room's effective route is the module's mount, so its params are checked against that mount even with no declared `__routeId`. A bare `defineRoom` with no route binding and no colocation is route-independent and is not checked.
+
 A guard that denies the upgrade closes the connection with code `4403`. Use `deny()` rather than `redirect()` in a room guard: a WebSocket handshake cannot follow an HTTP redirect, so a `redirect()` is treated as a deny (close `4403`) and logs a warning.
 
-The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions. This holds whether the route-node `use` is colocation-derived or explicitly bound: binding selects the `use` chain, not the room-key param wire, which always comes from the channel.
+The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions. This holds whether the route-node `use` is colocation-derived or explicitly bound: binding selects the `use` chain, not the room-key param wire, which always comes from the channel. The congruence check above is what guarantees that wire actually carries every param the route's own guards expect.
 
 ## Presence reconnect behavior
 
