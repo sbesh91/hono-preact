@@ -546,6 +546,74 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 /* ---- formerly home.css (route-scoped by the auto-splitter) ---- */
 
 /* Home scroll experience. All classes are `hx-` namespaced. Uses root.css tokens. */
+
+/* The playhead. A stage writes this on its own element once per frame (see
+   scroll/stage.tsx) and it inherits to the whole scene, so every continuous
+   scroll-driven visual on this page (lane fills, the wire playhead, the morph,
+   the prefetch cursor, the drifting peers, the chart reveal) is a pure CSS
+   function of one number and costs no render at all.
+
+   Registering it buys two things over a bare custom property: it is typed, so a
+   junk value falls back to `initial-value` instead of poisoning every
+   declaration downstream; and it is a real <number> at computed-value time, so
+   `calc()` on it stays cheap. Every stage also seeds it inline at SSR with its
+   own fallback, so the page never depends on @property being supported: an
+   engine without it still inherits the seeded token and renders the settled
+   scene. */
+@property --hx-p {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+/* The per-element terms the scenes feed into those CSS functions. Registering
+   them buys the same thing --hx-p gets: they are typed, so a stray unit falls
+   back to initial-value instead of making the whole `transform` (or `opacity`)
+   invalid-at-computed-value-time and silently dropping the element's motion.
+   `inherits: false` -- each is read only by the element it is set on. */
+@property --lane-start {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+@property --lane-size {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --lane-cap {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --region-at {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+/* The morph's window and the chart's geometry, so the numbers live in the TSX
+   that also uses them (see ChapterTransitions / ChapterStreaming) rather than
+   being copied here where they can drift out of sync with the path they clip. */
+@property --m-start {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --m-size {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+@property --chart-pad {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --chart-span {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
 .hx-chapter {
   position: relative;
 }
@@ -927,8 +995,25 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
      rounding into a flattened ellipse instead of staying circular. The track's
      own border-radius + overflow:hidden below already produces the right
      rounded-pill shape at rest (scaleX(1)); mid-fill the leading edge is a
-     flat cut instead of a rounded cap, a common progress-bar treatment. */
+     flat cut instead of a rounded cap, a common progress-bar treatment.
+
+     The fill *amount* is derived here rather than passed in from JS: the lane's
+     window (--lane-start, --lane-size) is static per lane, so the bar grows as a
+     pure function of the playhead with no render in the loop. --lane-cap is
+     where a cancelled lane freezes; since the fill only ever grows with the
+     playhead, capping it is all "freeze on cancel" needs to mean (the JS still
+     owns the discrete `data-state` below, which picks the colour). */
   transform-origin: left;
+  transform: scaleX(
+    min(
+      clamp(
+        0,
+        calc((var(--hx-p) - var(--lane-start, 0)) / var(--lane-size, 1)),
+        1
+      ),
+      var(--lane-cap, 1)
+    )
+  );
   background: var(--wire-inflight);
   transition: background 0.2s;
 }
@@ -956,6 +1041,18 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 .hx-lane__track:has(.hx-lane__fill--grad[data-state='done']) {
   box-shadow: 0 0 12px -1px var(--glow);
 }
+/* The playhead's travel lives on a full-width track, not on the 2px bar: a
+   percentage translate resolves against the element's own box, so translating
+   the bar could only ever move it multiples of 2px. Sliding the track by
+   `--hx-p * 100%` of the wire moves the bar exactly one wire-length, on the
+   compositor, with no measured geometry (this is what replaced the
+   ResizeObserver that used to feed a px offset in from JS). */
+.hx-playhead-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(calc(var(--hx-p) * 100%));
+}
 .hx-playhead {
   position: absolute;
   top: 0;
@@ -965,39 +1062,42 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
   opacity: 0.7;
   box-shadow: 0 0 10px 1px var(--glow);
-  pointer-events: none;
-  will-change: transform;
 }
 
+/* The skeleton/content crossfade is a continuous function of the playhead across
+   a short window past --region-at, so it tracks the reader's scrub 1:1. It used
+   to be a boolean flipping a fixed 300ms transition, which meant a fast scrub
+   left the fade chasing the scroll instead of following it.
+
+   data-live is the no-JS guard, and it has to gate the *variable*, not the
+   opacity: without a client driver there is no playhead to cross, so a region
+   whose showAt sits past its stage's fallback would otherwise stay a skeleton
+   forever. A skeleton must never be the terminal state. */
 .hx-region {
+  /* Lands on --region-at (the window runs up TO it), so the reveal completes
+     exactly as [data-shown] flips. See <Region>. */
+  --hx-r: clamp(0, calc((var(--hx-p) - var(--region-at) + 0.05) / 0.05), 1);
   position: relative;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   padding: 0.55rem 0.65rem;
   min-height: 2.6rem;
 }
+.hx-region[data-live='false'] {
+  --hx-r: 1;
+}
 .hx-region__skeleton {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  transition: opacity 0.25s;
-}
-.hx-region[data-shown='true'] .hx-region__skeleton {
-  opacity: 0;
+  opacity: calc(1 - var(--hx-r));
 }
 .hx-region__content {
   position: absolute;
   inset: 0.55rem 0.65rem;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 0.3s,
-    transform 0.3s;
+  opacity: var(--hx-r);
+  transform: translateY(calc((1 - var(--hx-r)) * 4px));
   font-size: 0.82rem;
-}
-.hx-region[data-shown='true'] .hx-region__content {
-  opacity: 1;
-  transform: none;
 }
 
 /* Visible by default: SSR, no-JS, and a failed client bundle all render the
@@ -1119,15 +1219,31 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
+/* The pointer glides up onto the "Invoices" link and settles there *before*
+   warming starts, so it is visibly hovering the link through the whole preload.
+
+   Like the wire playhead, the cursor is an anchor box the size of its parent
+   (inset: 0) rather than a small element at the tip: that is what lets its
+   travel be expressed as a percentage of the demo, which is a compositor
+   transform, instead of a `left`/`top` percentage (layout, every frame) or a px
+   offset measured in JS (a ResizeObserver and a render, every frame). Its
+   contents sit at the box's origin, so the box's translate places the tip. */
 .hx-prefetch__cursor {
+  --travel: clamp(0, calc((var(--hx-p) - 0.04) / 0.24), 1);
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  /* 33% -> 87% across, 80% -> 10% down: off the page body and up onto the nav. */
+  transform: translate(
+    calc(33% + var(--travel) * 54%),
+    calc(80% - var(--travel) * 70%)
+  );
+}
+.hx-prefetch__cursor svg {
   position: absolute;
   left: 0;
   top: 0;
-  z-index: 3;
-  pointer-events: none;
-  will-change: transform;
-}
-.hx-prefetch__cursor svg {
   display: block;
   filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
 }
@@ -1243,49 +1359,6 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   text-decoration: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hx-stage {
-    height: auto !important;
-  }
-  .hx-stage__pin {
-    position: static;
-    height: auto;
-    padding: 2.5rem 0;
-  }
-  .hx-playhead,
-  .hx-live-tag b {
-    display: none;
-  }
-  .hx-hero__scroll-arrow,
-  .hx-stream__dot,
-  .hx-sk-line,
-  .hx-skel {
-    animation: none;
-  }
-  /* Repeat the armed-hidden selectors so this override outranks them even if
-     a reduced-motion flip races the arming effect. */
-  .hx-reveal,
-  .hx-reveal[data-reveal-state='hidden'] {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-  .hx-region__skeleton {
-    display: none;
-  }
-  .hx-region__content {
-    position: static;
-    opacity: 1;
-    transform: none;
-  }
-  .hx-pkg-pill,
-  .hx-pkg-row[data-armed='true']:not([data-shown='true']) .hx-pkg-pill {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
-
 .hx-hero {
   position: relative;
   isolation: isolate;
@@ -1365,9 +1438,6 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   /* The right inset does the left-to-right reveal; top/bottom extend past the
      box so the wipe itself never clips the glyphs. */
   clip-path: inset(-0.3em 0 -0.3em -0.08em);
-  /* Isolate the gradient text on its own layer so the clip-path wipe repaints
-     just this element rather than the hero region behind it. */
-  will-change: clip-path;
 }
 /* The wire and its nodes sit on a baseline below the descenders (bottom: 0.04em
    of the padded box), so the line never crosses the "g". */
@@ -1395,7 +1465,6 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   /* Grow the fill with a compositor transform (scaleX) rather than animating
      width, which relayouts every frame and stutters the wipe on iOS Safari. */
   transform-origin: left;
-  will-change: transform;
 }
 .hx-hero__edge {
   position: absolute;
@@ -1410,21 +1479,34 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   transform: translate(-50%, 50%);
   opacity: 0;
 }
+/* The packet's travel rides this track, not the dot. The dot used to animate
+   `left` from the edge node to 100%, which is a layout property: it cannot be
+   composited, so the dot and its glow went through layout and paint on every
+   frame of the load animation (`will-change: left` promoted nothing; it is not a
+   compositable hint). The track spans exactly the dot's journey (the edge node
+   at 0.05em, out to the wire's right end), so translating it by 100% of its own
+   width moves the dot the length of the wire on the compositor. Travel and fade
+   are split across the two elements because only the travel needed to move. */
+.hx-hero__packet-track {
+  position: absolute;
+  left: 0.05em;
+  right: 0;
+  bottom: calc(0.04em + 1px);
+  height: 0;
+  pointer-events: none;
+}
 .hx-hero__packet {
   position: absolute;
-  left: 100%;
-  bottom: calc(0.04em + 1px);
+  left: 0;
+  top: 0;
   width: 0.16em;
   height: 0.16em;
   border-radius: 50%;
   background: var(--color-brand-magenta);
   box-shadow: 0 0 0.35em 0.07em
     color-mix(in srgb, var(--color-brand-magenta) 60%, transparent);
-  transform: translate(-50%, 50%);
+  transform: translate(-50%, -50%);
   opacity: 0;
-  /* Own layer so the traveling dot (and its glow) composites instead of
-     repainting the hero region each frame as it moves. */
-  will-change: left, opacity;
 }
 /* The destination dot at the browser end, lit as the packet arrives. */
 .hx-hero__browser {
@@ -1439,10 +1521,17 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
     color-mix(in srgb, var(--color-brand-magenta) 55%, transparent);
   transform: translate(-50%, 50%) scale(0.6);
   opacity: 0;
-  will-change: transform, opacity, filter;
 }
 
-/* Opt in to the load animation only when motion is welcome. */
+/* Opt in to the load animation only when motion is welcome.
+   These elements carry NO `will-change`. They animate once, on load, and then
+   never again, so a hint here would hold a promoted layer for the life of the
+   page to serve 1.5s of motion -- and moving it inside this media query would
+   not have expired it either, since (prefers-reduced-motion: no-preference)
+   matches nearly every reader. A running transform/opacity animation is
+   auto-promoted by the compositor while it runs, which is exactly the window we
+   want, and clip-path cannot be composited at all, so the old hint on the
+   wordmark bought nothing. */
 @media (prefers-reduced-motion: no-preference) {
   .hx-hero__wm-fill {
     animation: hx-hero-fill 1.3s var(--hx-ease-load) 0.3s backwards;
@@ -1459,8 +1548,11 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   .hx-hero__edge {
     animation: hx-hero-edge 1.6s ease 0.3s backwards;
   }
+  .hx-hero__packet-track {
+    animation: hx-hero-packet-travel 1.3s var(--hx-ease-load) 0.3s backwards;
+  }
   .hx-hero__packet {
-    animation: hx-hero-packet 1.3s var(--hx-ease-load) 0.3s backwards;
+    animation: hx-hero-packet-fade 1.3s var(--hx-ease-load) 0.3s backwards;
   }
   .hx-hero__browser {
     animation: hx-hero-browser 1.55s ease 0.3s backwards;
@@ -1524,9 +1616,18 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
     opacity: 0;
   }
 }
-@keyframes hx-hero-packet {
+/* 100% of the track is the wire's length, so the dot lands on the browser node
+   exactly where the old `left: 100%` put it. */
+@keyframes hx-hero-packet-travel {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes hx-hero-packet-fade {
   0% {
-    left: 0.03em;
     opacity: 0;
   }
   12% {
@@ -1536,7 +1637,6 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
     opacity: 1;
   }
   100% {
-    left: 100%;
     opacity: 0;
   }
 }
@@ -1622,12 +1722,24 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   display: inline-flex;
   align-items: center;
 }
+/* Press feedback, on pointer-down. Hover is not feedback on a touch screen,
+   where it does not exist, so the page's two most important controls used to sit
+   completely inert from the tap until the navigation landed. The scale is small
+   and the curve is short: this has to read as the button taking the press, not
+   as an animation playing. */
+.hx-btn,
+.hx-cta__btn,
+.hx-prefetch__demo {
+  transition: transform 100ms ease-out;
+}
+.hx-btn:active,
+.hx-cta__btn:active,
+.hx-prefetch__demo:active {
+  transform: scale(0.97);
+}
 .hx-btn--primary {
   background: var(--accent);
   color: var(--accent-foreground);
-}
-.hx-btn--primary:hover {
-  background: var(--accent-hover);
 }
 .hx-btn--ghost {
   border: 1px solid var(--border-color);
@@ -1641,16 +1753,23 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   background: var(--color-magenta-600);
   color: #ffffff;
 }
-.hx-hero .hx-btn--primary:hover {
-  background: var(--color-magenta-700);
-}
 .hx-hero .hx-btn--ghost {
   border-color: var(--hero-ghost-border);
   color: var(--foreground);
   background: var(--hero-ghost-bg);
 }
-.hx-hero .hx-btn--ghost:hover {
-  background: var(--hero-ghost-bg-hover);
+/* Behind (hover: hover) so a tap on a touch screen doesn't leave the button
+   stuck in its hover colour after the finger lifts. */
+@media (hover: hover) {
+  .hx-btn--primary:hover {
+    background: var(--accent-hover);
+  }
+  .hx-hero .hx-btn--primary:hover {
+    background: var(--color-magenta-700);
+  }
+  .hx-hero .hx-btn--ghost:hover {
+    background: var(--hero-ghost-bg-hover);
+  }
 }
 /* Scroll cue: gives the lower third a purpose and points into chapter one. */
 .hx-hero__scroll {
@@ -2014,6 +2133,13 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   width: 100%;
   height: 2.6rem;
 }
+/* The chart draws itself in left-to-right off the playhead, with no JS: `width`
+   on an SVG <rect> is a real CSS geometry property, so the clip rect that
+   reveals the line and area is just a calc. The viewBox is 120 wide with 2 units
+   of padding, so the reveal runs 2 -> 118 user units (px here == user units). */
+.hx-chart__clip {
+  width: calc((var(--chart-pad) + var(--hx-p) * var(--chart-span)) * 1px);
+}
 .hx-chart__area {
   fill: url(#hx-chart-fill);
 }
@@ -2022,10 +2148,16 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   stroke: var(--accent);
   stroke-width: 1.5;
 }
+/* The leading "now" edge rides the same reveal. transform-box is pinned to the
+   view box so the translate is in user units (and so it survives the
+   preserveAspectRatio="none" stretch), and non-scaling-stroke on the element
+   keeps the line 1.5px however far the SVG is stretched. */
 .hx-chart__now {
   stroke: var(--accent);
   stroke-width: 1.5;
   opacity: 0.55;
+  transform-box: view-box;
+  transform: translateX(calc(var(--hx-p) * var(--chart-span) * 1px));
 }
 .hx-chart__stop-a {
   stop-color: var(--accent);
@@ -2320,7 +2452,12 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   flex-direction: column;
   gap: 1.25rem;
 }
+/* The morph's own 0..1, a window of the stage playhead. Declared here, on the
+   common ancestor of the scrubber and the card, so both inherit it: the whole
+   morph is then a pure CSS function of --hx-p and scrubs without a single
+   render (the JS only mirrors the halfway point, to swap the URL and labels). */
 .hx-vt2__demo {
+  --m: clamp(0, calc((var(--hx-p) - var(--m-start)) / var(--m-size)), 1);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2429,16 +2566,38 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   background: var(--surface-subtle);
   overflow: hidden;
 }
-/* A peer cursor: a colored pointer with a name tag, like a multiplayer canvas.
-   Position is a JS-computed transform (the -2px tip offset is baked into it),
-   not left/top, since this drifts continuously via a running rAF clock. */
+/* Each peer drifts on its own Lissajous path around the room, driven straight
+   off the looping playhead. This is the one demo on the page whose clock never
+   stops while it is on screen, so it is the one that most wanted to stop
+   re-rendering: the orbit is now CSS, and the five cursors circle continuously
+   without Preact doing any work at all.
+
+   The anchor spans the room (inset: 0), because a percentage translate resolves
+   against the element's own box: translating the little cursor by 50% would move
+   it half a cursor, not half a room. Its child sits at the anchor's origin, so
+   the anchor's transform places the arrow, and the -2px puts the arrow's tip
+   (not its top-left corner) on the point. */
+.hx-rt-peer-anchor {
+  --t: calc(var(--hx-p) * 6.2831853);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translate(
+    calc(
+      50% + sin(calc(var(--t) * var(--sx) + var(--ph))) * var(--rx) * 1% - 2px
+    ),
+    calc(
+      50% + cos(calc(var(--t) * var(--sy) + var(--ph))) * var(--ry) * 1% - 2px
+    )
+  );
+}
+/* A peer cursor: a colored pointer with a name tag, like a multiplayer canvas. */
 .hx-rt-peer {
   position: absolute;
   left: 0;
   top: 0;
   pointer-events: none;
   color: var(--c);
-  will-change: transform;
 }
 .hx-rt-peer svg {
   display: block;
@@ -2622,16 +2781,20 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   background: var(--accent);
   color: var(--accent-foreground);
 }
-.hx-cta__btn--primary:hover {
-  background: var(--accent-hover);
-}
 .hx-cta__btn--secondary {
   background: var(--surface);
   color: var(--foreground);
   border-color: var(--border-color);
 }
-.hx-cta__btn--secondary:hover {
-  background: var(--surface-subtle);
+/* Behind (hover: hover) for the same reason as .hx-btn: on a touch screen a tap
+   leaves the button stuck in its hover colour after the finger lifts. */
+@media (hover: hover) {
+  .hx-cta__btn--primary:hover {
+    background: var(--accent-hover);
+  }
+  .hx-cta__btn--secondary:hover {
+    background: var(--surface-subtle);
+  }
 }
 .hx-cta__btn:focus-visible {
   outline: 2px solid var(--ring);
@@ -2662,6 +2825,142 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
 }
 .hx-footer a:hover {
   color: var(--accent-hover);
+}
+
+/* Promote the scrub-driven layers only while their chapter is actually on screen.
+   The stage's IntersectionObserver (which already gates the rAF) stamps
+   data-active, so these hints exist exactly when the motion does. A standing
+   `will-change` would hold ~10 compositor layers for the life of the page to
+   serve motion that only ever runs in one chapter at a time -- the same argument
+   that took the hints off the hero's load-only elements, applied consistently. */
+.hx-stage[data-active] .hx-playhead-track,
+.hx-stage[data-active] .hx-prefetch__cursor,
+.hx-live[data-active] .hx-rt-peer-anchor {
+  will-change: transform;
+}
+
+/* ---- Reader preferences ------------------------------------------------
+   These sit at the END of the home section on purpose. A media query carries
+   NO specificity of its own, so an override only beats a base rule of equal
+   specificity by coming later in source order. Declared mid-file (where they
+   were first written) every rule below that targeted a selector defined
+   further down -- the buttons, .hx-rt-chip, .hx-morph__row, .hx-hero__scroll --
+   silently lost to its own base rule and did nothing at all. Keep this block
+   last, and add new home preference overrides here rather than next to the
+   thing they override. */
+
+@media (prefers-reduced-motion: reduce) {
+  .hx-stage {
+    height: auto !important;
+  }
+  .hx-stage__pin {
+    position: static;
+    height: auto;
+    padding: 2.5rem 0;
+  }
+  .hx-playhead-track,
+  .hx-live-tag b {
+    display: none;
+  }
+  .hx-hero__scroll-arrow,
+  .hx-stream__dot,
+  .hx-sk-line,
+  .hx-skel {
+    animation: none;
+  }
+  /* Reduced motion is not "no feedback": the press still has to answer, it just
+     answers without moving. Swap the scale for a dip in opacity. */
+  .hx-btn,
+  .hx-cta__btn,
+  .hx-prefetch__demo {
+    transition: opacity 100ms ease-out;
+  }
+  .hx-btn:active,
+  .hx-cta__btn:active,
+  .hx-prefetch__demo:active {
+    transform: none;
+    opacity: 0.85;
+  }
+  /* Repeat the armed-hidden selectors so this override outranks them even if
+     a reduced-motion flip races the arming effect. */
+  .hx-reveal,
+  .hx-reveal[data-reveal-state='hidden'] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .hx-region__skeleton {
+    display: none;
+  }
+  .hx-region__content {
+    position: static;
+    opacity: 1;
+    transform: none;
+  }
+  .hx-pkg-pill,
+  .hx-pkg-row[data-armed='true']:not([data-shown='true']) .hx-pkg-pill {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Reduced motion was the only accessibility signal this page answered. These are
+   the other two, and the page leans hard enough on translucency and on tinted,
+   low-contrast surfaces that both of them change what a reader actually gets.
+
+   Reduced transparency: make the see-through surfaces opaque. The page-wide
+   atmospheric wash and the frosted ghost button are the two that read as haze;
+   the docs chrome's blurred backdrops get the same treatment at their own rules.
+
+   BASELINE EXCEPTION: `prefers-reduced-transparency` is Limited Availability,
+   below both tiers the repo sanctions -- Firefox does not implement it at all.
+   It is used purely additively (an engine without it drops the block and keeps
+   today's behaviour), so nothing regresses, but it is not a "newly available
+   progressive enhancement" either: a Firefox reader with Reduce Transparency on
+   gets no accommodation here and has no recourse. Accepted knowingly, because
+   the alternative is offering nothing to the readers whose engines DO support
+   it. Revisit when Firefox ships it. */
+@media (prefers-reduced-transparency: reduce) {
+  .hx-home::before {
+    display: none;
+  }
+  .hx-hero .hx-btn--ghost,
+  .hx-btn--ghost {
+    background: var(--surface);
+  }
+}
+
+/* More contrast: drop the decorative wash entirely, harden every hairline the
+   scenes are drawn with, and pull the muted text tier up to full foreground. The
+   demos are almost entirely 1px borders and grey-on-grey labels, which is
+   exactly what this signal is asking us not to do. */
+@media (prefers-contrast: more) {
+  .hx-home::before {
+    display: none;
+  }
+  .hx-browser,
+  .hx-browser__bar,
+  .hx-wire,
+  .hx-region,
+  .hx-prefetch__panel,
+  .hx-prefetch__dest,
+  .hx-morph__row,
+  .hx-rt-chip {
+    border-color: var(--foreground);
+  }
+  .hx-scene__desc,
+  .hx-wire__cap,
+  .hx-lane__label,
+  .hx-browser__url,
+  .hx-prefetch__panel-head,
+  .hx-rt-chip,
+  .hx-hero__scroll {
+    color: var(--foreground);
+  }
+  .hx-prefetch__dest {
+    opacity: 1;
+  }
 }
 
 /* ---- formerly docs.css (route-scoped by the auto-splitter) ---- */
@@ -3042,6 +3341,14 @@ html:active-view-transition-type(docs-within)::view-transition-new(
   backdrop-filter: blur(2px);
   opacity: 1;
   transition: opacity 160ms ease;
+}
+/* Asked for less transparency: drop the blur and let the scrim do the work of
+   separating the dialog from the page, opaquely. */
+@media (prefers-reduced-transparency: reduce) {
+  .docs-dialog::backdrop {
+    background: rgb(0 0 0 / 0.85);
+    backdrop-filter: none;
+  }
 }
 @starting-style {
   .docs-dialog[open]::backdrop {
@@ -4704,6 +5011,12 @@ html:active-view-transition-type(docs-within)::view-transition-new(
   backdrop-filter: blur(2px);
   opacity: 1;
   transition: opacity 160ms ease;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .docs-cmdk::backdrop {
+    background: rgb(0 0 0 / 0.85);
+    backdrop-filter: none;
+  }
 }
 @starting-style {
   .docs-cmdk[open]::backdrop {

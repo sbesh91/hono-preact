@@ -1,5 +1,5 @@
 import type { VNode } from 'preact';
-import { ScrollStage, useStageProgress } from '../scroll/stage.js';
+import { ScrollStage, useStageValue } from '../scroll/stage.js';
 import { BrowserFrame, Region, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 
@@ -14,11 +14,13 @@ const Live = serverLoaders.feed.View(
   { initial: null, reduce: (_, snap) => snap }
 );`;
 
-// Reads the stage playhead and animates a big streaming count. Must live inside
-// <ScrollStage> so useStageProgress resolves to the stage playhead.
+// Reads the stage playhead and animates a big streaming count. The one thing on
+// this page that genuinely has to re-render as the reader scrubs: it is grouped
+// text ("1,284"), which CSS counters cannot format. It selects the integer, so it
+// renders once per whole number rather than once per frame, and it is a leaf, so
+// a render costs one text node rather than the chapter.
 function LiveCount(): VNode {
-  const { progress } = useStageProgress();
-  const n = Math.floor(progress * 1284);
+  const n = useStageValue((progress) => Math.floor(progress * 1284));
   return (
     <div class="hx-stream__count" aria-hidden="true">
       {n.toLocaleString()}
@@ -30,8 +32,12 @@ function LiveCount(): VNode {
 // playhead advances, so it reads as live data arriving rather than a static box.
 const SAMPLES = [6, 10, 8, 15, 12, 20, 16, 25, 21, 30, 27, 34, 31, 39];
 
+// The chart is now completely static markup: the left-to-right draw-in is a
+// clip rect whose `width` and a "now" line whose `transform` both derive from
+// --hx-p in CSS (see .hx-chart__clip / .hx-chart__now). `width` and `x` on an
+// SVG rect are real CSS geometry properties, so the reveal scrubs without this
+// component ever re-rendering.
 function StreamChart(): VNode {
-  const { progress } = useStageProgress();
   const n = SAMPLES.length;
   const W = 120;
   const H = 40;
@@ -46,13 +52,17 @@ function StreamChart(): VNode {
     .map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`)
     .join(' ');
   const area = `${line} L${(W - PAD).toFixed(1)} ${H - PAD} L${PAD} ${H - PAD} Z`;
-  const revealW = (PAD + progress * (W - PAD * 2)).toFixed(1);
   return (
     <svg
       class="hx-chart"
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
       aria-hidden="true"
+      // The clip rect and the "now" line are scrubbed by CSS, but their geometry
+      // is the same geometry this component draws the path with. Hand the two
+      // numbers over rather than restating them in the stylesheet: change PAD or
+      // W here and the reveal would otherwise silently stop matching the line.
+      style={{ '--chart-pad': PAD, '--chart-span': W - PAD * 2 }}
     >
       <defs>
         <linearGradient id="hx-chart-fill" x1="0" y1="0" x2="0" y2="1">
@@ -60,7 +70,13 @@ function StreamChart(): VNode {
           <stop class="hx-chart__stop-b" offset="100%" />
         </linearGradient>
         <clipPath id="hx-chart-clip">
-          <rect x="0" y="0" width={revealW} height={H} />
+          {/* The `width` attribute is the floor, and the CSS rule (author level,
+              so it always outranks a presentation attribute) is what scrubs it.
+              A rect with no width resolves to `auto`, which is 0 for a rect, so
+              if the CSS geometry property were ever not honoured the clip would
+              be empty and the chart would vanish outright rather than simply
+              stop revealing. This turns that into "fully drawn". */}
+          <rect class="hx-chart__clip" x="0" y="0" width={W} height={H} />
         </clipPath>
       </defs>
       <path class="hx-chart__area" d={area} clip-path="url(#hx-chart-clip)" />
@@ -72,9 +88,9 @@ function StreamChart(): VNode {
       />
       <line
         class="hx-chart__now"
-        x1={revealW}
+        x1={PAD}
         y1={PAD}
-        x2={revealW}
+        x2={PAD}
         y2={H - PAD}
         vector-effect="non-scaling-stroke"
       />

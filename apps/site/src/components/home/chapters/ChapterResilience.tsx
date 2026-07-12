@@ -1,6 +1,6 @@
 import type { VNode } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { ScrollStage, useStageProgress } from '../scroll/stage.js';
+import { ScrollStage, useStageValue } from '../scroll/stage.js';
 import { BrowserFrame, Wire, Lane } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 import { usePrefersReducedMotion } from '../scroll/motion.js';
@@ -71,8 +71,8 @@ function ErrorPane(): VNode {
 }
 
 function ResilienceApp(): VNode {
-  const { progress } = useStageProgress();
-  const status = statusFor(progress);
+  // Four status windows across the scrub: four renders, not sixty a second.
+  const status = useStageValue(statusFor);
   const loading = status === 'loading';
   const errored = status === 'error';
   // Each surviving pane keeps its data rows; only the errored pane swaps to a

@@ -1,6 +1,6 @@
 import type { VNode, RefObject } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { ScrollStage, useStageProgress } from '../scroll/stage.js';
+import { ScrollStage, useStageValue } from '../scroll/stage.js';
 import { BrowserFrame } from '../scroll/primitives.js';
 import { Code } from '../scroll/code.js';
 
@@ -80,10 +80,10 @@ type Ring = { x: number; y: number; w: number; h: number };
 // measures the active layer and drives a single ring element that CSS-slides
 // between routes.
 function RouteStack(): VNode {
-  const { progress } = useStageProgress();
-  const active = Math.min(
-    LAYERS.length - 1,
-    Math.floor(progress * LAYERS.length)
+  // The scrub only ever picks one of four layers, so this re-renders four times
+  // across the whole chapter rather than once a frame.
+  const active = useStageValue((progress) =>
+    Math.min(LAYERS.length - 1, Math.floor(progress * LAYERS.length))
   );
   const nestRef = useRef<HTMLDivElement | null>(null);
   const layerRefs = useRef<(HTMLDivElement | null)[]>([]);

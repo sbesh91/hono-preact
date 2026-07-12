@@ -43,7 +43,12 @@ const Home: FunctionComponent = () => {
                 <span class="hx-hero__wm-fill">edge to browser</span>
                 <span class="hx-hero__wire-line" aria-hidden="true" />
                 <span class="hx-hero__edge" aria-hidden="true" />
-                <span class="hx-hero__packet" aria-hidden="true" />
+                {/* The packet rides a full-width track: the track carries the
+                    travel as a transform (100% of its own width = the wire's
+                    length), so the dot never animates `left`. */}
+                <span class="hx-hero__packet-track" aria-hidden="true">
+                  <span class="hx-hero__packet" />
+                </span>
                 <span class="hx-hero__browser" aria-hidden="true" />
               </span>
             </h1>

@@ -1,21 +1,21 @@
 import type { ComponentChildren, VNode } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { useStageProgress } from './stage.js';
-import { barState } from './progress.js';
-import {
-  useElementSize,
-  useInView,
-  usePrefersReducedMotion,
-} from './motion.js';
+import { useStage, useStageValue } from './stage.js';
+import { barStatus, laneCap } from './progress.js';
+import { useInView, usePrefersReducedMotion } from './motion.js';
 
-export function Playhead({ trackWidth }: { trackWidth: number }): VNode {
-  const { progress } = useStageProgress();
+/**
+ * The scrub head that rides along a wire. The bar itself stays put at the track's
+ * left edge; the track is a full-width box that CSS slides by `--hx-p * 100%` of
+ * its own width, which is what lets a 2px element travel the wire on the
+ * compositor. (A percentage translate resolves against the element's own box, so
+ * moving the 2px bar directly could never express "fraction of the wire".)
+ */
+export function Playhead(): VNode {
   return (
-    <div
-      class="hx-playhead"
-      aria-hidden="true"
-      style={{ transform: `translateX(${progress * trackWidth}px)` }}
-    />
+    <span class="hx-playhead-track" aria-hidden="true">
+      <span class="hx-playhead" />
+    </span>
   );
 }
 
@@ -26,12 +26,11 @@ export function Wire({
   caption: string;
   children: ComponentChildren;
 }): VNode {
-  const [ref, { width: trackWidth }] = useElementSize<HTMLDivElement>();
   return (
-    <div class="hx-wire" ref={ref}>
+    <div class="hx-wire">
       <div class="hx-wire__cap">{caption}</div>
       {children}
-      <Playhead trackWidth={trackWidth} />
+      <Playhead />
     </div>
   );
 }
@@ -49,8 +48,12 @@ export function Lane({
   tone?: 'accent' | 'grad';
   cancelAt?: number;
 }): VNode {
-  const { progress } = useStageProgress();
-  const { width, state } = barState(progress, start, size, cancelAt);
+  // The fill's width is CSS's job (scaleX off --hx-p, clamped to --lane-cap).
+  // Only the status is read in JS, and it takes four values across a whole
+  // scrub, so this component renders a handful of times rather than every frame.
+  const state = useStageValue((progress) =>
+    barStatus(progress, start, size, cancelAt)
+  );
   return (
     <div class="hx-lane">
       <span class="hx-lane__label">{label}</span>
@@ -58,7 +61,11 @@ export function Lane({
         <span
           class={`hx-lane__fill hx-lane__fill--${tone}`}
           data-state={state}
-          style={{ transform: `scaleX(${width})` }}
+          style={{
+            '--lane-start': start,
+            '--lane-size': size,
+            '--lane-cap': laneCap(start, size, cancelAt),
+          }}
         />
       </span>
     </div>
@@ -102,12 +109,29 @@ export function Region({
   skeleton: ComponentChildren;
   children: ComponentChildren;
 }): VNode {
-  const { progress, live } = useStageProgress();
+  const { live } = useStage();
+  // The skeleton/content crossfade is continuous now: CSS fades one into the
+  // other across a short window that *lands on* `showAt` (--region-at), so it
+  // tracks the reader's scroll instead of firing a fixed 300ms transition that
+  // lags behind a fast scrub.
+  //
+  // Landing on showAt rather than starting there is what keeps the two halves of
+  // this component on one clock. `shown` is a step at showAt, and it drives both
+  // the assistive-tech labelling below and (via [data-shown]) the mutations
+  // chapter's save-flash. Had the fade *started* at showAt, the row would be at
+  // opacity 0 exactly when it was announced as shown and exactly when its flash
+  // played -- 0.05 of scrub in which the screen reader and the eye disagree.
+  const passed = useStageValue((progress) => progress >= showAt);
   // Until client JS is actually driving the playhead (SSR, a failed bundle,
   // no-JS), show the content: a skeleton must never be the terminal state.
-  const shown = !live || progress >= showAt;
+  const shown = !live || passed;
   return (
-    <div class="hx-region" data-shown={String(shown)}>
+    <div
+      class="hx-region"
+      data-live={String(live)}
+      data-shown={String(shown)}
+      style={{ '--region-at': showAt }}
+    >
       <div class="hx-region__skeleton" aria-hidden={shown ? 'true' : undefined}>
         {skeleton}
       </div>
