@@ -164,6 +164,34 @@ useSocket(bareSocketRef, {});
 // @ts-expect-error bare socket takes no params
 useSocket(bareSocketRef, { params: { id: 'b1' } });
 
+// The options argument itself is required exactly when the route has params:
+// omitting it entirely on a bound ref must be a type error (previously it
+// compiled, since `opts` was optional, and only failed once an options object
+// was actually passed).
+useSocket(bareSocketRef);
+useSocket(bareSocketRef, { onMessage() {} });
+// @ts-expect-error a param-bearing binding requires the options argument
+useSocket(boundSocketRef);
+useSocket(boundSocketRef, { params: { id: 'b1' } });
+
+// The ref-method form (`ref.useSocket(...)`) carries the same hole and the
+// same fix: the options argument is required exactly when the bound route has
+// params.
+declare const boundSocketRefMethod: SocketRef<
+  { ping: true },
+  { pong: true },
+  { id: string }
+>;
+declare const bareSocketRefMethod: SocketRef<{ ping: true }, { pong: true }>;
+
+bareSocketRefMethod.useSocket();
+bareSocketRefMethod.useSocket({ onMessage() {} });
+// @ts-expect-error a param-bearing binding requires the options argument
+boundSocketRefMethod.useSocket();
+boundSocketRefMethod.useSocket({ params: { id: 'b1' } });
+// @ts-expect-error missing required params
+boundSocketRefMethod.useSocket({});
+
 void _probes;
 void _routeSocketProbe;
 void _openArityProbe;

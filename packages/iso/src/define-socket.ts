@@ -113,9 +113,15 @@ export interface SocketRef<Incoming, Outgoing, Params = {}> {
    * Idiomatic ref-method form of `useSocket`. Equivalent to
    * `useSocket(ref, opts)` but called directly on the ref:
    * `serverSockets.feed.useSocket({ onMessage })`.
+   *
+   * Rest tuple (mirroring `useSocket` itself): the options argument is
+   * required exactly when `Params` is non-empty, so `.useSocket()` with no
+   * arguments is a type error for a param-bearing binding.
    */
   useSocket(
-    opts?: UseSocketOptions<SocketRef<Incoming, Outgoing, Params>>
+    ...args: keyof Params extends never
+      ? [opts?: UseSocketOptions<SocketRef<Incoming, Outgoing, Params>>]
+      : [opts: UseSocketOptions<SocketRef<Incoming, Outgoing, Params>>]
   ): UseSocketResult<SocketRef<Incoming, Outgoing, Params>>;
 }
 
@@ -140,7 +146,7 @@ function makeSocketRef<Incoming, Outgoing, Data, Params>(
   // against this real def and would otherwise throw "useSocket is not a
   // function" (a bare 500). Without a module/socket key the hook stays
   // disconnected during SSR, matching the client's first hydration render.
-  ref.useSocket = (opts) => useSocket(ref, opts);
+  ref.useSocket = (...args) => useSocket(ref, ...args);
   return ref;
 }
 

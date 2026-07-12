@@ -17,3 +17,26 @@ export function requiredParamSlots(pattern: string): string[] {
     })
     .map((seg) => seg.slice(1));
 }
+
+/**
+ * Every declared `:param` slot name in a route or channel pattern, INCLUDING
+ * optional (`:name?`) and rest (`:name*`, `:name+`) slots, with the leading
+ * colon AND the trailing flag stripped.
+ *
+ * Answers a different question from `requiredParamSlots`: "what is allowed to
+ * be present" rather than "what must be present". Used to restrict a resolved
+ * params object (parsed from the untrusted wire) to the pattern's own
+ * declared slots, so a client cannot smuggle an undeclared key into
+ * `ctx.location.pathParams` or `onJoin`'s params, a key no real HTTP request
+ * could ever produce (Hono only populates declared slots).
+ */
+export function declaredParamSlots(pattern: string): string[] {
+  return pattern
+    .split('/')
+    .filter((seg) => seg.startsWith(':'))
+    .map((seg) => {
+      const flag = seg[seg.length - 1];
+      const stripFlag = flag === '?' || flag === '*' || flag === '+';
+      return seg.slice(1, stripFlag ? -1 : undefined);
+    });
+}

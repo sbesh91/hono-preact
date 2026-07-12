@@ -63,4 +63,25 @@ describe('resolveSocketParams', () => {
       params: {},
     });
   });
+
+  it('(security) drops a wire key that is not a declared slot on the pattern', () => {
+    // A client for `/board/:id` sends an extra `orgId`, a key no real HTTP
+    // request could ever produce (Hono only populates declared slots). The
+    // resolver must restrict the result to the pattern's declared slots.
+    expect(
+      resolveSocketParams('/board/:id', enc({ id: 'b1', orgId: 'victim' }))
+    ).toEqual({
+      ok: true,
+      params: { id: 'b1' },
+    });
+  });
+
+  it('keeps a legitimately-supplied optional slot (declared, not required)', () => {
+    // Filtering must use the DECLARED slot set, not the required one: an
+    // optional slot is a legitimate declared slot and must survive.
+    expect(resolveSocketParams('/a/:x?', enc({ x: 'v' }))).toEqual({
+      ok: true,
+      params: { x: 'v' },
+    });
+  });
 });

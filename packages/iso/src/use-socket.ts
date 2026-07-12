@@ -90,10 +90,22 @@ export type UseSocketResult<R extends AnySocketRefShape> = {
   lastMessage?: Serialize<Outgoing<R>>;
 };
 
+// The options argument itself is required exactly when the route has params:
+// a rest tuple, rather than a plain optional parameter, so `useSocket(ref)`
+// with the options argument omitted ENTIRELY is a type error for a
+// param-bearing binding (previously `opts` was merely optional, so omitting
+// it compiled even when `ParamsOption` required `params`; the hole only bit
+// once an options object was actually passed).
+type UseSocketArgs<R extends AnySocketRefShape> =
+  keyof ParamsOf<R> extends never
+    ? [opts?: UseSocketOptions<R>]
+    : [opts: UseSocketOptions<R>];
+
 export function useSocket<R extends AnySocketRefShape>(
   ref: R,
-  opts?: UseSocketOptions<R>
+  ...args: UseSocketArgs<R>
 ): UseSocketResult<R> {
+  const opts = args[0];
   const [lastMsg, setLastMsg] = useState<Serialize<Outgoing<R>> | undefined>(
     undefined
   );

@@ -65,6 +65,10 @@ describe('iso /internal/runtime door', () => {
       // room-key resolver, socket param resolver, and boot route/channel
       // congruence check, so the three agree on what "required" means.
       'requiredParamSlots',
+      // Declared-param-slot extraction (required AND optional/rest) shared
+      // with the same two resolvers, so they can restrict a resolved params
+      // object to the pattern's own declared slots and drop anything else.
+      'declaredParamSlots',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

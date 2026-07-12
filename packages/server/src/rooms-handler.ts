@@ -8,6 +8,7 @@ import {
   updatePresence,
   presenceMembers,
   requiredParamSlots,
+  declaredParamSlots,
 } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
 import {
@@ -134,6 +135,15 @@ export function resolveRoomKey(
         entries.filter((e): e is [string, string] => typeof e[1] === 'string')
       );
     }
+    // Restrict to the channel's DECLARED slots (required + optional/rest): a
+    // wire key outside the pattern's own slots is dropped before the topic is
+    // computed and before params are handed to the guard and to onJoin (the
+    // channel's `key()` only interpolates declared slots, so the topic is
+    // unaffected either way; this keeps `params` itself uncontaminated too).
+    const declared = new Set(declaredParamSlots(channel.name));
+    params = Object.fromEntries(
+      Object.entries(params).filter(([key]) => declared.has(key))
+    );
   }
 
   // Compute the topic SERVER-SIDE by interpolating the channel name with the

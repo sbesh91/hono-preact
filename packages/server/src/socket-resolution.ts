@@ -5,6 +5,7 @@ import {
   SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
   requiredParamSlots,
+  declaredParamSlots,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -311,6 +312,13 @@ export function resolveSocketParams(
         )
       );
     }
+    // Restrict to the pattern's DECLARED slots (required + optional/rest): a
+    // real HTTP request can never populate an undeclared key, so a wire key
+    // outside the pattern's own slots is dropped rather than trusted.
+    const declared = new Set(declaredParamSlots(routePattern));
+    params = Object.fromEntries(
+      Object.entries(params).filter(([key]) => declared.has(key))
+    );
   }
   const missing = requiredParamSlots(routePattern).filter(
     (slot) => !params[slot]
