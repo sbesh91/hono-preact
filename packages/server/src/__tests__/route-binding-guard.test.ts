@@ -3,8 +3,10 @@ import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
   warnAliasedLayoutBinding,
+  warnRoomParamBinding,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
+  type RoomParamBindingInfo,
 } from '../route-binding-guard.js';
 import { defineRoutes, defineServerMiddleware } from '@hono-preact/iso';
 import type { ServerRoute } from '@hono-preact/iso';
@@ -589,6 +591,65 @@ describe('socket/room bindings (serverSockets / serverRooms containers)', () => 
   });
 });
 
+describe('room route/channel param congruence', () => {
+  // A room whose route requires :id but whose channel keys on :boardId fails boot.
+  it('throws when a bound room route param is absent from the channel', async () => {
+    const roomMod = async () => ({
+      serverRooms: {
+        cursors: {
+          __routeId: '/board/:id',
+          channel: { name: 'board/:boardId' },
+        },
+      },
+    });
+    await expect(
+      assertRegistryRouteBindingsValid([roomMod], {
+        routeUseByPattern: new Map([['/board/:id', []]]),
+      })
+    ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+  });
+
+  // Congruent names pass and fire the dev advisory once.
+  it('passes on route ⊆ channel and fires the param advisory', async () => {
+    const roomMod = async () => ({
+      serverRooms: {
+        cursors: { __routeId: '/board/:id', channel: { name: 'board/:id' } },
+      },
+    });
+    const seen: Array<{ name: string; routeId: string; params: string[] }> = [];
+    await assertRegistryRouteBindingsValid([roomMod], {
+      routeUseByPattern: new Map([['/board/:id', []]]),
+      onRoomParamBinding: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      { name: 'cursors', routeId: '/board/:id', params: ['id'] },
+    ]);
+  });
+
+  it('checks a colocated room (no __routeId) against its module mount', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverRooms: { cursors: { channel: { name: 'board/:boardId' } } },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/board/:id', []]]))
+    ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+  });
+
+  it('does not check a bare registry room (no __routeId, route-independent)', async () => {
+    const registry = [
+      async () => ({
+        serverRooms: { cursors: { channel: { name: 'board/:boardId' } } },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(registry, ctxOf([]))
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe('warnAliasedLayoutBinding', () => {
   it('warns once per binding key, naming both spellings', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -610,6 +671,50 @@ describe('warnAliasedLayoutBinding', () => {
       // The wildcard hint points at tree-form registration, under which
       // every children-bearing node's subtree spelling is typed.
       expect(msg).toContain('tree: typeof routeTree');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('warnRoomParamBinding', () => {
+  it('warns once per binding key, naming the room, route, and params', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      const info: RoomParamBindingInfo = {
+        name: 'cursors',
+        routeId: '/board/:id',
+        params: ['id'],
+      };
+      warnRoomParamBinding(warned, info);
+      warnRoomParamBinding(warned, info);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const msg = String(warn.mock.calls[0][0]);
+      expect(msg).toContain("'cursors'");
+      expect(msg).toContain("'/board/:id'");
+      expect(msg).toContain('id');
+      expect(msg).toContain('channel key');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns again for a different binding key', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnRoomParamBinding(warned, {
+        name: 'cursors',
+        routeId: '/board/:id',
+        params: ['id'],
+      });
+      warnRoomParamBinding(warned, {
+        name: 'presence',
+        routeId: '/board/:id',
+        params: ['id'],
+      });
+      expect(warn).toHaveBeenCalledTimes(2);
     } finally {
       warn.mockRestore();
     }

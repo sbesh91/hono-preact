@@ -20,8 +20,10 @@ import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
   warnAliasedLayoutBinding,
+  warnRoomParamBinding,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
+  type RoomParamBindingInfo,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -140,18 +142,25 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // may bind either an exact route or a childful route's subtree. A
   // stale/typo'd pattern fails the boot closed rather than running the unit
   // under no gates.
-  // Dedup store for the dev aliasing warning: one per binding for the life
-  // of this entry (boot checks re-run per request in dev).
+  // Dedup stores for the dev advisories: one per binding for the life of
+  // this entry (boot checks re-run per request in dev).
   const warnedAliasedBindings = new Set<string>();
+  const warnedRoomParamBindings = new Set<string>();
   const bindingCheckContext: RouteBindingCheckContext = {
     routeUseByPattern: new Map(routes.routeUse.map((r) => [r.path, r.use])),
-    // Dev-only observational diagnostic: an exact-path binding whose sibling
-    // subtree chain differs was widened by the index child's own `use`. Prod
-    // passes no callback, so the detection short-circuits to zero cost.
+    // Dev-only observational diagnostics. Prod passes no callbacks, so both
+    // detections short-circuit to zero cost.
     ...(dev
       ? {
+          // An exact-path binding whose sibling subtree chain differs was
+          // widened by the index child's own `use`.
           onAliasedBinding: (info: AliasedBindingInfo) =>
             warnAliasedLayoutBinding(warnedAliasedBindings, info),
+          // A param-bearing room binding whose route params are satisfied by
+          // the channel key of the same name, so the aliasing is named
+          // rather than left silent.
+          onRoomParamBinding: (info: RoomParamBindingInfo) =>
+            warnRoomParamBinding(warnedRoomParamBindings, info),
         }
       : {}),
   };

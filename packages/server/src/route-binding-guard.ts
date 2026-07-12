@@ -1,5 +1,8 @@
 import type { ServerRoute } from '@hono-preact/iso';
-import { subtreePatternOf } from '@hono-preact/iso/internal/runtime';
+import {
+  subtreePatternOf,
+  requiredParamSlots,
+} from '@hono-preact/iso/internal/runtime';
 
 /**
  * A route-bound server unit (loader, action, socket, or room) stamps its
@@ -38,6 +41,14 @@ export type AliasedBindingInfo = {
   subtreeId: string;
 };
 
+export type RoomParamBindingInfo = {
+  name: string;
+  /** The room's effective owning route pattern (declared __routeId or mount). */
+  routeId: string;
+  /** The route params the channel satisfies, in pattern order. */
+  params: string[];
+};
+
 export type RouteBindingCheckContext = {
   /**
    * Every routeUse pattern mapped to its composed page-use chain
@@ -54,6 +65,12 @@ export type RouteBindingCheckContext = {
    * diagnostic, never feeds guard resolution. Omit in prod for zero cost.
    */
   onAliasedBinding?: (info: AliasedBindingInfo) => void;
+  /**
+   * Dev-only observer fired once per param-bearing room binding after
+   * congruence holds: the room's route params are being satisfied by the
+   * channel key of the same name. Purely diagnostic. Omit in prod.
+   */
+  onRoomParamBinding?: (info: RoomParamBindingInfo) => void;
 };
 
 // True when `exact` extends `subtree` with extra members appended: the index
@@ -92,6 +109,64 @@ function maybeReportAliasedBinding(
   ctx.onAliasedBinding({ kind, name, routeId, subtreeId });
 }
 
+// Read a room export's channel name pattern structurally (a sanctioned read of
+// a user module export). A non-room unit or a channel-less value yields null.
+function channelNameOf(value: unknown): string | null {
+  const name = (value as { channel?: { name?: unknown } }).channel?.name;
+  return typeof name === 'string' ? name : null;
+}
+
+/**
+ * Fail closed when a room's effective owning route requires a `:param` the
+ * channel does not carry: the page-use guard would read that param as
+ * undefined. Requires route params ⊆ channel params (the channel may be
+ * finer-grained). On success, reports the param correspondence to the dev
+ * advisory. No-op for a non-room unit or a param-less route.
+ */
+function assertRoomChannelCongruent(
+  name: string,
+  routeId: string,
+  channelName: string,
+  ctx: RouteBindingCheckContext
+): void {
+  const routeParams = requiredParamSlots(routeId);
+  if (routeParams.length === 0) return;
+  const channelParams = new Set(requiredParamSlots(channelName));
+  const missing = routeParams.filter((p) => !channelParams.has(p));
+  if (missing.length > 0) {
+    throw new Error(
+      `Route-bound room '${name}' binds route '${routeId}', but its route ` +
+        `param${missing.length > 1 ? 's' : ''} ${missing.join(', ')} ` +
+        `${missing.length > 1 ? 'are' : 'is'} not a key of channel ` +
+        `'${channelName}'. A room's page-use guard reads route params from ` +
+        `the channel key, so every route param must be a channel param of ` +
+        `the same name. Rename the channel or route param(s) to match, or ` +
+        `bind the room to a route whose params the channel supplies.`
+    );
+  }
+  ctx.onRoomParamBinding?.({ name, routeId, params: routeParams });
+}
+
+/**
+ * Dev-only console advisory for a param-bearing room binding, fired through
+ * `RouteBindingCheckContext.onRoomParamBinding`. One per binding for the life
+ * of the `warned` set the caller owns.
+ */
+export function warnRoomParamBinding(
+  warned: Set<string>,
+  info: RoomParamBindingInfo
+): void {
+  const key = `${info.name}@${info.routeId}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: room '${info.name}' bound to '${info.routeId}': route ` +
+      `param(s) ${info.params.join(', ')} are satisfied by the channel key of ` +
+      `the same name. Confirm the route and channel denote the same resource; ` +
+      `the room's guard authorizes on the channel key, not the page URL.`
+  );
+}
+
 /**
  * Fail closed at boot if any route-bound unit (loader/action/socket/room)
  * declares a route other than the one its module is registered on.
@@ -108,7 +183,10 @@ function maybeReportAliasedBinding(
  * dropped auth gate at request time.
  *
  * Bare units (no `__routeId`) are skipped: they resolve page-use by request URL
- * and carry no binding to check.
+ * and carry no binding to check. A room is the one exception: a colocated
+ * room (a `.server.ts` sibling with no `__routeId`) is still owned by the
+ * module's mount, so its route/channel param congruence is checked against
+ * `route.path` regardless (see {@link assertRoomChannelCongruent}).
  *
  * A module mounted on a children-bearing node may alternatively bind its
  * subtree pattern (subtreePatternOf(route.path), so the root's is '/*'),
@@ -135,6 +213,17 @@ export async function assertRouteBindingsMatchMount(
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
           const routeId = (value as RouteBoundExport).__routeId;
+          // A room's effective owning route is the mount (`route.path`),
+          // whether it is explicitly bound (routeId already asserted equal
+          // to route.path below) or colocated (no routeId at all). Check
+          // BEFORE the bare-unit skip below, or a colocated room would go
+          // unchecked.
+          if (kind === 'room') {
+            const channelName = channelNameOf(value);
+            if (channelName !== null) {
+              assertRoomChannelCongruent(name, route.path, channelName, ctx);
+            }
+          }
           if (typeof routeId !== 'string') continue;
           if (routeId === route.path) {
             maybeReportAliasedBinding(kind, name, routeId, ctx);
@@ -178,7 +267,9 @@ export async function assertRouteBindingsMatchMount(
  * pattern fails loudly here instead of silently dropping auth at request time.
  *
  * Bare units (no `__routeId`) are route-less and skipped; they resolve page-use
- * by request URL.
+ * by request URL. A bare registry room has no owning route and is skipped for
+ * the same reason: it runs only app-use and its own use, so route/channel
+ * param congruence does not apply to it.
  *
  * NOTE: framework-private. Consumed by the generated server entry alongside
  * {@link assertRouteBindingsMatchMount}.
@@ -210,6 +301,12 @@ export async function assertRegistryRouteBindingsValid(
             );
           }
           maybeReportAliasedBinding(kind, name, routeId, ctx);
+          if (kind === 'room') {
+            const channelName = channelNameOf(value);
+            if (channelName !== null) {
+              assertRoomChannelCongruent(name, routeId, channelName, ctx);
+            }
+          }
         }
       }
     })
