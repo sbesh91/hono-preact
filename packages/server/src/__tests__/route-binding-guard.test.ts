@@ -433,6 +433,148 @@ describe('aliasing diagnostic (onAliasedBinding)', () => {
   });
 });
 
+describe('socket/room bindings (serverSockets / serverRooms containers)', () => {
+  // Socket/room defs are objects, not fns; mirror the file's `bound` helper.
+  const boundDef = (routeId: string): Record<string, unknown> =>
+    Object.defineProperty({ open() {} }, '__routeId', {
+      value: routeId,
+      enumerable: false,
+    });
+
+  it('mount passes when a bound socket matches its mount path', async () => {
+    const routes = [
+      routeOf('/chat', {
+        __moduleKey: 'm',
+        serverSockets: { feed: boundDef('/chat') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/chat', []]]))
+    ).resolves.toBeUndefined();
+  });
+
+  it('mount throws when a bound socket declares a different route', async () => {
+    const routes = [
+      routeOf('/chat', {
+        __moduleKey: 'm',
+        serverSockets: { feed: boundDef('/other') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/chat', []]]))
+    ).rejects.toThrow(
+      /Route-bound socket 'feed' is bound to route '\/other', but its module is registered on route '\/chat'/
+    );
+  });
+
+  it('mount throws when a bound room declares a different route', async () => {
+    const routes = [
+      routeOf('/board', {
+        __moduleKey: 'm',
+        serverRooms: { board: boundDef('/elsewhere') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/board', []]]))
+    ).rejects.toThrow(
+      /Route-bound room 'board' is bound to route '\/elsewhere'/
+    );
+  });
+
+  it('mount rejects a socket subtree binding on a childless route (fail closed)', async () => {
+    const routes = [
+      routeOf('/chat', {
+        __moduleKey: 'm',
+        serverSockets: { feed: boundDef('/chat/*') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/chat', []]]))
+    ).rejects.toThrow(
+      /socket 'feed' binds the subtree pattern '\/chat\/\*', but route '\/chat' has no child routes/
+    );
+  });
+
+  it('registry throws when a bound socket targets a route not in the table', async () => {
+    const registry = [
+      async () => ({
+        __moduleKey: 'src/server/rt',
+        serverSockets: { feed: boundDef('/nope') },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(registry, ctxOf([['/chat', []]]))
+    ).rejects.toThrow(
+      /Route-bound socket 'feed' in the src\/server registry is bound to route '\/nope', which is not a route/
+    );
+  });
+
+  it('registry throws when a bound room targets a route not in the table', async () => {
+    const registry = [
+      async () => ({
+        __moduleKey: 'src/server/rt',
+        serverRooms: { board: boundDef('/nope') },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(registry, ctxOf([['/chat', []]]))
+    ).rejects.toThrow(/Route-bound room 'board'/);
+  });
+
+  it('registry passes when bound socket/room target real patterns', async () => {
+    const registry = [
+      async () => ({
+        __moduleKey: 'src/server/rt',
+        serverSockets: { feed: boundDef('/chat') },
+        serverRooms: { board: boundDef('/chat') },
+      }),
+    ];
+    await expect(
+      assertRegistryRouteBindingsValid(registry, ctxOf([['/chat', []]]))
+    ).resolves.toBeUndefined();
+  });
+
+  it('bare (unstamped) socket/room defs are skipped', async () => {
+    const routes = [
+      routeOf('/chat', {
+        __moduleKey: 'm',
+        serverSockets: { feed: { open() {} } },
+        serverRooms: { board: { onJoin() {} } },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/chat', []]]))
+    ).resolves.toBeUndefined();
+  });
+
+  it('aliasing diagnostic reports kind socket and room', async () => {
+    const g1 = () => {};
+    const g2 = () => {};
+    const seen: AliasedBindingInfo[] = [];
+    await assertRouteBindingsMatchMount(
+      [
+        routeOf('/app', {
+          __moduleKey: 'm',
+          serverSockets: { feed: boundDef('/app') },
+          serverRooms: { board: boundDef('/app') },
+        }),
+      ],
+      {
+        routeUseByPattern: new Map([
+          ['/app', [g1, g2]],
+          ['/app/*', [g1]],
+        ]),
+        onAliasedBinding: (info) => seen.push(info),
+      }
+    );
+    // CONTAINERS order: loaders, actions, sockets, rooms.
+    expect(seen).toEqual([
+      { kind: 'socket', name: 'feed', routeId: '/app', subtreeId: '/app/*' },
+      { kind: 'room', name: 'board', routeId: '/app', subtreeId: '/app/*' },
+    ]);
+  });
+});
+
 describe('warnAliasedLayoutBinding', () => {
   it('warns once per binding key, naming both spellings', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -2,19 +2,23 @@ import type { ServerRoute } from '@hono-preact/iso';
 import { subtreePatternOf } from '@hono-preact/iso/internal/runtime';
 
 /**
- * A route-bound loader/action stamps its declared route pattern onto the export
- * as a non-enumerable `__routeId` (`serverRoute(r).loader` / `.action`). Read it
+ * A route-bound server unit (loader, action, socket, or room) stamps its
+ * declared route pattern onto the export as `__routeId`. Read it
  * structurally; bare units leave it `undefined`.
  */
 type RouteBoundExport = { __routeId?: unknown };
 type SelfModule = {
   serverLoaders?: unknown;
   serverActions?: unknown;
+  serverSockets?: unknown;
+  serverRooms?: unknown;
 };
 
 const CONTAINERS = [
   ['serverLoaders', 'loader'],
   ['serverActions', 'action'],
+  ['serverSockets', 'socket'],
+  ['serverRooms', 'room'],
 ] as const;
 
 function readExports(value: unknown): Record<string, unknown> | null {
@@ -23,7 +27,7 @@ function readExports(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-export type BoundUnitKind = 'loader' | 'action';
+export type BoundUnitKind = 'loader' | 'action' | 'socket' | 'room';
 
 export type AliasedBindingInfo = {
   kind: BoundUnitKind;
@@ -89,8 +93,8 @@ function maybeReportAliasedBinding(
 }
 
 /**
- * Fail closed at boot if any route-bound loader/action declares a route other
- * than the one its module is registered on.
+ * Fail closed at boot if any route-bound unit (loader/action/socket/room)
+ * declares a route other than the one its module is registered on.
  *
  * A route-bound unit resolves its page-level `use` (auth) chain by its declared
  * `__routeId` pattern (`makePageUseResolver.byPattern`), NOT by the request URL.
@@ -161,7 +165,7 @@ export async function assertRouteBindingsMatchMount(
 
 /**
  * Fail closed at boot if a `src/server` registry module has a route-bound
- * (`serverRoute(r).loader` / `.action`) unit whose route is not real.
+ * unit (loader/action/socket/room) whose route is not real.
  *
  * A registry module is not attached to a route node, so a route-bound unit in
  * it resolves its page-level `use` (auth) chain by `byPattern(__routeId)`. That
