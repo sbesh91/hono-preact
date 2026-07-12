@@ -6,6 +6,7 @@ import {
   type SocketHandler,
 } from '../define-socket.js';
 import { serverRoute } from '../server-route.js';
+import { useSocket } from '../use-socket.js';
 import type { Serialize } from '../internal/serialize.js';
 import type { Context } from 'hono';
 
@@ -141,6 +142,27 @@ defineSocket<{ ping: true }, { pong: true }>({
     return undefined;
   },
 });
+
+// `useSocket`'s `params` option: required and typed iff the bound route has
+// params (mirrors `useRoom`'s `key` option probes).
+declare const boundSocketRef: SocketRef<
+  { ping: true },
+  { pong: true },
+  { id: string }
+>;
+declare const bareSocketRef: SocketRef<{ ping: true }, { pong: true }>;
+
+// Param-bearing binding: `params` is required and typed.
+useSocket(boundSocketRef, { params: { id: 'b1' } });
+// @ts-expect-error missing required params
+useSocket(boundSocketRef, {});
+// @ts-expect-error wrong param name
+useSocket(boundSocketRef, { params: { boardId: 'b1' } });
+
+// Bare socket: no `params` option.
+useSocket(bareSocketRef, {});
+// @ts-expect-error bare socket takes no params
+useSocket(bareSocketRef, { params: { id: 'b1' } });
 
 void _probes;
 void _routeSocketProbe;
