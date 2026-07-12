@@ -6,7 +6,11 @@ import {
   defineLoader,
   type RoutesManifest,
 } from '@hono-preact/iso';
-import { _defineRouteLoader } from '@hono-preact/iso/internal';
+import {
+  _defineRouteLoader,
+  _defineRouteSocket,
+} from '@hono-preact/iso/internal';
+import { SOCKETS_RPC_PATH } from '@hono-preact/iso/internal/runtime';
 import { createServerEntry } from '../create-server-entry.js';
 
 // A minimal RoutesManifest sufficient for the loader RPC path. The SSR (GET)
@@ -259,6 +263,34 @@ describe('createServerEntry', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('fails the socket upgrade closed (500) when a registry socket is misbound', async () => {
+    // A src/server registry socket bound to a pattern that is not in the route
+    // table. Before this gate, /__sockets never ran the binding check, so the
+    // misbinding surfaced (at best) as a silently gateless connection.
+    const app = createServerEntry({
+      routes: manifest({
+        serverImports: [],
+        routeUse: [{ path: '/x', use: [] }],
+      }),
+      layout: Layout,
+      serverRegistry: [
+        async () => ({
+          __moduleKey: 'src/server/rt',
+          serverSockets: { feed: _defineRouteSocket('/nope', {}) },
+        }),
+      ],
+      dev: true,
+    });
+
+    const res = await app.request(
+      `${SOCKETS_RPC_PATH}?m=${encodeURIComponent('src/server/rt')}&s=feed`
+    );
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/socket 'feed'/);
+    expect(body.error).toMatch(/'\/nope'/);
   });
 });
 

@@ -229,6 +229,18 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     // resolveRoutePath together give socketsHandler the route-node use chain
     // for the socket's owning route, which is where auth gates live.
     .get(SOCKETS_RPC_PATH, async (c, next) => {
+      // Sockets are the third route-bound dispatch surface: a misbound
+      // socket/room must fail the handshake closed (500, no upgrade) rather
+      // than resolve a wrong or empty gate chain, mirroring the loaders RPC
+      // and action POST gates above.
+      try {
+        await routeBindingCheck();
+      } catch (err) {
+        return c.json(
+          { error: err instanceof Error ? err.message : String(err) },
+          500
+        );
+      }
       const [registry, rooms, routePathResolver] = await Promise.all([
         socketRegistryPromise(),
         roomRegistryPromise(),
