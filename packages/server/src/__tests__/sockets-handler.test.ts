@@ -925,6 +925,75 @@ describe('socketsHandler: realtime connector forwarding', () => {
     }
   });
 
+  it('forwards a BOUND socket through the connector with the RESOLVED route params (CF path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // The upgrader must NOT be consulted on the forward path; install one that
+    // throws so a stray upgrade() call would fail the test loudly.
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the forward path');
+    });
+
+    const def = _defineRouteSocket<
+      never,
+      never,
+      Record<string, string>,
+      Record<string, string>
+    >('/board/:id', {
+      data: (_c, params) => params,
+    }) as unknown as SocketDef<never, never, Record<string, string>>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(registry);
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'b1' }))}`
+    );
+
+    // This pins that the CF path threads the RESOLVED r= params into the data
+    // factory, not `{}`: a future edit that forwards the wrong (or no) params
+    // to the factory would break this while the Node-path test above stays
+    // green.
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    const fwd = recorded[0]!;
+    expect(fwd.kind).toBe('socket-forward');
+    if (fwd.kind === 'socket-forward') {
+      expect(fwd.data).toEqual({ id: 'b1' });
+    }
+  });
+
+  it('denies a BOUND socket with no r= query via the connector deny, before any DO contact (CF path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // A missing required param must deny BEFORE any connector forward; install
+    // an upgrader that throws so a stray upgrade() call fails the test loudly.
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the socket deny path');
+    });
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/board/:id', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(registry);
+
+    // No SOCKET_KEY_PARAM (r=) on the request.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket`
+    );
+
+    // The connector was called exactly once with kind:deny: the missing
+    // required param denies at the edge, so the connector never receives a
+    // socket-forward context and the DO is never contacted.
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.kind).toBe('deny');
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
   it('a denied plain socket closes via the connector deny, never the upgrader (CF path)', async () => {
     const { connector, calls } = makeFakeConnector();
     installRealtimeConnector(connector);

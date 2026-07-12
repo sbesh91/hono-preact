@@ -46,4 +46,21 @@ describe('resolveSocketParams', () => {
       missing: ['id'],
     });
   });
+
+  it('rejects an empty-string value (treats the slot as missing)', () => {
+    // Pinned: the check below is `!params[slot]`, which reads an empty string
+    // as falsy and denies. A future refactor to `slot in params` would flip
+    // this to ALLOW an empty id through, an auth regression.
+    expect(resolveSocketParams('/board/:id', enc({ id: '' }))).toEqual({
+      ok: false,
+      missing: ['id'],
+    });
+  });
+
+  it('does not require an optional slot', () => {
+    expect(resolveSocketParams('/a/:x?', undefined)).toEqual({
+      ok: true,
+      params: {},
+    });
+  });
 });
