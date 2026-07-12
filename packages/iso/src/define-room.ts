@@ -4,11 +4,7 @@ import type { Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
 import type { ReadonlyData } from './internal/readonly-data.js';
-import {
-  useRoom,
-  type UseRoomOptions,
-  type UseRoomResult,
-} from './use-room.js';
+import { useRoom, type UseRoomArgs, type UseRoomResult } from './use-room.js';
 
 /**
  * The per-connection handle handed to a room's server handlers.
@@ -140,9 +136,14 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
    * Idiomatic ref-method form of `useRoom`. Equivalent to
    * `useRoom(ref, opts)` but called directly on the ref:
    * `serverRooms.board.useRoom({ key: { roomId } })`.
+   *
+   * `UseRoomArgs` (from use-room.ts) is the identical rest tuple the free
+   * function uses: the options argument is required exactly when the
+   * channel has params, so `.useRoom()` with no arguments is a type error
+   * for a param-bearing channel.
    */
   useRoom(
-    opts?: UseRoomOptions<RoomRef<Incoming, Outgoing, State, Params>>
+    ...args: UseRoomArgs<RoomRef<Incoming, Outgoing, State, Params>>
   ): UseRoomResult<RoomRef<Incoming, Outgoing, State, Params>>;
 }
 
@@ -175,7 +176,7 @@ function makeRoomRef<Name extends string, Payload, State, Data>(
   // method, SSR throws "useRoom is not a function" (a bare 500). The def carries
   // no module/room key, so the hook stays disconnected during SSR (opening no
   // socket) and the markup matches the client's first hydration render.
-  ref.useRoom = (opts) => useRoom(ref, opts);
+  ref.useRoom = (...args) => useRoom(ref, ...args);
   return ref;
 }
 

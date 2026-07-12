@@ -139,7 +139,10 @@ function Harness({
   opts,
   onResult,
 }: {
-  opts?: Opts;
+  // roomRef (TestRoomRef) has a required `roomId` param, so `Opts` resolves
+  // to the non-optional branch of `UseRoomArgs`; every call site below always
+  // passes `opts`, so this stays required rather than `opts?: Opts`.
+  opts: Opts;
   onResult: (r: Result) => void;
 }) {
   const result = useRoom(roomRef, opts);
