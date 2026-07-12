@@ -31,7 +31,8 @@ import { defineSocket } from 'hono-preact';
 export const serverSockets = {
   chat: defineSocket<
     { text: string }, // messages the client sends
-    { text: string; from: string } // messages the server sends
+    { text: string; from: string }, // messages the server sends
+    { name: string } // socket.data shape, seeded by the `data` factory below
   >({
     // Optional guard middleware. A failing guard closes the socket with 4403.
     use: [requireSession],
@@ -140,7 +141,11 @@ import { serverRoute } from 'hono-preact';
 const route = serverRoute('/board/:id');
 
 export const serverSockets = {
-  boardChat: route.socket<{ text: string }, { text: string }>({
+  boardChat: route.socket<
+    { text: string },
+    { text: string },
+    { boardId: string }
+  >({
     // Route params are validated at the upgrade and passed to the factory.
     data: (_c, { id }) => ({ boardId: id }),
     message(socket, msg) {
