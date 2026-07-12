@@ -5,7 +5,10 @@ describe('requiredParamSlots', () => {
   it('returns required :param names without the colon', () => {
     expect(requiredParamSlots('/board/:id')).toEqual(['id']);
     expect(requiredParamSlots('board/:boardId')).toEqual(['boardId']);
-    expect(requiredParamSlots('/org/:orgId/board/:id')).toEqual(['orgId', 'id']);
+    expect(requiredParamSlots('/org/:orgId/board/:id')).toEqual([
+      'orgId',
+      'id',
+    ]);
   });
 
   it('excludes optional and rest segments', () => {
