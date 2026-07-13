@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defineRoom, type RoomDef } from '../define-room.js';
-import { defineChannel } from '../define-channel.js';
+import { defineChannel, type Channel } from '../define-channel.js';
 import { defineSocket } from '../define-socket.js';
 
 type ChatMsg = { kind: 'chat'; text: string };
@@ -44,5 +44,23 @@ describe('defineRoom (runtime def)', () => {
 
     expect('channel' in room).toBe(true);
     expect('channel' in socket).toBe(false);
+  });
+
+  it("throws for a hand-rolled channel that bypasses defineChannel's name validator", () => {
+    // `Channel` is a public type export, so a hand-rolled `{ name, key }`
+    // literal type-checks as a Channel without ever running through
+    // defineChannel's assertConformingChannelName. Left unvalidated, this
+    // would collapse every connection onto the single literal topic
+    // 'board:boardId' (the colon is not at the segment start, so
+    // interpolatePattern never substitutes it), silently merging every
+    // resource's presence roster and broadcasts into one shared channel.
+    const badChannel: Channel<'board:boardId', unknown> = {
+      name: 'board:boardId',
+      key: () => 'board:boardId' as never,
+    };
+    expect(() => defineRoom(badChannel, {})).toThrow(/board:boardId/);
+    expect(() => defineRoom(badChannel, {})).toThrow(
+      /not a valid channel param/
+    );
   });
 });

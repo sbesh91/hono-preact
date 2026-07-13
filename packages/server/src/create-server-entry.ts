@@ -21,9 +21,11 @@ import {
   assertRegistryRouteBindingsValid,
   warnAliasedLayoutBinding,
   warnRoomParamBinding,
+  warnRoomParamExemption,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
   type RoomParamBindingInfo,
+  type RoomParamExemptionInfo,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -146,10 +148,16 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // this entry (boot checks re-run per request in dev).
   const warnedAliasedBindings = new Set<string>();
   const warnedRoomParamBindings = new Set<string>();
+  const warnedRoomParamExemptions = new Set<string>();
   const bindingCheckContext: RouteBindingCheckContext = {
     routeUseByPattern: new Map(routes.routeUse.map((r) => [r.path, r.use])),
-    // Dev-only observational diagnostics. Prod passes no callbacks, so both
-    // detections short-circuit to zero cost.
+    // The outermost tier composeServerChain composes ([...appConfig.use,
+    // ...pageUse, ...def.use]); a room's route/channel congruence check must
+    // treat this tier as live too, not just page-use, since the guard chain
+    // feeds it the SAME pathParams.
+    appUse: appConfig.use ?? [],
+    // Dev-only observational diagnostics. Prod passes no callbacks, so all
+    // three detections short-circuit to zero cost.
     ...(dev
       ? {
           // An exact-path binding whose sibling subtree chain differs was
@@ -161,6 +169,11 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           // rather than left silent.
           onRoomParamBinding: (info: RoomParamBindingInfo) =>
             warnRoomParamBinding(warnedRoomParamBindings, info),
+          // A room's route/channel param mismatch was exempted from the boot
+          // throw because all three guard tiers are empty today; name the
+          // params a guard added later would silently read as `undefined`.
+          onRoomParamExemption: (info: RoomParamExemptionInfo) =>
+            warnRoomParamExemption(warnedRoomParamExemptions, info),
         }
       : {}),
   };

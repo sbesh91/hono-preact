@@ -7,6 +7,7 @@ import {
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
   type RoomParamBindingInfo,
+  type RoomParamExemptionInfo,
 } from '../route-binding-guard.js';
 import { defineRoutes, defineServerMiddleware } from '@hono-preact/iso';
 import type { ServerRoute } from '@hono-preact/iso';
@@ -899,6 +900,69 @@ describe('room route/channel param congruence', () => {
           routeUseByPattern: new Map([['/board/:id', [guard]]]),
         })
       ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+    });
+  });
+
+  describe('P2-b: exemption requires ALL THREE guard tiers empty (round-4 fix)', () => {
+    // Round-3's exemption only checked the PAGE-use chain
+    // (ctx.routeUseByPattern.get(routeId)), but composeServerChain feeds the
+    // SAME pathParams to all three tiers: [...appConfig.use, ...pageUse,
+    // ...def.use]. An app-level or the room's own guard can read the missing
+    // param just as readily as a page-level one, so the exemption must not
+    // fire while either of those tiers is live.
+
+    it('throws when page-use is empty but APP-use is non-empty (app tier live)', async () => {
+      const routes = [
+        routeOf('/board/:id', {
+          __moduleKey: 'm',
+          serverRooms: { chat: { channel: { name: 'global-chat' } } },
+        }),
+      ];
+      await expect(
+        assertRouteBindingsMatchMount(routes, {
+          routeUseByPattern: new Map([['/board/:id', []]]),
+          appUse: [guard],
+        })
+      ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+    });
+
+    it("throws when page-use is empty but the room's OWN use is non-empty (def tier live)", async () => {
+      const routes = [
+        routeOf('/board/:id', {
+          __moduleKey: 'm',
+          serverRooms: {
+            chat: { channel: { name: 'global-chat' }, use: [guard] },
+          },
+        }),
+      ];
+      await expect(
+        assertRouteBindingsMatchMount(routes, ctxOf([['/board/:id', []]]))
+      ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+    });
+
+    it('does not throw when ALL THREE tiers are empty, and fires the exemption advisory', async () => {
+      const routes = [
+        routeOf('/board/:id', {
+          __moduleKey: 'm',
+          serverRooms: { chat: { channel: { name: 'global-chat' } } },
+        }),
+      ];
+      const seen: RoomParamExemptionInfo[] = [];
+      await expect(
+        assertRouteBindingsMatchMount(routes, {
+          routeUseByPattern: new Map([['/board/:id', []]]),
+          appUse: [],
+          onRoomParamExemption: (info) => seen.push(info),
+        })
+      ).resolves.toBeUndefined();
+      expect(seen).toEqual([
+        {
+          name: 'chat',
+          routeId: '/board/:id',
+          channelName: 'global-chat',
+          params: ['id'],
+        },
+      ]);
     });
   });
 });

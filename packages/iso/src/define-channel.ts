@@ -65,8 +65,13 @@ export interface Channel<Name extends string, Payload> {
  * `.room`) is a narrower case with the identical hazard (its guard reads
  * route params the same way a channel does) and is rejected separately, at
  * boot, by `@hono-preact/server`'s route-binding guard.
+ *
+ * Exported so `defineRoom` (define-room.ts) can run the SAME check on a
+ * `Channel` passed in structurally: `Channel` is a public type export, so a
+ * hand-rolled `{ name, key }` literal bypasses `defineChannel`'s own call to
+ * this function entirely unless the room constructor re-validates it too.
  */
-function assertConformingChannelName(name: string): void {
+export function assertConformingChannelName(name: string): void {
   for (const segment of name.split('/')) {
     if (segment.includes(':') && !isConformingParamSegment(segment)) {
       throw new Error(

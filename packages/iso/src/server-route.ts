@@ -164,15 +164,19 @@ export interface RouteBinder<RouteId extends string> {
    * documents above), and takes precedence over the module-mount derivation
    * when the upgrade guard chain is resolved.
    *
-   * Boot ALSO enforces route/channel param congruence on a route that has at
-   * least one `use` guard: every one of the route's own `:param` names must
-   * also be a `:param` of the CHANNEL (the channel may be finer-grained, never
-   * coarser), because a guard on this route can read `ctx.location.pathParams`
-   * under the route's param names, and those values come from the channel key,
-   * not the route. A guard-less param-bearing route is exempt (there is no
-   * guard for a name mismatch to fool), but binding to a channel that does not
-   * carry the route's resource identity is still a correctness hazard even
-   * without a guard; keep the names aligned regardless.
+   * Boot ALSO enforces route/channel param congruence whenever at least one of
+   * the three guard tiers the upgrade composes is non-empty: app-use
+   * (`defineApp({ use })`), page-use (this route's own composed chain), or the
+   * room's own `use`. Every one of the route's own `:param` names must also be
+   * a `:param` of the CHANNEL (the channel may be finer-grained, never
+   * coarser), because a guard in ANY of those three tiers can read
+   * `ctx.location.pathParams` under the route's param names, and those values
+   * come from the channel key, not the route. Only a room where ALL THREE
+   * tiers are empty is exempt (there is no guard anywhere for a name mismatch
+   * to fool); binding such a room to a channel that does not carry the
+   * route's resource identity is still a correctness hazard, so a dev-only
+   * advisory names the mismatch even when boot does not fail closed. Keep the
+   * names aligned regardless.
    */
   room<
     Name extends string,

@@ -50,6 +50,16 @@ export type RoomParamBindingInfo = {
   params: string[];
 };
 
+export type RoomParamExemptionInfo = {
+  name: string;
+  /** The room's effective owning route pattern (declared __routeId or mount). */
+  routeId: string;
+  /** The channel name pattern the route's params were checked against. */
+  channelName: string;
+  /** The route params NOT satisfied by the channel key. */
+  params: string[];
+};
+
 export type RouteBindingCheckContext = {
   /**
    * Every routeUse pattern mapped to its composed page-use chain
@@ -59,6 +69,14 @@ export type RouteBindingCheckContext = {
    * aliasing diagnostic.
    */
   routeUseByPattern: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  /**
+   * `appConfig.use` (the outermost tier `composeServerChain` composes:
+   * `[...appConfig.use, ...pageUse, ...def.use]`). Fed the SAME
+   * `location.pathParams` as the page and def tiers, so a room's route/channel
+   * congruence check must treat this tier as live too, not just page-use.
+   * Defaults to an empty array when omitted (a guard-less app).
+   */
+  appUse?: ReadonlyArray<unknown>;
   /**
    * Dev-only observer: called for each exact-path binding whose sibling
    * subtree key carries a strict PREFIX of the exact chain (the deepest-wins
@@ -72,6 +90,14 @@ export type RouteBindingCheckContext = {
    * channel key of the same name. Purely diagnostic. Omit in prod.
    */
   onRoomParamBinding?: (info: RoomParamBindingInfo) => void;
+  /**
+   * Dev-only observer fired when a room's route/channel param mismatch is
+   * exempted from the boot throw because all three guard tiers (app-use,
+   * page-use, and the room's own use) are empty today. Purely diagnostic:
+   * names the params a guard added to ANY of those three tiers later would
+   * read as `undefined`. Omit in prod.
+   */
+  onRoomParamExemption?: (info: RoomParamExemptionInfo) => void;
 };
 
 // True when `exact` extends `subtree` with extra members appended: the index
@@ -115,6 +141,17 @@ function maybeReportAliasedBinding(
 function channelNameOf(value: unknown): string | null {
   const name = (value as { channel?: { name?: unknown } }).channel?.name;
   return typeof name === 'string' ? name : null;
+}
+
+// Read a room export's OWN `use` chain structurally (the same sanctioned
+// user-module-export read as channelNameOf). This is the innermost of the
+// three tiers composeServerChain feeds the same pathParams to
+// (`[...appConfig.use, ...pageUse, ...def.use]`), so the room's own guard
+// chain is just as live a hazard as a page-level one. A missing or
+// non-array `use` yields an empty tier (no guard).
+function defUseOf(value: unknown): ReadonlyArray<unknown> {
+  const use = (value as { use?: unknown }).use;
+  return Array.isArray(use) ? use : [];
 }
 
 // The first segment of `routeId` that carries a ':' anywhere in it (not just
@@ -175,27 +212,32 @@ function assertConformingBoundRouteId(
 
 /**
  * Fail closed when a room's effective owning route requires a `:param` the
- * channel does not carry AND that route has at least one guard: a guard on
- * that route COULD read the missing param via `ctx.location.pathParams`, so
- * an absent value there is a real hazard. Requires route params ⊆ channel
- * params (the channel may be finer-grained). On success, reports the param
- * correspondence to the dev advisory. No-op for a non-room unit or a
- * param-less route.
+ * channel does not carry AND at least one of the three guard tiers
+ * `composeServerChain` feeds the same `pathParams` to is non-empty: app-use
+ * (`appConfig.use`), page-use (the route's own composed chain), and the
+ * room's own `use`. A guard in ANY of those tiers COULD read the missing
+ * param via `ctx.location.pathParams`, so an absent value there is a real
+ * hazard regardless of which tier the guard lives in. Requires route params
+ * ⊆ channel params (the channel may be finer-grained). On success, reports
+ * the param correspondence to the dev advisory. No-op for a non-room unit or
+ * a param-less route.
  *
- * A route with an EMPTY page-use chain is exempted from the throw (not the
- * whole check: `routeParams.length === 0` is a separate, unconditional
- * early-return above the missing-slot computation). A room deliberately
- * independent of its mount route's params, e.g. `defineChannel('global-chat')`
- * colocated on `/board/:id`, is a real, working v0.9/v0.10 configuration:
- * no guard on that route could ever read the missing param, because there is
- * no guard at all, so there is nothing for this rule to protect and no
- * reason to fail the boot. A route with even one guard keeps the full throw:
- * that guard COULD read the param.
+ * The throw is exempted only when ALL THREE tiers are empty (not the whole
+ * check: `routeParams.length === 0` is a separate, unconditional early-return
+ * above the missing-slot computation). A room deliberately independent of its
+ * mount route's params, e.g. `defineChannel('global-chat')` colocated on
+ * `/board/:id` with no app-use, no page-use, and no def.use, is a real,
+ * working v0.9/v0.10 configuration: no guard anywhere could ever read the
+ * missing param today, so there is nothing for this rule to protect and no
+ * reason to fail the boot. The exemption still fires a dev-only advisory
+ * (`onRoomParamExemption`), since a guard added LATER to any of the three
+ * tiers would silently read the missing param as `undefined`.
  */
 function assertRoomChannelCongruent(
   name: string,
   routeId: string,
   channelName: string,
+  defUse: ReadonlyArray<unknown>,
   ctx: RouteBindingCheckContext
 ): void {
   const routeParams = requiredParamSlots(routeId);
@@ -203,18 +245,28 @@ function assertRoomChannelCongruent(
   const channelParams = new Set(requiredParamSlots(channelName));
   const missing = routeParams.filter((p) => !channelParams.has(p));
   if (missing.length > 0) {
-    const guardChain = ctx.routeUseByPattern.get(routeId);
-    if (!guardChain || guardChain.length === 0) return;
+    const appUse = ctx.appUse ?? [];
+    const pageUse = ctx.routeUseByPattern.get(routeId) ?? [];
+    if (appUse.length + pageUse.length + defUse.length === 0) {
+      ctx.onRoomParamExemption?.({
+        name,
+        routeId,
+        channelName,
+        params: missing,
+      });
+      return;
+    }
     throw new Error(
       `Route-bound room '${name}' binds route '${routeId}', but its route ` +
         `param${missing.length > 1 ? 's' : ''} ${missing.join(', ')} ` +
         `${missing.length > 1 ? 'are' : 'is'} not a key of channel ` +
-        `'${channelName}'. A room's page-use guard reads route params from ` +
-        `the channel key, so every route param must be a channel param of ` +
-        `the same name. Rename the channel or route param(s) to match, bind ` +
-        `the room to a route whose params the channel supplies, or move the ` +
-        `room into a src/server registry module: a registry room carries no ` +
-        `__routeId, is route-independent, and skips this check entirely.`
+        `'${channelName}'. A room's guard chain (app-use, page-use, or the ` +
+        `room's own use) reads route params from the channel key, so every ` +
+        `route param must be a channel param of the same name. Rename the ` +
+        `channel or route param(s) to match, bind the room to a route whose ` +
+        `params the channel supplies, or move the room into a src/server ` +
+        `registry module: a registry room carries no __routeId, is ` +
+        `route-independent, and skips this check entirely.`
     );
   }
   ctx.onRoomParamBinding?.({ name, routeId, params: routeParams });
@@ -239,6 +291,31 @@ export function warnRoomParamBinding(
       `of the same name. Confirm the route and channel denote the same ` +
       `resource; the room's guard authorizes on the channel key, not the ` +
       `page URL.`
+  );
+}
+
+/**
+ * Dev-only console advisory for a room's route/channel param mismatch that was
+ * exempted from the boot throw (all three guard tiers empty today), fired
+ * through `RouteBindingCheckContext.onRoomParamExemption`. One per binding for
+ * the life of the `warned` set the caller owns.
+ */
+export function warnRoomParamExemption(
+  warned: Set<string>,
+  info: RoomParamExemptionInfo
+): void {
+  const key = `${info.name}@${info.routeId}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: room '${info.name}' bound to '${info.routeId}': route ` +
+      `param${info.params.length > 1 ? 's' : ''} ${info.params.join(', ')} ` +
+      `${info.params.length > 1 ? 'are' : 'is'} not a key of channel ` +
+      `'${info.channelName}'. Boot did not fail closed because no guard ` +
+      `reads it today (app-use, page-use, and the room's own use are all ` +
+      `empty), but a guard added later to any of those three tiers would ` +
+      `read ctx.location.pathParams.${info.params[0]} as undefined. Rename ` +
+      `the channel or route param(s) to match before adding a guard.`
   );
 }
 
@@ -332,6 +409,7 @@ export async function assertRouteBindingsMatchMount(
                 name,
                 typeof routeId === 'string' ? routeId : route.path,
                 channelName,
+                defUseOf(value),
                 ctx
               );
             }
@@ -394,7 +472,13 @@ export async function assertRegistryRouteBindingsValid(
           if (kind === 'room') {
             const channelName = channelNameOf(value);
             if (channelName !== null) {
-              assertRoomChannelCongruent(name, routeId, channelName, ctx);
+              assertRoomChannelCongruent(
+                name,
+                routeId,
+                channelName,
+                defUseOf(value),
+                ctx
+              );
             }
           }
         }
