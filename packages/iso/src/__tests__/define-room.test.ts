@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defineRoom, type RoomDef } from '../define-room.js';
+import { defineRoom, _defineRouteRoom, type RoomDef } from '../define-room.js';
 import { defineChannel, type Channel } from '../define-channel.js';
 import { defineSocket } from '../define-socket.js';
 
@@ -61,6 +61,30 @@ describe('defineRoom (runtime def)', () => {
     expect(() => defineRoom(badChannel, {})).toThrow(/board:boardId/);
     expect(() => defineRoom(badChannel, {})).toThrow(
       /not a valid channel param/
+    );
+  });
+
+  it("names 'defineRoom' (not 'defineChannel') in the thrown message for a hand-rolled channel", () => {
+    // The channel never went through defineChannel, so blaming
+    // 'defineChannel(...)' in the message would point the author at a call
+    // they never made. The message must name the constructor they actually
+    // called.
+    const badChannel: Channel<'board:boardId', unknown> = {
+      name: 'board:boardId',
+      key: () => 'board:boardId' as never,
+    };
+    expect(() => defineRoom(badChannel, {})).toThrow(
+      /^defineRoom\('board:boardId'\):/
+    );
+  });
+
+  it("names 'serverRoute(r).room' in the thrown message when the hand-rolled channel reaches the route-bound constructor", () => {
+    const badChannel: Channel<'board:boardId', unknown> = {
+      name: 'board:boardId',
+      key: () => 'board:boardId' as never,
+    };
+    expect(() => _defineRouteRoom('/board', badChannel, {})).toThrow(
+      /^serverRoute\(r\)\.room\('board:boardId'\):/
     );
   });
 });

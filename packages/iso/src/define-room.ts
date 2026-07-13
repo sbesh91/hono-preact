@@ -150,7 +150,8 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
 function makeRoomRef<Name extends string, Payload, State, Data>(
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>,
-  routeId?: string
+  routeId?: string,
+  constructorLabel: string = 'defineRoom'
 ): RoomRef<Payload, Payload, State, RouteParams<Name>> {
   // `Channel` is a public type export, so a hand-rolled `{ name, key }`
   // literal can reach this constructor without ever passing through
@@ -159,8 +160,10 @@ function makeRoomRef<Name extends string, Payload, State, Data>(
   // unvalidated name can carry a non-conforming ':param' segment that
   // `interpolatePattern` never substitutes, collapsing every connection onto
   // one degenerate constant topic (see assertConformingChannelName's own
-  // doc for the full hazard).
-  assertConformingChannelName(channel.name);
+  // doc for the full hazard). `constructorLabel` names the actual public
+  // constructor the author called, so the thrown message doesn't blame
+  // `defineChannel` for a name the author never passed to it.
+  assertConformingChannelName(channel.name, constructorLabel);
   // The def (handler + channel) IS the runtime value on the server; the type
   // presents as a client `RoomRef`. The build strips the body on the client and
   // replaces it with the descriptor stub, so this object only runs server-side.
@@ -228,5 +231,5 @@ export function _defineRouteRoom<
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
 ): RoomRef<Payload, Payload, State, RouteParams<Name>> {
-  return makeRoomRef(channel, handler, routeId);
+  return makeRoomRef(channel, handler, routeId, 'serverRoute(r).room');
 }

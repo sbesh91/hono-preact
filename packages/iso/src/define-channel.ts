@@ -70,13 +70,21 @@ export interface Channel<Name extends string, Payload> {
  * `Channel` passed in structurally: `Channel` is a public type export, so a
  * hand-rolled `{ name, key }` literal bypasses `defineChannel`'s own call to
  * this function entirely unless the room constructor re-validates it too.
+ * `constructorLabel` names whichever public constructor actually ran the
+ * check (`defineChannel` here; `defineRoom`/`serverRoute(r).room` when
+ * `defineRoom` re-validates a hand-rolled `Channel`), so the thrown message
+ * always points at the call the author actually made rather than always
+ * blaming `defineChannel`.
  */
-export function assertConformingChannelName(name: string): void {
+export function assertConformingChannelName(
+  name: string,
+  constructorLabel: string = 'defineChannel'
+): void {
   for (const segment of name.split('/')) {
     if (segment.includes(':') && !isConformingParamSegment(segment)) {
       throw new Error(
-        `defineChannel('${name}'): the param segment '${segment}' is not a ` +
-          `valid channel param. A channel param must be ':name', where ` +
+        `${constructorLabel}('${name}'): the param segment '${segment}' is not ` +
+          `a valid channel param. A channel param must be ':name', where ` +
           `'name' is one or more of [A-Za-z0-9_], optionally followed by a ` +
           `single '?', '*', or '+' modifier (e.g. ':id', ':id?', ':rest*', ` +
           `':rest+'). Rename the param so it only uses letters, digits, and ` +

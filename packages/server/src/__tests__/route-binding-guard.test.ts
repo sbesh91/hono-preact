@@ -9,7 +9,11 @@ import {
   type RoomParamBindingInfo,
   type RoomParamExemptionInfo,
 } from '../route-binding-guard.js';
-import { defineRoutes, defineServerMiddleware } from '@hono-preact/iso';
+import {
+  defineRoutes,
+  defineServerMiddleware,
+  defineClientMiddleware,
+} from '@hono-preact/iso';
 import type { ServerRoute } from '@hono-preact/iso';
 
 // A route-bound export carries a non-enumerable `__routeId`; mirror that here.
@@ -710,11 +714,14 @@ describe('bound route param conformance (socket/room :param spelling)', () => {
 });
 
 describe('room route/channel param congruence', () => {
-  // A guard-bearing gate, standing in for a real page-use middleware: the
-  // congruence throw is scoped to routes that HAVE a guard (P2-a), so these
-  // fixtures give '/board/:id' a non-empty chain wherever the test means to
-  // pin the throw.
-  const guard = () => {};
+  // A real server middleware, standing in for a page-use guard: the
+  // congruence throw is scoped to routes that have a LIVE (server) guard
+  // tier (P2-a), so these fixtures give '/board/:id' a non-empty chain
+  // wherever the test means to pin the throw. Tier liveness now counts only
+  // `runs === 'server'` entries (see `isServerMiddleware` in
+  // route-binding-guard.ts), so a bare function no longer counts as a guard;
+  // this must be a real `defineServerMiddleware` object.
+  const guard = defineServerMiddleware(async (_c, next) => next());
 
   // A room whose route requires :id but whose channel keys on :boardId fails
   // boot, PROVIDED the route has a guard that could read the missing param.
@@ -952,6 +959,124 @@ describe('room route/channel param congruence', () => {
         assertRouteBindingsMatchMount(routes, {
           routeUseByPattern: new Map([['/board/:id', []]]),
           appUse: [],
+          onRoomParamExemption: (info) => seen.push(info),
+        })
+      ).resolves.toBeUndefined();
+      expect(seen).toEqual([
+        {
+          name: 'chat',
+          routeId: '/board/:id',
+          channelName: 'global-chat',
+          params: ['id'],
+        },
+      ]);
+    });
+  });
+
+  describe('P1-1: guard-readable namespace covers optional/rest route params (round-5 fix)', () => {
+    // preact-iso's runtime matcher (`exec`) binds an optional or rest route
+    // param over HTTP just as readily as a required one, and a guard reads
+    // `ctx.location.pathParams` the same way regardless of the modifier.
+    // Round-4's congruence check used ONLY `requiredParamSlots`, which
+    // EXCLUDES optional ('?') and rest-zero-or-more ('*') slots, so a route
+    // whose only params are optional/rest early-returned
+    // (`routeParams.length === 0`) and skipped the check entirely -- even
+    // though the channel key named a totally different param and a guard
+    // could read the wrong (undefined) value. These pin the fix:
+    // `declaredParamSlots` (which INCLUDES optional/rest) now drives the
+    // early-return and the name-coverage condition.
+
+    it('throws for an OPTIONAL route param (:id?) satisfied by a differently-named channel key, on a guarded route', async () => {
+      const roomMod = async () => ({
+        serverRooms: {
+          cursors: {
+            __routeId: '/board/:id?',
+            channel: { name: 'board/:boardId' },
+          },
+        },
+      });
+      await expect(
+        assertRegistryRouteBindingsValid([roomMod], {
+          routeUseByPattern: new Map([['/board/:id?', [guard]]]),
+        })
+      ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+    });
+
+    it('throws for a REST route param (:rest*) satisfied by a differently-named channel key, on a guarded route', async () => {
+      const roomMod = async () => ({
+        serverRooms: {
+          files: {
+            __routeId: '/files/:rest*',
+            channel: { name: 'files/:name' },
+          },
+        },
+      });
+      await expect(
+        assertRegistryRouteBindingsValid([roomMod], {
+          routeUseByPattern: new Map([['/files/:rest*', [guard]]]),
+        })
+      ).rejects.toThrow(/route param .*rest.* is not a key of channel/i);
+    });
+
+    it('still throws when a REQUIRED route param is satisfied only by an OPTIONAL channel slot of the same name (presence guarantee)', async () => {
+      // Names line up (`id`/`id`), so condition 1 (name coverage) passes.
+      // But the channel only DECLARES `id` as optional, so it never
+      // guarantees the value a required route param promises: condition 2
+      // (presence guarantee) must still fire.
+      const roomMod = async () => ({
+        serverRooms: {
+          cursors: {
+            __routeId: '/board/:id',
+            channel: { name: 'board/:id?' },
+          },
+        },
+      });
+      await expect(
+        assertRegistryRouteBindingsValid([roomMod], {
+          routeUseByPattern: new Map([['/board/:id', [guard]]]),
+        })
+      ).rejects.toThrow(
+        /route param .*id.* only an optional or rest key in channel/i
+      );
+    });
+
+    it('does not throw when an optional route param is satisfied by a same-named optional channel slot', async () => {
+      const roomMod = async () => ({
+        serverRooms: {
+          cursors: {
+            __routeId: '/board/:id?',
+            channel: { name: 'board/:id?' },
+          },
+        },
+      });
+      await expect(
+        assertRegistryRouteBindingsValid([roomMod], {
+          routeUseByPattern: new Map([['/board/:id?', [guard]]]),
+        })
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('P2: tier liveness counts only SERVER middleware', () => {
+    // composeServerChain filters a tier to `m.runs === 'server'` before
+    // running it, so a client-scope middleware (or a StreamObserver) in
+    // appConfig.use/page-use/def.use can never read ctx.location.pathParams.
+    // Counting raw array length would make an app-level logger or a
+    // client-scope middleware hard-fail the boot of an otherwise-exempt
+    // (guard-less) room.
+    it('does not throw when the app tier contains ONLY a non-server (client-scope) middleware', async () => {
+      const clientOnly = defineClientMiddleware(async (_c, next) => next());
+      const routes = [
+        routeOf('/board/:id', {
+          __moduleKey: 'm',
+          serverRooms: { chat: { channel: { name: 'global-chat' } } },
+        }),
+      ];
+      const seen: RoomParamExemptionInfo[] = [];
+      await expect(
+        assertRouteBindingsMatchMount(routes, {
+          routeUseByPattern: new Map([['/board/:id', []]]),
+          appUse: [clientOnly],
           onRoomParamExemption: (info) => seen.push(info),
         })
       ).resolves.toBeUndefined();

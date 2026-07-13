@@ -1505,4 +1505,48 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     expect(openSpy).toHaveBeenCalledOnce();
     expect(guardSeenParams).toEqual({});
   });
+
+  it('a colocated socket ignores a malicious r= wire entirely and keeps pathParams: {}', async () => {
+    // Adversarial variant of the test above: rather than omitting r=, a
+    // client sends one, trying to smuggle a param value into a colocated
+    // socket's guard. Colocated (unbound) resolution must never read r= at
+    // all -- pinning the round-3 hole class (an unbound socket/room
+    // resolving CLIENT-SUPPLIED params) from the opposite direction of the
+    // "no r=" test.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardSeenParams: Record<string, string> | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      guardSeenParams = mwCtx.location.pathParams;
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    // A bare defineSocket (no __routeId), colocated with a param-bearing
+    // route file, exactly as the "no r=" test above.
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    const resolvePageUse = (path: string) =>
+      path === '/board/:id' ? [captureGuard] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === 'pages/board' ? '/board/:id' : undefined;
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+
+    // A malicious r= wire, as if forged to smuggle an authorized-looking id.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'pwn' }))}`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(guardSeenParams).toEqual({});
+  });
 });

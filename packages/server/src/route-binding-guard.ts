@@ -2,6 +2,7 @@ import type { ServerRoute } from '@hono-preact/iso';
 import {
   subtreePatternOf,
   requiredParamSlots,
+  declaredParamSlots,
   isConformingParamSegment,
 } from '@hono-preact/iso/internal/runtime';
 
@@ -74,7 +75,12 @@ export type RouteBindingCheckContext = {
    * `[...appConfig.use, ...pageUse, ...def.use]`). Fed the SAME
    * `location.pathParams` as the page and def tiers, so a room's route/channel
    * congruence check must treat this tier as live too, not just page-use.
-   * Defaults to an empty array when omitted (a guard-less app).
+   * Defaults to an empty array when omitted (a guard-less app). Tier
+   * liveness only counts entries with `runs === 'server'` (see
+   * `serverTierSize`): `composeServerChain` filters to server middleware
+   * before running the chain, so a client-scope middleware or a
+   * `StreamObserver` in this array can never read `pathParams` and must not
+   * count as a live guard.
    */
   appUse?: ReadonlyArray<unknown>;
   /**
@@ -183,10 +189,14 @@ function nonConformingRouteSegment(routeId: string): string | undefined {
  * `exec` matcher that resolved the route, so their param names already line
  * up and a hyphenated route param works correctly for them today. An
  * existing app may have a perfectly ordinary HTTP route like
- * `/board/:board-id`; only a NEW `serverRoute(r).socket`/`.room` binding on
- * such a route is rejected, and that binder is unreleased, so throwing here
- * is safe. A colocated (unbound) socket/room carries no `__routeId` and is
- * never passed to this function.
+ * `/board/:board-id`; only a `serverRoute(r).socket`/`.room` binding on such
+ * a route is rejected. `serverRoute(r).socket`/`.room` shipped in
+ * `hono-preact@0.10.1`, so this throw is a recorded breaking change (see the
+ * v0.11 release-notes breaking-change record), not a pre-release tightening:
+ * a released app that bound a socket/room to a non-conforming route param
+ * now fails its boot instead of silently running that unit with an empty
+ * params object. A colocated (unbound) socket/room carries no `__routeId`
+ * and is never passed to this function.
  */
 function assertConformingBoundRouteId(
   kind: BoundUnitKind,
@@ -210,28 +220,83 @@ function assertConformingBoundRouteId(
   );
 }
 
+// True for a structurally well-formed Middleware entry (server or client)
+// whose `runs` discriminant is `'server'`. `composeServerChain` filters a
+// tier to `m.runs === 'server'` before running it (compose-server-chain.ts),
+// so a client-scope middleware, a logger, or a StreamObserver (which carries
+// no `runs` field at all) never actually executes server-side and could
+// never read `ctx.location.pathParams`. Reads `use` entries structurally,
+// the same sanctioned read as `channelNameOf`/`defUseOf` above: a tier is
+// read off a user-defined module (or `appConfig`) as `ReadonlyArray<unknown>`.
+function isServerMiddleware(entry: unknown): boolean {
+  return (
+    typeof entry === 'object' &&
+    entry !== null &&
+    (entry as { __kind?: unknown }).__kind === 'middleware' &&
+    (entry as { runs?: unknown }).runs === 'server'
+  );
+}
+
+// The count of SERVER middleware in a `use` tier: the tier-liveness unit
+// `assertRoomChannelCongruent`'s three-guard-tier exemption counts, rather
+// than raw array length (see `isServerMiddleware`).
+function serverTierSize(tier: ReadonlyArray<unknown>): number {
+  return tier.filter(isServerMiddleware).length;
+}
+
 /**
- * Fail closed when a room's effective owning route requires a `:param` the
- * channel does not carry AND at least one of the three guard tiers
- * `composeServerChain` feeds the same `pathParams` to is non-empty: app-use
+ * Fail closed when a room's effective owning route declares a `:param` the
+ * channel cannot guarantee, AND at least one of the three guard tiers
+ * `composeServerChain` feeds the same `pathParams` to is live: app-use
  * (`appConfig.use`), page-use (the route's own composed chain), and the
  * room's own `use`. A guard in ANY of those tiers COULD read the missing
  * param via `ctx.location.pathParams`, so an absent value there is a real
- * hazard regardless of which tier the guard lives in. Requires route params
- * ⊆ channel params (the channel may be finer-grained). On success, reports
- * the param correspondence to the dev advisory. No-op for a non-room unit or
- * a param-less route.
+ * hazard regardless of which tier the guard lives in. No-op for a non-room
+ * unit or a route with no declared params at all.
  *
- * The throw is exempted only when ALL THREE tiers are empty (not the whole
- * check: `routeParams.length === 0` is a separate, unconditional early-return
- * above the missing-slot computation). A room deliberately independent of its
- * mount route's params, e.g. `defineChannel('global-chat')` colocated on
- * `/board/:id` with no app-use, no page-use, and no def.use, is a real,
- * working v0.9/v0.10 configuration: no guard anywhere could ever read the
- * missing param today, so there is nothing for this rule to protect and no
- * reason to fail the boot. The exemption still fires a dev-only advisory
- * (`onRoomParamExemption`), since a guard added LATER to any of the three
- * tiers would silently read the missing param as `undefined`.
+ * The guard-readable namespace is checked under TWO conditions, both
+ * required for congruence:
+ *
+ * 1. **Name coverage:** every param the route DECLARES (`declaredParamSlots`,
+ *    which includes optional `?` and rest `*`/`+` slots) must also be a param
+ *    the channel declares. preact-iso's runtime matcher (`exec`) binds an
+ *    optional or rest route param over HTTP just as readily as a required
+ *    one, and a guard reads `ctx.location.pathParams` the same way regardless
+ *    of the modifier, so a route param `requiredParamSlots` excludes (because
+ *    it is optional or rest-zero-or-more) is not exempt from this check: it
+ *    is exactly as guard-readable as a required one, just not guaranteed
+ *    present.
+ * 2. **Presence guarantee:** every param the route REQUIRES
+ *    (`requiredParamSlots`) must also be a param the channel REQUIRES. A
+ *    channel param declared but only optional/rest cannot guarantee a
+ *    required route param is present: an absent client-supplied slot
+ *    resolves to `undefined` at connection time, so a guard keyed on it would
+ *    misread a value the route promises is always there.
+ *
+ * The throw is exempted only when ALL THREE guard tiers are empty (not the
+ * whole check: the declared-params early-return above is unconditional). A
+ * room deliberately independent of its mount route's params, e.g.
+ * `defineChannel('global-chat')` colocated on `/board/:id` with no live
+ * app-use, page-use, or def.use, is a real, working v0.9/v0.10
+ * configuration: no guard anywhere could ever read the missing param today,
+ * so there is nothing for this rule to protect and no reason to fail the
+ * boot. The exemption still fires a dev-only advisory (`onRoomParamExemption`),
+ * since a guard added LATER to any of the three tiers would silently read
+ * the missing param as `undefined`. Tier liveness counts only SERVER
+ * middleware (`serverTierSize`), not raw array length.
+ *
+ * A route segment outside the supported `:[A-Za-z0-9_]+` param class (e.g. a
+ * hyphenated `:board-id`) is invisible to `declaredParamSlots`, so
+ * `declaredParamSlots(routeId)` is empty for such a route and this check
+ * early-returns just as it would for a genuinely param-less route. That is
+ * intentional, not a gap this function is meant to close: preact-iso's own
+ * `exec` matcher still binds that segment fine over HTTP, but its value never
+ * reaches `pathParams` for a REALTIME connection (rooms/sockets resolve
+ * params via `requiredParamSlots`/`declaredParamSlots`, not `exec`), so a
+ * room guard must not rely on such a param. A route-BOUND socket/room on a
+ * non-conforming route is separately rejected at boot by
+ * `assertConformingBoundRouteId`; a colocated room is not (see that
+ * function's own doc), which is why this early-return exists at all.
  */
 function assertRoomChannelCongruent(
   name: string,
@@ -240,14 +305,30 @@ function assertRoomChannelCongruent(
   defUse: ReadonlyArray<unknown>,
   ctx: RouteBindingCheckContext
 ): void {
-  const routeParams = requiredParamSlots(routeId);
-  if (routeParams.length === 0) return;
-  const channelParams = new Set(requiredParamSlots(channelName));
-  const missing = routeParams.filter((p) => !channelParams.has(p));
+  const routeDeclared = declaredParamSlots(routeId);
+  if (routeDeclared.length === 0) return;
+  const channelDeclared = new Set(declaredParamSlots(channelName));
+  const routeRequired = requiredParamSlots(routeId);
+  const channelRequired = new Set(requiredParamSlots(channelName));
+
+  // Condition 1: a route param the channel does not even declare is
+  // unreachable there under any spelling.
+  const undeclared = routeDeclared.filter((p) => !channelDeclared.has(p));
+  // Condition 2: a route param the channel DOES declare, but only as
+  // optional/rest, cannot guarantee a REQUIRED route param is present.
+  // Disjoint from `undeclared` by construction (only checks params that
+  // passed condition 1).
+  const notGuaranteed = routeRequired.filter(
+    (p) => channelDeclared.has(p) && !channelRequired.has(p)
+  );
+  const missing = [...undeclared, ...notGuaranteed];
+
   if (missing.length > 0) {
     const appUse = ctx.appUse ?? [];
     const pageUse = ctx.routeUseByPattern.get(routeId) ?? [];
-    if (appUse.length + pageUse.length + defUse.length === 0) {
+    const liveTiers =
+      serverTierSize(appUse) + serverTierSize(pageUse) + serverTierSize(defUse);
+    if (liveTiers === 0) {
       ctx.onRoomParamExemption?.({
         name,
         routeId,
@@ -256,20 +337,38 @@ function assertRoomChannelCongruent(
       });
       return;
     }
+    const parts: string[] = [];
+    if (undeclared.length > 0) {
+      parts.push(
+        `its route param${undeclared.length > 1 ? 's' : ''} ` +
+          `${undeclared.join(', ')} ${undeclared.length > 1 ? 'are' : 'is'} ` +
+          `not a key of channel '${channelName}'`
+      );
+    }
+    if (notGuaranteed.length > 0) {
+      parts.push(
+        `its route param${notGuaranteed.length > 1 ? 's' : ''} ` +
+          `${notGuaranteed.join(', ')} ${notGuaranteed.length > 1 ? 'are' : 'is'} ` +
+          `only an optional or rest key in channel '${channelName}', not a ` +
+          `required one`
+      );
+    }
     throw new Error(
-      `Route-bound room '${name}' binds route '${routeId}', but its route ` +
-        `param${missing.length > 1 ? 's' : ''} ${missing.join(', ')} ` +
-        `${missing.length > 1 ? 'are' : 'is'} not a key of channel ` +
-        `'${channelName}'. A room's guard chain (app-use, page-use, or the ` +
-        `room's own use) reads route params from the channel key, so every ` +
-        `route param must be a channel param of the same name. Rename the ` +
-        `channel or route param(s) to match, bind the room to a route whose ` +
-        `params the channel supplies, or move the room into a src/server ` +
-        `registry module: a registry room carries no __routeId, is ` +
-        `route-independent, and skips this check entirely.`
+      `Route-bound room '${name}' binds route '${routeId}', but ` +
+        `${parts.join('; and ')}. A room's guard chain (app-use, page-use, or ` +
+        `the room's own use) reads route params from the channel key, so ` +
+        `every route param the route declares must be a channel param of the ` +
+        `same name, and every route param the route REQUIRES must be a ` +
+        `REQUIRED channel param (an optional '?' or rest-zero-or-more '*' ` +
+        `channel slot can be absent at runtime, so it cannot guarantee a ` +
+        `required route param). Rename the channel or route param(s) to ` +
+        `match, make the channel slot required, bind the room to a route ` +
+        `whose params the channel supplies, or move the room into a ` +
+        `src/server registry module: a registry room carries no __routeId, ` +
+        `is route-independent, and skips this check entirely.`
     );
   }
-  ctx.onRoomParamBinding?.({ name, routeId, params: routeParams });
+  ctx.onRoomParamBinding?.({ name, routeId, params: routeRequired });
 }
 
 /**
