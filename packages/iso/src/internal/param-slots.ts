@@ -1,3 +1,13 @@
+// The exact param-name class and single-trailing-modifier grammar that
+// `interpolatePattern` (interpolate-pattern.ts) and the type-level `ParamFrom`
+// (typed-routes.ts) both use: `:name` where name is one or more of
+// `[A-Za-z0-9_]`, with an optional single trailing `?`/`*`/`+` flag. A segment
+// that does not conform (e.g. `:b-c`, a hyphen is outside the class) is not a
+// param at either the runtime interpolator or the type level, so it must not
+// be treated as a slot here either: the two extractors below share this
+// pattern so all four places agree on what counts as a param.
+const PARAM_SEGMENT = /^:([A-Za-z0-9_]+)([?*+])?$/;
+
 /**
  * The required `:param` slot names in a route or channel pattern: a `:name`
  * segment with no `?` (optional), `*` (rest-zero-or-more), or `+`
@@ -10,12 +20,9 @@
 export function requiredParamSlots(pattern: string): string[] {
   return pattern
     .split('/')
-    .filter((seg) => {
-      if (!seg.startsWith(':')) return false;
-      const flag = seg[seg.length - 1];
-      return flag !== '?' && flag !== '*' && flag !== '+';
-    })
-    .map((seg) => seg.slice(1));
+    .map((seg) => PARAM_SEGMENT.exec(seg))
+    .filter((m): m is RegExpExecArray => m !== null && m[2] === undefined)
+    .map((m) => m[1]);
 }
 
 /**
@@ -33,10 +40,7 @@ export function requiredParamSlots(pattern: string): string[] {
 export function declaredParamSlots(pattern: string): string[] {
   return pattern
     .split('/')
-    .filter((seg) => seg.startsWith(':'))
-    .map((seg) => {
-      const flag = seg[seg.length - 1];
-      const stripFlag = flag === '?' || flag === '*' || flag === '+';
-      return seg.slice(1, stripFlag ? -1 : undefined);
-    });
+    .map((seg) => PARAM_SEGMENT.exec(seg))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => m[1]);
 }

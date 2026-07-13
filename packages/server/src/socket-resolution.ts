@@ -272,17 +272,27 @@ export type ResolvedConnection =
       denied: boolean;
     };
 
+/**
+ * The outcome of resolving a route-bound socket's params from the wire. A
+ * failure carries WHY it failed: an unusable payload is not the same as a
+ * well-formed payload that omits a slot, and the dev warning must not tell an
+ * author to supply params they already sent.
+ */
 export type SocketParamsResolution =
   | { ok: true; params: Record<string, string> }
-  | { ok: false; missing: string[] };
+  /** The `r=` query was present but is not a JSON object of string values. */
+  | { ok: false; reason: 'invalid-payload' }
+  /** The payload was well formed, but these required slots are absent or empty. */
+  | { ok: false; reason: 'missing-params'; missing: string[] };
 
 /**
  * Parse + validate a route-bound socket's route params from the untrusted
- * `SOCKET_KEY_PARAM` wire. The topic-less twin of `resolveRoomKey`: a bound
- * socket carries route params for its page-use guard but has no channel/topic.
- * A param-less pattern requires nothing. On success returns the validated
- * string params; on failure returns the missing required slot names so the
- * caller can deny 4403 and name them in a dev warning.
+ * `SOCKET_KEY_PARAM` wire. The topic-less twin of `resolveRoomKey`, and
+ * matches its fail-closed policy: a non-string value anywhere in the wire
+ * object rejects the whole payload, not just that entry. A param-less
+ * pattern requires nothing. On success returns the validated string params;
+ * on failure returns the missing required slot names so the caller can deny
+ * 4403 and name them in a dev warning.
  */
 export function resolveSocketParams(
   routePattern: string,
@@ -293,37 +303,45 @@ export function resolveSocketParams(
     let parsed: unknown = null;
     try {
       // Sanctioned untrusted-wire JSON.parse: the client sends route params as
-      // a JSON object of string values. A malformed body leaves parsed = null,
-      // which fails every required slot below.
+      // a JSON object whose values are all strings.
       parsed = JSON.parse(rawR);
     } catch {
       parsed = null;
     }
+    // A PRESENT `r=` that is not a plain object (malformed JSON, null, an
+    // array, a primitive), or that carries a non-string value anywhere (e.g.
+    // `{"x":42}`), is a contract lie rather than a missing param. Reject the
+    // whole payload, mirroring resolveRoomKey's fail-closed policy, and say so,
+    // so the caller's warning does not name slots the client already sent.
     if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed)
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed)
     ) {
-      // Keep only string-valued entries: a non-string value is a contract lie,
-      // so drop it and let the slot read as missing below.
-      params = Object.fromEntries(
-        Object.entries(parsed).filter(
-          (e): e is [string, string] => typeof e[1] === 'string'
-        )
-      );
+      return { ok: false, reason: 'invalid-payload' };
     }
-    // Restrict to the pattern's DECLARED slots (required + optional/rest): a
-    // real HTTP request can never populate an undeclared key, so a wire key
-    // outside the pattern's own slots is dropped rather than trusted.
+    const entries = Object.entries(parsed);
+    if (entries.some(([, v]) => typeof v !== 'string')) {
+      return { ok: false, reason: 'invalid-payload' };
+    }
+    // Every value is a string (checked above), so this is a sound narrowing,
+    // not a cast over an unvalidated shape. Restrict to the pattern's DECLARED
+    // slots (required + optional/rest): a real HTTP request can never populate
+    // an undeclared key, so a wire key outside the pattern's own slots is
+    // dropped rather than trusted.
     const declared = new Set(declaredParamSlots(routePattern));
     params = Object.fromEntries(
-      Object.entries(params).filter(([key]) => declared.has(key))
+      entries
+        .filter((e): e is [string, string] => typeof e[1] === 'string')
+        .filter(([key]) => declared.has(key))
     );
   }
   const missing = requiredParamSlots(routePattern).filter(
     (slot) => !params[slot]
   );
-  return missing.length === 0 ? { ok: true, params } : { ok: false, missing };
+  return missing.length === 0
+    ? { ok: true, params }
+    : { ok: false, reason: 'missing-params', missing };
 }
 
 /**
@@ -408,11 +426,18 @@ export async function resolveConnection(
     );
     if (!resolved.ok) {
       if (opts.dev) {
+        // Name the actual failure. Telling an author to supply params they
+        // already sent (because the payload itself was unusable) sends them
+        // hunting for the wrong bug.
+        const detail =
+          resolved.reason === 'missing-params'
+            ? `without required route param(s): ${resolved.missing.join(', ')}. ` +
+              `Connect with useSocket(ref, { params: { ${resolved.missing.join(', ')} } })`
+            : `with an unusable route-param payload: the '${SOCKET_KEY_PARAM}' query ` +
+              `must be a JSON object whose values are all strings`;
         console.warn(
           `hono-preact: socket '${name ?? ''}' bound to '${def.__routeId}' was ` +
-            `connected without required route param(s): ${resolved.missing.join(', ')}. ` +
-            `Connect with useSocket(ref, { params: { ${resolved.missing.join(', ')} } }); ` +
-            `the connection is denied (4403).`
+            `connected ${detail}; the connection is denied (4403).`
         );
       }
       return {

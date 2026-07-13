@@ -140,8 +140,10 @@ function assertRoomChannelCongruent(
         `${missing.length > 1 ? 'are' : 'is'} not a key of channel ` +
         `'${channelName}'. A room's page-use guard reads route params from ` +
         `the channel key, so every route param must be a channel param of ` +
-        `the same name. Rename the channel or route param(s) to match, or ` +
-        `bind the room to a route whose params the channel supplies.`
+        `the same name. Rename the channel or route param(s) to match, bind ` +
+        `the room to a route whose params the channel supplies, or move the ` +
+        `room into a src/server registry module: a registry room carries no ` +
+        `__routeId, is route-independent, and skips this check entirely.`
     );
   }
   ctx.onRoomParamBinding?.({ name, routeId, params: routeParams });
@@ -215,40 +217,48 @@ export async function assertRouteBindingsMatchMount(
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
           const routeId = (value as RouteBoundExport).__routeId;
-          // A room's effective owning route is the mount (`route.path`),
-          // whether it is explicitly bound (routeId already asserted equal
-          // to route.path below) or colocated (no routeId at all). Check
-          // BEFORE the bare-unit skip below, or a colocated room would go
-          // unchecked.
+          // Validate the mount binding FIRST, before any room congruence
+          // check: a unit misbound to the wrong route should report that
+          // misbinding, not a congruence error computed against a pattern
+          // it was never actually bound to.
+          if (typeof routeId === 'string') {
+            if (routeId === route.path) {
+              maybeReportAliasedBinding(kind, name, routeId, ctx);
+            } else if (routeId === subtreeId) {
+              if (!ctx.routeUseByPattern.has(subtreeId)) {
+                throw new Error(
+                  `Route-bound ${kind} '${name}' binds the subtree pattern '${subtreeId}', ` +
+                    `but route '${route.path}' has no child routes, so no subtree entry ` +
+                    `exists and the binding would resolve an empty page-level \`use\` ` +
+                    `chain. Bind serverRoute('${route.path}') for the route itself, or ` +
+                    `give '${route.path}' children to make its subtree bindable.`
+                );
+              }
+            } else {
+              throw new Error(
+                `Route-bound ${kind} '${name}' is bound to route '${routeId}', but its ` +
+                  `module is registered on route '${route.path}'. A route-bound ${kind} must ` +
+                  `use serverRoute('${route.path}') (the page scope) or ` +
+                  `serverRoute('${subtreeId}') (the subtree scope, when the route has child ` +
+                  `routes) to match the route it is mounted on; otherwise it resolves its ` +
+                  `page-level \`use\` (auth) chain from the wrong route.`
+              );
+            }
+          }
+          // A room's effective owning route is its declared __routeId, now
+          // validated above to match the mount, or (a colocated room with
+          // no __routeId) the mount itself.
           if (kind === 'room') {
             const channelName = channelNameOf(value);
             if (channelName !== null) {
-              assertRoomChannelCongruent(name, route.path, channelName, ctx);
+              assertRoomChannelCongruent(
+                name,
+                typeof routeId === 'string' ? routeId : route.path,
+                channelName,
+                ctx
+              );
             }
           }
-          if (typeof routeId !== 'string') continue;
-          if (routeId === route.path) {
-            maybeReportAliasedBinding(kind, name, routeId, ctx);
-            continue;
-          }
-          if (routeId === subtreeId) {
-            if (ctx.routeUseByPattern.has(subtreeId)) continue;
-            throw new Error(
-              `Route-bound ${kind} '${name}' binds the subtree pattern '${subtreeId}', ` +
-                `but route '${route.path}' has no child routes, so no subtree entry ` +
-                `exists and the binding would resolve an empty page-level \`use\` ` +
-                `chain. Bind serverRoute('${route.path}') for the route itself, or ` +
-                `give '${route.path}' children to make its subtree bindable.`
-            );
-          }
-          throw new Error(
-            `Route-bound ${kind} '${name}' is bound to route '${routeId}', but its ` +
-              `module is registered on route '${route.path}'. A route-bound ${kind} must ` +
-              `use serverRoute('${route.path}') (the page scope) or ` +
-              `serverRoute('${subtreeId}') (the subtree scope, when the route has child ` +
-              `routes) to match the route it is mounted on; otherwise it resolves its ` +
-              `page-level \`use\` (auth) chain from the wrong route.`
-          );
         }
       }
     })

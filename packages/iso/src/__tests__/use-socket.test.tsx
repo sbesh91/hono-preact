@@ -150,7 +150,10 @@ function BoardHarness({
   onResult,
 }: {
   socketRef: typeof boardRef;
-  opts?: Parameters<typeof useSocket<typeof boardRef>>[1];
+  // boardRef has a required `boardId` param, so this resolves to the
+  // non-optional branch of UseSocketArgs; every call site below always
+  // passes `opts`, so this stays required rather than `opts?: ...`.
+  opts: Parameters<typeof useSocket<typeof boardRef>>[1];
   onResult: (r: BoardResult) => void;
 }) {
   const result = useSocket(socketRef, opts);

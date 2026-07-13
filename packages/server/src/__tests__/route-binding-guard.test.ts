@@ -638,6 +638,27 @@ describe('room route/channel param congruence', () => {
     ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
   });
 
+  // A room misbound to an unrelated route must report the MISBINDING error,
+  // not a congruence error computed against a pattern the room was never
+  // even bound to. Congruence against the mount ('/board/:id' requires :id)
+  // would also fail here (the channel is param-less), but the misbinding is
+  // the more actionable, sharper diagnostic and must win.
+  it('reports misbinding (not congruence) for a room bound to a different route than its mount', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverRooms: {
+          cursors: { __routeId: '/other/:x', channel: { name: 'cursors' } },
+        },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/board/:id', []]]))
+    ).rejects.toThrow(
+      /room 'cursors' is bound to route '\/other\/:x', but its module is registered on route '\/board\/:id'/
+    );
+  });
+
   it('does not check a bare registry room (no __routeId, route-independent)', async () => {
     const registry = [
       async () => ({

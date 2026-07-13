@@ -24,6 +24,15 @@ describe('requiredParamSlots', () => {
     expect(requiredParamSlots('/chat')).toEqual([]);
     expect(requiredParamSlots('/')).toEqual([]);
   });
+
+  it("does not report a segment whose name is outside interpolatePattern's class", () => {
+    // interpolatePattern and the type-level ParamFrom both constrain a param
+    // name to [A-Za-z0-9_]+; a hyphenated segment like `:b-c` is not a param
+    // to either of them, so it must not be a required slot here either, or a
+    // bound socket/room on this pattern would be denied on every connection
+    // for a "param" the client can never type or send.
+    expect(requiredParamSlots('/a/:b-c')).toEqual([]);
+  });
 });
 
 describe('declaredParamSlots', () => {
@@ -53,5 +62,12 @@ describe('declaredParamSlots', () => {
   it('returns [] for a param-less pattern', () => {
     expect(declaredParamSlots('/chat')).toEqual([]);
     expect(declaredParamSlots('/')).toEqual([]);
+  });
+
+  it("does not report a segment whose name is outside interpolatePattern's class", () => {
+    // Same alignment as requiredParamSlots: a non-conforming segment name
+    // (a hyphen is outside [A-Za-z0-9_]+) is not a declared slot either, so
+    // it is never restricted-into a resolved params object.
+    expect(declaredParamSlots('/a/:b-c')).toEqual([]);
   });
 });

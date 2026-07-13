@@ -254,7 +254,10 @@ Returns a `RoomRef` that the client hook reads. On the client side the `.server`
 | `data`                  | `Readonly<Data>` | Per-connection metadata seeded by the `data()` factory. Read-only; use `setPresence` for evolving state. For Node-only mutable per-connection state, capture a closure variable in `onJoin()`. |
 | `close(code?, reason?)` | method           | Close this connection.                                                                                                                                                                         |
 
-### `ref.useRoom(opts?)` / `useRoom(ref, opts?)`
+### `ref.useRoom(opts)` / `useRoom(ref, opts)`
+
+`opts` is optional for a param-less channel, and required for a channel with
+params (to supply `key`; see below).
 
 | Option                 | Type                          | Default                        | Description                                                                                    |
 | ---------------------- | ----------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
