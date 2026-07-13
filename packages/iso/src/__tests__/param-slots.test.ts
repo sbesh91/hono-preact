@@ -14,10 +14,13 @@ describe('requiredParamSlots', () => {
     ]);
   });
 
-  it('excludes optional and rest segments', () => {
+  it('excludes optional and zero-or-more rest segments', () => {
     expect(requiredParamSlots('/a/:x?')).toEqual([]);
     expect(requiredParamSlots('/a/:rest*')).toEqual([]);
-    expect(requiredParamSlots('/a/:rest+')).toEqual([]);
+  });
+
+  it('includes a one-or-more rest segment (`+`): both the type-level StripModifier and the runtime route matcher treat it as required', () => {
+    expect(requiredParamSlots('/files/:rest+')).toEqual(['rest']);
   });
 
   it('returns [] for a param-less pattern', () => {

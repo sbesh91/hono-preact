@@ -106,11 +106,11 @@ describe('resolveSocketParams', () => {
     });
   });
 
-  it('does not require a rest slot and keeps its value through the declared-slot filter', () => {
-    // `:rest*` (zero-or-more) and `:rest+` (one-or-more) are declared but never
-    // required (requiredParamSlots excludes the `*`/`+` flags), so a wire with
-    // no rest value still resolves ok, and a wire that DOES supply one is not
-    // dropped by the declared-slot filter (declaredParamSlots includes it).
+  it('does not require a zero-or-more rest slot and keeps its value through the declared-slot filter', () => {
+    // `:rest*` (zero-or-more) is declared but never required
+    // (requiredParamSlots excludes the `*` flag), so a wire with no rest
+    // value still resolves ok, and a wire that DOES supply one is not dropped
+    // by the declared-slot filter (declaredParamSlots includes it).
     expect(resolveSocketParams('/files/:rest*', undefined)).toEqual({
       ok: true,
       params: {},
@@ -119,9 +119,22 @@ describe('resolveSocketParams', () => {
       ok: true,
       params: { rest: 'a/b' },
     });
+  });
+
+  it('requires a one-or-more (`+`) rest slot: RouteParams types it required and the runtime route matcher refuses to match it empty', () => {
+    // A hand-rolled client that omits `rest` must be denied, not connected
+    // with `params: {}`: `+` is required both at the type level
+    // (StripModifier maps `+` to `{ optional: false }`) and at the runtime
+    // route matcher (preact-iso's `exec` refuses to match a `+` segment with
+    // no value).
     expect(resolveSocketParams('/files/:rest+', undefined)).toEqual({
+      ok: false,
+      reason: 'missing-params',
+      missing: ['rest'],
+    });
+    expect(resolveSocketParams('/files/:rest+', enc({ rest: 'a/b' }))).toEqual({
       ok: true,
-      params: {},
+      params: { rest: 'a/b' },
     });
   });
 });

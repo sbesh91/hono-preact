@@ -1,5 +1,6 @@
 import type { RouteParams } from './internal/typed-routes.js';
 import { interpolatePattern } from './internal/interpolate-pattern.js';
+import { isConformingParamSegment } from './internal/param-slots.js';
 
 // A topic string branded with its payload type. The brand is phantom (a
 // `unique symbol` optional key, never present at runtime), so it carries the
@@ -28,6 +29,43 @@ export interface Channel<Name extends string, Payload> {
 }
 
 /**
+ * Reject a channel name carrying a `:`-prefixed segment whose param name does
+ * not conform to the shared param grammar (`isConformingParamSegment`, the
+ * same `[A-Za-z0-9_]+` class plus an optional single `?`/`*`/`+` modifier that
+ * `interpolatePattern` and the type-level `ParamFrom` both enforce).
+ *
+ * A non-conforming segment (e.g. `:board-id`, a hyphen is outside the class)
+ * is NOT a param to `requiredParamSlots`/`declaredParamSlots`: nothing is
+ * required, and `interpolatePattern` leaves the segment LITERAL rather than
+ * substituting a value. Left unvalidated, every connection would collapse
+ * onto the single constant topic spelled with the literal `:board-id`
+ * segment, silently merging every resource's presence roster and broadcasts
+ * into one shared channel. Throwing here, at definition time, is the loud
+ * failure that replaces the old (correct) behavior of denying every
+ * connection: cheaper and louder than a per-connection check, and it cannot
+ * be bypassed by a client.
+ *
+ * CHANNEL-ONLY: this does not apply to route patterns. preact-iso's route
+ * matcher (`exec`) accepts any param name, hyphens included, so an existing
+ * app may legitimately have a route like `/board/:board-id`; throwing on
+ * route patterns would newly break that app at boot.
+ */
+function assertConformingChannelName(name: string): void {
+  for (const segment of name.split('/')) {
+    if (segment.startsWith(':') && !isConformingParamSegment(segment)) {
+      throw new Error(
+        `defineChannel('${name}'): the param segment '${segment}' is not a ` +
+          `valid channel param. A channel param must be ':name', where ` +
+          `'name' is one or more of [A-Za-z0-9_], optionally followed by a ` +
+          `single '?', '*', or '+' modifier (e.g. ':id', ':id?', ':rest*', ` +
+          `':rest+'). Rename the param so it only uses letters, digits, and ` +
+          `underscores.`
+      );
+    }
+  }
+}
+
+/**
  * Define a typed channel. The name uses the route `/:param` grammar, so its
  * params are extracted by the same engine that types route params:
  *
@@ -38,8 +76,13 @@ export interface Channel<Name extends string, Payload> {
  *
  * Curried so the name is inferred while the payload is given explicitly. A
  * payload-less channel (`defineChannel('x')()`) is a signal channel (`void`).
+ *
+ * Throws immediately (before the payload is even supplied) if `name` carries
+ * a `:`-prefixed segment whose param name does not conform to the shared
+ * param grammar; see {@link assertConformingChannelName}.
  */
 export function defineChannel<const Name extends string>(name: Name) {
+  assertConformingChannelName(name);
   return <Payload = void>(): Channel<Name, Payload> => ({
     name,
     // The `key` impl is intentionally loose (a `Record` in, a `string` out); the

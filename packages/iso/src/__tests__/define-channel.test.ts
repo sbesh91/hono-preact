@@ -26,3 +26,40 @@ describe('defineChannel.key', () => {
     expect(defineChannel('board/:projectId')().name).toBe('board/:projectId');
   });
 });
+
+describe('defineChannel param-name validation', () => {
+  it('throws at definition time for a param name outside [A-Za-z0-9_] (e.g. a hyphen)', () => {
+    // A non-conforming param name (a hyphen is outside the class) is not a
+    // param to requiredParamSlots/declaredParamSlots or to
+    // interpolatePattern: nothing is required, and interpolatePattern leaves
+    // the segment literal, so every connection would collapse onto the one
+    // constant topic 'board/:board-id' and silently share state across
+    // resources. That must fail loudly here instead.
+    expect(() => defineChannel('board/:board-id')).toThrow(/board\/:board-id/);
+    expect(() => defineChannel('board/:board-id')).toThrow(
+      /not a valid channel param/
+    );
+  });
+
+  it('names the offending segment and the allowed name class in the error', () => {
+    expect(() => defineChannel('room/:room-id/user/:userId')).toThrow(
+      /:room-id/
+    );
+    expect(() => defineChannel('room/:room-id/user/:userId')).toThrow(
+      /\[A-Za-z0-9_\]/
+    );
+  });
+
+  it('does not throw for conforming param names, including modifier forms', () => {
+    expect(() => defineChannel('board/:boardId')).not.toThrow();
+    expect(() => defineChannel('board/:board_id')).not.toThrow();
+    expect(() => defineChannel('files/:x?')).not.toThrow();
+    expect(() => defineChannel('files/:rest*')).not.toThrow();
+    expect(() => defineChannel('files/:rest+')).not.toThrow();
+  });
+
+  it('does not throw for a param-less or literal-only name', () => {
+    expect(() => defineChannel('activity')).not.toThrow();
+    expect(() => defineChannel('a/b/c')).not.toThrow();
+  });
+});
