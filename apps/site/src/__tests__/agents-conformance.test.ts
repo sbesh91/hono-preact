@@ -99,6 +99,14 @@ const scanned = appCodeFiles().map((abs) => {
 });
 
 describe('AGENTS.md conformance (live apps/site)', () => {
+  // Guard against a vacuously-passing walk: if `appCodeFiles()` ever resolves
+  // to the wrong directory or an empty tree (a moved `siteSrc`, a broken glob),
+  // R1/R2/R5 below would each iterate zero files and report zero violations,
+  // "passing" while checking nothing. Pin that the walk actually found files.
+  it('scans at least one source file', () => {
+    expect(scanned.length).toBeGreaterThan(0);
+  });
+
   it('R1: no react / react-dom imports', () => {
     const violations: string[] = [];
     for (const { rel, imports } of scanned) {

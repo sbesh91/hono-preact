@@ -13,8 +13,10 @@ import { defineRoom } from '../define-room.js';
 import { defineChannel } from '../define-channel.js';
 import { serverRoute } from '../server-route.js';
 import { useRoom } from '../use-room.js';
+import type { UseRoomArgs } from '../index.js';
 import type { Serialize } from '../internal/serialize.js';
 import type { PresenceMember } from '../internal/room-envelope.js';
+import type { RoomRef } from '../define-room.js';
 
 type ChatMsg = { kind: 'chat'; text: string } | { kind: 'typing' };
 type ChatState = { name: string; color: string };
@@ -269,6 +271,17 @@ function _deepReadonlyDataProbe() {
     },
   });
 }
+
+// Migration path for the (ref, opts?) -> conditional rest tuple break:
+// `UseRoomArgs<R>` is exported from the public barrel so a generic wrapper
+// can NAME the rest tuple and forward it (mirrors the identical
+// `UseSocketArgs` probe in define-socket.test-d.ts).
+function _genericWrapperProbe<
+  R extends RoomRef<unknown, unknown, unknown, unknown>,
+>(ref: R, ...args: UseRoomArgs<R>) {
+  return useRoom(ref, ...args);
+}
+void _genericWrapperProbe;
 
 void _routeRoomProbes;
 void _bareRoomProbes;

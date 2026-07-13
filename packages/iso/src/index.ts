@@ -136,6 +136,7 @@ export type {
   SocketCloseInfo,
   ReconnectOptions,
   UseSocketOptions,
+  UseSocketArgs,
   UseSocketResult,
 } from './use-socket.js';
 export { upgradeWebSocket } from './upgrade-websocket.js';
@@ -144,7 +145,7 @@ export { upgradeWebSocket } from './upgrade-websocket.js';
 export { defineRoom } from './define-room.js';
 export type { RoomRef, RoomHandler, RoomConnection } from './define-room.js';
 export { useRoom } from './use-room.js';
-export type { UseRoomOptions, UseRoomResult } from './use-room.js';
+export type { UseRoomOptions, UseRoomArgs, UseRoomResult } from './use-room.js';
 export type { PresenceMember } from './internal/room-envelope.js';
 
 // Middleware + outcomes (the new system).

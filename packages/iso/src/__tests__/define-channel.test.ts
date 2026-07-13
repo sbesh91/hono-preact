@@ -50,6 +50,27 @@ describe('defineChannel param-name validation', () => {
     );
   });
 
+  it('throws for a colon that is not at the start of the segment (the RouteParams hole)', () => {
+    // RouteParams<'board:boardId'> splits on ':' ANYWHERE in the segment, not
+    // just at its start, so it types a required `boardId` even though
+    // PARAM_SEGMENT (and interpolatePattern) never treat this segment as a
+    // param: nothing is substituted, and every connection collapses onto the
+    // one constant topic 'board:boardId'. The old `segment.startsWith(':')`
+    // gate missed this spelling entirely; it must throw now.
+    expect(() => defineChannel('board:boardId')).toThrow(/board:boardId/);
+    expect(() => defineChannel('board:boardId')).toThrow(
+      /not a valid channel param/
+    );
+  });
+
+  it('throws for a colon-hyphen segment (colon not at start, plus a non-conforming char)', () => {
+    expect(() => defineChannel('board-:id')).toThrow(/board-:id/);
+  });
+
+  it('throws for a minimal single-letter colon-anywhere segment', () => {
+    expect(() => defineChannel('a:b')).toThrow(/a:b/);
+  });
+
   it('does not throw for conforming param names, including modifier forms', () => {
     expect(() => defineChannel('board/:boardId')).not.toThrow();
     expect(() => defineChannel('board/:board_id')).not.toThrow();

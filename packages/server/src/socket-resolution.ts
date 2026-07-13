@@ -287,12 +287,20 @@ export type SocketParamsResolution =
 
 /**
  * Parse + validate a route-bound socket's route params from the untrusted
- * `SOCKET_KEY_PARAM` wire. The topic-less twin of `resolveRoomKey`, and
- * matches its fail-closed policy: a non-string value anywhere in the wire
- * object rejects the whole payload, not just that entry. A param-less
- * pattern requires nothing. On success returns the validated string params;
- * on failure returns the missing required slot names so the caller can deny
- * 4403 and name them in a dev warning.
+ * `SOCKET_KEY_PARAM` wire. The topic-less twin of `resolveRoomKey`, sharing
+ * its non-string-value rejection (a non-string value anywhere in the wire
+ * object rejects the whole payload, not just that entry), but STRICTER on a
+ * present-but-non-object payload: `resolveRoomKey` coerces it to `{}` and
+ * only fails if a required channel slot then ends up missing (so a garbage
+ * `r=` against a param-less channel still resolves `ok: true`), while this
+ * function denies immediately with `reason: 'invalid-payload'` regardless of
+ * whether the pattern has any required slots (a socket has no channel-typed
+ * "param-less" escape hatch to fall through to). A param-less pattern still
+ * requires nothing once the payload shape itself is valid. On success
+ * returns the validated string params; on a `missing-params` failure returns
+ * the missing required slot names so the caller can deny 4403 and name them
+ * in a dev warning; on an `invalid-payload` failure there is no slot list,
+ * only the payload-shape reason.
  */
 export function resolveSocketParams(
   routePattern: string,

@@ -69,6 +69,10 @@ describe('iso /internal/runtime door', () => {
       // with the same two resolvers, so they can restrict a resolved params
       // object to the pattern's own declared slots and drop anything else.
       'declaredParamSlots',
+      // The conforming-':param' predicate shared with @hono-preact/server's
+      // boot binding guard, which rejects a route-bound socket/room whose
+      // __routeId carries a non-conforming ':'-segment.
+      'isConformingParamSegment',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

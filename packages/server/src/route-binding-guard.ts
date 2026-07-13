@@ -2,6 +2,7 @@ import type { ServerRoute } from '@hono-preact/iso';
 import {
   subtreePatternOf,
   requiredParamSlots,
+  isConformingParamSegment,
 } from '@hono-preact/iso/internal/runtime';
 
 /**
@@ -116,12 +117,80 @@ function channelNameOf(value: unknown): string | null {
   return typeof name === 'string' ? name : null;
 }
 
+// The first segment of `routeId` that carries a ':' anywhere in it (not just
+// at the segment's start) but does not conform to the shared param grammar
+// (`isConformingParamSegment`), or undefined if every segment conforms.
+function nonConformingRouteSegment(routeId: string): string | undefined {
+  return routeId
+    .split('/')
+    .find((seg) => seg.includes(':') && !isConformingParamSegment(seg));
+}
+
+/**
+ * Fail closed at boot if a route-BOUND socket or room (`__routeId` set)
+ * declares a route with a non-conforming `:`-segment (e.g. `:board-id`, a
+ * hyphen; or `board:boardId`, a colon not at the segment's start).
+ *
+ * preact-iso's own runtime route matcher (`exec`) binds such a segment fine
+ * at HTTP request time (it accepts any param name, hyphens included), but
+ * `requiredParamSlots`/`declaredParamSlots` (the grammar this framework's
+ * realtime layer relies on) do not recognize it as a param, so a bound
+ * socket/room would require nothing, resolve an empty params object, and
+ * hand its page-use guard `{}` for a param the SAME guard sees populated
+ * over plain HTTP. This is the route-side twin of `defineChannel`'s own
+ * definition-time check (define-channel.ts): both reuse
+ * `isConformingParamSegment` so the two validators cannot drift.
+ *
+ * SCOPED to `socket`/`room` only. Loaders and actions are unaffected: they
+ * read `ctx.location.pathParams` from the request URL via the SAME wider
+ * `exec` matcher that resolved the route, so their param names already line
+ * up and a hyphenated route param works correctly for them today. An
+ * existing app may have a perfectly ordinary HTTP route like
+ * `/board/:board-id`; only a NEW `serverRoute(r).socket`/`.room` binding on
+ * such a route is rejected, and that binder is unreleased, so throwing here
+ * is safe. A colocated (unbound) socket/room carries no `__routeId` and is
+ * never passed to this function.
+ */
+function assertConformingBoundRouteId(
+  kind: BoundUnitKind,
+  name: string,
+  routeId: string
+): void {
+  if (kind !== 'socket' && kind !== 'room') return;
+  const badSegment = nonConformingRouteSegment(routeId);
+  if (badSegment === undefined) return;
+  throw new Error(
+    `Route-bound ${kind} '${name}' binds route '${routeId}', but its segment ` +
+      `'${badSegment}' is not a conforming ':param' spelling. A route-bound ` +
+      `${kind} resolves its params via 'requiredParamSlots'/'declaredParamSlots', ` +
+      `which only recognize ':name' where 'name' is one or more of ` +
+      `[A-Za-z0-9_], optionally followed by a single '?', '*', or '+' modifier ` +
+      `(e.g. ':id', ':id?', ':rest*', ':rest+'). Left unrejected, this ${kind} ` +
+      `would require no params, resolve an empty params object, and pass its ` +
+      `page-use guard '{}' for a param the same guard sees populated over plain ` +
+      `HTTP. Rename the route segment so it only uses letters, digits, and ` +
+      `underscores.`
+  );
+}
+
 /**
  * Fail closed when a room's effective owning route requires a `:param` the
- * channel does not carry: the page-use guard would read that param as
- * undefined. Requires route params ⊆ channel params (the channel may be
- * finer-grained). On success, reports the param correspondence to the dev
- * advisory. No-op for a non-room unit or a param-less route.
+ * channel does not carry AND that route has at least one guard: a guard on
+ * that route COULD read the missing param via `ctx.location.pathParams`, so
+ * an absent value there is a real hazard. Requires route params ⊆ channel
+ * params (the channel may be finer-grained). On success, reports the param
+ * correspondence to the dev advisory. No-op for a non-room unit or a
+ * param-less route.
+ *
+ * A route with an EMPTY page-use chain is exempted from the throw (not the
+ * whole check: `routeParams.length === 0` is a separate, unconditional
+ * early-return above the missing-slot computation). A room deliberately
+ * independent of its mount route's params, e.g. `defineChannel('global-chat')`
+ * colocated on `/board/:id`, is a real, working v0.9/v0.10 configuration:
+ * no guard on that route could ever read the missing param, because there is
+ * no guard at all, so there is nothing for this rule to protect and no
+ * reason to fail the boot. A route with even one guard keeps the full throw:
+ * that guard COULD read the param.
  */
 function assertRoomChannelCongruent(
   name: string,
@@ -134,6 +203,8 @@ function assertRoomChannelCongruent(
   const channelParams = new Set(requiredParamSlots(channelName));
   const missing = routeParams.filter((p) => !channelParams.has(p));
   if (missing.length > 0) {
+    const guardChain = ctx.routeUseByPattern.get(routeId);
+    if (!guardChain || guardChain.length === 0) return;
     throw new Error(
       `Route-bound room '${name}' binds route '${routeId}', but its route ` +
         `param${missing.length > 1 ? 's' : ''} ${missing.join(', ')} ` +
@@ -222,6 +293,12 @@ export async function assertRouteBindingsMatchMount(
           // misbinding, not a congruence error computed against a pattern
           // it was never actually bound to.
           if (typeof routeId === 'string') {
+            // A malformed param segment in the bound route id is a defect in
+            // the pattern itself, independent of where it is mounted: check
+            // it before the mount-match branches below (a route bound to
+            // ITS OWN mount, routeId === route.path, still needs this check;
+            // the mount-match branches alone would never catch it).
+            assertConformingBoundRouteId(kind, name, routeId);
             if (routeId === route.path) {
               maybeReportAliasedBinding(kind, name, routeId, ctx);
             } else if (routeId === subtreeId) {
@@ -301,6 +378,7 @@ export async function assertRegistryRouteBindingsValid(
         for (const [name, value] of Object.entries(exports)) {
           const routeId = (value as RouteBoundExport).__routeId;
           if (typeof routeId !== 'string') continue;
+          assertConformingBoundRouteId(kind, name, routeId);
           if (!ctx.routeUseByPattern.has(routeId)) {
             throw new Error(
               `Route-bound ${kind} '${name}' in the src/server registry is bound to ` +

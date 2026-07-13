@@ -141,7 +141,12 @@ export interface RouteBinder<RouteId extends string> {
    * typed `params` option. Those params are validated at the upgrade (a missing
    * slot denies 4403), read by the guard as `ctx.location.pathParams`, and
    * passed to the edge `data` factory as its second argument. The declared
-   * pattern is stamped on the def and validated fail-closed at boot.
+   * pattern is stamped on the def and validated fail-closed at boot: the boot
+   * check also rejects (throws, does not just deny) a route whose `:param`
+   * segment does not conform to the shared param grammar (e.g. a hyphen, as in
+   * `:board-id`), since such a segment would otherwise resolve NO required
+   * params and pass the guard an empty object for a param the same guard sees
+   * populated over plain HTTP.
    */
   socket<Incoming, Outgoing, Data = undefined>(
     handler: SocketHandler<Incoming, Outgoing, Data, RouteParams<RouteId>>
@@ -155,8 +160,19 @@ export interface RouteBinder<RouteId extends string> {
    * query param), so the channel is the only param source available at runtime
    * on the flat socket endpoint. Binding the route wires the room's page-level
    * `use` inheritance: the declared pattern is stamped on the def, validated
-   * fail-closed at boot, and takes precedence over the module-mount
-   * derivation when the upgrade guard chain is resolved.
+   * fail-closed at boot (the same non-conforming-`:param` rejection `.socket`
+   * documents above), and takes precedence over the module-mount derivation
+   * when the upgrade guard chain is resolved.
+   *
+   * Boot ALSO enforces route/channel param congruence on a route that has at
+   * least one `use` guard: every one of the route's own `:param` names must
+   * also be a `:param` of the CHANNEL (the channel may be finer-grained, never
+   * coarser), because a guard on this route can read `ctx.location.pathParams`
+   * under the route's param names, and those values come from the channel key,
+   * not the route. A guard-less param-bearing route is exempt (there is no
+   * guard for a name mismatch to fool), but binding to a channel that does not
+   * carry the route's resource identity is still a correctness hazard even
+   * without a guard; keep the names aligned regardless.
    */
   room<
     Name extends string,

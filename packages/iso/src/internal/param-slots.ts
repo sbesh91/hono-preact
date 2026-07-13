@@ -1,11 +1,33 @@
-// The exact param-name class and single-trailing-modifier grammar that
-// `interpolatePattern` (interpolate-pattern.ts) and the type-level `ParamFrom`
-// (typed-routes.ts) both use: `:name` where name is one or more of
-// `[A-Za-z0-9_]`, with an optional single trailing `?`/`*`/`+` flag. A segment
-// that does not conform (e.g. `:b-c`, a hyphen is outside the class) is not a
-// param at either the runtime interpolator or the type level, so it must not
-// be treated as a slot here either: the two extractors below share this
-// pattern so all four places agree on what counts as a param.
+// PARAM_SEGMENT is THIS FRAMEWORK'S OWN supported ':param' grammar, anchored
+// to the WHOLE segment: ':name' where name is one or more of [A-Za-z0-9_],
+// with an optional single trailing '?'/'*'/'+' flag. `interpolatePattern`
+// (interpolate-pattern.ts) uses the identical anchored grammar, so the two
+// agree on what a segment substitutes at runtime.
+//
+// The other two param grammars in this codebase do NOT agree with this one,
+// despite an earlier version of this comment claiming they did:
+//
+//   - The type-level `RouteParams` (typed-routes.ts) extracts a param from a
+//     ':' at ANY position in a segment, not just its start: its extraction is
+//     an unanchored template-literal split on the first ':', so
+//     `RouteParams<'board:boardId'>` types a required `boardId` even though
+//     PARAM_SEGMENT never matches the segment 'board:boardId' as a param.
+//   - preact-iso's own runtime route matcher (`exec`) is WIDER still: it
+//     binds any param name, hyphens included, so a route pattern like
+//     '/board/:board-id' matches and binds fine at HTTP request time even
+//     though PARAM_SEGMENT rejects the segment ':board-id'.
+//
+// Left unchecked, a name PARAM_SEGMENT rejects but RouteParams accepts looks
+// correctly typed and required while resolving to nothing at runtime: every
+// connection collapses onto one constant topic (the segment stays literal,
+// see requiredParamSlots/declaredParamSlots below). `defineChannel`
+// (define-channel.ts) and @hono-preact/server's route-binding boot check
+// both reject the disagreeing spellings, at definition time and at boot
+// respectively, reusing `isConformingParamSegment` below so the two
+// validators cannot drift from each other or from this grammar. That
+// rejection is what lets `requiredParamSlots`/`declaredParamSlots` rely on
+// PARAM_SEGMENT as the one grammar every VALIDATED pattern actually
+// satisfies.
 const PARAM_SEGMENT = /^:([A-Za-z0-9_]+)([?*+])?$/;
 
 /**
@@ -53,8 +75,10 @@ export function requiredParamSlots(pattern: string): string[] {
  * be present" rather than "what must be present". Used to restrict a resolved
  * params object (parsed from the untrusted wire) to the pattern's own
  * declared slots, so a client cannot smuggle an undeclared key into
- * `ctx.location.pathParams` or `onJoin`'s params, a key no real HTTP request
- * could ever produce (Hono only populates declared slots).
+ * `ctx.location.pathParams` or `onJoin`'s params, a key no real page
+ * navigation could ever produce: a page's own `pathParams` come from
+ * preact-iso's route matcher (`exec`, see e.g. `prefetch.ts`'s `buildLocation`),
+ * not from Hono, and it only ever binds a pattern's own declared slots.
  */
 export function declaredParamSlots(pattern: string): string[] {
   return pattern

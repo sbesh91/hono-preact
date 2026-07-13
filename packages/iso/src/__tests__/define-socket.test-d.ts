@@ -7,6 +7,7 @@ import {
 } from '../define-socket.js';
 import { serverRoute } from '../server-route.js';
 import { useSocket } from '../use-socket.js';
+import type { UseSocketArgs } from '../index.js';
 import type { Serialize } from '../internal/serialize.js';
 import type { Context } from 'hono';
 
@@ -191,6 +192,19 @@ boundSocketRefMethod.useSocket();
 boundSocketRefMethod.useSocket({ params: { id: 'b1' } });
 // @ts-expect-error missing required params
 boundSocketRefMethod.useSocket({});
+
+// Migration path for the (ref, opts?) -> conditional rest tuple break:
+// `UseSocketArgs<R>` is exported from the public barrel so a generic wrapper
+// can NAME the rest tuple and forward it, rather than re-declaring `opts` as
+// a plain optional parameter (which no longer matches `useSocket`'s own
+// signature for a param-bearing `R`).
+function _genericWrapperProbe<R extends SocketRef<unknown, unknown>>(
+  ref: R,
+  ...args: UseSocketArgs<R>
+) {
+  return useSocket(ref, ...args);
+}
+void _genericWrapperProbe;
 
 void _probes;
 void _routeSocketProbe;

@@ -29,30 +29,46 @@ export interface Channel<Name extends string, Payload> {
 }
 
 /**
- * Reject a channel name carrying a `:`-prefixed segment whose param name does
- * not conform to the shared param grammar (`isConformingParamSegment`, the
- * same `[A-Za-z0-9_]+` class plus an optional single `?`/`*`/`+` modifier that
- * `interpolatePattern` and the type-level `ParamFrom` both enforce).
+ * Reject a channel name carrying a segment with a `:` ANYWHERE in it (not
+ * just at the segment's start) whose param name does not conform to the
+ * shared param grammar (`isConformingParamSegment`, the same `[A-Za-z0-9_]+`
+ * class plus an optional single `?`/`*`/`+` modifier that `interpolatePattern`
+ * enforces at runtime). The type-level `RouteParams` (typed-routes.ts) is
+ * WIDER than that grammar: it extracts a param from a `:` at any position in
+ * a segment, not just the start (`RouteParams<'board:boardId'>` types a
+ * required `boardId`), so a colon that is not at the segment's start is just
+ * as much a hole as one that is.
  *
- * A non-conforming segment (e.g. `:board-id`, a hyphen is outside the class)
+ * A segment `PARAM_SEGMENT` does not match (a `:` anywhere the surrounding
+ * text is not `^:[A-Za-z0-9_]+[?*+]?$`, e.g. `:board-id` or `board:boardId`)
  * is NOT a param to `requiredParamSlots`/`declaredParamSlots`: nothing is
  * required, and `interpolatePattern` leaves the segment LITERAL rather than
  * substituting a value. Left unvalidated, every connection would collapse
- * onto the single constant topic spelled with the literal `:board-id`
- * segment, silently merging every resource's presence roster and broadcasts
- * into one shared channel. Throwing here, at definition time, is the loud
- * failure that replaces the old (correct) behavior of denying every
- * connection: cheaper and louder than a per-connection check, and it cannot
- * be bypassed by a client.
+ * onto the single constant topic spelled with the literal segment, silently
+ * merging every resource's presence roster and broadcasts into one shared
+ * channel, even though the type layer looks correctly typed and required.
+ * Throwing here, at definition time, is the loud failure that replaces the
+ * old (correct) behavior of denying every connection: cheaper and louder
+ * than a per-connection check. Scanning every character of every segment (not
+ * just the leading one) for a `:` means no non-conforming spelling can slip
+ * past this check regardless of where the colon sits in the segment; a
+ * statically-named channel with an embedded `:` (e.g. `defineChannel('metrics:cpu')`)
+ * also throws, which is correct: `RouteParams` already types that name's
+ * `cpu` as a required param `interpolatePattern` never substitutes, so the
+ * channel was already broken before this check existed.
  *
- * CHANNEL-ONLY: this does not apply to route patterns. preact-iso's route
- * matcher (`exec`) accepts any param name, hyphens included, so an existing
- * app may legitimately have a route like `/board/:board-id`; throwing on
- * route patterns would newly break that app at boot.
+ * CHANNEL-ONLY here: this does not apply to ordinary (unbound) route
+ * patterns. preact-iso's own route matcher (`exec`) accepts any param name,
+ * hyphens included, so an existing app may legitimately have an HTTP route
+ * like `/board/:board-id`; throwing on every route pattern would newly break
+ * that app at boot. A route-BOUND realtime unit (`serverRoute(r).socket`/
+ * `.room`) is a narrower case with the identical hazard (its guard reads
+ * route params the same way a channel does) and is rejected separately, at
+ * boot, by `@hono-preact/server`'s route-binding guard.
  */
 function assertConformingChannelName(name: string): void {
   for (const segment of name.split('/')) {
-    if (segment.startsWith(':') && !isConformingParamSegment(segment)) {
+    if (segment.includes(':') && !isConformingParamSegment(segment)) {
       throw new Error(
         `defineChannel('${name}'): the param segment '${segment}' is not a ` +
           `valid channel param. A channel param must be ':name', where ` +
@@ -78,8 +94,9 @@ function assertConformingChannelName(name: string): void {
  * payload-less channel (`defineChannel('x')()`) is a signal channel (`void`).
  *
  * Throws immediately (before the payload is even supplied) if `name` carries
- * a `:`-prefixed segment whose param name does not conform to the shared
- * param grammar; see {@link assertConformingChannelName}.
+ * a segment with a `:` anywhere in it (not just at the segment's start) whose
+ * param name does not conform to the shared param grammar; see
+ * {@link assertConformingChannelName}.
  */
 export function defineChannel<const Name extends string>(name: Name) {
   assertConformingChannelName(name);
