@@ -178,6 +178,8 @@ The requirement applies to a colocated room the same as an explicitly bound one:
 
 A route param outside the supported `:name` class (one or more of `[A-Za-z0-9_]`, optionally followed by a single `?`/`*`/`+`) is **invisible to this check**, and to room param resolution generally: for example a hyphenated `/board/:board-id`. preact-iso's own runtime route matcher still binds that segment fine over plain HTTP, but its value never reaches `pathParams` for a realtime connection, so a room guard on such a route must not rely on that param.
 
+This has different consequences depending on how the room reaches that route. A **colocated** room (no `serverRoute` binding) is not rejected: it simply never sees the non-conforming param, as described above. An **explicitly bound** room (`serverRoute(r).room`, or an equivalent `serverRoute(r).socket`) on such a route fails the boot outright: `serverRoute('/board/:board-id').room(...)` throws at startup rather than running with an empty params object, so every `/__loaders` request, action POST, and `/__sockets` upgrade in the app returns a 500 until the route segment is renamed to only use letters, digits, and underscores.
+
 A guard that denies the upgrade closes the connection with code `4403`. Use `deny()` rather than `redirect()` in a room guard: a WebSocket handshake cannot follow an HTTP redirect, so a `redirect()` is treated as a deny (close `4403`) and logs a warning.
 
 The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions. This holds whether the route-node `use` is colocation-derived or explicitly bound: binding selects the `use` chain, not the room-key param wire, which always comes from the channel. The congruence check above is what guarantees that wire actually carries every param the route's own guards expect.
@@ -303,8 +305,11 @@ import type {
   UseRoomOptions,
   UseRoomResult,
   PresenceMember,
+  UseRoomArgs,
 } from 'hono-preact';
 ```
+
+`UseRoomArgs<R>` is the type of `useRoom`'s options rest tuple (`[opts?: UseRoomOptions<R>]` for a param-less binding, `[opts: UseRoomOptions<R>]` for a param-bearing one): useful for typing a generic wrapper that forwards its own rest args to `useRoom` without re-deriving the required-vs-optional rule itself.
 
 ## See also
 

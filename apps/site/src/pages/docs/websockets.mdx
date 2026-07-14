@@ -170,6 +170,8 @@ An explicit `serverRoute(r).socket` binding on a param-bearing route authorizes 
 
 A **colocated** socket, a `.server.ts` sibling of a route with no `serverRoute` binding, has no param wire: `ctx.location.pathParams` stays empty and the connection is never denied for a missing param, even beside a route with `:param`s. Reach for an explicit `serverRoute(r).socket` binding whenever a socket needs to authorize on a route param. Rooms resolve their params differently, from the channel key rather than this `params` option; see [Rooms](/docs/rooms).
 
+A route param outside the supported `:name` class (one or more of `[A-Za-z0-9_]`, optionally followed by a single `?`/`*`/`+`), for example a hyphenated `/board/:board-id`, is invisible to the params wire above: preact-iso's own runtime route matcher still binds that segment fine over plain HTTP, but its value never reaches `ctx.location.pathParams` for a realtime connection. A colocated socket on such a route is not rejected; it simply never sees that param, the same as any other route param a colocated socket doesn't wire up. An **explicitly bound** `serverRoute(r).socket` on such a route fails the boot outright rather than running with an empty params object: `serverRoute('/board/:board-id').socket(...)` throws at startup, so every `/__loaders` request, action POST, and `/__sockets` upgrade in the app returns a 500 until the route segment is renamed to only use letters, digits, and underscores.
+
 ### Cloudflare setup
 
 On Cloudflare Workers, `defineSocket` runs inside a per-connection Durable Object, so it needs the `HONO_PREACT_REALTIME` Durable Object binding and migration in `wrangler.jsonc` (the same binding rooms and live-loader pub/sub use). See [Rooms → Cloudflare setup](/docs/rooms#cloudflare-setup) for the binding and migration. (This applies to `defineSocket`; the raw `upgradeWebSocket` path below is separate and pairs its own Durable Object.)
@@ -349,8 +351,11 @@ import type {
   ReconnectOptions,
   UseSocketOptions,
   UseSocketResult,
+  UseSocketArgs,
 } from 'hono-preact';
 ```
+
+`UseSocketArgs<R>` is the type of `useSocket`'s options rest tuple (`[opts?: UseSocketOptions<R>]` for a param-less binding, `[opts: UseSocketOptions<R>]` for a param-bearing one): useful for typing a generic wrapper that forwards its own rest args to `useSocket` without re-deriving the required-vs-optional rule itself.
 
 ## See also
 

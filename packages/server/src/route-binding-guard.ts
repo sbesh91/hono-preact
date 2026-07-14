@@ -13,6 +13,7 @@ import {
  */
 type RouteBoundExport = { __routeId?: unknown };
 type SelfModule = {
+  __moduleKey?: unknown;
   serverLoaders?: unknown;
   serverActions?: unknown;
   serverSockets?: unknown;
@@ -32,6 +33,16 @@ function readExports(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+// The module's `__moduleKey` (the build-injected, path-derived key every
+// `.server.*` file carries; see moduleKeyPlugin), read structurally, or `''`
+// when absent (a hand-built test fixture, or a module the plugin never
+// touched). Only used to module-qualify a dev advisory's dedup key and
+// payload, so a missing key degrading to '' rather than throwing is the
+// right failure mode: it is diagnostic, not security-relevant.
+function moduleKeyOf(mod: SelfModule): string {
+  return typeof mod.__moduleKey === 'string' ? mod.__moduleKey : '';
+}
+
 export type BoundUnitKind = 'loader' | 'action' | 'socket' | 'room';
 
 export type AliasedBindingInfo = {
@@ -45,19 +56,43 @@ export type AliasedBindingInfo = {
 
 export type RoomParamBindingInfo = {
   name: string;
+  /** The `moduleKey::name` module the room is exported from. */
+  moduleKey: string;
   /** The room's effective owning route pattern (declared __routeId or mount). */
   routeId: string;
-  /** The route params the channel satisfies, in pattern order. */
+  /**
+   * Every route param the channel satisfies, in pattern order, INCLUDING
+   * optional (`:id?`) and rest (`:rest*`/`:rest+`) slots: the same
+   * `declaredParamSlots` set the congruence check itself reasons over. A
+   * required-only list would silently omit an optional/rest param from this
+   * advisory even though a guard reads it exactly like a required one.
+   */
   params: string[];
 };
 
 export type RoomParamExemptionInfo = {
   name: string;
+  /** The `moduleKey::name` module the room is exported from. */
+  moduleKey: string;
   /** The room's effective owning route pattern (declared __routeId or mount). */
   routeId: string;
   /** The channel name pattern the route's params were checked against. */
   channelName: string;
   /** The route params NOT satisfied by the channel key. */
+  params: string[];
+};
+
+export type ColocatedSocketParamAdvisoryInfo = {
+  name: string;
+  /** The `moduleKey::name` module the socket is exported from. */
+  moduleKey: string;
+  /** The socket's mount route pattern (its effective owning route). */
+  routeId: string;
+  /**
+   * Every declared route param (including optional/rest) a guard on this
+   * socket's chain would read as `undefined`, since a colocated socket
+   * resolves no param wire at all.
+   */
   params: string[];
 };
 
@@ -104,6 +139,19 @@ export type RouteBindingCheckContext = {
    * read as `undefined`. Omit in prod.
    */
   onRoomParamExemption?: (info: RoomParamExemptionInfo) => void;
+  /**
+   * Dev-only observer fired once per colocated socket (no `__routeId`) whose
+   * mount route declares params and whose guard chain (app-use, page-use, or
+   * the socket's own use) has at least one live server-middleware tier. A
+   * colocated socket resolves no param wire (`resolveConnection` always hands
+   * it `params: {}`), so any guard reading those route params sees
+   * `undefined` forever. The room analog of this situation fails the boot
+   * (`assertRoomChannelCongruent`); a boot throw here would break every
+   * released colocated-socket app (colocation predates the route-bound param
+   * wire), so this is the symmetric dev-only measure instead. Purely
+   * diagnostic. Omit in prod.
+   */
+  onColocatedSocketParams?: (info: ColocatedSocketParamAdvisoryInfo) => void;
 };
 
 // True when `exact` extends `subtree` with extra members appended: the index
@@ -300,6 +348,7 @@ function serverTierSize(tier: ReadonlyArray<unknown>): number {
  */
 function assertRoomChannelCongruent(
   name: string,
+  moduleKey: string,
   routeId: string,
   channelName: string,
   defUse: ReadonlyArray<unknown>,
@@ -331,6 +380,7 @@ function assertRoomChannelCongruent(
     if (liveTiers === 0) {
       ctx.onRoomParamExemption?.({
         name,
+        moduleKey,
         routeId,
         channelName,
         params: missing,
@@ -368,7 +418,12 @@ function assertRoomChannelCongruent(
         `is route-independent, and skips this check entirely.`
     );
   }
-  ctx.onRoomParamBinding?.({ name, routeId, params: routeRequired });
+  // Report every DECLARED param (routeDeclared), not just the required ones
+  // (routeRequired): an optional/rest route param is exactly as
+  // guard-readable as a required one (see condition 1's doc above), so an
+  // advisory scoped to `routeRequired` would silently omit it from the
+  // author-facing eyeball check this callback exists to provide.
+  ctx.onRoomParamBinding?.({ name, moduleKey, routeId, params: routeDeclared });
 }
 
 /**
@@ -380,7 +435,11 @@ export function warnRoomParamBinding(
   warned: Set<string>,
   info: RoomParamBindingInfo
 ): void {
-  const key = `${info.name}@${info.routeId}`;
+  // Module-qualified: a registry room and a colocated room can share a
+  // `name`/`routeId` pair (they are distinct `moduleKey::name` registry
+  // entries), and an unqualified key would let one binding's advisory
+  // silently swallow the other's.
+  const key = `${info.moduleKey}::${info.name}@${info.routeId}`;
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
@@ -403,7 +462,8 @@ export function warnRoomParamExemption(
   warned: Set<string>,
   info: RoomParamExemptionInfo
 ): void {
-  const key = `${info.name}@${info.routeId}`;
+  // Module-qualified for the same reason as warnRoomParamBinding above.
+  const key = `${info.moduleKey}::${info.name}@${info.routeId}`;
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
@@ -415,6 +475,62 @@ export function warnRoomParamExemption(
       `empty), but a guard added later to any of those three tiers would ` +
       `read ctx.location.pathParams.${info.params[0]} as undefined. Rename ` +
       `the channel or route param(s) to match before adding a guard.`
+  );
+}
+
+// Dev-only advisory check behind ctx.onColocatedSocketParams: a colocated
+// socket (no `__routeId`) whose mount route declares params, guarded by at
+// least one live server-middleware tier, resolves NO param wire at all
+// (`resolveSocketParams`/`resolveConnection` only run for a route-BOUND
+// socket). A guard on such a socket's chain reads those route params as
+// `undefined` forever, silently. This is the socket analog of
+// `assertRoomChannelCongruent`'s tier-liveness gate; unlike that function it
+// never throws (a boot throw would break every released colocated-socket
+// app), so it only ever reports through the callback.
+function maybeReportColocatedSocketParams(
+  name: string,
+  moduleKey: string,
+  route: ServerRoute,
+  defUse: ReadonlyArray<unknown>,
+  ctx: RouteBindingCheckContext
+): void {
+  if (!ctx.onColocatedSocketParams) return;
+  const declared = declaredParamSlots(route.path);
+  if (declared.length === 0) return;
+  const appUse = ctx.appUse ?? [];
+  const pageUse = ctx.routeUseByPattern.get(route.path) ?? [];
+  const liveTiers =
+    serverTierSize(appUse) + serverTierSize(pageUse) + serverTierSize(defUse);
+  if (liveTiers === 0) return;
+  ctx.onColocatedSocketParams({
+    name,
+    moduleKey,
+    routeId: route.path,
+    params: declared,
+  });
+}
+
+/**
+ * Dev-only console advisory for a colocated socket on a param-bearing,
+ * guarded route, fired through `RouteBindingCheckContext.onColocatedSocketParams`.
+ * One per socket for the life of the `warned` set the caller owns.
+ */
+export function warnColocatedSocketParams(
+  warned: Set<string>,
+  info: ColocatedSocketParamAdvisoryInfo
+): void {
+  // Module-qualified for the same reason as warnRoomParamBinding above.
+  const key = `${info.moduleKey}::${info.name}@${info.routeId}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(
+    `hono-preact: socket '${info.name}' is colocated with '${info.routeId}', ` +
+      `which declares route param${info.params.length > 1 ? 's' : ''} ` +
+      `${info.params.join(', ')}. A colocated socket resolves no param wire, ` +
+      `so a guard on its chain will read ` +
+      `${info.params.length > 1 ? 'those params' : 'that param'} as ` +
+      `undefined. Bind with serverRoute('${info.routeId}').socket(...) ` +
+      `instead of colocation to authorize on ${info.params.length > 1 ? 'those route params' : 'that route param'}.`
   );
 }
 
@@ -437,7 +553,10 @@ export function warnRoomParamExemption(
  * and carry no binding to check. A room is the one exception: a colocated
  * room (a `.server.ts` sibling with no `__routeId`) is still owned by the
  * module's mount, so its route/channel param congruence is checked against
- * `route.path` regardless (see {@link assertRoomChannelCongruent}).
+ * `route.path` regardless (see {@link assertRoomChannelCongruent}). A
+ * colocated socket is a dev-only-advisory exception in the same spirit,
+ * scoped to a report rather than a throw (see
+ * {@link maybeReportColocatedSocketParams}).
  *
  * A module mounted on a children-bearing node may alternatively bind its
  * subtree pattern (subtreePatternOf(route.path), so the root's is '/*'),
@@ -458,6 +577,7 @@ export async function assertRouteBindingsMatchMount(
       // Structural read of a user-defined module's exports (a sanctioned cast
       // boundary); only the server-unit containers and their `__routeId` are read.
       const mod = (await route.server()) as SelfModule;
+      const moduleKey = moduleKeyOf(mod);
       const subtreeId = subtreePatternOf(route.path);
       for (const [container, kind] of CONTAINERS) {
         const exports = readExports(mod[container]);
@@ -497,6 +617,17 @@ export async function assertRouteBindingsMatchMount(
                   `page-level \`use\` (auth) chain from the wrong route.`
               );
             }
+          } else if (kind === 'socket') {
+            // A colocated socket (no __routeId) has no param wire; advise
+            // when its mount route declares params a live guard tier could
+            // misread as undefined (see maybeReportColocatedSocketParams).
+            maybeReportColocatedSocketParams(
+              name,
+              moduleKey,
+              route,
+              defUseOf(value),
+              ctx
+            );
           }
           // A room's effective owning route is its declared __routeId, now
           // validated above to match the mount, or (a colocated room with
@@ -506,6 +637,7 @@ export async function assertRouteBindingsMatchMount(
             if (channelName !== null) {
               assertRoomChannelCongruent(
                 name,
+                moduleKey,
                 typeof routeId === 'string' ? routeId : route.path,
                 channelName,
                 defUseOf(value),
@@ -549,6 +681,7 @@ export async function assertRegistryRouteBindingsValid(
       // Structural read of a user-defined module's exports (a sanctioned cast
       // boundary); only the server-unit containers and their `__routeId` are read.
       const mod = (await load()) as SelfModule;
+      const moduleKey = moduleKeyOf(mod);
       for (const [container, kind] of CONTAINERS) {
         const exports = readExports(mod[container]);
         if (!exports) continue;
@@ -573,6 +706,7 @@ export async function assertRegistryRouteBindingsValid(
             if (channelName !== null) {
               assertRoomChannelCongruent(
                 name,
+                moduleKey,
                 routeId,
                 channelName,
                 defUseOf(value),

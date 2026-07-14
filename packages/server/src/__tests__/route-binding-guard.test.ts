@@ -4,10 +4,12 @@ import {
   assertRegistryRouteBindingsValid,
   warnAliasedLayoutBinding,
   warnRoomParamBinding,
+  warnColocatedSocketParams,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
   type RoomParamBindingInfo,
   type RoomParamExemptionInfo,
+  type ColocatedSocketParamAdvisoryInfo,
 } from '../route-binding-guard.js';
 import {
   defineRoutes,
@@ -754,7 +756,7 @@ describe('room route/channel param congruence', () => {
       onRoomParamBinding: (info) => seen.push(info),
     });
     expect(seen).toEqual([
-      { name: 'cursors', routeId: '/board/:id', params: ['id'] },
+      { name: 'cursors', moduleKey: '', routeId: '/board/:id', params: ['id'] },
     ]);
   });
 
@@ -825,7 +827,7 @@ describe('room route/channel param congruence', () => {
       })
     ).resolves.toBeUndefined();
     expect(seen).toEqual([
-      { name: 'cursors', routeId: '/board/:id', params: ['id'] },
+      { name: 'cursors', moduleKey: '', routeId: '/board/:id', params: ['id'] },
     ]);
   });
 
@@ -965,6 +967,7 @@ describe('room route/channel param congruence', () => {
       expect(seen).toEqual([
         {
           name: 'chat',
+          moduleKey: 'm',
           routeId: '/board/:id',
           channelName: 'global-chat',
           params: ['id'],
@@ -1083,12 +1086,213 @@ describe('room route/channel param congruence', () => {
       expect(seen).toEqual([
         {
           name: 'chat',
+          moduleKey: 'm',
           routeId: '/board/:id',
           channelName: 'global-chat',
           params: ['id'],
         },
       ]);
     });
+  });
+
+  describe('P2-1: onRoomParamBinding reports every DECLARED param, not just required (round-6 fix)', () => {
+    // Round-5 fixed the congruence CHECK to reason over declaredParamSlots
+    // (P1-1 above), but the success advisory one line below still reported
+    // `routeRequired`, which EXCLUDES optional ('?') and rest-zero-or-more
+    // ('*') slots. The design doc names this advisory as THE mitigation for
+    // the name-aliasing hazard ("the dev advisory surfaces every param
+    // correspondence for the author to eyeball"), so an advisory that omits
+    // an optional param it just validated defeats that purpose. Before the
+    // fix (params: routeRequired) this asserts params: [] for an
+    // optional-only route and fails.
+    it('includes an OPTIONAL route param (:id?) the channel satisfies', async () => {
+      const roomMod = async () => ({
+        serverRooms: {
+          cursors: {
+            __routeId: '/board/:id?',
+            channel: { name: 'board/:id?' },
+          },
+        },
+      });
+      const seen: RoomParamBindingInfo[] = [];
+      await assertRegistryRouteBindingsValid([roomMod], {
+        routeUseByPattern: new Map([['/board/:id?', []]]),
+        onRoomParamBinding: (info) => seen.push(info),
+      });
+      expect(seen).toEqual([
+        {
+          name: 'cursors',
+          moduleKey: '',
+          routeId: '/board/:id?',
+          params: ['id'],
+        },
+      ]);
+    });
+
+    // Same signal through a REST slot (`*`), also excluded by
+    // requiredParamSlots.
+    it('includes a REST route param (:rest*) the channel satisfies', async () => {
+      const roomMod = async () => ({
+        serverRooms: {
+          files: {
+            __routeId: '/files/:rest*',
+            channel: { name: 'files/:rest*' },
+          },
+        },
+      });
+      const seen: RoomParamBindingInfo[] = [];
+      await assertRegistryRouteBindingsValid([roomMod], {
+        routeUseByPattern: new Map([['/files/:rest*', []]]),
+        onRoomParamBinding: (info) => seen.push(info),
+      });
+      expect(seen).toEqual([
+        {
+          name: 'files',
+          moduleKey: '',
+          routeId: '/files/:rest*',
+          params: ['rest'],
+        },
+      ]);
+    });
+  });
+});
+
+describe('colocated socket param advisory (onColocatedSocketParams, round-6 fix P2-4)', () => {
+  // A ROOM in the analogous position (route-declared params, a live guard,
+  // no param wire on this branch) fails the boot via
+  // assertRoomChannelCongruent. A colocated SOCKET has no channel-typed
+  // escape hatch, and a boot throw here would break every released
+  // colocated-socket app (colocation predates the route-bound param wire),
+  // so this is a dev-only advisory instead of a throw.
+  const guard = defineServerMiddleware(async (_c, next) => next());
+
+  it('fires for a colocated socket on a param-bearing route with a live guard', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverSockets: { chat: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:id', [guard]]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      { name: 'chat', moduleKey: 'm', routeId: '/board/:id', params: ['id'] },
+    ]);
+  });
+
+  it('does not fire when no guard tier is live', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverSockets: { chat: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:id', []]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it('does not fire for a param-less route even with a live guard', async () => {
+    const routes = [
+      routeOf('/chat', {
+        __moduleKey: 'm',
+        serverSockets: { chat: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/chat', [guard]]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it('does not fire for an EXPLICITLY bound socket (it has its own param wire)', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverSockets: { chat: bound('/board/:id') },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:id', [guard]]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it("fires when the live tier is the socket's OWN use rather than page-use", async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverSockets: {
+          chat: Object.assign(async () => 'ok', { use: [guard] }),
+        },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:id', []]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      { name: 'chat', moduleKey: 'm', routeId: '/board/:id', params: ['id'] },
+    ]);
+  });
+});
+
+describe('warnColocatedSocketParams', () => {
+  it('warns once per socket key, naming the socket, route, and params', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      const info: ColocatedSocketParamAdvisoryInfo = {
+        name: 'chat',
+        moduleKey: 'm',
+        routeId: '/board/:id',
+        params: ['id'],
+      };
+      warnColocatedSocketParams(warned, info);
+      warnColocatedSocketParams(warned, info);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const msg = String(warn.mock.calls[0][0]);
+      expect(msg).toContain("'chat'");
+      expect(msg).toContain("'/board/:id'");
+      expect(msg).toContain('id');
+      expect(msg).toContain('serverRoute');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // Module-qualified dedup, same reasoning as warnRoomParamBinding.
+  it('warns again for the same name/routeId under a DIFFERENT moduleKey', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnColocatedSocketParams(warned, {
+        name: 'chat',
+        moduleKey: 'src/server/chat',
+        routeId: '/board/:id',
+        params: ['id'],
+      });
+      warnColocatedSocketParams(warned, {
+        name: 'chat',
+        moduleKey: 'src/routes/board/chat',
+        routeId: '/board/:id',
+        params: ['id'],
+      });
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -1126,6 +1330,7 @@ describe('warnRoomParamBinding', () => {
       const warned = new Set<string>();
       const info: RoomParamBindingInfo = {
         name: 'cursors',
+        moduleKey: 'm',
         routeId: '/board/:id',
         params: ['id'],
       };
@@ -1148,11 +1353,39 @@ describe('warnRoomParamBinding', () => {
       const warned = new Set<string>();
       warnRoomParamBinding(warned, {
         name: 'cursors',
+        moduleKey: 'm',
         routeId: '/board/:id',
         params: ['id'],
       });
       warnRoomParamBinding(warned, {
         name: 'presence',
+        moduleKey: 'm',
+        routeId: '/board/:id',
+        params: ['id'],
+      });
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // round-6 fix (P2-5): the dedup key must be module-qualified. A registry
+  // room and a colocated room can share a name/routeId pair (they are
+  // distinct `moduleKey::name` registry entries), so an unqualified key
+  // would let one binding's advisory silently swallow the other's.
+  it('warns again for the same name/routeId under a DIFFERENT moduleKey (module-qualified dedup)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnRoomParamBinding(warned, {
+        name: 'chat',
+        moduleKey: 'src/server/chat',
+        routeId: '/board/:id',
+        params: ['id'],
+      });
+      warnRoomParamBinding(warned, {
+        name: 'chat',
+        moduleKey: 'src/routes/board/chat',
         routeId: '/board/:id',
         params: ['id'],
       });

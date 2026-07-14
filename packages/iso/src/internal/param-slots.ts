@@ -1,11 +1,14 @@
 // PARAM_SEGMENT is THIS FRAMEWORK'S OWN supported ':param' grammar, anchored
 // to the WHOLE segment: ':name' where name is one or more of [A-Za-z0-9_],
-// with an optional single trailing '?'/'*'/'+' flag. `interpolatePattern`
-// (interpolate-pattern.ts) uses the identical anchored grammar, so the two
-// agree on what a segment substitutes at runtime.
+// with an optional single trailing '?'/'*'/'+' flag. It is spelled ONCE, here.
+// `interpolatePattern` (interpolate-pattern.ts) imports `matchParamSegment`
+// below rather than carrying its own copy of the regex, so the grammar cannot
+// drift out from under it the way it drifted before (an earlier version of
+// this file's PARAM_SEGMENT and interpolate-pattern.ts's inline regex were
+// two hand-spelled copies of the same pattern, kept in sync only by a comment
+// asserting they agreed).
 //
-// The other two param grammars in this codebase do NOT agree with this one,
-// despite an earlier version of this comment claiming they did:
+// The other two param grammars in this codebase do NOT agree with this one:
 //
 //   - The type-level `RouteParams` (typed-routes.ts) extracts a param from a
 //     ':' at ANY position in a segment, not just its start: its extraction is
@@ -31,6 +34,19 @@
 const PARAM_SEGMENT = /^:([A-Za-z0-9_]+)([?*+])?$/;
 
 /**
+ * Match `segment` against the shared `:param` grammar (`PARAM_SEGMENT`),
+ * returning the full match (the name in group 1, the optional `?`/`*`/`+`
+ * modifier in group 2) or `null` when the segment is not a conforming
+ * spelling. This is the ONE place `PARAM_SEGMENT` is exercised outside this
+ * module: `interpolatePattern` (interpolate-pattern.ts) imports and calls
+ * this function instead of re-spelling the regex, so the two can never
+ * disagree on what counts as a param segment.
+ */
+export function matchParamSegment(segment: string): RegExpExecArray | null {
+  return PARAM_SEGMENT.exec(segment);
+}
+
+/**
  * True iff `segment` is a conforming `:param` segment (the same grammar
  * `PARAM_SEGMENT` matches): a `:name` where `name` is one or more of
  * `[A-Za-z0-9_]`, with an optional single trailing `?`/`*`/`+` flag. Exported
@@ -40,7 +56,7 @@ const PARAM_SEGMENT = /^:([A-Za-z0-9_]+)([?*+])?$/;
  * use, rather than re-spelling the regex and risking drift.
  */
 export function isConformingParamSegment(segment: string): boolean {
-  return PARAM_SEGMENT.test(segment);
+  return matchParamSegment(segment) !== null;
 }
 
 /**
@@ -59,7 +75,7 @@ export function isConformingParamSegment(segment: string): boolean {
 export function requiredParamSlots(pattern: string): string[] {
   return pattern
     .split('/')
-    .map((seg) => PARAM_SEGMENT.exec(seg))
+    .map((seg) => matchParamSegment(seg))
     .filter(
       (m): m is RegExpExecArray => m !== null && m[2] !== '?' && m[2] !== '*'
     )
@@ -83,7 +99,7 @@ export function requiredParamSlots(pattern: string): string[] {
 export function declaredParamSlots(pattern: string): string[] {
   return pattern
     .split('/')
-    .map((seg) => PARAM_SEGMENT.exec(seg))
+    .map((seg) => matchParamSegment(seg))
     .filter((m): m is RegExpExecArray => m !== null)
     .map((m) => m[1]);
 }

@@ -22,10 +22,12 @@ import {
   warnAliasedLayoutBinding,
   warnRoomParamBinding,
   warnRoomParamExemption,
+  warnColocatedSocketParams,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
   type RoomParamBindingInfo,
   type RoomParamExemptionInfo,
+  type ColocatedSocketParamAdvisoryInfo,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -149,6 +151,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   const warnedAliasedBindings = new Set<string>();
   const warnedRoomParamBindings = new Set<string>();
   const warnedRoomParamExemptions = new Set<string>();
+  const warnedColocatedSocketParams = new Set<string>();
   const bindingCheckContext: RouteBindingCheckContext = {
     routeUseByPattern: new Map(routes.routeUse.map((r) => [r.path, r.use])),
     // The outermost tier composeServerChain composes ([...appConfig.use,
@@ -174,6 +177,11 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           // params a guard added later would silently read as `undefined`.
           onRoomParamExemption: (info: RoomParamExemptionInfo) =>
             warnRoomParamExemption(warnedRoomParamExemptions, info),
+          // A colocated socket (no __routeId) sits on a param-bearing,
+          // guarded route: it resolves no param wire, so a guard on its
+          // chain reads those route params as `undefined` forever.
+          onColocatedSocketParams: (info: ColocatedSocketParamAdvisoryInfo) =>
+            warnColocatedSocketParams(warnedColocatedSocketParams, info),
         }
       : {}),
   };
