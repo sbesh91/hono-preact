@@ -318,7 +318,13 @@ describe('aliasing diagnostic (onAliasedBinding)', () => {
       }
     );
     expect(seen).toEqual([
-      { kind: 'loader', name: 'shell', routeId: '/app', subtreeId: '/app/*' },
+      {
+        kind: 'loader',
+        name: 'shell',
+        moduleKey: 'm',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      },
     ]);
   });
 
@@ -437,7 +443,13 @@ describe('aliasing diagnostic (onAliasedBinding)', () => {
       }
     );
     expect(seen).toEqual([
-      { kind: 'action', name: 'save', routeId: '/app', subtreeId: '/app/*' },
+      {
+        kind: 'action',
+        name: 'save',
+        moduleKey: 'src/server/x',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      },
     ]);
   });
 });
@@ -592,8 +604,20 @@ describe('socket/room bindings (serverSockets / serverRooms containers)', () => 
     );
     // CONTAINERS order: loaders, actions, sockets, rooms.
     expect(seen).toEqual([
-      { kind: 'socket', name: 'feed', routeId: '/app', subtreeId: '/app/*' },
-      { kind: 'room', name: 'board', routeId: '/app', subtreeId: '/app/*' },
+      {
+        kind: 'socket',
+        name: 'feed',
+        moduleKey: 'm',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      },
+      {
+        kind: 'room',
+        name: 'board',
+        moduleKey: 'm',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      },
     ]);
   });
 });
@@ -1246,6 +1270,75 @@ describe('colocated socket param advisory (onColocatedSocketParams, round-6 fix 
       { name: 'chat', moduleKey: 'm', routeId: '/board/:id', params: ['id'] },
     ]);
   });
+
+  // round-7 fix (P2-a): maybeReportColocatedSocketParams reads
+  // declaredParamSlots (required AND optional AND rest), not the narrower
+  // requiredParamSlots. Every test above uses /board/:id, a REQUIRED param,
+  // so all five pass under EITHER function; none of them pins the choice.
+  // These two exercise an optional and a rest slot, which requiredParamSlots
+  // excludes: they only pass under declaredParamSlots.
+  it('fires for a colocated socket on an OPTIONAL param route (:id?) with a live guard', async () => {
+    const routes = [
+      routeOf('/board/:id?', {
+        __moduleKey: 'm',
+        serverSockets: { chat: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:id?', [guard]]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      { name: 'chat', moduleKey: 'm', routeId: '/board/:id?', params: ['id'] },
+    ]);
+  });
+
+  it('fires for a colocated socket on a REST param route (:rest*) with a live guard', async () => {
+    const routes = [
+      routeOf('/files/:rest*', {
+        __moduleKey: 'm',
+        serverSockets: { downloads: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/files/:rest*', [guard]]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      {
+        name: 'downloads',
+        moduleKey: 'm',
+        routeId: '/files/:rest*',
+        params: ['rest'],
+      },
+    ]);
+  });
+
+  // round-7 fix (P2-b): the tier-liveness sum includes serverTierSize(appUse).
+  // Every test above never passes ctx.appUse, so none of them pins that term:
+  // deleting `serverTierSize(appUse) +` from the sum would leave this whole
+  // describe block green. This test makes app-use the ONLY live tier (page-use
+  // and def-use are both empty), so it only passes when appUse is counted.
+  it('fires when the ONLY live tier is app-use (page-use and def-use are both empty)', async () => {
+    const appGuard = defineServerMiddleware(async (_c, next) => next());
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverSockets: { chat: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:id', []]]),
+      appUse: [appGuard],
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      { name: 'chat', moduleKey: 'm', routeId: '/board/:id', params: ['id'] },
+    ]);
+  });
 });
 
 describe('warnColocatedSocketParams', () => {
@@ -1267,13 +1360,18 @@ describe('warnColocatedSocketParams', () => {
       expect(msg).toContain("'/board/:id'");
       expect(msg).toContain('id');
       expect(msg).toContain('serverRoute');
+      expect(msg).toContain('(m)');
     } finally {
       warn.mockRestore();
     }
   });
 
+  // round-7 fix (P2-c): the dedup key was already module-qualified, but the
+  // message text was a pure function of (name, routeId), so two modules
+  // exporting the same-named socket bound to the same route printed two
+  // byte-identical lines with no way to tell which module either one meant.
   // Module-qualified dedup, same reasoning as warnRoomParamBinding.
-  it('warns again for the same name/routeId under a DIFFERENT moduleKey', () => {
+  it('warns again for the same name/routeId under a DIFFERENT moduleKey, naming each module', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const warned = new Set<string>();
@@ -1290,6 +1388,10 @@ describe('warnColocatedSocketParams', () => {
         params: ['id'],
       });
       expect(warn).toHaveBeenCalledTimes(2);
+      const first = String(warn.mock.calls[0][0]);
+      const second = String(warn.mock.calls[1][0]);
+      expect(first).toContain('src/server/chat');
+      expect(second).toContain('src/routes/board/chat');
     } finally {
       warn.mockRestore();
     }
@@ -1304,6 +1406,7 @@ describe('warnAliasedLayoutBinding', () => {
       const info: AliasedBindingInfo = {
         kind: 'loader',
         name: 'shell',
+        moduleKey: 'm',
         routeId: '/app',
         subtreeId: '/app/*',
       };
@@ -1314,9 +1417,42 @@ describe('warnAliasedLayoutBinding', () => {
       expect(msg).toContain("'/app'");
       expect(msg).toContain("serverRoute('/app/*')");
       expect(msg).toContain('page scope');
+      expect(msg).toContain('(m)');
       // The wildcard hint points at tree-form registration, under which
       // every children-bearing node's subtree spelling is typed.
       expect(msg).toContain('tree: typeof routeTree');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // round-7 fix (P2-c): the key is now module-qualified, like the other
+  // warn* functions in this file. Two modules exporting a same-kind/name
+  // unit bound to the same route must not have one binding's advisory
+  // silently swallow the other's.
+  it('warns again for the same kind/name/routeId under a DIFFERENT moduleKey (module-qualified dedup)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnAliasedLayoutBinding(warned, {
+        kind: 'loader',
+        name: 'shell',
+        moduleKey: 'src/routes/app/index',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      });
+      warnAliasedLayoutBinding(warned, {
+        kind: 'loader',
+        name: 'shell',
+        moduleKey: 'src/routes/app/layout',
+        routeId: '/app',
+        subtreeId: '/app/*',
+      });
+      expect(warn).toHaveBeenCalledTimes(2);
+      const first = String(warn.mock.calls[0][0]);
+      const second = String(warn.mock.calls[1][0]);
+      expect(first).toContain('src/routes/app/index');
+      expect(second).toContain('src/routes/app/layout');
     } finally {
       warn.mockRestore();
     }
@@ -1342,6 +1478,7 @@ describe('warnRoomParamBinding', () => {
       expect(msg).toContain("'/board/:id'");
       expect(msg).toContain('id');
       expect(msg).toContain('channel key');
+      expect(msg).toContain('(m)');
     } finally {
       warn.mockRestore();
     }
@@ -1373,7 +1510,11 @@ describe('warnRoomParamBinding', () => {
   // room and a colocated room can share a name/routeId pair (they are
   // distinct `moduleKey::name` registry entries), so an unqualified key
   // would let one binding's advisory silently swallow the other's.
-  it('warns again for the same name/routeId under a DIFFERENT moduleKey (module-qualified dedup)', () => {
+  //
+  // round-7 fix (P2-c): the key was already module-qualified, but the
+  // message text was a pure function of (name, routeId), so the two
+  // warnings printed here were byte-identical and neither named its module.
+  it('warns again for the same name/routeId under a DIFFERENT moduleKey, naming each module', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const warned = new Set<string>();
@@ -1390,6 +1531,10 @@ describe('warnRoomParamBinding', () => {
         params: ['id'],
       });
       expect(warn).toHaveBeenCalledTimes(2);
+      const first = String(warn.mock.calls[0][0]);
+      const second = String(warn.mock.calls[1][0]);
+      expect(first).toContain('src/server/chat');
+      expect(second).toContain('src/routes/board/chat');
     } finally {
       warn.mockRestore();
     }

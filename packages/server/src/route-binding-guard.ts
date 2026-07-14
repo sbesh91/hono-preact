@@ -48,6 +48,8 @@ export type BoundUnitKind = 'loader' | 'action' | 'socket' | 'room';
 export type AliasedBindingInfo = {
   kind: BoundUnitKind;
   name: string;
+  /** The module's `__moduleKey` (the registry key is `moduleKey::name`). */
+  moduleKey: string;
   /** The exact pattern the unit is bound to (the page scope). */
   routeId: string;
   /** The sibling subtree pattern (the subtree scope). */
@@ -56,7 +58,7 @@ export type AliasedBindingInfo = {
 
 export type RoomParamBindingInfo = {
   name: string;
-  /** The `moduleKey::name` module the room is exported from. */
+  /** The module's `__moduleKey` (the registry key is `moduleKey::name`). */
   moduleKey: string;
   /** The room's effective owning route pattern (declared __routeId or mount). */
   routeId: string;
@@ -72,7 +74,7 @@ export type RoomParamBindingInfo = {
 
 export type RoomParamExemptionInfo = {
   name: string;
-  /** The `moduleKey::name` module the room is exported from. */
+  /** The module's `__moduleKey` (the registry key is `moduleKey::name`). */
   moduleKey: string;
   /** The room's effective owning route pattern (declared __routeId or mount). */
   routeId: string;
@@ -84,7 +86,7 @@ export type RoomParamExemptionInfo = {
 
 export type ColocatedSocketParamAdvisoryInfo = {
   name: string;
-  /** The `moduleKey::name` module the socket is exported from. */
+  /** The module's `__moduleKey` (the registry key is `moduleKey::name`). */
   moduleKey: string;
   /** The socket's mount route pattern (its effective owning route). */
   routeId: string;
@@ -178,6 +180,7 @@ function chainStrictlyExtends(
 function maybeReportAliasedBinding(
   kind: BoundUnitKind,
   name: string,
+  moduleKey: string,
   routeId: string,
   ctx: RouteBindingCheckContext
 ): void {
@@ -187,7 +190,7 @@ function maybeReportAliasedBinding(
   const subtree = ctx.routeUseByPattern.get(subtreeId);
   if (exact === undefined || subtree === undefined) return;
   if (!chainStrictlyExtends(exact, subtree)) return;
-  ctx.onAliasedBinding({ kind, name, routeId, subtreeId });
+  ctx.onAliasedBinding({ kind, name, moduleKey, routeId, subtreeId });
 }
 
 // Read a room export's channel name pattern structurally (a sanctioned read of
@@ -443,12 +446,12 @@ export function warnRoomParamBinding(
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
-    `hono-preact: room '${info.name}' bound to '${info.routeId}': route ` +
-      `param${info.params.length > 1 ? 's' : ''} ${info.params.join(', ')} ` +
-      `${info.params.length > 1 ? 'are' : 'is'} satisfied by the channel key ` +
-      `of the same name. Confirm the route and channel denote the same ` +
-      `resource; the room's guard authorizes on the channel key, not the ` +
-      `page URL.`
+    `hono-preact: room '${info.name}' (${info.moduleKey}) bound to ` +
+      `'${info.routeId}': route param${info.params.length > 1 ? 's' : ''} ` +
+      `${info.params.join(', ')} ${info.params.length > 1 ? 'are' : 'is'} ` +
+      `satisfied by the channel key of the same name. Confirm the route and ` +
+      `channel denote the same resource; the room's guard authorizes on the ` +
+      `channel key, not the page URL.`
   );
 }
 
@@ -524,12 +527,12 @@ export function warnColocatedSocketParams(
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
-    `hono-preact: socket '${info.name}' is colocated with '${info.routeId}', ` +
-      `which declares route param${info.params.length > 1 ? 's' : ''} ` +
-      `${info.params.join(', ')}. A colocated socket resolves no param wire, ` +
-      `so a guard on its chain will read ` +
-      `${info.params.length > 1 ? 'those params' : 'that param'} as ` +
-      `undefined. Bind with serverRoute('${info.routeId}').socket(...) ` +
+    `hono-preact: socket '${info.name}' (${info.moduleKey}) is colocated ` +
+      `with '${info.routeId}', which declares route ` +
+      `param${info.params.length > 1 ? 's' : ''} ${info.params.join(', ')}. ` +
+      `A colocated socket resolves no param wire, so a guard on its chain ` +
+      `will read ${info.params.length > 1 ? 'those params' : 'that param'} ` +
+      `as undefined. Bind with serverRoute('${info.routeId}').socket(...) ` +
       `instead of colocation to authorize on ${info.params.length > 1 ? 'those route params' : 'that route param'}.`
   );
 }
@@ -596,7 +599,7 @@ export async function assertRouteBindingsMatchMount(
             // the mount-match branches alone would never catch it).
             assertConformingBoundRouteId(kind, name, routeId);
             if (routeId === route.path) {
-              maybeReportAliasedBinding(kind, name, routeId, ctx);
+              maybeReportAliasedBinding(kind, name, moduleKey, routeId, ctx);
             } else if (routeId === subtreeId) {
               if (!ctx.routeUseByPattern.has(subtreeId)) {
                 throw new Error(
@@ -700,7 +703,7 @@ export async function assertRegistryRouteBindingsValid(
                 `for a node with child routes), or move the unit to that route's module.`
             );
           }
-          maybeReportAliasedBinding(kind, name, routeId, ctx);
+          maybeReportAliasedBinding(kind, name, moduleKey, routeId, ctx);
           if (kind === 'room') {
             const channelName = channelNameOf(value);
             if (channelName !== null) {
@@ -733,18 +736,23 @@ export function warnAliasedLayoutBinding(
   warned: Set<string>,
   info: AliasedBindingInfo
 ): void {
-  const key = `${info.kind}:${info.name}@${info.routeId}`;
+  // Module-qualified for the same reason as warnRoomParamBinding above: two
+  // modules can export a unit of the same kind/name bound to the same
+  // route, and an unqualified key would let one binding's advisory silently
+  // swallow the other's.
+  const key = `${info.moduleKey}::${info.kind}:${info.name}@${info.routeId}`;
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
-    `hono-preact: ${info.kind} '${info.name}' is bound to '${info.routeId}', ` +
-      `the page scope for that pattern: it resolves the deepest composed ` +
-      `chain, which includes the index child's own 'use' on top of the ` +
-      `layout's chain. For a subtree-scoped (layout shell) binding, use ` +
-      `serverRoute('${info.subtreeId}') instead: the subtree scope runs the ` +
-      `layout node's own composed chain without the index child's additions. ` +
-      `Register your routes in the tree form ({ tree: typeof routeTree }) to ` +
-      `have every subtree spelling typed. Keep '${info.routeId}' if this ` +
-      `${info.kind} should run the index page's full gate chain.`
+    `hono-preact: ${info.kind} '${info.name}' (${info.moduleKey}) is bound ` +
+      `to '${info.routeId}', the page scope for that pattern: it resolves ` +
+      `the deepest composed chain, which includes the index child's own ` +
+      `'use' on top of the layout's chain. For a subtree-scoped (layout ` +
+      `shell) binding, use serverRoute('${info.subtreeId}') instead: the ` +
+      `subtree scope runs the layout node's own composed chain without the ` +
+      `index child's additions. Register your routes in the tree form ` +
+      `({ tree: typeof routeTree }) to have every subtree spelling typed. ` +
+      `Keep '${info.routeId}' if this ${info.kind} should run the index ` +
+      `page's full gate chain.`
   );
 }
