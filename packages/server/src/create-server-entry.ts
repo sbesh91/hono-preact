@@ -146,8 +146,9 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   // may bind either an exact route or a childful route's subtree. A
   // stale/typo'd pattern fails the boot closed rather than running the unit
   // under no gates.
-  // Dedup stores for the dev advisories: one per binding for the life of
-  // this entry (boot checks re-run per request in dev).
+  // Dedup stores for the advisories (two dev-only, two wired in prod too;
+  // see bindingCheckContext below): one per binding for the life of this
+  // entry (boot checks re-run per request in dev).
   const warnedAliasedBindings = new Set<string>();
   const warnedRoomParamBindings = new Set<string>();
   const warnedRoomParamExemptions = new Set<string>();
@@ -159,8 +160,9 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     // treat this tier as live too, not just page-use, since the guard chain
     // feeds it the SAME pathParams.
     appUse: appConfig.use ?? [],
-    // Dev-only observational diagnostics. Prod passes no callbacks, so all
-    // three detections short-circuit to zero cost.
+    // Purely-informational diagnostics (a structural quirk or a SUCCESSFUL
+    // param correspondence, never a hazard): dev-only. Prod passes no
+    // callbacks for these two, so both detections short-circuit to zero cost.
     ...(dev
       ? {
           // An exact-path binding whose sibling subtree chain differs was
@@ -172,18 +174,27 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           // rather than left silent.
           onRoomParamBinding: (info: RoomParamBindingInfo) =>
             warnRoomParamBinding(warnedRoomParamBindings, info),
-          // A room's route/channel param mismatch was exempted from the boot
-          // throw because all three guard tiers are empty today; name the
-          // params a guard added later would silently read as `undefined`.
-          onRoomParamExemption: (info: RoomParamExemptionInfo) =>
-            warnRoomParamExemption(warnedRoomParamExemptions, info),
-          // A colocated socket (no __routeId) sits on a param-bearing,
-          // guarded route: it resolves no param wire, so a guard on its
-          // chain reads those route params as `undefined` forever.
-          onColocatedSocketParams: (info: ColocatedSocketParamAdvisoryInfo) =>
-            warnColocatedSocketParams(warnedColocatedSocketParams, info),
         }
       : {}),
+    // Hazard diagnostics: both describe a guard chain that reads (or would
+    // read) an unbound route param as `undefined`. Neither can fail the boot
+    // for a colocated unit (that is the whole point: colocation predates the
+    // route-bound param wire, so a throw here would break every released
+    // colocated-socket/room app), so a loud warning is the ONLY signal an
+    // author gets. Wired UNCONDITIONALLY (dev AND prod): a dev-only warning
+    // would leave production silently running an auth hole.
+    //
+    // A room's route/channel param mismatch that did not fail the boot
+    // (colocated, or bound with all three guard tiers empty today): a guard
+    // on the route reads the missing param as `undefined`, live now or
+    // added later.
+    onRoomParamExemption: (info: RoomParamExemptionInfo) =>
+      warnRoomParamExemption(warnedRoomParamExemptions, info),
+    // A colocated socket (no __routeId) sits on a param-bearing, guarded
+    // route: it resolves no param wire, so a guard on its chain reads those
+    // route params as `undefined` forever.
+    onColocatedSocketParams: (info: ColocatedSocketParamAdvisoryInfo) =>
+      warnColocatedSocketParams(warnedColocatedSocketParams, info),
   };
   const runBootChecks = () =>
     Promise.all([

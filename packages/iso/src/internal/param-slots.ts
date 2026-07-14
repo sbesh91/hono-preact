@@ -105,6 +105,44 @@ export function declaredParamSlots(pattern: string): string[] {
 }
 
 /**
+ * Every param name a guard could actually read off `ctx.location.pathParams`
+ * for a request that matches `pattern`, per preact-iso's OWN runtime route
+ * matcher (`exec`, in `preact-iso/src/router.js`). This is deliberately
+ * WIDER than `PARAM_SEGMENT`/`declaredParamSlots`: it answers "what can a
+ * guard actually read", not "what does this framework's `:param` grammar
+ * support".
+ *
+ * `exec` binds any segment starting with `:` as a param, matching it against
+ * `/^(:?)(.*?)([+*?]?)$/`: the name is everything after the leading `:` with
+ * a single trailing `+`/`*`/`?` modifier char stripped, no character-class
+ * restriction at all (hyphens, dots, extra colons all bind fine). A segment
+ * that does NOT start with `:` (including a bare `*` wildcard, or a
+ * colon-namespaced literal like `metrics:cpu`) is never a param to `exec`
+ * either, so this function agrees with the framework's own grammar on what
+ * counts as a param SITE (leading `:`), just not on which NAMES are legal
+ * there.
+ *
+ * Used by `@hono-preact/server`'s route-binding boot check to detect every
+ * route param a guard could misread as `undefined`, including one
+ * `declaredParamSlots` is blind to (e.g. `:board-id`, a hyphenated name):
+ * left undetected, such a param silently fails both the boot-throw and the
+ * dev advisory `declaredParamSlots` was driving, even though it IS live over
+ * plain HTTP. Substitution and wire-filtering stay on the narrower
+ * `declaredParamSlots`/`requiredParamSlots` grammar; those describe what the
+ * framework can SUPPLY (the room-key/socket-param resolvers only ever
+ * resolve a conforming `:param` slot), not what a guard can read.
+ */
+export function guardReadableParamSlots(pattern: string): string[] {
+  return pattern
+    .split('/')
+    .filter((seg) => seg.startsWith(':'))
+    .map((seg) => {
+      const body = seg.slice(1);
+      return /[+*?]$/.test(body) ? body.slice(0, -1) : body;
+    });
+}
+
+/**
  * Build a params record with NO prototype (not even `Object.prototype`),
  * from a list of `[key, value]` entries. Used by `resolveSocketParams`
  * (`@hono-preact/server`'s socket-resolution.ts) and `resolveRoomKey`

@@ -67,9 +67,15 @@ export { subtreePatternOf } from './define-routes.js';
 // isHazardousColonSegment is shared with the same boot binding guard's
 // route-id conformance check, so it and defineChannel's own definition-time
 // check can never disagree on which ':'-segment spellings are a real hazard.
+// guardReadableParamSlots is shared with the same boot binding guard's
+// colocated-unit advisory and its room/channel congruence check: it answers
+// "what param could a guard actually read" per preact-iso's own (wider)
+// `exec` matcher, so a hyphenated route param is no longer invisible to
+// those two detections the way it is to declaredParamSlots.
 export {
   requiredParamSlots,
   declaredParamSlots,
+  guardReadableParamSlots,
   isConformingParamSegment,
   toNullProtoParams,
   isPresentParamSlot,

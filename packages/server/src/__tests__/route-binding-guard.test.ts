@@ -780,6 +780,19 @@ describe('room route/channel param congruence', () => {
   // this must be a real `defineServerMiddleware` object.
   const guard = defineServerMiddleware(async (_c, next) => next());
 
+  // A route-BOUND room def: same shape the `boundDef` helper in the
+  // 'socket/room bindings' describe block above builds for sockets, but
+  // allowing arbitrary extra properties (channel, use) since room congruence
+  // tests need to vary those.
+  const boundRoomDef = (
+    routeId: string,
+    extra: Record<string, unknown>
+  ): Record<string, unknown> =>
+    Object.defineProperty({ ...extra }, '__routeId', {
+      value: routeId,
+      enumerable: false,
+    });
+
   // A room whose route requires :id but whose channel keys on :boardId fails
   // boot, PROVIDED the route has a guard that could read the missing param.
   it('throws when a bound room route param is absent from the channel (route has a guard)', async () => {
@@ -815,16 +828,35 @@ describe('room route/channel param congruence', () => {
     ]);
   });
 
-  it('checks a colocated room (no __routeId) against its module mount (route has a guard)', async () => {
+  // A COLOCATED room (no __routeId) never fails the boot for a mismatch,
+  // even against a guarded mount route: the framework has no param wire to
+  // give it either way, so it advises instead (see the dedicated 'colocated
+  // vs bound room asymmetry' describe block below for the full fix pin).
+  // This test still exercises the mount-fallback path (routeId defaults to
+  // route.path when no explicit __routeId is present).
+  it('checks a colocated room (no __routeId) against its module mount (route has a guard), and advises instead of throwing', async () => {
     const routes = [
       routeOf('/board/:id', {
         __moduleKey: 'm',
         serverRooms: { cursors: { channel: { name: 'board/:boardId' } } },
       }),
     ];
+    const seen: RoomParamExemptionInfo[] = [];
     await expect(
-      assertRouteBindingsMatchMount(routes, ctxOf([['/board/:id', [guard]]]))
-    ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+      assertRouteBindingsMatchMount(routes, {
+        routeUseByPattern: new Map([['/board/:id', [guard]]]),
+        onRoomParamExemption: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([
+      {
+        name: 'cursors',
+        moduleKey: 'm',
+        routeId: '/board/:id',
+        channelName: 'board/:boardId',
+        params: ['id'],
+      },
+    ]);
   });
 
   // A room misbound to an unrelated route must report the MISBINDING error,
@@ -922,14 +954,21 @@ describe('room route/channel param congruence', () => {
       ).resolves.toBeUndefined();
     });
 
-    // The identical route/channel mismatch on a GUARDED route still throws: a
-    // guard on '/board/:id' could read pathParams.id, so the divergence is a
-    // real hazard, not a benign route-independent room.
-    it('still throws for the identical mismatch on a GUARDED param route', async () => {
+    // The identical route/channel mismatch on a GUARDED route still throws
+    // when the room is route-BOUND: a guard on '/board/:id' could read
+    // pathParams.id, so the divergence is a real hazard for a room that
+    // opted into the route contract, not a benign route-independent room.
+    // (A COLOCATED room in this identical shape does NOT throw: see the
+    // dedicated 'colocated vs bound room asymmetry' describe block below.)
+    it('still throws for the identical mismatch on a GUARDED param route, when the room is route-bound', async () => {
       const routes = [
         routeOf('/board/:id', {
           __moduleKey: 'm',
-          serverRooms: { chat: { channel: { name: 'global-chat' } } },
+          serverRooms: {
+            chat: boundRoomDef('/board/:id', {
+              channel: { name: 'global-chat' },
+            }),
+          },
         }),
       ];
       await expect(
@@ -975,11 +1014,20 @@ describe('room route/channel param congruence', () => {
     // param just as readily as a page-level one, so the exemption must not
     // fire while either of those tiers is live.
 
+    // These pin tier-liveness-governs-the-throw for a route-BOUND room: a
+    // COLOCATED room in the identical shape never throws regardless of tier
+    // liveness (see the 'colocated vs bound room asymmetry' describe block
+    // below), so these are written against explicitly bound rooms.
+
     it('throws when page-use is empty but APP-use is non-empty (app tier live)', async () => {
       const routes = [
         routeOf('/board/:id', {
           __moduleKey: 'm',
-          serverRooms: { chat: { channel: { name: 'global-chat' } } },
+          serverRooms: {
+            chat: boundRoomDef('/board/:id', {
+              channel: { name: 'global-chat' },
+            }),
+          },
         }),
       ];
       await expect(
@@ -995,7 +1043,10 @@ describe('room route/channel param congruence', () => {
         routeOf('/board/:id', {
           __moduleKey: 'm',
           serverRooms: {
-            chat: { channel: { name: 'global-chat' }, use: [guard] },
+            chat: boundRoomDef('/board/:id', {
+              channel: { name: 'global-chat' },
+              use: [guard],
+            }),
           },
         }),
       ];
@@ -1210,6 +1261,136 @@ describe('room route/channel param congruence', () => {
       ]);
     });
   });
+});
+
+// -----------------------------------------------------------------------
+// #274 asymmetry fix: F-A (fail-open, dev-only advisory) + F-B (over-reach,
+// colocated rooms hard-failed the boot) + F-C (detection blind spot, a
+// hyphenated route param was invisible to declaredParamSlots). The coherent
+// rule: a BOUND unit opted into the route contract, so a mismatch is a bug
+// in the author's code and still fails the boot closed (unchanged, pinned
+// above). A COLOCATED unit has no param wire either way, so it NEVER fails
+// the boot; it warns loudly instead, using guardReadableParamSlots (which
+// mirrors preact-iso's own WIDE `exec` grammar) so a hyphenated segment like
+// ':board-id' -- live over plain HTTP but invisible to declaredParamSlots --
+// is no longer a silent blind spot for either the room or the socket
+// advisory.
+// -----------------------------------------------------------------------
+describe('colocated vs bound room asymmetry (#274 asymmetry fix)', () => {
+  const guard = defineServerMiddleware(async (_c, next) => next());
+  const boundRoomDef = (
+    routeId: string,
+    extra: Record<string, unknown>
+  ): Record<string, unknown> =>
+    Object.defineProperty({ ...extra }, '__routeId', {
+      value: routeId,
+      enumerable: false,
+    });
+
+  // (test 1) A released-app shape: defineApp({ use: [logger] }) plus a
+  // colocated room whose channel does not carry the mount route's param.
+  // This used to 500 the boot (F-B); it must now resolve and advise.
+  it('does not throw for a COLOCATED room on a param-bearing route with a live app-use tier, and fires the advisory', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverRooms: { chat: { channel: { name: 'chat/:chatId' } } },
+      }),
+    ];
+    const seen: RoomParamExemptionInfo[] = [];
+    await expect(
+      assertRouteBindingsMatchMount(routes, {
+        routeUseByPattern: new Map([['/board/:id', []]]),
+        appUse: [guard],
+        onRoomParamExemption: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([
+      {
+        name: 'chat',
+        moduleKey: 'm',
+        routeId: '/board/:id',
+        channelName: 'chat/:chatId',
+        params: ['id'],
+      },
+    ]);
+  });
+
+  // (test 2) The identical shape, but explicitly route-bound: the author
+  // opted into the route contract, so this still throws.
+  it('still throws for the identical mismatch when the room IS route-bound', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverRooms: {
+          chat: boundRoomDef('/board/:id', {
+            channel: { name: 'chat/:chatId' },
+          }),
+        },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, {
+        routeUseByPattern: new Map([['/board/:id', []]]),
+        appUse: [guard],
+      })
+    ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
+  });
+
+  // (tests 3+4) A hyphenated route param is live over plain HTTP but
+  // invisible to declaredParamSlots; guardReadableParamSlots (the WIDE
+  // grammar) must see it so the advisory names it instead of staying silent.
+  it('fires the advisory for a COLOCATED room on a hyphenated route param (/board/:board-id), naming the guard-readable param', async () => {
+    const routes = [
+      routeOf('/board/:board-id', {
+        __moduleKey: 'm',
+        serverRooms: { cursors: { channel: { name: 'cursors' } } },
+      }),
+    ];
+    const seen: RoomParamExemptionInfo[] = [];
+    await expect(
+      assertRouteBindingsMatchMount(routes, {
+        routeUseByPattern: new Map([['/board/:board-id', [guard]]]),
+        onRoomParamExemption: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([
+      {
+        name: 'cursors',
+        moduleKey: 'm',
+        routeId: '/board/:board-id',
+        channelName: 'cursors',
+        params: ['board-id'],
+      },
+    ]);
+  });
+
+  it('fires the colocated-socket advisory for a hyphenated route param (/board/:board-id)', async () => {
+    const routes = [
+      routeOf('/board/:board-id', {
+        __moduleKey: 'm',
+        serverSockets: { feed: async () => 'ok' },
+      }),
+    ];
+    const seen: ColocatedSocketParamAdvisoryInfo[] = [];
+    await assertRouteBindingsMatchMount(routes, {
+      routeUseByPattern: new Map([['/board/:board-id', [guard]]]),
+      onColocatedSocketParams: (info) => seen.push(info),
+    });
+    expect(seen).toEqual([
+      {
+        name: 'feed',
+        moduleKey: 'm',
+        routeId: '/board/:board-id',
+        params: ['board-id'],
+      },
+    ]);
+  });
+
+  // (test 5) Existing bound-unit throw coverage stays green: pinned above in
+  // 'room route/channel param congruence' (P2-a/P2-b, now on explicitly
+  // bound room defs) and 'bound route param conformance', unchanged by this
+  // fix and re-verified by the full suite run.
 });
 
 describe('colocated socket param advisory (onColocatedSocketParams, round-6 fix P2-4)', () => {

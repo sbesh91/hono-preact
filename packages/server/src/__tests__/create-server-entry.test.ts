@@ -11,6 +11,7 @@ import {
 import {
   _defineRouteLoader,
   _defineRouteSocket,
+  _defineRouteRoom,
 } from '@hono-preact/iso/internal';
 import { SOCKETS_RPC_PATH } from '@hono-preact/iso/internal/runtime';
 import { createServerEntry } from '../create-server-entry.js';
@@ -332,17 +333,20 @@ describe('createServerEntry', () => {
     // other test in the suite still passes, so the auth-hole fix it pins
     // has zero coverage without this end-to-end test: a route with an
     // EMPTY page-use chain, an app tier that is genuinely non-empty, and a
-    // colocated room whose channel does not carry the route's param must
-    // still fail the boot closed.
+    // ROUTE-BOUND room whose channel does not carry the route's param must
+    // still fail the boot closed. (A COLOCATED room in this identical shape
+    // no longer fails the boot at all -- see the '#274 asymmetry fix'
+    // describe block below -- so this is pinned against an explicitly bound
+    // room, the one case that still throws.)
     const appGuard = defineServerMiddleware<'loader'>(async (_c, next) => {
       await next();
     });
-    // A colocated room (no serverRoute binding): its effective owning route
-    // is the module mount, '/board/:id'. Its channel is route-independent
-    // ('global-chat'), so the route's required 'id' param is not a channel
-    // key -- a real, boot-rejected mismatch once ANY guard tier is live.
+    // A route-BOUND room (serverRoute(r).room): its declared route is
+    // '/board/:id'. Its channel is route-independent ('global-chat'), so the
+    // route's required 'id' param is not a channel key -- a real,
+    // boot-rejected mismatch once ANY guard tier is live.
     const channel = defineChannel('global-chat')();
-    const roomDef = defineRoom(channel, {});
+    const roomDef = _defineRouteRoom('/board/:id', channel, {});
     const serverThunk = async () => ({
       __moduleKey: 'pages/board',
       serverRooms: { chat: roomDef },
@@ -371,6 +375,114 @@ describe('createServerEntry', () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/room 'chat'/);
     expect(body.error).toMatch(/not a key of channel/);
+  });
+});
+
+// #274 asymmetry fix, test 6: the two advisories that describe a guard
+// reading a route param as `undefined` (onRoomParamExemption,
+// onColocatedSocketParams) must fire in BOTH dev and prod -- a dev-only
+// warning would leave production silently running the same hazard. The
+// purely-informational ones (onAliasedBinding, onRoomParamBinding) stay
+// dev-only, unchanged.
+describe('colocated advisories fire in prod (#274 asymmetry fix)', () => {
+  // A single boot check pass (triggered by any of the three gated request
+  // paths) walks every server route, so one request can carry both a hazard
+  // fixture (a colocated room param mismatch under a live app-use tier) and
+  // a purely-informational fixture (an aliased exact-path loader binding) at
+  // once, and prove the prod build treats them differently.
+  const buildApp = (dev: boolean) => {
+    const layoutGate = defineServerMiddleware<'loader'>(async (_c, next) =>
+      next()
+    );
+    const indexGate = defineServerMiddleware<'loader'>(async (_c, next) =>
+      next()
+    );
+    const loader = _defineRouteLoader('/x', async () => 'ok', {
+      __moduleKey: 'test/x',
+      __loaderName: 'l',
+      use: [],
+    });
+    const modX = { __moduleKey: 'test/x', serverLoaders: { l: loader } };
+
+    const appGuard = defineServerMiddleware<'loader'>(async (_c, next) =>
+      next()
+    );
+    // A colocated room (no serverRoute binding): channel is route-independent
+    // ('global-chat'), so the '/board/:id' route's 'id' param is not a
+    // channel key. With appGuard live, this is the hazard this fix stops
+    // from hard-failing the boot -- it must still WARN, in prod too.
+    const channel = defineChannel('global-chat')();
+    const roomDef = defineRoom(channel, {});
+    const modBoard = {
+      __moduleKey: 'pages/board',
+      serverRooms: { chat: roomDef },
+    };
+
+    return createServerEntry({
+      routes: manifest({
+        serverImports: [async () => modX, async () => modBoard],
+        routeUse: [
+          { path: '/x', use: [layoutGate, indexGate] },
+          { path: '/x/*', use: [layoutGate] },
+          { path: '/board/:id', use: [] },
+        ],
+        serverRoutes: [
+          { path: '/x', server: async () => modX, ancestors: [] } as never,
+          {
+            path: '/board/:id',
+            server: async () => modBoard,
+            ancestors: [],
+          } as never,
+        ],
+      }),
+      layout: Layout,
+      appConfig: { use: [appGuard] },
+      dev,
+    });
+  };
+  const post = (app: ReturnType<typeof buildApp>) =>
+    app.request('/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'test/x',
+        loader: 'l',
+        location: { path: '/x', pathParams: {}, searchParams: {} },
+      }),
+    });
+  const hazardWarnings = (calls: ReadonlyArray<ReadonlyArray<unknown>>) =>
+    calls.filter((c) => String(c[0]).includes("room 'chat'"));
+  const informationalWarnings = (
+    calls: ReadonlyArray<ReadonlyArray<unknown>>
+  ) => calls.filter((c) => String(c[0]).includes('page scope'));
+
+  it('dev: fires both the hazard advisory and the informational advisory', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = buildApp(true);
+      const res = await post(app);
+      expect(res.status).toBe(200);
+      expect(hazardWarnings(warn.mock.calls)).toHaveLength(1);
+      expect(informationalWarnings(warn.mock.calls)).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('prod: fires the hazard advisory but NOT the informational one', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const app = buildApp(false);
+      const res = await post(app);
+      expect(res.status).toBe(200);
+      // The hazard: a guard chain (app-use is live) reads the room's missing
+      // param as `undefined` right now. Must not be silent in prod.
+      expect(hazardWarnings(warn.mock.calls)).toHaveLength(1);
+      // The purely-informational aliasing advisory stays dev-only.
+      expect(informationalWarnings(warn.mock.calls)).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

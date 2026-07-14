@@ -69,6 +69,12 @@ describe('iso /internal/runtime door', () => {
       // with the same two resolvers, so they can restrict a resolved params
       // object to the pattern's own declared slots and drop anything else.
       'declaredParamSlots',
+      // The WIDE param-slot extraction (mirrors preact-iso's own `exec`
+      // matcher, hyphens and all) shared with @hono-preact/server's
+      // colocated-unit advisory and its room/channel congruence check, so
+      // neither is blind to a param name declaredParamSlots doesn't
+      // recognize.
+      'guardReadableParamSlots',
       // The conforming-':param' predicate shared with @hono-preact/server's
       // boot binding guard, which rejects a route-bound socket/room whose
       // __routeId carries a non-conforming ':'-segment.

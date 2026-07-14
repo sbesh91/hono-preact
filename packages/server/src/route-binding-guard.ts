@@ -3,6 +3,7 @@ import {
   subtreePatternOf,
   requiredParamSlots,
   declaredParamSlots,
+  guardReadableParamSlots,
   isHazardousColonSegment,
 } from '@hono-preact/iso/internal/runtime';
 
@@ -124,34 +125,45 @@ export type RouteBindingCheckContext = {
    * Dev-only observer: called for each exact-path binding whose sibling
    * subtree key carries a strict PREFIX of the exact chain (the deepest-wins
    * exact entry was widened by the index child's own `use`). Purely
-   * diagnostic, never feeds guard resolution. Omit in prod for zero cost.
+   * diagnostic (names a structural quirk, not a param-safety hazard), never
+   * feeds guard resolution. Omit in prod for zero cost.
    */
   onAliasedBinding?: (info: AliasedBindingInfo) => void;
   /**
    * Dev-only observer fired once per param-bearing room binding after
    * congruence holds: the room's route params are being satisfied by the
-   * channel key of the same name. Purely diagnostic. Omit in prod.
+   * channel key of the same name. Purely diagnostic (names a SUCCESSFUL
+   * correspondence, not a hazard). Omit in prod.
    */
   onRoomParamBinding?: (info: RoomParamBindingInfo) => void;
   /**
-   * Dev-only observer fired when a room's route/channel param mismatch is
-   * exempted from the boot throw because all three guard tiers (app-use,
-   * page-use, and the room's own use) are empty today. Purely diagnostic:
-   * names the params a guard added to ANY of those three tiers later would
-   * read as `undefined`. Omit in prod.
+   * Observer fired whenever a room's route/channel param mismatch does NOT
+   * fail the boot: either the room is COLOCATED (no `__routeId`), which can
+   * never fail the boot (the framework has no param wire to give it either
+   * way, throwing here would break every released colocated-room app), or
+   * the room is BOUND but all three guard tiers (app-use, page-use, and the
+   * room's own use) are empty today. In the colocated case a guard on any
+   * live tier reads the missing param as `undefined` RIGHT NOW; in the
+   * bound/no-live-tier case a guard added LATER to any of those three tiers
+   * would. Either way this describes a real hazard, so unlike
+   * `onAliasedBinding`/`onRoomParamBinding` it must be wired in BOTH dev and
+   * prod, not dev-only.
    */
   onRoomParamExemption?: (info: RoomParamExemptionInfo) => void;
   /**
-   * Dev-only observer fired once per colocated socket (no `__routeId`) whose
-   * mount route declares params and whose guard chain (app-use, page-use, or
-   * the socket's own use) has at least one live server-middleware tier. A
-   * colocated socket resolves no param wire (`resolveConnection` always hands
-   * it `params: {}`), so any guard reading those route params sees
-   * `undefined` forever. The room analog of this situation fails the boot
-   * (`assertRoomChannelCongruent`); a boot throw here would break every
-   * released colocated-socket app (colocation predates the route-bound param
-   * wire), so this is the symmetric dev-only measure instead. Purely
-   * diagnostic. Omit in prod.
+   * Observer fired once per colocated socket (no `__routeId`) whose mount
+   * route declares a param a guard could read (`guardReadableParamSlots`,
+   * preact-iso's own WIDE `exec` grammar, not just the narrower
+   * `declaredParamSlots` this framework's wire understands) and whose guard
+   * chain (app-use, page-use, or the socket's own use) has at least one live
+   * server-middleware tier. A colocated socket resolves no param wire
+   * (`resolveConnection` always hands it `params: {}`), so any guard reading
+   * those route params sees `undefined` forever. The room analog of this
+   * situation is `onRoomParamExemption`; both are symmetric now (neither
+   * throws for a colocated unit; a boot throw here would break every
+   * released colocated-socket app, colocation predates the route-bound param
+   * wire). This describes a real hazard, so it must be wired in BOTH dev and
+   * prod, not dev-only.
    */
   onColocatedSocketParams?: (info: ColocatedSocketParamAdvisoryInfo) => void;
 };
@@ -300,27 +312,43 @@ function serverTierSize(tier: ReadonlyArray<unknown>): number {
 }
 
 /**
- * Fail closed when a room's effective owning route declares a `:param` the
- * channel cannot guarantee, AND at least one of the three guard tiers
- * `composeServerChain` feeds the same `pathParams` to is live: app-use
- * (`appConfig.use`), page-use (the route's own composed chain), and the
- * room's own `use`. A guard in ANY of those tiers COULD read the missing
- * param via `ctx.location.pathParams`, so an absent value there is a real
- * hazard regardless of which tier the guard lives in. No-op for a non-room
- * unit or a route with no declared params at all.
+ * Check a room's effective owning route against its channel for param
+ * congruence: does every param a guard could read off the route also
+ * resolve through the channel key? No-op for a route with no guard-readable
+ * param at all.
+ *
+ * The guard-readable namespace comes from `guardReadableParamSlots`, which
+ * mirrors preact-iso's own runtime matcher (`exec`): it recognizes ANY
+ * `:`-prefixed segment as a param, hyphens and all, not just the narrower
+ * `:[A-Za-z0-9_]+` class `declaredParamSlots` supports. A route segment like
+ * `:board-id` is invisible to `declaredParamSlots` (so a channel-congruence
+ * check keyed on that function alone would silently pass it, and the
+ * colocated-unit advisory below it would silently skip it too), but it IS a
+ * live param over plain HTTP, so a guard reading it sees a real value there
+ * while a realtime connection (which resolves params via
+ * `requiredParamSlots`/`declaredParamSlots`, not `exec`) would never satisfy
+ * it through any channel spelling. `guardReadableParamSlots` closes that
+ * blind spot: it drives the early-return and the name-coverage condition
+ * below, while the channel side of the comparison, and the presence
+ * guarantee, stay on the narrower `declaredParamSlots`/`requiredParamSlots`
+ * grammar (what the framework can actually SUPPLY and substitute).
  *
  * The guard-readable namespace is checked under TWO conditions, both
  * required for congruence:
  *
- * 1. **Name coverage:** every param the route DECLARES (`declaredParamSlots`,
- *    which includes optional `?` and rest `*`/`+` slots) must also be a param
- *    the channel declares. preact-iso's runtime matcher (`exec`) binds an
- *    optional or rest route param over HTTP just as readily as a required
- *    one, and a guard reads `ctx.location.pathParams` the same way regardless
- *    of the modifier, so a route param `requiredParamSlots` excludes (because
- *    it is optional or rest-zero-or-more) is not exempt from this check: it
- *    is exactly as guard-readable as a required one, just not guaranteed
- *    present.
+ * 1. **Name coverage:** every param a guard could read off the route
+ *    (`guardReadableParamSlots`) must also be a param the channel declares
+ *    (`declaredParamSlots`, which includes optional `?` and rest `*`/`+`
+ *    slots). preact-iso's runtime matcher binds an optional or rest route
+ *    param over HTTP just as readily as a required one, and a guard reads
+ *    `ctx.location.pathParams` the same way regardless of the modifier, so a
+ *    route param `requiredParamSlots` excludes (because it is optional or
+ *    rest-zero-or-more) is not exempt from this check: it is exactly as
+ *    guard-readable as a required one, just not guaranteed present. A
+ *    hyphenated segment `guardReadableParamSlots` sees but `declaredParamSlots`
+ *    does not can never pass this condition either: no legal channel spelling
+ *    (`defineChannel` rejects the same hazardous segments, via the shared
+ *    `isHazardousColonSegment`) could ever declare it.
  * 2. **Presence guarantee:** every param the route REQUIRES
  *    (`requiredParamSlots`) must also be a param the channel REQUIRES. A
  *    channel param declared but only optional/rest cannot guarantee a
@@ -328,30 +356,36 @@ function serverTierSize(tier: ReadonlyArray<unknown>): number {
  *    resolves to `undefined` at connection time, so a guard keyed on it would
  *    misread a value the route promises is always there.
  *
- * The throw is exempted only when ALL THREE guard tiers are empty (not the
- * whole check: the declared-params early-return above is unconditional). A
- * room deliberately independent of its mount route's params, e.g.
- * `defineChannel('global-chat')` colocated on `/board/:id` with no live
- * app-use, page-use, or def.use, is a real, working v0.9/v0.10
- * configuration: no guard anywhere could ever read the missing param today,
- * so there is nothing for this rule to protect and no reason to fail the
- * boot. The exemption still fires a dev-only advisory (`onRoomParamExemption`),
- * since a guard added LATER to any of the three tiers would silently read
- * the missing param as `undefined`. Tier liveness counts only SERVER
- * middleware (`serverTierSize`), not raw array length.
+ * A mismatch fails the boot closed ONLY for a route-BOUND room (`bound`
+ * true, i.e. it carries an explicit `__routeId`), and only while at least one
+ * of the three guard tiers `composeServerChain` feeds the same `pathParams`
+ * to is live: app-use (`appConfig.use`), page-use (the route's own composed
+ * chain), and the room's own `use`. A guard in ANY of those tiers COULD read
+ * the missing param via `ctx.location.pathParams`, so an absent value there
+ * is a real hazard regardless of which tier the guard lives in. Tier
+ * liveness counts only SERVER middleware (`serverTierSize`), not raw array
+ * length. The author opted a bound room into the route contract, so a
+ * mismatch is a bug in their code and a loud boot failure is the right
+ * response.
  *
- * A route segment outside the supported `:[A-Za-z0-9_]+` param class (e.g. a
- * hyphenated `:board-id`) is invisible to `declaredParamSlots`, so
- * `declaredParamSlots(routeId)` is empty for such a route and this check
- * early-returns just as it would for a genuinely param-less route. That is
- * intentional, not a gap this function is meant to close: preact-iso's own
- * `exec` matcher still binds that segment fine over HTTP, but its value never
- * reaches `pathParams` for a REALTIME connection (rooms/sockets resolve
- * params via `requiredParamSlots`/`declaredParamSlots`, not `exec`), so a
- * room guard must not rely on such a param. A route-BOUND socket/room on a
- * non-conforming route is separately rejected at boot by
- * `assertConformingBoundRouteId`; a colocated room is not (see that
- * function's own doc), which is why this early-return exists at all.
+ * A COLOCATED room (`bound` false: a `.server.ts` sibling with no explicit
+ * `serverRoute(...).room(...)`) NEVER fails the boot for a mismatch,
+ * regardless of tier liveness: the framework cannot supply this room's
+ * params either way (a colocated room's effective route is only its module's
+ * mount, an accident of file layout, not an authored contract), so throwing
+ * would break every released colocated-room app the moment it grows a guard
+ * anywhere in that chain (`defineApp({ use: [...] })` is an extremely common
+ * shape). A room deliberately independent of its mount route's params, e.g.
+ * `defineChannel('global-chat')` colocated on `/board/:id`, is a real,
+ * working configuration either way.
+ *
+ * Both non-throwing outcomes (a bound room with all three tiers empty today,
+ * or any colocated room) fire the SAME advisory (`onRoomParamExemption`):
+ * either a guard already reads the missing param as `undefined` right now
+ * (colocated with a live tier), or one added later to any of the three tiers
+ * would (both remaining cases). This observer must be wired in BOTH dev and
+ * prod (see its own doc on `RouteBindingCheckContext`), unlike the
+ * dev-only `onAliasedBinding`/`onRoomParamBinding`.
  */
 function assertRoomChannelCongruent(
   name: string,
@@ -359,9 +393,10 @@ function assertRoomChannelCongruent(
   routeId: string,
   channelName: string,
   defUse: ReadonlyArray<unknown>,
+  bound: boolean,
   ctx: RouteBindingCheckContext
 ): void {
-  const routeDeclared = declaredParamSlots(routeId);
+  const routeDeclared = guardReadableParamSlots(routeId);
   if (routeDeclared.length === 0) return;
   const channelDeclared = new Set(declaredParamSlots(channelName));
   const routeRequired = requiredParamSlots(routeId);
@@ -380,50 +415,59 @@ function assertRoomChannelCongruent(
   const missing = [...undeclared, ...notGuaranteed];
 
   if (missing.length > 0) {
-    const appUse = ctx.appUse ?? [];
-    const pageUse = ctx.routeUseByPattern.get(routeId) ?? [];
-    const liveTiers =
-      serverTierSize(appUse) + serverTierSize(pageUse) + serverTierSize(defUse);
-    if (liveTiers === 0) {
-      ctx.onRoomParamExemption?.({
-        name,
-        moduleKey,
-        routeId,
-        channelName,
-        params: missing,
-      });
-      return;
+    if (bound) {
+      const appUse = ctx.appUse ?? [];
+      const pageUse = ctx.routeUseByPattern.get(routeId) ?? [];
+      const liveTiers =
+        serverTierSize(appUse) +
+        serverTierSize(pageUse) +
+        serverTierSize(defUse);
+      if (liveTiers > 0) {
+        const parts: string[] = [];
+        if (undeclared.length > 0) {
+          parts.push(
+            `its route param${undeclared.length > 1 ? 's' : ''} ` +
+              `${undeclared.join(', ')} ${undeclared.length > 1 ? 'are' : 'is'} ` +
+              `not a key of channel '${channelName}'`
+          );
+        }
+        if (notGuaranteed.length > 0) {
+          parts.push(
+            `its route param${notGuaranteed.length > 1 ? 's' : ''} ` +
+              `${notGuaranteed.join(', ')} ${notGuaranteed.length > 1 ? 'are' : 'is'} ` +
+              `only an optional or rest key in channel '${channelName}', not a ` +
+              `required one`
+          );
+        }
+        throw new Error(
+          `Route-bound room '${name}' binds route '${routeId}', but ` +
+            `${parts.join('; and ')}. A room's guard chain (app-use, page-use, or ` +
+            `the room's own use) reads route params from the channel key, so ` +
+            `every route param the route declares must be a channel param of the ` +
+            `same name, and every route param the route REQUIRES must be a ` +
+            `REQUIRED channel param (an optional '?' or rest-zero-or-more '*' ` +
+            `channel slot can be absent at runtime, so it cannot guarantee a ` +
+            `required route param). Rename the channel or route param(s) to ` +
+            `match, make the channel slot required, bind the room to a route ` +
+            `whose params the channel supplies, or remove the explicit ` +
+            `serverRoute(...).room(...) binding (a colocated room warns on this ` +
+            `mismatch instead of failing the boot) or move the room into a ` +
+            `src/server registry module (a bare registry room carries no ` +
+            `__routeId, is route-independent, and skips this check entirely).`
+        );
+      }
     }
-    const parts: string[] = [];
-    if (undeclared.length > 0) {
-      parts.push(
-        `its route param${undeclared.length > 1 ? 's' : ''} ` +
-          `${undeclared.join(', ')} ${undeclared.length > 1 ? 'are' : 'is'} ` +
-          `not a key of channel '${channelName}'`
-      );
-    }
-    if (notGuaranteed.length > 0) {
-      parts.push(
-        `its route param${notGuaranteed.length > 1 ? 's' : ''} ` +
-          `${notGuaranteed.join(', ')} ${notGuaranteed.length > 1 ? 'are' : 'is'} ` +
-          `only an optional or rest key in channel '${channelName}', not a ` +
-          `required one`
-      );
-    }
-    throw new Error(
-      `Route-bound room '${name}' binds route '${routeId}', but ` +
-        `${parts.join('; and ')}. A room's guard chain (app-use, page-use, or ` +
-        `the room's own use) reads route params from the channel key, so ` +
-        `every route param the route declares must be a channel param of the ` +
-        `same name, and every route param the route REQUIRES must be a ` +
-        `REQUIRED channel param (an optional '?' or rest-zero-or-more '*' ` +
-        `channel slot can be absent at runtime, so it cannot guarantee a ` +
-        `required route param). Rename the channel or route param(s) to ` +
-        `match, make the channel slot required, bind the room to a route ` +
-        `whose params the channel supplies, or move the room into a ` +
-        `src/server registry module: a registry room carries no __routeId, ` +
-        `is route-independent, and skips this check entirely.`
-    );
+    // Either colocated (never fails the boot, regardless of tier liveness)
+    // or bound with all three tiers empty today (exempted, but a guard added
+    // later would misread the param): advise, don't throw.
+    ctx.onRoomParamExemption?.({
+      name,
+      moduleKey,
+      routeId,
+      channelName,
+      params: missing,
+    });
+    return;
   }
   // Report every DECLARED param (routeDeclared), not just the required ones
   // (routeRequired): an optional/rest route param is exactly as
@@ -460,10 +504,16 @@ export function warnRoomParamBinding(
 }
 
 /**
- * Dev-only console advisory for a room's route/channel param mismatch that was
- * exempted from the boot throw (all three guard tiers empty today), fired
- * through `RouteBindingCheckContext.onRoomParamExemption`. One per binding for
- * the life of the `warned` set the caller owns.
+ * Console advisory for a room's route/channel param mismatch that did NOT
+ * fail the boot, fired through `RouteBindingCheckContext.onRoomParamExemption`.
+ * Covers two distinct reasons (see `assertRoomChannelCongruent`'s own doc):
+ * a colocated room (never fails the boot, whether or not a guard is live
+ * today), or a bound room with all three guard tiers empty today (exempted,
+ * but a later-added guard would misread the param). The message stays
+ * accurate under both without needing to know which applied: a guard on the
+ * route, live now or added later, reads the missing param as `undefined`
+ * either way. Fires in BOTH dev and prod (see the field's own doc). One per
+ * binding for the life of the `warned` set the caller owns.
  */
 export function warnRoomParamExemption(
   warned: Set<string>,
@@ -474,24 +524,27 @@ export function warnRoomParamExemption(
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(
-    `hono-preact: room '${info.name}' bound to '${info.routeId}': route ` +
+    `hono-preact: room '${info.name}' at route '${info.routeId}': route ` +
       `param${info.params.length > 1 ? 's' : ''} ${info.params.join(', ')} ` +
       `${info.params.length > 1 ? 'are' : 'is'} not a key of channel ` +
-      `'${info.channelName}'. Boot did not fail closed because no guard ` +
-      `reads it today (app-use, page-use, and the room's own use are all ` +
-      `empty), but a guard added later to any of those three tiers would ` +
-      `read ctx.location.pathParams.${info.params[0]} as undefined. Rename ` +
-      `the channel or route param(s) to match before adding a guard.`
+      `'${info.channelName}'. Boot did not fail closed for this room; a ` +
+      `guard on the route (app-use, page-use, or the room's own use), ` +
+      `whether live now or added later, reads ` +
+      `ctx.location.pathParams.${info.params[0]} as undefined. Rename the ` +
+      `channel or route param(s) to match, make the channel slot required, ` +
+      `or bind the room explicitly with serverRoute('${info.routeId}').room(...) ` +
+      `to authorize on that route param.`
   );
 }
 
-// Dev-only advisory check behind ctx.onColocatedSocketParams: a colocated
-// socket (no `__routeId`) whose mount route declares params, guarded by at
-// least one live server-middleware tier, resolves NO param wire at all
+// Advisory check behind ctx.onColocatedSocketParams: a colocated socket (no
+// `__routeId`) whose mount route declares a param a guard could read
+// (`guardReadableParamSlots`, preact-iso's own WIDE `exec` grammar), guarded
+// by at least one live server-middleware tier, resolves NO param wire at all
 // (`resolveSocketParams`/`resolveConnection` only run for a route-BOUND
 // socket). A guard on such a socket's chain reads those route params as
 // `undefined` forever, silently. This is the socket analog of
-// `assertRoomChannelCongruent`'s tier-liveness gate; unlike that function it
+// `assertRoomChannelCongruent`'s tier-liveness gate; unlike a BOUND room it
 // never throws (a boot throw would break every released colocated-socket
 // app), so it only ever reports through the callback.
 function maybeReportColocatedSocketParams(
@@ -502,7 +555,7 @@ function maybeReportColocatedSocketParams(
   ctx: RouteBindingCheckContext
 ): void {
   if (!ctx.onColocatedSocketParams) return;
-  const declared = declaredParamSlots(route.path);
+  const declared = guardReadableParamSlots(route.path);
   if (declared.length === 0) return;
   const appUse = ctx.appUse ?? [];
   const pageUse = ctx.routeUseByPattern.get(route.path) ?? [];
@@ -518,9 +571,10 @@ function maybeReportColocatedSocketParams(
 }
 
 /**
- * Dev-only console advisory for a colocated socket on a param-bearing,
- * guarded route, fired through `RouteBindingCheckContext.onColocatedSocketParams`.
- * One per socket for the life of the `warned` set the caller owns.
+ * Console advisory for a colocated socket on a param-bearing, guarded route,
+ * fired through `RouteBindingCheckContext.onColocatedSocketParams`. Fires in
+ * BOTH dev and prod (see the field's own doc). One per socket for the life
+ * of the `warned` set the caller owns.
  */
 export function warnColocatedSocketParams(
   warned: Set<string>,
@@ -560,10 +614,10 @@ export function warnColocatedSocketParams(
  * and carry no binding to check. A room is the one exception: a colocated
  * room (a `.server.ts` sibling with no `__routeId`) is still owned by the
  * module's mount, so its route/channel param congruence is checked against
- * `route.path` regardless (see {@link assertRoomChannelCongruent}). A
- * colocated socket is a dev-only-advisory exception in the same spirit,
- * scoped to a report rather than a throw (see
- * {@link maybeReportColocatedSocketParams}).
+ * `route.path` regardless, but a mismatch there only ever advises, never
+ * fails the boot (see {@link assertRoomChannelCongruent}). A colocated
+ * socket is an advisory-only exception in the same spirit, scoped to a
+ * report rather than a throw (see {@link maybeReportColocatedSocketParams}).
  *
  * A module mounted on a children-bearing node may alternatively bind its
  * subtree pattern (subtreePatternOf(route.path), so the root's is '/*'),
@@ -648,6 +702,7 @@ export async function assertRouteBindingsMatchMount(
                 typeof routeId === 'string' ? routeId : route.path,
                 channelName,
                 defUseOf(value),
+                typeof routeId === 'string',
                 ctx
               );
             }
@@ -717,6 +772,9 @@ export async function assertRegistryRouteBindingsValid(
                 routeId,
                 channelName,
                 defUseOf(value),
+                // Every room reaching this point is route-bound: a bare
+                // (no __routeId) registry unit was already `continue`d above.
+                true,
                 ctx
               );
             }
