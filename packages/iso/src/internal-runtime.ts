@@ -60,10 +60,20 @@ export { subtreePatternOf } from './define-routes.js';
 // guard, which rejects a route-bound socket/room whose __routeId carries a
 // non-conforming ':'-segment (the route-side twin of defineChannel's own
 // definition-time check).
+// toNullProtoParams/isPresentParamSlot are shared with the same package's
+// room-key resolver and socket param resolver, so both build and check their
+// untrusted-wire params objects identically (the prototype-chain auth-bypass
+// fix: see param-slots.ts's own docs).
+// isHazardousColonSegment is shared with the same boot binding guard's
+// route-id conformance check, so it and defineChannel's own definition-time
+// check can never disagree on which ':'-segment spellings are a real hazard.
 export {
   requiredParamSlots,
   declaredParamSlots,
   isConformingParamSegment,
+  toNullProtoParams,
+  isPresentParamSlot,
+  isHazardousColonSegment,
 } from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {

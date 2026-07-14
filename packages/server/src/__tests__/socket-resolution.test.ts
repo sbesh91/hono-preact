@@ -121,6 +121,59 @@ describe('resolveSocketParams', () => {
     });
   });
 
+  // ---------------------------------------------------------------------
+  // (security, P0) prototype-chain auth bypass: `requiredParamSlots`
+  // accepts any `[A-Za-z0-9_]+` slot name, which includes every
+  // `Object.prototype` member name. A bare `!params[slot]` presence check
+  // reads THROUGH the prototype chain, so an absent required slot named
+  // e.g. `constructor` reads the inherited (truthy) `Object` function and
+  // wrongly resolves as present, letting the connection through with
+  // `missing: []`.
+  // ---------------------------------------------------------------------
+
+  it('(security) denies a route bound to :constructor when the client sends no params (prototype-chain bypass)', () => {
+    expect(resolveSocketParams('/plugin/:constructor', enc({}))).toEqual({
+      ok: false,
+      reason: 'missing-params',
+      missing: ['constructor'],
+    });
+  });
+
+  it('(security) denies a route bound to :toString when the client sends no params', () => {
+    expect(resolveSocketParams('/plugin/:toString', enc({}))).toEqual({
+      ok: false,
+      reason: 'missing-params',
+      missing: ['toString'],
+    });
+  });
+
+  it('(security) denies a route bound to :hasOwnProperty when the client sends no params', () => {
+    expect(resolveSocketParams('/plugin/:hasOwnProperty', enc({}))).toEqual({
+      ok: false,
+      reason: 'missing-params',
+      missing: ['hasOwnProperty'],
+    });
+  });
+
+  it('(security) denies a route bound to :valueOf when the client sends no params', () => {
+    expect(resolveSocketParams('/plugin/:valueOf', enc({}))).toEqual({
+      ok: false,
+      reason: 'missing-params',
+      missing: ['valueOf'],
+    });
+  });
+
+  it('(security) a legitimately-supplied :constructor value still works', () => {
+    // The prototype-chain fix must not break a real, deliberately-named
+    // `:constructor` slot: a genuine own-property value still resolves ok.
+    expect(
+      resolveSocketParams('/plugin/:constructor', enc({ constructor: 'x' }))
+    ).toEqual({
+      ok: true,
+      params: { constructor: 'x' },
+    });
+  });
+
   it('requires a one-or-more (`+`) rest slot: RouteParams types it required and the runtime route matcher refuses to match it empty', () => {
     // A hand-rolled client that omits `rest` must be denied, not connected
     // with `params: {}`: `+` is required both at the type level

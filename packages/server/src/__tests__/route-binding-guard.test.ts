@@ -737,6 +737,37 @@ describe('bound route param conformance (socket/room :param spelling)', () => {
       )
     ).resolves.toBeUndefined();
   });
+
+  // ---------------------------------------------------------------------
+  // (P0) mirrors defineChannel's own exemption (define-channel.test.ts):
+  // the shared `isHazardousColonSegment` predicate must not reject a
+  // colon-namespaced route segment whose suffix is not an identifier
+  // RouteParams would ever claim as a param.
+  // ---------------------------------------------------------------------
+
+  it('mount does NOT throw for a bound socket on a colon-namespaced route segment whose suffix is not an identifier', async () => {
+    const routes = [
+      routeOf('/board:my-tag', {
+        __moduleKey: 'm',
+        serverSockets: { feed: boundDef('/board:my-tag') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/board:my-tag', []]]))
+    ).resolves.toBeUndefined();
+  });
+
+  it('mount still throws for a colon-namespaced route segment whose suffix IS a claimable identifier', async () => {
+    const routes = [
+      routeOf('/metrics:cpu', {
+        __moduleKey: 'm',
+        serverSockets: { feed: boundDef('/metrics:cpu') },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/metrics:cpu', []]]))
+    ).rejects.toThrow(/socket 'feed' binds route '\/metrics:cpu'/);
+  });
 });
 
 describe('room route/channel param congruence', () => {

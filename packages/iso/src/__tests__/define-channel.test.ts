@@ -83,4 +83,42 @@ describe('defineChannel param-name validation', () => {
     expect(() => defineChannel('activity')).not.toThrow();
     expect(() => defineChannel('a/b/c')).not.toThrow();
   });
+
+  // -------------------------------------------------------------------------
+  // (P0) the over-wide "any colon throws" rule rejected working v0.10.1 apps:
+  // a colon-namespaced CONSTANT channel name (no param ever claimed by
+  // RouteParams, since the suffix after the colon is not an identifier) must
+  // not throw. Only a segment the type layer would still misread as a
+  // required/optional param stays rejected.
+  // -------------------------------------------------------------------------
+
+  it('does not throw for a colon-namespaced constant name whose suffix is not an identifier (hyphen)', () => {
+    const c = defineChannel('notifications:user-alerts')();
+    expect(c.key()).toBe('notifications:user-alerts');
+  });
+
+  it('does not throw for a colon-namespaced constant name with a numeric-suffixed hyphen', () => {
+    const c = defineChannel('chat:lobby-1')();
+    expect(c.key()).toBe('chat:lobby-1');
+  });
+
+  it('does not throw for a colon-namespaced constant name whose suffix contains a period', () => {
+    const c = defineChannel('events:order.created')();
+    expect(c.key()).toBe('events:order.created');
+  });
+
+  it('still throws for a colon-namespaced name whose suffix IS a claimable identifier (the type layer would require it as a param)', () => {
+    expect(() => defineChannel('board:boardId')).toThrow(
+      /not a valid channel param/
+    );
+    expect(() => defineChannel('metrics:cpu')).toThrow(
+      /not a valid channel param/
+    );
+  });
+
+  it('still throws for a hyphenated leading-colon param (board/:board-id): an unambiguous attempted :param with an invalid name', () => {
+    expect(() => defineChannel('board/:board-id')).toThrow(
+      /not a valid channel param/
+    );
+  });
 });

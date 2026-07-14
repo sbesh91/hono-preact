@@ -6,6 +6,8 @@ import {
   SOCKETS_RPC_PATH,
   requiredParamSlots,
   declaredParamSlots,
+  toNullProtoParams,
+  isPresentParamSlot,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -301,12 +303,21 @@ export type SocketParamsResolution =
  * the missing required slot names so the caller can deny 4403 and name them
  * in a dev warning; on an `invalid-payload` failure there is no slot list,
  * only the payload-shape reason.
+ *
+ * The resulting `params` is built by `toNullProtoParams` and its presence
+ * check uses `isPresentParamSlot` (both param-slots.ts), not a bare
+ * `Object.fromEntries` object and a bare truthiness index: `requiredParamSlots`
+ * accepts any `[A-Za-z0-9_]+` slot name, which includes every
+ * `Object.prototype` member name (`constructor`, `toString`, ...), so a
+ * plain object + truthiness check would resolve an ABSENT slot of one of
+ * those names to the inherited (truthy) member and wrongly deny nothing,
+ * both here and in every downstream guard that reads `ctx.location.pathParams`.
  */
 export function resolveSocketParams(
   routePattern: string,
   rawR: string | undefined
 ): SocketParamsResolution {
-  let params: Record<string, string> = {};
+  let params: Record<string, string> = toNullProtoParams([]);
   if (rawR !== undefined && rawR !== '') {
     let parsed: unknown = null;
     try {
@@ -338,14 +349,14 @@ export function resolveSocketParams(
     // an undeclared key, so a wire key outside the pattern's own slots is
     // dropped rather than trusted.
     const declared = new Set(declaredParamSlots(routePattern));
-    params = Object.fromEntries(
+    params = toNullProtoParams(
       entries
         .filter((e): e is [string, string] => typeof e[1] === 'string')
         .filter(([key]) => declared.has(key))
     );
   }
   const missing = requiredParamSlots(routePattern).filter(
-    (slot) => !params[slot]
+    (slot) => !isPresentParamSlot(params, slot)
   );
   return missing.length === 0
     ? { ok: true, params }

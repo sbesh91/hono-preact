@@ -18,7 +18,16 @@ export function interpolatePattern(
     .map((seg) => {
       const m = matchParamSegment(seg);
       if (!m) return seg; // static segment, kept verbatim
-      const value = values[m[1]];
+      // Own-property read only, never one resolved through the prototype
+      // chain. `matchParamSegment`'s grammar accepts any `[A-Za-z0-9_]+`
+      // name, which includes every `Object.prototype` member name
+      // (`constructor`, `toString`, `valueOf`, `hasOwnProperty`, ...). A
+      // bare `values[m[1]]` read for an ABSENT slot of one of those names
+      // would resolve the inherited member (a function, always truthy)
+      // instead of `undefined`, splicing e.g. `function toString() {
+      // [native code] }` into the interpolated path/topic rather than
+      // dropping the segment.
+      const value = Object.hasOwn(values, m[1]) ? values[m[1]] : undefined;
       // Absent or empty -> drop the segment (avoids emitting `//`). This does
       // NOT enforce that a required param is present; callers that must reject a
       // missing required value do so themselves: the strict `buildPath` overload

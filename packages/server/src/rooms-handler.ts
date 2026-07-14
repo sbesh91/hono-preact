@@ -9,6 +9,8 @@ import {
   presenceMembers,
   requiredParamSlots,
   declaredParamSlots,
+  toNullProtoParams,
+  isPresentParamSlot,
 } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
 import {
@@ -103,8 +105,10 @@ export function resolveRoomKey(
   rawR: string | undefined
 ): RoomKeyResolution {
   // The client sends key params as `r=<JSON>` (or omits `r` for a param-less
-  // channel). An absent/empty `r` means no params.
-  let params: Record<string, string> = {};
+  // channel). An absent/empty `r` means no params. Built with a null
+  // prototype (toNullProtoParams), not a plain object: see the fuller note
+  // below, at the required-slot check.
+  let params: Record<string, string> = toNullProtoParams([]);
   if (rawR !== undefined && rawR !== '') {
     let parsed: unknown;
     try {
@@ -131,7 +135,7 @@ export function resolveRoomKey(
       }
       // Every value is a string (checked above): this is now a sound narrowing,
       // not a cast over an unvalidated shape.
-      params = Object.fromEntries(
+      params = toNullProtoParams(
         entries.filter((e): e is [string, string] => typeof e[1] === 'string')
       );
     }
@@ -141,7 +145,7 @@ export function resolveRoomKey(
     // channel's `key()` only interpolates declared slots, so the topic is
     // unaffected either way; this keeps `params` itself uncontaminated too).
     const declared = new Set(declaredParamSlots(channel.name));
-    params = Object.fromEntries(
+    params = toNullProtoParams(
       Object.entries(params).filter(([key]) => declared.has(key))
     );
   }
@@ -155,9 +159,20 @@ export function resolveRoomKey(
 
   // Validate that every required `:param` in the channel name has a non-empty
   // value. interpolatePattern drops a missing segment rather than leaving
-  // `:name` in place, so we check the params object directly.
+  // `:name` in place, so we check the params object directly, via
+  // `isPresentParamSlot` (an OWN-property + non-empty check), not a bare
+  // truthiness index: `requiredParamSlots` accepts any `[A-Za-z0-9_]+` slot
+  // name, which includes every `Object.prototype` member name (`constructor`,
+  // `toString`, ...). A bare `!params[slot]` reads THROUGH the prototype
+  // chain, so an absent required slot named e.g. `toString` (channel
+  // `presence/:toString`, client sends `r={}`) would read the inherited
+  // (truthy) function and wrongly resolve as present, an auth bypass. `params`
+  // is also built with a null prototype (`toNullProtoParams` above) as a
+  // second, independent guard: belt-and-braces, so a future call site that
+  // reads a value off this same object without going through
+  // `isPresentParamSlot` still can't resolve an inherited member.
   const missingRequired = requiredParamSlots(channel.name).some(
-    (slot) => !params[slot]
+    (slot) => !isPresentParamSlot(params, slot)
   );
 
   if (!topic || missingRequired) {

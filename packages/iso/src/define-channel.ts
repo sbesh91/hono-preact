@@ -1,6 +1,6 @@
 import type { RouteParams } from './internal/typed-routes.js';
 import { interpolatePattern } from './internal/interpolate-pattern.js';
-import { isConformingParamSegment } from './internal/param-slots.js';
+import { isHazardousColonSegment } from './internal/param-slots.js';
 
 // A topic string branded with its payload type. The brand is phantom (a
 // `unique symbol` optional key, never present at runtime), so it carries the
@@ -29,33 +29,26 @@ export interface Channel<Name extends string, Payload> {
 }
 
 /**
- * Reject a channel name carrying a segment with a `:` ANYWHERE in it (not
- * just at the segment's start) whose param name does not conform to the
- * shared param grammar (`isConformingParamSegment`, the same `[A-Za-z0-9_]+`
- * class plus an optional single `?`/`*`/`+` modifier that `interpolatePattern`
- * enforces at runtime). The type-level `RouteParams` (typed-routes.ts) is
- * WIDER than that grammar: it extracts a param from a `:` at any position in
- * a segment, not just the start (`RouteParams<'board:boardId'>` types a
- * required `boardId`), so a colon that is not at the segment's start is just
- * as much a hole as one that is.
+ * Reject a channel name carrying a segment that is a REAL hazard: see
+ * `isHazardousColonSegment` (param-slots.ts) for the exact two shapes this
+ * rejects (a non-conforming `:`-prefixed segment like `:board-id`, or a
+ * namespaced literal like `board:boardId` whose suffix the type-level
+ * `RouteParams` would still claim as a param). Left unvalidated, either
+ * shape would collapse every connection onto a single constant topic while
+ * looking correctly typed and required (the `board:boardId` case), or read
+ * as a live param to a wider matcher elsewhere while resolving to nothing
+ * here (the `:board-id` case).
  *
- * A segment `PARAM_SEGMENT` does not match (a `:` anywhere the surrounding
- * text is not `^:[A-Za-z0-9_]+[?*+]?$`, e.g. `:board-id` or `board:boardId`)
- * is NOT a param to `requiredParamSlots`/`declaredParamSlots`: nothing is
- * required, and `interpolatePattern` leaves the segment LITERAL rather than
- * substituting a value. Left unvalidated, every connection would collapse
- * onto the single constant topic spelled with the literal segment, silently
- * merging every resource's presence roster and broadcasts into one shared
- * channel, even though the type layer looks correctly typed and required.
+ * A colon-namespaced but non-param-shaped segment (e.g.
+ * `defineChannel('notifications:user-alerts')`) is NOT rejected: the
+ * type-level `RouteParams` does not claim a param there either (its suffix
+ * fails the same `[A-Za-z0-9_]+` class), so the type layer and
+ * `interpolatePattern` already agree the segment is a literal. This is an
+ * ordinary, working colon-namespaced constant name, not a hazard.
+ *
  * Throwing here, at definition time, is the loud failure that replaces the
  * old (correct) behavior of denying every connection: cheaper and louder
- * than a per-connection check. Scanning every character of every segment (not
- * just the leading one) for a `:` means no non-conforming spelling can slip
- * past this check regardless of where the colon sits in the segment; a
- * statically-named channel with an embedded `:` (e.g. `defineChannel('metrics:cpu')`)
- * also throws, which is correct: `RouteParams` already types that name's
- * `cpu` as a required param `interpolatePattern` never substitutes, so the
- * channel was already broken before this check existed.
+ * than a per-connection check.
  *
  * CHANNEL-ONLY here: this does not apply to ordinary (unbound) route
  * patterns. preact-iso's own route matcher (`exec`) accepts any param name,
@@ -64,7 +57,8 @@ export interface Channel<Name extends string, Payload> {
  * that app at boot. A route-BOUND realtime unit (`serverRoute(r).socket`/
  * `.room`) is a narrower case with the identical hazard (its guard reads
  * route params the same way a channel does) and is rejected separately, at
- * boot, by `@hono-preact/server`'s route-binding guard.
+ * boot, by `@hono-preact/server`'s route-binding guard, reusing the SAME
+ * `isHazardousColonSegment` predicate so the two validators cannot drift.
  *
  * Exported so `defineRoom` (define-room.ts) can run the SAME check on a
  * `Channel` passed in structurally: `Channel` is a public type export, so a
@@ -81,7 +75,7 @@ export function assertConformingChannelName(
   constructorLabel: string = 'defineChannel'
 ): void {
   for (const segment of name.split('/')) {
-    if (segment.includes(':') && !isConformingParamSegment(segment)) {
+    if (isHazardousColonSegment(segment)) {
       throw new Error(
         `${constructorLabel}('${name}'): the param segment '${segment}' is not ` +
           `a valid channel param. A channel param must be ':name', where ` +

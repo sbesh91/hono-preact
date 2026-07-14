@@ -103,3 +103,123 @@ export function declaredParamSlots(pattern: string): string[] {
     .filter((m): m is RegExpExecArray => m !== null)
     .map((m) => m[1]);
 }
+
+/**
+ * Build a params record with NO prototype (not even `Object.prototype`),
+ * from a list of `[key, value]` entries. Used by `resolveSocketParams`
+ * (`@hono-preact/server`'s socket-resolution.ts) and `resolveRoomKey`
+ * (rooms-handler.ts) to build the params object they parse off the
+ * untrusted wire.
+ *
+ * `requiredParamSlots` accepts any `[A-Za-z0-9_]+` slot name, which includes
+ * every `Object.prototype` member name (`constructor`, `toString`,
+ * `valueOf`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable`,
+ * `toLocaleString`). A params object built with `Object.fromEntries`
+ * inherits `Object.prototype`, so a bracket/dot read for an ABSENT slot of
+ * one of those names (e.g. `params.constructor` on a route bound to
+ * `/plugin/:constructor`) resolves the inherited member instead of
+ * `undefined`. A prototype-less object closes that off at the source: no
+ * inherited member exists to read, present or not. This is belt-and-braces
+ * alongside `isPresentParamSlot`'s own-property check below (either alone
+ * is fragile: this function protects every consumer of the resulting
+ * object, including guard code this framework does not control; the
+ * own-property check protects the one call site that forgets to build a
+ * prototype-less object).
+ */
+export function toNullProtoParams(
+  entries: Iterable<[string, string]>
+): Record<string, string> {
+  const params: Record<string, string> = Object.create(null);
+  for (const [key, value] of entries) {
+    params[key] = value;
+  }
+  return params;
+}
+
+/**
+ * True iff `slot` is present in `params`: an OWN property (`Object.hasOwn`,
+ * never one resolved through the prototype chain) whose value is a
+ * non-empty string. Shared by `resolveSocketParams` and `resolveRoomKey`'s
+ * required-slot presence checks, so both resolvers agree on what "present"
+ * means.
+ *
+ * `Object.hasOwn` is the check that actually closes the prototype-chain
+ * auth bypass (see `toNullProtoParams`'s doc): a bare `!params[slot]`
+ * truthiness check reads an inherited `Object.prototype` member for an
+ * ABSENT slot named e.g. `constructor`, and that member is a function
+ * (truthy), so the slot would wrongly resolve as present. An empty string
+ * is still treated as missing (both resolvers pin this in their tests: a
+ * well-formed but empty value denies, it is not merely "present but
+ * blank"), so this is `hasOwn AND non-empty`, not just `hasOwn`.
+ */
+export function isPresentParamSlot(
+  params: Record<string, string>,
+  slot: string
+): boolean {
+  return Object.hasOwn(params, slot) && params[slot] !== '';
+}
+
+// The character class typed-routes.ts's `IsParamName` accepts: one or more
+// of [A-Za-z0-9_]. Mirrors that type exactly (not `matchParamSegment`'s
+// class, which is the SAME character set but anchored to a whole `:name`
+// segment) so `isHazardousColonSegment` below and the type layer can never
+// disagree on which names the type layer would claim as a param.
+const PARAM_NAME_CLASS = /^[A-Za-z0-9_]+$/;
+
+// Strip a single trailing '?'/'*'/'+' modifier, mirroring typed-routes.ts's
+// `StripModifier`.
+function stripTrailingModifier(text: string): string {
+  return /[?*+]$/.test(text) ? text.slice(0, -1) : text;
+}
+
+// True iff the type-level `RouteParams` (typed-routes.ts) would claim a
+// param for `segment` via its own UNANCHORED extraction: the text after the
+// FIRST ':' in the segment, with a single trailing '?'/'*'/'+' modifier
+// stripped, is a non-empty [A-Za-z0-9_]+ name. A TypeScript template-literal
+// conditional's `${string}:${infer Param}` resolves `Param` to everything
+// after the FIRST ':' in the matched string, so reading from `indexOf(':')`
+// here mirrors that resolution exactly.
+function typeLayerClaimsParam(segment: string): boolean {
+  const colonIndex = segment.indexOf(':');
+  if (colonIndex === -1) return false;
+  const name = stripTrailingModifier(segment.slice(colonIndex + 1));
+  return name.length > 0 && PARAM_NAME_CLASS.test(name);
+}
+
+/**
+ * True iff `segment` is a `:`-bearing hazard `defineChannel` and
+ * `@hono-preact/server`'s route-binding boot check (for a route-BOUND
+ * socket/room) must reject. Two shapes:
+ *
+ * 1. The segment STARTS with `:` (e.g. `:board-id`, `:a.b`) but is not a
+ *    conforming `:param` segment (`isConformingParamSegment`): the spelling
+ *    unambiguously reads as an attempted `:param`, just with a name outside
+ *    `[A-Za-z0-9_]`. preact-iso's own runtime route matcher (`exec`) is
+ *    WIDER than this framework's grammar and binds such a segment as a
+ *    param at request time regardless of the character class, so leaving it
+ *    unrejected means the segment is treated as an inert literal HERE while
+ *    a wider matcher elsewhere reads it as a live param.
+ * 2. The segment does NOT start with `:` (a namespaced literal like
+ *    `metrics:cpu`, the colon following a literal prefix), but the
+ *    type-level `RouteParams` would still claim a param for it
+ *    (`typeLayerClaimsParam` above). A channel/route spelled this way looks
+ *    correctly typed and required, but `interpolatePattern`
+ *    (`requiredParamSlots`/`declaredParamSlots`, both anchored to
+ *    `isConformingParamSegment`'s grammar) never substitutes it and leaves
+ *    the segment literal, so every distinct value collapses onto the one
+ *    constant segment.
+ *
+ * A namespaced literal whose suffix does NOT parse as an identifier (e.g.
+ * `notifications:user-alerts`, `chat:lobby-1`, `events:order.created`) is
+ * NOT a hazard: `RouteParams` does not claim a param there either (the
+ * suffix fails the same character class), so the type layer and
+ * `interpolatePattern` already agree the segment is a literal. These are
+ * ordinary, working colon-namespaced constant names; rejecting them broke
+ * every app that used the convention.
+ */
+export function isHazardousColonSegment(segment: string): boolean {
+  if (!segment.includes(':') || isConformingParamSegment(segment)) {
+    return false;
+  }
+  return segment.startsWith(':') || typeLayerClaimsParam(segment);
+}

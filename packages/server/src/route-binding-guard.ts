@@ -3,7 +3,7 @@ import {
   subtreePatternOf,
   requiredParamSlots,
   declaredParamSlots,
-  isConformingParamSegment,
+  isHazardousColonSegment,
 } from '@hono-preact/iso/internal/runtime';
 
 /**
@@ -211,13 +211,12 @@ function defUseOf(value: unknown): ReadonlyArray<unknown> {
   return Array.isArray(use) ? use : [];
 }
 
-// The first segment of `routeId` that carries a ':' anywhere in it (not just
-// at the segment's start) but does not conform to the shared param grammar
-// (`isConformingParamSegment`), or undefined if every segment conforms.
+// The first segment of `routeId` that is a real hazard: see
+// `isHazardousColonSegment` (param-slots.ts, shared with defineChannel's own
+// definition-time check) for the exact two shapes rejected. undefined if
+// every segment is either conforming or a benign colon-namespaced literal.
 function nonConformingRouteSegment(routeId: string): string | undefined {
-  return routeId
-    .split('/')
-    .find((seg) => seg.includes(':') && !isConformingParamSegment(seg));
+  return routeId.split('/').find((seg) => isHazardousColonSegment(seg));
 }
 
 /**
@@ -233,7 +232,12 @@ function nonConformingRouteSegment(routeId: string): string | undefined {
  * hand its page-use guard `{}` for a param the SAME guard sees populated
  * over plain HTTP. This is the route-side twin of `defineChannel`'s own
  * definition-time check (define-channel.ts): both reuse
- * `isConformingParamSegment` so the two validators cannot drift.
+ * `isHazardousColonSegment` so the two validators cannot drift. A benign
+ * colon-namespaced route segment (no realistic HTTP route uses one, but the
+ * predicate is shared, so the rule is identical to `defineChannel`'s) is not
+ * rejected; only a segment the type layer would still misread as a param, or
+ * one that unambiguously spells an attempted `:param` with an invalid name,
+ * is.
  *
  * SCOPED to `socket`/`room` only. Loaders and actions are unaffected: they
  * read `ctx.location.pathParams` from the request URL via the SAME wider

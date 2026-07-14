@@ -73,6 +73,18 @@ describe('iso /internal/runtime door', () => {
       // boot binding guard, which rejects a route-bound socket/room whose
       // __routeId carries a non-conforming ':'-segment.
       'isConformingParamSegment',
+      // Prototype-less params-record builder and own-property presence
+      // check shared with @hono-preact/server's room-key resolver and
+      // socket param resolver, so both close the prototype-chain auth
+      // bypass (a required slot named e.g. 'constructor' or 'toString')
+      // identically.
+      'toNullProtoParams',
+      'isPresentParamSlot',
+      // The hazardous-colon-segment predicate shared with
+      // @hono-preact/server's boot binding guard's route-id conformance
+      // check, so it and defineChannel's own definition-time check can
+      // never disagree on which ':'-segment spellings are a real hazard.
+      'isHazardousColonSegment',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

@@ -911,4 +911,27 @@ describe('resolveRoomKey', () => {
       expect(withExtra.topic).toBe(withoutExtra.topic);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // (security, P0) prototype-chain auth bypass: a channel keyed on a param
+  // name that collides with an Object.prototype member (`toString`,
+  // `constructor`, ...) must not resolve `ok: true` for a keyless client, and
+  // the computed topic must never carry the inherited member's own
+  // stringification (which would collapse every keyless connection onto one
+  // shared, function-shaped topic).
+  // -------------------------------------------------------------------------
+
+  it('(security) a :toString channel with no key does not resolve ok, and no topic leaks the inherited function', () => {
+    const channel = defineChannel('presence/:toString')();
+    const result = resolveRoomKey(channel, enc({}));
+    expect(result.ok).toBe(false);
+    // Even though `result.ok` is false (topic discarded either way), pin
+    // that no code path anywhere could observe a topic containing the
+    // inherited Function.prototype.toString() text.
+    const rawTopic = (channel.key as (p?: Record<string, string>) => string)(
+      {}
+    );
+    expect(rawTopic).not.toMatch(/native code/);
+    expect(rawTopic).not.toMatch(/function/i);
+  });
 });
