@@ -934,4 +934,23 @@ describe('resolveRoomKey', () => {
     expect(rawTopic).not.toMatch(/native code/);
     expect(rawTopic).not.toMatch(/function/i);
   });
+
+  // -------------------------------------------------------------------------
+  // (shared-pipeline alignment) a present-but-non-object payload must deny on
+  // BOTH the socket and room paths, even against a param-less pattern. Before
+  // the `parseKeyParams` extraction, `resolveRoomKey` coerced a non-object
+  // parse result (e.g. `r="hello"`, valid JSON, a string) to `{}` and only
+  // failed if a required slot then ended up missing, so a param-less channel
+  // resolved `ok: true` for a garbage payload. `resolveSocketParams` already
+  // denied this case outright. Both now share the same fail-closed reading:
+  // an unusable payload is a contract lie, not a missing param, regardless of
+  // whether the pattern has any required slots.
+  // -------------------------------------------------------------------------
+
+  it('(security, aligned) a present-but-non-object payload denies even against a param-less channel', () => {
+    const channel = defineChannel('lobby')();
+    expect(resolveRoomKey(channel, enc('hello'))).toEqual({ ok: false });
+    expect(resolveRoomKey(channel, enc(42))).toEqual({ ok: false });
+    expect(resolveRoomKey(channel, enc([1, 2]))).toEqual({ ok: false });
+  });
 });

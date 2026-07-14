@@ -7,10 +7,6 @@ import {
   leavePresence,
   updatePresence,
   presenceMembers,
-  requiredParamSlots,
-  declaredParamSlots,
-  toNullProtoParams,
-  isPresentParamSlot,
 } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
 import {
@@ -21,6 +17,7 @@ import {
   type RoomTransport,
 } from './room-engine.js';
 import { warnIfOverForwardBudget } from './realtime-budget.js';
+import { parseKeyParams } from './param-parse.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -93,6 +90,14 @@ export type RoomKeyResolution =
  * resolved params into the guard as `pathParams`, and hand the result to
  * `createRoomWsEvents` without a re-parse.
  *
+ * The parse+validate half is the shared `parseKeyParams` pipeline
+ * (param-parse.ts), the same one `resolveSocketParams` (socket-resolution.ts)
+ * runs for a route-bound socket: both resolve a pattern's `:param` slots off
+ * the identical `SOCKET_KEY_PARAM` wire shape. This function layers topic
+ * computation on top: `params` collapses into a discriminated `ok: false` on
+ * ANY parse/required-slot failure (the reason itself is not surfaced here,
+ * since a room denies uniformly regardless of which pipeline step failed).
+ *
  * Security property preserved: the topic is ALWAYS `channel.key(params)`
  * computed here, server-side. The client only varies param VALUES, never the
  * channel namespace, so it cannot reach an unrelated topic.
@@ -104,51 +109,9 @@ export function resolveRoomKey(
   channel: AnyRoomDef['channel'],
   rawR: string | undefined
 ): RoomKeyResolution {
-  // The client sends key params as `r=<JSON>` (or omits `r` for a param-less
-  // channel). An absent/empty `r` means no params. Built with a null
-  // prototype (toNullProtoParams), not a plain object: see the fuller note
-  // below, at the required-slot check.
-  let params: Record<string, string> = toNullProtoParams([]);
-  if (rawR !== undefined && rawR !== '') {
-    let parsed: unknown;
-    try {
-      // Sanctioned untrusted-wire JSON.parse: the client sends the channel key
-      // params as a JSON object whose values are strings (channel param slots).
-      parsed = JSON.parse(rawR);
-    } catch {
-      return { ok: false };
-    }
-    // `JSON.parse('null')` succeeds but returns null, and `null["key"]` throws.
-    // Coerce any non-plain-object parse result (null, numbers, strings, arrays)
-    // to {} so the required-param check below denies cleanly. Then validate that
-    // every value is a string: a non-string value (e.g. `{"roomId":[1,2,3]}`)
-    // would otherwise arrive at the handler as a typed-contract lie, so reject
-    // it here instead of casting a non-string-valued object to Record<string,string>.
-    if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed)
-    ) {
-      const entries = Object.entries(parsed);
-      if (entries.some(([, v]) => typeof v !== 'string')) {
-        return { ok: false };
-      }
-      // Every value is a string (checked above): this is now a sound narrowing,
-      // not a cast over an unvalidated shape.
-      params = toNullProtoParams(
-        entries.filter((e): e is [string, string] => typeof e[1] === 'string')
-      );
-    }
-    // Restrict to the channel's DECLARED slots (required + optional/rest): a
-    // wire key outside the pattern's own slots is dropped before the topic is
-    // computed and before params are handed to the guard and to onJoin (the
-    // channel's `key()` only interpolates declared slots, so the topic is
-    // unaffected either way; this keeps `params` itself uncontaminated too).
-    const declared = new Set(declaredParamSlots(channel.name));
-    params = toNullProtoParams(
-      Object.entries(params).filter(([key]) => declared.has(key))
-    );
-  }
+  const parsed = parseKeyParams(channel.name, rawR);
+  if (!parsed.ok) return { ok: false };
+  const { params } = parsed;
 
   // Compute the topic SERVER-SIDE by interpolating the channel name with the
   // client-supplied params. The erased Channel<string,unknown> type resolves
@@ -157,27 +120,12 @@ export function resolveRoomKey(
   // runtime signature.
   const topic = (channel.key as (p?: Record<string, string>) => string)(params);
 
-  // Validate that every required `:param` in the channel name has a non-empty
-  // value. interpolatePattern drops a missing segment rather than leaving
-  // `:name` in place, so we check the params object directly, via
-  // `isPresentParamSlot` (an OWN-property + non-empty check), not a bare
-  // truthiness index: `requiredParamSlots` accepts any `[A-Za-z0-9_]+` slot
-  // name, which includes every `Object.prototype` member name (`constructor`,
-  // `toString`, ...). A bare `!params[slot]` reads THROUGH the prototype
-  // chain, so an absent required slot named e.g. `toString` (channel
-  // `presence/:toString`, client sends `r={}`) would read the inherited
-  // (truthy) function and wrongly resolve as present, an auth bypass. `params`
-  // is also built with a null prototype (`toNullProtoParams` above) as a
-  // second, independent guard: belt-and-braces, so a future call site that
-  // reads a value off this same object without going through
-  // `isPresentParamSlot` still can't resolve an inherited member.
-  const missingRequired = requiredParamSlots(channel.name).some(
-    (slot) => !isPresentParamSlot(params, slot)
-  );
-
-  if (!topic || missingRequired) {
-    return { ok: false };
-  }
+  // Defensive: `parseKeyParams` already enforces every required `:param` is
+  // present, so `topic` should never come back empty for a validated params
+  // object. Kept as a belt-and-braces check rather than a non-null
+  // assertion, so a future channel-key implementation that can legitimately
+  // interpolate to '' still denies instead of joining an empty-string topic.
+  if (!topic) return { ok: false };
 
   return { ok: true, params, topic };
 }

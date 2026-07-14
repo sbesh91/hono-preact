@@ -85,14 +85,24 @@ export type TreeSubtrees<
 // Param extraction. Handles required `:id`, optional `:id?`, and the preact-iso
 // modifier suffixes `*` / `+`. A pattern with no `:param` yields `{}`.
 //
-// The runtime matcher (`build-path.ts`, and preact-iso's `exec`) only treats a
-// segment as a param when it is `:name` where `name` matches `[A-Za-z0-9_]+`,
-// optionally followed by a single `?`/`*`/`+` modifier and nothing else. A
-// segment like `:foo-bar` or `:a.b` does NOT match, so the runtime keeps it as
-// a literal and substitutes nothing. `ParamNameChar` / `IsParamName` mirror
-// that character class so the type grammar agrees: a name outside the class
-// makes the segment a literal that contributes no param, rather than
-// over-claiming a required `foo-bar` the runtime would silently ignore.
+// This framework's OWN `:param` grammar (`build-path.ts`, `PARAM_SEGMENT` in
+// param-slots.ts) anchors a param to a WHOLE segment: `:name` where `name`
+// matches `[A-Za-z0-9_]+`, optionally followed by a single `?`/`*`/`+`
+// modifier and nothing else. `ParamNameChar` / `IsParamName` mirror that
+// character class, so a name outside it (`:foo-bar`, `:a.b`) contributes no
+// param here either, matching this framework's own interpolation rather than
+// over-claiming a required `foo-bar` this framework would silently ignore.
+//
+// preact-iso's OWN runtime matcher (`exec`) is WIDER still: it binds ANY
+// `:`-prefixed segment as a param regardless of character class (hyphens,
+// dots, extra colons all bind fine), so a hyphenated name this type rejects
+// can still be live over plain HTTP. See `guardReadableParamSlots`
+// (param-slots.ts) for the fuller account. `RouteParams` below is also
+// UNANCHORED in a different way: it extracts from the first `:` anywhere in a
+// segment, not just a segment-initial one, so it can claim a param for a
+// colon-namespaced literal like `board:boardId` that this framework's own
+// grammar never treats as a param at all. `isHazardousColonSegment`
+// (param-slots.ts) is what rejects that disagreement for a route-BOUND unit.
 // prettier-ignore
 type ParamNameChar =
   | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm'

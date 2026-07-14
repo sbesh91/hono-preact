@@ -4,10 +4,6 @@ import {
   SOCKET_NAME_PARAM,
   SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
-  requiredParamSlots,
-  declaredParamSlots,
-  toNullProtoParams,
-  isPresentParamSlot,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -15,6 +11,8 @@ import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
 import { resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
+import { parseKeyParams } from './param-parse.js';
+import type { ParamsParseResult } from './param-parse.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -279,88 +277,28 @@ export type ResolvedConnection =
  * failure carries WHY it failed: an unusable payload is not the same as a
  * well-formed payload that omits a slot, and the dev warning must not tell an
  * author to supply params they already sent.
+ *
+ * This is `ParamsParseResult` (param-parse.ts) under the socket-specific
+ * name: `resolveSocketParams` below is a thin wrapper over the shared
+ * `parseKeyParams` pipeline, the topic-less twin of `resolveRoomKey`
+ * (rooms-handler.ts), which layers topic computation on the same result.
  */
-export type SocketParamsResolution =
-  | { ok: true; params: Record<string, string> }
-  /** The `r=` query was present but is not a JSON object of string values. */
-  | { ok: false; reason: 'invalid-payload' }
-  /** The payload was well formed, but these required slots are absent or empty. */
-  | { ok: false; reason: 'missing-params'; missing: string[] };
+export type SocketParamsResolution = ParamsParseResult;
 
 /**
  * Parse + validate a route-bound socket's route params from the untrusted
- * `SOCKET_KEY_PARAM` wire. The topic-less twin of `resolveRoomKey`, sharing
- * its non-string-value rejection (a non-string value anywhere in the wire
- * object rejects the whole payload, not just that entry), but STRICTER on a
- * present-but-non-object payload: `resolveRoomKey` coerces it to `{}` and
- * only fails if a required channel slot then ends up missing (so a garbage
- * `r=` against a param-less channel still resolves `ok: true`), while this
- * function denies immediately with `reason: 'invalid-payload'` regardless of
- * whether the pattern has any required slots (a socket has no channel-typed
- * "param-less" escape hatch to fall through to). A param-less pattern still
- * requires nothing once the payload shape itself is valid. On success
- * returns the validated string params; on a `missing-params` failure returns
- * the missing required slot names so the caller can deny 4403 and name them
- * in a dev warning; on an `invalid-payload` failure there is no slot list,
- * only the payload-shape reason.
- *
- * The resulting `params` is built by `toNullProtoParams` and its presence
- * check uses `isPresentParamSlot` (both param-slots.ts), not a bare
- * `Object.fromEntries` object and a bare truthiness index: `requiredParamSlots`
- * accepts any `[A-Za-z0-9_]+` slot name, which includes every
- * `Object.prototype` member name (`constructor`, `toString`, ...), so a
- * plain object + truthiness check would resolve an ABSENT slot of one of
- * those names to the inherited (truthy) member and wrongly deny nothing,
- * both here and in every downstream guard that reads `ctx.location.pathParams`.
+ * `SOCKET_KEY_PARAM` wire, via the shared `parseKeyParams` pipeline
+ * (param-parse.ts). On success returns the validated string params; on a
+ * `missing-params` failure returns the missing required slot names so the
+ * caller can deny 4403 and name them in a dev warning; on an
+ * `invalid-payload` failure there is no slot list, only the payload-shape
+ * reason.
  */
 export function resolveSocketParams(
   routePattern: string,
   rawR: string | undefined
 ): SocketParamsResolution {
-  let params: Record<string, string> = toNullProtoParams([]);
-  if (rawR !== undefined && rawR !== '') {
-    let parsed: unknown = null;
-    try {
-      // Sanctioned untrusted-wire JSON.parse: the client sends route params as
-      // a JSON object whose values are all strings.
-      parsed = JSON.parse(rawR);
-    } catch {
-      parsed = null;
-    }
-    // A PRESENT `r=` that is not a plain object (malformed JSON, null, an
-    // array, a primitive), or that carries a non-string value anywhere (e.g.
-    // `{"x":42}`), is a contract lie rather than a missing param. Reject the
-    // whole payload, mirroring resolveRoomKey's fail-closed policy, and say so,
-    // so the caller's warning does not name slots the client already sent.
-    if (
-      parsed === null ||
-      typeof parsed !== 'object' ||
-      Array.isArray(parsed)
-    ) {
-      return { ok: false, reason: 'invalid-payload' };
-    }
-    const entries = Object.entries(parsed);
-    if (entries.some(([, v]) => typeof v !== 'string')) {
-      return { ok: false, reason: 'invalid-payload' };
-    }
-    // Every value is a string (checked above), so this is a sound narrowing,
-    // not a cast over an unvalidated shape. Restrict to the pattern's DECLARED
-    // slots (required + optional/rest): a real HTTP request can never populate
-    // an undeclared key, so a wire key outside the pattern's own slots is
-    // dropped rather than trusted.
-    const declared = new Set(declaredParamSlots(routePattern));
-    params = toNullProtoParams(
-      entries
-        .filter((e): e is [string, string] => typeof e[1] === 'string')
-        .filter(([key]) => declared.has(key))
-    );
-  }
-  const missing = requiredParamSlots(routePattern).filter(
-    (slot) => !isPresentParamSlot(params, slot)
-  );
-  return missing.length === 0
-    ? { ok: true, params }
-    : { ok: false, reason: 'missing-params', missing };
+  return parseKeyParams(routePattern, rawR);
 }
 
 /**

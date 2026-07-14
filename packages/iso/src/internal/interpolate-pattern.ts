@@ -5,10 +5,17 @@ import { matchParamSegment } from './param-slots.js';
 // topics) so both interpolate identically: `matchParamSegment` (param-slots.ts)
 // is this framework's ONE ':param' grammar definition, imported here rather
 // than re-spelled, so this function's notion of a param segment can never
-// disagree with `requiredParamSlots`/`declaredParamSlots`. The runtime matcher
-// (preact-iso's `exec`) only treats `:name` (name in `[A-Za-z0-9_]+`, optional
+// disagree with `requiredParamSlots`/`declaredParamSlots`. This framework's
+// OWN supported grammar treats `:name` (name in `[A-Za-z0-9_]+`, optional
 // trailing `?`/`*`/`+`) as a param; anything else is a literal segment kept
-// verbatim.
+// verbatim. The runtime matcher (preact-iso's `exec`) is WIDER: it binds ANY
+// `:`-prefixed segment as a param regardless of the name's character class
+// (hyphens, dots, extra colons all bind fine), so a spelling this grammar
+// rejects can still be live over plain HTTP. See `guardReadableParamSlots`
+// (param-slots.ts) for the fuller account of that divergence: it is why
+// `defineChannel` and the bound-route boot check reject the disagreeing
+// spellings (`isHazardousColonSegment`) rather than trusting this narrower
+// grammar alone.
 export function interpolatePattern(
   pattern: string,
   values: Record<string, string | undefined>

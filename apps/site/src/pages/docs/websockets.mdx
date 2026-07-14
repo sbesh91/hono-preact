@@ -27,6 +27,7 @@ Place the socket definition in a `.server.ts` module, inside a `serverSockets` e
 ```ts
 // src/chat.server.ts
 import { defineSocket } from 'hono-preact';
+import { requireSession } from './auth/session.js';
 
 export const serverSockets = {
   chat: defineSocket<
