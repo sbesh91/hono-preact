@@ -12,8 +12,11 @@ import { expectTypeOf } from 'vitest';
 import { defineRoom } from '../define-room.js';
 import { defineChannel } from '../define-channel.js';
 import { serverRoute } from '../server-route.js';
+import { useRoom } from '../use-room.js';
+import type { UseRoomArgs } from '../index.js';
 import type { Serialize } from '../internal/serialize.js';
 import type { PresenceMember } from '../internal/room-envelope.js';
+import type { RoomRef } from '../define-room.js';
 
 type ChatMsg = { kind: 'chat'; text: string } | { kind: 'typing' };
 type ChatState = { name: string; color: string };
@@ -152,6 +155,38 @@ function _keyOptionalProbe() {
   ref.useRoom({ onMessage: () => undefined });
 }
 
+// The options argument itself is required exactly when the channel has
+// params: omitting it entirely on a bound ref is a type error (mirrors
+// `useSocket`'s `params` arity probes in define-socket.test-d.ts). Also pins
+// that a param-less channel's `key` option rejects a stray key value rather
+// than silently accepting it: `KeyOption`'s no-params branch is `{ key?: never }`,
+// not `{ key?: {} }` (the latter would structurally accept almost any object).
+// Covers both the free-function `useRoom(ref, opts)` and the `ref.useRoom(opts)`
+// method form.
+function _optionsArityProbe() {
+  const boundRef = defineRoom(roomChannel, {});
+  const bareChannel = defineChannel('lobby')<ChatMsg>();
+  const bareRef = defineRoom(bareChannel, {});
+
+  // Free-function form.
+  useRoom(bareRef);
+  useRoom(bareRef, { onMessage: () => undefined });
+  useRoom(boundRef, { key: { roomId: 'r1' } });
+  // @ts-expect-error a param-bearing channel requires the options argument
+  useRoom(boundRef);
+  // @ts-expect-error a stray `key` on a param-less channel is rejected
+  useRoom(bareRef, { key: { junk: 'x' } });
+
+  // ref-method form: the identical arity rule.
+  bareRef.useRoom();
+  bareRef.useRoom({ onMessage: () => undefined });
+  boundRef.useRoom({ key: { roomId: 'r1' } });
+  // @ts-expect-error a param-bearing channel requires the options argument
+  boundRef.useRoom();
+  // @ts-expect-error a stray `key` on a param-less channel is rejected
+  bareRef.useRoom({ key: { junk: 'x' } });
+}
+
 // data factory: infers Data from the factory return and seeds conn.data in
 // onJoin and onMessage. The factory receives a live Context; onJoin does NOT.
 function _dataFactoryProbe() {
@@ -237,6 +272,17 @@ function _deepReadonlyDataProbe() {
   });
 }
 
+// Migration path for the (ref, opts?) -> conditional rest tuple break:
+// `UseRoomArgs<R>` is exported from the public barrel so a generic wrapper
+// can NAME the rest tuple and forward it (mirrors the identical
+// `UseSocketArgs` probe in define-socket.test-d.ts).
+function _genericWrapperProbe<
+  R extends RoomRef<unknown, unknown, unknown, unknown>,
+>(ref: R, ...args: UseRoomArgs<R>) {
+  return useRoom(ref, ...args);
+}
+void _genericWrapperProbe;
+
 void _routeRoomProbes;
 void _bareRoomProbes;
 void _multiParamProbes;
@@ -244,6 +290,7 @@ void _negativeProbes;
 void _useRoomMethodProbe;
 void _keyRequiredProbe;
 void _keyOptionalProbe;
+void _optionsArityProbe;
 void _dataFactoryProbe;
 void _noDataFactoryProbe;
 void _asyncRoomDataProbe;

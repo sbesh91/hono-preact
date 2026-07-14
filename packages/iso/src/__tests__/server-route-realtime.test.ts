@@ -40,4 +40,12 @@ describe('serverRoute(r).socket / .room route stamping', () => {
     const ref = route.socket({ open });
     expect((ref as { open?: unknown }).open).toBe(open);
   });
+
+  it('.socket still stamps __routeId (route binding unchanged by params wire)', () => {
+    const ref = serverRoute('/board/:id').socket<
+      { ping: true },
+      { pong: true }
+    >({});
+    expect((ref as { __routeId?: string }).__routeId).toBe('/board/:id');
+  });
 });

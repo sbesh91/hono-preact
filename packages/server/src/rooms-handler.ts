@@ -7,6 +7,8 @@ import {
   leavePresence,
   updatePresence,
   presenceMembers,
+  requiredParamSlots,
+  declaredParamSlots,
 } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, RoomEnvelope } from '@hono-preact/iso/internal';
 import {
@@ -94,7 +96,7 @@ export type RoomKeyResolution =
  * channel namespace, so it cannot reach an unrelated topic.
  *
  * @param channel The room's bound channel (its name pattern + `key`).
- * @param rawR    The raw `SOCKET_ROOM_PARAM` query value (or undefined).
+ * @param rawR    The raw `SOCKET_KEY_PARAM` query value (or undefined).
  */
 export function resolveRoomKey(
   channel: AnyRoomDef['channel'],
@@ -133,6 +135,15 @@ export function resolveRoomKey(
         entries.filter((e): e is [string, string] => typeof e[1] === 'string')
       );
     }
+    // Restrict to the channel's DECLARED slots (required + optional/rest): a
+    // wire key outside the pattern's own slots is dropped before the topic is
+    // computed and before params are handed to the guard and to onJoin (the
+    // channel's `key()` only interpolates declared slots, so the topic is
+    // unaffected either way; this keeps `params` itself uncontaminated too).
+    const declared = new Set(declaredParamSlots(channel.name));
+    params = Object.fromEntries(
+      Object.entries(params).filter(([key]) => declared.has(key))
+    );
   }
 
   // Compute the topic SERVER-SIDE by interpolating the channel name with the
@@ -142,19 +153,12 @@ export function resolveRoomKey(
   // runtime signature.
   const topic = (channel.key as (p?: Record<string, string>) => string)(params);
 
-  // Validate that every required `:param` segment in the channel name has a
-  // non-empty value. interpolatePattern drops a missing segment rather than
-  // leaving `:name` in place, so we check the params object directly.
-  const missingRequired = channel.name
-    .split('/')
-    .filter((seg) => {
-      if (!seg.startsWith(':')) return false;
-      const flag = seg[seg.length - 1];
-      // Optional (?), rest-zero-or-more (*), and rest-one-or-more (+) are not
-      // required to be present. Only plain `:name` is required.
-      return flag !== '?' && flag !== '*' && flag !== '+';
-    })
-    .some((seg) => !params[seg.slice(1)]);
+  // Validate that every required `:param` in the channel name has a non-empty
+  // value. interpolatePattern drops a missing segment rather than leaving
+  // `:name` in place, so we check the params object directly.
+  const missingRequired = requiredParamSlots(channel.name).some(
+    (slot) => !params[slot]
+  );
 
   if (!topic || missingRequired) {
     return { ok: false };

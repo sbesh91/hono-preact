@@ -81,16 +81,38 @@ function appCodeFiles(): string[] {
 const relativeToSiteSrc = (abs: string) =>
   relative(siteSrc, abs).split('\\').join('/');
 
+// Read and parse each source file ONCE, here rather than inside the `it`s.
+// R1 and R2 both need the import specifiers and R5 needs the casts, so scanning
+// per-test meant every file was read and run through the TypeScript parser three
+// times over. Under coverage instrumentation that was slow enough to blow
+// vitest's 5s per-test timeout, which surfaced as a flaky R1. Hoisting the scan
+// out of the test bodies leaves each rule an in-memory filter, and the parse cost
+// (module scope, not a test) is paid once for the whole file.
+const scanned = appCodeFiles().map((abs) => {
+  const tsx = abs.endsWith('.tsx');
+  const source = readFileSync(abs, 'utf8');
+  return {
+    rel: relativeToSiteSrc(abs),
+    imports: collectImports(source, tsx),
+    casts: collectCasts(source, tsx),
+  };
+});
+
 describe('AGENTS.md conformance (live apps/site)', () => {
-  const files = appCodeFiles();
+  // Guard against a vacuously-passing walk: if `appCodeFiles()` ever resolves
+  // to the wrong directory or an empty tree (a moved `siteSrc`, a broken glob),
+  // R1/R2/R5 below would each iterate zero files and report zero violations,
+  // "passing" while checking nothing. Pin that the walk actually found files.
+  it('scans at least one source file', () => {
+    expect(scanned.length).toBeGreaterThan(0);
+  });
 
   it('R1: no react / react-dom imports', () => {
     const violations: string[] = [];
-    for (const f of files) {
-      const tsx = f.endsWith('.tsx');
-      for (const spec of collectImports(readFileSync(f, 'utf8'), tsx)) {
+    for (const { rel, imports } of scanned) {
+      for (const spec of imports) {
         if (/^react(-dom)?(\/|$)/.test(spec)) {
-          violations.push(`${relativeToSiteSrc(f)}: imports '${spec}'`);
+          violations.push(`${rel}: imports '${spec}'`);
         }
       }
     }
@@ -102,11 +124,10 @@ describe('AGENTS.md conformance (live apps/site)', () => {
 
   it('R2: framework imports stay on the public surface', () => {
     const violations: string[] = [];
-    for (const f of files) {
-      const tsx = f.endsWith('.tsx');
-      for (const spec of collectImports(readFileSync(f, 'utf8'), tsx)) {
+    for (const { rel, imports } of scanned) {
+      for (const spec of imports) {
         if (spec.includes('/internal') || spec.startsWith('@hono-preact/')) {
-          violations.push(`${relativeToSiteSrc(f)}: imports '${spec}'`);
+          violations.push(`${rel}: imports '${spec}'`);
         }
       }
     }
@@ -164,10 +185,8 @@ describe('AGENTS.md conformance (live apps/site)', () => {
     const allowed = new Set(CAST_ALLOWLIST.map((e) => `${e.file}|${e.expr}`));
     const seen = new Set<string>();
     const violations: string[] = [];
-    for (const f of files) {
-      const rel = relativeToSiteSrc(f);
-      const tsx = f.endsWith('.tsx');
-      for (const { expr } of collectCasts(readFileSync(f, 'utf8'), tsx)) {
+    for (const { rel, casts } of scanned) {
+      for (const { expr } of casts) {
         const key = `${rel}|${expr}`;
         seen.add(key);
         if (!allowed.has(key)) {

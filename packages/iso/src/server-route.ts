@@ -135,20 +135,22 @@ export interface RouteBinder<RouteId extends string> {
 
   /**
    * Define a duplex WebSocket bound to this route. Consume with
-   * `useSocket(serverSockets.x)`. Binding selects the route's page-level
-   * `use` (auth) chain for the upgrade guard probe: the declared pattern is
-   * stamped on the def, validated fail-closed at boot (against the module
-   * mount, or the route table for src/server registry modules), and takes
-   * precedence over the module-mount derivation. The handler receives
-   * `ctx.c` (the Hono Context for the upgrade request); there is no
-   * `ctx.params` field because the socket endpoint is query-string-only at
-   * runtime, so a guard on a param-bearing pattern sees empty
-   * `ctx.location.pathParams`. Binding selects the use chain, not param
-   * typing; typed route params for sockets are reserved for a later release.
+   * `useSocket(serverSockets.x, { params })`. Binding selects the route's
+   * page-level `use` (auth) chain for the upgrade guard probe AND, for a
+   * param-bearing route, requires the client to supply the route params via a
+   * typed `params` option. Those params are validated at the upgrade (a missing
+   * slot denies 4403), read by the guard as `ctx.location.pathParams`, and
+   * passed to the edge `data` factory as its second argument. The declared
+   * pattern is stamped on the def and validated fail-closed at boot: the boot
+   * check also rejects (throws, does not just deny) a route whose `:param`
+   * segment does not conform to the shared param grammar (e.g. a hyphen, as in
+   * `:board-id`), since such a segment would otherwise resolve NO required
+   * params and pass the guard an empty object for a param the same guard sees
+   * populated over plain HTTP.
    */
   socket<Incoming, Outgoing, Data = undefined>(
-    handler: SocketHandler<Incoming, Outgoing, Data>
-  ): SocketRef<Incoming, Outgoing>;
+    handler: SocketHandler<Incoming, Outgoing, Data, RouteParams<RouteId>>
+  ): SocketRef<Incoming, Outgoing, RouteParams<RouteId>>;
 
   /**
    * Define a broadcasting room bound to this route, addressed by a `Channel`.
@@ -158,8 +160,23 @@ export interface RouteBinder<RouteId extends string> {
    * query param), so the channel is the only param source available at runtime
    * on the flat socket endpoint. Binding the route wires the room's page-level
    * `use` inheritance: the declared pattern is stamped on the def, validated
-   * fail-closed at boot, and takes precedence over the module-mount
-   * derivation when the upgrade guard chain is resolved.
+   * fail-closed at boot (the same non-conforming-`:param` rejection `.socket`
+   * documents above), and takes precedence over the module-mount derivation
+   * when the upgrade guard chain is resolved.
+   *
+   * Boot ALSO enforces route/channel param congruence whenever at least one of
+   * the three guard tiers the upgrade composes is non-empty: app-use
+   * (`defineApp({ use })`), page-use (this route's own composed chain), or the
+   * room's own `use`. Every one of the route's own `:param` names must also be
+   * a `:param` of the CHANNEL (the channel may be finer-grained, never
+   * coarser), because a guard in ANY of those three tiers can read
+   * `ctx.location.pathParams` under the route's param names, and those values
+   * come from the channel key, not the route. Only a room where ALL THREE
+   * tiers are empty is exempt (there is no guard anywhere for a name mismatch
+   * to fool); binding such a room to a channel that does not carry the
+   * route's resource identity is still a correctness hazard, so a dev-only
+   * advisory names the mismatch even when boot does not fail closed. Keep the
+   * names aligned regardless.
    */
   room<
     Name extends string,

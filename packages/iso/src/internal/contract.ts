@@ -112,10 +112,12 @@ export const SOCKETS_RPC_PATH = '/__sockets';
 export const SOCKET_MODULE_PARAM = 'm';
 export const SOCKET_NAME_PARAM = 's';
 
-/** Query param carrying the JSON-encoded channel key params for a room
- * connection. The server interpolates the topic from these params; the client
- * never sends a pre-built topic string. */
-export const SOCKET_ROOM_PARAM = 'r';
+/**
+ * Query param carrying the JSON-encoded key params for a realtime upgrade: a
+ * room's channel key params, or a route-bound socket's route params. Shared by
+ * both (the server tells socket from room by registry lookup).
+ */
+export const SOCKET_KEY_PARAM = 'r';
 
 /**
  * Client socket-stub descriptor field for the socket name (module reuses

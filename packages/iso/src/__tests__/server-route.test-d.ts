@@ -65,7 +65,9 @@ function _probes() {
       expectTypeOf(socket.send).parameter(0).toEqualTypeOf<{ pong: true }>();
     },
   });
-  expectTypeOf(sock).toEqualTypeOf<SocketRef<{ ping: true }, { pong: true }>>();
+  expectTypeOf(sock).toEqualTypeOf<
+    SocketRef<{ ping: true }, { pong: true }, { projectId: string }>
+  >();
 
   // .room: ctx.params is typed from the CHANNEL pattern, not the route.
   const room = route.room(boardChannel, {

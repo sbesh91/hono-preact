@@ -4,7 +4,7 @@ import {
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   FORM_MODULE_FIELD,
   FORM_ROOM_FIELD,
 } from './internal/contract.js';
@@ -53,7 +53,15 @@ type Params<R> =
 // `key` mirrors the channel's `KeyArgs`: a param-less channel makes `key`
 // optional, a `:param` channel makes it required. Threading this through the
 // opts object (rather than as a positional arg) keeps the single-opts shape.
-type KeyOption<P> = keyof P extends never ? { key?: P } : { key: P };
+//
+// The no-params branch types `key` as `{ key?: never }` rather than
+// `{ key?: P }`. `P` is `{}` for a param-less channel, and TS's structural
+// `{}` accepts almost any object, so `{ key?: {} }` would silently accept a
+// stray `key` value instead of rejecting it. `never` still declares the
+// property (so both branches expose it for the castless `opts?.key` read
+// below) but makes assigning anything to it a real type error. Mirrors
+// `ParamsOption` in use-socket.ts.
+type KeyOption<P> = keyof P extends never ? { key?: never } : { key: P };
 
 export type UseRoomOptions<R extends AnyRoomRefShape> = KeyOption<Params<R>> & {
   /** Initial presence state, sent on open and re-sent on every reconnect. */
@@ -97,6 +105,20 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   closeInfo?: SocketCloseInfo;
 };
 
+// The options argument itself is required exactly when the channel has
+// params: a rest tuple, rather than a plain optional parameter, so
+// `useRoom(ref)` with the options argument omitted ENTIRELY is a type error
+// for a param-bearing channel (previously `opts` was merely optional, so
+// omitting it compiled even when `KeyOption` required `key`; the hole only
+// bit once an options object was actually passed). Exported so `RoomRef.useRoom`
+// in define-room.ts spells the identical rest tuple instead of re-deriving it,
+// keeping the free-function and ref-method arity rules single-sourced. Mirrors
+// `UseSocketArgs` in use-socket.ts.
+export type UseRoomArgs<R extends AnyRoomRefShape> =
+  keyof Params<R> extends never
+    ? [opts?: UseRoomOptions<R>]
+    : [opts: UseRoomOptions<R>];
+
 /**
  * Presence-aware room client hook: the room counterpart to `useSocket`. Opens
  * the same `/__sockets` connection with an extra `&r=<JSON key params>` query
@@ -106,8 +128,9 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
  */
 export function useRoom<R extends AnyRoomRefShape>(
   ref: R,
-  opts?: UseRoomOptions<R>
+  ...args: UseRoomArgs<R>
 ): UseRoomResult<R> {
+  const opts = args[0];
   const [members, setMembers] = useState<
     ReadonlyArray<PresenceMember<State<R> | undefined>>
   >([]);
@@ -132,7 +155,7 @@ export function useRoom<R extends AnyRoomRefShape>(
         `${proto}//${location.host}${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(moduleKey!)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(roomName!)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(keyJson)}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(keyJson)}`
       );
     },
     onOpen: () => {

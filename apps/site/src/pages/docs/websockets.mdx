@@ -31,7 +31,8 @@ import { defineSocket } from 'hono-preact';
 export const serverSockets = {
   chat: defineSocket<
     { text: string }, // messages the client sends
-    { text: string; from: string } // messages the server sends
+    { text: string; from: string }, // messages the server sends
+    { name: string } // socket.data shape, seeded by the `data` factory below
   >({
     // Optional guard middleware. A failing guard closes the socket with 4403.
     use: [requireSession],
@@ -131,9 +132,45 @@ export const serverSockets = {
 
 The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the socket under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound socket live under the [`src/server` registry](/docs/routes#the-srcserver-registry) organized by domain rather than beside its view. A bare `defineSocket` with no `serverRoute` binding, defined in a `src/server` registry module rather than colocated with a route, is route-independent: it only ever runs the app-level `use` and its own `use`. Add socket-specific authorization in the socket's own `use` array for concerns that only apply to the socket.
 
+Binding to a route with `:param`s opens a typed param wire too. `useSocket` requires a `params` option shaped from the route pattern, and the same validated values reach the edge `data` factory as its second argument:
+
+```ts
+// src/server/boards/board-chat.server.ts
+import { serverRoute } from 'hono-preact';
+
+const route = serverRoute('/board/:id');
+
+export const serverSockets = {
+  boardChat: route.socket<
+    { text: string },
+    { text: string },
+    { boardId: string }
+  >({
+    // Route params are validated at the upgrade and passed to the factory.
+    data: (_c, { id }) => ({ boardId: id }),
+    message(socket, msg) {
+      socket.send({ text: msg.text });
+    },
+  }),
+};
+```
+
+```tsx
+// on the /board/:id page
+import { useParams } from 'hono-preact';
+import { serverSockets } from './server/boards/board-chat.server.js';
+
+const { id } = useParams('/board/:id');
+const { send } = serverSockets.boardChat.useSocket({ params: { id } });
+```
+
 Use `deny()`, not `redirect()`, to reject a realtime upgrade. A WebSocket handshake cannot follow an HTTP redirect, so a guard that throws `redirect()` on the socket path is treated as a deny (close `4403`) and logs a warning. If you share a guard between an HTTP route and its socket, branch on the request so the HTTP path redirects and the socket path denies.
 
-A plain socket does not receive route path params in an inherited route-node guard, whether that guard comes from colocation or an explicit `serverRoute(r).socket` binding: binding selects the `use` chain, not the param wire. The upgrade is served from the framework's flat `/__sockets` endpoint, which is query-string only, so `ctx.location.pathParams` is empty for a socket connection. Param-dependent authorization for a socket must read the connection's query or headers in the socket's own `use` (or in `open`), not rely on a `:param` from the route the socket is bound or colocated to. (Rooms differ: a room's guard chain can read the room-key params via `ctx.location.pathParams`, because the room key rides the wire and is resolved server-side before the guard runs. See [Rooms](/docs/rooms).)
+An explicit `serverRoute(r).socket` binding on a param-bearing route authorizes on the route's params: `useSocket(ref, { params })` becomes required and typed from the route pattern. The client sends those params on the upgrade; the server validates them before the guard chain runs, denying the connection (close `4403`) when a required param is missing. The validated params are readable by the guard as `ctx.location.pathParams`, and are the same values passed to the `data` factory's second argument, so an authorization check or the seed for `socket.data` can key off them directly.
+
+A **colocated** socket, a `.server.ts` sibling of a route with no `serverRoute` binding, has no param wire: `ctx.location.pathParams` stays empty and the connection is never denied for a missing param, even beside a route with `:param`s. When the route declares params and at least one guard tier (app-level `use`, the route's page-layer `use`, or the socket's own `use`) is live, a one-time dev-only console advisory names the socket and the params a guard on it would read as `undefined`, so the gap is never silent even though the boot proceeds. Reach for an explicit `serverRoute(r).socket` binding whenever a socket needs to authorize on a route param. Rooms resolve their params differently, from the channel key rather than this `params` option; see [Rooms](/docs/rooms).
+
+A route param outside the supported `:name` class (one or more of `[A-Za-z0-9_]`, optionally followed by a single `?`/`*`/`+`), for example a hyphenated `/board/:board-id`, is invisible to the params wire above: preact-iso's own runtime route matcher still binds that segment fine over plain HTTP, but its value never reaches `ctx.location.pathParams` for a realtime connection. A colocated socket on such a route is not rejected; it simply never sees that param, the same as any other route param a colocated socket doesn't wire up. An **explicitly bound** `serverRoute(r).socket` on such a route fails the boot outright rather than running with an empty params object: `serverRoute('/board/:board-id').socket(...)` throws at startup, so every `/__loaders` request, action POST, and `/__sockets` upgrade in the app returns a 500 until the route segment is renamed to only use letters, digits, and underscores.
 
 ### Cloudflare setup
 
@@ -242,14 +279,14 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 
 `handler` fields:
 
-| Field     | Type                                               | Description                                                                                                                                                                                                                                                                                                                                                                                     |
-| --------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `use`     | `ReadonlyArray<Middleware>`                        | Guard chain run before the upgrade. A failing guard closes with code 4403.                                                                                                                                                                                                                                                                                                                      |
-| `data`    | `(c: Context) => Data \| Promise<Data>`            | Optional. Edge factory run once at the upgrade with the live Context; its result seeds `socket.data`. May be async. The only place a socket handler sees a Context (on Cloudflare the handler runs inside a Durable Object). On Cloudflare the `data()` result rides a request header to the Durable Object (6KB limit); the Node dev server warns when the factory result exceeds this budget. |
-| `open`    | `(socket) => void \| (() => void) \| Promise<...>` | Runs once per connection. Returning a function registers a teardown (Node only; on Cloudflare use `close`). Receives only the socket; its `data` is the `data` factory result.                                                                                                                                                                                                                  |
-| `message` | `(socket, msg: Incoming) => void \| Promise<void>` | Called for every incoming message.                                                                                                                                                                                                                                                                                                                                                              |
-| `close`   | `(socket, { code, reason }) => void`               | Called when the connection closes.                                                                                                                                                                                                                                                                                                                                                              |
-| `error`   | `(socket, err) => void`                            | Called on a socket error.                                                                                                                                                                                                                                                                                                                                                                       |
+| Field     | Type                                                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `use`     | `ReadonlyArray<Middleware>`                             | Guard chain run before the upgrade. A failing guard closes with code 4403.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `data`    | `(c: Context, params: Params) => Data \| Promise<Data>` | Optional. Edge factory run once at the upgrade with the live Context and the route's validated params (`{}` for a bare `defineSocket`, or the route's params for a `serverRoute(r).socket` binding); its result seeds `socket.data`. May be async. The only place a socket handler sees a Context (on Cloudflare the handler runs inside a Durable Object). On Cloudflare the `data()` result rides a request header to the Durable Object (6KB limit); the Node dev server warns when the factory result exceeds this budget. |
+| `open`    | `(socket) => void \| (() => void) \| Promise<...>`      | Runs once per connection. Returning a function registers a teardown (Node only; on Cloudflare use `close`). Receives only the socket; its `data` is the `data` factory result.                                                                                                                                                                                                                                                                                                                                                 |
+| `message` | `(socket, msg: Incoming) => void \| Promise<void>`      | Called for every incoming message.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `close`   | `(socket, { code, reason }) => void`                    | Called when the connection closes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `error`   | `(socket, err) => void`                                 | Called on a socket error.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 `socket` fields:
 
@@ -260,20 +297,25 @@ Register WebSocket routes on any non-colliding path. The build rejects catch-all
 | `data`                  | `Readonly<Data>`          | Per-connection data seeded by the `data` factory at connect time. Read-only; for Node-only mutable per-connection state, capture a closure variable in `open()`. |
 | `raw`                   | `unknown`                 | Escape hatch to the underlying runtime socket.                                                                                                                   |
 
-### `ref.useSocket(opts?)` / `useSocket(ref, opts?)`
+### `ref.useSocket(opts)` / `useSocket(ref, opts)`
 
-| Option                 | Type                                 | Default   | Description                                                                                |
-| ---------------------- | ------------------------------------ | --------- | ------------------------------------------------------------------------------------------ |
-| `onMessage`            | `(msg: Serialize<Outgoing>) => void` |           | Called for every incoming message. Does not trigger a re-render.                           |
-| `onOpen`               | `() => void`                         |           | Called when the connection opens.                                                          |
-| `onClose`              | `(e: CloseEvent) => void`            |           | Called when the connection closes.                                                         |
-| `shouldReconnect`      | `(e: CloseEvent) => boolean`         | See below | Returns `true` to reconnect.                                                               |
-| `reconnect.maxRetries` | `number`                             | `5`       | Maximum reconnect attempts.                                                                |
-| `reconnect.minDelay`   | `number`                             | `250`     | Minimum delay in ms before first retry.                                                    |
-| `reconnect.maxDelay`   | `number`                             | `30000`   | Backoff cap in ms.                                                                         |
-| `reconnect.growth`     | `number`                             | `2`       | Exponential growth factor.                                                                 |
-| `enabled`              | `boolean`                            | `true`    | When `false`, the socket does not connect.                                                 |
-| `lastMessage`          | `boolean`                            | `false`   | When `true`, the latest message is stored in reactive state and returned as `lastMessage`. |
+`opts` is optional for a bare or param-less socket, and required for a
+`serverRoute(r).socket` binding with route params (to supply `params`; see
+below).
+
+| Option                 | Type                                 | Default                                                                        | Description                                                                                                                                                     |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `params`               | route params                         | required for a param-bearing `serverRoute(r).socket` binding, absent otherwise | The bound route's params, typed from the route pattern. Sent on the upgrade and validated server-side; a missing required param denies the connection (`4403`). |
+| `onMessage`            | `(msg: Serialize<Outgoing>) => void` |                                                                                | Called for every incoming message. Does not trigger a re-render.                                                                                                |
+| `onOpen`               | `() => void`                         |                                                                                | Called when the connection opens.                                                                                                                               |
+| `onClose`              | `(e: CloseEvent) => void`            |                                                                                | Called when the connection closes.                                                                                                                              |
+| `shouldReconnect`      | `(e: CloseEvent) => boolean`         | See below                                                                      | Returns `true` to reconnect.                                                                                                                                    |
+| `reconnect.maxRetries` | `number`                             | `5`                                                                            | Maximum reconnect attempts.                                                                                                                                     |
+| `reconnect.minDelay`   | `number`                             | `250`                                                                          | Minimum delay in ms before first retry.                                                                                                                         |
+| `reconnect.maxDelay`   | `number`                             | `30000`                                                                        | Backoff cap in ms.                                                                                                                                              |
+| `reconnect.growth`     | `number`                             | `2`                                                                            | Exponential growth factor.                                                                                                                                      |
+| `enabled`              | `boolean`                            | `true`                                                                         | When `false`, the socket does not connect.                                                                                                                      |
+| `lastMessage`          | `boolean`                            | `false`                                                                        | When `true`, the latest message is stored in reactive state and returned as `lastMessage`.                                                                      |
 
 Default `shouldReconnect`: `false` for codes `1000` and `4000-4999`, `true` otherwise.
 
@@ -309,8 +351,11 @@ import type {
   ReconnectOptions,
   UseSocketOptions,
   UseSocketResult,
+  UseSocketArgs,
 } from 'hono-preact';
 ```
+
+`UseSocketArgs<R>` is the type of `useSocket`'s options rest tuple (`[opts?: UseSocketOptions<R>]` for a param-less binding, `[opts: UseSocketOptions<R>]` for a param-bearing one): useful for typing a generic wrapper that forwards its own rest args to `useSocket` without re-deriving the required-vs-optional rule itself.
 
 ## See also
 

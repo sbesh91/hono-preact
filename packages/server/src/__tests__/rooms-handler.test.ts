@@ -16,10 +16,10 @@ import {
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   WS_DENY_CODE,
 } from '@hono-preact/iso/internal/runtime';
-import { buildRoomRegistry } from '../rooms-handler.js';
+import { buildRoomRegistry, resolveRoomKey } from '../rooms-handler.js';
 import { socketsHandler } from '../sockets-handler.js';
 import type { WebSocketUpgrader } from '@hono-preact/iso/internal/runtime';
 import type { WSEvents } from 'hono/ws';
@@ -126,7 +126,7 @@ function connectWithRawR(app: Hono, rawR: string): Promise<Response> {
     `http://localhost${SOCKETS_RPC_PATH}` +
       `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
       `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-      `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(rawR)}`
+      `&${SOCKET_KEY_PARAM}=${encodeURIComponent(rawR)}`
   );
 }
 
@@ -139,7 +139,7 @@ function connect(app: Hono): Promise<Response> {
     `http://localhost${SOCKETS_RPC_PATH}` +
       `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
       `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-      `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(ROOM_PARAMS)}`
+      `&${SOCKET_KEY_PARAM}=${encodeURIComponent(ROOM_PARAMS)}`
   );
 }
 
@@ -558,7 +558,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({}))}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({}))}`
     );
     const a = conns()[0]!;
     await a.events.onOpen?.(new Event('open'), a.ws as never);
@@ -575,7 +575,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent('not-json')}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent('not-json')}`
     );
     const a = conns()[0]!;
     await a.events.onOpen?.(new Event('open'), a.ws as never);
@@ -596,7 +596,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent('null')}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent('null')}`
     );
     const a = conns()[0]!;
 
@@ -629,7 +629,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(params)}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(params)}`
     );
     const a = conns()[0]!;
     await a.events.onOpen?.(new Event('open'), a.ws as never);
@@ -672,7 +672,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({}))}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({}))}`
     );
     const a = conns()[0]!;
     await a.events.onOpen?.(new Event('open'), a.ws as never);
@@ -803,7 +803,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(ROOM_PARAMS)}` +
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(ROOM_PARAMS)}` +
         `&tag=x`
     );
     const a = conns()[0]!;
@@ -866,5 +866,49 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       a.ws as never
     );
     expect(received).toEqual([{ text: 'hi' }]);
+  });
+});
+
+describe('resolveRoomKey', () => {
+  const enc = (o: unknown) => JSON.stringify(o);
+
+  it('(security) drops a wire key that is not a declared slot on the channel name', () => {
+    // A client for `room/:roomId` sends an extra `orgId`, a key the channel
+    // pattern never declared. The resolver must restrict the resolved params
+    // to the channel's declared slots before the topic is computed and before
+    // the params are handed onward (to the guard and to onJoin).
+    const channel = defineChannel('room/:roomId')();
+    const result = resolveRoomKey(
+      channel,
+      enc({ roomId: 'r1', orgId: 'victim' })
+    );
+    expect(result).toEqual({
+      ok: true,
+      params: { roomId: 'r1' },
+      topic: 'room/r1',
+    });
+  });
+
+  it('keeps a legitimately-supplied optional slot (declared, not required)', () => {
+    const channel = defineChannel('room/:roomId/:sub?')();
+    const result = resolveRoomKey(channel, enc({ roomId: 'r1', sub: 'x' }));
+    expect(result).toEqual({
+      ok: true,
+      params: { roomId: 'r1', sub: 'x' },
+      topic: 'room/r1/x',
+    });
+  });
+
+  it('the topic is unaffected by an undeclared key: identical to the topic computed without it', () => {
+    const channel = defineChannel('room/:roomId')();
+    const withExtra = resolveRoomKey(
+      channel,
+      enc({ roomId: 'r1', orgId: 'victim' })
+    );
+    const withoutExtra = resolveRoomKey(channel, enc({ roomId: 'r1' }));
+    expect(withExtra.ok && withoutExtra.ok).toBe(true);
+    if (withExtra.ok && withoutExtra.ok) {
+      expect(withExtra.topic).toBe(withoutExtra.topic);
+    }
   });
 });

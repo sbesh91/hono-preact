@@ -51,6 +51,20 @@ export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 // validator (route-binding-guard.ts); users spell the pattern as a literal
 // '<path>/*' string, so it has no public-barrel story.
 export { subtreePatternOf } from './define-routes.js';
+// Required-param-slot extraction shared with @hono-preact/server's room-key
+// resolver, socket param resolver, and boot congruence check.
+// Declared-param-slot extraction (required AND optional/rest) shared with the
+// same two resolvers, so they can restrict a resolved params object to the
+// pattern's own declared slots and drop anything else.
+// isConformingParamSegment is shared with @hono-preact/server's boot binding
+// guard, which rejects a route-bound socket/room whose __routeId carries a
+// non-conforming ':'-segment (the route-side twin of defineChannel's own
+// definition-time check).
+export {
+  requiredParamSlots,
+  declaredParamSlots,
+  isConformingParamSegment,
+} from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {
   validateWithSchema,

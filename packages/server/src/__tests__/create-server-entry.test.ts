@@ -4,6 +4,8 @@ import { h, type ComponentChildren } from 'preact';
 import {
   defineServerMiddleware,
   defineLoader,
+  defineChannel,
+  defineRoom,
   type RoutesManifest,
 } from '@hono-preact/iso';
 import {
@@ -320,6 +322,55 @@ describe('createServerEntry', () => {
     expect(second.status).toBe(500);
     const secondBody = (await second.json()) as { error: string };
     expect(secondBody.error).toMatch(/socket 'feed'/);
+  });
+
+  it('fails the socket upgrade closed (500) when ONLY the app-use tier is live for a room param-congruence mismatch (round-4 auth-fix pin)', async () => {
+    // `appUse: appConfig.use ?? []` (create-server-entry.ts) is the ONLY
+    // wiring that threads defineApp's app-level `use` into the room
+    // route/channel congruence check. Deleting that line is not a type
+    // error (appUse is optional on RouteBindingCheckContext) and every
+    // other test in the suite still passes, so the auth-hole fix it pins
+    // has zero coverage without this end-to-end test: a route with an
+    // EMPTY page-use chain, an app tier that is genuinely non-empty, and a
+    // colocated room whose channel does not carry the route's param must
+    // still fail the boot closed.
+    const appGuard = defineServerMiddleware<'loader'>(async (_c, next) => {
+      await next();
+    });
+    // A colocated room (no serverRoute binding): its effective owning route
+    // is the module mount, '/board/:id'. Its channel is route-independent
+    // ('global-chat'), so the route's required 'id' param is not a channel
+    // key -- a real, boot-rejected mismatch once ANY guard tier is live.
+    const channel = defineChannel('global-chat')();
+    const roomDef = defineRoom(channel, {});
+    const serverThunk = async () => ({
+      __moduleKey: 'pages/board',
+      serverRooms: { chat: roomDef },
+    });
+
+    const app = createServerEntry({
+      routes: manifest({
+        serverImports: [serverThunk],
+        // Page-use is EMPTY: if appUse were dropped, all three tiers the
+        // congruence check inspects would read as empty and the boot would
+        // wrongly pass (the round-4 regression this test pins).
+        routeUse: [{ path: '/board/:id', use: [] }],
+        serverRoutes: [
+          { path: '/board/:id', ancestors: [], server: serverThunk } as never,
+        ],
+      }),
+      layout: Layout,
+      appConfig: { use: [appGuard] },
+      dev: true,
+    });
+
+    const res = await app.request(
+      `${SOCKETS_RPC_PATH}?m=${encodeURIComponent('pages/board')}&s=chat`
+    );
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/room 'chat'/);
+    expect(body.error).toMatch(/not a key of channel/);
   });
 });
 

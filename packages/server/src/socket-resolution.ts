@@ -2,8 +2,10 @@ import type { Context } from 'hono';
 import {
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
+  requiredParamSlots,
+  declaredParamSlots,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -155,13 +157,14 @@ export async function resolveGuardDenied(opts: {
   moduleKey: string;
   name: string;
   /**
-   * Path params the guard chain can read via `ctx.location.pathParams`. Rooms
-   * pass their server-resolved room-key params here (so a route-node/room guard
-   * can read e.g. `ctx.location.pathParams.roomId`); plain sockets pass `{}`
-   * (the `/__sockets` endpoint is query-string only, with no param wire). A
-   * declared route binding does not change this: binding selects the use
-   * chain, never the param wire, so a guard on a param-bearing bound pattern
-   * still sees `{}` for plain sockets.
+   * Path params the guard chain can read via `ctx.location.pathParams`. A
+   * ROOM passes its server-resolved channel-key params here (so a
+   * route-node/room guard can read e.g. `ctx.location.pathParams.roomId`). A
+   * route-BOUND socket (`serverRoute(r).socket`, `__routeId` set) passes its
+   * validated route params, resolved from the `SOCKET_KEY_PARAM` wire; a
+   * missing required slot denies the connection (4403) before the guard runs,
+   * so the guard never sees a partially-resolved bound socket. A COLOCATED
+   * or bare socket (no `__routeId`) has no param wire and passes `{}`.
    */
   pathParams?: Record<string, string>;
 }): Promise<boolean> {
@@ -251,6 +254,14 @@ export type ResolvedConnection =
       moduleKey: string | undefined;
       name: string | undefined;
       denied: boolean;
+      /**
+       * The socket's validated route params. `{}` for a colocated (unbound)
+       * socket, which has no param wire; the resolved wire params for an
+       * EXPLICITLY route-bound socket (`__routeId` set). Fed to both the
+       * page-use guard (as `pathParams`) and the `data` edge factory's second
+       * argument.
+       */
+      params: Record<string, string>;
     }
   | {
       kind: 'room';
@@ -260,6 +271,86 @@ export type ResolvedConnection =
       name: string | undefined;
       denied: boolean;
     };
+
+/**
+ * The outcome of resolving a route-bound socket's params from the wire. A
+ * failure carries WHY it failed: an unusable payload is not the same as a
+ * well-formed payload that omits a slot, and the dev warning must not tell an
+ * author to supply params they already sent.
+ */
+export type SocketParamsResolution =
+  | { ok: true; params: Record<string, string> }
+  /** The `r=` query was present but is not a JSON object of string values. */
+  | { ok: false; reason: 'invalid-payload' }
+  /** The payload was well formed, but these required slots are absent or empty. */
+  | { ok: false; reason: 'missing-params'; missing: string[] };
+
+/**
+ * Parse + validate a route-bound socket's route params from the untrusted
+ * `SOCKET_KEY_PARAM` wire. The topic-less twin of `resolveRoomKey`, sharing
+ * its non-string-value rejection (a non-string value anywhere in the wire
+ * object rejects the whole payload, not just that entry), but STRICTER on a
+ * present-but-non-object payload: `resolveRoomKey` coerces it to `{}` and
+ * only fails if a required channel slot then ends up missing (so a garbage
+ * `r=` against a param-less channel still resolves `ok: true`), while this
+ * function denies immediately with `reason: 'invalid-payload'` regardless of
+ * whether the pattern has any required slots (a socket has no channel-typed
+ * "param-less" escape hatch to fall through to). A param-less pattern still
+ * requires nothing once the payload shape itself is valid. On success
+ * returns the validated string params; on a `missing-params` failure returns
+ * the missing required slot names so the caller can deny 4403 and name them
+ * in a dev warning; on an `invalid-payload` failure there is no slot list,
+ * only the payload-shape reason.
+ */
+export function resolveSocketParams(
+  routePattern: string,
+  rawR: string | undefined
+): SocketParamsResolution {
+  let params: Record<string, string> = {};
+  if (rawR !== undefined && rawR !== '') {
+    let parsed: unknown = null;
+    try {
+      // Sanctioned untrusted-wire JSON.parse: the client sends route params as
+      // a JSON object whose values are all strings.
+      parsed = JSON.parse(rawR);
+    } catch {
+      parsed = null;
+    }
+    // A PRESENT `r=` that is not a plain object (malformed JSON, null, an
+    // array, a primitive), or that carries a non-string value anywhere (e.g.
+    // `{"x":42}`), is a contract lie rather than a missing param. Reject the
+    // whole payload, mirroring resolveRoomKey's fail-closed policy, and say so,
+    // so the caller's warning does not name slots the client already sent.
+    if (
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed)
+    ) {
+      return { ok: false, reason: 'invalid-payload' };
+    }
+    const entries = Object.entries(parsed);
+    if (entries.some(([, v]) => typeof v !== 'string')) {
+      return { ok: false, reason: 'invalid-payload' };
+    }
+    // Every value is a string (checked above), so this is a sound narrowing,
+    // not a cast over an unvalidated shape. Restrict to the pattern's DECLARED
+    // slots (required + optional/rest): a real HTTP request can never populate
+    // an undeclared key, so a wire key outside the pattern's own slots is
+    // dropped rather than trusted.
+    const declared = new Set(declaredParamSlots(routePattern));
+    params = Object.fromEntries(
+      entries
+        .filter((e): e is [string, string] => typeof e[1] === 'string')
+        .filter(([key]) => declared.has(key))
+    );
+  }
+  const missing = requiredParamSlots(routePattern).filter(
+    (slot) => !params[slot]
+  );
+  return missing.length === 0
+    ? { ok: true, params }
+    : { ok: false, reason: 'missing-params', missing };
+}
 
 /**
  * Resolve a `/__sockets` connection's def, owning route path, room key, and
@@ -311,7 +402,7 @@ export async function resolveConnection(
     // (channel.key(params)); the client only varies param VALUES.
     const roomKey = resolveRoomKey(
       def.channel,
-      ctx.req.query(SOCKET_ROOM_PARAM)
+      ctx.req.query(SOCKET_KEY_PARAM)
     );
     const denied = await resolveGuardDenied({
       def,
@@ -329,7 +420,45 @@ export async function resolveConnection(
     return { kind: 'room', roomDef: def, roomKey, moduleKey, name, denied };
   }
 
-  // Plain socket: no param wire, so the guard gets `{}` path params.
+  // Plain socket. A bare (colocated / registry) socket has no param wire and
+  // its guard gets `{}` (the /__sockets endpoint is query-string only). An
+  // EXPLICITLY route-bound socket (serverRoute(r).socket, __routeId set) carries
+  // its route params on the shared key wire, mirroring a room's channel key:
+  // resolve + validate them here so the page-use guard reads them and the edge
+  // `data` factory receives them. A missing required slot denies 4403.
+  let socketParams: Record<string, string> = {};
+  if (def.__routeId !== undefined) {
+    const resolved = resolveSocketParams(
+      def.__routeId,
+      ctx.req.query(SOCKET_KEY_PARAM)
+    );
+    if (!resolved.ok) {
+      if (opts.dev) {
+        // Name the actual failure. Telling an author to supply params they
+        // already sent (because the payload itself was unusable) sends them
+        // hunting for the wrong bug.
+        const detail =
+          resolved.reason === 'missing-params'
+            ? `without required route param(s): ${resolved.missing.join(', ')}. ` +
+              `Connect with useSocket(ref, { params: { ${resolved.missing.join(', ')} } })`
+            : `with an unusable route-param payload: the '${SOCKET_KEY_PARAM}' query ` +
+              `must be a JSON object whose values are all strings`;
+        console.warn(
+          `hono-preact: socket '${name ?? ''}' bound to '${def.__routeId}' was ` +
+            `connected ${detail}; the connection is denied (4403).`
+        );
+      }
+      return {
+        kind: 'socket',
+        socketDef: def,
+        moduleKey,
+        name,
+        denied: true,
+        params: {},
+      };
+    }
+    socketParams = resolved.params;
+  }
   const denied = await resolveGuardDenied({
     def,
     ctx,
@@ -338,7 +467,14 @@ export async function resolveConnection(
     routePath,
     moduleKey: moduleKey ?? '',
     name: name ?? '',
-    pathParams: {},
+    pathParams: socketParams,
   });
-  return { kind: 'socket', socketDef: def, moduleKey, name, denied };
+  return {
+    kind: 'socket',
+    socketDef: def,
+    moduleKey,
+    name,
+    denied,
+    params: socketParams,
+  };
 }

@@ -1,14 +1,10 @@
 import type { Context } from 'hono';
 import type { Middleware } from './define-middleware.js';
-import type { Channel } from './define-channel.js';
+import { assertConformingChannelName, type Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
 import type { ReadonlyData } from './internal/readonly-data.js';
-import {
-  useRoom,
-  type UseRoomOptions,
-  type UseRoomResult,
-} from './use-room.js';
+import { useRoom, type UseRoomArgs, type UseRoomResult } from './use-room.js';
 
 /**
  * The per-connection handle handed to a room's server handlers.
@@ -140,17 +136,34 @@ export interface RoomRef<Incoming, Outgoing, State, Params> {
    * Idiomatic ref-method form of `useRoom`. Equivalent to
    * `useRoom(ref, opts)` but called directly on the ref:
    * `serverRooms.board.useRoom({ key: { roomId } })`.
+   *
+   * `UseRoomArgs` (from use-room.ts) is the identical rest tuple the free
+   * function uses: the options argument is required exactly when the
+   * channel has params, so `.useRoom()` with no arguments is a type error
+   * for a param-bearing channel.
    */
   useRoom(
-    opts?: UseRoomOptions<RoomRef<Incoming, Outgoing, State, Params>>
+    ...args: UseRoomArgs<RoomRef<Incoming, Outgoing, State, Params>>
   ): UseRoomResult<RoomRef<Incoming, Outgoing, State, Params>>;
 }
 
 function makeRoomRef<Name extends string, Payload, State, Data>(
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>,
-  routeId?: string
+  routeId?: string,
+  constructorLabel: string = 'defineRoom'
 ): RoomRef<Payload, Payload, State, RouteParams<Name>> {
+  // `Channel` is a public type export, so a hand-rolled `{ name, key }`
+  // literal can reach this constructor without ever passing through
+  // `defineChannel`'s own validator. Re-run the SAME check here so every
+  // constructor door (defineRoom, serverRoute(r).room) is closed: an
+  // unvalidated name can carry a non-conforming ':param' segment that
+  // `interpolatePattern` never substitutes, collapsing every connection onto
+  // one degenerate constant topic (see assertConformingChannelName's own
+  // doc for the full hazard). `constructorLabel` names the actual public
+  // constructor the author called, so the thrown message doesn't blame
+  // `defineChannel` for a name the author never passed to it.
+  assertConformingChannelName(channel.name, constructorLabel);
   // The def (handler + channel) IS the runtime value on the server; the type
   // presents as a client `RoomRef`. The build strips the body on the client and
   // replaces it with the descriptor stub, so this object only runs server-side.
@@ -175,7 +188,7 @@ function makeRoomRef<Name extends string, Payload, State, Data>(
   // method, SSR throws "useRoom is not a function" (a bare 500). The def carries
   // no module/room key, so the hook stays disconnected during SSR (opening no
   // socket) and the markup matches the client's first hydration render.
-  ref.useRoom = (opts) => useRoom(ref, opts);
+  ref.useRoom = (...args) => useRoom(ref, ...args);
   return ref;
 }
 
@@ -218,5 +231,5 @@ export function _defineRouteRoom<
   channel: Channel<Name, Payload>,
   handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
 ): RoomRef<Payload, Payload, State, RouteParams<Name>> {
-  return makeRoomRef(channel, handler, routeId);
+  return makeRoomRef(channel, handler, routeId, 'serverRoute(r).room');
 }
