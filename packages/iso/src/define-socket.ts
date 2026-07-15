@@ -91,33 +91,29 @@ export interface SocketDef<
   readonly __routeId?: string;
 }
 
-// Nominal brand marking a value as a real `SocketRef`, never actually
-// present at runtime -- a `declare const ... unique symbol`, the same
-// phantom-brand device `define-channel.ts`'s `TopicPayload` uses, except
-// this one is REQUIRED (no `?`) rather than permissive-in. `useSocket`'s
-// generic constraint (`use-socket.ts`'s local `SocketRefShape`, chosen over
-// the full `SocketRef` to avoid an excessively-deep recursive constraint
-// through `useSocket`'s own method) reads message/param types from a
-// STRUCTURAL shape with every field optional except this brand. Without a
-// required field, a plain `{}` satisfies "every field optional" trivially,
-// so `useSocket({})` type-checked with no error -- closing that hole is the
-// point of this brand. Exported (type-only) so `use-socket.ts` can declare
-// the identical property key on its constraint; TypeScript rejects a type
-// missing a REQUIRED property outright, so only a real `SocketRef` (which
-// always carries this field, via the sanctioned cast in `makeSocketRef`)
-// satisfies it.
-declare const SocketRefBrand: unique symbol;
-export type { SocketRefBrand };
-
 /**
  * The client-facing reference. On the server it is the SocketDef; on the client
  * the `.server` import is stripped to a `{ __module, __socket }` descriptor. The
  * message and param types ride phantom fields so `useSocket(ref)` infers them:
  * `__incoming`/`__outgoing` (the duplex message types) and `__params` (the
  * route's params, so `useSocket(ref, { params })` is typed).
+ *
+ * `useSocket`'s generic constraint reads these phantom fields off a
+ * structural shape (`use-socket.ts`'s local `SocketRefShape`) rather than
+ * this full interface, to avoid an excessively-deep recursive constraint
+ * through the `useSocket` method below. That shape requires the `useSocket`
+ * method itself (typed loosely there, to stay non-recursive) rather than a
+ * dedicated brand field: an earlier revision added a REQUIRED
+ * `[SocketRefBrand]: true` phantom field purely to reject a plain `{}`
+ * argument, but that field had no runtime counterpart (a `declare const ...
+ * unique symbol`, never actually assignable), so a user who hand-rolled a
+ * mock or wrote `const m: SocketRef<A, B> = {...}` for a test could no
+ * longer satisfy the type -- a breaking change to a type shipped since
+ * v0.8.0, for a marginal compile-time nicety. Requiring the (already public,
+ * already required-by-real-refs) `useSocket` method instead gets the same
+ * `useSocket({})` rejection without adding a new required member.
  */
 export interface SocketRef<Incoming, Outgoing, Params = {}> {
-  readonly [SocketRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_SOCKET_FIELD]?: string;
   readonly __incoming?: Incoming;

@@ -4,7 +4,7 @@ import {
   SOCKET_NAME_PARAM,
   SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
-  EMPTY_PARAMS,
+  emptyParams,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -177,7 +177,7 @@ export async function resolveGuardDenied(opts: {
     routePath,
     moduleKey,
     name,
-    pathParams = EMPTY_PARAMS,
+    pathParams = emptyParams(),
   } = opts;
 
   // Chain order is outer -> inner: app-use, page/route-node use, def.use.
@@ -202,8 +202,8 @@ export async function resolveGuardDenied(opts: {
     // searchParams: a realtime upgrade is query-string-only on `/__sockets`
     // itself and carries no client-supplied search params to the guard, but
     // the field is still guard-readable (`ctx.location.searchParams`), so it
-    // gets the same prototype-less EMPTY_PARAMS rather than a plain `{}`.
-    location: { path: routePath, pathParams, searchParams: EMPTY_PARAMS },
+    // gets a fresh prototype-less `emptyParams()` rather than a plain `{}`.
+    location: { path: routePath, pathParams, searchParams: emptyParams() },
     module: moduleKey,
     loader: name,
   };
@@ -369,7 +369,7 @@ export async function resolveConnection(
       // Only feed resolved params to the guard; a failed room-key resolution
       // contributes no params. onOpen still denies on a failed room key, so the
       // guard never sees a partially-resolved room.
-      pathParams: roomKey.ok ? roomKey.params : EMPTY_PARAMS,
+      pathParams: roomKey.ok ? roomKey.params : emptyParams(),
     });
     return { kind: 'room', roomDef: def, roomKey, moduleKey, name, denied };
   }
@@ -380,7 +380,7 @@ export async function resolveConnection(
   // its route params on the shared key wire, mirroring a room's channel key:
   // resolve + validate them here so the page-use guard reads them and the edge
   // `data` factory receives them. A missing required slot denies 4403.
-  let socketParams: Record<string, string> = EMPTY_PARAMS;
+  let socketParams: Record<string, string> = emptyParams();
   if (def.__routeId !== undefined) {
     const resolved = resolveSocketParams(
       def.__routeId,
@@ -408,7 +408,7 @@ export async function resolveConnection(
         moduleKey,
         name,
         denied: true,
-        params: EMPTY_PARAMS,
+        params: emptyParams(),
       };
     }
     socketParams = resolved.params;

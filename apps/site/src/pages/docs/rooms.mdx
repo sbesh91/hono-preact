@@ -189,6 +189,8 @@ A guard that denies the upgrade closes the connection with code `4403`. Use `den
 
 The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions. This holds whether the route-node `use` is colocation-derived or explicitly bound: binding selects the `use` chain, not the room-key param wire, which always comes from the channel. The congruence check above is what guarantees that wire actually carries every param the route's own guards expect.
 
+Every params map a room sees — `onJoin`'s `ctx.params` and the guard's `ctx.location.pathParams` — is a **null-prototype object**: read it by destructuring, `params.roomId`, `'roomId' in params`, `Object.keys(params)`, or `Object.hasOwn(params, 'roomId')`. A missing key reads as `undefined` for _any_ key name, including one that collides with an `Object.prototype` member like `constructor` or `toString`, which is what makes a guard like `if (!params.roomId) return deny()` safe even when a channel names a key after one of those. Don't call `params.hasOwnProperty(...)` or `params.toString()` directly on the object; it has no inherited methods to call. Use `Object.hasOwn(params, k)` instead.
+
 ## Presence reconnect behavior
 
 On reconnect, the room re-joins and the server sends a fresh presence snapshot. Any presence state the client passed in `opts.presence` is re-sent on open. There is a brief membership gap between disconnect and rejoin; missed messages during a disconnect are not replayed.

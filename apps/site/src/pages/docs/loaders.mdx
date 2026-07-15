@@ -440,6 +440,8 @@ A route-bound loader (`serverRoute(r).loader(fn)`) receives:
 
 A route-independent loader (`defineLoader(fn)`) receives the same fields except `location`.
 
+`location.pathParams` and `location.searchParams` are **null-prototype objects**: read them by destructuring, `pathParams.id`, `'id' in pathParams`, `Object.keys(pathParams)`, or `Object.hasOwn(pathParams, 'id')`. A missing key reads as `undefined` for _any_ key name, including one that collides with an `Object.prototype` member like `constructor` or `toString`, which is what makes a guard like `if (!pathParams.id) return deny()` safe even when a route names a param after one of those. Don't call `pathParams.hasOwnProperty(...)` or `pathParams.toString()` directly on the object; it has no inherited methods to call. Use `Object.hasOwn(pathParams, k)` instead. The same contract applies to a socket's `data` factory params and a room's `onJoin` params; see [WebSockets](/docs/websockets) and [Rooms](/docs/rooms).
+
 Pass the signal to upstream `fetch` calls and subscriptions so they clean up promptly:
 
 ```ts

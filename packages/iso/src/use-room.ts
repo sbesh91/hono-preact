@@ -16,7 +16,6 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
-import type { RoomRefBrand } from './define-room.js';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -29,14 +28,20 @@ export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
  * recurse through that method, which TS rejects as excessively deep. `RoomRef`
  * is structurally assignable to this shape, so callers pass a `RoomRef` as-is.
  *
- * `[RoomRefBrand]` is REQUIRED (no `?`), unlike every other field here, for
- * the identical reason `use-socket.ts`'s `SocketRefShape` requires
- * `SocketRefBrand`: without it every field was optional, so a plain `{}`
- * trivially satisfied `R extends AnyRoomRefShape` and `useRoom({})`
- * type-checked with no error.
+ * Every field here is optional, so a plain `{}` DOES satisfy `R extends
+ * AnyRoomRefShape` and `useRoom({})` type-checks with no compile error. See
+ * `SocketRefShape`'s doc (use-socket.ts) for the full reasoning: a prior
+ * REQUIRED `[RoomRefBrand]: true` phantom field closed this hole but broke
+ * the released public `RoomRef` type for a hand-rolled mock or a
+ * `const m: RoomRef<...> = {...}` annotation; a follow-up attempt requiring
+ * the `useRoom` method itself (still no new required member on the value
+ * side) reintroduced the identical excessively-deep recursion checking
+ * `RoomRef<I,O,S,P>` against a shape whose `useRoom` method's own parameter
+ * type references `RoomRef<I,O,S,P>` again. This constraint stays
+ * field-only and accepts that `useRoom({})` compiles: it fails loudly at
+ * runtime, not silently.
  */
 type RoomRefShape<Incoming, Outgoing, State, Params> = {
-  readonly [RoomRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_ROOM_FIELD]?: string;
   readonly __incoming?: Incoming;

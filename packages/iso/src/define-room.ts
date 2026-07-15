@@ -113,14 +113,6 @@ export interface RoomDef<
   readonly __state?: State;
 }
 
-// Nominal brand marking a value as a real `RoomRef`. Mirrors
-// `define-socket.ts`'s `SocketRefBrand`: see that declaration's own doc for
-// the full reasoning (a `declare const ... unique symbol`, REQUIRED rather
-// than permissive-in, closing the hole where `useRoom`'s generic constraint
-// -- every OTHER field optional -- trivially accepted a plain `{}`).
-declare const RoomRefBrand: unique symbol;
-export type { RoomRefBrand };
-
 /**
  * The client-facing reference. On the server it is the `RoomDef`; on the client
  * the `.server` import is stripped to a `{ __module, __room }` descriptor. The
@@ -132,9 +124,14 @@ export type { RoomRefBrand };
  * The `useRoom` ref-method mirrors `SocketRef.useSocket`: it is the type for the
  * codegen-attached `.useRoom` runtime method, so a room can be consumed as
  * `serverRooms.board.useRoom({ key })`.
+ *
+ * `useRoom`'s generic constraint reads the phantom fields off a structural
+ * shape (`use-room.ts`'s local `RoomRefShape`), not this full interface, to
+ * avoid an excessively-deep recursive constraint through the `useRoom`
+ * method below; see `SocketRef`'s doc (define-socket.ts) for why that shape
+ * requires the `useRoom` method itself rather than a dedicated brand field.
  */
 export interface RoomRef<Incoming, Outgoing, State, Params> {
-  readonly [RoomRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_ROOM_FIELD]?: string;
   readonly __incoming?: Incoming;

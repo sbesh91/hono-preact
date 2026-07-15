@@ -1677,4 +1677,90 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     expect(capturedParams).toBeDefined();
     expect(Object.getPrototypeOf(capturedParams)).toBeNull();
   });
+
+  it('a colocated socket data factory can mutate its (empty) params argument without throwing', async () => {
+    // Regression for the frozen-EMPTY_PARAMS bug: the empty params object
+    // handed to every colocated socket's data factory used to be ONE
+    // Object.freeze'd singleton shared across every connection. A factory
+    // doing `params.derived = computeFrom(c)` threw
+    // `TypeError: Cannot add property derived, object is not extensible`.
+    // The fix (emptyParams()) hands each call a FRESH, extensible,
+    // null-proto object, so the mutation must succeed silently.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let mutationThrew = false;
+    let readBack: unknown;
+    let missingProtoKey: unknown;
+    const def = defineSocket<never, never, { derived: string }>({
+      data: (_c, rawParams) => {
+        const params = rawParams as Record<string, unknown>;
+        try {
+          // params is empty (colocated, no __routeId) but must still be
+          // extensible: a real-world factory commonly derives socket.data
+          // from request-scoped state, not from the (empty) params object
+          // itself, but the object identity is the same one this mutation
+          // targets.
+          params.derived = 'computed';
+        } catch {
+          mutationThrew = true;
+        }
+        readBack = params.derived;
+        // A missing Object.prototype-named key must still read undefined:
+        // mutability must not have reopened the prototype-chain hole.
+        missingProtoKey = params.constructor;
+        return { derived: 'computed' };
+      },
+    }) as unknown as SocketDef<never, never, { derived: string }>;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(mutationThrew).toBe(false);
+    expect(readBack).toBe('computed');
+    expect(missingProtoKey).toBeUndefined();
+  });
+
+  it('two connections to a colocated socket get DIFFERENT (non-aliased) empty params objects', async () => {
+    // A shared frozen singleton meant every connection's data factory saw
+    // the SAME object; a mutation by one connection would have been visible
+    // to every other connection that hit the same empty-params call site.
+    // emptyParams() returns a fresh object per call, so no two connections
+    // should ever observe each other's mutation.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const seenParamsObjects: Record<string, unknown>[] = [];
+    const def = defineSocket<never, never, undefined>({
+      data: (_c, rawParams) => {
+        const p = rawParams as Record<string, unknown>;
+        // If this connection ever saw a PRIOR connection's mutation, the key
+        // would already be present here.
+        expect(Object.hasOwn(p, 'taggedBy')).toBe(false);
+        p.taggedBy = `conn-${seenParamsObjects.length}`;
+        seenParamsObjects.push(p);
+        return undefined;
+      },
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await getRequest('pages/chat', 'chatSocket');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+
+    await getRequest('pages/chat', 'chatSocket');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+
+    expect(seenParamsObjects).toHaveLength(2);
+    expect(seenParamsObjects[0]).not.toBe(seenParamsObjects[1]);
+    expect(seenParamsObjects[0]!.taggedBy).toBe('conn-0');
+    expect(seenParamsObjects[1]!.taggedBy).toBe('conn-1');
+  });
 });

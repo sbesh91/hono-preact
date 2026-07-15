@@ -206,18 +206,21 @@ function _genericWrapperProbe<R extends SocketRef<unknown, unknown>>(
 }
 void _genericWrapperProbe;
 
-// Finding 6 (#274 round-8 fix): `useSocket`'s generic constraint widened from
-// the full `SocketRef` (whose `useSocket` method it is required) to a
-// structural shape (`AnySocketRefShape`, use-socket.ts) so `Params`/etc. can
-// be read without recursing through that method. Every field in that shape
-// used to be optional, so a plain object with none of them still satisfied
-// the constraint and `useSocket({})` compiled -- pin that it no longer does:
-// the shape's `SocketRefBrand` field is required, and only a real `SocketRef`
-// (built via `defineSocket`/`serverRoute(r).socket`) carries it.
-// @ts-expect-error a plain object is not a real SocketRef
+// Finding 6 (#274 round-8 fix) revisited (#274 param-contract finalization):
+// `useSocket`'s generic constraint reads types off a structural shape
+// (`AnySocketRefShape`, use-socket.ts) with every field optional, so it
+// cannot require a real `SocketRef` argument without either (a) a required
+// brand field with no runtime counterpart -- which broke the released
+// public `SocketRef` type for a hand-rolled mock or a
+// `const m: SocketRef<A, B> = {...}` annotation -- or (b) requiring the
+// `useSocket` method itself, which reintroduces the excessively-deep
+// recursion the structural shape exists to avoid (checking `SocketRef`
+// against a shape whose `useSocket` parameter type references `SocketRef`
+// again). Neither is worth it for this compile-time nicety, so
+// `useSocket({})` DOES type-check: it fails loudly at runtime (no
+// `moduleKey`/`socketName`, so the connection never becomes `ready`), which
+// is a caught user error, not a security gap.
 useSocket({});
-// @ts-expect-error an object with the right-shaped optional fields, but no
-// SocketRefBrand, is still not a real SocketRef
 useSocket({ __incoming: {}, __outgoing: {} });
 
 void _probes;

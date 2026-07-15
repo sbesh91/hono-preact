@@ -175,21 +175,32 @@ export function toNullProtoParams(
 }
 
 /**
- * The canonical prototype-less EMPTY params record: shared by every call site
- * that previously fell back to a plain `{}` object literal for "no params to
- * resolve" (a colocated/bare socket's guard params, `resolveGuardDenied`'s
- * default, a failed room-key resolution's guard params, a denied socket's
- * `ResolvedConnection.params`). A bare `{}` inherits `Object.prototype`,
- * which reopens exactly the prototype-chain read hazard `toNullProtoParams`
- * closes for the PARSED case (see that function's doc): a guard reading e.g.
+ * Build a FRESH, prototype-less, mutable EMPTY params record: called by every
+ * call site that previously fell back to a plain `{}` object literal for "no
+ * params to resolve" (a colocated/bare socket's guard params, the `data` edge
+ * factory's params argument, `resolveGuardDenied`'s default, a failed
+ * room-key resolution's guard params, a denied socket's
+ * `ResolvedConnection.params`). A bare `{}` inherits `Object.prototype`, which
+ * reopens exactly the prototype-chain read hazard `toNullProtoParams` closes
+ * for the PARSED case (see that function's doc): a guard reading e.g.
  * `pathParams.constructor` on one of these EMPTY sites would resolve the
  * inherited `Object` constructor function (truthy) instead of `undefined`.
- * Frozen so the one shared instance can never be mutated by a call site that
- * forgets it is not a fresh object.
+ *
+ * A FRESH object per call, not a shared singleton: an earlier version of this
+ * helper returned one `Object.freeze`d instance shared across every call
+ * site. That reached userland-mutable positions -- most notably the socket
+ * `data(ctx, params)` edge factory's `params` argument -- so a factory that
+ * did `params.derived = computeFrom(c)` threw `TypeError: Cannot add
+ * property, object is not extensible`, and every connection that hit an
+ * EMPTY-params site shared the SAME object, a latent cross-connection
+ * aliasing hazard. Returning a fresh, extensible object per call keeps the
+ * null-prototype guarantee (a missing key still reads `undefined` for ANY
+ * key name) while letting userland code treat it like any other params
+ * object.
  */
-export const EMPTY_PARAMS: Record<string, string> = Object.freeze(
-  Object.create(null)
-);
+export function emptyParams(): Record<string, string> {
+  return Object.create(null);
+}
 
 /**
  * True iff `slot` is present in `params`: an OWN property (`Object.hasOwn`,

@@ -14,7 +14,6 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
-import type { SocketRefBrand } from './define-socket.js';
 
 // Re-export the shared lifecycle types so the public surface is unchanged.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -26,16 +25,29 @@ export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
  * makes the constraint recurse through that method, which TS rejects as
  * excessively deep. Mirrors `RoomRefShape` in use-room.ts.
  *
- * `[SocketRefBrand]` is REQUIRED (no `?`), unlike every other field here.
- * Without it, every field in this shape was optional, so a plain `{}`
- * trivially satisfied `R extends AnySocketRefShape` and `useSocket({})`
- * type-checked with no error -- a real `SocketRef` was never actually
- * required. `SocketRef` (define-socket.ts) always carries this brand (via
- * the sanctioned cast in `makeSocketRef`), so only a real socket ref
- * satisfies this constraint now.
+ * Every field here is optional, so a plain `{}` DOES satisfy `R extends
+ * AnySocketRefShape` and `useSocket({})` type-checks with no compile error.
+ * A prior revision closed that hole with a REQUIRED `[SocketRefBrand]: true`
+ * phantom field (a `declare const ... unique symbol` with no runtime
+ * counterpart), but that made the field a required member of the PUBLIC
+ * `SocketRef` interface too, so a hand-rolled mock or a
+ * `const m: SocketRef<A, B> = {...}` annotation -- both legal since
+ * `SocketRef` shipped in v0.8.0 -- stopped compiling: a breaking change to a
+ * released public type. A follow-up attempt required the `useSocket` method
+ * itself instead (still no new required member on the *value* side, since
+ * every real ref already carries it), but that reintroduced the exact
+ * excessively-deep recursion this comment describes: checking whether
+ * `SocketRef<I,O,P>` structurally satisfies a shape that itself requires
+ * `useSocket(...): ...` forces TS to inspect `SocketRef`'s own `useSocket`
+ * method, whose parameter type is `UseSocketArgs<SocketRef<I,O,P>>` --
+ * referencing `SocketRef<I,O,P>` while still resolving `SocketRef<I,O,P>`.
+ * So this constraint stays field-only and accepts that `useSocket({})`
+ * compiles: it fails loudly at runtime (the missing `moduleKey`/`socketName`
+ * mean the connection is never `ready`), which is a user-visible bug, not a
+ * security hole -- unlike breaking the public type for every existing
+ * caller.
  */
 type SocketRefShape<Incoming, Outgoing, Params> = {
-  readonly [SocketRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_SOCKET_FIELD]?: string;
   readonly __incoming?: Incoming;
