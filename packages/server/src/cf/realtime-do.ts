@@ -8,6 +8,7 @@
 // vitest; this file is only importable in workerd.
 
 import { DurableObject } from 'cloudflare:workers';
+import { toNullProtoParams } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, SocketDef } from '@hono-preact/iso/internal';
 import {
   engineJoin,
@@ -226,9 +227,15 @@ export class HonoPreactRealtimeDO extends DurableObject {
     // Sanctioned cast: x-hp-params is stamped server-side by the forward
     // connector but rides the wire, so it is parsed at the untrusted-JSON
     // boundary; it is a string-valued record. x-hp-data is the edge data bag.
-    const params = parseHeaderJson(
+    // Rehydrated through toNullProtoParams: `JSON.parse` (inside
+    // parseHeaderJson) returns a normal Object.prototype-bearing object, which
+    // would reopen the prototype-chain guard-read hazard `toNullProtoParams`
+    // closes on the Node path (the params object it rebuilds here is the SAME
+    // one `onJoin` receives, so Node and Cloudflare must agree on its shape).
+    const rawParams = parseHeaderJson(
       request.headers.get('x-hp-params')
     ) as Record<string, string>;
+    const params = toNullProtoParams(Object.entries(rawParams));
     // An ABSENT x-hp-data means no room data factory ran -> `undefined` (parity
     // with Node, where conn.data defaults to undefined). A present 'null' (an
     // intentional null factory result) still parses to null.

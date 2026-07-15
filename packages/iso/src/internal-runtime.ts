@@ -72,6 +72,11 @@ export { subtreePatternOf } from './define-routes.js';
 // "what param could a guard actually read" per preact-iso's own (wider)
 // `exec` matcher, so a hyphenated route param is no longer invisible to
 // those two detections the way it is to declaredParamSlots.
+// EMPTY_PARAMS is the frozen, prototype-less shared instance for every
+// "no params to resolve" call site (see param-slots.ts's own doc): the
+// completion of the prototype-chain auth-bypass fix for sites that
+// previously fell back to a plain `{}` literal instead of running the
+// parsed-params pipeline at all.
 export {
   requiredParamSlots,
   declaredParamSlots,
@@ -80,6 +85,7 @@ export {
   toNullProtoParams,
   isPresentParamSlot,
   isHazardousColonSegment,
+  EMPTY_PARAMS,
 } from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {

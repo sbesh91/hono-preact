@@ -1549,4 +1549,132 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     expect(openSpy).toHaveBeenCalledOnce();
     expect(guardSeenParams).toEqual({});
   });
+
+  it('a colocated socket on /plugin/:constructor DENIES when a guard reads pathParams.constructor (prototype-chain bypass)', async () => {
+    // The param-name grammar admits every Object.prototype member name
+    // (constructor, toString, valueOf, hasOwnProperty, ...). A colocated
+    // socket's guard params previously fell back to a plain `{}` object
+    // literal, which inherits Object.prototype: a guard reading
+    // `pathParams.constructor` for a route mounted at '/plugin/:constructor'
+    // would resolve the INHERITED (truthy) Object constructor function
+    // instead of `undefined`, so `if (!id) deny()` wrongly PASSES. This test
+    // pins the fix: the params object must have no prototype at all, so the
+    // read resolves to `undefined` and the guard denies.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let observedId: unknown;
+    const requireId = defineServerMiddleware(async (mwCtx, next) => {
+      const id = mwCtx.location.pathParams.constructor;
+      observedId = id;
+      if (!id) {
+        const { deny } = await import('@hono-preact/iso');
+        throw deny('missing id', 403);
+      }
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    // Colocated (bare defineSocket, no __routeId) mounted under a route whose
+    // own pattern happens to be '/plugin/:constructor'.
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/plugin::feed', def]]);
+    const resolvePageUse = (path: string) =>
+      path === '/plugin/:constructor' ? [requireId] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === 'pages/plugin' ? '/plugin/:constructor' : undefined;
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+
+    await getRequest('pages/plugin', 'feed');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(observedId).toBeUndefined();
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('a failed room-key resolution hands the guard a null-proto pathParams object', async () => {
+    // roomKey.ok is false (no r= wire, and the channel has a required :id
+    // slot), so resolveGuardDenied falls back to the EMPTY params object.
+    // That fallback must be prototype-less like every other params object,
+    // not a plain `{}`.
+    const { upgrader } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let observedParams: Record<string, string> | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      observedParams = mwCtx.location.pathParams;
+      await next();
+    });
+
+    const channel = defineChannel('room/:id')<unknown>();
+    const roomDef = _defineRouteRoom(
+      '/room/:id',
+      channel,
+      {}
+    ) as unknown as RoomDef<unknown, unknown, unknown, unknown, unknown>;
+
+    const registry = new Map<string, SocketDef<unknown, unknown, unknown>>();
+    const rooms = new Map([['pages/room::feed', roomDef]]);
+    const app2 = new Hono();
+    app2.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry,
+        rooms,
+        resolvePageUse: (path) => (path === '/room/:id' ? [captureGuard] : []),
+      })
+    );
+
+    // No r= param, so resolveRoomKey fails (missing required :id).
+    await app2.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/room')}&${SOCKET_NAME_PARAM}=feed`
+    );
+
+    expect(observedParams).toBeDefined();
+    expect(Object.getPrototypeOf(observedParams)).toBeNull();
+  });
+
+  it('a denied bound socket (missing required param) resolves a null-proto params object', async () => {
+    // The early-return deny path (missing required :id on a route-bound
+    // socket) never runs the guard, but the resolved connection's own
+    // `params` field must still be prototype-less for any downstream reader.
+    const def = _defineRouteSocket<never, never>(
+      '/board/:id',
+      {}
+    ) as unknown as SocketDef<never, never, undefined>;
+    const registry = new Map([['pages/board::boardSocket', def]]);
+
+    const { resolveConnection } = await import('../socket-resolution.js');
+    const honoApp = new Hono();
+    let capturedParams: Record<string, string> | undefined;
+    let capturedDenied: boolean | undefined;
+    honoApp.get('/probe', async (ctx) => {
+      const resolved = await resolveConnection(ctx, {
+        registry,
+        resolvePageUse: () => [],
+        resolveRoutePath: () => undefined,
+      });
+      if (resolved.kind === 'socket') {
+        capturedParams = resolved.params;
+        capturedDenied = resolved.denied;
+      }
+      return ctx.text('ok');
+    });
+    // No r= param, so the required :id slot is missing -> denied 4403.
+    await honoApp.request(
+      `http://localhost/probe?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket`
+    );
+
+    expect(capturedDenied).toBe(true);
+    expect(capturedParams).toBeDefined();
+    expect(Object.getPrototypeOf(capturedParams)).toBeNull();
+  });
 });

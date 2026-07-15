@@ -175,6 +175,23 @@ export function toNullProtoParams(
 }
 
 /**
+ * The canonical prototype-less EMPTY params record: shared by every call site
+ * that previously fell back to a plain `{}` object literal for "no params to
+ * resolve" (a colocated/bare socket's guard params, `resolveGuardDenied`'s
+ * default, a failed room-key resolution's guard params, a denied socket's
+ * `ResolvedConnection.params`). A bare `{}` inherits `Object.prototype`,
+ * which reopens exactly the prototype-chain read hazard `toNullProtoParams`
+ * closes for the PARSED case (see that function's doc): a guard reading e.g.
+ * `pathParams.constructor` on one of these EMPTY sites would resolve the
+ * inherited `Object` constructor function (truthy) instead of `undefined`.
+ * Frozen so the one shared instance can never be mutated by a call site that
+ * forgets it is not a fresh object.
+ */
+export const EMPTY_PARAMS: Record<string, string> = Object.freeze(
+  Object.create(null)
+);
+
+/**
  * True iff `slot` is present in `params`: an OWN property (`Object.hasOwn`,
  * never one resolved through the prototype chain) whose value is a
  * non-empty string. Shared by `resolveSocketParams` and `resolveRoomKey`'s

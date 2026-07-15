@@ -86,6 +86,13 @@ describe('iso /internal/runtime door', () => {
       // identically.
       'toNullProtoParams',
       'isPresentParamSlot',
+      // The shared frozen, prototype-less EMPTY params record for every "no
+      // params to resolve" call site (a colocated socket, resolveGuardDenied's
+      // default, a failed room-key resolution, a denied socket's resolved
+      // params): the completion of the prototype-chain fix for sites that
+      // previously fell back to a plain `{}` literal instead of running the
+      // parsed-params pipeline.
+      'EMPTY_PARAMS',
       // The hazardous-colon-segment predicate shared with
       // @hono-preact/server's boot binding guard's route-id conformance
       // check, so it and defineChannel's own definition-time check can
